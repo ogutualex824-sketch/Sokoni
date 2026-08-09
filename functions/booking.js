@@ -14,6 +14,11 @@ const FieldValue = admin.firestore.FieldValue;
    legacy OR canonical, so this prices existing (un-migrated) venues correctly. */
 const { normalize: _normalizePricing, compute: _computePricing } = require('./pricing-schema');
 
+/* Shared reservation primitives — the ONE definition of slot-key, buffered
+   overlap, capacity + per-customer caps, shared with the service-appointment
+   engine so the two can never drift (docs/BOOKING_CONVERGENCE.md). */
+const _rc = require('./reservation-core');
+
 exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -299,7 +304,7 @@ exports.bookingHoldSlot = onCall(
 
       for (const doc of bSnap.docs) {
         const b = doc.data();
-        if ((startTs - bufBeforeMs) < (b.endTs + bufAfterMs) && (endTs + bufAfterMs) > (b.startTs - bufBeforeMs)) return false;
+        if (_rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufBeforeMs, bufAfterMs)) return false;
       }
 
       /* Check existing holds */
@@ -399,7 +404,9 @@ exports.bookingCreate = onCall(
     let paymentNote       = null;
 
     if (paymentId) {
-      const TERMINAL_PAID = new Set(['COMPLETE', 'COMPLETED', 'PAID', 'SUCCESS']);
+      /* One definition, in shared/constants.js — a second copy of a financial
+         vocabulary is one drift from two answers to 'has this been paid?'. */
+      const { TERMINAL_PAID } = require('./shared/constants');
       const REVERSED      = new Set(['REFUNDED', 'REVERSED', 'CHARGEBACK', 'CANCELLED']);
       try {
         const paySnap = await db.collection('payments').doc(String(paymentId)).get();
@@ -471,7 +478,7 @@ exports.bookingCreate = onCall(
     /* Slot-lock document: keyed on the exact time window.
        Writing this atomically inside the transaction prevents two concurrent
        requests for the identical slot from both committing. */
-    const slotKey    = `${date}_${startTs}_${endTs}`;
+    const slotKey    = _rc.slotKey(date, startTs, endTs);
     const slotLockRef = db.collection('venues').doc(venueId).collection('slotLocks').doc(slotKey);
 
     /* Authoritative per-customer cap: counter doc read + incremented inside the
@@ -525,7 +532,7 @@ exports.bookingCreate = onCall(
       ── */
       if (venue.capacity?.max) {
         const concurrent = venue.capacity.concurrent || 1;
-        if (existingBookings.length >= concurrent) {
+        if (_rc.capacityExceeded(existingBookings.length, concurrent)) {
           isConflict   = true;
           conflictCode = 'resource-exhausted';
           return;
@@ -541,7 +548,7 @@ exports.bookingCreate = onCall(
         const cSnap = await txn.get(counterRef);
         counterExisted = cSnap.exists;
         counterSeed    = cSnap.exists ? Number(cSnap.data().active || 0) : customerActiveCount;
-        if (counterSeed >= maxPerCustomer) {
+        if (_rc.customerCapExceeded(counterSeed, maxPerCustomer)) {
           isConflict   = true;
           conflictCode = 'failed-precondition';
           return;
@@ -550,9 +557,7 @@ exports.bookingCreate = onCall(
 
       /* ── 4. Overlap check (against pre-fetched snapshot; includes the provider
              buffer so a booking reserves [start-bufferBefore, end+bufferAfter]) ─  */
-      const hasOverlap = existingBookings.some(b =>
-        (startTs - bufBeforeMs) < (b.endTs + bufAfterMs) &&
-        (endTs   + bufAfterMs)  > (b.startTs - bufBeforeMs));
+      const hasOverlap = _rc.bufferedOverlaps(startTs, endTs, existingBookings, bufBeforeMs, bufAfterMs);
       if (hasOverlap) {
         isConflict   = true;
         conflictCode = 'already-exists';
@@ -1140,10 +1145,10 @@ exports.bookingSendReminders = functions.scheduler.onSchedule(
 );
 
 /* ═══════════════════════════════════════════════════════════
-   17. SCHEDULED — Clean Up Expired Holds (every 5 minutes)
+   17. SCHEDULED — Clean Up Expired Holds (every 1 minute)
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCleanupHolds = functions.scheduler.onSchedule(
-  { schedule: 'every 5 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
+  { schedule: 'every 1 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     const snap = await db.collection('bookingHolds').where('expiresAt', '<', Date.now()).get();
     const expired = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1155,6 +1160,11 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
     const batch = db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     if (!snap.empty) await batch.commit();
+
+    /* Phase E WS1 — reuse this every-1-min maintenance job (no new Cloud Run service) to
+       expire unpaid service bookings: release the slot lock, cancel, invalidate the intent. */
+    try { await require('./booking-payment-sweep').expireUnpaidServiceBookings(db); }
+    catch (e) { console.warn('[booking] service-booking payment expiry:', e.message); }
     return null;
   }
 );

@@ -20,6 +20,7 @@ const { onCall } = require('firebase-functions/v2/https');
 const { getAuth }                   = require('firebase-admin/auth');
 const { getFirestore, FieldValue }  = require('firebase-admin/firestore');
 const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
+const { writeAudit } = require('./pos-audit');
 
 /* ── Constants ──────────────────────────────────────────────────────────────── */
 
@@ -131,6 +132,11 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
   // ── Build minimal, non-overlapping custom claims ────────────────────────────
   // Only the flags relevant to the new role are set to `true`; all others are
   // explicitly `false` so previous role claims are always cleared atomically.
+  /* Capture the PREVIOUS role (from existing claims) BEFORE overwriting — required by the audit. */
+  const _pc = targetUser.customClaims || {};
+  const _prevRole = _pc.superAdmin ? 'superAdmin' : _pc.admin ? 'admin' : _pc.seller ? 'seller'
+    : _pc.driver ? 'driver' : _pc.moderator ? 'moderator' : 'buyer';
+
   const claims = {
     admin:      cleanRole === 'admin'      || cleanRole === 'superAdmin',
     superAdmin: cleanRole === 'superAdmin',
@@ -157,6 +163,18 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
     resource: `users/${cleanUid}`,
     details:  { uid: cleanUid, newRole: cleanRole, claims, targetEmail: targetUser.email || null },
     severity: 'high',
+  });
+  /* Canonical audit schema (Task 4) — actor, target, previous→new role, outcome, ts. */
+  writeAudit(db, {
+    action:     'role.change',
+    actorUid:   request.auth.uid,
+    actorRole:  (request.auth.token && request.auth.token.role) || 'superAdmin',
+    objectType: 'user',
+    objectId:   cleanUid,
+    before:     { role: _prevRole },
+    after:      { role: cleanRole },
+    reason:     (request.data && request.data.reason) || null,
+    metadata:   { targetEmail: targetUser.email || null, claims },
   });
 
   return { success: true, uid: cleanUid, role: cleanRole };

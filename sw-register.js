@@ -32,6 +32,31 @@
   /* ────────────────────────────────────────────────────────────────────────── */
 
   /* ══════════════════════════════════════════════════════
+     0. BUILD-VERSION EVIDENCE — proves what the DEVICE is running vs. what's DEPLOYED.
+        runningCache  = the active SW's cache name (what this device is actually serving)
+        deployedCache = version.json fetched fresh from network (what's live right now)
+        stale === true → the device is on an OLD build (SW hasn't swapped yet).
+        Usage: const b = await window.sokoniBuildInfo();
+  ══════════════════════════════════════════════════════ */
+  window.sokoniBuildInfo = async function () {
+    const info = { runningCache: null, deployedCache: null, deployedCommit: null, stale: null };
+    try {
+      const keys = await caches.keys();
+      const k = keys.find(x => /^sokoni-.*-v\d+/.test(x)) || '';
+      info.runningCache = (k.match(/v\d+/) || [null])[0];
+    } catch (_) {}
+    try {
+      const v = await (await fetch('/version.json?cb=' + Date.now(), { cache: 'no-store' })).json();
+      info.deployedCache  = (String(v.cacheVersion || '').match(/v\d+/) || [null])[0];
+      info.deployedCommit = v.commitShort || null;
+    } catch (_) {}
+    if (info.runningCache && info.deployedCache) {
+      info.stale = parseInt(info.runningCache.slice(1), 10) < parseInt(info.deployedCache.slice(1), 10);
+    }
+    return info;
+  };
+
+  /* ══════════════════════════════════════════════════════
      1. REGISTER SERVICE WORKER (HTTPS only)
   ══════════════════════════════════════════════════════ */
   let _swReg = null; /* stored so the Update button can reach the waiting worker */
@@ -339,6 +364,9 @@
 
   /* ── Notification permission prompt ── */
   function _showNotificationPrompt() {
+    /* Never render inside a shell-hosted iframe — the top-level shell owns global prompts,
+       otherwise each module stacks its own (same overlap class as the update banner). */
+    try { if (window.parent && window.parent !== window) return; } catch (_) {}
     if (document.getElementById("sokoniNotifPrompt")) return;
 
     /* NEVER cover the privacy / cookie consent banner.
@@ -552,6 +580,20 @@
      4. UPDATE AVAILABLE TOAST
   ══════════════════════════════════════════════════════ */
   function _showUpdateToast() {
+    /* Inside an iframe (a module hosted by the Merchant Shell) OR on a page whose shell owns
+       the update UI, DO NOT render our own floating toast — otherwise the shell + every hosted
+       iframe each stack their own banner, overlapping the content (the reported bug). Signal
+       upward/sideways instead so the shell shows ONE integrated bar. */
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __sokoniUpdate: true }, location.origin);
+        return;
+      }
+      if (window.__sokoniShellHandlesUpdate) {
+        window.dispatchEvent(new CustomEvent("sokoni:update-available"));
+        return;
+      }
+    } catch (_) {}
     if (document.getElementById("swUpdateToast")) return;
     const toast = document.createElement("div");
     toast.id = "swUpdateToast";

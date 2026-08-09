@@ -3,7 +3,9 @@
     "source": "functions",
     "predeploy": [
       "node \"$RESOURCE_DIR/../scripts/predeploy-syntax-gate.js\"",
-      "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\""
+      "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\"",
+      "node \"$RESOURCE_DIR/../scripts/verify-delivery-engine-sync.js\"",
+      "node \"$RESOURCE_DIR/../scripts/predeploy-payout-gate.js\""
     ],
     "runtime": "nodejs22",
     "concurrency": 80,
@@ -65,6 +67,21 @@
       "pos-hardware-setup.html"
     ],
     "rewrites": [
+      {
+        "source": "/api/catalogue",
+        "function": "catalogue",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/available-deliveries",
+        "function": "availableDeliveries",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/rider-profile",
+        "function": "riderProfile",
+        "region": "us-central1"
+      },
       {
         "source": "/api/chat",
         "function": "sokoniChat",
@@ -533,12 +550,15 @@
     ],
     "predeploy": [
       "node scripts/deploy/guard-no-rollback.js",
+      "node scripts/deploy/guard-deploy-cooldown.js",
       "node scripts/deploy/bump-sw-version.js",
       "node scripts/generate-version.js",
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
-      "node scripts/gate-inventory.js"
+      "node scripts/audit-base64-writes.js",
+      "node scripts/gate-inventory.js",
+      "node scripts/check-money-toast-safety.mjs"
     ]
   },
   "firestore": [

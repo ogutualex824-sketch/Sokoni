@@ -301,7 +301,7 @@
         { i:'🔒', l:'Security',   h:'trust-safety.html',          cat:'security' },
         { i:'🛡️',l:'Zero Trust', h:'super-admin.html#security',  cat:'security' },
         { i:'🤖', l:'AI',         h:'ai-subscriptions.html',      cat:'ai'       },
-        { i:'🔍', l:'Search',     h:'enterprise-search.html',     cat:'ai'       }
+        { i:'🔍', l:'Search',     h:'search.html',                cat:'ai'       }
       ]
     }
   };

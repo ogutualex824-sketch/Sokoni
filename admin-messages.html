@@ -969,8 +969,8 @@ function _loadStorage(){
   }).catch(function(e){_toast('Failed to load storage: '+e.message,'#dc2626');});
 }
 
-window._triggerCleanup=function(){
-  if(!confirm('Run storage cleanup now? This will delete expired media files.'))return;
+window._triggerCleanup=async function(){
+  if(!(await SK.dialog.confirm('Run storage cleanup now? This will delete expired media files.', null, null, { title: 'Run storage cleanup', variant: 'danger', confirmLabel: 'Run cleanup' })))return;
   _toast('Cleanup triggered — will run in background','#16a34a');
   /* The weekly CF handles cleanup; admins can only trigger manually via direct CF invocation */
 };

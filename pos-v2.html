@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI POS</title>
+  <script type="module" src="firebase.js"></script>
+  <style>
+    :root{
+      --bg:#050505; --card:#0f0f10; --card2:#161618; --border:rgba(255,255,255,0.08);
+      --text:#f5f5f5; --muted:rgba(255,255,255,0.45); --accent:#71ff00; --accent2:#4fc800;
+      --danger:#ff4d4d; --warn:#fb923c; --info:#38bdf8; --ok:#22c55e;
+      --nav-h:64px; --sab:env(safe-area-inset-bottom,0px); --sat:env(safe-area-inset-top,0px);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:15px}
+    body{padding-top:var(--sat);padding-bottom:calc(var(--nav-h) + var(--sab));min-height:100vh}
+    button{font-family:inherit}
+    /* ── Auth gate ── */
+    #auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999}
+    .spinner{width:34px;height:34px;border:3px solid rgba(113,255,0,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .auth-msg{color:var(--muted);font-size:14px}
+    /* ── Top bar ── */
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(5,5,5,0.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:52px}
+    .tb-back{background:none;border:none;color:var(--muted);font-size:22px;padding:6px;cursor:pointer;min-width:44px;min-height:44px}
+    .tb-title{font-weight:800;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tb-shift{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap}
+    .tb-icon{background:none;border:none;color:var(--text);font-size:18px;min-width:44px;min-height:44px;cursor:pointer;position:relative}
+    /* ── Search / scan ── */
+    .searchwrap{padding:12px 14px 4px;position:relative}
+    .searchbar{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+    .searchbar input{flex:1;background:none;border:none;color:var(--text);font-size:16px;outline:none;min-width:0}
+    .scan-inline{background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:var(--accent);border-radius:10px;min-width:44px;min-height:40px;font-size:18px;cursor:pointer}
+    /* ── Primary action bar (always visible) ── */
+    .actionbar{display:flex;gap:8px;overflow-x:auto;padding:10px 14px;scrollbar-width:none}
+    .actionbar::-webkit-scrollbar{display:none}
+    .act{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);
+      border-radius:14px;padding:10px 14px;min-width:72px;min-height:64px;color:var(--text);cursor:pointer;font-size:11px;font-weight:700}
+    .act .ico{font-size:20px}
+    .act.accent{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:var(--accent)}
+    .act .dot{position:absolute;top:8px;right:14px;width:8px;height:8px;border-radius:50%}
+    /* ── Tabs ── */
+    .tabs{display:flex;gap:6px;padding:6px 14px;overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:9px 16px;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;min-height:40px}
+    .tab.active{background:var(--accent);border-color:var(--accent);color:#04120a}
+    .tab .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;background:rgba(255,255,255,0.15);border-radius:9px;font-size:11px;text-align:center}
+    .tab.active .badge{background:rgba(0,0,0,0.25)}
+    /* ── Content ── */
+    .content{padding:8px 14px 24px}
+    .empty{text-align:center;padding:48px 20px;color:var(--muted)}
+    .empty .big{font-size:48px;margin-bottom:12px}
+    /* ── Order card ── */
+    .ordercard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
+    .oc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+    .oc-id{font-weight:800;font-size:15px}
+    .oc-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .oc-total{font-weight:900;font-size:17px;color:var(--accent)}
+    .oc-badge{display:inline-block;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800}
+    .oc-items{margin:8px 0;font-size:13px;color:rgba(255,255,255,0.75)}
+    .oc-item{display:flex;justify-content:space-between;padding:3px 0}
+    .oc-meta{font-size:12px;color:var(--muted);margin:6px 0}
+    .oc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .btn{border:none;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:800;cursor:pointer;min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1;min-width:130px}
+    .btn-dispatch{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04120a}
+    .btn-print{background:var(--card2);border:1px solid var(--border);color:var(--text)}
+    .btn-ghost{background:none;border:1px solid rgba(255,77,77,0.3);color:var(--danger);flex:0 0 auto;min-width:90px}
+    /* ── Printer panel ── */
+    .printer-panel{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--sab));background:var(--card);border-top:1px solid var(--border);
+      transform:translateY(110%);transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:45;padding:16px 14px calc(16px + var(--sab));border-radius:20px 20px 0 0}
+    .printer-panel.open{transform:translateY(0)}
+    .pp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}
+    .pp-stat{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+    .pp-stat .v{font-size:16px;font-weight:800}
+    .pp-stat .l{font-size:10px;color:var(--muted);margin-top:2px}
+    .pp-actions{display:flex;gap:10px}
+    /* ── Bottom nav ── */
+    .bottomnav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--nav-h) + var(--sab));padding-bottom:var(--sab);
+      background:rgba(10,10,11,0.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;z-index:50}
+    .bn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);text-decoration:none;font-size:10px;font-weight:600;min-height:48px}
+    .bn .ico{font-size:19px}
+    .bn.active{color:var(--accent)}
+    /* ── Toast ── */
+    #toast{position:fixed;left:14px;right:14px;bottom:calc(var(--nav-h) + var(--sab) + 14px);z-index:60;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{background:var(--card2);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:14px;font-size:14px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,0.5);animation:slideup .25s}
+    .toast.err{border-left-color:var(--danger)} .toast.warn{border-left-color:var(--warn)}
+    @keyframes slideup{from{transform:translateY(10px);opacity:0}}
+    .section-title{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 2px 8px}
+    /* ── Sell (New Sale) overlay ── */
+    .sell{position:fixed;inset:0;z-index:70;background:var(--bg);display:none;flex-direction:column;padding-top:var(--sat)}
+    .sell.open{display:flex}
+    .sell-top{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(5,5,5,0.95)}
+    .sell-top input{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;color:var(--text);font-size:16px;outline:none;min-width:0}
+    .sell-grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 150px;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;align-content:start}
+    .pcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:4px;min-height:100px}
+    .pcard:active{transform:scale(0.97)}
+    .pcard .pname{font-size:12px;font-weight:700;line-height:1.25;max-height:2.5em;overflow:hidden}
+    .pcard .price{font-size:14px;font-weight:900;color:var(--accent);margin-top:auto}
+    .pcard .stk{font-size:10px;color:var(--muted)}
+    .pcard .stk.low{color:var(--warn)} .pcard .stk.out{color:var(--danger)}
+    .pcard.oos{opacity:.45}
+    .pcard .qbadge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#04120a;font-size:11px;font-weight:900;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .kpi{flex:0 0 auto;min-width:98px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:9px 12px}
+    .kpi .kv{font-size:20px;font-weight:900;line-height:1.1}
+    .kpi .kl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    .kpi .ks{font-size:11px;color:var(--accent);font-weight:800;margin-top:3px}
+    #kpiStrip::-webkit-scrollbar{display:none}
+    .cartbar{position:fixed;left:0;right:0;bottom:0;z-index:75;background:var(--card);border-top:1px solid var(--border);padding:12px 14px calc(12px + var(--sab));display:none}
+    .cartbar.show{display:block}
+    .cb-row{display:flex;align-items:center;gap:12px}
+    .cb-info{flex:1}.cb-info .n{font-size:11px;color:var(--muted)}.cb-info .t{font-size:20px;font-weight:900}
+    .cb-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04120a;border:none;border-radius:14px;padding:14px 20px;font-size:15px;font-weight:900;min-height:52px;cursor:pointer}
+    .cb-view{background:none;border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 14px;min-height:48px;font-weight:700;cursor:pointer}
+    .sheet{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:none;align-items:flex-end}
+    .sheet.open{display:flex}
+    .sheet-inner{background:var(--card);width:100%;max-height:88vh;border-radius:20px 20px 0 0;padding:16px 14px calc(16px + var(--sab));overflow-y:auto}
+    .li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .li .ln{flex:1;font-size:14px;font-weight:600}
+    .li .lp{font-size:13px;color:var(--muted);min-width:74px;text-align:right;font-weight:700}
+    .qstep{display:flex;align-items:center;gap:8px}
+    .qbtn{width:34px;height:34px;border-radius:10px;background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:18px;font-weight:800;cursor:pointer}
+    .pay-methods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+    .pm{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;text-align:center;color:var(--text)}
+    .pm.sel{border-color:var(--accent);background:rgba(113,255,0,.1);color:var(--accent)}
+    .field{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:13px 14px;color:var(--text);font-size:16px;outline:none;margin-top:8px}
+  </style>
+</head>
+
+<!-- Auth gate + startup checklist -->
+<div id="auth-screen">
+  <div class="spinner" id="auth-spinner"></div>
+  <div class="auth-msg" id="auth-msg">Opening your POS…</div>
+  <div id="auth-steps" style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font-size:13px;min-width:210px;text-align:left"></div>
+</div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <button class="tb-back" onclick="history.length>1?history.back():location.href='/pos-marketplace'" aria-label="Back">&#8592;</button>
+  <div class="tb-title" id="shopName">Loading…</div>
+  <span id="liveDot" title="Live sync" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto;transition:transform .2s,background .3s"></span>
+  <span class="tb-shift" id="shiftClock">--:--</span>
+  <button class="tb-icon" onclick="location.href='/notifications'" aria-label="Notifications">&#128276;</button>
+  <button class="tb-icon" onclick="location.href='/profile'" aria-label="Profile">&#128100;</button>
+</div>
+
+<!-- Search / scan -->
+<div class="searchwrap">
+  <div class="searchbar">
+    <span style="color:var(--muted)">&#128269;</span>
+    <input id="search" placeholder="Search orders, customer, ref…" oninput="filterOrders(this.value)" autocomplete="off">
+    <button class="scan-inline" onclick="openScanner()" aria-label="Scan barcode">&#128247;</button>
+  </div>
+</div>
+
+<!-- Primary action bar (always visible) -->
+<div class="actionbar">
+  <button class="act accent" onclick="togglePrinterPanel()"><span class="ico">&#128424;</span>Printer<span class="dot" id="prnDot" style="background:var(--muted)"></span></button>
+  <button class="act" onclick="openScanner()"><span class="ico">&#128247;</span>Scan</button>
+  <button class="act" onclick="switchTab('awaiting')"><span class="ico">&#128230;</span>Dispatch</button>
+  <button class="act" onclick="location.href='/inventory'"><span class="ico">&#10133;</span>Add Product</button>
+  <button class="act accent" onclick="openSell()"><span class="ico">&#128179;</span>New Sale</button>
+</div>
+
+<!-- Command Center: live KPI strip -->
+<div id="kpiStrip" style="display:flex;gap:8px;overflow-x:auto;padding:4px 14px 2px;scrollbar-width:none">
+  <div class="kpi"><div class="kv" id="kpiPipe">0</div><div class="kl">In pipeline</div><div class="ks" id="kpiPipeVal">KES 0</div></div>
+  <div class="kpi"><div class="kv" id="kpiAwait" style="color:var(--warn)">0</div><div class="kl">Awaiting rider</div></div>
+  <div class="kpi"><div class="kv" id="kpiReady" style="color:var(--info)">0</div><div class="kl">Ready/pickup</div></div>
+  <div class="kpi"><div class="kv" id="kpiDone" style="color:var(--ok)">0</div><div class="kl">Done</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="pending" onclick="switchTab('pending')">New <span class="badge" id="cnt-pending">0</span></button>
+  <button class="tab" data-tab="awaiting" onclick="switchTab('awaiting')">Awaiting Rider <span class="badge" id="cnt-awaiting">0</span></button>
+  <button class="tab" data-tab="ready" onclick="switchTab('ready')">Ready/Pickup <span class="badge" id="cnt-ready">0</span></button>
+  <button class="tab" data-tab="collected" onclick="switchTab('collected')">Done <span class="badge" id="cnt-collected">0</span></button>
+</div>
+
+<!-- Content -->
+<div class="content" id="orders"><div class="empty"><div class="big">&#128230;</div>Loading orders…</div></div>
+
+<!-- Printer panel -->
+<div class="printer-panel" id="printerPanel">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <strong style="font-size:15px">&#128424; Printer</strong>
+    <button onclick="togglePrinterPanel()" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">&#10005;</button>
+  </div>
+  <div class="pp-grid">
+    <div class="pp-stat"><div class="v" id="prnStatus">—</div><div class="l">Status</div></div>
+    <div class="pp-stat"><div class="v" id="prnPaper">—</div><div class="l">Paper</div></div>
+    <div class="pp-stat"><div class="v" id="prnModel">P58E</div><div class="l">Model</div></div>
+  </div>
+  <div class="pp-actions">
+    <button class="btn btn-dispatch" onclick="testPrint()">&#129514; Test Print</button>
+    <button class="btn btn-print" onclick="reconnectPrinter()">&#128257; Reconnect</button>
+  </div>
+  <div id="prnHint" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5;text-align:center"></div>
+  <a href="/pos-hardware-wizard" style="display:block;margin-top:12px;text-align:center;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none">&#128295; Manage devices — printer, scanner, drawer &rsaquo;</a>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottomnav">
+  <a class="bn active" href="#" onclick="openSell();return false"><span class="ico">&#128722;</span>Sell</a>
+  <a class="bn" href="#" onclick="switchTab('pending');return false"><span class="ico">&#128220;</span>Orders</a>
+  <a class="bn" href="#" onclick="switchTab('awaiting');return false"><span class="ico">&#128666;</span>Dispatch</a>
+  <a class="bn" href="/inventory"><span class="ico">&#128230;</span>Inventory</a>
+  <a class="bn" href="/pos-crm-pro"><span class="ico">&#128101;</span>Customers</a>
+  <a class="bn" href="/pos-reports"><span class="ico">&#128202;</span>More</a>
+</nav>
+
+<!-- ── Sell (New Sale) overlay ── -->
+<div class="sell" id="sell">
+  <div class="sell-top">
+    <button class="tb-back" onclick="closeSell()" aria-label="Close">&#10005;</button>
+    <input id="sellSearch" placeholder="Search products…" oninput="filterGrid(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();_addFirstMatch();}" autocomplete="off" enterkeyhint="done">
+    <button class="scan-inline" onclick="openScanner()" aria-label="Scan">&#128247;</button>
+  </div>
+  <div class="sell-grid" id="sellGrid"><div class="empty" style="grid-column:1/-1"><div class="spinner"></div></div></div>
+</div>
+<!-- Cart bar (in Sell view) -->
+<div class="cartbar" id="cartbar">
+  <div class="cb-row">
+    <button class="cb-view" onclick="openCart()"><span id="cbCount">0</span> items</button>
+    <div class="cb-info"><div class="n">Total</div><div class="t" id="cbTotal">KES 0</div></div>
+    <button class="cb-btn" onclick="openCart()">Charge &#8594;</button>
+  </div>
+</div>
+<!-- Cart + payment sheet -->
+<div class="sheet" id="sheet"><div class="sheet-inner" id="sheetInner"></div></div>
+
+<div id="toast"></div>
+
+<!-- Printer stack (reused, verified working) -->
+<script src="/sokoni-universal-printer.js" defer></script>
+<script src="/sokoni-bluetooth-printer.js" defer></script>
+<script src="/sokoni-receipt.js" defer></script>
+
+<script type="module">
+/* Import the SAME SDK version firebase.js uses (10.12.2) so the browser DEDUPES this module onto
+   firebase.js's already-initialised app — the one holding the warm logged-in session + App Check
+   token. The previous 11.0.1 import loaded a SEPARATE SDK copy whose registry never saw that app,
+   so it built its own instance that had to cold-read the session and timed out on Safari
+   ("stuck on sign in"). Now we bind directly to firebase.js's warm auth/db/functions. */
+import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const FB_CFG = window.SOKONI_CONFIG || { apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'auth.mysokoni.co.ke', projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app', messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4' };
+let app, auth, db, fns;                 /* bound in _bootstrap() once firebase.js is ready */
+const CF = (n) => httpsCallable(fns, n);
+
+let _uid=null, _sellerId=null, _gate=false;
+let _byStatus={ pending:[], ready:[], collected:[] };
+let _tab='pending', _search='';
+
+function _resolveUser(){
+  try{ if(auth.currentUser) return auth.currentUser; }catch(_){}
+  try{ if(window.firebaseAuth&&window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; }catch(_){}
+  try{ if(typeof firebase!=='undefined'&&firebase.auth&&firebase.auth().currentUser) return firebase.auth().currentUser; }catch(_){}
+  return null;
+}
+/* ── Startup checklist (Sprint 3) — honest per-step readiness, never a blank spinner ──
+   Only steps the POS actually performs at launch are shown (no fabricated ✓). Reveal is gated on
+   Session + the first Orders snapshot (or a 2.5s cap), so a slow/failed feed never hangs startup. */
+const _GSTEPS=[['session','Session'],['merchant','Merchant'],['orders','Orders'],['printer','Printer']];
+const _gstate={};
+function _grender(){
+  const box=document.getElementById('auth-steps'); if(!box) return;
+  const ico=s=> s==='ok'?'<span style="color:var(--ok)">✓</span>' : s==='warn'?'<span style="color:var(--warn)">!</span>' : s==='pending'?'<span style="color:rgba(255,255,255,.4)">◌</span>' : '<span style="color:rgba(255,255,255,.25)">◌</span>';
+  box.innerHTML=_GSTEPS.map(([k,label])=>{
+    const st=_gstate[k]||'idle', note=_gstate['_'+k]?' <span style="color:rgba(255,255,255,.5)">'+_esc(_gstate['_'+k])+'</span>':'';
+    return '<div style="display:flex;gap:9px;align-items:center;'+(st==='idle'?'opacity:.4':'')+'">'+ico(st)+'<span>'+_esc(label)+note+'</span></div>';
+  }).join('');
+}
+function _gstep(k,s,note){ _gstate[k]=s; if(note!=null) _gstate['_'+k]=note; _grender(); }
+let _ordersSeen=false, _gateDone=false;
+function _finishGate(){
+  if(_gateDone) return; _gateDone=true;
+  const msg=document.getElementById('auth-msg'); if(msg) msg.textContent='Ready to sell';
+  const sp=document.getElementById('auth-spinner'); if(sp) sp.style.display='none';
+  setTimeout(()=>{ const s=document.getElementById('auth-screen'); if(s) s.style.display='none'; }, 450);
+}
+function _revealWhenReady(){
+  const start=Date.now();
+  const t=setInterval(()=>{
+    if(_ordersSeen || Date.now()-start>2500){ clearInterval(t); if(!_ordersSeen) _gstep('orders','warn','slow'); _finishGate(); }
+  }, 150);
+}
+
+async function _proceed(user){
+  if(_gate||!user) return; _gate=true; _uid=user.uid;
+  _gstep('session','ok'); _gstep('merchant','pending'); _gstep('orders','pending'); _gstep('printer','pending');
+  try{ const t=await Promise.race([user.getIdTokenResult(), new Promise((_,r)=>setTimeout(()=>r(0),4000))]); _sellerId=t.claims?.sellerId||_uid; }
+  catch{ _sellerId=_uid; }
+  let _shop='My Shop';
+  try{ const u=JSON.parse(localStorage.getItem('sokoniUser')||'null'); _shop=(u&&(u.shopName||u.name))||'My Shop'; }catch(_){}
+  document.getElementById('shopName').textContent=_shop;
+  _gstep('merchant','ok',_shop.length>16?'':_shop);
+  _startClock(); _attach();
+  _revealWhenReady();
+  setTimeout(_checkFirstRun, 2500);   /* one-time onboarding prompt if the POS isn't set up yet */
+  setTimeout(_flushOffline, 3000);    /* replay any cash sales queued while offline (idempotent) */
+  _updateQueueBadge();
+}
+/* Bind to firebase.js's warm app (wait for it to finish init), then attach the auth listener
+   + a forgiving poll. Same-version SDK → window.firebase* instances interoperate with the
+   modular helpers imported above. */
+async function _bootstrap(){
+  for(let i=0;i<80 && !window.firebaseApp && !getApps().length;i++){ await new Promise(r=>setTimeout(r,150)); }
+  app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(FB_CFG));
+  auth = window.firebaseAuth || getAuth(app);
+  db   = window.firebaseDB || getFirestore(app);
+  fns  = window.firebaseFunctions || getFunctions(app, 'us-central1');
+  try{ onAuthStateChanged(auth, u=>{ if(u) _proceed(u); }); }catch(_){}
+  let _tries=0; const _poll=setInterval(()=>{
+    if(_gate){ clearInterval(_poll); return; }
+    const u=_resolveUser();
+    if(u){ clearInterval(_poll); _proceed(u); }
+    else if(++_tries>=40){ clearInterval(_poll); const m=document.querySelector('.auth-msg'); if(m) m.innerHTML='Session not found. <a href="/login.html?redirect=pos-v2.html" style="color:var(--info)">Sign in</a>'; }
+  }, 500);
+}
+_bootstrap();
+
+function _startClock(){ const el=document.getElementById('shiftClock'); const tick=()=>{ try{ el.textContent='Shift '+new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){} }; tick(); setInterval(tick,30000); }
+
+/* Orders: same source as the merchant POS — sellers/{id}/clickAndCollect, no orderBy (index-free). */
+function _attach(){
+  ['pending','ready','collected'].forEach(st=>{
+    const q=query(collection(db,'sellers',_sellerId,'clickAndCollect'), where('status','==',st));
+    onSnapshot(q, snap=>{
+      if(!_ordersSeen){ _ordersSeen=true; try{ _gstep('orders','ok'); }catch(_){} }
+      _pulseLive(true);
+      _byStatus[st]=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>_ms(b.createdAt)-_ms(a.createdAt));
+      _recount(); render();
+    }, err=>{ console.error('orders',st,err); _pulseLive(false); try{ _gstep('orders','warn'); }catch(_){} toast('Feed error: '+(err.message||err),'err'); });
+  });
+}
+const _ms=v=>(v&&(v.toMillis?v.toMillis():(v.seconds?v.seconds*1000:0)))||0;
+/* Live-sync indicator (Sprint 4): green + a quick pulse on every real-time order update; red if
+   the feed drops. Makes the "changes appear within seconds" guarantee visible to the merchant. */
+let _liveTimer=null;
+function _pulseLive(ok){
+  const d=document.getElementById('liveDot'); if(!d) return;
+  d.style.background = ok===false ? 'var(--danger)' : 'var(--ok)';
+  d.title = ok===false ? 'Sync offline — reconnecting' : 'Live — synced just now';
+  if(ok!==false){ d.style.transform='scale(1.9)'; clearTimeout(_liveTimer); _liveTimer=setTimeout(()=>{ d.style.transform='scale(1)'; }, 220); }
+}
+function _recount(){
+  const pend=_byStatus.pending, ready=_byStatus.ready;
+  const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  const pickup=ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  set('cnt-pending',pend.length); set('cnt-awaiting',awaiting.length); set('cnt-ready',pickup.length); set('cnt-collected',_byStatus.collected.length);
+  _renderKpis();
+}
+/* Command Center KPIs — computed live from the order feed (honest: reflects the dispatch pipeline
+   currently on this device, not a fabricated all-channel total). */
+function _renderKpis(){
+  const pend=_byStatus.pending||[], ready=_byStatus.ready||[], done=_byStatus.collected||[];
+  const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  const pickup=ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  const pipe=pend.concat(ready);
+  set('kpiPipe',pipe.length); set('kpiPipeVal',kes(pipe.reduce((s,o)=>s+(Number(o.total)||0),0)));
+  set('kpiAwait',awaiting.length); set('kpiReady',pickup.length); set('kpiDone',done.length);
+}
+function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const kes=n=>'KES '+Math.round(Number(n)||0).toLocaleString();
+
+function _listFor(tab){
+  if(tab==='pending') return _byStatus.pending;
+  if(tab==='awaiting') return _byStatus.ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  if(tab==='ready') return _byStatus.ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  return _byStatus.collected;
+}
+function render(){
+  const el=document.getElementById('orders'); let list=_listFor(_tab);
+  if(_search){ const q=_search.toLowerCase(); list=list.filter(o=>((o.id||'')+ (o.customerName||o.buyerName||'')+(o.customerPhone||'')).toLowerCase().includes(q)); }
+  if(!list.length){ el.innerHTML='<div class="empty"><div class="big">&#128230;</div>No orders here yet.</div>'; return; }
+  el.innerHTML=list.map(o=>_card(o)).join('');
+  el.querySelectorAll('[data-ready]').forEach(b=>b.onclick=()=>markReady(b.getAttribute('data-ready'),b));
+  el.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printReceipt(b.getAttribute('data-print')));
+  el.querySelectorAll('[data-collect]').forEach(b=>b.onclick=()=>markCollected(b.getAttribute('data-collect'),b));
+}
+function _card(o){
+  const ff=o.fulfillmentType||'delivery';
+  const items=Array.isArray(o.items)?o.items:[];
+  const badge = o.status==='pending' ? '<span class="oc-badge" style="background:rgba(56,189,248,0.15);color:var(--info)">&#9679; Paid</span>'
+    : o.status==='ready' ? (ff==='pickup' ? '<span class="oc-badge" style="background:rgba(56,189,248,0.15);color:var(--info)">&#127978; Ready for Pickup</span>' : '<span class="oc-badge" style="background:rgba(251,146,60,0.15);color:var(--warn)">&#128666; Awaiting Rider</span>')
+    : '<span class="oc-badge" style="background:rgba(34,197,94,0.15);color:var(--ok)">&#10003; Done</span>';
+  const readyLabel = ff==='pickup' ? '&#127978; Ready for Pickup' : '&#128666; Ready for Dispatch';
+  let actions='';
+  if(o.status==='pending') actions=`<button class="btn btn-dispatch" data-ready="${_esc(o.id)}">${readyLabel}</button><button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Print</button>`;
+  else if(o.status==='ready') actions=`<button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Print Docket</button>`+(ff==='pickup'?`<button class="btn btn-dispatch" data-collect="${_esc(o.id)}">&#10003; Collected</button>`:'');
+  else actions=`<button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Reprint</button>`;
+  return `<div class="ordercard">
+    <div class="oc-top"><div><div class="oc-id">${_esc(String(o.id).slice(0,12))}</div><div class="oc-sub">${_esc(o.customerName||o.buyerName||'Customer')} · ${badge}</div></div><div class="oc-total">${kes(o.total)}</div></div>
+    <div class="oc-items">${items.length?items.map(it=>`<div class="oc-item"><span>${_esc(it.name||'Item')} ×${_esc(it.qty||1)}</span><span>${kes(it.price||it.unitPrice||0)}</span></div>`).join(''):'<div class="oc-sub">No item details</div>'}</div>
+    ${ff!=='pickup'&&o.deliveryAddress?`<div class="oc-meta">&#128205; ${_esc(String(o.deliveryAddress).slice(0,60))}</div>`:''}
+    ${_timeline(o)}
+    <div class="oc-actions">${actions}</div></div>`;
+}
+/* Sprint 9 — one fulfillment timeline every participant shares. Stage derived from the order's
+   real status; delivery and pickup follow their own tracks. */
+function _timeline(o){
+  const ff=o.fulfillmentType||'delivery';
+  const stages = ff==='pickup' ? ['Paid','Preparing','Ready','Collected'] : ['Paid','Preparing','Awaiting Rider','Delivered'];
+  const idx = o.status==='collected'?3 : o.status==='ready'?2 : o.status==='pending'?1 : 0;
+  return '<div style="display:flex;gap:4px;margin:8px 0 2px;flex-wrap:wrap">'+stages.map((s,i)=>{
+    const on=i<=idx, cur=i===idx;
+    return '<span style="font-size:9px;font-weight:800;padding:3px 7px;border-radius:8px;'+(on?'background:rgba(113,255,0,.14);color:var(--accent)':'background:var(--card2);color:var(--muted)')+'">'+(cur?'● ':'')+_esc(s)+'</span>';
+  }).join('')+'</div>';
+}
+
+/* ── Ready for Dispatch / Pickup (server creates dispatch job + notifies buyer; print is separate) ── */
+async function markReady(orderId, btn){
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Working…'; }
+  try{
+    await CF('updateClickAndCollectStatus')({ sellerId:_sellerId, orderId, status:'ready' });
+    const o=(_byStatus.pending||[]).find(x=>x.id===orderId)||{};
+    toast((o.fulfillmentType==='pickup')?'🏪 Ready for pickup — customer notified':'🛵 Sent to riders + customer notified');
+  }catch(e){ console.error(e); toast('Failed: '+(e.message||e),'err'); if(btn){ btn.disabled=false; btn.innerHTML='&#128666; Ready for Dispatch'; } }
+}
+async function markCollected(orderId, btn){
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{ await CF('updateClickAndCollectStatus')({ sellerId:_sellerId, orderId, status:'collected' }); toast('✅ Marked collected'); }
+  catch(e){ toast('Failed: '+(e.message||e),'err'); if(btn){ btn.disabled=false; btn.textContent='✓ Collected'; } }
+}
+
+/* ── Printer (reused stack) ── */
+function _P(){ return window.P58EPrinter; }
+async function testPrint(){
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print){ toast('Printer stack loading — try again','warn'); return; }
+  if(!P||!P.isConnected){ try{ if(P&&P.requestAndPair) await P.requestAndPair(); else if(P&&P.autoConnect) await P.autoConnect(); }catch(_){} }
+  if(!P||!P.isConnected){ toast('Printer not connected — tap Reconnect','warn'); _refreshPrinter(); return; }
+  if(!window.SokoniReceipt){ toast('Receipt engine loading — try again','warn'); return; }
+  try{
+    const doc=SokoniReceipt.doc()
+      .center('KASS SHOP',{bold:true,size:'big'})
+      .center('POS Test Print')
+      .rule()
+      .center(new Date().toLocaleString('en-KE'))
+      .center('Printer OK')
+      .feed(2);
+    await SP.print('custom',{ build(enc){ doc.renderTo(enc); } });
+    toast('🧾 Test printed');
+  }
+  catch(e){ toast('Print failed: '+(e.message||e),'err'); }
+  _refreshPrinter();
+}
+async function reconnectPrinter(){ const P=_P(); try{ if(P&&P.requestAndPair) await P.requestAndPair(); else if(P&&P.autoConnect) await P.autoConnect(); toast('Printer connection attempted'); }catch(e){ toast('Reconnect failed: '+(e.message||e),'err'); } _refreshPrinter(); }
+async function printReceipt(orderId){
+  var all=[].concat(_byStatus.pending,_byStatus.ready,_byStatus.collected); var o=all.find(x=>x.id===orderId);
+  if(!o){ toast('Order not found','err'); return; }
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print){ toast('Printer stack loading','warn'); return; }
+  if(!P||!P.isConnected){ toast('Printer offline — receipt saved','warn'); return; }
+  if(!window.SokoniReceipt){ toast('Receipt engine loading — try again','warn'); return; }
+  const items=Array.isArray(o.items)?o.items:[], total=Math.round(Number(o.total)||0), sub=Math.round(Number(o.subtotal||total)), del=Math.max(0,total-sub), ff=o.fulfillmentType||'delivery';
+  try{
+    const doc=_orderDoc(o,items,total,sub,del,ff);
+    await SP.print('custom',{ build(enc){ doc.renderTo(enc); } });
+    toast('🧾 Printed '+String(o.id).slice(0,10));
+    /* Audit the (re)print — authoritative, server-counted. Fire-and-forget. */
+    try{ CF('posLogReprint')({ orderId:o.id, receiptType:'order', printerName:(_P()&&_P().paired&&_P().paired.name)||'P58E', merchantId:_sellerId }); }catch(_){}
+  }
+  catch(e){ toast('Print failed: '+(e.message||e),'err'); }
+}
+/* Shared order/dispatch receipt document — same layout engine, used for print AND preview. */
+function _orderDoc(o,items,total,sub,del,ff){
+  const doc=SokoniReceipt.doc()
+    .center('KASS SHOP',{bold:true,size:'big'})
+    .center('SOKONI Receipt')
+    .rule()
+    .row('Receipt',String(o.id))
+    .row('Fulfillment',ff==='pickup'?'Pickup':'Delivery');
+  if(ff!=='pickup'&&o.deliveryAddress){ doc.left('Deliver to:'); doc.left(String(o.deliveryAddress)); }
+  if(ff!=='pickup'&&(o.customerPhone||o.buyerPhone)) doc.row('Phone',String(o.customerPhone||o.buyerPhone));
+  doc.rule();
+  items.forEach(it=>doc.row((it.qty||1)+' x '+String(it.name||'Item'),'KES '+Math.round(Number(it.price||it.unitPrice||0))));
+  doc.rule().row('Subtotal','KES '+sub);
+  if(del>0) doc.row('Delivery','KES '+del);
+  doc.row('TOTAL PAID','KES '+total).rule().center('Paid via M-PESA').center('Thank you!').feed(2);
+  return doc;
+}
+/* ── Printer lifecycle: configure once, then auto-reconnect in the background ──
+   Three states — 🟢 Connected / 🟡 Reconnecting / 🔴 Offline. When the printer drops but a
+   pairing is saved (P.paired), we retry autoConnect() periodically WITHOUT blocking selling, and
+   also on app-resume / network-online. Recovery from a drop toasts once. If nothing is paired yet
+   we show a one-time "Set up printer" hint — never force the wizard mid-shift. */
+let _prnState='off', _prnBusy=false, _prnEver=false;
+function _setPrnState(s){
+  const prev=_prnState; _prnState=s;
+  const dot=document.getElementById('prnDot');
+  if(dot) dot.style.background = s==='on'?'var(--ok)':s==='recon'?'var(--warn)':'var(--danger)';
+  const P=_P(), paired=!!(P&&P.paired);
+  set('prnStatus', s==='on'?'🟢 Connected':s==='recon'?'🟡 Reconnecting…':(paired?'🔴 Offline':'🔴 Not set up'));
+  set('prnPaper', s==='on'?'OK':'—');
+  const hint=document.getElementById('prnHint');
+  if(hint){
+    hint.innerHTML = s==='on' ? ''
+      : s==='recon' ? 'Trying to reconnect to your printer…'
+      : paired ? 'P58E is offline. Turn it on or move it closer — it reconnects automatically.'
+      : 'No printer set up yet. <a href="/pos-hardware-wizard" style="color:var(--accent)">Set up printer →</a>';
+  }
+  if(s==='on' && prev!=='on' && _prnEver) toast('🟢 Printer reconnected');
+  if(s==='on') _prnEver=true;
+  try{ if(typeof _gstep==='function') _gstep('printer', s==='on'?'ok':s==='recon'?'pending':'warn'); }catch(_){}
+}
+function _refreshPrinter(){
+  const P=_P();
+  if(P&&P.isConnected){ _setPrnState('on'); return; }
+  if(_prnState!=='recon') _setPrnState('off');   /* leave the amber state alone while a try is in flight */
+}
+async function _tryReconnect(){
+  const P=_P();
+  if(!P||P.isConnected||_prnBusy||!P.paired) return;   /* nothing to reconnect to → don't nag */
+  _prnBusy=true; _setPrnState('recon');
+  try{ const ok=await P.autoConnect(); _setPrnState((ok||P.isConnected)?'on':'off'); }
+  catch(_){ _setPrnState('off'); }
+  finally{ _prnBusy=false; }
+}
+setInterval(_refreshPrinter, 3000);          /* fast status poll */
+setInterval(_tryReconnect, 15000);           /* background reconnect while offline */
+window.addEventListener('load', ()=>{ setTimeout(_tryReconnect, 1200); });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _tryReconnect(); });
+window.addEventListener('online', _tryReconnect);
+
+/* ── One-time onboarding gate (Sprint 1) ──────────────────────────────────
+   The POS opens straight to selling. If setup was never completed (no posSetupComplete flag and
+   no paired printer), we show ONE dismissible prompt to finish setup — never a hard block, never
+   the full wizard forced on the merchant. A paired printer is treated as already set up. */
+/* Sprint 2 — Cloud Restore: another authorized device already set this merchant up. Read the
+   canonical posTerminals profile and restore preferences (paper width, printer model/name, setup
+   flag) so THIS device skips the wizard. The OS still owns the one-time Bluetooth pairing. */
+async function _cloudRestore(){
+  try{
+    if(!db||!_sellerId||!doc||!getDoc) return false;
+    const snap=await getDoc(doc(db,'posTerminals',_sellerId+'_hardware'));
+    if(!snap.exists() ) return false;
+    const d=snap.data()||{};
+    if(!d.setupComplete) return false;
+    const chars = Number(d.paperWidth)>=80 ? 48 : 32;           /* 58mm≈32, 80mm≈48 */
+    let prn={name:'P58E',model:'P58E'};
+    try{ const first=Object.values(d.devices||{}).find(x=>((x&&x.category)||'').indexOf('printer')>-1); if(first) prn={name:first.name||'P58E',model:first.model||'P58E'}; }catch(_){}
+    try{
+      localStorage.setItem('posReceiptWidth', String(chars));
+      localStorage.setItem('posSetupComplete', JSON.stringify({ v:d.setupVersion||1, at:Date.now(), sellerId:_sellerId, branchId:d.branchId||'default', terminalId:d.terminalId||(_sellerId+'_pos1'), printer:{...prn,width:d.paperWidth||58}, restored:true }));
+    }catch(_){}
+    return true;
+  }catch(_){ return false; }   /* App Check / offline → no restore; the setup prompt covers it */
+}
+async function _checkFirstRun(){
+  try{
+    if(localStorage.getItem('posSetupComplete')) return;
+    var P=_P();
+    if(P&&P.paired){ try{ localStorage.setItem('posSetupComplete', JSON.stringify({v:1,at:Date.now(),inferred:true})); }catch(_){} return; }
+    if(await _cloudRestore()){ toast('☁️ Restored your POS setup — pair your printer to print'); _refreshPrinter(); return; }
+    if(sessionStorage.getItem('posSetupPromptDismissed')) return;
+    _showSetupPrompt();
+  }catch(_){}
+}
+function _showSetupPrompt(){
+  var b=document.getElementById('setupPrompt');
+  if(b){ b.style.display='flex'; return; }
+  b=document.createElement('div'); b.id='setupPrompt';
+  b.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + var(--sab) + 12px);z-index:65;background:var(--card2);border:1px solid rgba(113,255,0,.3);border-radius:14px;padding:14px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.5)';
+  b.innerHTML='<div style="flex:1;font-size:13px"><strong>Finish setting up your POS</strong>'
+    +'<div style="color:var(--muted);margin-top:2px">Pair your printer once — then it just works.</div></div>'
+    +'<a href="/pos-hardware-wizard" style="background:var(--accent);color:#04120a;border-radius:10px;padding:11px 14px;font-weight:800;text-decoration:none;font-size:13px;min-height:44px;display:flex;align-items:center">Set up</a>'
+    +'<button onclick="_dismissSetup()" aria-label="Dismiss" style="background:none;border:none;color:var(--muted);font-size:18px;min-width:40px;min-height:44px">&#10005;</button>';
+  document.body.appendChild(b);
+}
+function _dismissSetup(){ try{ sessionStorage.setItem('posSetupPromptDismissed','1'); }catch(_){} var b=document.getElementById('setupPrompt'); if(b) b.style.display='none'; }
+window._dismissSetup=_dismissSetup;
+
+/* ── Scanner ── */
+function openScanner(){ if(window.SokoniPrinter&&window.P58EPrinter){} toast('Scanner: point the camera at a barcode in New Sale','warn'); location.href='/pos-checkout#scan'; }
+
+/* ── UI plumbing ── */
+function switchTab(t){ _tab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.getAttribute('data-tab')===t)); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+function filterOrders(v){ _search=v||''; render(); }
+function togglePrinterPanel(){ document.getElementById('printerPanel').classList.toggle('open'); _refreshPrinter(); }
+function toast(msg,kind){ const box=document.getElementById('toast'); const t=document.createElement('div'); t.className='toast'+(kind==='err'?' err':kind==='warn'?' warn':''); t.textContent=msg; box.appendChild(t); setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3200); }
+
+/* ══ Selling flow (Stage 3) — product grid + cart + checkout ══════════════════
+   Cash → posCompleteCheckout (synchronous, proven, now reads canonical `products`).
+   M-Pesa → hands the cart to the proven /pos-checkout STK flow (no parallel money path). */
+let _catalogue=[], _cart={}, _payMethod='cash', _checkoutBusy=false, _gridSearch='';
+
+function openSell(){
+  document.getElementById('sell').classList.add('open');
+  if(!_catalogue.length) loadCatalogue(); else renderGrid();
+  _renderCartBar();
+  try{ document.getElementById('sellSearch').focus(); }catch(_){}
+}
+function closeSell(){ document.getElementById('sell').classList.remove('open'); document.getElementById('cartbar').classList.remove('show'); }
+
+async function loadCatalogue(){
+  const grid=document.getElementById('sellGrid');
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="spinner"></div><div class="auth-msg" style="margin-top:10px">Loading products…</div></div>';
+  try{
+    const r=await fetch('/api/catalogue?sellerUid='+encodeURIComponent(_sellerId||_uid)+'&limit=500',{cache:'no-store'});
+    const j=await r.json();
+    const raw=j.products||j.items||j.data||(Array.isArray(j)?j:[]);
+    _catalogue=raw.map(p=>({
+      id:p.id||p.productId||p._id,
+      name:p.name||p.title||'Item',
+      price:Number(p.price||p.sellingPrice||p.salePrice||0),
+      stock:(p.stock!=null?p.stock:(p.stockLevel!=null?p.stockLevel:(p.stockQty!=null?p.stockQty:null))),
+      track:p.trackInventory!==false
+    })).filter(p=>p.id);
+    renderGrid();
+  }catch(e){ console.error('catalogue',e); grid.innerHTML='<div class="empty" style="grid-column:1/-1">Couldn\'t load products.<br><button class="cb-view" style="margin-top:12px" onclick="loadCatalogue()">Retry</button></div>'; }
+}
+function _stk(p){
+  if(!p.track||p.stock==null) return {t:'',c:''};
+  if(p.stock<=0) return {t:'Out of stock',c:'out'};
+  if(p.stock<=5) return {t:p.stock+' left',c:'low'};
+  return {t:'In stock',c:''};
+}
+function renderGrid(){
+  const grid=document.getElementById('sellGrid');
+  let list=_catalogue; const q=(_gridSearch||'').toLowerCase();
+  if(q) list=list.filter(p=>p.name.toLowerCase().includes(q));
+  if(!list.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">'+(_catalogue.length?'No match.':'No products yet.')+'</div>'; return; }
+  grid.innerHTML=list.map(p=>{
+    const s=_stk(p), oos=p.track&&p.stock!=null&&p.stock<=0, q=_cart[p.id]?_cart[p.id].qty:0;
+    return '<div class="pcard'+(oos?' oos':'')+'" data-add="'+_esc(p.id)+'">'+
+      (q?'<span class="qbadge">'+q+'</span>':'')+
+      '<div class="pname">'+_esc(p.name)+'</div>'+
+      '<div class="price">'+kes(p.price)+'</div>'+
+      '<div class="stk '+s.c+'">'+_esc(s.t)+'</div></div>';
+  }).join('');
+  grid.querySelectorAll('[data-add]').forEach(el=>el.onclick=()=>addToCart(el.getAttribute('data-add')));
+}
+/* Debounce search (was: full grid filter+rebuild on EVERY keystroke → per-key lag). */
+let _filterT;
+function filterGrid(v){ _gridSearch=v||''; clearTimeout(_filterT); _filterT=setTimeout(renderGrid, 120); }
+/* Keyboard workflow: Enter in the product search adds the first (in-stock) match to
+   the cart, then clears + refocuses the box for rapid keyboard-only entry. Reads the
+   input value directly so a fast Enter beats the 120ms search debounce. */
+function _addFirstMatch(){
+  const inp=document.getElementById('sellSearch');
+  const q=((inp&&inp.value)||'').trim().toLowerCase();
+  if(!q) return;                                   /* nothing typed → no-op */
+  const list=_catalogue.filter(p=>p.name.toLowerCase().includes(q));
+  const pick=list.find(p=>!(p.track&&p.stock!=null&&p.stock<=0))||list[0];
+  if(!pick){ toast('No match','warn'); return; }
+  addToCart(pick.id);
+  if(inp){ inp.value=''; inp.focus(); }
+  _gridSearch=''; clearTimeout(_filterT); renderGrid();
+}
+/* Update ONLY the tapped card's qty badge instead of rebuilding the whole grid (was: full
+   renderGrid() on every product tap — tore down + re-bound every card to bump one badge). */
+function _updateCardQty(pid){
+  const grid=document.getElementById('sellGrid'); if(!grid) return;
+  let card=null; const cards=grid.querySelectorAll('.pcard[data-add]');
+  for(const c of cards){ if(c.getAttribute('data-add')===String(pid)){ card=c; break; } }
+  if(!card){ renderGrid(); return; }   /* filtered out / not present → fall back */
+  const q=_cart[pid]?_cart[pid].qty:0;
+  let badge=card.querySelector('.qbadge');
+  if(q>0){ if(!badge){ badge=document.createElement('span'); badge.className='qbadge'; card.insertBefore(badge, card.firstChild); } badge.textContent=q; }
+  else if(badge){ badge.remove(); }
+}
+function addToCart(pid){
+  const p=_catalogue.find(x=>x.id===pid); if(!p) return;
+  const cur=_cart[pid]?_cart[pid].qty:0;
+  if(p.track&&p.stock!=null&&cur+1>p.stock){ toast('Only '+p.stock+' in stock','warn'); return; }
+  _cart[pid]=_cart[pid]||{id:p.id,name:p.name,price:p.price,track:p.track,stock:p.stock,qty:0};
+  _cart[pid].qty=cur+1;
+  _updateCardQty(pid); _renderCartBar();
+  if(document.getElementById('sheet').classList.contains('open')) _renderCartSheet();
+}
+function setQty(pid,delta){
+  const it=_cart[pid]; if(!it) return;
+  const nq=it.qty+delta;
+  if(nq<=0){ delete _cart[pid]; }
+  else{ if(it.track&&it.stock!=null&&nq>it.stock){ toast('Only '+it.stock+' in stock','warn'); return; } it.qty=nq; }
+  _updateCardQty(pid); _renderCartBar();
+  if(_cartCount()) _renderCartSheet(); else closeSheet();
+}
+const _cartArr=()=>Object.values(_cart);
+const _cartTotal=()=>_cartArr().reduce((s,it)=>s+it.price*it.qty,0);
+const _cartCount=()=>_cartArr().reduce((s,it)=>s+it.qty,0);
+function _renderCartBar(){
+  const n=_cartCount(), inSell=document.getElementById('sell').classList.contains('open');
+  document.getElementById('cartbar').classList.toggle('show', n>0 && inSell);
+  set('cbCount',n); set('cbTotal',kes(_cartTotal()));
+}
+function _clearCart(){ _cart={}; _renderCartBar(); renderGrid(); }
+function openCart(){ if(!_cartCount()){ toast('Cart is empty','warn'); return; } _renderCartSheet(); document.getElementById('sheet').classList.add('open'); }
+function closeSheet(){ document.getElementById('sheet').classList.remove('open'); }
+function _renderCartSheet(){
+  const el=document.getElementById('sheetInner'), items=_cartArr(), total=_cartTotal();
+  el.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<strong style="font-size:16px">Cart</strong>'+
+      '<button onclick="closeSheet()" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">&#10005;</button></div>'+
+    items.map(it=>'<div class="li">'+
+      '<div class="ln">'+_esc(it.name)+'<div style="font-size:12px;color:var(--muted)">'+kes(it.price)+' each</div></div>'+
+      '<div class="qstep"><button class="qbtn" onclick="setQty(\''+_esc(it.id)+'\',-1)">&#8722;</button>'+
+        '<span style="min-width:22px;text-align:center;font-weight:800">'+it.qty+'</span>'+
+        '<button class="qbtn" onclick="setQty(\''+_esc(it.id)+'\',1)">&#43;</button></div>'+
+      '<div class="lp">'+kes(it.price*it.qty)+'</div></div>').join('')+
+    '<div style="display:flex;justify-content:space-between;margin:14px 2px 4px;font-size:20px;font-weight:900"><span>Total</span><span>'+kes(total)+'</span></div>'+
+    '<div class="section-title">Payment</div>'+
+    '<div class="pay-methods">'+
+      '<div class="pm" data-pm="cash" onclick="selPay(\'cash\')">&#128176; Cash</div>'+
+      '<div class="pm" data-pm="mpesa" onclick="selPay(\'mpesa\')">&#128241; M-Pesa</div></div>'+
+    '<div id="payExtra"></div>'+
+    '<button class="cb-btn" style="width:100%;margin-top:14px" id="chargeBtn" onclick="doCheckout()">Charge '+kes(total)+'</button>'+
+    '<div style="height:8px"></div>';
+  selPay(_payMethod);
+}
+function selPay(m){
+  _payMethod=m;
+  document.querySelectorAll('.pm').forEach(x=>x.classList.toggle('sel',x.getAttribute('data-pm')===m));
+  const ex=document.getElementById('payExtra'); if(!ex) return;
+  if(m==='cash') ex.innerHTML='<input class="field" id="cashGiven" type="number" inputmode="numeric" placeholder="Cash given (optional — for change)" oninput="_calcChange()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();doCheckout();}" enterkeyhint="done"><div id="changeOut" style="margin-top:6px;color:var(--muted);font-size:13px"></div>';
+  else ex.innerHTML='<div style="margin-top:8px;color:var(--muted);font-size:13px">Opens the secure M-Pesa checkout — an STK prompt is sent to the customer to approve. Your cart carries over.</div>';
+}
+function _calcChange(){ const g=Number((document.getElementById('cashGiven')||{}).value||0), t=_cartTotal(), o=document.getElementById('changeOut'); if(!o) return; o.textContent=g>0?(g>=t?('Change: '+kes(g-t)):('Short by '+kes(t-g))):''; }
+function _idem(){ return 'posv2_'+(_uid||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+
+async function doCheckout(){
+  const items=_cartArr(); if(!items.length){ toast('Cart empty','warn'); return; }
+  const total=_cartTotal();
+  if(_payMethod==='mpesa'){
+    /* Hand the cart to the proven /pos-checkout STK flow — no parallel money path here. */
+    try{ sessionStorage.setItem('posv2_cart', JSON.stringify({ items:items.map(it=>({productId:it.id,name:it.name,qty:it.qty,unitPrice:it.price})), total, ts:Date.now() })); }catch(_){}
+    toast('Opening secure M-Pesa checkout…');
+    location.href='/pos-checkout?src=posv2';
+    return;
+  }
+  if(_checkoutBusy) return; _checkoutBusy=true;
+  const btn=document.getElementById('chargeBtn'); if(btn){ btn.disabled=true; btn.textContent='Processing…'; }
+  const cashGiven=Number((document.getElementById('cashGiven')||{}).value||0);
+  /* ONE idempotencyKey per sale — reused by any offline retry so posCompleteCheckout treats the
+     replay as the same transaction (exactly-once; a replay can never create a second sale). */
+  const payload={
+    idempotencyKey:_idem(), merchantId:_sellerId,
+    items:items.map(it=>({ productId:it.id, qty:it.qty, unitPrice:it.price })),
+    payments:[{ method:'cash', amount:total }],
+    subtotal:total, grandTotal:total,
+    metadata:{ source:'pos-v2', channel:'till' }
+  };
+  const _finishSale=(saleId,offline)=>{
+    toast((offline?'📴 Saved offline — will sync':'✅ Sale complete')+(cashGiven>total?(' · change '+kes(cashGiven-total)):''), offline?'warn':undefined);
+    try{
+      if(window.SokoniReceipt){ showReceiptPreview(_saleDoc(items,total,'CASH',saleId,cashGiven), function(){ _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }); }
+      else { _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }
+    }catch(_){}
+    _clearCart(); closeSheet();
+    items.forEach(it=>{ const p=_catalogue.find(x=>x.id===it.id); if(p&&p.stock!=null) p.stock=Math.max(0,p.stock-it.qty); });
+    renderGrid();
+  };
+  try{
+    const res=await CF('posCompleteCheckout')(payload);
+    _finishSale((res&&res.data&&(res.data.saleId||res.data.id))||'', false);
+  }catch(e){
+    console.error('checkout',e);
+    if(_isNetworkErr(e)){
+      /* Cash is physically in hand — provisionally complete + queue the record for replay. */
+      _queueOffline(payload); _finishSale('(offline)', true);
+    } else {
+      toast('Checkout failed: '+(e&&e.message?e.message:e),'err');   /* real rejection — do NOT queue */
+    }
+  }finally{ _checkoutBusy=false; if(btn){ btn.disabled=false; btn.textContent='Charge '+kes(total); } }
+}
+/* ── Offline queue (Sprint 8) — cash only; safe because posCompleteCheckout is idempotent ──
+   Only NETWORK errors queue; a real rejection (stock/price/precondition) never does. Replays reuse
+   the original idempotencyKey, so a sale that actually landed server-side returns its cached result
+   instead of creating a duplicate. */
+function _isNetworkErr(e){
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return true;
+  const s=(((e&&e.code)||'')+' '+((e&&e.message)||'')).toLowerCase();
+  return /unavailable|deadline|internal|network|failed to fetch|timeout|fetch/.test(s);
+}
+function _queueOffline(payload){
+  try{ const q=JSON.parse(localStorage.getItem('posOfflineQueue')||'[]'); q.push({payload,ts:Date.now()}); localStorage.setItem('posOfflineQueue',JSON.stringify(q)); }catch(_){}
+  _updateQueueBadge();
+}
+async function _flushOffline(){
+  let q; try{ q=JSON.parse(localStorage.getItem('posOfflineQueue')||'[]'); }catch(_){ q=[]; }
+  if(!q.length||!_sellerId) return;
+  const remain=[];
+  for(const it of q){
+    try{ await CF('posCompleteCheckout')(it.payload); }                 /* success OR idempotent replay → settled */
+    catch(e){ if(_isNetworkErr(e)) remain.push(it); /* still offline — keep; else permanent → drop */ }
+  }
+  try{ localStorage.setItem('posOfflineQueue',JSON.stringify(remain)); }catch(_){}
+  _updateQueueBadge();
+  if(q.length && !remain.length) toast('☁️ '+q.length+' offline sale(s) synced');
+}
+function _updateQueueBadge(){
+  let n=0; try{ n=(JSON.parse(localStorage.getItem('posOfflineQueue')||'[]')||[]).length; }catch(_){}
+  const d=document.getElementById('liveDot');
+  if(d && n>0){ d.style.background='var(--warn)'; d.title=n+' sale(s) queued offline — syncing'; }
+}
+window.addEventListener('online', _flushOffline);
+
+/* Sale receipt document — shared by print + preview. */
+function _saleDoc(items,total,method,saleId,cashGiven){
+  const change=(cashGiven&&cashGiven>total)?(cashGiven-total):0;
+  const doc=SokoniReceipt.doc()
+    .center('KASS SHOP',{bold:true,size:'big'})
+    .center('SOKONI Sale Receipt')
+    .rule();
+  if(saleId) doc.row('Sale',String(saleId));
+  doc.row('Date',new Date().toLocaleString('en-KE')).rule();
+  items.forEach(it=>doc.row((it.qty)+' x '+String(it.name),'KES '+Math.round(it.price*it.qty)));
+  doc.rule().row('TOTAL','KES '+Math.round(total))
+     .row('Paid ('+method+')','KES '+Math.round(cashGiven||total));
+  if(change>0) doc.row('Change','KES '+Math.round(change));
+  doc.rule().center('Thank you!').feed(2);
+  return doc;
+}
+async function _printSaleReceipt(items,total,method,saleId,cashGiven){
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print||!P||!P.isConnected||!window.SokoniReceipt) return;   /* receipt optional; sale already recorded */
+  await SP.print('custom',{ build(enc){ _saleDoc(items,total,method,saleId,cashGiven).renderTo(enc); } });
+  toast('🧾 Receipt printed');
+}
+/* On-screen WYSIWYG preview of the exact receipt (same engine → same output). */
+function showReceiptPreview(doc,onPrint){
+  if(!doc){ return; }
+  var ov=document.getElementById('rcptPv');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='rcptPv';
+    ov.style.cssText='position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;';
+    ov.innerHTML='<div style="background:var(--card);width:100%;max-height:90vh;border-radius:20px 20px 0 0;padding:16px 14px calc(16px + var(--sab));overflow-y:auto">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong style="font-size:15px">🧾 Receipt preview</strong>'
+      +'<button onclick="document.getElementById(\'rcptPv\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">✕</button></div>'
+      +'<pre id="rcptPvText" style="background:#fff;color:#000;font:12px/1.35 \'Courier New\',monospace;padding:14px 10px;border-radius:10px;white-space:pre;overflow-x:auto;margin:0;text-align:left"></pre>'
+      +'<button id="rcptPvPrint" class="cb-btn" style="width:100%;margin-top:12px">🖨 Print receipt</button>'
+      +'<div style="height:6px"></div></div>';
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  document.getElementById('rcptPvText').textContent=doc.toText();
+  document.getElementById('rcptPvPrint').onclick=function(){ ov.style.display='none'; if(onPrint) onPrint(); };
+}
+window.showReceiptPreview=showReceiptPreview;
+
+window.openSell=openSell; window.closeSell=closeSell; window.loadCatalogue=loadCatalogue;
+window.filterGrid=filterGrid; window.addToCart=addToCart; window.setQty=setQty; window._addFirstMatch=_addFirstMatch;
+window.openCart=openCart; window.closeSheet=closeSheet; window.selPay=selPay; window._calcChange=_calcChange; window.doCheckout=doCheckout;
+
+window.switchTab=switchTab; window.filterOrders=filterOrders; window.togglePrinterPanel=togglePrinterPanel;
+window.testPrint=testPrint; window.reconnectPrinter=reconnectPrinter; window.openScanner=openScanner;
+</script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>

@@ -445,15 +445,15 @@ function _pollPayment(payRef) {
 
 /* ── Cancel ── */
 window._cancel = async function(subId, name) {
-  if (!confirm(`Cancel ${name}? You keep access until the billing period ends.`)) return;
+  if (!(await SK.dialog.confirm(`Cancel ${name}? You keep access until the billing period ends.`, null, null, { title: 'Cancel subscription', variant: 'danger', confirmLabel: 'Cancel' }))) return;
   try { await CF('subCancel')({ subscriptionId:subId, immediate:false }); await _load(); }
-  catch (e) { alert(e.message); }
+  catch (e) { SK.dialog.alert(e.message); }
 };
 
 /* ── Reactivate ── */
 window._reactivate = async function(subId) {
   try { await CF('subReactivate')({ subscriptionId:subId }); await _load(); }
-  catch (e) { alert(e.message); }
+  catch (e) { SK.dialog.alert(e.message); }
 };
 
 /* ── Modal ── */

@@ -118,7 +118,11 @@
     '.sk-toast-icon{font-size:16px;flex-shrink:0;line-height:1.4;}',
     '.sk-toast-body{flex:1;min-width:0;}',
     '.sk-toast-title{display:block;font-weight:900;margin-bottom:2px;}',
-    '.sk-toast-msg{display:block;font-weight:600;opacity:0.85;}',
+    '.sk-toast-msg{display:block;font-weight:600;opacity:0.85;word-break:break-word;}',
+    '.sk-toast-action{flex-shrink:0;align-self:center;min-height:32px;padding:6px 12px;border-radius:8px;',
+      'border:1px solid rgba(113,255,0,0.5);background:rgba(113,255,0,0.12);color:#71ff00;',
+      'font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}',
+    '.sk-toast-action:active{background:rgba(113,255,0,0.22);}',
     '@media(max-width:480px){',
       '#sk-toast-root{',
         'top:auto;',
@@ -126,6 +130,7 @@
         'right:12px;left:12px;max-width:none;',
       '}',
       '.sk-toast{font-size:12px;}',
+      '.sk-toast-action{min-height:38px;padding:8px 14px;}',   /* touch-sized on phone */
     '}'
   ].join('');
 
@@ -164,7 +169,9 @@
   function toast(message, type, opts) {
     type = type || 'success';
     opts = opts || {};
-    var duration = opts.duration !== undefined ? opts.duration : (type === 'error' ? 5000 : 3500);
+    /* An actionable toast (with a button) is sticky by default — the user must act or dismiss it. */
+    var hasAction = !!(opts.action && opts.action.label);
+    var duration = opts.duration !== undefined ? opts.duration : (hasAction ? 0 : (type === 'error' ? 5000 : 3500));
 
     _ready(function() {
       var root = _ensureToastRoot();
@@ -173,7 +180,7 @@
 
       var el = document.createElement('div');
       el.id = id;
-      el.className = 'sk-toast sk-toast--' + type;
+      el.className = 'sk-toast sk-toast--' + type + (hasAction ? ' sk-toast--action' : '');
       el.setAttribute('role', 'alert');
       el.setAttribute('aria-live', 'assertive');
       el.innerHTML =
@@ -181,8 +188,17 @@
         '<span class="sk-toast-body">' +
           (opts.title ? '<span class="sk-toast-title">' + _esc(opts.title) + '</span>' : '') +
           '<span class="sk-toast-msg">' + _esc(message) + '</span>' +
-        '</span>';
+        '</span>' +
+        (hasAction ? '<button type="button" class="sk-toast-action">' + _esc(opts.action.label) + '</button>' : '');
 
+      if (hasAction) {
+        el.querySelector('.sk-toast-action').addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          try { if (typeof opts.action.onClick === 'function') opts.action.onClick(); } catch (_) {}
+          _dismissToast(el);
+        });
+      }
+      /* Clicking the toast body dismisses; the action button has its own handler above. */
       el.addEventListener('click', function() { _dismissToast(el); });
 
       root.appendChild(el);
@@ -285,6 +301,11 @@
 
     var box = document.createElement('div');
     box.className = 'sk-modal' + (opts.bottom ? ' sk-modal--bottom' : '');
+    /* Dialog semantics — native alert/confirm expose these for free; the
+       canonical modal must match before it can replace them (Slice B). */
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    if (opts.title) box.setAttribute('aria-label', opts.title);
 
     if (opts.closeable !== false) {
       var closeBtn = document.createElement('button');
@@ -321,23 +342,61 @@
       });
     }
 
+    /* Remember what had focus so we can restore it on close (native dialogs do). */
+    var _prevFocus = document.activeElement;
+
     document.addEventListener('keydown', _onEsc);
+    box.addEventListener('keydown', _trapFocus);
     document.body.style.overflow = 'hidden';
     document.body.appendChild(backdrop);
     _modalStack.push({ backdrop: backdrop, close: close, onClose: opts.onClose });
 
+    /* Auto-focus the first interactive control (or the box itself), so keyboard
+       and screen-reader users land inside the dialog — matches native confirm(). */
+    _ready(function() {
+      var focusables = _focusable(box);
+      (focusables[0] || box).focus();
+      if (!focusables.length) box.setAttribute('tabindex', '-1');
+    });
+
     function close() {
       backdrop.classList.add('sk-modal--out');
       document.removeEventListener('keydown', _onEsc);
+      box.removeEventListener('keydown', _trapFocus);
       setTimeout(function() {
         if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
         _modalStack = _modalStack.filter(function(m) { return m.backdrop !== backdrop; });
         if (!_modalStack.length) document.body.style.overflow = '';
       }, 210);
+      /* Restore focus to the element that opened the dialog. */
+      try { if (_prevFocus && _prevFocus.focus) _prevFocus.focus(); } catch (_) {}
       if (typeof opts.onClose === 'function') opts.onClose();
     }
 
     return close;
+  }
+
+  /* Focusable elements inside a container, in tab order. */
+  function _focusable(root) {
+    var sel = 'a[href],button:not([disabled]),textarea:not([disabled]),' +
+              'input:not([disabled]):not([type="hidden"]),select:not([disabled]),' +
+              '[tabindex]:not([tabindex="-1"])';
+    return Array.prototype.slice.call(root.querySelectorAll(sel))
+      .filter(function(el) { return el.offsetParent !== null || el === document.activeElement; });
+  }
+
+  /* Trap Tab within the modal so focus can't escape to the page behind it. */
+  function _trapFocus(e) {
+    if (e.key !== 'Tab') return;
+    var box = e.currentTarget;
+    var f = _focusable(box);
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1], active = document.activeElement;
+    if (e.shiftKey && (active === first || active === box)) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault(); first.focus();
+    }
   }
 
   function _onEsc(e) {
@@ -381,6 +440,9 @@
         var can = document.getElementById('sk-confirm-cancel');
         if (ok)  ok.addEventListener('click',  function() { close(); resolve(true);  });
         if (can) can.addEventListener('click', function() { close(); resolve(false); });
+        /* Enter confirms (native confirm() parity): focus the primary button so
+           it activates on Enter. Esc still cancels via the modal's onClose. */
+        if (ok) ok.focus();
       });
     });
   }
@@ -942,6 +1004,42 @@
 
   /* Expose */
   global.SokoniUI = SokoniUI;
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     SokoniNotify — the ONE public notification API for all of SOKONI.
+     Every success/error/warning/info/action message across buyer, seller,
+     merchant and POS goes through here, rendered by the single viewport-anchored
+     SokoniUI.toast engine (bottom-centered + full-width on phone, never clipped).
+     One consistent voice: use the standard strings below wherever they fit.
+  ───────────────────────────────────────────────────────────────────────── */
+  var _STR = {
+    orderPlaced:      'Order placed successfully',
+    paymentReceived:  'Payment received successfully',
+    saved:            'Changes saved successfully',
+    receiptPrinted:   'Receipt printed successfully',
+    printerConnected: 'Printer connected successfully',
+    genericError:     "We couldn't complete that action. Please try again.",
+    networkError:     "We couldn't reach the network. Check your connection and try again.",
+    paymentFailed:    "Payment didn't go through. No money was taken — please try again."
+  };
+  function _notify(type, message, opts) {
+    return SokoniUI.toast(message, type, opts || {});
+  }
+  var SokoniNotify = {
+    STRINGS: _STR,
+    success: function (message, opts) { return _notify('success', message, opts); },
+    error:   function (message, opts) { return _notify('error',   message || _STR.genericError, opts); },
+    warning: function (message, opts) { return _notify('warning', message, opts); },
+    info:    function (message, opts) { return _notify('info',    message, opts); },
+    /* action(message, {label, onClick, type, ...}) — a sticky toast with one button. */
+    action:  function (message, opts) {
+      opts = opts || {};
+      var t = opts.type || 'info';
+      return _notify(t, message, { title: opts.title, icon: opts.icon, duration: opts.duration,
+        action: { label: opts.label || 'View', onClick: opts.onClick } });
+    }
+  };
+  global.SokoniNotify = SokoniNotify;
 
   /* Auto-init if bootstrap not present */
   if (!global.SokoniBootstrap) {

@@ -29,8 +29,18 @@ if(_urlId && String(product && product.id) !== String(_urlId)){
     _prdFetching = true;
     (async function(){
         try{
+            /* Wait for the app's App-Check'd Firestore (window.firebaseDB). A fresh
+               import + getFirestore() issues the read BEFORE App Check has obtained a
+               reCAPTCHA token — especially in a fresh/incognito session with no cached
+               token — which Firestore rejects as permission-denied, so a public product
+               (rules: read if true) renders as "not found". Wait for the app instance
+               and the App-Check ready signal, then read via window.firebaseDB. */
+            var _wt = 0;
+            while(!window.firebaseDB && _wt++ < 80){ await new Promise(function(r){ setTimeout(r,150); }); }
+            if(window.__sokoniAppCheckReady && typeof window.__sokoniAppCheckReady.then === 'function'){ try{ await window.__sokoniAppCheckReady; }catch(_){} }
             var _m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-            var _snap = await _m.getDoc(_m.doc(_m.getFirestore(), 'products', String(_urlId)));
+            var _db  = window.firebaseDB || _m.getFirestore();
+            var _snap = await _m.getDoc(_m.doc(_db, 'products', String(_urlId)));
             if(_snap.exists()){
                 localStorage.setItem('selectedProduct', JSON.stringify(Object.assign({ id: _snap.id }, _snap.data())));
                 location.reload();  /* the synchronous path above now resolves it from cache */
@@ -407,16 +417,19 @@ else{
             ${(()=>{
                 const allMedia = [];
                 if (product.videoUrl) allMedia.push({ type:'video', src: product.videoUrl });
+                const _picked = (window.pickProductImage ? pickProductImage(product) : '');
                 const imgs = (product.images && product.images.length)
                   ? product.images
-                  : (product.image ? [product.image] : ['assets/default-product.png']);
+                  : (product.imageStorageUrls && product.imageStorageUrls.length)
+                    ? product.imageStorageUrls
+                    : (_picked ? [_picked] : (product.image ? [product.image] : ['assets/default-product.png']));
                 imgs.forEach(i => allMedia.push({ type:'image', src: i }));
                 const first = allMedia[0];
                 const thumbsHtml = allMedia.map((m, idx) =>
                   `<div class="prd-thumb ${idx===0?'active':''} ${m.type==='video'?'prd-video-thumb':''}" data-idx="${idx}" onclick="_prdGalleryGo(${idx})">`+
                     (m.type==='video'
                       ? `<video src="${m.src}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>`
-                      : `<img src="${m.src}" alt="" loading="lazy">`)+
+                      : `<img src="${m.src}" alt="" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">`)+
                   `</div>`
                 ).join('');
                 const dotsHtml = allMedia.length > 1
@@ -429,7 +442,7 @@ else{
                   <div class="prd-gallery-main" id="prdGalleryMain" onclick="_prdLightboxOpen()" title="Tap to enlarge">
                     ${first.type==='video'
                       ? `<video id="prdMainVid" src="${first.src}" controls muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>`
-                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}">`}
+                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
                     ${navHtml}
                     <div class="prd-gallery-zoom-hint">Tap to zoom</div>
                   </div>
@@ -590,7 +603,7 @@ else{
                 })()}
 
                 <!-- ACTIONS — Premium CTA v2 -->
-                <div style="margin-top:16px;">
+                <div id="prdActions" style="margin-top:16px;">
                     <button class="prd-cta-primary" onclick="buyNowProduct()">&#x26A1; Buy Now</button>
                     <div class="prd-cta-row">
                         <button class="prd-cta-secondary" onclick="addToCart()">&#x1F6D2; Add to Cart</button>
@@ -923,20 +936,23 @@ else{
 
 let quantity = 1;
 
-
+/* Max purchasable = declared stock (Infinity if the product does not track stock). */
+function _prdMaxStock(){
+    var s = (typeof product !== 'undefined' && product && product.stock != null) ? Number(product.stock) : null;
+    return (s != null && !isNaN(s)) ? s : Infinity;
+}
+/* Single source that updates the #qty label AND the sticky bar's live total. */
+function _syncQtyUI(){
+    var q = document.getElementById("qty"); if (q) q.innerText = quantity;
+    if (typeof _updateStickyPrice === "function") _updateStickyPrice();
+}
 
 function increaseQty(){
-
-    quantity++;
-
-
-
-    document.getElementById(
-
-        "qty"
-
-    ).innerText = quantity;
-
+    var max = _prdMaxStock();
+    if (quantity < max) { quantity++; _syncQtyUI(); }
+    else if (max !== Infinity) {                 /* graceful stock limit */
+        try { if (window.showToast) showToast("Only " + max + " in stock", "info"); } catch(_) {}
+    }
 }
 
 
@@ -1031,22 +1047,153 @@ if(product) {
 /* DECREASE */
 
 function decreaseQty(){
-
-    if(quantity > 1){
-
-        quantity--;
-
-
-
-        document.getElementById(
-
-            "qty"
-
-        ).innerText = quantity;
-
-    }
-
+    if (quantity > 1) { quantity--; _syncQtyUI(); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PRODUCT STICKY BUY BAR (Phase C gap #2)
+   A persistent mobile purchase surface that slides in once the inline CTA
+   scrolls out of view (IntersectionObserver — no scroll polling) and slides
+   out when it returns. Dynamic CTA (Buy/Add · Out of Stock · Select Options ·
+   Pre-order) + live total that tracks the quantity. Docks above the bottom-nav,
+   respects the safe area, mobile-only. Never covers content (fixed, own layer).
+══════════════════════════════════════════════════════════════════════════ */
+function _prdIsOOS(){
+    return (typeof product !== 'undefined' && product &&
+        (product.outOfStock === true || (product.stock != null && Number(product.stock) <= 0)));
+}
+function _prdVariantPending(){
+    try {
+        if (typeof _variantGroups !== 'function' || typeof product === 'undefined') return false;
+        var groups = _variantGroups(product) || [];
+        var sel = window._selectedVariants || {};
+        for (var i = 0; i < groups.length; i++) {
+            var g = groups[i]; if (!g) continue;
+            if (g.required === false) continue;
+            var key = g.key || g.name || g.label;
+            if (key && !sel[key]) return true;
+        }
+    } catch(_) {}
+    return false;
+}
+function _prdCtaState(){
+    if (_prdIsOOS())          return { key:'oos',     label:'Out of Stock' };
+    if (_prdVariantPending()) return { key:'variant', label:'Select Options' };
+    if (product && product.preorder) return { key:'preorder', label:'&#x26A1; Pre-order' };
+    return { key:'normal' };
+}
+function _updateStickyPrice(){
+    var pv = document.getElementById('prdStickyPrice'); if (!pv) return;
+    var unit  = Number((typeof product !== 'undefined' && product && product.price) || 0);
+    var total = unit * quantity;
+    pv.innerHTML = 'KES ' + total.toLocaleString() +
+        (quantity > 1 ? ' <span class="pssb-mult">(' + quantity + ' × KES ' + unit.toLocaleString() + ')</span>' : '');
+}
+function _renderStickyBtns(){
+    var wrap = document.getElementById('prdStickyBtns'); if (!wrap) return;
+    var st = _prdCtaState();
+    if (st.key === 'oos') { wrap.innerHTML = '<div class="pssb-oos">Out of Stock</div>'; return; }
+    if (st.key === 'variant') {
+        wrap.innerHTML = '<button class="pssb-buy" onclick="document.getElementById(\'prdActions\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">' + st.label + '</button>';
+        return;
+    }
+    var buyLabel = (st.key === 'preorder') ? st.label : '&#x26A1; Buy Now';
+    wrap.innerHTML =
+        '<button class="pssb-cart" onclick="addToCart()">&#x1F6D2; Add</button>' +
+        '<button class="pssb-buy" onclick="buyNowProduct()">' + buyLabel + '</button>';
+}
+function _initProductStickyBar(){
+    if (document.getElementById('prdStickyBar')) return;              /* build once */
+    var actions = document.getElementById('prdActions');
+    if (!actions || typeof product === 'undefined' || !product) return;
+
+    var css = document.createElement('style'); css.id = 'prdStickyBarCss';
+    css.textContent =
+      '#prdStickyBar{position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));z-index:60;' +
+      'display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(8,8,8,0.98);' +
+      'border-top:1px solid rgba(255,255,255,0.08);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);' +
+      'transform:translateY(150%);transition:transform .28s cubic-bezier(.22,1,.36,1);pointer-events:none;will-change:transform;}' +
+      '#prdStickyBar.pssb-show{transform:translateY(0);pointer-events:auto;}' +
+      '.pssb-info{display:flex;flex-direction:column;line-height:1.15;min-width:0;flex:0 1 auto;max-width:46%;}' +
+      '.pssb-name{font-size:11px;color:rgba(255,255,255,0.55);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '#prdStickyPrice{font-size:16px;font-weight:900;color:#71ff00;white-space:nowrap;letter-spacing:-0.3px;}' +
+      '.pssb-mult{font-size:9px;color:rgba(255,255,255,0.4);font-weight:600;}' +
+      '.pssb-btns{display:flex;gap:7px;flex:1;justify-content:flex-end;align-items:center;}' +
+      '.pssb-cart,.pssb-buy{height:42px;border:none;border-radius:12px;font-weight:900;font-size:12.5px;cursor:pointer;font-family:inherit;white-space:nowrap;padding:0 13px;}' +
+      '.pssb-cart{background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}' +
+      '.pssb-buy{flex:0 1 150px;background:linear-gradient(135deg,#71ff00,#39e600);color:#050e05;box-shadow:0 2px 10px rgba(113,255,0,0.3);}' +
+      '.pssb-oos{flex:1;height:42px;border-radius:12px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px;}' +
+      '@media(min-width:821px){#prdStickyBar{display:none !important;}}';         /* mobile-only */
+    document.head.appendChild(css);
+
+    var bar = document.createElement('div');
+    bar.id = 'prdStickyBar';
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Quick purchase');
+    bar.innerHTML =
+        '<div class="pssb-info"><span class="pssb-name">' + _esc(String(product.name || '').slice(0, 40)) + '</span>' +
+        '<span id="prdStickyPrice"></span></div><div class="pssb-btns" id="prdStickyBtns"></div>';
+    document.body.appendChild(bar);
+    _renderStickyBtns();
+    _updateStickyPrice();
+
+    /* Show the bar when the inline actions leave the viewport; hide when they return. */
+    try {
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                var show = !e.isIntersecting;
+                if (show) { _renderStickyBtns(); _updateStickyPrice(); }   /* reflect current variant/qty/stock */
+                bar.classList.toggle('pssb-show', show);
+            });
+        }, { rootMargin: '0px 0px -12% 0px', threshold: 0 });
+        io.observe(actions);
+    } catch(_) { /* no IntersectionObserver → leave the bar hidden, inline CTAs still work */ }
+
+    _wireQtyHold();
+}
+
+/* ── Press-and-hold quantity acceleration ──────────────────────────────────
+   Conservative ramp: 250ms → 120ms → 60ms. Respects stock/min via increase/
+   decreaseQty. Stops on release/leave/cancel. Single-tap still works (click).
+   Touch + mouse; keyboard already steps via the buttons' click. */
+function _wireQtyHold(){
+    var box = document.querySelector('.quantity-box'); if (!box) return;
+    var btns = box.querySelectorAll('button'); if (btns.length < 2) return;
+    [{ el: btns[0], fn: decreaseQty }, { el: btns[1], fn: increaseQty }].forEach(function (b) {
+        if (b.el._skHold) return; b.el._skHold = 1;
+        var t0 = 0, timer = null;
+        function step(){ b.fn(); }
+        function schedule(){
+            var held = Date.now() - t0;
+            var gap = held > 1500 ? 60 : held > 500 ? 120 : 250;
+            timer = setTimeout(function(){ step(); schedule(); }, gap);
+        }
+        function start(ev){
+            /* left mouse / touch only; don't hijack the click's own single step */
+            if (ev.type === 'mousedown' && ev.button !== 0) return;
+            t0 = Date.now();
+            clearTimeout(timer);
+            schedule();                       /* first repeat after 250ms; the click fires the immediate step */
+        }
+        function stop(){ clearTimeout(timer); timer = null; }
+        b.el.addEventListener('mousedown', start);
+        b.el.addEventListener('touchstart', start, { passive: true });
+        ['mouseup','mouseleave','touchend','touchcancel','blur'].forEach(function (evt) {
+            b.el.addEventListener(evt, stop);
+        });
+    });
+}
+
+/* Boot: init once the async-rendered product actions exist. */
+(function _bootProductStickyBar(){
+    var tries = 0;
+    var iv = setInterval(function () {
+        tries++;
+        if (document.getElementById('prdActions') && typeof product !== 'undefined' && product) {
+            clearInterval(iv); _initProductStickyBar();
+        } else if (tries > 40) { clearInterval(iv); }     /* ~10s giveup */
+    }, 250);
+})();
 
 
 
@@ -1081,7 +1228,10 @@ function addToCart(){
 
 function buyNowProduct(){
 
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    /* Buy Now = express-checkout THIS item only. Build a FRESH cart instead of
+       appending to whatever was saved — appending made checkout charge for stale/
+       accumulated entries (observed as "the whole stock" instead of 1). */
+    const cart = [];
 
     const item = Object.assign({}, product, {
         selectedSize:  window._selectedSize  || null,
@@ -1583,7 +1733,7 @@ window.downloadProductVideo=downloadProductVideo;
     window._rvTrackProduct = function(p) {
         if (!p || !p.id) return;
         var list = _getList().filter(function(x) { return x.id !== p.id; });
-        list.unshift({ id: p.id, name: p.name || '', price: p.price || 0, image: p.image || '' });
+        list.unshift({ id: p.id, name: p.name || '', price: p.price || 0, image: (window.pickProductImage ? pickProductImage(p) : (p.image || '')) });
         _saveList(list);
     };
 

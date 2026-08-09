@@ -175,13 +175,27 @@ window.SokoniWalletV2 = (function () {
 
   /* ─── TOAST ─── */
   let _toastTimer;
+  /* Toasts are QUEUED so success/warning/info never stack over each other (#8):
+     one shows at a time, the next appears after the current fades. */
+  let _toastQueue = [];
+  let _toastActive = false;
   function toast(msg, type = 'default', ms = 3000) {
+    _toastQueue.push({ msg, type, ms });
+    if (!_toastActive) _drainToasts();
+  }
+  function _drainToasts() {
     const el = document.getElementById('wal-toast');
-    if (!el) return;
+    if (!el) { _toastQueue = []; _toastActive = false; return; }
+    const next = _toastQueue.shift();
+    if (!next) { _toastActive = false; return; }
+    _toastActive = true;
+    el.textContent = next.msg;
+    el.className = 'show ' + next.type;
     clearTimeout(_toastTimer);
-    el.textContent = msg;
-    el.className = 'show ' + type;
-    _toastTimer = setTimeout(() => { el.className = ''; }, ms);
+    _toastTimer = setTimeout(() => {
+      el.className = '';
+      setTimeout(_drainToasts, 220);   // let it fade out before the next
+    }, next.ms);
   }
 
   /* ─── INIT ─── */
@@ -208,6 +222,8 @@ window.SokoniWalletV2 = (function () {
         if (av) av.textContent = (_userName[0] || '?').toUpperCase();
 
         await loadDashboard();
+        _startBalanceListener();   // live balance — updates instantly on send/claim/top-up/withdraw/webhook
+        _claimPendingTransfers();  // auto-claim any money sent to this user's number before they registered
         await checkSellerStatus();
 
         /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
@@ -322,6 +338,62 @@ window.SokoniWalletV2 = (function () {
     if (el) el.textContent = val;
   }
 
+  /* Auto-claim money sent to this user's phone BEFORE they registered (send-to-anyone).
+     Runs best-effort on every wallet load — the missing piece that left claimable
+     transfers stuck 'pending' when a recipient signed up normally (walletV2SavePhone's
+     claim hook only fires in the explicit add-phone flow). Idempotent server-side. */
+  async function _claimPendingTransfers() {
+    try {
+      const res = await _callTimed('walletV2ClaimPending', {}, 12000);
+      const d = res && res.data || {};
+      if (d.claimed > 0) {
+        toast('Received KSh ' + _fmt(d.amount) + ' sent to your number', 'success');
+        loadDashboard();   // refresh tx list; balance also updates via the live listener
+      }
+    } catch (_) { /* no pending claims / endpoint busy — safe to ignore */ }
+  }
+
+  /* ─── LIVE BALANCE (single source of truth) ───
+     Subscribe to wallets/{uid} so every money movement — top-up, send, claim,
+     withdraw, and any webhook-driven credit — reflects instantly on every wallet
+     screen with no manual refresh. Read-only (firestore.rules allows reading your
+     own wallet doc). Additive: loadDashboard() still owns the non-balance fields. */
+  let _balanceUnsub = null;
+  async function _startBalanceListener() {
+    if (_balanceUnsub || !_uid) return;
+    try {
+      const db = await _db();
+      const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      _balanceUnsub = onSnapshot(
+        doc(db, 'wallets', _uid),
+        (snap) => { if (snap.exists()) _applyLiveBalance(snap.data()); },
+        (err) => console.warn('[WalletV2] balance listener error', err && err.message),
+      );
+    } catch (e) {
+      console.warn('[WalletV2] balance listener unavailable (falling back to refresh-on-action)', e && e.message);
+    }
+  }
+
+  function _applyLiveBalance(w) {
+    const bal = Number(w.balance) || 0;
+    const balEl = document.getElementById('balVal'); if (balEl) balEl.textContent = _fmt(bal);
+    _setText('wdrAvail', 'KSh ' + _fmt(bal));
+    if (w.savingsBalance  != null) _setText('savingsTotal', 'KSh ' + _fmtShort(w.savingsBalance  || 0));
+    if (w.cashbackBalance != null) _setText('cashbackVal',  'KSh ' + _fmtShort(w.cashbackBalance || 0));
+    if (w.rewardPoints    != null) _setText('rewardPts',    (w.rewardPoints || 0) + ' pts');
+    if (w.frozen != null) {
+      _frozen = !!w.frozen;
+      const fb = document.getElementById('frozenBadge'); if (fb) fb.style.display = _frozen ? 'flex' : 'none';
+    }
+    if (_dashboard) { _dashboard.balance = bal; if (w.pendingPayout != null) _dashboard.pendingPayout = w.pendingPayout; }
+    try { localStorage.setItem('_walletBal', String(bal)); } catch (_) {}
+    if (typeof _renderPendingPayout === 'function') _renderPendingPayout();
+    /* Broadcast so any other surface on this page (e.g. an embedded Profile balance)
+       can stay in lockstep without its own round-trip. Cross-PAGE Profile sync gets
+       its own wallets/{uid} listener in the Profile↔Wallet slice. */
+    try { window.dispatchEvent(new CustomEvent('sokoni:wallet-balance', { detail: { balance: bal, savingsBalance: w.savingsBalance, pendingPayout: w.pendingPayout, frozen: _frozen } })); } catch (_) {}
+  }
+
   /* ─── SELLER CHECK ─── */
   async function checkSellerStatus() {
     try {
@@ -367,19 +439,36 @@ window.SokoniWalletV2 = (function () {
     return _esc(tx.description || tx.note || 'Transaction');
   }
 
+  /* Map a raw tx status to a human label + badge colour. */
+  function _txStatusMeta(status) {
+    const s = String(status || 'completed').toLowerCase();
+    if (s === 'completed' || s === 'paid' || s === 'success') return { label: 'Completed', color: 'var(--g)' };
+    if (s === 'pending_claim')                                return { label: 'Unclaimed',  color: '#f5a623' };
+    if (s === 'pending' || s === 'processing')                return { label: 'Pending',    color: '#f5a623' };
+    if (s === 'failed' || s === 'rejected')                   return { label: 'Failed',     color: 'var(--red)' };
+    if (s === 'refunded' || s === 'reversed' || s === 'expired') return { label: s[0].toUpperCase() + s.slice(1), color: 'var(--sub)' };
+    return { label: s[0].toUpperCase() + s.slice(1), color: 'var(--sub)' };
+  }
+
+  /* Cache the rendered rows per target so taps dispatch by INDEX — never embed the
+     tx JSON in an inline onclick (that decodes HTML entities before JS parses it =
+     an XSS vector; see the inline-handler rule). */
+  let _txCache = {};
   function renderTxList(txs, targetId, compact = false) {
     const el = document.getElementById(targetId);
     if (!el) return;
 
     if (!txs || txs.length === 0) {
+      _txCache[targetId] = [];
       el.innerHTML = '<div class="empty-state"><div class="empty-emoji">🧾</div><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
       return;
     }
 
     const limit = compact ? 5 : txs.length;
     const items = txs.slice(0, limit);
+    _txCache[targetId] = items;
 
-    el.innerHTML = items.map(tx => {
+    el.innerHTML = items.map((tx, i) => {
       const { cls, emoji } = _txIcon(tx);
       const isIn = cls === 'in' || cls === 'save';
       const amt = Math.abs(tx.amount || 0);
@@ -388,11 +477,19 @@ window.SokoniWalletV2 = (function () {
       const time = _relativeTime(tx.createdAt);
       const title = _txTitle(tx);
       const note = tx.note || tx.description || tx.category || '';
-      return `<div class="tx-item" onclick="W2.openTxDetail(${_esc(JSON.stringify(tx))})">
+      const st = _txStatusMeta(tx.status);
+      const ref = String(tx.id || tx.txId || '');
+      const meta = `<div class="tx-desc" style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:${st.color}">
+            <span style="width:6px;height:6px;border-radius:50%;background:${st.color};display:inline-block"></span>${_esc(st.label)}</span>
+          ${ref ? `<span style="font-size:11px;color:var(--sub);opacity:.7">· ${_esc(ref.slice(0, 16))}</span>` : ''}
+        </div>`;
+      return `<div class="tx-item" onclick="W2.openTxByIndex('${_esc(targetId)}',${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')W2.openTxByIndex('${_esc(targetId)}',${i})">
         <div class="tx-icon ${_esc(cls)} emoji">${emoji}</div>
         <div class="tx-info">
           <div class="tx-name">${title}</div>
           ${note ? `<div class="tx-desc">${_esc(note)}</div>` : ''}
+          ${meta}
         </div>
         <div class="tx-right">
           <div class="tx-amount ${_esc(amtCls)}">${sign}${_fmt(amt)}</div>
@@ -400,6 +497,11 @@ window.SokoniWalletV2 = (function () {
         </div>
       </div>`;
     }).join('');
+  }
+
+  function openTxByIndex(targetId, i) {
+    const tx = (_txCache[targetId] || [])[Number(i)];
+    if (tx) openTxDetail(tx);
   }
 
   /* ─── LOAD TRANSACTIONS (HISTORY PANEL) ─── */
@@ -614,6 +716,10 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('sndAmtInput').value = '0';
     document.getElementById('sndStep2Next').disabled = true;
     document.getElementById('sndNote').value = '';
+    /* Re-enable the confirm button: executeSend() disables it on submit and the success
+       path never re-enables it, so a second send inherited a stuck-disabled ("unpressable")
+       button. Reset it whenever a new send starts. */
+    const _cb = document.getElementById('sndConfirmBtn'); if (_cb) _cb.disabled = false;
     if (document.getElementById('sndAmountDisplay')) document.getElementById('sndAmountDisplay').classList.remove('error');
     sendGoStep(1);
   }
@@ -646,18 +752,32 @@ window.SokoniWalletV2 = (function () {
        valid Kenyan phone; walletV2Send returns the recipient's real name on
        success, rejects USER_NOT_FOUND, and blocks self-sends. */
     const normPhone = _normalizePhone(phone);
-    document.getElementById('sndStep1Searching').style.display = 'none';
     if (!normPhone) {
+      document.getElementById('sndStep1Searching').style.display = 'none';
       document.getElementById('sndNotFound').style.display = 'block';
       document.getElementById('sndStep1Next').disabled = true;
       _sendRecipient = null;
       return;
     }
-    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone };
+
+    /* Resolve the recipient's NAME server-side before confirming (M-Pesa-style), so the
+       user sees who they're paying. Read-only + rate-limited (walletV2ResolveRecipient).
+       Falls back to the phone number if the lookup is unavailable — the send itself is
+       still validated server-side by walletV2Send, so this only affects the label. */
+    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone, registered: null };
+    let label = '+' + normPhone, sub = 'Confirmed on send';
+    try {
+      const r = (await _callTimed('walletV2ResolveRecipient', { phone: normPhone }, 8000))?.data || {};
+      if (r.self)            { sub = 'This is your own number'; }
+      else if (r.registered) { label = r.name || label; sub = '+' + normPhone; _sendRecipient.name = r.name || _sendRecipient.name; _sendRecipient.registered = true; }
+      else if (r.canReceive) { sub = 'Not on SOKONI yet — they’ll get an SMS to claim'; _sendRecipient.registered = false; }
+    } catch (_) { /* lookup unavailable — keep phone label; server still validates on send */ }
+
+    document.getElementById('sndStep1Searching').style.display = 'none';
     const av = document.getElementById('sndAvatar');
-    if (av) av.textContent = '👤';
-    _setText('sndName', '+' + normPhone);
-    _setText('sndPhoneDisp', 'Recipient name confirmed on send');
+    if (av) av.textContent = (label && label[0] !== '+') ? label[0].toUpperCase() : '👤';
+    _setText('sndName', label);
+    _setText('sndPhoneDisp', sub);
     document.getElementById('sndContactCard').style.display = 'flex';
     document.getElementById('sndStep1Next').disabled = false;
   }
@@ -1227,10 +1347,22 @@ window.SokoniWalletV2 = (function () {
       _setText('anOut', 'KSh ' + _fmt(d.totalOut || 0));
       _drawAnalyticsChart(d.byDay || []);
       _renderCategories(d.byCategory || []);
-    } catch (_) {
-      _setText('anIn', 'KSh 0.00');
-      _setText('anOut', 'KSh 0.00');
-      _renderCategories([]);
+    } catch (err) {
+      /* Never leave users on "Could not load analytics" (#12): friendly state + Retry
+         (retries in place, no page refresh). Log the real cause for diagnostics. */
+      console.error('[WalletV2] analytics load failed', err && err.message);
+      _setText('anIn', '—');
+      _setText('anOut', '—');
+      const cats = document.getElementById('anCategories');
+      if (cats) {
+        cats.innerHTML =
+          '<div style="text-align:center;padding:26px 14px;color:var(--sub)">'
+          + '<div style="font-size:30px;margin-bottom:10px">📊</div>'
+          + '<div style="font-weight:800;color:var(--txt);margin-bottom:4px">We’re fetching your analytics</div>'
+          + '<div style="font-size:13px;margin-bottom:16px">This is taking a moment.</div>'
+          + '<button class="btn btn-secondary" style="padding:9px 22px" onclick="W2.loadAnalytics(\'' + _esc(_anPeriod) + '\')">Retry</button>'
+          + '</div>';
+      }
     }
   }
 
@@ -1402,7 +1534,16 @@ window.SokoniWalletV2 = (function () {
   function _promptPin(sub) {
     return new Promise((resolve) => {
       _pinResolve = resolve;
-      const i = document.getElementById('pinVerifyInput'); if (i) i.value = '';
+      const i = document.getElementById('pinVerifyInput');
+      if (i) {
+        i.value = '';
+        /* Auto-submit the instant a valid 4-digit PIN is entered — no extra tap (#13). */
+        i.oninput = () => {
+          const v = (i.value || '').replace(/\D/g, '').slice(0, 4);
+          if (i.value !== v) i.value = v;
+          if (v.length === 4) pinVerifySubmit();
+        };
+      }
       _setText('pinVerifySub', sub || 'Authorize this payment');
       openOverlay('ovlPinVerify');
       setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 120);
@@ -1858,12 +1999,17 @@ window.SokoniWalletV2 = (function () {
 
     const rows = document.getElementById('txdRows');
     if (!rows) return;
+    const st = _txStatusMeta(tx.status);
+    if (statusEl) { statusEl.textContent = st.label; statusEl.style.color = st.color; }
     const fields = [
       ['Type',       tx.type || '—'],
       ['Date',       tx.createdAt ? _relativeTime(tx.createdAt) : '—'],
       ['Reference',  tx.id || tx.txId || '—'],
+      ['Status',     st.label],
+      ...(tx.fee != null ? [['Fee', 'KSh ' + _fmt(tx.fee)]] : []),
       ['Note',       tx.note || tx.description || '—'],
       ...(tx.recipientName ? [['To', tx.recipientName]] : []),
+      ...(tx.toPhone       ? [['To', tx.toPhone]]        : []),
       ...(tx.senderName    ? [['From', tx.senderName]]  : []),
       ...(tx.category      ? [['Category', tx.category]] : []),
     ];
@@ -1871,9 +2017,34 @@ window.SokoniWalletV2 = (function () {
       <div class="info-row">
         <span class="k">${_esc(k)}</span>
         <span class="v" style="font-size:13px">${_esc(v)}</span>
-      </div>`).join('');
+      </div>`).join('') +
+      `<button class="btn btn-secondary" style="margin-top:14px;width:100%;min-height:44px" onclick="W2.shareReceipt()">
+        <i class="fas fa-share-nodes"></i> Share receipt</button>`;
 
+    _currentReceiptTx = tx;
     openOverlay('ovlTxDetail');
+  }
+
+  /* Share a transaction receipt via the native share sheet, falling back to clipboard. */
+  let _currentReceiptTx = null;
+  async function shareReceipt() {
+    const tx = _currentReceiptTx; if (!tx) return;
+    const st = _txStatusMeta(tx.status);
+    const amt = Math.abs(tx.amount || 0);
+    const lines = [
+      'SOKONI Wallet Receipt',
+      `${_txTitle(tx).replace(/<[^>]*>/g, '')}`,
+      `Amount: KSh ${_fmt(amt)}`,
+      `Status: ${st.label}`,
+      `Reference: ${tx.id || tx.txId || '—'}`,
+      `Date: ${tx.createdAt ? _relativeTime(tx.createdAt) : '—'}`,
+    ];
+    const text = lines.join('\n');
+    try {
+      if (navigator.share) { await navigator.share({ title: 'SOKONI Receipt', text }); return; }
+      await navigator.clipboard.writeText(text);
+      toast('Receipt copied to clipboard', 'success');
+    } catch (_) { /* user cancelled share — ignore */ }
   }
 
   /* ─── PUBLIC API ─── */
@@ -1913,7 +2084,7 @@ window.SokoniWalletV2 = (function () {
     /* History */
     loadTransactions, filterTx, setTxFilter, loadMoreTx,
     /* TX detail */
-    openTxDetail,
+    openTxDetail, openTxByIndex, shareReceipt,
   };
 
   /* Notify page script */

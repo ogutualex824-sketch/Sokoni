@@ -21,6 +21,48 @@ const _auth = () => getAuth();
 const _ts  = () => FieldValue.serverTimestamp();
 const _san = (v, n = 200) => String(v || '').slice(0, n).replace(/[<>"']/g, '');
 
+/* ── D2b — Onboarding → canonical availability adapter ──────────────────────────
+   The onboarding wizard captures a SIMPLE availability form (day chips + one
+   from/to + one break + a lead-time code) and a separate "bookings" step
+   (duration/buffer/caps). The authoritative engine (booking-service `_prepareSlot`)
+   reads `schedule.{day}.periods`/`breaks`, `appt`, `modes` — which the raw form does
+   NOT contain, so an onboarding-only provider was unbookable. This adapter maps the
+   onboarding model into the input shape of the ONE canonical pipeline
+   (availability.js `normalizeAvailabilityConfig`); it introduces NO new availability
+   logic — it only translates. Governance invariant holds: onboarding output reaches
+   the same normalizer before storage. */
+const _DOW3 = { mon: 'monday', tue: 'tuesday', wed: 'wednesday', thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday' };
+const _LEAD_HOURS = { '1h': 1, '2h': 2, '4h': 4, 'same': 0, '1d': 24, '2d': 48, '1w': 168 };
+function _onboardingAvailabilityToConfig(draft) {
+  const av = (draft && draft.availability) || {};
+  const bk = (draft && draft.bookings) || {};
+  const selected = new Set((av.days || []).map(x => _DOW3[String(x).toLowerCase().slice(0, 3)]).filter(Boolean));
+  const open = av.from || '08:00', close = av.to || '17:00';
+  const breaks = (av.breakFrom && av.breakTo) ? [{ start: av.breakFrom, end: av.breakTo }] : [];
+  const schedule = {};
+  for (const day of Object.values(_DOW3)) {
+    schedule[day] = selected.has(day)
+      ? { closed: false, periods: [{ open, close }], breaks }
+      : { closed: true, periods: [], breaks: [] };
+  }
+  const leadHours = _LEAD_HOURS[av.leadTime] != null ? _LEAD_HOURS[av.leadTime] : 2;
+  return {
+    modes:   av.emergency ? ['open_24_7'] : ['fixed_hours'],
+    hubType: 'general',
+    schedule,
+    appt: {
+      enabled:        true,
+      durationMins:   Number(bk.duration) || 60,
+      bufferMins:     Number(bk.buffer) || 0,
+      maxDaysAhead:   Number(bk.maxAdvanceDays) || 30,
+      minNoticeHours: leadHours,
+      allowSameDay:   leadHours < 24,
+    },
+    cap: { maxPerDay: bk.maxPerDay != null ? Number(bk.maxPerDay) : null, maxSimultaneous: 1 },
+  };
+}
+exports._onboardingAvailabilityToConfig = _onboardingAvailabilityToConfig;
+
 /* ── Subscription plan catalogue ────────────────────────────────────────────── */
 const PLANS = {
   free_trial: {
@@ -358,11 +400,12 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
-  // Create availability doc
+  // Create availability doc — via the CANONICAL normalization pipeline (D2b adapter),
+  // so the authoritative booking engine can read the onboarding provider's schedule.
   if (draft.availability) {
-    batch.set(_db().collection('providerAvailability').doc(uid), {
-      uid, ...draft.availability, updatedAt: _ts(),
-    }, { merge: true });
+    const { normalizeAvailabilityConfig } = require('./availability');
+    const config = normalizeAvailabilityConfig(_onboardingAvailabilityToConfig(draft), uid);
+    batch.set(_db().collection('providerAvailability').doc(uid), config, { merge: true });
   }
 
   // Create settings doc
@@ -465,21 +508,34 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
   const profile = profileSnap.data();
   const sub     = subSnap.exists ? subSnap.data() : null;
 
-  // Aggregate earnings (last 30d)
-  const since = new Date(Date.now() - 30 * 86400000);
-  const earningsSnap = await _db().collection('providerPayouts')
-    .where('providerId', '==', uid)
-    .where('createdAt', '>=', since)
-    .get();
-
-  const earnings30d = earningsSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  // Aggregate earnings (last 30d) — SECONDARY KPI, must never block the dashboard.
+  // Wrapped so a missing index / slow query degrades to 0 instead of failing the whole
+  // load (the home screen must always render the profile, bookings and pending list).
+  let earnings30d = 0;
+  try {
+    const since = new Date(Date.now() - 30 * 86400000);
+    const earningsSnap = await _db().collection('providerPayouts')
+      .where('providerId', '==', uid)
+      .where('createdAt', '>=', since)
+      .get();
+    earnings30d = earningsSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  } catch (e) {
+    logger.warn('[providerDashboard] earnings aggregate skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
 
   return {
     profile: {
-      name: profile.name, category: profile.category, providerId: profile.providerId,
+      name: profile.name, category: profile.category, subcategory: profile.subcategory || null,
+      providerId: profile.providerId,
       status: profile.status, rating: profile.rating, reviewCount: profile.reviewCount,
       bookingCount: profile.bookingCount, verified: profile.verified, featured: profile.featured,
       profilePhotoUrl: profile.profilePhotoUrl || null, qrCode: profile.qrCode || null,
+      /* Fields the dashboard Settings tabs prefill (Profile / Pricing / Payment). Added
+         to the projection so those tabs are not blank on load — additive, read-only. */
+      bio: profile.bio || null, description: profile.description || null,
+      phone: profile.phone || null, email: profile.email || null,
+      hourlyRate: profile.hourlyRate ?? null, fixedPrice: profile.fixedPrice ?? null,
+      mpesaPhone: profile.mpesaPhone || null,
     },
     subscription: sub ? {
       plan: sub.plan, status: sub.status, renewalDate: sub.renewalDate,
@@ -489,6 +545,173 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
     earnings: { last30dKes: earnings30d, currency: 'KES' },
     profileCompletion: _calcProfileCompletion(profile),
   };
+};
+
+/* providerGetHealth — the ONLY new aggregation the Business Health card needs:
+   completion rate, cancellation rate, average response time. Everything else on the
+   card comes from existing data (dashboard/profile/reviews/earnings/wallet). Reads
+   providerBookings (single-field where + limit → no composite index) and derives from
+   status + createdAt→confirmedAt. Read-only, degrades to nulls, never throws hard. */
+exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
+  const uid = _uid(req);
+  let total = 0, completed = 0, cancelled = 0, noShow = 0, respSum = 0, respN = 0;
+  const byDow = [0, 0, 0, 0, 0, 0, 0];   // Sun..Sat booking counts (busy days)
+  const byHour = new Array(24).fill(0);  // 0..23 booking counts (peak hours)
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(500).get();
+    snap.docs.forEach(d => {
+      const b = d.data(); total++;
+      const s = String(b.status || '');
+      if (s === 'completed' || s === 'order_delivered') completed++;
+      else if (s === 'cancelled' || s === 'declined' || s === 'rejected') cancelled++;
+      else if (s === 'no_show') noShow++;
+      const reqAt = b.createdAt?.toDate ? b.createdAt.toDate() : (b.requestedAt?.toDate ? b.requestedAt.toDate() : null);
+      const cfAt  = b.confirmedAt?.toDate ? b.confirmedAt.toDate() : null;
+      if (reqAt && cfAt && cfAt >= reqAt) { respSum += (cfAt - reqAt) / 60000; respN++; }
+      /* Busy days / peak hours from the appointment day+time (EAT) — derived, no new data. */
+      if (b.date) { const dt = new Date(b.date + 'T00:00:00+03:00'); if (!isNaN(dt)) byDow[dt.getUTCDay()]++; }
+      const hh = (typeof b.startTime === 'string' && /^(\d{1,2}):/.test(b.startTime)) ? parseInt(b.startTime, 10) : null;
+      if (hh != null && hh >= 0 && hh < 24) byHour[hh]++;
+    });
+  } catch (e) {
+    logger.warn('[providerGetHealth] aggregate skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+  const terminal = completed + cancelled + noShow;
+  return {
+    total, completed, cancelled, noShow, sampled: total,
+    completionRate:   terminal ? Math.round((completed / terminal) * 100) : null,
+    cancellationRate: total ? Math.round(((cancelled + noShow) / total) * 100) : null,
+    avgResponseMins:  respN ? Math.round(respSum / respN) : null,
+    busyDays: byDow, peakHours: byHour,
+  };
+};
+
+/* providerServiceMetrics — per-service operational metrics from EXISTING booking data
+   (no new tracking): bookings count, revenue (only from explicit KES-named fields to
+   avoid unit ambiguity), last-booked. Views/conversion are omitted — no source exists.
+   Single-field query, no index; read-only, degrades to {}. */
+exports._h.providerServiceMetrics = _h.providerServiceMetrics = async (req) => {
+  const uid = _uid(req);
+  const byService = {};
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(1000).get();
+    snap.docs.forEach(d => {
+      const b = d.data();
+      const sid = b.serviceId || b.service || null;
+      if (!sid) return;
+      const m = byService[sid] || (byService[sid] = { bookings: 0, revenueKes: null, lastBooked: null });
+      m.bookings++;
+      const amtKes = b.amountKes != null ? b.amountKes : (b.totalKes != null ? b.totalKes : (b.priceKes != null ? b.priceKes : null));
+      if ((b.status === 'completed' || b.status === 'order_delivered') && amtKes != null) m.revenueKes = (m.revenueKes || 0) + Number(amtKes);
+      const t = b.scheduledAt?.toDate ? b.scheduledAt.toDate() : (b.createdAt?.toDate ? b.createdAt.toDate() : null);
+      if (t) { const iso = t.toISOString(); if (!m.lastBooked || iso > m.lastBooked) m.lastBooked = iso; }
+    });
+  } catch (e) {
+    logger.warn('[providerServiceMetrics] skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+  return { byService };
+};
+
+/* Booking timestamp (ms) — mirrors the client _schedMs so roster ordering matches. */
+function _bkTs(b) {
+  if (b.startTs) return Number(b.startTs);
+  if (b.scheduledAt?.toDate) return b.scheduledAt.toDate().getTime();
+  if (b.scheduledAt?._seconds) return b.scheduledAt._seconds * 1000;
+  if (b.date) return Date.parse(b.date + 'T' + (b.startTime || '00:00') + ':00') || null;
+  if (b.createdAt?.toDate) return b.createdAt.toDate().getTime();
+  return null;
+}
+
+/* ── providerGetCustomers — lightweight CRM roster + insights aggregated from
+   providerBookings (NO separate customer database). Single-field query (auto-indexed),
+   in-memory grouping → no composite index. Provider-only internal notes are batch-read
+   from providerCustomerNotes. Read-only; touches no money/booking logic. */
+exports._h.providerGetCustomers = _h.providerGetCustomers = async (req) => {
+  const uid = _uid(req);
+  const now = Date.now();
+  const byCust = {};
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(1000).get();
+    snap.docs.forEach(d => {
+      const b = d.data();
+      const cid = b.customerUid || ('name:' + (b.customerName || 'Unknown'));
+      const c = byCust[cid] || (byCust[cid] = {
+        id: b.customerUid || null, name: b.customerName || 'Customer',
+        bookings: 0, completed: 0, cancelled: 0, spendKes: 0,
+        firstTs: null, lastTs: null, nextTs: null, services: {},
+      });
+      c.bookings++;
+      if (b.customerName) c.name = b.customerName;
+      const st = b.status;
+      const done = (st === 'completed' || st === 'order_delivered');
+      if (done) c.completed++;
+      if (st === 'cancelled' || st === 'declined' || st === 'no_show') c.cancelled++;
+      if (done) {
+        /* price is CENTS (booking-service); older/order flows carry *Kes in shillings. */
+        const sh = (b.price != null) ? Number(b.price) / 100
+          : (b.amountKes != null ? Number(b.amountKes)
+            : (b.totalKes != null ? Number(b.totalKes)
+              : (b.priceKes != null ? Number(b.priceKes) : 0)));
+        c.spendKes += sh || 0;
+      }
+      const ts = _bkTs(b);
+      if (ts) {
+        if (!c.firstTs || ts < c.firstTs) c.firstTs = ts;
+        if (!c.lastTs || ts > c.lastTs) c.lastTs = ts;
+        if (ts >= now && ['pending', 'confirmed', 'in_progress'].includes(st) && (!c.nextTs || ts < c.nextTs)) c.nextTs = ts;
+      }
+      const sv = b.service || b.serviceId;
+      if (sv) c.services[sv] = (c.services[sv] || 0) + 1;
+    });
+  } catch (e) {
+    logger.warn('[providerGetCustomers] skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+
+  /* Provider-only notes — one batched getAll, CF-only collection. */
+  const notes = {};
+  try {
+    const ids = Object.values(byCust).map(c => c.id).filter(Boolean).slice(0, 300);
+    if (ids.length) {
+      const snaps = await _db().getAll(...ids.map(cid => _db().collection('providerCustomerNotes').doc(uid + '__' + cid)));
+      snaps.forEach(s => { if (s.exists) notes[s.data().customerUid] = s.data().note || ''; });
+    }
+  } catch (_) { /* best-effort */ }
+
+  const customers = Object.values(byCust).map(c => {
+    const fav = Object.keys(c.services).sort((a, b) => c.services[b] - c.services[a])[0] || null;
+    const repeat = c.bookings >= 2;
+    const daysSince = c.lastTs ? Math.floor((now - c.lastTs) / 86400000) : null;
+    const status = !repeat ? 'New' : ((daysSince != null && daysSince <= 90) ? 'Active' : 'Returning');
+    return {
+      id: c.id, name: c.name, bookings: c.bookings, completed: c.completed, cancelled: c.cancelled,
+      spendKes: Math.round(c.spendKes), avgKes: c.completed ? Math.round(c.spendKes / c.completed) : 0,
+      repeat, favourite: fav, firstTs: c.firstTs, lastTs: c.lastTs, nextTs: c.nextTs, daysSince, status,
+      note: c.id ? (notes[c.id] || null) : null,
+    };
+  }).sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
+
+  const returning = customers.filter(c => c.repeat).length;
+  const insights = {
+    total: customers.length,
+    new: customers.length - returning,
+    returning,
+    inactive90: customers.filter(c => c.daysSince != null && c.daysSince > 90).length,
+    topBySpend: customers.slice().sort((a, b) => b.spendKes - a.spendKes).slice(0, 5).map(c => ({ id: c.id, name: c.name, spendKes: c.spendKes })),
+    frequent: customers.slice().sort((a, b) => b.bookings - a.bookings).slice(0, 5).map(c => ({ id: c.id, name: c.name, bookings: c.bookings })),
+  };
+  return { customers: customers.slice(0, 300), insights };
+};
+
+/* ── providerSaveCustomerNote — provider-only note on a customer. CF-only collection
+   (providerCustomerNotes), owner keyed by the doc id prefix. Not money/booking logic. */
+exports._h.providerSaveCustomerNote = _h.providerSaveCustomerNote = async (req) => {
+  const uid = _uid(req);
+  const customerUid = _san(req.data?.customerUid, 128);
+  if (!customerUid) throw new HttpsError('invalid-argument', 'customerUid is required.');
+  const note = _san(req.data?.note, 1000);
+  await _db().collection('providerCustomerNotes').doc(uid + '__' + customerUid)
+    .set({ providerId: uid, customerUid, note, updatedAt: _ts() }, { merge: true });
+  return { success: true, note };
 };
 
 function _calcProfileCompletion(p) {
@@ -515,13 +738,29 @@ exports._h.providerGetBookings = _h.providerGetBookings = async (req) => {
   return { bookings: snap.docs.map(d => ({ id: d.id, ...d.data() })), hasMore: snap.size === limit };
 };
 
-/* ── 10. providerUpdateAvailability ──────────────────────────────────────────── */
+/* ── 10. providerUpdateAvailability ──────────────────────────────────────────────
+   @deprecated D2 (2026-07-27). This is the BLIND-MERGE availability writer: it stores
+   raw client input WITHOUT the canonical normalization pipeline, so it can persist a
+   config the authoritative booking engine can't read (no schedule/appt/modes) and
+   drops `breaks`. It violates the D2 governance invariant ("every persisted
+   availability configuration reaches normalizeAvailabilityConfig before storage").
+   The rich editor now saves via bookingDispatch→setProviderAvailability (canonical);
+   the onboarding wizard converges via the same pipeline in D2b. This op has ZERO
+   known callers. RETAINED only for the standard retirement lifecycle — instrumented
+   below so telemetry can confirm zero usage before removal in a dedicated cleanup. */
 exports._h.providerUpdateAvailability = _h.providerUpdateAvailability = async (req) => {
   const uid  = _uid(req);
   const data = req.data?.data;
   if (!data) throw new HttpsError('invalid-argument', 'data required.');
+  logger.warn('[deprecated] providerUpdateAvailability called — bypasses canonical availability pipeline', { uid });
   await _db().collection('providerAvailability').doc(uid).set({ uid, ...data, updatedAt: _ts() }, { merge: true });
-  return { success: true };
+  /* Retirement telemetry (D2): count deprecated-path usage. When this stops rising over
+     an observation window, the blind-merge writer follows the standard removal lifecycle. */
+  try {
+    await _db().collection('systemHealth').doc('availabilityConvergence').set(
+      { deprecatedWrites: FieldValue.increment(1), lastDeprecatedAt: _ts() }, { merge: true });
+  } catch (_) { /* best-effort */ }
+  return { success: true, deprecated: true };
 };
 
 /* ── 11. providerUpdatePricing ───────────────────────────────────────────────── */

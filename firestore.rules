@@ -22,6 +22,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /* Server-enforced account deactivation. accountDeactivate sets a custom claim
+       `deactivated:true`; this gates authenticated WRITE actions so a frozen
+       account cannot create orders, bookings, listings or messages. FAIL-OPEN:
+       only an explicit claim == true blocks — an absent claim (every normal user)
+       passes, so this can never lock out active users. Admins are exempt. */
+    function isActive() {
+      return request.auth != null &&
+             (request.auth.token.deactivated != true ||
+              request.auth.token.admin == true ||
+              request.auth.token.superAdmin == true);
+    }
+
     function isOwner() {
       return isAuthed() && resource.data.uid == request.auth.uid;
     }
@@ -261,11 +273,40 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* Per-user analytics (RBAC) — a user reads only their OWN summary (rider earnings/CLV, buyer
+       spend); admins read any. Maintained ONLY by Cloud Functions. */
+    match /users/{uid}/analytics/{doc} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;
+    }
+
+    /* ── Applications: the onboarding request for every role ───────────────────
+       Providers, riders, businesses, professionals and healthcare facilities all
+       submit here, and `applicationLifecycle` projects an approved applicant onto
+       the registry that makes them discoverable and dispatchable.
+
+       THIS IS THE ONLY `applications` BLOCK. A second, more permissive one used
+       to exist further down this file. Firestore takes the UNION of all matching
+       allow rules, so the effective read rule was the looser one — which included
+       `resource.data.status == 'open' || 'active'`, granting UNAUTHENTICATED read
+       of any application in either state. Every application carries the
+       applicant's phone number and a rider's carries their National ID and
+       driving-licence number, so a single document set to 'active' would have
+       published those to the open internet. Nothing in the codebase writes either
+       status to this collection (checked: no writer, and production held only
+       'pending' and 'approved'), so the clause bought nothing and risked
+       everything. Consolidated here, with no public read.
+
+       Personal data is owner-or-admin only. Approval is an admin act:
+       noAdminFields() keeps `approved`/`verified`/`role` out of an applicant's
+       own update, so nobody can approve themselves by editing their request. */
     match /applications/{appId} {
-      allow create: if claimsOwner();
+      allow create: if claimsOwner() && noAdminFields();
       allow read:   if isAdmin() || isOwner();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      /* The applicant may amend or withdraw a request that is still theirs
+         (e.g. correcting a phone number), but cannot decide it. */
+      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
     }
 
     /* Administrator invitations. Written EXCLUSIVELY by the inviteUser /
@@ -296,7 +337,7 @@ service cloud.firestore {
          A client may only create a record in the pending state. Promotion to
          'active' or 'approved' is an admin action (see the update rule below,
          which already blocks status changes by the owner). */
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
+      allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
                     && (!request.resource.data.keys().hasAny(['status'])
                         || request.resource.data.status == 'pending');
       allow update: if isAdmin()
@@ -311,11 +352,25 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
 
-      allow create: if isAuthed()
+      /* Client create is for a booking REQUEST only. The authoritative price,
+         payment state, commission and confirmed status are set by the server
+         (bookingCreate / bookingCreateService via Admin SDK, which bypass rules).
+         A client may not self-declare them — status must be absent or 'pending',
+         and the financial/settlement fields are forbidden. This closes the
+         manipulation vector (a client writing status:'confirmed' / paymentStatus:
+         'paid' / a fake price) while still letting the request-creation UIs work.
+         Service bookings go through `providerBookings` (write:false → CF-only). */
+      allow create: if isActive() && isAuthed()
                     && (request.resource.data.customerId == request.auth.uid
                         || request.resource.data.buyerId  == request.auth.uid
                         || request.resource.data.userId   == request.auth.uid)
-                    && noAdminFields();
+                    && noAdminFields()
+                    && (!('status' in request.resource.data)
+                        || request.resource.data.status == 'pending')
+                    && !request.resource.data.keys().hasAny([
+                         'price','pricingBreakdown','paymentStatus','paymentId',
+                         'verifiedPaymentId','commission','commissionRate','net',
+                         'amountPaid','settlement','settled']);
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid          == request.auth.uid)
                     || (isAuthed() && resource.data.buyerId      == request.auth.uid)
@@ -511,7 +566,7 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow create: if claimsOwner()
+      allow create: if isActive() && claimsOwner()
                     && validOrderStatus()
                     && clientOrderInit();
       allow read:   if isAdmin()
@@ -564,6 +619,22 @@ service cloud.firestore {
       }
     }
 
+    /* Booking resolution engine (Slice 2). Both are written ONLY by Cloud Functions
+       (Admin SDK bypasses rules); clients may READ their own participant rows. */
+    match /bookingEvents/{eventId} {
+      // immutable, append-only canonical event log; participants + admin read
+      allow read:                 if isAdmin()
+                                  || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                                  || resource.data.customerUid == request.auth.uid));
+      allow create, update, delete: if false;   // server-only (Admin SDK)
+    }
+    match /affectedBookings/{bookingId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                   || resource.data.customerUid == request.auth.uid));
+      allow write: if false;                     // server-only (Admin SDK)
+    }
+
     match /fcm_tokens/{tokenId} {
       allow write: if isAuthed()
                    && request.auth.token.email != null
@@ -576,6 +647,16 @@ service cloud.firestore {
                             && request.resource.data.uid == request.auth.uid
                             && request.resource.data.keys().hasAll(['uid','action','ts']);
       allow read:           if isModerator();
+      allow update, delete: if false;
+    }
+
+    /* Durable consent audit trail (Must-fix #2). A user may only APPEND their own consent event;
+       records are immutable (no update/delete) so historical consent is preserved and auditable. */
+    match /consentRecords/{recId} {
+      allow create:         if isAuthed()
+                            && request.resource.data.uid == request.auth.uid
+                            && request.resource.data.keys().hasAll(['uid','policyVersion','source']);
+      allow read:           if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
       allow update, delete: if false;
     }
 
@@ -783,7 +864,7 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read:   if true;
-      allow create: if isAuthed()
+      allow create: if isActive() && isAuthed()
                     && request.resource.data.sellerUid == request.auth.uid
                     && validPrice('price')
                     && noAdminFields()
@@ -826,7 +907,7 @@ service cloud.firestore {
       allow update: if isParticipant()
                     && request.resource.data.diff(resource.data)
                          .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
-      allow create: if isAuthed()
+      allow create: if isActive() && isAuthed()
                     && request.auth.uid in request.resource.data.participants
                     && request.resource.data.participants.size() <= 2;
       allow delete: if isAdmin();
@@ -1336,7 +1417,27 @@ service cloud.firestore {
                                        'hours','openingHours','returnPolicy','returnText',
                                        'packagingNote','delMethod','delTime','zones','updatedAt']));
       allow delete: if isAdmin();
+
+      /* Canonical per-shop analytics — maintained ONLY by Cloud Functions (analytics-aggregator).
+         The shop owner + admins may read their own numbers; clients never write. */
+      match /analytics/{doc} {
+        allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+        allow write: if false;
+      }
     }
+
+    /* Canonical platform-wide analytics (analytics/global, analytics/daily_*) — the ONE source
+       every admin/finance dashboard reads. Admin-read only; written only by Cloud Functions. */
+    match /analytics/{doc} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* Dimensional analytics (RBAC) — platform-wide product/category stats + the cutover
+       parity log are admin-only; written only by Cloud Functions. */
+    match /productAnalytics/{productId}  { allow read: if isAdmin(); allow write: if false; }
+    match /categoryAnalytics/{categoryId}{ allow read: if isAdmin(); allow write: if false; }
+    match /analyticsParityLog/{entryId}  { allow read: if isAdmin(); allow write: if false; }
 
     /* ── orderEvents/{orderId}/events — the sale's audit trail / timeline ──
        Had no rule block, so `sokoni-orders.js::listenOrderEvents` and the
@@ -1416,6 +1517,83 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }
 
+    /* ── Landlord properties ───────────────────────────────────────────────────
+       Three levels: a building, its units, and a financial ledger per unit.
+
+       This replaces landlordData/{uid}.properties[] — an array that held units,
+       which held rentHistory[] and waterBills[]. Recording one tenant's rent
+       rewrote the entire building, ledger entries could not be queried, indexed
+       or audited individually, and the document grew by two entries per unit per
+       month forever. Measured 2026-08-02: 0 documents existed, so the correct
+       shape was built once rather than migrated to later.
+
+       ownerUid is DENORMALISED onto units and ledger entries deliberately. The
+       alternative is get(parent) inside the rule, which costs a document read on
+       every single access and counts against the rules read limit. A copied uid
+       is cheaper and cannot drift, because nothing may change it: it is absent
+       from every hasOnly() list below. */
+    match /landlordProperties/{propertyId} {
+      allow read:   if true;                    /* public directory, as bnbListings */
+      allow create: if isAuthed()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['ownerUid','name','status','createdAt'])
+                    /* A landlord may not publish themselves. Moderation is the
+                       platform's, so a new building starts pending and only an
+                       admin can move it. */
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['name','address','city','phone','description',
+                                       'images','image','updatedAt']));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+
+      /* Units are not public. A building is advertised; who lives in it is not. */
+      match /units/{unitId} {
+        allow read:   if isAdmin()
+                      || (isAuthed() && resource.data.ownerUid  == request.auth.uid)
+                      || (isAuthed() && resource.data.tenantUid == request.auth.uid);
+        allow create: if isAuthed()
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.resource.data.keys().hasAll(['ownerUid','number','createdAt']);
+        allow update: if isAdmin()
+                      || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['number','type','monthlyRent','deposit','tenantUid',
+                                         'tenantName','tenantPhone','leaseStart','leaseEnd',
+                                         'occupancyStatus','updatedAt']));
+        allow delete: if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+
+        /* Ledger entries are financial records. They may be created and settled,
+           and their amount and period may be corrected while still pending — but
+           a PAID entry is closed to the landlord. Reversing money is an
+           adjustment or refund entry of its own, never an edit to history, which
+           is the whole reason these left the array. */
+        match /ledger/{entryId} {
+          allow read:   if isAdmin()
+                        || (isAuthed() && resource.data.ownerUid  == request.auth.uid)
+                        || (isAuthed() && resource.data.tenantUid == request.auth.uid);
+          allow create: if isAuthed()
+                        && request.resource.data.ownerUid == request.auth.uid
+                        && request.resource.data.keys().hasAll(['ownerUid','type','period','amount','status','createdAt'])
+                        && request.resource.data.type in ['rent','water','deposit','refund','adjustment','penalty','discount']
+                        && request.resource.data.amount is number
+                        && request.resource.data.status in ['pending','paid','overdue','refunded'];
+          allow update: if isAdmin()
+                        || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                            && resource.data.status != 'paid'
+                            && request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasOnly(['status','paidAt','reference','amount','period','updatedAt']));
+          /* Deleting a settled financial record is not a landlord's to do. */
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
+    /* SUPERSEDED by landlordProperties above. Left in place, read-only for its
+       owner and admins, so any device still holding a legacy mirror can be
+       inspected. It has no reader in the codebase and nothing writes it after
+       landlord.html moved to the new collection. */
     match /landlordData/{uid} {
       allow read, write: if isAuthed() && request.auth.uid == uid;
       allow read: if isAdmin();
@@ -2230,6 +2408,7 @@ service cloud.firestore {
     match /posRetailSales/{saleId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid)   /* seller reads own sales (mirror + CF write merchantId) */
                    || (isAuthed() && resource.data.cashierUid == request.auth.uid);
       allow write: if false; /* CF Admin SDK only */
     }
@@ -2324,6 +2503,16 @@ service cloud.firestore {
                               .data.ownerId == request.auth.uid)
                      || isAdmin());
       allow write: if false;
+
+      /* Per-branch analytics (RBAC) — maintained ONLY by Cloud Functions. The branch owner
+         (parent branch's sellerId) + admins may read their own branch's numbers; no client writes. */
+      match /analytics/{doc} {
+        allow read:  if isAdmin()
+                     || (isAuthed()
+                         && exists(/databases/$(database)/documents/branches/$(branchId))
+                         && get(/databases/$(database)/documents/branches/$(branchId)).data.sellerId == request.auth.uid);
+        allow write: if false;
+      }
     }
 
     match /posRefunds/{refundId} {
@@ -3434,6 +3623,28 @@ service cloud.firestore {
       allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
     }
 
+    /* Immutable, append-only audit trail. Owner (seller) or admin may READ; NO client
+       writes at all. Records are written once by Cloud Functions (admin SDK) and never
+       updated or deleted — a per-entity hash chain makes any out-of-band tampering
+       detectable (functions/etims-audit.js verifyChain). */
+    match /etimsAuditLog/{eventId} {
+      allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /etimsAuditHeads/{entityId} {
+      allow read, write: if false;   // internal chain-head pointers — CF-only
+    }
+
+    /* Invoice lifecycle documents (credit/debit notes, cancellations, amendments,
+       reversals). Owner (seller) or admin READ; all writes via Cloud Functions only
+       (etims-lifecycle.js). */
+    match /creditNotes/{id}          { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /debitNotes/{id}           { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceCancellations/{id} { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceAmendments/{id}    { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceReversals/{id}     { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /etimsTransmissionQueue/{id} { allow read: if isAdmin(); allow write: if false; }
+
     match /hubs/{hubId} {
       allow read:   if isAuthed();
       allow create: if isAdmin();
@@ -3743,6 +3954,13 @@ service cloud.firestore {
                      (resource.data.fromUid == request.auth.uid ||
                       resource.data.toUid   == request.auth.uid ||
                       isAdmin());
+      allow write: if false;
+    }
+
+    match /claimableTransfers/{claimId} {
+      // Send-to-anyone escrow. Sender may read their own; all money movement
+      // (create/claim/refund) goes through Admin SDK (Cloud Functions) only.
+      allow read:  if isAuthed() && (resource.data.senderUid == request.auth.uid || isAdmin());
       allow write: if false;
     }
 
@@ -4759,8 +4977,13 @@ service cloud.firestore {
     }
 
     match /providerBookings/{bookingId} {
+      /* Read: the provider (providerId) or the customer who owns it. The canonical
+         customer field is `customerUid` (what bookingCreateService writes); `customerId`
+         is kept for any legacy docs. Needed so a customer can OBSERVE their own booking
+         (pending → paid_held → settled) in real time. Writes stay CF-only. */
       allow read:  if isAdmin()
                    || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                      || resource.data.customerUid == request.auth.uid
                                       || resource.data.customerId == request.auth.uid));
       allow write: if false;
     }
@@ -4773,6 +4996,41 @@ service cloud.firestore {
     match /providerVerification/{uid} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write: if false;
+    }
+
+    /* ── Driver / rider records ────────────────────────────────────────────────
+       `drivers/{uid}` is the operational rider record read by navigation.js
+       (auto-dispatch), admin-os.js (online counts) and email-triggers.js. It had
+       NO rule block at all, which in a default-deny ruleset means the rider could
+       not read their own record — the driver dashboard could show a rider nothing
+       about their own approval state or payout setting.
+
+       Written exclusively by the server (`applicationLifecycle` /
+       `applicationDecide` via the Admin SDK, which bypasses rules), so all client
+       writes are denied. Approval status, suspension and vehicle verification are
+       platform decisions; a rider who could write this document could approve
+       themselves onto the road. Going online is a separate act and is expressed
+       through `rideDrivers` + `riderLocations`, which have their own rules.
+
+       Read is owner-or-admin, NOT `isAuthed()`: this record carries the rider's
+       payout frequency and home area, which no other customer needs. */
+    match /drivers/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;   // CF-only — applicationLifecycle / dispatch
+    }
+
+    /* Rider identity documents — National ID, driving licence, expiry.
+       Deliberately a SEPARATE collection from `drivers` and `rideDrivers`,
+       because `rideDrivers` is readable by every signed-in user (dispatch needs
+       the rider's operational record) and putting identity numbers there would
+       expose every rider's National ID to any account on the platform. Consistent
+       with providerVerification above and with the ODPC treatment of
+       high-sensitivity identifiers: restricted at rest, never search-indexed.
+       Admin-read for review; the rider may read their own to see what is still
+       outstanding. CF-write only. */
+    match /driverVerification/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;   // CF-only — applicationLifecycle
     }
 
     match /providerSettings/{uid} {
@@ -5004,16 +5262,19 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isAuthed() && resource.data.employerUid == request.auth.uid);
     }
 
-    /* Job application listing (open calls) — searchable public listings */
-    match /applications/{appId} {
-      allow read:   if resource.data.status == 'open' || resource.data.status == 'active'
-                    || (isAuthed() && resource.data.uid == request.auth.uid)
-                    || isAdmin();
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
-      allow update: if isAdmin()
-                    || (isAuthed() && resource.data.uid == request.auth.uid && noAdminFields());
-      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
-    }
+    /* REMOVED — duplicate `applications` block.
+       This was labelled "Job application listing (open calls) — searchable public
+       listings", but it matched the SAME path as the onboarding-application rule
+       near the top of this file. Firestore unions all matching allow rules, so
+       this block's `status == 'open' || 'active'` read clause silently applied to
+       provider, business and rider applications too — documents that hold a phone
+       number, a National ID and a driving-licence number. No code ever wrote
+       either status here (job posts live in `jobs`/`jobApplications`), so the
+       public-listing intent was never realised while the PII exposure was real.
+
+       The single authoritative block is `match /applications/{appId}` above;
+       see the comment there. Do not re-add a second block for this path — add
+       clauses to the one rule instead, or the union quietly widens access again. */
 
     /* Healthcare providers — publicly discoverable directory */
     match /healthProviders/{providerId} {

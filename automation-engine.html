@@ -696,8 +696,8 @@ function _toggleRule(id, enabled) {
   }).catch(function(e) { _toast(e.message,'red'); _loadRules(); });
 }
 
-function _deleteRule(id) {
-  if (!confirm('Delete this rule? This cannot be undone.')) return;
+async function _deleteRule(id) {
+  if (!(await SK.dialog.confirm('Delete this rule? This cannot be undone.', null, null, { title: 'Delete rule', variant: 'danger', confirmLabel: 'Delete' }))) return;
   _cf('adeDeleteRule')({ id }).then(function() {
     _toast('Rule deleted', 'green');
     _loadRules();

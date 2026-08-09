@@ -81,14 +81,11 @@
 <body>
 <script src="splash.js"></script>
 
-<!-- Nav -->
-<nav class="iq-nav">
-  <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="iq-nav-logo" alt="SOKONI"></a>
-  <div class="iq-nav-right">
-    <button type="button" onclick="(function(){var p=document.getElementById('inspiqPicker');var open=p.style.display===''||p.style.display==='none';if(open){p.style.display='block';InspIQ&&InspIQ.renderPickerEdit('inspiqPicker');}else{p.style.display='none';}})()" class="iq-nav-link">✨ Edit Interests</button>
-    <a href="/" class="iq-nav-link">🏠 Home</a>
-  </div>
-</nav>
+<!-- The shared home header (#sk-top-nav, injected by shared-header.js) sits above
+     this and provides the logo + Home + search, so the page matches home. The old
+     custom .iq-nav duplicated that header and was hidden anyway by shared-header's
+     `body > nav:not(#sk-top-nav)...` rule — which also hid its "Edit Interests"
+     control. That control now lives in the hero below, where it's actually visible. -->
 
 <!-- Hero -->
 <div class="iq-hero">
@@ -98,6 +95,7 @@
   </div>
   <h1>Your <span>Infinite Feed</span></h1>
   <p>Deals, products &amp; services personalised to your interests — updated continuously</p>
+  <button type="button" class="iq-nav-link" style="margin-top:14px;" onclick="(function(){var p=document.getElementById('inspiqPicker');var open=p.style.display===''||p.style.display==='none';if(open){p.style.display='block';InspIQ&&InspIQ.renderPickerEdit('inspiqPicker');}else{p.style.display='none';}})()">✨ Edit Interests</button>
 </div>
 
 <!-- Stats -->

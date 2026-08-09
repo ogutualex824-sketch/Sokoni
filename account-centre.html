@@ -6,7 +6,10 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-  <script src="auth-guard.js"></script>
+  <script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
+  <script src="sokoni-auth-state.js"></script>
+  <script src="sokoni-identity-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>SOKONI — Account Centre</title>
@@ -1773,7 +1776,7 @@ async function _loadBusinesses() {
       const b = d.data();
       const emoji = { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥', events:'🎪', property:'🏠' }[b.type] || '🏢';
       return `
-        <div class="ac-biz-card" onclick="location.href='seller.html'">
+        <div class="ac-biz-card" onclick="location.href='/merchant'">
           <div class="ac-biz-icon">${emoji}</div>
           <div class="ac-biz-info">
             <div class="ac-biz-name">${_esc(b.name || 'Unnamed Business')}</div>
@@ -1948,7 +1951,7 @@ window.acWsBreak = async function(businessId) {
     await window.SokoniWorkspace.clockBreak();
     _empLoaded = false;
     await _loadEmployment();
-  } catch(e) { alert('Break failed: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Break failed: ' + e.message); }
 };
 window.acWsResume = async function(businessId) {
   if (!window.SokoniWorkspace) return;
@@ -1958,7 +1961,7 @@ window.acWsResume = async function(businessId) {
     await window.SokoniWorkspace.clockResume();
     _empLoaded = false;
     await _loadEmployment();
-  } catch(e) { alert('Resume failed: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Resume failed: ' + e.message); }
 };
 
 /* ── Panel switching ────────────────────────────────────────── */
@@ -2039,7 +2042,7 @@ window.acConfirmDelete = async function() {
 
 /* ── Sign out all other devices ─────────────────────────────── */
 window.acRevokeAll = async function() {
-  if (!confirm('Sign out all other devices? You will remain signed in on this device.')) return;
+  if (!(await SK.dialog.confirm('Sign out all other devices? You will remain signed in on this device.', null, null, { title: 'Sign out other devices', variant: 'danger', confirmLabel: 'Sign out others' }))) return;
   try {
     const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
 
@@ -2079,7 +2082,7 @@ window.acRevokeAll = async function() {
       } catch (reauthErr) {
         console.error('[AccountCentre] re-auth after revoke failed:',
                       reauthErr && reauthErr.message);
-        alert('Other devices were signed out, but this device needs you to sign in ' +
+        SK.dialog.alert('Other devices were signed out, but this device needs you to sign in ' +
               'again shortly.');
       }
     }
@@ -2092,18 +2095,18 @@ window.acRevokeAll = async function() {
        other devices are signed out, and claiming otherwise would be false. */
     if (devRes.status === 'rejected' && legacyRes.status === 'rejected') {
       const why = (devRes.reason && (devRes.reason.code || devRes.reason.message)) || 'unknown error';
-      alert('Could not sign out other devices (' + why + '). Please try again, ' +
+      SK.dialog.alert('Could not sign out other devices (' + why + '). Please try again, ' +
             'or contact support if this continues.');
     }
   } catch (e) {
     console.error('[AccountCentre] acRevokeAll error:', e && e.message, e);
-    alert('Could not sign out other devices (' + ((e && e.message) || 'unknown error') + ').');
+    SK.dialog.alert('Could not sign out other devices (' + ((e && e.message) || 'unknown error') + ').');
   }
 };
 
 /* ── Revoke individual device (device engine v2) ─────────────── */
 window.acRevokeDeviceV2 = async function(deviceDocId) {
-  if (!confirm('Sign out this device? It will lose access immediately.')) return;
+  if (!(await SK.dialog.confirm('Sign out this device? It will lose access immediately.', null, null, { title: 'Sign out device', variant: 'danger', confirmLabel: 'Sign out' }))) return;
   try {
     await _cfDeviceLogout({ deviceDocId });
     _devices = _devices.filter(d => d.docId !== deviceDocId);
@@ -2113,7 +2116,7 @@ window.acRevokeDeviceV2 = async function(deviceDocId) {
     const countEl = document.getElementById('secDeviceCount');
     if (countEl) countEl.textContent = _devices.length;
   } catch (e) {
-    alert('Failed to sign out device. Please try again.');
+    SK.dialog.alert('Failed to sign out device. Please try again.');
   }
 };
 
@@ -2126,7 +2129,7 @@ window.acTrustDevice = async function(deviceDocId) {
     const listEl = document.getElementById('acDeviceList');
     const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
     if (listEl) listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
-  } catch (e) { alert('Failed: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
 };
 
 /* ── Untrust a device ───────────────────────────────────────── */
@@ -2138,12 +2141,12 @@ window.acUntrustDevice = async function(deviceDocId) {
     const listEl = document.getElementById('acDeviceList');
     const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
     if (listEl) listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
-  } catch (e) { alert('Failed: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
 };
 
 /* ── Revoke individual device (legacy sessions fallback) ─────── */
 window.acRevokeDevice = async function(sessionId) {
-  if (!confirm('Revoke this device? It will be signed out immediately.')) return;
+  if (!(await SK.dialog.confirm('Revoke this device? It will be signed out immediately.', null, null, { title: 'Revoke device', variant: 'danger', confirmLabel: 'Revoke' }))) return;
   try {
     await SokoniSessions.revokeSession(sessionId);
     _sessions = _sessions.filter(s => s.sessionId !== sessionId);
@@ -2154,7 +2157,7 @@ window.acRevokeDevice = async function(sessionId) {
     const countEl = document.getElementById('secDeviceCount');
     if (countEl) countEl.textContent = _sessions.length;
   } catch (e) {
-    alert('Failed to revoke device. Please try again.');
+    SK.dialog.alert('Failed to revoke device. Please try again.');
   }
 };
 

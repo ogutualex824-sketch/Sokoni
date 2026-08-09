@@ -817,8 +817,8 @@ window._saveRule=function(){
   }).finally(function(){btn.disabled=false;btn.textContent=id?'Update Rule':'Save Rule';});
 };
 
-window._deleteRule=function(id){
-  if(!confirm('Deactivate this rule?'))return;
+window._deleteRule=async function(id){
+  if(!(await SK.dialog.confirm('Deactivate this rule?', null, null, { title: 'Deactivate rule', variant: 'danger', confirmLabel: 'Deactivate' })))return;
   _cf('deleteCommissionRule')({ruleId:id}).then(function(){
     _toast('Rule deactivated','green');
     _loadRules();_loadOverview();

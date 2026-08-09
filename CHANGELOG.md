@@ -1,3 +1,4918 @@
+## [2026-08-09] — fix(merchant): shared-shell routing + terminal states (batch 6)
+
+Device screenshots exposed shared-runtime bugs (not per-screen). Traced to root, fixed at the
+shared layer where possible:
+
+- **Deliveries blank (shared fix)** — dispatch.html put a PAGE-level data-require-role="admin" on
+  <html>, and sokoni-permissions  hid ANY matching element — so it set <html>
+  display:none for a non-admin merchant, blanking the whole document.  now never
+  hides html/body; page-level access stays with GUARDED_ROUTES. Protects every page from a
+  mis-placed role attribute. test-merchant-runtime (5) proves html not blanked + role filter intact.
+- **Seller routes showed overview under the wrong title** — the shared seller iframe is pre-built at
+  overview (Dashboard feed) and seller.js DOMContentLoaded resets to overview AFTER the shell’s
+  one-shot showSection. The shell now re-asserts the requested section on the iframe  event
+  (+ a settle re-post), so Staff/Stories/Messages/Disputes mount the right section.
+- **Returns stuck on “Loading…”** — loadReturns’ catch only toasted and never cleared the loading
+  cells, with no timeout. Added a terminal error row (with Retry) + a 12s bounded timeout, so it
+  always reaches READY/EMPTY/ERROR.
+
+Note (verified): showOnly is reliable (one active panel; Dashboard native panel is hidden on nav) —
+the “Dashboard underneath” was the seller iframe’s own overview. Settings is a POS module, not seller.
+16 suites green. Boot crash + POS isolation already live (v494). Canonical product/stock/order/
+analytics/receipts one-identity convergence (E–L) is a separate multi-pass program, sequenced next.
+
+## [2026-08-09] — fix(pos): SmartPOS IndexedDB boot crash — self-healing schema + degrade-not-die (batch 5)
+
+Production crash on KASS (Inventory + Cashier): "Failed to execute 'transaction' on 'IDBDatabase':
+One of the specified object stores was not found." A partially-upgraded local POS DB (a prior
+upgrade was interrupted — version reads current but a store is missing, so onupgradeneeded never
+re-runs) made `_store()` throw synchronously, and the boot catch replaced the whole page with a red
+error. A POS-cache problem was taking down Inventory/Cashier, which don't even need it.
+
+- **Self-healing schema (pos-db.js)** — DB_VERSION 4→5 (forces the idempotent onupgradeneeded to
+  create any missing stores on stuck devices; no data loss). `init()` also VERIFIES all required
+  stores after open and, if any is still missing, forces ONE more upgrade at version+1 to create
+  it — never deletes user data.
+- **Guarded accessors** — `_getAll/_get/_put/_delete/_getByIndex` check the store exists first; a
+  missing store returns empty / no-ops instead of throwing. One missing store can no longer kill
+  Inventory/Cashier/the shell.
+- **Boot never dies** — `PosDB.init()` never throws (degrades); each boot step is isolated; the
+  full-page red error is replaced by a small non-blocking "POS local storage unavailable" banner,
+  and the app still launches. Inventory renders the **canonical active products** directly when the
+  local cache is degraded (Firestore is the authority; IndexedDB is a cache).
+- **Diagnostic** — `PosDB.diagnostics()` (database / version / stores present / missing / migration
+  OK|PARTIAL|FAILED / degraded) for the Diagnostics panel, never the prod UI.
+- **Regression** — `test-pos-db-migration` (8) drives an ACTUAL old v1 IndexedDB fixture in real
+  webkit: init self-heals, all 21 stores present, schema→v5, **legacy data preserved**, missing-
+  store reads don't throw. 15 suites green.
+
+Printer/POS-Setup stays isolated to its own module; unchanged. No IndexedDB clear, no reinstall,
+no hidden error, no parallel DB.
+
+## [2026-08-09] — fix(pos): canonical cross-device POS sales + splash root cause + MiniShop resolve (batch 4)
+
+Device feedback (v491 not accepted): splash still on Cashier/Inventory; POS sales not canonical.
+Traced both to root:
+
+- **Splash ROOT — `#pos-wizard` was `display:flex` by default (pos.css)**. The full-screen setup
+  overlay painted on EVERY pos.html load and was only hidden later by JS after async boot — on a
+  slow device that gap IS the splash. The two prior fixes stopped the redirect + JS-show but not
+  the CSS default. Now `display:none` by default; standalone first-run still shows it explicitly
+  (pos.js:56). Embedded Cashier/Inventory never flash it. (SW is network-first for these HTML/JS,
+  so it self-heals once v491 activates — not the primary cause.)
+- **Gap B — canonical cross-device POS sales**. A live checkout wrote only IndexedDB + canonical
+  `posTransactions` + a `products.stock` decrement, never `posRetailSales` (what OrderService's
+  posProvider reads). Promoting the real `posCompleteCheckout` would DOUBLE-DEDUCT stock. Instead:
+  a backend trigger `mirrorPosTransactionToRetail` (onDocumentCreated posTransactions/{id}) writes
+  an idempotent `posRetailSales/{id}` mirror — NO stock, NO payment (local sale stays the single
+  stock authority). Offline-safe: fires when the sync queue flushes on reconnect. Pure mapper
+  `pos-retail-mirror-map.js`; `test-pos-retail-mirror` (16) proves the round-trip txn→mirror→
+  OrderService→unified row + branch scope + no side-effect fields. Plus firestore.rules: seller
+  may read own `posRetailSales` by `merchantId` (the existing query shape).
+- **MiniShop resolution** — broadened to the canonical `shops/{sellerUid}` doc first, then active
+  branch doc, then ownerId/sellerUid/uid queries; handle from minishopHandle/handle/slug/
+  shopHandle/merchantSlug/username — so a claimed shop (KASS) resolves to 🟢 Shop Live, never Claim.
+
+15 regression suites green. Trigger has no client-facing surface; local checkout/stock unchanged.
+
+## [2026-08-09] — fix(pos): ecosystem sync audit + MiniShop in-shell (batch 3)
+
+Audited every POS/commerce mutation point (write → SokoniSync event → subscriber). Most of the
+chain is correct: a completed POS sale emits orderChanged→Order.Changed and the shell recomputes
+Analytics off the FACADE KEY (not the payload), so the earlier productChanged/Product.Changed
+mismatch class does not recur; product create/edit/delete/stock all propagate. Fixes + evidence:
+
+- **My MiniShop opens IN-SHELL (#2/#3)** — was a full-page `location.href` leave. Now a `minishop`
+  page module (dynamic src): same /merchant document/session, same tab, no window.open, shell
+  panel transition (not a splash). Honest state — neutral until the canonical claimed-shop
+  resolution succeeds, then 🟢 Shop Live (→ /shop/<handle>) or ✨ Claim Shop. Re-resolves + reloads
+  on branch switch. `pagePanel` gained dynamic-src support; router exposed as SokoniShell.go.
+- **Stock event sign (Note A)** — `PosDB.products.adjustStock` recorded `qty:Math.abs(delta)` with
+  no signed `delta`, so the stockChanged emit always said STOCK_RECEIVED (positive) even on a sale
+  deduction. Now passes the signed delta → STOCK_DEDUCTED on a sale. (Not a shell break; matters to
+  any consumer applying the payload delta.)
+- **Automated propagation proof (#5)** — `test-pos-ecosystem` (19): POS sale + marketplace order →
+  ONE OrderService identity → Analytics revenue/orders/pos/online == Orders summarize; same saleId
+  dedups (no double-count/drift); branch A≠B and legacy untagged still counts; status + channel
+  (delivery/pickup) lifecycle preserved on the shared order; archive excludes from active; stock
+  sign. Deliveries code untouched — only verified it reads the same order identity.
+
+KNOWN, deferred behind their existing gates (NOT touched this pass): (B) live POS sale does not
+write canonical cross-device `posRetailSales` (only IndexedDB + on-device Analytics) — belongs to
+the checkout-convergence effort; (C) marketplace order status changes emit no live SokoniSync event
+(shell reloads on next query) — the status writes live in the order/delivery flow.
+
+14 regression suites green. No new product/order/analytics model or MiniShop page.
+
+## [2026-08-09] — fix(merchant): convergence batch 2 — active count, splash root cause, MiniShop same-tab, analytics reconcile
+
+Device-tested feedback: count stayed 103 after deleting 2, splash still appeared, My MiniShop
+opened a new tab, Analytics disagreed with Orders. Root causes (not screenshot patches):
+
+- **Active count excludes archived (#2/#8)** — `seller.js` set the products tile from a raw
+  server aggregate over `uid==sellerUid` with NO status filter, so archiving 2 left it at 103.
+  New canonical predicate `sokoni-product-visibility.js` (ONE source of truth; absent status =
+  active, so legacy KASS products aren't hidden) — used by the count tile and reconcile;
+  `test-product-visibility` proves 103→101 and drift-matches the /api/catalogue HIDDEN set.
+- **POS splash root cause (#1/#9)** — a SECOND, earlier trigger: `pos.html`'s inline boot guard
+  hard-redirected to `pos-setup.html` at parse time (before pos.js) whenever the standalone setup
+  keys were absent — which they always are in the embedded shell. Now early-returns when embedded;
+  Cashier/Inventory open directly; POS Setup stays an explicit sidebar module.
+- **My MiniShop same-tab (#4/#5)** — replaced `window.open('_blank')` with same-origin, same-tab
+  `location.href`. Canonical resolver (`shops.minishopHandle`) → `🟢 Shop Live` → `/shop/<handle>`;
+  unclaimed → claim flow. `test-minishop-resolution` locks claimed≠claim-flow.
+- **Orders↔Analytics reconcile (#3/#6)** — Analytics view + dashboard KPIs defaulted to today/week
+  while Orders is All Time, so KASS's historical orders showed in Orders but not Analytics. Both
+  now default All Time, same OrderService identity + branch scope → they reconcile; history renders.
+
+13 regression suites green (2 new). No new mirror/collection/order-model/MiniShop-page.
+
+## [2026-08-09] — feat(merchant): convergence batch 1 — Orders, product delete, My MiniShop, POS splash
+
+Data-paths-first, extending existing infra (SokoniShell/SokoniSync/OrderService/canonical
+products) — no parallel systems, no hardcoding, no second order model.
+
+- **Orders now show (#5/#6)** — the Merchant Orders screen already read the unified
+  `SokoniOrderService`, but defaulted to `range:'today'` while diagnose used `'all'`, so
+  marketplace orders dated before local midnight were date-filtered out ("Orders empty while
+  OrderService has 9"). Default → All Time; query now branch-scoped (`activeShopId`, lenient so
+  legacy still shows). Empty state runs `diagnose()` and prints `Source·Accepted·POS·Unified·
+  Rendered` with a "Show all" action — an empty Orders view can no longer be a mystery.
+- **Product delete propagates (#4/#10)** — one canonical semantics: SOFT-archive
+  (`status:'archived', isVisible:false`). Removed the conflicting hard `deleteDoc` in
+  seller-wiring.js that raced the archive and destroyed history; it now archives idempotently.
+  seller.js emits `productChanged({deleted:true})`. Fixed a live event-name mismatch (POS listened
+  on `productChanged`, the bus emits `Product.Changed`) — POS now removes the id immediately
+  (no rebuild, no resurrection) and `refreshInventoryFromCanonical` removes canonical-sourced
+  orphans CAP-SAFELY (only on a full, untruncated catalogue). Delete → count drops on seller list,
+  POS, inventory, search, analytics.
+- **My MiniShop (#1/#2/#3)** — premium header button resolving the CANONICAL claimed-shop
+  relationship (`shops` where `ownerId==uid`, or the active branch's own shop doc): claimed
+  (`minishopHandle`) → `🟢 Shop Live` → opens `/shop/<handle>`; unclaimed → `✨ Create` → claim
+  flow. No hardcoded KASS. Re-resolves on branch switch; resolves eagerly so the click is a
+  gesture (no popup block).
+- **POS setup splash removed from the nav path (#9)** — the first-run wizard no longer blocks
+  when the POS is embedded in the merchant shell, so Merchant → Inventory renders directly. Setup
+  stays available as the explicit POS Setup module; printer functionality untouched.
+
+Verified: all files parse; test-inventory-sync 18/18. Device acceptance (founder) is the gate.
+
+## [2026-08-09] — fix(inventory): canonical products reflect on the POS screen (offline-safe)
+
+Same forensic method as the order 9→0 fix: trace source→screen, fix the exact boundary,
+prove it, deploy. The POS inventory screen renders from IndexedDB (PosDB `sokoni_smartpos`),
+which was seeded from canonical `products` ONLY ONCE at POS boot — no live path from a
+seller's dashboard edit to the screen, so new/edited products never reflected without a full
+POS reload, and `SokoniReconcile.status()` measured only the Firestore mirrors so it looked
+healthy while the screen was stale.
+
+- **pos-inventory-sync.js (new, pure, unit-tested)** — `reconcileProduct` / `mergeCatalogue`:
+  offline-safe last-write-wins. Canonical carries `updatedAt`; PosDB stamps a local `updatedAt`;
+  we persist the last-seen canonical time as `canonicalUpdatedAt`. A dashboard edit (canonical
+  newer) reflects; an unsynced offline POS sale (local newer) is PRESERVED — never clobbered by
+  stale canonical stock. Canonical stays authoritative for money and self-heals the cache. Also
+  carries `status/isVisible/minStockLevel` the old seed dropped, and surfaces upstream-deleted
+  rows as orphans (never auto-deletes).
+- **pos.js** — `_seedCatalogueFromCanonical` → re-runnable `refreshInventoryFromCanonical` (5s
+  throttle; `{force}` for explicit sync / events). Runs on inventory-tab render, on a debounced
+  `productChanged`/`stockChanged` from the shared bus, and at boot. Compact in-POS sync bar
+  (Catalogue N · ＋new · ↻updated · 🔒 kept-local · Sync now) — real stats, no fabricated data.
+- **pos-db.js** — `products.upsertCanonical` (put preserving the reconciled timestamps).
+- **Tests** — `test-inventory-sync` (18/18): timestamp coercion, dashboard-edit reflects,
+  offline-sale preserved, availability fields carried, merge counts + orphan surfacing. 9 suites green.
+- No Cloud Function change (`/api/catalogue` already returns the full doc). No new model, no
+  second product source, stock authority unchanged.
+
+## [2026-08-08] — feat(r1.1): Merchant premium mobile + unified notifications + analytics parity (v445–v453)
+
+Product-completion pass on the frozen data architecture (OrderService / AnalyticsEngine
+unchanged). Each item implemented → tested (parse + headless functional/measurement) →
+deployed → verified live. Auth-gated flows (Cart, Wishlist, Checkout, buyer orders, seller
+module internals) deferred pending a signed-in verification path — NOT marked done.
+
+- **Analytics parity (P8, v445)** — Finance leads with the same six metrics as the other
+  surfaces (Revenue/Orders/AOV/POS/Online/Refunds), read straight from
+  `AnalyticsEngine.compute()`. Dashboard = Reports = Finance = Analytics is now eyeball-verifiable.
+- **SokoniNotify (P3, v446)** — ONE notification API (`success/error/warning/info/action`) on the
+  single viewport-anchored `SokoniUI.toast` engine (bottom-centered, full-width, never clipped on
+  phone). Standard strings ("Order placed successfully", …), sticky `action()` toast with a
+  touch-sized button. Every legacy `showToast/showNotification/_sokoniToast` already routes here, so
+  the off-viewport toast bug is fixed platform-wide. **File:** sokoni-ui.js.
+- **Mobile foundation audit + drawer scrim (P2, v447)** — measured: 0 horizontal page-overflow at
+  360px on `/`, `product`, `search`, `category`, `/merchant`. Merchant rail already off-canvas +
+  hamburger; added a tap-outside scrim to dismiss the drawer.
+- **Premium merchant mobile (P9, v448–v450)** — fixed bottom nav (Home/Orders/Sell/More) on the same
+  `go()` router with two-way active sync; swipeable scroll-snap KPI cards on phone; order detail as a
+  bottom-sheet (rounded top, grab handle, 88vh) on phone. Desktop unchanged.
+- **Premium features (P13, v451–v453)** — ⌘K/Ctrl+K command palette (jump to any module + quick
+  actions, generated from the MODULE registry — no dead entries; 🔍 button on mobile); truthful
+  3-state sync indicator (Synced / Syncing N / Offline · N queued — amber only from a REAL reported
+  pending count, never fabricated); animated KPI counters honoring `prefers-reduced-motion`, unknown
+  metrics stay `—` never a fake 0.
+- **File:** merchant.html (P2/P8/P9/P13), sokoni-ui.js (P3). SW auto-bumped each deploy (v445–v453).
+- **Deferred (need signed-in path):** Cart, Wishlist, Checkout certification, buyer order UX, and the
+  seller/merchant module *internals* mobile pass. `/merchant`-as-default gated on the founder-device
+  certification sweep.
+
+---
+
+## [2026-08-07] — feat(delivery): Secure Delivery Authorization Phase 0 (shadow instrumentation)
+
+Security telemetry with ZERO money-path change (owner: "freeze payments except security
+instrumentation"). Escrow/wallet/seller/rider payout logic untouched.
+
+- **New isolated module** `functions/delivery-pin.js` (live):
+  - `deliveryPinOnAccept` (trigger): on `packageRequests` → `driver_accepted`, generate a 6-digit
+    PIN, store a keyed HMAC hash on the packageRequest (safe to expose) + `deliveryVerificationStatus`
+    `'pending'`; deliver the PLAINTEXT PIN to the buyer's order doc only (riders read deliveries via
+    CF endpoints, not orders). The live `claimAvailableDelivery` accept CF is NOT modified.
+  - `deliveryVerifyShadow` (onCall, public): rider submits PIN → HMAC compare → record a
+    `deliveryAuditLog` attempt (`verificationMethod`, result, geo) + bump status/attempt counter.
+    SHADOW — does NOT complete the delivery or release funds; existing proofPin/OTP +
+    `captureProofOfDelivery` stays authoritative.
+- **Buyer PIN display** on `track.html` — shows the 6-digit PIN (from the buyer's order doc) until
+  delivered; rider never sees it.
+- Deployed: both functions created (401 = reachable); hosting `2509923`. node --check + parse clean.
+- **Next (Phase 0b):** rider shadow PIN-entry UI (feeds `deliveryVerifyShadow` telemetry). Phases 1+
+  (enforcement/geofence/instant-hold) remain frozen-path, sign-off + shadow-parity gated.
+- **Files:** functions/delivery-pin.js, functions/index.js, track.html.
+
+---
+
+## [2026-08-07] — verify(money): funded free-delivery invariant traced end-to-end
+
+Evidence trace before further delivery work. Verdict: rider-safety core PASSES; the fuller
+funded-discount accounting is NOT implemented, with one real defect.
+
+- ✅ **deliveryFee (rider basis) is preserved end-to-end** — session (index.js:2439) → order
+  (:2700) → Rail 1 (:2927) / seller settlement (order-settlement.js:40). No promo/discount mutates
+  it; the discount reduces serverTotal only (:2424), capped at goods value (:2356). Free delivery
+  never underpays the rider; seller settled on total−delivery (not over-settled).
+- ❌ **deliveryChargedToBuyer field does not exist** — buyer-vs-rider delivery split is implicit.
+- ❌ **DEFECT: fundedBy ignored at settlement** — order-settlement settles seller on goods−discount
+  and never reads fundedBy → seller silently absorbs every discount incl. platform-funded free
+  delivery. The fundedBy ledger (finos.js applyPromoCode) is a helper the main checkout never calls.
+- No delivery-subsidy ledger line / receipt "Delivery Discount (funder)" line.
+- Recorded: docs/SECURE_DELIVERY_AUTHORIZATION_DESIGN.md §4.1; memory
+  project_discount_funding_seller_absorbs. Fix is its own money-path slice (sign-off) and does NOT
+  block delivery-auth Phase 0.
+- **Files:** docs/SECURE_DELIVERY_AUTHORIZATION_DESIGN.md (no code change — verification only).
+
+---
+
+## [2026-08-07] — fix(money): close dormant rider double-pay + client-earnings hole (trips rail)
+
+Found during the "Secure Delivery Authorization" architecture-gate survey (that spec is ~90%
+already built → verdict REVISE/converge). A latent money-path hazard, owner-signed-off to fix.
+
+- **The hazard:** `navCompleteTrip` (functions/navigation.js) both flipped `orders.status='delivered'`
+  (which fires `onOrderStatusChange`'s rider payout, key `walletTransactions/{rider}_{order}_delivery`,
+  server-computed) AND enqueued `driverEarningQueue` with a **client-supplied `request.data.earnings`**
+  (processed by `processDriverEarning`, key `walletTransactions/{queueDocId}`). Two rails, two keys,
+  no cross-guard → double-pay; plus the rider's own device set the payout amount.
+- **Why it wasn't firing:** NO client calls `navCompleteTrip`/`navSubmitPOD` (only `navTriggerSOS` is
+  invoked); the trips/multi-stop payout rail is deployed but unwired. Live payout is the delivered-
+  trigger rail alone (exactly-once). The hazard activates only if the multi-stop route UI is wired.
+- **Fix:** (1) `processDriverEarning` now shares the SAME `{rider}_{order}_delivery` key when an
+  orderId is present → the two rails are mutually exclusive (first pays, other no-ops); order-less
+  trips fall back to the queue-doc id. (2) `navCompleteTrip` no longer trusts `request.data.earnings`
+  — the rider is credited server-authoritatively by the delivered trigger; the client-amount enqueue
+  was removed. Rail 1 (`index.js` onOrderStatusChange) untouched; `node --check` clean.
+- **Files:** functions/navigation.js.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B9 — dialog convergence (Track A CLOSURE)
+
+Final ordinary-HTML batch: 26 single-dialog pages. Track A (SK-available HTML pages) now complete.
+
+- **Migrated (26 sites, 0 bare left):** trust-safety, returns (refund, danger), release-readiness,
+  pos-till-manager, pos-crm-pro, pos-cash-manager, pos-ai, messages-admin, merchant-pipeline,
+  inventory, inv-product (positive-form), fos-admin (refund→debit wallet, danger), dispute-portal,
+  digital-esoko-seller, crm, commission-engine, bnb-manage, automation-engine, auction-manager,
+  admin-messages, track, settlement-dashboard, professional-profile, fleet-monitor, checkout,
+  admin-feedback. Non-async handlers marked async after onclick/listener caller verification.
+- **Survey-first exclusions (documented, no action):** comment-only `confirm()` mentions
+  (provider-onboarding, onboarding, pos-checkout); provider-dashboard's `async confirm(id)` booking
+  METHOD; email-preview non-dialog string.
+- **Deferred (exception list, no SK):** validation, route-debug (clipboard alerts), beta-control.
+- **Adoption:** dialogs **~79% → ~86%** (330 canonical / 54 native). **Track A COMPLETE** — every
+  executable dialog on an SK-available HTML page flows through SK.dialog. Remaining natives are
+  exclusively documented exceptions, JS libraries (Track B, load-site gate), and availability-manager
+  (Track C).
+- **Files:** 26 HTML pages + docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B8 — dialog convergence (admin/ops/comms pages)
+
+11 pages migrated; 1 deferred (SK-availability gate).
+
+- **Migrated (22 sites, 0 bare left):** uat-center (2), superadmin (2 — async object methods),
+  launch (2), food-dashboard (2), event-manager (2), chat (2 — incl. `action.confirm && !confirm(...)`
+  where only the native call was replaced, the property preserved), automation-center (2 — object
+  methods marked async), async-jobs (2), status (2 alert), seller (2 alert), legal-centre (2 alert).
+  Non-async handlers marked `async` after verifying onclick/callback callers discard the return.
+- **Deferred (exception list):** android-doctor.html — diagnostic page, no shared-header/sokoni-ds,
+  `SK` absent. Same gate as pos-ios-print-test.
+- **Adoption:** dialogs **~73% → ~79%** (304 canonical / 80 native left).
+- **Files:** uat-center.html, superadmin.html, launch.html, food-dashboard.html, event-manager.html,
+  chat.html, automation-center.html, async-jobs.html, status.html, seller.html, legal-centre.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B7 — dialog convergence (POS/admin pages)
+
+9 pages migrated; 1 deferred on the SK-availability gate.
+
+- **Migrated (21 sites, 0 bare left):** pos-printer-setup (3), pos-suppliers (1 alert + 1),
+  pos-inventory (2, incl. assignment-form `const ok = await SK.dialog.confirm`), pos-hq (2),
+  pos-accounting (2), workspace-invite (1 alert + 1), partner-portal (2), notifications (2),
+  finos (2 — money: reverse-ledger + refund-clawback, danger variants). Non-async handlers
+  (pos-printer-setup, partner-portal, notifications listeners, finos money fns) marked `async`
+  after verifying onclick/listener callers discard the return.
+- **finos money check:** its `_reverseEntry`/`_processRefund` already branch correctly
+  (success in `.then`, error in `.catch`) — no swallow-then-succeed; money guard passes.
+- **Deferred (exception list):** pos-ios-print-test.html — standalone test page, loads no
+  shared-header/sokoni-ds, so `SK` is absent. Left native until an explicit include is added.
+- **Adoption:** dialogs **~68% → ~73%** (282 canonical / 102 native left).
+- **Files:** pos-printer-setup.html, pos-suppliers.html, pos-inventory.html, pos-hq.html,
+  pos-accounting.html, workspace-invite.html, partner-portal.html, notifications.html, finos.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B6 — dialog convergence (org/admin/ops pages)
+
+8 pages. Survey-first caught two files where a blind replace would have corrupted non-executable code.
+
+- **Migrated (20 sites, 0 executable native left):** seller-delivery (3 alert), org-workflows (3),
+  org-structure (1 alert + 2), my-subscriptions (2 alert + 1), manager-auth (3, incl. positive-form
+  + data-no-header), gip (2 alert + 1, data-no-header), developer-portal (1 confirm), commissioning
+  (1 alert). Non-async handlers (legal event arrows already done; here manager-auth addManager was
+  async) — all confirms verified in async fns.
+- **Exceptions retained (documented, NOT executable):** developer-portal lines ~180/182 `alert(...)`
+  inside `<span class="str">` code-doc examples; commissioning lines ~877/879 `alert(1)` inside an
+  XSS-escaping TEST string. A blind replace_all would have broken both — survey-first prevented it.
+- **Adoption:** dialogs **~63% → ~68%** (263 canonical / 121 native, ~4 of which are exceptions).
+- **Files:** seller-delivery.html, org-workflows.html, org-structure.html, my-subscriptions.html,
+  manager-auth.html, gip.html, developer-portal.html, commissioning.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B5 — dialog convergence (admin/ops pages)
+
+Resumed mechanical batches after the money-path fix. 6 admin/ops pages (all load shared-header → SK).
+
+- **Migrated (20 sites, 0 bare left):** legal-admin (4 confirm; 4 event-listener arrows marked
+  async), inv-products (4), sasos-admin (3), ops-center (2 alert + 1 confirm), financial-os (3 —
+  money page, non-async fns marked async, danger variants on escrow/wallet/ledger), hr-payroll
+  (3 — non-async fns marked async). Non-async handlers marked `async` after verifying onclick/
+  listener callers discard the return. `\n\n` in a few messages collapses to a space in the modal
+  (content preserved).
+- **Adoption:** dialogs **~56% → ~63%** (243 canonical / 141 native left).
+- **Money guard** re-ran clean in predeploy over the newly-migrated financial-os.html.
+- **Files:** legal-admin.html, inv-products.html, sasos-admin.html, ops-center.html,
+  financial-os.html, hr-payroll.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — fix(money): dispute/refund toast correctness + money-path CI guard
+
+Closes out the money-path toast-correctness work (last two of six instances) and adds an
+automated guard so the class can't quietly reappear.
+
+- **Fixed (sokoni-aos.js):** aosResolveDispute (resolveDispute) and processRefund — same
+  branch-on-outcome pattern as the prior four: `try { await _call(...) } catch(e){ _toast(err);
+  return } _toast("…","success")`. Same CFs/params/messages/refresh; no business-logic/CF/
+  telemetry change; prompt() preserved. All six money ops now toast success ONLY on real success.
+- **New guard (scripts/check-money-toast-safety.mjs):** fails the build if a FINANCIAL backend
+  call (escrow/payout/refund/dispute/commission/settle/withdraw/disburse) uses an inline
+  `.catch(… _toast …)` that swallows the error and falls through to a success toast. Comment/doc
+  lines skipped. Read-only `.catch(() => default)` fallbacks allowed. Verified: passes on current
+  tree; catches all 6 pre-fix instances. Wired into hosting `predeploy` (firebase.json) and
+  `npm run check:money-toast`.
+- **Noted (NOT fixed — non-money, lower severity):** ~15 non-financial admin ops in sokoni-aos.js
+  share the same swallow-then-succeed shape (banUser, product/order status, review moderation,
+  category upsert, support tickets, push/email/SMS). Out of the money-path scope; tracked for later.
+- **Files:** sokoni-aos.js, scripts/check-money-toast-safety.mjs, firebase.json, package.json.
+
+---
+
+## [2026-08-07] — fix(money): admin financial actions no longer toast success on failure
+
+Isolated money-path correctness fix (no dialog/other refactoring). Four Admin OS financial
+operations toasted "success" UNCONDITIONALLY after a caught failure — an operator could believe
+an irreversible action succeeded when the backend rejected it.
+
+- **Fixed (sokoni-aos.js):** releaseEscrow (finosReleaseEscrow), markCommPaid (markCommissionPaid),
+  approvePayout (adminProcessPayout), rejectPayout (finosRequestBankPayout). Pattern changed from
+  `await _call(...).catch(e=>_toast(err)); _toast("…","success")` to branch-on-outcome:
+  `try { await _call(...) } catch(e){ _toast(err); return } _toast("…","success")`.
+- **Acceptance (per op):** backend success → success toast; backend failure → error toast ONLY;
+  no success toast after any caught exception; single request (no duplicates); same CFs/params/
+  messages/refresh (no business-logic change); no Cloud Function changes; telemetry untouched.
+- **Bulk approveAllPayouts** was already correct (per-item try/catch checking res.failed).
+- **STILL FLAGGED (same defect, out of this scope):** aosResolveDispute + processRefund toast
+  success unconditionally after `.catch` too — fix with the same pattern in a follow-up.
+- **Files:** sokoni-aos.js.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B4B — sokoni-aos.js dialog convergence (money-path review)
+
+Admin OS engine (loaded only by admin-os.html, which carries shared-header → SK present).
+Treated as a money-path review, not a mechanical migration.
+
+- **Migrated (13 confirms, 0 bare confirm left):** banUser, releaseEscrow, approveAllPayouts,
+  sendEmailBlast, sendSMSBlast, deleteCampaign/Banner/Faq, removeAnnouncement, reindex,
+  voidReceipt, revokeAllSessions, revokeSession. All in `async` fns → `await SK.dialog.confirm`.
+- **Money-path rigor:** descriptive title + body + `variant:'danger'` + explicit confirm labels
+  (e.g. "Release escrow?" / "Funds will be transferred to the seller immediately. This is
+  irreversible." / [Release Funds]). Per-flow verification of escrow-release + payout-approve:
+  cancel→return (no side effect), success path unchanged (same CFs finosReleaseEscrow /
+  _bulkApprovePayouts), failure `.catch` preserved, no double-exec (modal backdrop blocks
+  re-click), Enter/Esc + focus-restore from the hardened modal.
+- **Deliberately NOT migrated:** line 25 `alert("Access denied…")` — fires at early init before
+  deferred sokoni-ds.js is guaranteed loaded, and is a security bail-out, not a dialog flow.
+  Left native to avoid an SK-undefined throw.
+- **PRE-EXISTING defect flagged (NOT fixed here — out of scope, needs its own review):**
+  releaseEscrow shows `_toast("Escrow released","success")` UNCONDITIONALLY after the `.catch`,
+  so a FAILED release still flashes success (healthy-looking failure on a money path).
+- **Adoption:** dialogs **~53% → ~56%**.
+- **Files:** sokoni-aos.js, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B4A — dialog convergence (data-no-header pages)
+
+Isolated special-case slice: the three `data-no-header` pages (shared-header does NOT render
+their chrome, but — corrected finding — DOES still inject `sokoni-ui.js`+`sokoni-ds.js` before
+its early-return, so `SK` is present). Infrastructure-verified before migrating.
+
+- **Corrected assumption:** `SK` IS injected on `data-no-header` pages (shared-header.js:257/261
+  run before the line-567 `data-no-header` return). Script tags confirmed present; no bootstrap
+  needed; no CSS/namespace conflicts. Headless can't runtime-verify `window.SK` on auth-gated
+  pages (even known-good `admin` reads undefined — unauthed redirect); runtime = on-device.
+- **Migrated (23 sites, 0 bare left):** dispatch (7 alert + 3 confirm), ecc (4+1),
+  provider-dashboard (0+8). Adoption **~47% → ~53%**.
+- **Money-path rigor on provider-dashboard** (booking/subscription surface): descriptive titles +
+  `variant:'danger'` on no-show / cancel / delete-rate-card / close-today / cancel-subscription.
+  **Trap avoided:** its `async confirm(id)` booking-confirm METHOD (not a native call) left
+  untouched; only the 8 bare `confirm()` calls migrated. Non-async handlers (dispatch `window._*`,
+  provider `cancelSub`) marked `async` after verifying onclick callers discard the return.
+  `prompt()` (vacation/block-date) left unchanged.
+- **Files:** dispatch.html, ecc.html, provider-dashboard.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B batch 3 — dialog convergence (driver/rider/profile/POS)
+
+Native `alert`/`confirm` → `SK.dialog`, user-facing group.
+
+- **Migrated (29 sites, 0 bare left):** driver (10+1), rider-nav (5+1 SOS), profile (5+1),
+  pos-completeness (0+6 gift-card/layaway/parked-sale/inventory-count).
+- **Non-async handling:** all 9 confirms were in non-async fire-and-forget handlers (onclick/
+  addEventListener). Converted by marking each enclosing function `async` (body untouched) after
+  verifying every caller discards the return value (Promise return is inert). Destructive actions
+  (void/discard/delete/SOS) get `variant:'danger'`. rider-nav SOS message lost its `\n\n` line
+  break (modal wraps as one paragraph — text preserved).
+- **Adoption:** dialogs **~40% → ~47%** (187 canonical / 212 native left).
+- **Files:** driver.html, rider-nav.html, profile.html, pos-completeness.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B batch 2 — dialog convergence (admin/ops consoles)
+
+Continued native `alert`/`confirm` → `SK.dialog` migration, next logical group (low-traffic
+admin/ops tooling). Same discipline: parse-verified, re-measured, deployed per batch.
+
+- **Migrated (56 sites, 0 bare left):** admin-subscriptions (9+2), ai-subscriptions (9), webhooks
+  (8+1), observability (5+1), api-gateway (4+1), task-queue (9+2), email-center (0+5). Deletes/purges/
+  global-disable get `variant:'danger'`. All confirms verified in `async` fns.
+- **Adoption:** dialogs **~24% → ~40%** (158 canonical / 239 native left).
+- **Scanner false-positives excluded (verified, documented in audit):** `sokoni-alerts.js` (its own
+  severity-based `alert()` audit lib — NOT native); Node `functions/test/*` + `scripts/*` (no `SK`);
+  `dispatch/provider-dashboard/ecc.html` (`data-no-header` → `SK` not injected — handled separately).
+- **Files:** admin-subscriptions.html, ai-subscriptions.html, webhooks.html, observability.html,
+  api-gateway.html, task-queue.html, email-center.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — feat(ui): Slice B — dialog convergence (top-6 modules) + canonical modal hardening
+
+Design-system convergence, batch 2 (after Slice A toasts). Native `alert()`/`confirm()` →
+canonical `SK.dialog`, migrated by highest-offender module so each batch stays reviewable.
+
+- **Foundation first (capability parity before retiring native):** strengthened the canonical
+  modal (sokoni-ui.js `openModal`) to match what native dialogs give for free — `role="dialog"` +
+  `aria-modal`, a **focus trap** (Tab cycles inside), **focus save/restore** (returns focus to the
+  opener on close), **auto-focus** the first control, and **Enter-confirms** parity in `confirm()`.
+  Scroll-lock + Esc were already present.
+- **New API:** `SK.dialog.alert(msg, opts?)` — styled, focus-trapped, Esc/Enter-dismissable,
+  returns a Promise. `SK.dialog.confirm` now also returns the boolean (awaitable) and fires telemetry.
+- **Telemetry (like Slice A toasts):** `window._skDialogMetrics {total, byType, byResult}` +
+  a `sk:dialog` CustomEvent (`type`, `module`, `result`, `durationMs`). Nothing persisted.
+- **Migrated (102 call sites, 0 bare left in these files):** creative-studio (22), subscription-os
+  (16+5), admin (19+2), wap (10+2), staff-management (11+1), account-centre (9+3). Mapping:
+  `alert(x)`→`SK.dialog.alert(x)`; `if(!confirm(x))return;`→`if(!(await SK.dialog.confirm(x)))return;`
+  in async fns, or `SK.dialog.confirm(x, cb)` (body-wrapped) in non-async fns (admin). Destructive
+  actions (suspend/revoke/sign-out) get `variant:'danger'`. `prompt()` left unchanged.
+- **Adoption:** dialogs **~0% → ~24%** (102 canonical / 331 native remaining). Verified: all inline
+  scripts parse; every `await` sits in an already-`async` function; no double-prefix. Runtime render
+  is App-Check-gated headless, so on-device confirm pending. No business behavior/button/keyboard
+  changes — renderer convergence only, not UX redesign.
+- **Files:** sokoni-ui.js, sokoni-ds.js, creative-studio.html, subscription-os.html, admin.html,
+  wap.html, staff-management.html, account-centre.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
+## [2026-08-07] — fix(seller): dashboard reads canonical analytics (was fabricated) + per-shop backfill
+
+Fixed the merchant dashboard headline stats, which were FABRICATED, not aggregated.
+
+- **Root cause (proven):** seller.js updateSellerStats computed revenue = Σ(product listing
+  prices) and orders = products × 3.2, read from an empty-on-a-fresh-device localStorage array
+  — so a shop showed KES 0 / 0 orders regardless of real sales. Now every business metric reads
+  the canonical Analytics Engine aggregate shops/{uid}/analytics/summary (paidOrders / gmvShillings
+  / platformRevenueShillings / sellerEarningsShillings) + a server-side count of canonical products.
+  On a read failure it shows "—", NEVER a fabricated number or a misleading 0.
+- **Gap found + closed:** the reconciliation path only rebuilt analytics/global, never the per-shop
+  summaries. Added scripts/backfill-shop-analytics.js (dry-run default, --commit, --shop) which SETs
+  each shop's paidOrders + gmvShillings from canonical orders (paid = reached PAID or downstream;
+  gmv = Σ merchandise ex-delivery). Idempotent; live increments compose on top.
+- **Evidence (production, read-only diagnostic):** the whole orders collection is 5 orders, all KASS,
+  ~KES 485 — the "0" was the fabrication, not hidden data; both analytics/global and the KASS shop
+  summary were empty. Backfilled shops/{KASS}/analytics/summary = {paidOrders:5, gmvShillings:485}.
+- **Functions:** firebase deploy --only functions confirmed PARITY (all unchanged = committed source
+  is live; no invoker resets). Flagged a stray live function foundationScheduledRecurring (not in
+  source) — NOT deleted (destructive; left for an explicit decision).
+
+Files: seller.js, scripts/backfill-shop-analytics.js.
+
+## [2026-08-07] — perf+feat+fix: MED-cluster (bounded listeners, rider nav, fake-order removal, POS keyboard, feature-shop)
+
+Phase-3 follow-through on the audit's deferred MED items, each committed + deployed + live-verified
+in order. Continues the "no success UI until the backend confirms" rule and the merge policy
+(defect fix / measurable perf / planned capability only).
+
+- **MED-1 bounded history listeners (perf):** added `limit()` to all previously-unbounded realtime
+  `onSnapshot` — sokoni-db.js (userOrders 200, listenPOSOrders 200, listenUnboxingReviews 100,
+  listenNotifications 100, listenSellerOrders 200) + sokoni-orders.js (listenSellerOrders 200,
+  listenDisputes 200). Keeps `orderBy(createdAt,desc)` so caps retain newest; no new index. Bounds
+  client memory/bandwidth as history grows. Deployed ba0a558; caps live, modules load clean.
+- **MED-2 rider Open-in-Maps (feat):** food-rider.html active-delivery card gains a native-maps
+  turn-by-turn deep link (`openRiderNav`) — restaurant while picking up, customer while delivering;
+  prefers real coords, falls back to address, guards empty destination.
+- **MED-3 fake demo orders (fix, false-success):** removed the static "Recent Orders" block in
+  seller.html (3 hardcoded #1021/1022/1023 "Delivered" cards, never populated) that duplicated the
+  canonical Incoming Orders panel. The inventory gate's `test-seller-dashboard` caught a router/section
+  drift (seller.js `DASH_PAGES` still referenced the deleted `orders-section`) → fixed; now 22/22.
+- **MED-4 POS keyboard (feat):** pos-v2.html — Enter in product search adds first in-stock match
+  (`_addFirstMatch`, reads live input to beat the debounce) + Enter in cash field confirms sale;
+  `enterkeyhint=done`. No change to the idempotent `posCompleteCheckout` path.
+- **MED-5 Feature-My-Shop (fix, false-success):** the self-serve button wrote only per-device
+  localStorage yet claimed platform-wide featuring. Disabled + honest copy; `featureShopOnHome`
+  neutered (no localStorage write, no fake toast). Real featuring is admin-curated `featuredShops/{uid}`.
+- **ROADMAP.md:** added the **Legacy Surface Audit** section (🟢 Canonical / 🟡 Needs migration /
+  🔴 Legacy-false-success) tracking each surface by data authority, incl. the 🟡 items intentionally
+  deferred (legacy delivery feed, home Featured Shops localStorage, rider earnings, POS refund keyboard).
+
+Deployed 04fa7d2. Files: sokoni-db.js, sokoni-orders.js, food-rider.html, seller.html, seller.js,
+pos-v2.html, ROADMAP.md. Verified: markers live behind cleanUrls, seller/pos load with no JS errors,
+test-seller-dashboard 22/22. Interactive exercise of auth-gated POS/rider actions bounded by login gate.
+
+## [2026-08-06] — fix(seller+perf+rider): eliminate false-success + OOM regression (evidence-based audit)
+
+Read-only 4-area defect audit (Performance/Seller/Rider/POS) → fixed the verified high-impact defects,
+each confirmed at file:line. Dominant pattern: legacy localStorage-only UI paths reporting success
+without touching the canonical backend. Adopted rule: no success UI until the backend confirms.
+
+- **Wallet false-success (P0):** seller.js `renderWallet` fabricated balance from localStorage orders +
+  `withdrawWallet` faked "KES X sent to M-PESA"; seller.html `loadWallet` injected a demo balance and
+  `confirmWithdraw` faked "Funds arrive in 5 minutes" — all with NO Cloud Function. Now: real
+  `wallets/{uid}.balance` read + all withdrawal actions route to the CF-backed seller-wallet.html
+  (`requestWithdrawal`). No client can claim money was sent.
+- **Bulk upload (P0):** `confirmBulkUpload` wrote localStorage only → 0 products published. Now batch-writes
+  canonical `products` (chunks of 400, status:'active', uid/sellerUid, server ts); success only after commit.
+- **Stock edits (P0):** `saveStock`/`markOutOfStock`/`restoreStock` were localStorage-only (oversell/stale).
+  Now write canonical `products.stock` + inventoryVersion:increment(1) (auto-fires inventoryMovements audit),
+  optimistic UI + rollback + honest error on failure.
+- **realtime.js OOM (HIGH):** unbounded products onSnapshot (duplicate of the already-fixed anti-pattern) →
+  bounded newest-200 (orderBy documentId desc + limit(200); category = filter+cap) + base64 stripped before
+  the localStorage cache. Closes the documented mobile-renderer OOM / quota bomb.
+- **Rider window.toast (HIGH):** undefined on driver.html → ~18 actions silent + 2 unguarded calls THREW
+  (Mark-Delivered threw after the delivered write, card stuck). Aliased to `_drvToast` (correct inverted
+  convention). All rider actions now give feedback; no throw.
+
+Deferred (Phase 3, documented): seller-public.html localStorage, pos-v2 grid re-render, duplicate order list,
+feature-shop no-op, rider nav button, POS Enter-to-add/confirm, bounded history listeners, minor cosmetics.
+Files: seller.js, seller.html, realtime.js, driver.html.
+
+## [2026-08-06] — feat(analytics): R1.x engine phases 5/2/3/4/6 (reconciliation, coverage, buckets, BI, monitoring)
+
+Built + verified (self-cleaning production tests) atop the RC analytics foundation. New modules:
+functions/analytics-reconcile.js, analytics-rollup.js, analytics-monitor.js. Daily job
+`scheduledAnalyticsReconcile` runs rollup → BI → reconcile → health; `adminReconcileAnalytics`
+callable modes: {} reconcile · {backfill} · {rollup} · {bi} · {health}.
+
+- **Phase 5 Reconciliation (parity gate):** canonical truth (settlements/deliveryFees/orders) vs
+  analytics/global → analytics/reconciliation + reconciliationAlerts on drift. VERIFIED: injected a
+  settled order with no analytics increment → flagged settledOrders/platformRevenue/sellerEarnings drift.
+- **Phase 2 Trigger coverage:** refund (initiateRefund→handleOrderRefund) counts refunds+amount once and
+  REVERSES settled revenue when the settlement flips to 'reversed' (kept in parity with reconciliation
+  truth); cancellation (onOrderStatusChange) counts + reverses paid/gmv if counted. VERIFIED both.
+- **Phase 3 Historical buckets:** analytics-rollup folds daily buckets → window_7d/30d, month, quarter,
+  year. VERIFIED window boundaries (7d excludes day-20, 30d includes).
+- **Phase 4 BI ratios:** analytics/bi lifetime + last30d (AOV, refund/cancel/settlement rate, gross/net
+  revenue, merchant/rider earnings). VERIFIED ratios.
+- **Phase 6 Monitoring:** analytics/health + monitoringAlerts — stale analytics, negative-value integrity,
+  reconciliation drift, oversold/negative-stock. VERIFIED negative-value detection.
+
+Remaining R1.x: Phase 1 dashboards (BLOCKED on the stuck rules release), Phase 7 gate execution (load/DR/
+offline tests), Phase 4b dimensional BI (top products/peak hours/CLV) + enterprise items. See
+docs/ANALYTICS_ENGINE_ROADMAP.md.
+
+Files: functions/index.js, analytics-reconcile.js (new), analytics-rollup.js (new), analytics-monitor.js
+(new), docs/ANALYTICS_ENGINE_ROADMAP.md, CHANGELOG.md.
+
+## [2026-08-06] — feat(dispatch+commerce+analytics): rider payout, single-source money/inventory/analytics
+
+Dispatch delivery E2E hardened + single-source convergence, all proven with self-cleaning production tests.
+
+- **Accept "internal"**: claimAvailableDelivery had no `allUsers` invoker (Cloud Run IAM denial → SDK
+  reports `internal`) + 128MiB OOM that stopped the container booting. Re-bound invoker, bumped 256MiB.
+- **RIDER PAYOUT (was NEVER credited)**: traced the money path — `deliveryFees` was written `pending`
+  on delivery but its only consumer is a read-only admin report; `settleOrder` credits seller-only;
+  finos credits riders at payment (riderId null for marketplace). Added exactly-once rider credit to
+  canonical `wallets/{uid}.balance` in `onOrderStatusChange` delivered branch (deterministic
+  `walletTransactions/{rider}_{order}_delivery` + `before.status` guard). VERIFIED KES88 exactly-once.
+- **Rider-share reconcile → 88%/12%** (owner decision): `commission-config.js` `hub: 8%→12%` (was
+  paying 92%, contradicting the app's 88% promise). Regenerated client snapshot `sokoni-commission-rates.js`
+  (predeploy single-source guard). Seller settlement VERIFIED exactly-once (KES970/KES1000).
+- **Driver Hub v2** (driver.html): removed the duplicate Shift-Management card (ran a separate online
+  system that drifted); one full-width Go Online/Offline toggle is the single authority
+  (rideDrivers.isOnline + GPS + job availability; shift derived from online).
+- **inventoryMovements audit trail — single trigger**: `indexProductUpdate` now records EVERY
+  products.stock change (all 9 deduction sites + manual edits), deterministic `${pid}_v${version}`,
+  order/source attributed only when THIS write set it. Removed the redundant per-order explicit write.
+- **Click-and-collect converged**: create/cancel/reserve-status read+wrote the EMPTY
+  sellers/{uid}/products subcollection (C&C was silently broken + a separate stock pool) → repointed to
+  canonical `products` with ownership check + TOCTOU-safe in-txn re-read + version/source stamps.
+- **Canonical Analytics ENGINE (foundation)**: `analytics-aggregator.js` + hooks maintain
+  `analytics/global` / `analytics/daily_*` / `shops/{id}/analytics/*` atomically from exactly-once
+  events; platform fee = canonical commission (never a `%`). Client `sokoni-analytics.js`. Firestore
+  read-rules added. VERIFIED all 8 metrics exact + exactly-once. Full buildout → docs/ANALYTICS_ENGINE_ROADMAP.md.
+
+Known issue: default-DB `firestore.rules` release stuck (409 on CLI 15.24+15.26; REST update rejects
+all shapes) — deployment/tooling, NOT app logic. Non-blocking (engine writes via Admin SDK). Needs a
+clean CI runner or a scheduled maintenance window; do NOT force delete on the live app.
+
+Files: functions/index.js, order-settlement.js (read), commission-config.js, analytics-aggregator.js
+(new), pos-marketplace-sync.js, dispatch.js (read), driver.html, sokoni-commission-rates.js,
+sokoni-analytics.js (new), firestore.rules, docs/ANALYTICS_ENGINE_ROADMAP.md (new).
+
+## [2026-08-06] — feat(audit)+chore(hardening): canonical audit schema + operational-resilience evidence
+
+Audit gaps CLOSED via one schema (functions/pos-audit.js `writeAudit`): pos.refund,
+inventory.stock_adjust, product.price_change, pos.receipt_reprint (new posLogReprint callable,
+invoker=allUsers), dispatch migrated. Fields: schema/action/actorUid/actorRole/branchId/objectType/
+objectId/before/after/delta/reason/outcome/metadata/ts. Deployed 5 CFs.
+
+Operational resilience VERIFIED with evidence (not assumption):
+- Firestore: daily backup schedule, 98-day retention, PITR ENABLED, "Backup Not Run in 26h" alert.
+- Monitoring: 20 alert policies enabled (CF error rate, Firestore latency, payment failure, 5xx,
+  SLOs, backup-not-run, fraud, rate-limit) + 2 email channels. Gaps: explicit auth-failure +
+  dispatch-failure policies; a restore drill.
+docs/LAUNCH_READINESS.md updated with all evidence + Go/No-Go.
+
+Files: functions/pos-audit.js (new), pos-zero-friction.js, inventory-engine.js, index.js,
+pos-marketplace-sync.js, pos-v2.html, docs/LAUNCH_READINESS.md.
+
+## [2026-08-06] — chore(hardening): production validation instruments (Phase 2 + 4 + launch checklist)
+
+Feature freeze → hardening phase. Evidence-based validation, no fabricated "done".
+
+- scripts/qa/consistency-audit.js: read-only Phase-2 audit of a merchant's canonical sources.
+  Production result (KASS D5Ql2): identity one doc + unique roles; sellers/{uid} shop; 103 products
+  no owner-mismatch, all have stock; posProducts empty; orders 0 on deprecated uid (backfill holds).
+  One gap: posTerminals/{uid}_hardware not saved yet — run wizard Save once.
+- Phase 4 audit-coverage analysis: dispatch/FinOS/device/admin covered; refund, stock-adjust,
+  price-change, receipt-reprint are GAPS to close before onboarding.
+- docs/LAUNCH_READINESS.md: living checklist — every flow marked PROVEN / ENG (needs device test) /
+  GAP with evidence + test steps, a device matrix (with the iOS Web-Bluetooth caveat), and Go/No-Go.
+
+Files: scripts/qa/consistency-audit.js, docs/LAUNCH_READINESS.md, CHANGELOG.md. No production code
+change. No DB/API/security change.
+
+## [2026-08-06] — fix(orders): buyer my-orders empty after account merge — match uid OR buyerUid
+
+Evidence (scripts/qa/inspect-orders.js): the buyer's 4 KASS orders (phone 254705726803) carry
+`uid: xrH21J5GFb…` (the OLD phone account) but `buyerUid: D5Ql2EYr…` (the merged Google account
+the founder now signs in as). `SokoniDB.listenUserOrders` queried only `where uid == <viewer>`, so
+it matched nothing and my-orders rendered empty — despite `buyerUid` being correct.
+
+- sokoni-db.js: `listenUserOrders` now runs TWO listeners (`uid` and `buyerUid`), merging by doc id
+  (additive; buyer orders aren't deleted). Both composite indexes (uid|buyerUid + createdAt) already
+  exist. A merge-induced uid/buyerUid split can no longer hide a buyer's orders.
+- scripts/qa/inspect-orders.js: read-only order diagnostic (buyer-field presence + spotlight).
+
+Follow-up (pending owner OK): backfill `orders.uid` xrH→D5Ql2 to complete the merge canonically.
+Files: sokoni-db.js, scripts/qa/inspect-orders.js. DB/API: none (read path). Breaking: none.
+
+## [2026-08-06] — feat(pos): self-diagnosing POS startup gate — never hangs on 'Verifying credentials'
+
+pos-marketplace auth gate now reports each real startup step (Firebase engine, Merchant session,
+Access & role, POS ready) with ✓/✗, hard-fails the blocking step after ~14s, and surfaces Retry +
+Sign out instead of an infinite spinner; a render/listener failure re-reveals the gate with the
+error. Also: pos-marketplace + pos-v2 bind to firebase.js's warm 10.12.2 app (was importing 11.0.1,
+a separate SDK copy → private app that cold-read the session and hung). Files: pos-marketplace.html,
+pos-v2.html.
+
+## [2026-08-06] — feat(sync): real-time inventory across devices (slice 1) + orders verified live
+
+Cross-device convergence, slice 1 of the platform program. Goal: a change on one device
+(a till sale, a price edit, a stock adjustment) appears on every other signed-in device within
+seconds, no refresh.
+
+- sokoni-inventory.js: new `subscribeProducts(cb)` — live listener on this seller's canonical
+  `products` via the firebase.js compat shim (modular onSnapshot under the hood → the warm
+  App-Checked session). Because the shim wires no error callback, an iOS App-Check-blocked
+  listener simply never emits, so a visibility-aware **poll fallback** (the App-Check-independent
+  `/api/catalogue`) starts if no snapshot lands in 8s. cb returns the full inventory-shaped list;
+  returns an unsubscribe.
+- inventory.html: subscribes on load — list, category chips, KPI cards and stock levels now
+  update live (debounced) instead of one-shot; localStorage stays a cold-start paint only.
+  Removed the temporary `_invDbg` diagnostic banner.
+- Orders were already real-time and are now verified: buyer `my-orders.html` via
+  `SokoniDB.listenUserOrders` (onSnapshot + cold cache), merchant via `sellers/{uid}/clickAndCollect`
+  onSnapshot in pos-marketplace / pos-v2. No change needed.
+
+Builds on today's till convergence: a POS sale writes `products.stock` + `inventoryVersion++`,
+which is exactly the event these listeners push. Files: sokoni-inventory.js, inventory.html.
+DB/API: none. Security: read-only listeners scoped to the seller's own products. Breaking: none.
+
+## [2026-08-06] — feat(pos): POS v2 selling flow (Cash) + till money-path convergence to canonical products
+
+**Money-path fix (correctness-critical).** `posCompleteCheckout` and `posProcessRefund`
+(functions/pos-zero-friction.js) validated the cart and deducted/returned stock from the
+**`posProducts`** collection, which is **empty** for real merchants (products live in the
+canonical `products`). Every till sale therefore failed `"Product <id> not found"` — the POS
+could not sell at all. Both now read/write `products`: price via `salePrice||price`, stock via
+`stock ?? stockQty ?? quantity`, and on sale/refund mutate the **canonical `stock`** field
+symmetrically (sale decrements, refund increments) plus `inventoryVersion: increment(1)` +
+`updatedAt`. A till sale is now immediately reflected in inventory, catalogue and dispatch — one
+stock source. All reads-before-writes + idempotency claims preserved.
+
+- functions/pos-zero-friction.js: posCompleteCheckout + posProcessRefund → canonical `products`.
+- pos-v2.html: Stage 3 selling flow — product grid (live `/api/catalogue?sellerUid=`), tap-to-add
+  cart with qty ±, cart+payment sheet. **Cash** checks out via `posCompleteCheckout` (records
+  sale, deducts canonical stock, auto-prints receipt on the connected P58E). **M-Pesa** stashes
+  the cart in sessionStorage and hands off to the proven `/pos-checkout` STK flow — no parallel
+  money path. "New Sale" + bottom "Sell" open the in-page flow (was a redirect).
+- docs/POS_V2_SPEC.md: Stage 3 marked Cash-built.
+
+Files: functions/pos-zero-friction.js, functions/index.js (exports unchanged), pos-v2.html,
+docs/POS_V2_SPEC.md. DB: writes canonical `products.stock`/`inventoryVersion`/`sold`. API: none.
+Security: server-authoritative stock + idempotency unchanged. Breaking: none (posProducts
+analytics readers unaffected; they converge in a follow-up).
+
+## [2026-08-05] — fix(checkout): confirm payment via authed CF poll so checkout closes/clears cart
+
+First real gate order (SKN14CIAER) COMPLETED end-to-end: paid → order status=paid
+(source=webhook_created) → stock 2→1 (inventoryVersion++) → commission ledgered → KASS wallet
+credited 87. But the checkout did not close, clear the cart, or show the receipt — all three
+live in saveAndRedirect, which only runs once waitForConfirmation resolves, and it never did:
+the confirmation used a Firestore onSnapshot on payments/{ref}, which the buyer cannot read
+(the payments read rule keys on buyerId while initiateSTKPush writes uid), and the listener's
+"fallback to polling" was a no-op that just waited out a 90s timeout.
+
+- functions/index.js: verifyPaymentStatus gains a `ref` branch reading payments/{ref} (Admin SDK)
+  authorised for the buyer (uid), seller (meta.sellerUid), or admin.
+- sokoni-intasend.js: _waitForPaymentConfirmation now POLLS verifyPaymentStatus over the authed
+  CF channel (which carries the token the Firestore instance does not), resolving on COMPLETE.
+  The realtime listener stays as a fast-path. Fixes checkout-not-closing + cart-not-cleared +
+  receipt-not-shown together (all downstream of saveAndRedirect running).
+
+## [2026-08-04] — feat(checkout): keyless IntaSend product payments + webhook-authoritative finalisation
+
+Product checkout collected M-Pesa via `darajaSTKPush`, a DIRECT-to-seller Daraja flow that
+reads the seller's own API credentials from `shopSettings/{sellerUid}`. That collection has
+**zero documents**, so every product payment threw "Daraja credentials not configured" before
+any STK — the confirmed cause of "payment failed, no prompt." The KASS shop owner has a till
+but no Daraja API access, so direct-to-till is not available.
+
+Re-pointed product checkout to the **keyless IntaSend** collector (`initiateSTKPush`), which
+uses SOKONI's provisioned platform keys (Merchant-of-Record) — nothing required from the seller.
+The IntaSend webhook already marked payment COMPLETE, recorded commission, and credited the
+seller wallet, but **never finalised the product order or decremented stock** — a paid order
+stayed `pending_payment` and inventory never moved. Completed that pipeline:
+
+- **`functions/index.js`** — new shared `_finalizeMarketplacePayment()` (extracted from
+  `darajaSTKCallback`): one transaction marks the order `paid` AND decrements stock (floored at
+  zero, `inventoryVersion++`, `oversoldAlerts`), idempotent via the order's `inventoryApplied`
+  flag; absent order → `orphanPayments`. Called from `webhookIntasend` for buyer-initiated
+  product payments (`meta.orderId` present, not booking/subscription/top-up), with
+  `settlementStatus:"settled"` so no settlement sweep double-credits the already-credited wallet.
+- **`functions/index.js`** — wallet credit now credits `meta.sellerUid` for buyer-initiated
+  checkouts (payData.uid is the BUYER); POS/other flows without `meta.sellerUid` keep `uid`.
+- **`sokoni-intasend.js`** — `initiateSTKPush` now forwards `orderId/sellerUid/sellerName/hub/items`
+  into `meta` (previously a fixed allowlist dropped them).
+- **`checkout.html`** — M-Pesa branch now: persists the order as `pending_payment` BEFORE the STK
+  (so the webhook can finalise it even if the tab closes) → `initiateSTKPush` → `waitForConfirmation`;
+  `saveAndRedirect` gains an `alreadyPersisted` flag so it no longer re-writes (and downgrades) the
+  webhook's authoritative `paid`. `_placeOrderCore` is now `async`.
+
+Files: `functions/index.js`, `sokoni-intasend.js`, `checkout.html`. Security: server remains the
+pricing/stock authority; stock deduction is transactional and floored. Deploy: functions
+(`webhookIntasend`) FIRST, then hosting — never the reverse.
+
+## [2026-08-04] — fix(auth-ui): password-reset modal overflows mobile viewport
+
+`login.html` reset modal box had `max-width:380px;width:100%` but no height bound, so on a
+short mobile viewport (keyboard open) it overflowed and couldn't scroll — reading as
+"oversized / doesn't fit." Added `max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch`
+so it always fits centered and scrolls internally. Backend auth is unaffected — Firebase
+identifies the account fine; this was purely a UI/viewport bug. (Email-delivery for reset
+links is a separate, config issue — bypass with an admin-generated link on the `mysokoni.co.ke`
+authDomain.)
+
+## [2026-08-04] — fix(nav+rider): search-box autofill + go-online writes dispatch field
+
+- **Search box email autofill (all pages):** Chrome ignores `autocomplete="off"` on the shared
+  header search once it has a saved email, popping its autofill dropdown over the box. Added the
+  `readonly`-until-focus guard to `shared-header.js` `#sk-nav-search` (excluded from autofill at
+  load; readonly dropped on first focus/pointer so typing is unaffected). One fix, every page.
+- **Rider go-online didn't make the rider dispatchable:** `driver.html` has two "Go Online"
+  controls; the prominent top toggle wrote DeliveryHub/`online` but **never `rideDrivers.isOnline`**
+  (the field `dispatch.js` filters on), so a rider looked online yet wasn't discoverable. The top
+  toggle now also syncs `rideDrivers.isOnline`. **R1.1:** unify the two controls + the `isOnline`
+  vs `online` field split (logged with dispatch cleanup).
+
+## [2026-08-04] — fix(rider): prevent duplicate driver applications (re-entrancy lock)
+
+Found during live RC gate provisioning: rapid re-clicks on the driver-registration Submit
+created **3 applications for one uid**. Because the operational `rideDrivers` doc is keyed by
+uid, a later **reject** of one duplicate then ran `projectDriver(approved=false)` and
+**suspended an already-approved rider** + stripped the role. `driver.html` now takes a
+one-in-flight-submission lock (`__driverRegBusy`) so re-clicks can't create duplicates; the
+lock releases on submit failure.
+**Deferred to R1.1 (server-side hardening):** the application lifecycle should also refuse to
+*downgrade* an already-active rider when a **duplicate** application for the same uid is
+rejected (decision should be scoped so a stale duplicate can't clobber a live operational
+record). Tracked with the canonical rider-onboarding work.
+
+## [2026-08-04] — chore(rider): temporary owner photo-exception for RC gate rider onboarding
+
+`driver.html` rider application: the standard flow is **unchanged for all riders** (ID + DL
+photos still required). Added a **single-account exception** (owner test account
+`alexochieng3030` / uid `D5Ql2…`) that may onboard without ID/DL photos, so the rider
+dispatch path can be proven via the real UI before the live checkout gate. `readFile` now
+tolerates a missing file (empty string, no crash). **TEMPORARY — remove after v1.0.0.**
+Missing photos still surface as `driverVerification.documentsMissing` (a KYC flag, not a
+provisioning blocker). **Deploy:** requires the gate hosting deploy to take effect on live.
+
+## [2026-08-04] — fix(nav): RC-safe navigation correctness (audit-driven, Navigation Contract v1)
+
+From the 2026-08-04 navigation audit — correctness only, no redesign, no business logic. Governed by `docs/NAVIGATION_CONTRACT.md`.
+- **`super-admin.html`** — added a "← Back to Admin" sidebar link (→ `admin-os.html`). Was a genuine **dead end**: `data-no-header` suppressed both injected navs and the only exits were JS auth redirects (Contract rule 2).
+- **`seller-wallet.html`** — added a "← Back" header link (history-back with `seller.html` fallback). Was a near dead end (Contract rule 2).
+- **`sokoni-nav-engine.js`** — Super-Admin sidebar "Search" pointed to **`enterprise-search.html`, which does not exist** (404); repointed to `search.html` (Contract rule 4).
+- **`nav-active.js`** — bottom-nav active highlight matched only `.html` keys; under cleanUrls (prod serves extension-free) it silently never lit up on nav-engine `_SKIP` pages (e.g. Profile). Now also tries the `.html` key (Contract rule 6).
+
+**Deferred (need a canonical decision or are larger than a quick fix):** unify the two admin→super-admin destinations (`admin.html` `superadmin.html` vs `admin-os.html` `super-admin.html`); canonical provider hub (`providers.html` vs `provider-dashboard.html`); `rider-dashboard.html` vs `driver.html` orphan; `inventory.html` AI/Alerts buttons hidden by shared-header CSS (relocate); retire redundant `nav-active.js` in favour of nav-engine; the 3-layer nav consolidation → R1.1.
+
+**Security:** none. **Breaking:** none. **Deploy:** requires a hosting deploy (working tree now clean).
+
+## [2026-08-04] — fix(minishop): shop button + KASS SHOP inventory/ownership reconciliation
+
+**MiniShop admin header (`minishop-admin.html`).**
+- Removed the redundant header "Open MiniShop ↗" button (`#msaViewShop`) — duplicated the hero
+  "Visit Shop" action. Cleaned up its now-dead JS reference.
+- Made "Visit Shop" (`#msaViewShopBtn`) resilient: href now resolves eagerly from
+  `_state.shopUrl || buildShopUrl(_state.handle)`, plus a click handler that resolves the URL at
+  click time — so it opens instantly instead of dead-clicking to `#` before the async handle load,
+  and gracefully prompts "Claim your handle first" when the seller has no MiniShop handle.
+
+**Production data reconciliation — KASS SHOP (`sellers/xrH21J5GFbW8PluCZ2ny5nIuf602`).** Ops-only,
+no schema change. Diagnosed via the documented `SELLER_KEY_MISMATCH` / counter-drift classes
+(`scripts/diagnose-upload.js`). "Empty inventory" was **not lost data** — 10 products were live in
+the buyer catalog, but with a split ownership identity:
+- **Seller-key mismatch fixed.** All 10 products carried `uid = xrH2…` (KASS SHOP) but
+  `sellerUid = D5Ql2…` (a personal account "Kaspa" with no seller profile). Since checkout resolves
+  the owner as `sellerUid || uid`, a real order would have **settled to the wrong account** (no
+  profile, no deliveryConfig). Normalized `sellerUid → xrH2` on all 10 (owner-confirmed), backed up
+  first, audit-stamped (`_ownerNormalizedFrom`). `products.where(sellerUid==KASS)` now returns 10
+  (was 0). **Gate-relevant:** RC step-3 order now attributes/settles to KASS SHOP.
+- **Stale counter reconciled.** `sellers/{KASS}.productCount` was `0` vs live `10` — reconciled to
+  `10` (audit `_productCountWas`).
+
+**Security:** none. **Breaking:** none. **Deploy:** `minishop-admin.html` requires a hosting deploy
+to take effect; data fixes are already live.
+
+## [2026-08-02] — feat(admin): Admin OS Phase 1 — canonical data synchronization (P1–P3)
+
+Every Admin Console pane/KPI now reads live production data from its **canonical** collection
+(docs/CANONICAL_COLLECTIONS.md) instead of stale `localStorage` mirrors. Reconciliation is
+guaranteed **by construction** — dashboard and pane read the *same* collection, so they can't
+diverge. **Additive backend + data-binding only**; no `showPane()`/`renderPane()`/routing/CSS/
+layout changes (owned by the concurrent pane refactor). Full report:
+`docs/ADMIN_OS_PHASE1_RECONCILIATION.md`.
+
+- **P1 — Providers.** `D.providers = ls('sokoniServiceProviders')` → `SokoniDB.listenProviders`
+  (canonical `providers`, status ∈ active/approved, one-listener discipline). `removeProvider`
+  no longer fakes a persistent delete via localStorage.
+- **P2 — Unified Finance.** New `adminGetFinance()` aggregates `payments` + `commissionLedger`
+  + `providerPayouts` + `payoutRequests` + `wallets` (revenue = product + service commission;
+  gateway fees absorbed → net margin; wallet liability; pending/paid payouts; today/7d/30d
+  buckets; index-safe, capped-with-honesty). admin.html Finance pane appends a live canonical
+  strip into `#finKpis`; the hand-entered cost/tax P&L stays local (legitimate).
+- **P3 — Products.** `ls('sellerProducts')` → `SokoniDB.listenProducts` (canonical `products`).
+  Actions made canonical: `deleteProduct` → real unpublish (`adminUpdateProductStatus`
+  `status:'removed'`) — the old local splice was dangerous (admin saw it vanish while it stayed
+  live for customers); `toggleFeature` persists via the same CF; dead localStorage writes removed.
+- **P5a — Reports.** Revenue source `transactions` (empty) → `payments` (canonical).
+- **Deferred (boundary):** P4 Services `providerServices` catalog + P5b `providerAnalytics` need
+  **new panes** (not localStorage-source defects) → collide with the pane refactor; deferred.
+
+Files: `functions/admin-os.js` (adminGetFinance), `admin.html` (listeners + canonical actions),
+`docs/ADMIN_OS_PHASE1_RECONCILIATION.md` (new). Deploy: `functions:adminOsDispatch, hosting`.
+Enforcement: `scripts/test-canonical-collections.js` (deploy gate). Breaking: none.
+
+---
+
+## [2026-08-02] — fix(booking): provider not notified on paid booking (QA-gate critical fix)
+
+Scenario 1 of the production QA gate surfaced a real operational bug: a provider was **never**
+notified when a booking was paid — they only saw the pre-payment "New booking request". Two causes,
+both fixed; the booking core (hold/slot/payment/settlement/events) was NOT touched.
+
+- **Root cause 1 — unregistered notification type.** `holdServiceBookingPayment` called
+  `notify({ type: 'booking_new' })`, but `booking_new` (and `booking_paid`/`booking_refund`/
+  `booking_released`) were **not in `notify.js` TYPES** — so `notify()` threw "Unknown notification type"
+  and the fire-and-forget `.catch(() => {})` swallowed it. Registered the four booking types
+  (commerce/orders; SMS off). Verified against production: no `notifyLog` entry existed for the paid
+  booking, confirming the throw-and-swallow.
+- **Root cause 2 — fire-and-forget dropped the write.** Even with a valid type, the un-awaited
+  `notify()` promise was orphaned when the webhook `res.send()`+returned. Fixed via a backward-compatible
+  `awaitDelivery` flag on `notify()` (default `true` = unchanged for all existing callers): the webhook now
+  `await`s the **durable in-app write** and runs push/email/SMS in the **background**, so a slow FCM push
+  never adds webhook latency (Option A). Dropped the redundant customer `booking_paid` — the customer is
+  already notified independently by `payment-success.js` (`payment_success`), so sending it here would
+  duplicate.
+
+Result: provider gets an immediate, durable "New paid booking 📅" (deep-links to the dashboard) the moment
+payment is held; webhook stays fast; no duplicate customer notice.
+
+Tests: `scripts/test-notify-booking-types.js` (9/9) — guards that every booking notify type is registered
+(the exact silent-throw class) and that the `awaitDelivery` seam exists. Booking suite regression-clean.
+Deploy: `functions:intasendWebhook, webhookIntasend`. Scope: notification subsystem only. Breaking: none.
+
+---
+
+## [2026-08-02] — feat(booking): Slice 4 — structured lifecycle events (observability)
+
+Every service-booking transition now emits a structured, append-only event to the canonical
+`bookingEvents` log (the same collection the resolution engine uses), so an investigation can
+reconstruct exactly what happened — actor, `previousStatus → newStatus`, `paymentRef`, timestamp —
+without grepping logs.
+
+- **`functions/booking-events.js` (new).** `bookingEvent()` builds a `{ ref, payload }` written INSIDE
+  the same transaction as the state change (atomic, never a drifting best-effort write). Canonical types:
+  `BOOKING_HELD`, `BOOKING_RESUMED`, `BOOKING_RELEASED`, `BOOKING_EXPIRED`, `PAYMENT_CONFIRMED`,
+  `BOOKING_CONFIRMED`. Schema denormalises `providerId`/`customerUid` so rules can scope reads.
+- **Idempotent audit (Scenario 7).** Transitions that occur at most once per booking use a deterministic
+  id (`${bookingId}_${key}` for held/released/expired/paid/confirmed), so a retried/duplicate webhook
+  OVERWRITES the same event doc — **no duplicate audit entries**. Repeatable transitions (RESUMED) use a
+  random id. Combined with the transaction guards in `releaseServiceHold`, the release path is idempotent
+  under repeated delivery by construction.
+- **Wired into all six transitions:** create → HELD (`booking-service.js`), owner resume → RESUMED,
+  release → RELEASED (`booking-payment-sweep.js`, actor = customer/system/webhook), expiry sweep → EXPIRED,
+  webhook hold → PAYMENT_CONFIRMED, provider confirm → CONFIRMED (`provider-ops.js`, alongside the existing
+  `providerCalendar` write).
+
+Tests: `scripts/test-booking-events.js` — 16/16 (deterministic vs random ids, schema, defaults). Booking
+suite regression-clean. Note: `test-booking-hold-expiry.js` gained an admin-init line because the sweep
+module now transitively loads `booking-events` (which calls `admin.firestore()` at load) — the exact
+harness-drift class the Slice 1 guard exists for. Deploy: `functions:providerDispatch, bookingCleanupHolds,
+intasendWebhook, webhookIntasend`. Breaking: none.
+
+---
+
+## [2026-08-02] — feat(booking): Slice 3 — immediate release on payment failure, autoConfirm sweep, accurate conflicts
+
+Three release-blockers on the hold lifecycle, all reusing Slice 1's idempotent, owner-aware release.
+
+- **One canonical release path (`functions/booking-payment-sweep.js` `releaseServiceHold`).** Cancels the
+  unpaid booking, deletes the slot lock, and cancels the payment intent in a single transaction; never
+  releases a paid hold; `ownerUid` restricts to the booking owner (customer-initiated) or is omitted for
+  system-initiated release. `bookingReleaseHold` (the onCall owner path) now DELEGATES to it — one
+  implementation, three callers (owner, webhook, sweep).
+- **Payment-failure webhook release (Critical) — `functions/index.js`.** BOTH IntaSend webhook handlers
+  (`intasendWebhook`, `webhookIntasend`) now, on a TERMINAL non-payment state
+  (`FAILED/CANCELLED/EXPIRED/REJECTED/TIMEOUT`), call `releaseServiceBookingOnTerminalPayment` → the slot
+  frees the instant the provider reports the outcome, not after the sweep. Keyed off the RAW `state` (the
+  existing `fsStatus` collapses CANCELLED/EXPIRED/… into PENDING). No-op for non-booking intents, so
+  product/wallet payments are unaffected. Notifies the customer the slot was released.
+- **autoConfirm-unpaid sweep (`isExpired`).** A slot is now considered held by an unconfirmed `pending`
+  booking OR an auto-confirmed one that still owes payment (`price > 0`). Free bookings (price 0) and the
+  existing `pending` behavior are untouched — closes the gap where an `autoConfirm` provider's unpaid
+  booking stranded a slot forever (it wasn't `status:'pending'`, so the sweep skipped it).
+- **Accurate conflict messages (`functions/booking-service.js`).** Instead of a blanket "just taken", the
+  create path classifies why the slot is held and returns: *"Someone else just booked and paid for this
+  time…"* (paid/confirmed), *"Another customer is completing payment for this time. It may free up in a
+  few minutes…"* (someone else's live unpaid hold), or *"That time overlaps another booking…"* (overlap).
+
+Tests: `scripts/test-booking-hold-expiry.js` — 15/15 (adds autoConfirm-priced sweep + free-booking guard).
+Booking suite regression-clean. Deploy: `functions:providerDispatch, bookingCleanupHolds, intasendWebhook,
+webhookIntasend`. Breaking: none.
+
+---
+
+## [2026-08-02] — feat(booking): Slice 2 — server availability truthfulness (only show bookable slots)
+
+`getAvailabilitySlots` is the single source of truth for what's offerable, but it had gaps that let it
+show slots the booking gate would reject. All fixed in `functions/availability.js`, with the decision
+extracted to a PURE, unit-tested helper (`_computeSlotReason`) so displayed and bookable availability
+can never drift.
+
+- **Booked/held slots now hide (the big one).** The customer UI books via `bookingCreateService`
+  (writes `providerBookings` + `slotLocks`), but `getAvailabilitySlots` only read the legacy
+  `providerAvailability/{id}/bookings` sub-collection (`reserveSlot`'s store) — so a slot booked through
+  the real flow still displayed as free (the transaction blocked the double-book, but only at payment,
+  as "just taken"). Now unions that legacy set with the canonical ACTIVE `providerBookings` (status
+  pending/confirmed/active — a **pending hold** hides the slot too) by true buffered **interval overlap**,
+  the same formula the booking gate uses. Reuses the `providerId+date+status` index already in production.
+- **Unconditional now-floor.** A slot whose start is in the past is never bookable, independent of
+  `allowSameDay` (which now only governs whether *same-day* is permitted). This was the "shows 10 AM at
+  12:24" bug — `allowSameDay=true` used to bypass the time check entirely.
+- **Max-advance horizon.** Slots beyond `now + maxDaysAhead` are not bookable, and the day window is
+  clamped to `maxDaysAhead` (previously stored but unenforced).
+- **Break pre-filter.** A slot overlapping a configured break is not bookable in the LIST, matching the
+  booking gate (previously only rejected at booking time).
+- **Self-describing slots.** Every slot now carries `{ startTime, endTime, status: 'available'|'blocked',
+  bookable, reason }` where `reason ∈ {booked, past, break, too_soon, beyond_horizon}` (null when bookable).
+  The client still filters on `available` (= `bookable`, back-compat); the metadata powers debugging and
+  future provider/admin tooling.
+
+Tests: `scripts/test-availability-slots.js` — 16/16 (now-floor incl. the allowSameDay bug, notice/same-day,
+horizon, breaks, legacy-set + interval-overlap holds, precedence). Booking suite regression-clean.
+Deploy: `functions:bookingDispatch` (routes `getAvailabilitySlots`). Client unchanged. Breaking: none.
+Follow-up (tracked): the two reservation stores (`reserveSlot`'s `bookings` sub-collection vs canonical
+`providerBookings`/`slotLocks`) should converge to one — this change makes the READ reflect both safely.
+
+---
+
+## [2026-08-02] — feat(booking): Slice 1 — pre-payment slot HOLD lifecycle (fixes "ghost booked" slots)
+
+Audit first (two agents, file:line evidence): the service-booking engine already has transactional
+double-booking protection (deterministic `slotKey` slot-lock CAS) and a rich availability schema
+(hours, breaks, holidays, vacation, min-notice, same-day, buffer, max-per-day). The genuine gap was the
+**pre-payment hold**: `bookingCreateService` locked the slot the instant the booking was created
+(`pending`), with no `expiresAt`; an abandoned unpaid booking held the slot until a **15-min** `createdAt`
+sweep, so a customer retrying their own closed payment saw *"That slot was just taken"* for a slot nobody
+bought. Chosen approach (per owner): **extend `pending` + `expiresAt`**, not a new status or a rebuild.
+
+- **Explicit 5-min hold (`functions/booking-service.js`).** Create stamps `expiresAt = now + 5m` on the
+  booking AND the slot lock, and returns it. Payment (`booking-payment-sweep.js` `holdServiceBookingPayment`)
+  clears `expiresAt` when it sets `paid_held`, so a paid booking is never mistaken for an abandoned hold.
+- **Owner self-resume, not "just taken".** When the slot lock exists and it is THIS customer's own still-unpaid
+  hold (deterministic id ⇒ same booking doc), the create refreshes the window and returns `{resumed:true}` so
+  they continue payment. Anyone else's hold remains a real conflict.
+- **Proactive release (`bookingReleaseHold`, new; registered in `provider-dispatch.js`).** Owner-only,
+  idempotent, never releases a paid hold. Cancels the booking + deletes the slot lock + cancels any open
+  payment intent in one transaction — called by the client the instant the customer closes the payment sheet.
+- **Faster, expiry-driven sweep (`booking-payment-sweep.js` + `booking.js`).** `isExpired` now prefers the
+  explicit `expiresAt` (5 min) and falls back to `createdAt + 15-min TTL` for legacy docs; the cleanup
+  scheduler runs **every 1 minute** (was 5), so an abandoned hold frees within ~1 min even if the device died.
+- **Client (`sokoni-book-service.js`).** Captures `expiresAt`, shows a live "please pay within m:ss" countdown
+  that disables Pay at zero, and releases the hold on close (fire-and-forget; server no-ops if already paid).
+
+Tests: `scripts/test-booking-hold-expiry.js` — 12/12 on the pure expiry decision (expiresAt window, paid/terminal
+guards, legacy fallback, precedence). Booking suite regression-clean (payment-auth 10/10, buffer 11/11,
+waitlist 19/19). Deploy: `functions:providerDispatch` (new op) + `functions:bookingCleanupHolds` (cadence) +
+hosting (`sokoni-book-service.js`). Data: bookings/slot-locks gain `expiresAt` (additive; legacy docs use the
+TTL fallback). Breaking: none. Follow-ups: payment-failure webhook release (currently client + sweep cover it);
+autoConfirm-unpaid holds are not swept by this predicate (pre-existing; autoConfirm is off by default).
+
+---
+
+## [2026-08-02] — fix(test-tooling): unblock deploy gate (harness drift) + ship Bug 1 to production
+
+The Bug 1 hosting deploy was blocked by the inventory predeploy gate. The Windows symptom was
+`spawn node scripts\gate-inventory.js ENOENT`, but that message is cross-spawn synthesising over a
+**real** non-zero exit (per the gate's own doc-comment) — not a missing executable. Running the gate
+directly surfaced the true cause: `test-booking-payment-auth` crashed at load with
+`ReferenceError: require is not defined`, so the gate fail-closed correctly.
+
+- **Root cause (test harness, not app code).** `scripts/test-booking-payment-auth.js` extracts the
+  payment-verification block from `functions/booking.js` and runs it in a `new Function(...)` sandbox
+  (so the test can't drift from shipped logic). A convergence change added
+  `require('./shared/constants')` (for `TERMINAL_PAID`) into that block, but the sandbox exposed no
+  `require` → crash → every deploy blocked.
+- **Fix.** Inject a `require` into the sandbox, bound to `functions/booking.js`'s directory via
+  `Module.createRequire`, so `./shared/constants` resolves exactly as at runtime. **`functions/booking.js`
+  unchanged.** 10/10 assertions pass; full gate green (`PASS 65 FAIL 0`, `4a07ce5.json` APPROVED).
+- **Regression guard for the class.** New `scripts/harness-sandbox.js` detects extract-and-eval sandbox
+  drift — if an extracted block references a CommonJS binding (`require`/`module`/`__dirname`/…) the
+  harness doesn't provide, `assertSandboxProvides()` fails early with a clear `HARNESS DRIFT` message
+  naming the missing binding instead of a cryptic `ReferenceError`. `scripts/test-harness-sandbox-parity.js`
+  proves the detector and checks the live booking harness against the current `functions/booking.js`
+  block, so a newly-added import is caught the moment it lands. The booking suite now pre-flights the
+  sandbox. 11/11.
+- **Deployed.** Hosting shipped from `4a07ce5` → live `mysokoni.co.ke` `commit 4a07ce5`,
+  `cacheVersion sokoni-20260802090712-v192`. Verified live: Bug 1 slot renderer now formats times
+  (no `[object Object]`), reads `startTime`, and passes `serviceId`. `version.json`/`service-worker.js`
+  values verified against live before committing back.
+
+Files: `scripts/test-booking-payment-auth.js`, `scripts/harness-sandbox.js` (new),
+`scripts/test-harness-sandbox-parity.js` (new), `version.json`, `service-worker.js`,
+`docs/release-gates/4a07ce5.json` (new). API changes: none. Security changes: none (the gate's
+protection is preserved, not bypassed). Breaking: none.
+
+---
+
+## [2026-08-02] — fix(booking): P0 QA blockers — [object Object] slots + slot/validation duration mismatch
+
+Live QA exposed two verified defects that stopped a real booking:
+
+- **Bug 1 — `[object Object]` slots (`sokoni-book-service.js`).** The slot renderer read `s.start || s.time || s`,
+  but `getAvailabilitySlots` returns `{startTime, endTime, available, booked}`; the missing fields fell through
+  to the object → `[object Object]`. Fixed: read `startTime`, filter to `available` slots only, and format to
+  12-hour local time (`10:00 AM`) via a new `fmtTime` helper; the Continue button now shows formatted time too.
+- **Bug 2 — slot generation vs booking validation disagreed (`functions/availability.js`).** `getAvailabilitySlots`
+  generated slots at `cfg.appt.durationMins` while `bookingCreateService`/`_prepareSlot` validate at the SERVICE's
+  duration — so a displayed slot could be rejected "outside working hours." Fixed: `getAvailabilitySlots` now accepts
+  `serviceId` and generates slots at the service's duration (the same value validation uses) — one availability
+  authority. Client passes `serviceId`. Correct by construction: slot-gen bounds start to `close − dur`; validation
+  checks `start + dur ≤ close`; with `dur = serviceDur` they cannot disagree.
+- Bug 3 (QA schedule) is already covered by the availability auto-onboarding shipped in v186 — an unconfigured DJ
+  becomes bookable (Mon–Fri 09:00–17:00) on first slots call, now at the correct service duration.
+
+Deploy: `functions:bookingDispatch` + hosting. Note: the local emulator harness became flaky mid-session, so Bug 2
+is verified by construction + syntax (the same harness passed 4/4 earlier for the availability fix). Breaking: none.
+
+---
+
+## [2026-08-02] — refactor(food): Phase 6 consumer 1/4 — `food-menu.html` on the shared engine
+
+First of four, lowest financial risk, migrated alone.
+
+**`_rest.deliveryFee || 50` appeared twice in the same file** — a duplicate within a duplicate. Both
+call sites now go through `SokoniDeliveryEngine.calculateDelivery()` via one `_foodDeliveryConfig()`.
+
+The literal `50` is preserved exactly, but as a named `FOOD_LEGACY_DEFAULT_FEE` rather than an inline
+number, so it is **visible** when merchants get real delivery configuration instead of hiding in an
+expression.
+
+A fallback keeps the legacy arithmetic if the engine script has not loaded, so a slow script cannot
+block a customer from checking out.
+
+### One deliberate behaviour change — found by testing for equivalence, not assumed
+
+I wrote an equivalence check across six input shapes rather than trusting that the refactor was
+neutral. It failed on one:
+
+| `_rest` | old | new | |
+|---|---|---|---|
+| `{deliveryFee: 120}` | 120 | 120 | match |
+| **`{deliveryFee: 0}`** | **50** | **0** | **differs** |
+| `{}` / `null` / `{deliveryFee: null}` | 50 | 50 | match |
+
+**`0 || 50` is 50.** A restaurant that set delivery to **free** had its customers charged **50 anyway**,
+because zero is falsy. The `!= null` check honours the zero.
+
+**Verified against production before accepting it:** `restaurants`, `foodProviders` and
+`foodRestaurants` all hold **0 documents**, so no existing merchant's pricing changes. Had any
+restaurant carried a `0`, this would have been the founder's decision rather than a silent fix — and
+the reasoning is recorded in the source, not only here.
+
+This is exactly why "produce identical pricing" is tested rather than asserted: the old behaviour was
+a **bug**, and a migration that reproduced it faithfully would have carried it forward invisibly.
+
+**Rollback:** revert this commit. The engine is additive and no other consumer references
+`_foodDeliveryConfig`.
+
+**Tests:** 825 passed · markup balanced 16/16 · predeploy green.
+
+Files: `food-menu.html`. Not deployed.
+
+Remaining consumers: `delivery-hub.js` → `functions/index.js:3303` → `checkout.html` (last, requires
+authenticated end-to-end verification).
+
+---
+
+## [2026-08-02] — feat(delivery): Phase 6 — one delivery engine (engine + tests; consumers not yet migrated)
+
+**Delivery was being priced in at least four places, each with its own rules:**
+
+| site | rule |
+|---|---|
+| `checkout.html:3158` | `Math.round(80 + zone.distanceKm * 15)` — hardcoded |
+| `delivery-hub.js:212` | `_calcFee(distance, vehicle, weight, urgency)` |
+| `food-menu.html:320,344` | `_rest.deliveryFee \|\| 50` — hardcoded default |
+| `functions/index.js:3303` | clamps a **client-supplied** fee to 0–5000 |
+
+A merchant setting "free delivery" had no way to be sure every surface agreed, and the last of those
+**trusts a number the client sent**. Four implementations of a price is four answers to "what does this
+cost?" — the same defect class as two inventories or two receipt numbers.
+
+### `sokoni-delivery-engine.js` — pure, by design
+
+No Firestore, no network, no writes. Config + order in, number + **reason** out. That makes it testable
+without an emulator, callable identically on the client and in a Cloud Function, and — the point —
+lets the **server recompute exactly what the client displayed and reject a mismatch, instead of
+clamping an unexplained value.**
+
+Six modes: `free` · `flat` · `distance` · `zones` · `own_fleet` · `pickup_only`.
+Four methods: `calculateDelivery()` · `canDeliver()` · `deliverySummary()` · `isEditable()`.
+
+### The refusals are the important part
+
+- **An unconfigured merchant does not silently get free delivery.** Absent config means *not offered*,
+  never *free*.
+- **An unknown distance refuses rather than inventing a fee.** A charge the customer cannot explain is
+  worse than an error.
+- **An unserved zone never renders as "FREE delivery."** *"We don't go there"* and *"it costs nothing"*
+  are different answers, and conflating them is how a customer is shown free delivery to an address
+  the merchant cannot reach.
+- **Fees are never negative**, even with a negative configured base.
+
+`freeAbove` overrides every priced mode — a merchant who says "free above 2,000" means it regardless of
+distance. Operating-hours windows that cross midnight work, which matters for water deliveries.
+
+### `isEditable` enforces ADR-010 structurally
+
+**There is no branch that returns true for a financial field**, so the function cannot be misused as a
+general *"can I edit this order?"* check. `total`, `tax`, `discount`, `receiptNumber`,
+`paymentReference` and `deposit` return `not_a_fulfilment_field` at every status. Fulfilment fields are
+editable until dispatch and locked by `dispatched` / `out_for_delivery` / `delivered`.
+
+### Tests: 26 new, **825 total**
+
+### Not yet done — stated plainly
+
+**The four existing call sites are not migrated.** That work rewrites **checkout pricing**, and doing
+it at the end of a long session without an authenticated checkout to test against would be exactly the
+kind of change this programme has been avoiding. The engine ships first, tested; the consumers migrate
+next, one at a time, each verified — the same order used for merchant templates (data, then wiring)
+and Phase 4 (primitive, then consumers).
+
+Until they migrate, the four implementations remain. **The engine is additive and changes no existing
+behaviour.**
+
+Files: `sokoni-delivery-engine.js` (new), `functions/test/delivery-engine.test.js` (new).
+Not deployed.
+
+---
+
+## [2026-08-02] — feat(inventory): Phase 4 — returnable-unit subtypes on the existing ledger
+
+**Extended, not rebuilt.** No bottle inventory, no bottle stock engine, no duplicate balance table, no
+parallel reservation system. `inventory_levels`, `inventory_movements`, `inventory_audit` and the
+existing transaction engine are all reused.
+
+### Two buckets
+
+`empty` (returned containers the merchant holds) and `onLoan` (containers in a customer's possession)
+added to `inventory_levels`. Additive — absent means zero, so no existing level needs backfilling.
+`available`, `reserved`, `incoming` and `damaged` already existed.
+
+**No `exchanged` bucket.** Stock does not *sit* in exchanged, it moves *through* it — a balance would
+only ever grow. It is a movement type, as specified.
+
+### One primitive
+
+```
+inventoryTransferSubtype(fromSubtype, toSubtype, quantity, reason, metadata)
+```
+
+Generalised from `inventoryReserveStock`, which already moved quantity between two named buckets in a
+transaction. **This adds the movement record that pair never wrote.** Every bottle workflow — refill,
+loan, return, damage — is expressed through it rather than getting its own function.
+
+The `from` balance is read **inside** `db.runTransaction`, so two tills racing for the last bottle
+cannot both pass the check.
+
+`reason` is **required**, minimum 3 characters: a bottle count that shrinks without an explanation is
+indistinguishable from theft.
+
+### Shared balance definitions
+
+```js
+sellableOf(level) = max(0, available − reserved)
+onHandOf(level)   = available + reserved + incoming + damaged     // EXCLUDES empty, onLoan
+```
+
+Exported so every consumer shares **one** definition — two modules computing "sellable" slightly
+differently is how a POS and a marketplace come to disagree about the same shelf.
+
+`onHand` is **recomputed** from the buckets on every transfer rather than incremented, so it is
+self-healing and the new buckets can never inflate it. **An empty bottle is not sellable stock, and a
+bottle in a customer's kitchen is not on hand at all.**
+
+### The financial boundary holds
+
+**Deposits never touch inventory.** A deposit is money: a receipt line item refunded through the refund
+pipeline (ADR-010). Inventory moves objects; the financial pipeline moves money. The transfer records
+`receiptNumber` and `orderId` as *references* only.
+
+### Tests — 16 new, 799 total
+
+Conservation across a refill · loan→return→refill restoring balances · damaged never sellable ·
+empty/onLoan never sellable · a warehouse of empties reporting **zero** on hand · `exchanged` absent
+from the buckets.
+
+**Three acceptance cases are named in the file rather than silently omitted**, because they need the
+Firestore emulator and JDK 21 (this host has 17):
+
+1. two concurrent tills selling the last bottle — exactly one succeeds
+2. every balance change appends exactly one movement
+3. `reason` required, short reasons rejected
+
+The in-transaction read gives (1) by Firestore's optimistic concurrency — **but that is an argument,
+not a test, and it is recorded as untested until it runs.** Same gate as the landlord rules.
+
+Registered in `functions/index.js` by name, per repo discipline.
+
+Files: `functions/inventory-engine.js`, `functions/index.js`,
+`functions/test/inventory-subtype.test.js` (new).
+**Not deployed** — a new Cloud Function should ship with the Phase 7 merchant verification.
+
+---
+
+## [2026-08-02] — design(inventory): Phase 4 subtypes — most of it already exists
+
+Design only. **Not implemented.** Full note: `docs/INVENTORY_SUBTYPE_DESIGN.md`.
+
+**`functions/inventory-engine.js` is already an append-only movement ledger with balance buckets** —
+precisely the architecture the brief asks for:
+
+```
+inventory_levels/{id}      balances
+inventory_movements/{id}   append-only
+inventory_audit/{id}       audit log
+```
+
+Every adjustment runs in `db.runTransaction`, appends a movement, and never overwrites history. And
+`inventoryReserve` **already transfers between buckets** (`available → reserved`, released with
+`increment(-qty)`) — the bucket-transfer primitive the bottle workflow needs is already written and
+already transactional.
+
+| requested subtype | status |
+|---|---|
+| `filled` · `damaged` · `reserved` · `in_transit` | **already exist** (`available`, `damaged`, `reserved`, `incoming`/`allocated`) |
+| `empty` · `on_loan` | **missing** |
+| `exchanged` | correctly *not* a balance — a movement type, as the brief states |
+
+Movement types `sale`, `damage`, `transfer`, `adjustment`, `reserve`, `release` exist; `refill`,
+`exchange`, `return`, `dispatch`, `receive` do not.
+
+**So Phase 4 is two balance buckets, five movement types, and one generalised transfer** — not a new
+subsystem. That is the outcome the declarative merchant template was written to produce.
+
+### The one thing that must be got right
+
+**`onHand` must exclude `empty` and `onLoan`.** An empty bottle is not sellable stock, and a bottle in
+a customer's kitchen is not on hand at all. Getting this wrong overstates sellable stock — the exact
+failure mode the shared-inventory design exists to prevent.
+
+**The deposit never touches inventory.** It is money: a receipt line item returned through
+`autoOnRefundRequest` (ADR-010). Inventory moves objects; the financial pipeline moves money.
+
+### Verification defined before implementation
+
+The engine's collections are **empty in production**, so correctness cannot be measured against data
+and must be proven by test: conservation across a refill · `onHand` excluding `empty`/`onLoan` · **two
+concurrent tills selling the last bottle, one succeeding and one failing the negative-stock guard** ·
+a movement for every balance change · `damage` requiring a reason.
+
+The concurrency case is the oversell guarantee and matters most.
+
+Files: `docs/INVENTORY_SUBTYPE_DESIGN.md` (new). No runtime code changed.
+
+---
+
+## [2026-08-02] — decision(ADR-009): `receiptNumber` is canonical; `receiptNo` deprecated and ratcheted
+
+**Decision:** `receiptNumber` and `invoiceNumber` are canonical. `receiptNo` and `invoiceNo` are
+deprecated aliases. An invoice is a different document from a receipt — that distinction is kept.
+
+### No migration layer is needed, because there is no data
+
+**Zero production documents carry any of these fields.** `receipts` holds 1 document, `payments` 8,
+and `orders` / `posSales` / `invoices` are empty. The split exists **only in code**, so the recommended
+dual-write compatibility layer would guard nothing. This is the landlord situation again: decide now,
+at zero cost.
+
+### I got the count wrong twice, in the same way
+
+| report | figure | why it was wrong |
+|---|---|---|
+| first | "63 vs 45" | counted **local variable names** as fields — `finos-router.js` declares `const receiptNo` and writes the field as `receiptNumber` |
+| second | "20 vs 19" | correct about fields, but **scoped to `functions/*.js` and root `*.html` only** |
+| measured | **91 `receiptNo` in 34 files · 18 `invoiceNo` in 10 · 109 total** | repo-wide, field usage only |
+
+Both errors were scope errors, and both made a contained problem look smaller or larger than it is.
+ADR-008 exists for this and I still had to apply it twice to my own numbers.
+
+### Why the rename is not in this commit
+
+109 uses across 34 files, including **POS receipt printing** (`pos-checkout.html`,
+`print-station.html`, `pos-ios-print-test.html`) and `financial-engine.js`, which carries a paired
+`invoiceNo`/`receiptNo` vocabulary.
+
+That is a mechanical change to **printed financial documents** which I cannot test from here — no
+authenticated POS session, no printer. It carries no *data* risk (nothing to migrate) but real
+*behavioural* risk, and it belongs with the **Phase 7 multi-till verification** where a real merchant
+can confirm a receipt still prints correctly.
+
+### What shipped instead
+
+`scripts/verify-receipt-naming.js`, wired into `predeploy` as a **ratchet**: the deprecated alias may
+not spread while the rename is scheduled. `--strict` becomes the mode once the count reaches zero, and
+the alias is gone for good.
+
+It counts **field usage only** — an object key or a property read. A local variable of the same name is
+not a schema problem, and counting it is precisely what produced the wrong number the first time.
+
+Mutation-tested: adding `{ receiptNo: 1 }` reports `109 -> 110`, says the alias is spreading, and
+exits 1. (The first mutation attempt silently did nothing because the target file had no
+`module.exports` anchor — caught by re-testing rather than trusting the pass.)
+
+Files: `scripts/verify-receipt-naming.js` (new), `scripts/receipt-naming-baseline.json` (new),
+`docs/adr/ADR-009-canonical-field-representation.md`, `package.json`.
+No runtime code changed.
+
+---
+
+## [2026-08-02] — docs(architecture): receipt architecture — ADR-010
+
+Design only. **Nothing implemented.**
+
+**Principle:** *a receipt is a financial record; a delivery note is an operational record; they evolve
+under different rules.*
+
+### The survey inverted the problem
+
+The `orders` rule at `firestore.rules:561` **already enforces the financial half** through per-role
+`hasOnly()` allowlists. **No financial field appears in any allowlist** — `total`, `items`, `taxes` and
+the payment reference are already immutable to buyers, sellers and drivers. And
+`orders/{orderId}/events` **already exists** as a subcollection, so the event log this design needs is
+not new infrastructure.
+
+Three gaps, and the first is the opposite of what was assumed:
+
+| # | gap |
+|---|---|
+| **1** | **No delivery field is in ANY allowlist.** Not `estate`, not `houseNumber`, not `landmark`. **A merchant cannot correct a house number after payment today, except as an admin.** The concern was that delivery details were too editable; in fact the water business's core operational need is currently impossible. |
+| 2 | **`isAdmin()` is unrestricted** — an administrator may rewrite `total` with no audit requirement. The financial record is immutable to everyone except the actor most able to cause a reconciliation problem. |
+| 3 | **No dispatch lock** — a driver may rewrite `driverNote` after delivery. |
+
+### The design
+
+**State 1 — financial, immutable after payment.** Corrections create new records through pipelines
+that already exist (`fosSubmitRefund`, `processRefund`, `autoOnRefundRequest`, the FinOS ledger). The
+change needed is to **narrow `isAdmin()`**, applying the rule already proved on a paid landlord ledger
+entry in ADR-006.
+
+**State 2 — fulfilment, mutable until dispatch.** A `fulfilment` map **on the order**, not a parallel
+collection — a second document is a second authority to reconcile, and this programme has spent two
+days removing exactly that shape. Every edit appends to the existing `events` subcollection with
+editor, timestamp, previous value, new value and a **required `reason`**: an audit trail of *what*
+changed without *why* answers the easy question and not the useful one.
+
+Rules cannot enforce "and also write an event", so fulfilment edits go through a callable with the
+rule narrowed against direct client writes.
+
+**State 3 — dispatch lock.** Later change happens through `failed_delivery` · `return` · `redelivery` ·
+`cancellation` · `exchange`. **A redelivery is a new attempt, not a rewrite of the first.**
+
+**Water extension.** Bottle movements are fulfilment events. But a **deposit is money** — it is a
+receipt line item returned through the refund pipeline, never a fulfilment edit. This preserves the
+invariant that made the landlord ledger correct: *the thing that moves money is append-only; the thing
+that moves objects is an event stream.*
+
+### Blocking question, recorded rather than assumed away
+
+`receiptNo` (63 uses) and `receiptNumber` (45) are the same concept under two names; `invoiceNumber`
+(53) is genuinely different. **Freezing an ambiguous field name would freeze the ambiguity** — resolve
+under ADR-009 before implementing State 1.
+
+### Implementation order
+
+1. Resolve `receiptNo` vs `receiptNumber`.
+2. Fulfilment map + `orderUpdateFulfilment` callable — **closes Gap 1, the merchant's actual blocker.**
+3. Narrow `isAdmin()` once `paidAt` exists — **ship the refund path first and verify it**, since
+   narrowing could otherwise block a correction that has no other route.
+4. Dispatch lock.
+5. Bottle events, on Phase 4's inventory subtypes.
+
+Files: `docs/RECEIPT_ARCHITECTURE.md` (new), `docs/adr/ADR-010-…md` (new), `docs/adr/README.md`.
+No runtime code changed.
+
+---
+
+## [2026-08-02] — fix(disputes): a dispute rule decides the outcome; the financial engine moves the money
+
+**Policy applied:** automatic dispute resolution must not approve a refund directly.
+
+**And the investigation inverted the problem.** `autoOnRefundRequest` — in the *same file* — already
+triggers on `refundRequests/{refId}` and does everything the policy asked for:
+
+| requirement | already provided by `autoOnRefundRequest` |
+|---|---|
+| audit entry | `_logAction({ action:'auto_approve_refund', … })` |
+| idempotency | `automationProcessed` flag **and** a transactional re-check of `status !== 'pending'` |
+| duplicate protection | the same transactional guard |
+| notification | `_notify()` to the buyer |
+| settlement record | a `ledger` entry — `type:'refund'`, credit, `userId`, `refundId`, `orderId` |
+| human review | `requireManualAbove` (default **KES 20,000**) → `under_review` + exception queue |
+
+**But it returns immediately unless `status === 'pending'`.** The dispute path wrote
+`status: 'approved'`, so the trigger skipped it entirely.
+
+So the defect was worse than "approves refunds too readily": it wrote an **approved refund that was
+then executed by nobody** — no wallet credit, no ledger entry, no notification, no idempotency guard.
+**An approved refund that never reaches the customer is worse than none, because it looks settled.**
+
+**Fix — one value.** The dispute path now writes `status: 'pending'` with
+`requestedBy: 'automation:dispute_auto_resolve'`, handing the money to the pipeline that already
+exists. The dispute rule decides the *outcome*; the financial engine validates and executes.
+
+**Deliberately `'pending'`, not `'pending_execution'.** The consumer defines this vocabulary, and a new
+value would bypass the trigger exactly as `'approved'` did — ADR-009. No new pipeline was built,
+because one already existed and was being stepped around.
+
+Two other `approvedBy: 'automation'` sites were checked and left alone: `autoOnSellerApplication` and
+`autoOnApprovalRequest` are **not financial**.
+
+**Tests:** 783 passed, 17 suites.
+
+Files: `functions/automation-engine.js`.
+Deployed with the `TERMINAL_PAID` consolidation as one functions release.
+
+---
+
+## [2026-08-02] — refactor(payments): one definition of "has this been paid?"
+
+`TERMINAL_PAID` had been written out **independently in two files** and imported into a third. Two
+copies of a financial vocabulary is one drift away from two different answers to the same question.
+
+`functions/shared/constants.js` now owns it, plus `isPaid(status)` which normalises case at the
+comparison — the actual defect behind the dispute bug was a raw literal comparison, so the safe form is
+provided rather than left to each caller to remember.
+
+| module | before | after |
+|---|---|---|
+| `shared/constants.js` | — | **defines** `TERMINAL_PAID` + `isPaid()` |
+| `entitlement-engine.js` | own `new Set([...])` | imports; **re-exports** so existing importers are unchanged |
+| `booking.js` | own `new Set([...])` inside a function | imports |
+| `automation-engine.js` | imported from `entitlement-engine` | imports from `shared/constants`, uses `isPaid()` |
+
+Independent definitions remaining: **0**. Re-export identity verified — `entitlement.TERMINAL_PAID`
+**is** `constants.TERMINAL_PAID`, so nothing can hold a divergent copy.
+
+**Tests:** 783 passed, 17 suites · all four modules load cleanly, no circular dependency ·
+`isPaid('COMPLETE')` true · `isPaid('completed')` true · `isPaid('PENDING')` false ·
+`isPaid(undefined)` false.
+
+Files: `functions/shared/constants.js`, `functions/entitlement-engine.js`, `functions/booking.js`,
+`functions/automation-engine.js`. **Not deployed** — bundled with the `automationEngine` decision.
+
+---
+
+## [2026-08-02] — verification: `automationEngine` pre-deployment checks
+
+Requested before deploying `8ab9f33`. **All four answered; one finding needs a decision.**
+
+| check | result |
+|---|---|
+| **audit entry per auto-resolution** | ✅ `_logAction({ action:'auto_resolve_dispute', … })` with amount, evidence types and resolution |
+| **notifications still fire** | ✅ `_notify()` to **both** buyer and seller, in a `Promise.all` after the transaction |
+| **amount threshold** | ✅ `amount <= (rule.autoResolveBelow || 1000)` — **KES 1,000**, configurable per rule |
+| **only TERMINAL_PAID qualifies** | ✅ after the fix, via `isPaid()` which normalises case |
+
+**Which dispute types qualify: all of them.** `type` does not gate eligibility — it only selects the
+outcome:
+
+```js
+const resolution = (dispute.type === 'not_received' && deliveryConfirmed)
+  ? 'seller_wins' : 'buyer_wins';
+```
+
+### The finding that needs a decision, not a fix
+
+**The default outcome is `buyer_wins`, and `buyer_wins` writes a `refundRequests` document with
+`status: 'approved'`, `approvedBy: 'automation'`.**
+
+So deploying this means: **any dispute of any type, at or under KES 1,000, against a terminally-paid
+payment, auto-approves a refund to the buyer** — unless it is specifically `not_received` *and*
+delivery is confirmed.
+
+That is the intended design as written. It is also a real financial behaviour that has never once
+executed, so there is no production experience of it. The code is correct; whether the policy is what
+you want is yours.
+
+`deliveryConfirmed` was checked for the same class of bug and is **sound** — `dispatch.js:331` writes
+lowercase `'delivered'` and the comparison is lowercase `'delivered'`.
+
+**Urgency is low:** `disputes`, `deliveries` and `refundRequests` all hold **0 documents** in
+production. Nothing is waiting on this.
+
+---
+
+## [2026-08-02] — fix(disputes): small-dispute auto-resolve has never fired
+
+**Root cause.** `automation-engine.js:394` read `payments/{paymentId}` and tested:
+
+```js
+const paymentConfirmed = payment?.status === 'completed';
+```
+
+The `payments` collection stores **UPPERCASE** — measured across 8 production documents:
+`COMPLETE` · `PENDING` · `FAILED`. The literal `'completed'` matches **neither `COMPLETE` nor
+`complete`**. `paymentConfirmed` was therefore permanently `false`, and the guard below it —
+
+```js
+if (isSmall && paymentConfirmed) { … auto-resolve … }
+```
+
+— **never executed. Small-dispute auto-resolution has never worked.**
+
+**It failed CLOSED**, which is why it went unnoticed for so long: disputes fell through to manual
+review rather than being wrongly auto-resolved. No money moved incorrectly. But an automation nobody
+knew was dead is still an automation nobody has.
+
+### How it was found, and a correction to my own claim
+
+I flagged "`COMPLETE` vs `complete`" three times from a schema probe **without checking that a
+comparison actually existed**. That was an assertion, not a finding. Verifying it produced a more
+accurate picture than the one I had been repeating:
+
+- `email-triggers.js:138–143` **already documents the mixed case** — a previous investigation found it.
+- `booking.js:407` and `entitlement-engine.js:47` **already defend against it** with
+  `TERMINAL_PAID = new Set(['COMPLETE','COMPLETED','PAID','SUCCESS'])`.
+- `entitlement-engine.js:401` uses the correct defensive form: `String(status||'').toUpperCase()`.
+
+So the platform mostly handles this. **One path did not**, and it is this one.
+
+### Fix — imported, not redefined
+
+`TERMINAL_PAID` was already **exported** by `entitlement-engine.js:427`. It is imported rather than
+copied: the set exists in two places already, and a third copy is how the next one drifts.
+
+Verified safe before importing — `entitlement-engine` registers no Cloud Function at load, has no
+top-level side effects, and does not require `automation-engine` back. Confirmed by loading both.
+
+```js
+const paymentConfirmed = TERMINAL_PAID.has(String(payment?.status || '').toUpperCase());
+```
+
+Now matches `COMPLETE`, `COMPLETED`, `PAID`, `SUCCESS` — and, because of the `toUpperCase()`, any
+lowercase variant a future writer produces. `PENDING` correctly does not match.
+
+**Tests:** 783 passed, 17 suites · both modules load cleanly with no circular dependency ·
+`COMPLETE` → true, `completed` → true, `PENDING` → false.
+
+**Not deployed** — this is a Cloud Function change and needs `functions:automationEngine` deployed
+deliberately, not folded into a hosting release.
+
+Files: `functions/automation-engine.js`.
+Database changes: none. Breaking changes: none — a guard that never passed can now pass, which is the
+intent. Related: `CANONICAL_DATA_MODEL.md` §5, ADR-009.
+
+**Still open:** `TERMINAL_PAID` is defined in two files and imported in a third. Consolidating it into
+`functions/shared/constants.js` is a separate concern and is not done here.
+
+---
+
+## [2026-08-02] — feat(merchant): Water Supplier category + declarative template (Phases 1–3)
+
+**No Dash Premium production record was created**, per the decision. This is the reusable category any
+water merchant onboards through.
+
+### Phase 1 — the category
+
+One row in `hub-register.js`, alongside the existing 103:
+
+```js
+{ id:'water-supplier', label:'Water Supplier / Refill Station', hub:'shopping', emoji:'💧' }
+```
+
+**No special-case onboarding logic.** The existing merchant flow already reads that registry, so
+selecting it works with no other change.
+
+### Phases 2–3 — `sokoni-merchant-templates.js`, and why it is *data*
+
+The template **declares** which existing capabilities a category turns on and what products it starts
+with. It contains **no POS, inventory, delivery or pricing logic**, because all of that already exists:
+**141 POS/till/inventory Cloud Functions are deployed**, and `posSyncToMarketplace` /
+`posMarketplaceOrderSync` already keep one inventory in step across POS and marketplace **in both
+directions**.
+
+A category template carrying its own logic would be a second POS. A Water Supplier is an ordinary
+SOKONI merchant with a particular starting configuration — **not a special kind of merchant**. The
+contract asserts this directly: no per-category branching, and the module performs **no writes**.
+
+**Adding a future category should require an entry here and a row in `CATS` — nothing else. If a
+category needs code, that is a signal the capability belongs in the platform.**
+
+### What the template refuses to invent
+
+| | why |
+|---|---|
+| `price: null` on every preset | a made-up price would face a real customer |
+| `barcode: ''` | a barcode belongs to the product, not to us |
+| `status: 'draft'` | nothing is listed until the merchant prices it |
+| `defaultDeliveryMode: 'flat-rate'` | **free is deliberately not the default** — defaulting to free gives away a merchant's margin |
+
+SKUs are bound to the merchant id (`DASH01-001`) so two merchants cannot collide.
+
+### Returnable units — subtypes, not a second inventory
+
+`filled · empty · on-loan · damaged`, **reconciled against the product**. Modelling bottles as their
+own inventory would recreate exactly the split this programme has spent two days removing: one number
+in the POS, a different number online, and no way to tell which is true.
+
+**Declared here; the inventory-engine work to honour `subtype` is a separate tracked change and is not
+implied by this file existing.**
+
+### Tests
+
+`scripts/test-merchant-templates.js` — **32/32**, wired into `npm run test:panels`. The assertions
+that matter are the negative ones: nothing invented, no branching, no writes, and `get()` returns a
+copy so a caller cannot corrupt the registry.
+
+Regression re-run: **36 PASS · 0 FAIL · 3 BLOCKED**.
+
+### Phases 4–7 — declared, not implemented
+
+Deliberately **not** in this commit, because each is a real platform extension rather than
+configuration:
+
+| phase | what it actually needs |
+|---|---|
+| 4 — bottle lifecycle | the inventory engine to honour `subtype` on adjustments and exchanges |
+| 5 — receipt split | **financial fields immutable after payment, delivery fields mutable until dispatch, every edit audited** — this is ADR-005 applied in reverse and deserves its own design |
+| 6 — delivery modes | merchant settings UI + dispatch honouring the chosen mode |
+| 7 — multi-till | already exists; needs verification against a real merchant, not new code |
+
+Files: `hub-register.js`, `sokoni-merchant-templates.js` (new),
+`scripts/test-merchant-templates.js` (new), `package.json`.
+Database changes: none. Breaking changes: none — one added category, no existing behaviour altered.
+
+---
+
+## [2026-08-02] — test(admin): Admin OS regression harness — 44 PASS · 0 FAIL · 2 BLOCKED
+
+Run before any new product work, per the agreed order.
+
+**PASS / FAIL / BLOCKED are never conflated.** BLOCKED means *this could not be executed here*, not
+*this passed* — a suite that reports BLOCKED as PASS is worse than no suite.
+
+### Result
+
+| | |
+|---|---|
+| **PASS** | **44** |
+| **FAIL** | **0** |
+| **BLOCKED** | **2** |
+
+Covered: pane convergence per pane (one pane · one renderer · one data source · no localStorage
+authority) · claim-based authorization · consent gate (86) · admin markup · duplicate-id ratchet ·
+localStorage ratchet · Applications render contract (25) · Users render contract (36) · Cloud Function
+unit tests (783) · audit logging reuse · realtime listeners guarded against double-attach · live
+production assets, `<div>` balance and all five panes single.
+
+### The two BLOCKED, and why they are not FAIL
+
+1. **`landlordProperties` rule behaviour** — 26 assertions written, unexecuted. The Firestore emulator
+   needs JDK 21; this host has 17.0.19.
+2. **`sokoniLandlordProperties` still a localStorage authority** — landlord Phases 2/3/6 are gated on
+   the above.
+
+I first classified the second as **FAIL**, and that was wrong. FAIL means *something that worked has
+broken*. This has never worked and is held behind a declared gate. Reporting it as a failure would
+make every future run red for a reason nobody can act on — which is precisely how a red suite starts
+getting ignored. It is still counted, still listed, and still blocks completion.
+
+### What this harness cannot do
+
+It **cannot mint an admin ID token**, so there is no live authenticated click-through. Eleven manual
+checks are printed on every run rather than quietly omitted — sign-in, each pane's list and actions,
+Moderation and Super Admin, notifications, search, mobile at 393px, and an audit entry appearing in
+`auditLogs`.
+
+**Mutation-tested:** re-introducing a duplicate `#adm-pane-users` produces
+`FAIL exactly one pane — 2 declaration(s)` and `FAIL duplicate-id ratchet`, and exits 1.
+
+### Dash Premium — decision recorded
+
+No production merchant record was created, per the decision. The survey found **141 POS / till /
+inventory Cloud Functions already deployed**, including `posSyncToMarketplace` and
+`posMarketplaceOrderSync` — **shared inventory across POS and marketplace already works in both
+directions**. The Water Supplier work is therefore a **category + onboarding template on existing
+modules**, not new systems. Queued behind this regression per the agreed order.
+
+Files: `scripts/admin-os-regression.js` (new), `package.json` (`npm run regression:admin`).
+No runtime code changed.
+
+---
+
+## [2026-08-02] — docs(architecture): canonical data model + ADR index
+
+Specification and decision records. **Nothing migrated, no runtime code changed.**
+
+### Canonical data model — measured, not assumed
+
+`docs/CANONICAL_DATA_MODEL.md`, generated from
+`functions/scripts/probe-canonical-fields.js` against production.
+
+Measuring rather than reading changed the answer every time. `phone` is the obvious field name and
+covers **5%** of users; `phoneNumber` covers **75%**.
+
+| concept | measured reality | canonical |
+|---|---|---|
+| role | **four representations** on `users`: `roles[]` 97% · `registeredAs` 97% · `role` 13% · `accountType` 13% — and **2 documents carry none** | **`roles[]`** |
+| identity | `providers` carries **`uid` AND `providerId` on 100%** — pure duplication | `uid`, or a role-qualified uid |
+| phone | `phone` 5% vs `phoneNumber` 75%; `applications` carries **both on 100%** | **`phoneNumber`**, E.164 |
+| created | `applications` carries **`createdAt` AND `submittedAt` on 100%**; `auditLogs` uses `ts`; **`users.joined` is 0%** | `createdAt` |
+| status | **`payments` is UPPERCASE** (`COMPLETE`/`FAILED`/`PENDING`) while every other collection is lowercase | lowercase, per-lifecycle vocabulary |
+| verified | `verified` 2% vs `verificationStatus` 7% on users | `verified: boolean` + `verifiedAt`/`verifiedBy` |
+| location | **`city` exists on 0% of users** while the admin pane renders a City column | one `location` map, `county` queryable |
+
+**The `payments` case mismatch is a live correctness risk**, not a cosmetic one: a comparison against
+`'complete'` fails silently against `COMPLETE`. It is first in the migration order.
+
+Three things are recorded as **deliberately distinct, so they are not "unified" later**:
+`ownerUid`/`hostUid`/`tenantUid` (different people, sometimes on the same document, and the rules
+depend on telling them apart); `applications.type` (the application *kind*, not a role); and
+`projectionStatus` (whether an approval reached its registry — the fact that made
+approved-but-invisible providers detectable).
+
+Migration principles: **dual-read before converging writes** · **normalise, never rename**, where
+formats differ (`07…` → `+2547…`) · **backfill before ordering**, because `orderBy` silently drops
+documents lacking the field · one field per commit with measured before/after coverage.
+
+### ADR index — 9 records
+
+`docs/adr/` — ADR-001 claim-based authorization · 002 one renderer/source/write path · 003 no
+business authority in localStorage · 004 single writer for shared layout state · 005 commit-point
+persistence gating · 006 hierarchical landlord model · 007 pane convergence protocol · 008
+evidence-before-change · 009 canonical field representation.
+
+Each states the decision, the production evidence that produced it, and — most usefully — **what it
+forbids**, because every one of these is the kind of decision a future contributor reverses by
+accident while fixing something else.
+
+The index cross-references every implementation document and every guard, with each guard's mode
+(absolute vs ratchet) and current count.
+
+**The rule governing all of them:** a ratchet may decrease; it never increases without explicit
+architectural justification. Raising a baseline to silence a gate converts the gate into decoration.
+
+Files: `docs/CANONICAL_DATA_MODEL.md` (new), `docs/adr/README.md` + 9 ADRs (new),
+`functions/scripts/probe-canonical-fields.js` (new).
+
+---
+
+## [2026-08-02] — audit(admin): localStorage inventory + CI ratchet · Ride Hub roadmap
+
+### Ride Hub — deferred, documented as a product module
+
+`docs/RIDE_HUB_ROADMAP.md`. **Not technical debt: a feature built ahead of its product.** No renderer
+was removed and nothing regressed — the markup preceded the backend.
+
+A correction to the earlier Rides note, from a re-measurement: the pane is **not uniformly empty**.
+`#payoutsStats`, `#payoutsBody` and `#payoutsDoneBody` are fed by `renderPayouts()` — **the Payouts
+sub-tab works.** `#deliveryStats` is fed by `renderDelivery()`. Only `#ridesBody`, `#driversBody`,
+`#deliveriesBody`, `#couriersBody` and `#ride-payout-cnt` are unfed. The earlier "no renderer" claim
+was true of the rides and drivers *tables*, not of the pane, and is corrected in the document.
+
+Existing assets are `driverLocations` and `deliveryLocations` — **tracking** collections that record
+where something is, not what was requested, by whom, for how much, or whether it completed. Missing:
+trip model, driver record, vehicles, onboarding, dispatch, pricing, payments, ETA/routing, moderation,
+customer history. Seven-phase plan proposed, each extending something that already exists (the
+`applications` lifecycle, Logistics & Dispatch v1.1, the commission and settlement engines, OSRM
+navigation) rather than starting a parallel system.
+
+### localStorage inventory — **45 keys still to migrate**
+
+`docs/ADMIN_LOCALSTORAGE_INVENTORY.md`, generated by `npm run audit:storage`.
+
+**49 keys · 4 KEEP · 45 REPLACE.** The five-pane programme fixed **four**. `sokoniOrders`,
+`sokoniAllUsers`, `sokoniBnBListings` and `sokoniBnBBookings` no longer appear at all — that is what a
+completed migration looks like here.
+
+The remaining 45 span the whole platform, and **several are financial**: `sokoniCommissionLedger`,
+`sokoniCommissions`, `sokoniTaxPayments`, `sokoniCosts`, `sokoniBookingFees`, `sokoniLeadFees`. A
+commission or tax figure that differs per device is worse than a listing that does, so those are
+recommended first, then approval-bearing keys (applications, verified sellers), then operational
+records, then catalogue.
+
+Classification rule, stated so it cannot drift: a key is **KEEP** only if losing it — or another device
+holding a different value — **cannot change a business outcome**. Everything else is REPLACE until
+proven otherwise. The default is deliberately hostile, because all three earlier failures looked
+harmless in the source.
+
+### The guard — a ratchet, then a wall
+
+Wired into `predeploy`. With 45 existing violations an absolute guard would fail every deploy until the
+whole backlog cleared, and a gate that blocks everything gets disabled and then ignored. Default mode
+fails only when the count **rises**; `--ci` is the absolute form and is the end state — when the count
+reaches zero, `predeploy` switches to it and the door closes permanently.
+
+**Never raise the baseline to make a failure go away.** That single move turns this into decoration.
+
+Mutation-tested: adding `localStorage.getItem('sokoniSecretLedger')` to `moderation.html` reports
+`45 -> 46`, names the new key, and fails.
+
+Files: `docs/RIDE_HUB_ROADMAP.md` (new), `docs/ADMIN_LOCALSTORAGE_INVENTORY.md` (new),
+`scripts/audit-admin-localstorage.js` (new), `scripts/admin-localstorage-baseline.json` (new),
+`package.json`. No runtime code changed.
+
+---
+
+## [2026-08-02] — audit(security): admin credential inputs — risk report, no code changed
+
+Audit only. Full report: `docs/ADMIN_CREDENTIAL_RISK_REPORT.md`.
+
+**Severity depends on what the lock protects, so that was established first.** `admin.html` has **two
+independent gates**: the Firebase claim check (`getIdTokenResult(true)` + `firestore.rules isAdmin()`),
+which protects **all data**, and the manager lock (PIN/pattern/password hashed into `localStorage`),
+which protects **the console UI on that device**. Defeating the lock reveals the admin *shell*; every
+read and write inside still needs a valid ID token carrying an admin claim, which the lock cannot
+grant. That is the correct architecture and it caps the blast radius of everything below.
+
+| # | finding | severity |
+|---|---|---|
+| 1 | **Unsalted, single-round SHA-256.** A 4-digit PIN is 10,000 values — every hash is precomputable in under a second, so the stored hash is equivalent to storing the PIN | HIGH (within the lock's scope) |
+| 2 | The hash is readable by any script on the origin, so XSS or device access yields the PIN itself, not a hash | HIGH |
+| 3 | Minimums are low — 4 digits, 6 characters, no complexity, no unlock rate limit | MEDIUM |
+| 4 | **No re-authentication before a credential change.** `changePin()`/`changePassword()` never ask for the current credential, so anyone at an unlocked console can silently replace the lock | MEDIUM |
+| 5 | Duplicated credential inputs | **RESOLVED** in `631b632` |
+
+**Already correct, and worth recording so it is not "fixed" later by mistake:** `autocomplete="new-password"`
+on both inputs; values cleared after submit; the raw value never logged; **no hardcoded default
+credentials** (`DEFAULTS = {}`, with first-run enrolment forced when no hash exists — a shipped default
+PIN would have been the worst finding here and it is absent); inputs are `type="password"`.
+
+**Checked and not applicable:** clipboard (no handler touches these fields), browser cache
+(`type="password"` is not cached, and the page is not form-posted), logging (nothing writes these
+values anywhere), password-manager compatibility (`new-password` is the correct signal).
+
+**Recommended order when scheduled:** re-authentication before a credential change (cheapest, no
+migration) → PBKDF2 with a per-install salt (needs a re-enrolment path for existing hashes) → raise
+minimums and rate-limit unlock attempts.
+
+Files: `docs/ADMIN_CREDENTIAL_RISK_REPORT.md` (new). **No authentication code changed.**
+
+---
+
+## [2026-08-02] — refactor(admin): Phase 1 pane 5 — Settings, unreachable duplicate removed
+
+**Last of the five panes.** UI cleanup only.
+
+**Root cause.** `#adm-pane-settings` was declared twice. `showPane()` resolves to the first, so the
+second copy — **80 lines** — could never be displayed. Both copies carried **identical id sets**, so
+nothing was lost.
+
+### This is also the security finding
+
+The two panes each declared **`newPin`, `newAdminPw` and `patternCanvasNew`**. The duplicated
+credential inputs flagged for the security audit were not a separate defect — they were a symptom of
+the duplicated pane, and removing it resolves them:
+
+| id | before | after |
+|---|---|---|
+| `newPin` | 2 | **1** |
+| `newAdminPw` | 2 | **1** |
+| `patternCanvasNew` | 2 | **1** |
+
+`getElementById` resolved to the first copy, so the second set was unreachable and never read by
+`changePin()`, `changePassword()` or `_patNewInit()`. The risk was **latent rather than active** — an
+admin could not reach the dead form — but a second password field that no handler reads is exactly the
+kind of thing that becomes active the moment someone adds a nav entry.
+
+**The deeper credential risks are NOT patched here** and are reported separately, as instructed.
+
+**Tests:** functions 783 passed · users 36/36 · applications 25/25 · `<div>` balanced 704/704, 5 inline
+blocks parse · **duplicate ids 97 → 90** · predeploy green.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none — the removed pane was unreachable.
+
+### Phase 1 complete — all five panes
+
+| pane | duplicate removed | one renderer | one data source | one write path | complete? |
+|---|---|---|---|---|---|
+| Orders | ✅ | ✅ | ✅ Firestore | ✅ Firestore | **✅** |
+| Users | ✅ | ✅ | ✅ Firestore | ⚠️ read-only by design | **✅** |
+| Properties | ✅ | ✅ | ✅ Firestore | ✅ Firestore | ❌ `sokoniLandlordProperties` |
+| Rides | ✅ | ❌ none exists | ❌ none exists | ❌ none exists | ❌ **deferred — not built** |
+| Settings | ✅ | — | — | — | ⚠️ credential risks open |
+
+**Duplicate ids: 112 → 90** across the programme. Every remaining duplicate is now *within* a single
+surviving pane rather than between two copies of one.
+
+---
+
+## [2026-08-02] — refactor(admin): Phase 1 pane 4 — Rides, unreachable duplicate removed
+
+**UI cleanup only.** No data migration — see the finding below, which is a separate concern.
+
+**Root cause.** `#adm-pane-rides` was declared twice. `showPane()` resolves to the first, so the second
+copy (16 lines, `ridesBody` + `driversBody`) could never be displayed. Both ids were already declared
+in the surviving pane, so nothing was lost.
+
+**The bigger finding — Rides has no implementation, not a broken one**
+
+Unlike Orders (a legacy pipeline), Users (a dead localStorage key) or Properties (a disconnected
+Firestore collection), the Rides tables have **never had a renderer at all**:
+
+| | |
+|---|---|
+| `#ridesBody` | declared 2× · **referenced by JavaScript 0 times** |
+| `#driversBody` | declared 2× · **referenced by JavaScript 0 times** |
+| `renderPane('rides')` | **no entry** — only `name==='drivers'` → `renderDriverApps()`, which is driver *applications*, a different container |
+| `D.rides` / `D.drivers` | declared in the state object, **never assigned, never read** |
+
+And there is nothing to render. Measured in production:
+
+| collection | documents |
+|---|---|
+| `rides` · `rideRequests` · `rideDrivers` · `drivers` | **0** |
+| `driverApplications` · `deliveries` · `deliveryRequests` · `couriers` | **0** |
+
+The only ride-related root collections that exist at all are `deliveryLocations` and `driverLocations`
+— GPS tracking, not ride records.
+
+So the Rides pane is **aspirational markup**: two tables, no renderer, no data source, no collection.
+This is a *feature that was never built*, not one that regressed, and calling it a migration would
+misdescribe it. Written up rather than silently wired to an empty collection.
+
+The Delivery sub-tab inside Rides is a third case again: `#deliveriesBody` and `#couriersBody` are
+orphans, while a **separate, reachable `adm-pane-delivery` works** — fed by the live
+`_renderAdmDeliveries` Firestore listener writing `#deliveryBody` and `#couriersGrid`. Two UIs for the
+same thing, one real. That is a de-duplication question and is deliberately not answered here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `<div>` balanced 751/751, 5 inline blocks
+parse · duplicate ids **100 → 97** · `#adm-pane-rides`, `#ridesBody`, `#driversBody` now 1 each ·
+predeploy green.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none — the removed pane was unreachable.
+
+**Rides is NOT complete** by the completion rule: it has one visible pane and no unreachable duplicate,
+but **no renderer, no data source and no write path**. Orphan containers rose 100 → 97 duplicates but
+27 → 29 orphans, because removing the duplicate leaves the surviving pane's unfed containers visible
+to the audit rather than hidden behind a twin. That number is honest, not a regression.
+
+---
+
+## [2026-08-02] — findings(properties): landlord model — measured, **Option B recommended**
+
+Analysis only. No schema change, no migration, no rule edited. Full document:
+`docs/LANDLORD_PROPERTY_MODEL.md`.
+
+### Measured first
+
+| collection | documents |
+|---|---|
+| `landlordData` | **0** |
+| `landlordProperties` | **0** |
+| `bnbListings` | **0** |
+| `properties` / `propertyListings` | **0** |
+
+Declared indexes touching `landlord*`/`bnb*`/`propert*`: **none**. **Migration cost today is zero.**
+
+### `landlordData` has no reader
+
+It appears in exactly two places in the repository: the rule at `firestore.rules:1493`, and one write
+at `landlord.html:873`. Not read by `landlord.html` itself, `admin.html`, any Cloud Function, or any
+other page.
+
+```js
+function getData(){  return JSON.parse(localStorage.getItem("sokoniLandlordProperties")) || []; }
+function saveData(d){
+  localStorage.setItem("sokoniLandlordProperties", JSON.stringify(d));            // authority
+  setDoc(doc(db,'landlordData',uid), {uid, properties:d, updatedAt}, {merge:true}); // write-only mirror
+}
+```
+
+Three consequences fall out of that shape: the **whole array is rewritten on every edit** (O(n) write
+amplification, and two concurrent edits silently lose one); the **uid comes from
+`localStorage.sokoniUser`, not Firebase Auth**, so the mirror silently no-ops when that key is stale;
+and **a landlord's properties are invisible to moderation** entirely.
+
+### Recommendation — Option B, a `landlordProperties` collection
+
+**Option A is disqualified on moderation alone:** properties inside an array cannot carry an
+individual `status`, so no property can be approved, rejected or suspended without rewriting its
+landlord's whole document. It also cannot be queried or indexed — every admin filter becomes a full
+collection scan.
+
+**Option C (fold into `bnbListings`) was seriously considered and rejected.** A short-stay booking and
+a monthly tenancy are different products: nightly price vs monthly rent, availability vs occupancy,
+guest bookings vs tenancies. It would also break the existing create rule, which requires
+`hasAll(['id','name','type','location','price','phone','hostUid'])`, and `bnb.html` reads
+`pricePerNight`, which a rental does not have. Its one real attraction — a shared moderation queue and
+the generically-named `sokoni_properties` Algolia index — is available to Option B anyway, because
+moderation and search read a **projection**, not the collection.
+
+**Option B** gives one document per property: queryable, individually moderatable, O(1) writes,
+ownership enforceable in rules exactly as `bnbListings` enforces `hostUid`, and the `_decideProp` path
+shipped in Properties Commit 2 works with a collection swap.
+
+**Migration cost: none.** No data to move, no backfill, no consumer to coordinate — `landlordData` has
+no reader. The only thing that grows with delay is the number of documents that would later need
+splitting.
+
+**Properties remains INCOMPLETE** by the completion rule: the admin pane still reads
+`sokoniLandlordProperties` from localStorage. Deliberately unchanged until this recommendation is
+accepted or replaced.
+
+Files: `docs/LANDLORD_PROPERTY_MODEL.md` (new),
+`functions/scripts/probe-landlord-model.js` (new). No runtime code changed.
+
+---
+
+## [2026-08-02] — feat(admin): Properties Commit 2 — moderation decisions are written to Firestore
+
+**Root cause.** `approveProp()` / `rejectProp()` mutated `D.bnbListings` and wrote `localStorage`. The
+decision reached the administrator's own browser **and nowhere else** — no host, no guest and no other
+admin ever saw it, and a reload discarded it.
+
+**A second, quieter defect:** `approveProp` also called `updateApplicationStatus(a._fsId, 'approved')`,
+which writes the **`applications`** collection. Before Commit 1 there was no `_fsId` on these objects
+so it never ran; afterwards `_fsId` is a **`bnbListings`** document id, so it would have updated
+`applications/{listingId}` — a document that does not exist — and failed into an empty `catch`. Wrong
+collection, silently. Removed.
+
+### Reused, not invented
+
+| need | existing thing reused |
+|---|---|
+| collection | **`bnbListings`** — no new collection |
+| authority | `firestore.rules`: `allow update: if isAdmin()` — **verified before writing code**, so **no Cloud Function was added** |
+| audit | **`window.sokoniFirestoreAudit`** in `firebase.js`, which exists for non-module callers and matches the `auditLogs` rule requiring `uid`, `action`, `ts` |
+| update helper | `SokoniDB.updateBnbListingStatus()`, following `updateApplicationStatus()` |
+
+**Minimum fields only** — `status`, `updatedAt`, `updatedBy`, and `approvalReason` on rejection. The
+host owns everything else on the document; an admin decision has no business rewriting it.
+
+**Failures are reported, never swallowed.** A moderation decision that fails silently is how an admin
+comes to believe a listing is live when it is not. The listener re-renders on the server's echo, so
+there is no local mutation to keep in step — what the admin sees after a decision is what Firestore
+holds.
+
+**Rejection now requires a reason** (≥5 characters, recorded in the audit entry). Cancelling the
+prompt is not a decision and writes nothing.
+
+### Deliberately not done
+
+`approveProp` previously tried to set `registeredAs.landlord` on `users/{a.uid}`. `bnbListings`
+documents carry **`hostUid`**, not `uid` (see `bnb-hub.html`, `bnb-manage.html`), so that branch never
+ran. **Activating it would change user documents — a different concern from recording a moderation
+decision.** Documented, not wired.
+
+### Found while verifying, out of scope
+
+`approveLawyer`, `approveFirm` and `approveHcFac` also call `updateApplicationStatus(a._fsId, …)` —
+and for them it is **correct**, because those panes are backed by the `applications` collection. They
+do still write `localStorage` (`sokoniLawyerApp` and friends), which is the same authority pattern in
+the Legal and Healthcare panes. Catalogued for the Legacy LocalStorage Elimination phase, not touched
+here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `admin.html` `<div>` balanced 756/756,
+5 inline blocks parse · **`setItem('sokoniBnBListings')` occurrences: 0** · predeploy green.
+Not verified in a live authenticated browser — no admin ID token available here, and the collection is
+empty in production so there is no listing to decide on.
+
+Files: `admin.html`, `sokoni-db.js`.
+Database changes: none. API changes: `SokoniDB.updateBnbListingStatus()` added.
+**Security rules: unchanged.** Breaking changes: none.
+
+**Properties: reads ✅ writes ✅.** Remaining for this pane: `sokoniLandlordProperties`, which is
+Commit 3 — analysis only, pending a model decision.
+
+---
+
+## [2026-08-01] — feat(bnb): booking requires authentication — never take payment for a booking that cannot be persisted
+
+**Product decision applied.** `firestore.rules` requires
+`request.resource.data.uid == request.auth.uid` on `bnbBookings` create, so an unauthenticated booking
+**cannot** be persisted. The rules are **not** weakened — a booking needs a verified identity for its
+history, its disputes, its notifications and its payment reconciliation.
+
+**Before:** an unauthenticated guest could pay, the write was rejected by rules, and the empty `catch`
+reported success. After the commit-point gating (`94de38a`) they were at least told the truth — but
+**they had still paid for a booking that was never creatable.**
+
+**Now** the check happens *before* payment. Verified by position: auth gate @15232 → persist @17381 →
+payment @22281. The gate precedes both.
+
+### The gate does not cost the guest their form
+
+A correct security boundary that discards everything typed is how you get an abandoned booking. The
+selection — listing, name, phone, check-in, check-out — is kept in `sessionStorage` under
+`sokoniBnBIntent`, and `_bnbResumeIntent()` reopens the booking modal with the fields restored the
+moment `onAuthStateChanged` reports a signed-in user. The intent expires after **30 minutes**: long
+enough to sign in, short enough not to resurrect a stale booking days later.
+
+Auth state also had to be **published**: `_uid` lives inside the `type="module"` block and the booking
+runs in the inline script above it, which could not see it. `window._bnbAuthUid` / `_bnbAuthReady`
+close that gap.
+
+Sign-in routes to `login.html?redirect=bnb.html`, the convention already used by ~5 other consoles.
+Available methods today are **Google** and **Phone OTP**; **Email Link** joins them when the client
+flow lands — the gate needs no change to pick it up.
+
+**Extended, not rebuilt:** `venue-booking.html` already had `requireAuth(fn)` for the same problem.
+This follows it and closes its two weaknesses — it loses the in-progress booking, and it does not pass
+a return URL.
+
+**Tests:** functions 783 passed · `bnb.html` `<div>` balanced 21/21, 2 inline blocks parse · gate
+ordering verified programmatically · rules confirmed unchanged · predeploy green.
+
+Files: `bnb.html`.
+Database changes: none. **Security rules: unchanged — deliberately.** Breaking changes: none for a
+signed-in guest. An anonymous guest is now stopped before payment instead of after it.
+
+---
+
+## [2026-08-01] — feat(admin): Properties Commit 1 — reads come from Firestore
+
+**Reads only.** `approveProp` / `rejectProp` still write localStorage; they are Commit 2.
+
+**Root cause.** `D.bnbListings` / `D.bnbBookings` were seeded from `localStorage`, which is per-origin
+**and per device**. A listing created by a host on their machine, or a booking made by a guest on
+their phone, could never reach an administrator. In practice the only thing that populated those keys
+on an admin machine was `demo-seed.js`. Full investigation: `docs/PROPERTIES_DATA_SOURCE.md`.
+
+The canonical collections already existed and were already used by `bnb.html`, `bnb-hub.html`,
+`bnb-manage.html` and the Algolia triggers. The admin console was simply never connected to them.
+
+**Added** — `SokoniDB.listenBnbListings()` and `listenBnbBookings()`, following `listenUsers()`:
+realtime, `onError` callback, one listener pair only.
+
+**Unordered on purpose.** For `users` the ordering risk was *measured* — `orderBy('createdAt')`
+returned 59 of 61. Here it **cannot be measured**: both collections are empty in production. An
+unmeasurable risk is not one to accept on a query that drops rows silently, so sorting stays in the
+caller. `bnb-hub.html` and `bnb-manage.html` both write `serverTimestamp()`, so new documents *should*
+carry `createdAt` — but "should" is not the standard for a query that hides listings. Before adding a
+server-side `orderBy` later: verify coverage against real data and backfill if it is not 100%.
+
+**States.** Loading, empty, error and retry are now distinct. A read failure says
+*"This is a read failure, not an empty directory."* and offers Retry; an empty directory says
+*"No BnB listings found."*; a filter that matches nothing says so differently.
+
+**Rules verified before shipping** — this would otherwise be a permanent error state:
+
+- `bnbListings` — `allow read: if true`, `allow update: if isAdmin() || host(restricted fields)`
+- `bnbBookings` — `allow read: if isAdmin() || own || host`
+
+An admin may list both, and may update a listing directly, so **Commit 2 needs no new Cloud Function**.
+
+### Found while reading the rules — worth your attention
+
+`bnbBookings` requires `request.resource.data.uid == request.auth.uid` on create. **A guest who is not
+signed in cannot create a booking** — the write is rejected by rules. `bnb.html` passes
+`uid: _uid || null`, so an unauthenticated checkout fails.
+
+Until today that failure was invisible: the empty `catch` swallowed it and the guest was told
+"Booking confirmed" anyway. With the commit-point gating shipped in `94de38a` it now surfaces honestly
+as *"Payment received. Your booking is being verified."* — correct behaviour, but it means the message
+may fire for real guests. **Whether BnB checkout should require sign-in, or the rules should admit
+anonymous bookings, is a product decision** and is not made here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `admin.html` `<div>` balanced 756/756,
+5 inline blocks parse · duplicate ids unchanged at 100 · predeploy green.
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `sokoni-db.js`.
+Database changes: none. API changes: `listenBnbListings` / `listenBnbBookings` added.
+Breaking changes: none.
+
+Remaining localStorage authorities: `sokoniLandlordProperties` (Commit 3, model decision pending),
+plus the `sokoniBnBListings` **writes** in approve/reject (Commit 2).
+
+---
+
+## [2026-08-01] — fix(bnb): the booking document is the commit point
+
+**Decision applied:** if the booking does not persist, nothing that depends on it runs.
+
+**Before**, every downstream step ran unconditionally, and the local record was written as
+`status:"confirmed"` *before the Firestore write was even attempted*. A failed persist produced a host
+WhatsApp, an invoice, a commission entry and a confirmation banner **for a booking that existed
+nowhere**.
+
+**Now:**
+
+```
+persist ──✗──▶ recovery record · ops log · "Payment received. Your booking is
+                being verified. Keep this reference: <ref>."   [stop]
+
+persist ──✓──▶ 1 local record   2 host notification   3 invoice
+               4 commission     5 customer confirmation
+```
+
+The failure branch `return`s. There is no path from a failed commit to a notification, an invoice, a
+commission entry or a confirmation.
+
+### The money already has a home — no second source of truth
+
+`darajaSTKCallback` records **every** payment in `posPayments/{checkoutId}` server-side. Where the
+paid-for document is absent at callback time, it already writes
+`orphanPayments/{checkoutId}` with `reason: "order_document_absent_at_callback"` — precisely the
+"money exists, the thing it paid for does not" case. That is the platform's reconciliation path, and
+this change deliberately does not invent another. The reference shown to the guest is the key that
+matches the two together.
+
+**`unmatchedPayments` + `flagUnmatchedPayment` also exist and were considered and rejected here:**
+that callable is `assertAdmin`-gated, and the rules are `allow write: if false` (CF-only). Correct —
+money handling should not be client-writable. A guest cannot and should not flag their own payment.
+
+**Gap, documented not invented:** there is **no client-callable ops alert** in the codebase
+(`reportClientError` / `opsAlert` / equivalent: none). The failure is written to `console.error` with
+the reference, amount and M-Pesa code, and to a local `sokoniBnBBookingRecovery` record — under a
+**different key** and a **non-confirmed status**, because writing it into `sokoniBnBBookings` would
+manufacture a confirmed booking on the device, which is the exact hazard being removed. Routing this
+to operations in real time needs a server-side entry point and is **not** something to bolt on
+client-side.
+
+### Tests
+
+`bnb.html` 21/21 `<div>` balanced, 2 inline blocks parse · **ordering verified programmatically**:
+persist → fail-gate → recovery → early return → local record → host → invoice → commission →
+confirmation, each strictly after the last · functions 783 passed · predeploy green.
+
+Files: `bnb.html`.
+Database changes: none. Breaking changes: none — a successful booking behaves exactly as before.
+
+---
+
+## [2026-08-01] — fix(bnb): P1 — a guest could be told "Booking confirmed" when nothing was saved
+
+**Root cause — two independent failure modes, both silent.**
+
+1. **`_saveBnBBookingFS` swallowed every error.** `try { await addDoc(…) } catch(e) {}` — an empty
+   body. A rules rejection, an offline device or a quota error lost the booking with no trace: no
+   throw, no log, no signal.
+2. **The caller never waited for it.** `_finalise()` called the async helper fire-and-forget and showed
+   `✅ Booking confirmed!` on the next line. The banner could not have reflected the outcome even if
+   the error had been reported, because it fired first.
+
+There was also a **third path with no error at all**: `window._saveBnBBookingFS` is defined in a
+`type="module"` block near the end of `<body>`, which executes *after* the inline booking script. A
+guest who completed payment quickly hit `if (window._saveBnBBookingFS)` while it was still `undefined`
+and the Firestore write was **skipped entirely** — the guard read as "not available, carry on".
+
+In every case the guest saw a confirmation, the **host was WhatsApped**, an **invoice was generated**
+and **commission was recorded** for a booking that reached no database.
+
+**Fix**
+
+- The helper returns `{ok, id}` / `{ok, reason}` and logs failures with the booking reference.
+- `_finalise` is `async` and **awaits persistence before saying anything**.
+- `_persistBnBBooking()` waits up to 4s for the module to load rather than silently skipping it, and
+  reports if it never arrives.
+- The success banner is conditional. On failure the guest is **not** told to try again — **payment may
+  already have been taken, and a retry risks a second charge**. They are told: *payment received,
+  confirmation pending, keep this reference*, with the failure reason, and to contact support. The
+  local record is deliberately kept so the booking is recoverable.
+
+Deliberately **not** changed: the host WhatsApp, invoice and commission steps still run. Suppressing
+them on a persistence failure would be a larger behavioural decision, and a host who has been told
+about a real, paid booking is better off than one who has not. Flagged for a product call.
+
+### Also — a false positive in my own guard
+
+`verify-admin-markup.js` reported `bnb.html:28 Unexpected token ':'`. That line is
+`<script type="application/ld+json">` — structured data, not JavaScript. The checker parsed any
+non-module script as JS. Now it only parses blocks with no `type` or a JavaScript mime type. **This
+guard is in `predeploy`, so the false positive would have blocked deploys on any page carrying
+JSON-LD.** Corrected before it could.
+
+**Tests:** functions 783 passed · `bnb.html` 21/21 `<div>` balanced, 2 inline blocks parse · all five
+admin consoles still clean · predeploy green.
+
+Files: `bnb.html`, `scripts/verify-admin-markup.js`.
+Database changes: none. Breaking changes: none — a successful booking behaves exactly as before.
+
+---
+
+## [2026-08-01] — findings(admin): Properties data source — **B, migration required**
+
+Investigation only. Nothing implemented. Full write-up: `docs/PROPERTIES_DATA_SOURCE.md`.
+
+**This is not the Users situation.** The canonical Firestore collections **already exist, already have
+rules, and are already written and read by three other pages**. The admin console is the only consumer
+still reading `localStorage`.
+
+| data | canonical collection | writers | readers |
+|---|---|---|---|
+| listings | **`bnbListings`** | `bnb-hub.html`, `bnb-manage.html` | `bnb.html` (**realtime `onSnapshot`**), Algolia triggers, backfill |
+| bookings | **`bnbBookings`** | `bnb.html` `_saveBnBBookingFS()` | — |
+| landlord | **`landlordData/{uid}`** | `landlord.html` | — |
+
+**All 18 property references in `admin.html` are to local `D.*` arrays. Not one Firestore read.**
+`localStorage` is per-origin *and per-device*: a guest booking on their phone writes to their own
+browser, which the administrator never sees. In practice the only thing that populates
+`sokoniBnBListings` on an admin machine is `demo-seed.js:1202` — **demo data**.
+
+**The write path is worse than the read path.** `approveProp()` / `rejectProp()` set
+`D.bnbListings[i].status` and write `localStorage`. **Approving a BnB listing changes nothing any host,
+guest or other admin can see.** Same defect class as the Orders `flagDispute` lost-write closed
+earlier today — still live.
+
+**All three collections are empty in production** (141 root collections checked by name and by
+enumeration; none property-related). So no real data is currently hidden — but the first genuine
+listing would be invisible, and admin decisions already go nowhere. **It is the cheapest possible
+moment to connect them: nothing to migrate, nothing to reconcile.**
+
+**Historical cause:** `sokoni-sync.js`, a localStorage→Firestore bridge that lists exactly these keys,
+is **loaded by zero pages**. The sync was written and never wired in.
+
+**Found separately, on its own merits:** `bnb.html:421` wraps its `addDoc` in `try { … } catch(e) {}`
+with an empty body. A booking can fail to persist while the guest is told it is confirmed.
+
+### Migration plan (approved scope, not started)
+
+1. **Read** — `listenBnbListings` / `listenBnbBookings` following `listenUsers()`; no server-side
+   `orderBy` until `createdAt` coverage is verified; loading/empty/error/retry.
+2. **Write** — `approveProp`/`rejectProp` update Firestore, ideally behind an audited callable.
+3. **Landlord** — `landlordData/{uid}` holds a `properties` **array**, so an admin list must flatten
+   across documents. **Model decision, needs approval.**
+4. **Cleanup** — remove localStorage reads/writes; wire or delete `sokoni-sync.js`.
+
+**Verdict: Properties is NOT complete.** Internally singular and correctly wired — every container
+resolves, the header matches the renderer — but reading a private per-device cache and writing
+decisions nowhere.
+
+Files: `docs/PROPERTIES_DATA_SOURCE.md` (new), `functions/scripts/probe-properties-source.js` (new).
+No runtime code changed.
+
+---
+
+## [2026-08-01] — refactor(admin): Phase 1 pane 3 — Properties converged onto one pane
+
+**Root cause.** `#adm-pane-properties` was declared twice, and `renderProperties()` wrote into **both**
+copies. `showPane()` resolves to the first, so an administrator saw one half of the render and not the
+other.
+
+| target | resolved to | visible? |
+|---|---|---|
+| `#propStats` | reachable pane | ✅ |
+| `#bnbBody` | **unreachable copy only** | ❌ |
+| `#bnbBookingsBody` | reachable pane | ✅ |
+| `#landlordGrid` | **unreachable copy only** | ❌ |
+
+So the pane showed **statistics above a permanently empty listings table**, with working BnB bookings
+below it, and the Landlord Properties section absent entirely. The reachable pane's own table
+(`#propsBody`) was an orphan — declared once, written to by nothing.
+
+`getElementById('bnbBody')` did not return null, so the renderer's early `if(!body) return` never
+fired; it rendered happily into a pane nobody could open.
+
+**Fix — move every live container into the survivor, then delete the copy.** The reachable pane keeps
+its search box and type filter (which the copy lacked) and gains:
+
+- the `#bnbBody` tbody **and the header that matches the renderer** — `Property · Host · City ·
+  Price/Night · Bookings · Status · Actions`. The reachable pane's own header said `Title · Owner ·
+  Location · Type · Price · Status · Actions`, which would have mislabelled every column.
+- the **Landlord Properties** section, which existed only in the copy and is genuinely fed.
+
+All six containers now resolve inside the single surviving pane; `#propsBody` is gone.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | 783 passed, 17 suites |
+| users render contract | 36/36 |
+| applications render contract | 25/25 |
+| admin markup guard | `<div>` balanced 756/756, 5 inline blocks parse |
+| every `renderProperties` target inside the survivor | 6/6 |
+| duplicate ids | **103 → 100** |
+| predeploy | all gates green |
+
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+**Still localStorage-backed.** `D.bnbListings`, `D.bnbBookings` and `D.landlordProps` read
+`sokoniBnBListings` / `sokoniBnBBookings` / `sokoniLandlordProperties`. Whether anything populates
+those keys is the **same question that turned out to matter more than the duplication on Users**, and
+it is deliberately not answered in this commit — one concern per commit. It is the next thing to check
+for this pane.
+
+Remaining duplicate ids: **100**. Orphan containers: **27**. Next pane: **Rides**.
+
+---
+
+## [2026-08-01] — fix(admin): my Users regression — a stray `</div>` let the table escape its pane
+
+**Self-inflicted, shipped in `4c2b495` (v199), live for one release.**
+
+The status filter was inserted one line too early: it landed *after* the toolbar's existing `</div>`
+and brought a second `</div>` with it. That extra close ended `#adm-pane-users` prematurely, so the
+users table, the pager and the detail slide-in became **siblings of the pane instead of children**.
+
+`.adm-pane { display:none }` hides the pane element and nothing else — so those three blocks rendered
+on **every other admin pane**. The diff looked reasonable, the page parsed, and every gate passed.
+
+Fixed: the select now sits inside the toolbar where it belongs, and the extra close is gone. Both
+filter handlers call `filterUsers()` with no argument, since the Firestore renderer reads the controls
+straight from the DOM.
+
+### The guard that would have caught it
+
+`scripts/verify-admin-markup.js` (new), wired into `predeploy`:
+
+1. `<div>` opens and closes balance across the file — computed on markup only, with `<script>` bodies
+   and comments stripped so a renderer building `'<div>'` in a template literal is not miscounted.
+2. Every inline `<script>` block parses.
+
+Neither proves a layout is correct. Both make *"I moved some markup and it still renders"* a claim
+with something behind it.
+
+Mutation-tested: re-introducing the stray close reports `756 open, 757 close (-1)` and fails with
+*"a container is ending early… panes hidden with display:none stop hiding it."* All five admin
+consoles are balanced today.
+
+Files: `admin.html`, `scripts/verify-admin-markup.js` (new), `package.json`.
+Tests: users contract 36/36, consent 86/86, markup guard green, predeploy green.
+Database changes: none. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(admin): Users reads Firestore — the pane finally has a data source
+
+**Root cause.** The pane read `D.users`, populated from localStorage key `sokoniAllUsers`. That key
+had exactly two references in the entire repository: this read, and one write inside the delete
+handler. **Nothing ever populated it.** `D.users` was `[]` on every device, so the Users pane rendered
+"No users found" permanently while **61 user documents** sat in Firestore.
+
+**Data source.** The `users` collection, via a new `SokoniDB.listenUsers()`. Firebase Auth is the
+identity provider only and is never listed from — Firestore is the record.
+
+### The query is deliberately unordered
+
+Measured against production before writing a line of it:
+
+| query | returns |
+|---|---|
+| `orderBy('createdAt')` | **59 of 61** |
+| `orderBy('updatedAt')` | 13 of 61 |
+| `orderBy('joined')` | **0 of 61** — the field does not exist |
+
+Firestore omits documents that lack the ordering field, so two real people would simply not appear,
+with no error to explain it. The collection is small enough to sort in the caller, so it does. If
+server-side ordering is ever needed for scale, **backfill `createdAt` first and verify the count**
+rather than accepting a query that silently hides accounts.
+
+### Built to the schema that exists, not the one the renderer assumed
+
+Coverage across 61 documents, and what each meant:
+
+| field | coverage | handling |
+|---|---|---|
+| `city` | **0%** | explicit `—`; there is no city on a user document |
+| `joined` | **0%** | falls back to `createdAt` (97%) |
+| `suspended` | **0%** | status now comes from `status` (93%) |
+| `verified` | 2% | badge shows only where genuinely set |
+| `phone` | 5% | reads `phoneNumber` (75%) first — the old renderer showed "no phone" for three quarters of the directory |
+| `roles[]` / `role` | 59 / 8, **2 documents have neither** | both read |
+
+Roles are one concept stored two ways. A filter reading only `roles[]` hides eight real accounts; one
+reading only `role` hides fifty-nine. Both are read — this is not a cross-collection join, and no data
+is merged in from `providers`, `sellers` or anywhere else. **Converging the write path onto `roles[]`
+is a separate, deliberate change to the canonical user model**, and until it happens the two-field read
+is the only honest option. Two documents carry neither field and are shown as "no role set".
+
+Nothing is fabricated. Absent values render as `—`, `unnamed`, `no phone` or `not set`.
+
+### Also
+
+- **Loading, empty, error and retry** are now distinct states. "Loading users…" is not "No users
+  found."; a read failure says *"This is a read failure, not an empty directory."* and offers Retry;
+  a filter that matches nothing says so differently from an empty directory.
+- **Pagination** at 50/page, with the count reporting the full match rather than the page.
+- **Search** across name, email, phone and uid. **Role** and **status** filters.
+- **Per-row isolation** — one malformed document renders as a visible, uid-bearing failure card
+  instead of taking the table down.
+- **The slide-in works.** `#userDetailContent` was an orphan: close button, no opener, no renderer.
+  `openUserDetail(uid)` now fills it from the same cached snapshot the table renders, so it costs no
+  extra read and cannot disagree with the row above it.
+- **`adminDeleteUser` removed.** It spliced a local array and wrote localStorage — it changed nothing
+  in Firestore and nothing for the user, only hiding the row until reload. Removing an account is a
+  server-side operation with auth, audit and cascade implications and belongs behind a Cloud Function.
+  The row action is now View.
+
+### Tests
+
+`scripts/test-users-render.js` (new) lifts the pipeline **verbatim from admin.html** and exercises it
+against the real production shapes — including the two role-less documents and a user with no
+`createdAt`. **36/36.**
+
+| check | result |
+|---|---|
+| users render contract | **36/36** |
+| applications render contract | 25/25 |
+| functions unit tests | 783 passed, 17 suites |
+| inline script syntax | 9 blocks, 0 errors |
+| `sokoniAllUsers` references | 2 → **1** (only `clearDemo`, which clears legacy residue) |
+| `adminDeleteUser` | removed |
+| predeploy | all gates green |
+
+Rules confirmed: `match /users/{userId} { allow read: if isAdmin() … }` — an admin may list.
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `sokoni-db.js`, `scripts/test-users-render.js` (new),
+`functions/scripts/probe-users-schema.js` (new), `package.json`.
+Database changes: none. API changes: `SokoniDB.listenUsers(cb, onError, limit)` added.
+Breaking changes: none.
+
+### Gap documented, not patched over
+
+`city` does not exist on any user document, and role storage is split across two fields. Both are
+**canonical-model gaps**, not UI problems. They should be closed by extending the user model
+deliberately — not by joining `providers`/`sellers` into this pane, which would give Users two
+sources of truth and undo what this commit is for.
+
+Remaining duplicate ids: **103**. Orphan containers: **26**. Next pane: **Properties**.
+
+---
+
+## [2026-08-01] — refactor(admin): Phase 1 pane 2 — Users converged onto one pane
+
+**Root cause.** `#adm-pane-users` was declared twice. `showPane()` resolves to the first match, so the
+second copy was unreachable. But unlike Orders, **the unreachable copy was the correct one** — and the
+reachable pane carried two live defects because of it.
+
+| | reachable pane (kept) | unreachable copy (deleted) |
+|---|---|---|
+| `<thead>` | **6 columns** | 7 columns |
+| search handler | `filterUsers()` — **no argument** | `filterUsers(this.value)` |
+| role filter | `filterUsers()` — discards the query | reads the query back |
+| detail slide-in | present | absent |
+
+`renderUsers()` emits **seven** `<td>` and its empty state is `emptyRow(7,…)`.
+
+So in production, on the pane an administrator can actually open:
+
+1. **Every column after Email was rendered under the wrong heading.** "Roles" sat above email/phone,
+   "Joined" above role, "Status" above city, and the seventh cell had no header at all.
+2. **The Users search box did nothing.** `filterUsers(q)` filters on `q`; the reachable pane passed
+   nothing, `q||''` made that an empty query, and typing silently re-rendered the whole list.
+3. Changing the role filter discarded whatever had been typed.
+
+**Fix — move the live implementation into the survivor, then delete the copy.** The survivor now
+carries the 7-column header, `oninput="filterUsers(this.value)"`, and a role filter that reads the
+query back via `#userSearch` rather than the deleted copy's
+`querySelector('#adm-pane-users .adm-search')` — which resolved to the *first* match and only worked
+by accident of document order.
+
+Unique to the survivor and therefore preserved: the `#userDetailPanel` slide-in.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | 783 passed, 17 suites |
+| applications render contract | 25/25 |
+| inline script syntax | 9 blocks, 0 errors |
+| `#adm-pane-users` | 2 → **1** |
+| `userSearch` / `userRoleFilter` / `usersCount` / `usersBody` | 1 each |
+| **header ↔ renderer parity** | thead 7 · `<td>` 7 · `emptyRow(7)` — **aligned** |
+| duplicate ids | **107 → 103** |
+| `<div>` balance | 0 → 0 |
+| predeploy | all gates green |
+
+### Found, not fixed — the Users pane has no data source
+
+`sokoniAllUsers` has **exactly two references in the entire repository**: one read
+(`D.users = ls('sokoniAllUsers')`) and one write — inside `adminDeleteUser()`, after splicing a user
+out. **Nothing populates it.** `D.users` is therefore `[]` on every device, so the pane renders
+"No users found" permanently, for everyone, while 64 real accounts exist in Firebase Auth and a
+`users` collection exists in Firestore.
+
+De-duplicating the pane does not fix that, and pretending Users is "complete" would be false. Wiring
+it to the Firestore `users` collection is a **data-source change, not a de-duplication** — a separate
+concern and the next commit. `#userDetailContent` is likewise an orphan: the slide-in has a close
+button, no opener and no filler.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+Remaining duplicate ids: **103**. Unreachable functions in Users: **0**. Orphan containers: **27**.
+Next: give Users a real data source, then pane 3 — Properties.
+
+---
+
+## [2026-08-01] — refactor(admin): Orders is Firestore-only — legacy cluster removed
+
+**Root cause.** Once `_renderAdmOrders` became the sole renderer, the legacy localStorage cluster —
+`renderOrders()`, `flagDispute()`, `resolveOrderDispute()`, `_doResolveDispute()` — was reachable only
+from markup that `renderOrders` itself emitted. Nothing else called it.
+
+It had to be **removed** rather than merely left uncalled: `flagDispute` wrote an order status to
+`localStorage` and nowhere else, so any path that reached it produced a change Firestore never saw.
+A working-looking dispute button sitting in the source is how that comes back.
+
+**Reachability proof, per function, before deleting**
+
+| function | direct calls | HTML handlers | dynamic (`window[…]`, string) | exports |
+|---|---|---|---|---|
+| `renderOrders` | 0 | 0 | 0 | 0 |
+| `flagDispute` | 0 | 0 | 0 | 0 |
+| `resolveOrderDispute` | 0 | 0 | 0 | 0 |
+| `_doResolveDispute` | 0 | 0 | 0 | 0 |
+
+Every surviving mention is a comment. The one apparent live reference — `admin.html:6479` — is the
+banner comment *"ORDERS PANE — replace existing renderOrders"*. Other pages define their own
+`renderOrders`; each HTML page is a separate JS realm, so they are unaffected.
+
+The removal refused to run unless the first and last line of each range matched the expected text.
+
+**A withholding-tax report was reading a dead source.** `renderWHT()` computed from
+`localStorage.getItem('sokoniOrders')`. That key is now never written — and *before* this cleanup it
+was only ever written as a side effect of clicking a dispute button, so on any device where nobody had
+done that, **the WHT report was computed from an empty array and looked entirely normal**. Repointed
+at `window._admOrders`, the live Firestore snapshot. Fixed here rather than deferred because this
+commit is what made it deterministic.
+
+`D.orders` no longer boots from `localStorage`; `_renderAdmOrders` syncs it for the stat counters.
+
+**Orders now has:** one listener · one renderer · one filter · one dispute path
+(`admFileDispute` / `openDisputeModal` / `openOverride`) · **one write path — Firestore**.
+`localStorage.setItem('sokoniOrders')` occurrences: **0**. The only remaining mention is `clearDemo()`,
+which removes legacy residue from older devices — correct to keep.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | **783 passed, 17 suites** |
+| applications render contract | 25/25 |
+| inline script syntax | 9 blocks, 0 errors |
+| definitions of the four functions | 4 → **0** |
+| `getElementById('ordersBody')` writers | 3 → **2** (renderer + its own filter, one pipeline) |
+| `sokoniOrders` writes | **0** |
+| `<div>` balance | 0 → 0 |
+| net lines removed | 23 |
+| predeploy | all gates green |
+
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+Remaining duplicate ids: **107**. Remaining unreachable functions in the Orders pane: **0**.
+Next pane: **Users**.
+
+---
+
+## [2026-08-01] — fix(admin): one orders renderer — and a lost-write window closed
+
+**Root cause.** Four functions wrote `#ordersBody` / `#ordersCount`, forming two competing pipelines:
+
+| | legacy (script block 4) | canonical (script block 20) |
+|---|---|---|
+| data | `D.orders` ← `localStorage.sokoniOrders` | `SokoniDB.listenAllOrders()` — live Firestore |
+| render | `renderOrders()` colspan 7 | `_renderAdmOrders()` colspan 8 |
+| filter | `filterOrders()` | `window.filterOrders = …` |
+| row actions | `flagDispute`, `resolveOrderDispute` | `admFileDispute`, `openDisputeModal`, `openOverride` |
+
+Block 20 **overrides `window.showPane`** and re-renders from Firestore 50 ms after the original. So
+opening Orders painted stale localStorage rows, then replaced them.
+
+That was not merely a flash. **The two renderers emit different actions.** `flagDispute` writes
+`D.orders[i].status` straight to `localStorage` and nothing else — so a click inside that 50 ms window
+performed an order status change that **never reached Firestore and was then discarded** by the
+incoming snapshot. A lost write, invisible to the admin who made it.
+
+`filterOrders` was defined twice. The block-20 assignment to `window.filterOrders` runs later, and an
+inline `oninput`/`onchange` resolves through `window` — so the legacy definition was already
+unreachable, and the table behaved differently depending on whether you had typed in the search box.
+
+**Fix.** One renderer owns the pane:
+
+- `renderPane()` no longer renders orders. The Firestore listener owns the table via the `showPane`
+  override, as it already did.
+- The shadowed legacy `filterOrders()` is removed.
+- Legacy `renderOrders()` and its dispute handlers are now unreachable — `flagDispute` was only ever
+  referenced from markup that `renderOrders` itself emitted. **Left in place deliberately:** removing
+  them is a separate concern and a separate commit.
+
+**Loading is no longer indistinguishable from empty.** Dropping the legacy render would have left the
+pane showing *"No orders yet"* while the first snapshot was still in flight — a healthy-looking
+failure. `window._admOrdersLoaded` is set when a snapshot actually arrives, so the pane shows
+*"Loading orders…"* until then. Included here rather than deferred because without it this change
+would have introduced a regression.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | **783 passed, 17 suites** |
+| inline script syntax | 9 blocks, 0 errors |
+| `renderOrders` calls from `renderPane` | 1 → **0** |
+| `filterOrders` definitions | 2 → **1** |
+| duplicate ids | 107, unchanged (this commit touches renderers, not markup) |
+| predeploy | all gates green |
+
+Static verification of the survivor's coverage: realtime listener unchanged; filters, counts and the
+Billing / Disputes / POS sub-tabs untouched. **Not verified in a live authenticated browser** — that
+needs an admin ID token this environment cannot mint.
+
+Files: `admin.html`.
+Database changes: none. API changes: none. Breaking changes: none.
+Behaviour: the stale-data flash is gone, and a status click during load can no longer be lost.
+
+Remaining duplicate ids: **107**. Next: remove the now-unreachable legacy orders cluster, then the
+Users pane.
+
+---
+
+## [2026-08-01] — refactor(admin): Phase 1 pane 1 — remove the unreachable Orders pane
+
+**Root cause.** `admin.html` declared `#adm-pane-orders` twice. `showPane()` resolves
+`getElementById('adm-pane-' + name)` to the **first** match, so the second copy (L1774–1794) could
+never be displayed by any navigation path.
+
+Every id inside it — `orderSearch`, `orderFilter`, `ordersCount`, `ordersBody` — is also declared in
+the surviving pane, **earlier in the document**, so every `getElementById` already resolved there. The
+renderers were feeding the reachable pane all along. Removing the duplicate therefore changes nothing
+at runtime; it removes five duplicate ids and 21 lines of unreachable markup.
+
+The removal script refuses to run if any id in the block is not already declared earlier, so a pane
+holding a unique container cannot be deleted by accident. It located the pane by content and walked
+`<div>` depth to find the matching close rather than trusting line numbers.
+
+**Verified**
+
+| check | result |
+|---|---|
+| inline script syntax | 9 blocks, 0 errors |
+| duplicate ids | **112 → 107** (exactly the 5 predicted) |
+| `#adm-pane-orders` declarations | 2 → **1** |
+| `orderSearch` / `orderFilter` / `ordersCount` / `ordersBody` | 1 each, survivor retained |
+| `getElementById('ordersBody')` references | 4, all still resolving |
+| `<div>` balance | 0 before, 0 after |
+| applications render contract | 25/25 |
+| predeploy | all gates green |
+
+The surviving pane is the richer one — it carries the Orders / Billing / Disputes / POS sub-tabs and
+one extra status filter option (`disputed`) that the deleted copy lacked.
+
+**State coverage for Orders, reported honestly:** empty state exists (`No orders yet`). Loading, error
+and retry states do **not** exist yet — they are Phase 2 work and were not added here, because this
+commit is a removal and bundling them would make the "changes nothing at runtime" claim unverifiable.
+
+**Found, not fixed (next commit):** there are **two** orders renderers, both writing `#ordersBody` and
+`#ordersCount` — one with colspan 7, one with colspan 8 that also syncs `D.orders`. Whichever runs
+last wins. That is a duplicate render path and it is a separate concern.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none. Behaviour: identical.
+
+Remaining duplicate ids: **107**. Next pane: **Users**.
+
+---
+
+## [2026-08-01] — findings(admin): the 29 blank panels are 112 duplicate element ids
+
+Priority 1 asked for loading/empty/error/retry states on 29 orphan admin containers. Classifying them
+first — as the rules require, since wiring them blind would be a speculative fix — showed that adding
+states would not have fixed a single one. **The element being rendered into is not the element on
+screen.**
+
+### Root cause
+
+`admin.html` carries **two parallel layouts for the same data**:
+
+- a consolidated sub-tab layout (~L880–1300): `ord-sub-disputes`, `ride-sub-delivery`, `biz-sub-*`
+- a pane-per-topic layout (~L2000–2400): `adm-pane-disputes`, `adm-pane-delivery`, …
+
+The renderers feed one of them. Everything in the other is permanently blank. `#bizAppsGrid` — the P0
+fixed earlier today — was simply the instance someone happened to report.
+
+**`showPane()` does `document.getElementById('adm-pane-' + name)`, which returns the FIRST match and
+nothing else.** Five pane ids exist twice — `orders`, `properties`, `rides`, `settings`, `users` — so
+the second copy of each, and everything inside it, can never be displayed.
+
+Worse where a renderer straddles the two. `renderProperties()` writes stats to `#propStats` (first
+occurrence L1210, in the sub-tab layout) and the table to `#bnbBody` (L2083, in the unreachable
+pane). **The Properties pane a human can open shows stats above an empty table, while the table data
+is written into a pane nobody can reach.** `deliveryStats` and `communityStats` collide the same way.
+
+### Scale
+
+`scripts/audit-duplicate-ids.js` (new): **112 duplicate ids in `admin.html`**.
+`super-admin.html`, `moderation.html`, `trust-safety.html`, `verification-admin.html` and
+`index.html` are **clean** — this is one file's problem.
+
+Among them: **`#newPin`, `#newAdminPw`, `#patternCanvasNew`** — credential inputs. A duplicated
+credential field means the code may read a different element than the administrator typed into.
+Flagged for the security review; not touched here.
+
+### What shipped, and what deliberately did not
+
+Shipped: the audit, plus a **ratchet** wired into `predeploy`. The current count is the baseline and
+the check fails only when it goes **up**. Failing the build on 112 today would block every deploy
+until a multi-day cleanup lands, which is how a gate ends up disabled and then ignored. The number may
+fall freely; it may never rise.
+
+Mutation-tested both directions: adding one duplicate reports `112 -> 113` and fails; removing one
+reports `112 -> 111` and passes with a note to re-baseline. A bug in the flag parser was caught doing
+this — `--update-baseline` was being scanned as a filename, which wrote an empty baseline that would
+have made all 112 real duplicates look like fresh regressions. Fixed before the baseline was recorded.
+
+**Not shipped: the de-duplication itself.** Removing a layout means deciding, per pane, which copy is
+canonical and relocating any fed container out of the copy being deleted. Done carelessly it deletes a
+working admin pane. That is the next commit, one pane per commit, and it is not something to rush at
+the end of a long session.
+
+Files: `scripts/audit-duplicate-ids.js` (new), `scripts/duplicate-ids-baseline.json` (new),
+`package.json`.
+Database changes: none. API changes: none. Breaking changes: none. No runtime code changed.
+
+---
+
+## [2026-08-01] — chore(auth): authorization is claim-based, and now gated to stay that way
+
+Prerequisite for renaming the administrative identities:
+
+```
+alexochieng3030@gmail.com   ->  superadmin@mysokoni.co.ke
+ochisaac@gmail.com          ->  ceo@mysokoni.co.ke
+bravilexinternational@…     ->  company@mysokoni.co.ke
+```
+
+A rename is only safe if no gate depends on the old string. One
+`if (user.email === "founder@…")` left anywhere turns an address change into a silent privilege loss
+— or worse, leaves the **old** address privileged after it has been handed to someone else.
+
+### Audit result: the codebase is already clean
+
+Searched all 1,192 source files for email-equality checks, hardcoded privileged-address lists and
+domain-suffix privilege tests. **Zero found.** Every gate reads custom claims.
+
+The five named strings (`alexochieng3030`, `ochisaac`, `ogutualex824`, `bravilexinternational@`,
+`alex@`/`isaac@`) appear **only** in comments recording the invitation incident, test fixtures, the
+changelog, and an ops-script default recipient. None is consulted by any authorization path.
+
+Two things that look like exceptions and are not:
+
+- **`functions/index.js:8311` `PLATFORM_ADMIN_EMAIL = "orders@mysokoni.co.ke"`** — a *recipient*
+  allowlist on `sendInvoiceEmail`, restricting where an invoice may be sent to the caller's own
+  address or the platform inbox. Sending something to a fixed address grants nobody anything.
+- **The bootstrap allowlist is keyed on UID, not email** (`_systemConfig/bootstrap.allowedUids`), and
+  `admin.html:5879` records that the old `FOUNDER_EMAIL` escape hatch was already removed. A UID is
+  stable across a rename — which is exactly why it was moved.
+
+**So the identity rename requires no authorization changes.** Claims travel with the UID; the address
+is a label.
+
+### The gate
+
+`scripts/verify-claim-based-auth.js` (new), wired into `predeploy` and available as
+`npm run verify:auth`. It flags an email compared to a literal address inside an auth context, a
+hardcoded list of privileged addresses, and domain-suffix privilege tests — while deliberately not
+flagging notification recipients, test fixtures, comments or UID allowlists.
+
+Mutation-tested, because a check that cannot fail is worth nothing: injecting an
+`email === "founder@mysokoni.co.ke"` admin gate is caught, and so is a hardcoded
+`ADMINS.includes(...)` allowlist. Both restored; the tree is unchanged.
+
+Files: `scripts/verify-claim-based-auth.js` (new), `package.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+---
+
+## [2026-08-01] — fix(auth): admin registry converged to claims + passwordless migration baseline
+
+`functions/scripts/sync-admin-estate.js` (new) sweeps every Auth account once and produces the four
+reports that were previously guesswork, then repairs exactly one thing.
+
+### Repaired — `platformEmployees` now mirrors the claims (APPLIED to production)
+
+All three accounts holding a privileged claim had **no registry row at all**, because
+`invitations-core.acceptInvitation()` is the only writer and none of them were granted that way.
+Backfilled with `source: 'claims-backfill'` provenance, so a later audit can tell a derived row from
+an accepted invitation:
+
+| account | claims | role written |
+|---|---|---|
+| `alexochieng3030@gmail.com` | `superAdmin`+`admin` | `superAdmin` |
+| `ogutualex824@gmail.com` | `superAdmin`+`admin` | `superAdmin` |
+| `ochisaac@gmail.com` | `admin` | `admin` |
+
+Re-run confirms `registry: ok` for all three, no stale rows.
+
+This is safe because **`platformEmployees` grants nothing**: `firestore.rules` exposes it read-only,
+no rule consults it, no Cloud Function authorizes against it, and `admin.html` reads it only to list
+staff. It also fixes a latent crash — `index.js` `removePlatformEmployee` calls `.update()` on that
+document, and `update()` rejects when the document is absent, so removing any current administrator
+would have thrown.
+
+No claim was set or removed. No refresh token was revoked. No Auth account was created or deleted.
+
+### D — the named platform identities do not exist
+
+`superadmin@mysokoni.co.ke`, `ceo@mysokoni.co.ke` and `company@mysokoni.co.ke` are **all absent from
+Firebase Auth**. Not created here, and the ordering matters: an Auth account for an address with no
+Workspace mailbox can neither receive a password reset nor an email-link sign-in, so creating the Auth
+side first produces an identity that cannot be recovered. Workspace state is not readable with this
+credential.
+
+### E — passwordless migration baseline (64 accounts)
+
+| provider set | accounts |
+|---|---|
+| `password` | **50** |
+| `phone` | 5 |
+| `password`+`phone` | 4 |
+| `google.com` | 3 |
+| `google.com`+`phone` | 2 |
+
+**50 of 64 accounts (78%) are password-only** and would be locked out if password sign-in were
+disabled today. Two of them hold a privileged claim: `ogutualex824@gmail.com` and
+`ochisaac@gmail.com` — disabling password first would lock out an administrator.
+
+**Project sign-in configuration, read from the Identity Toolkit admin API:**
+
+| method | state |
+|---|---|
+| email + password | **enabled** |
+| **email link (passwordless)** | **DISABLED** |
+| phone / OTP | enabled |
+| Google | enabled (3 accounts use it) |
+| anonymous | disabled |
+
+So step one of the migration is a **project configuration change, not code**: email-link sign-in is
+off, and no account can migrate onto a method that does not exist yet. Phone/OTP and Google are
+already available and are the two paths usable today.
+
+### F — token revocation impact
+
+| account | last sign-in | token |
+|---|---|---|
+| `alexochieng3030@gmail.com` | 2 days | may carry stale claims |
+| `ogutualex824@gmail.com` | 11 days | may carry stale claims |
+| `ochisaac@gmail.com` | never | n/a |
+
+Blast radius: **3 accounts, 1 active in the last 7 days, 0 non-admin users.** Small and bounded — but
+still a forced sign-out on every device, so it is scheduled work, not a surprise. Not performed.
+
+Files: `functions/scripts/sync-admin-estate.js` (new).
+Database changes: 3 `platformEmployees` documents created (registry projection only, grants nothing).
+API changes: none. Security: none — claims, tokens and accounts untouched. Breaking changes: none.
+
+---
+
+## [2026-08-01] — audit(auth): admin authorization pipeline — what is actually stored (P0 investigation)
+
+Investigation only. **No authorization code was changed** — see "Why nothing was repaired yet" below.
+
+`functions/scripts/audit-admin-claims.js` (new, read-only) prints Firebase Auth custom claims, token
+freshness, and every Firestore source that claims to describe admin authority, side by side.
+
+### Production result
+
+| account | UID | custom claims | last sign-in | admin.html | registry |
+|---|---|---|---|---|---|
+| `superadmin@mysokoni.co.ke` | — | — | — | **NO ACCOUNT** | — |
+| `ceo@mysokoni.co.ke` | — | — | — | **NO ACCOUNT** | — |
+| `ochisaac@gmail.com` | `zPYdnpHfdxNV…` | `admin` | **NEVER** | ALLOWED | none |
+| `alexochieng3030@gmail.com` | `D5Ql2EYr95bt…` | `admin`, `superAdmin`, `role:5` | 30 Jul | ALLOWED | none |
+| `ogutualex824@gmail.com` | `uwpD5gx3pvPu…` | `admin`, `superAdmin` | 21 Jul | ALLOWED | none |
+
+### Findings
+
+1. **Two of the five named platform accounts do not exist in Firebase Auth.** `superadmin@` and
+   `ceo@mysokoni.co.ke` have no account at all. Anyone expecting them to work gets nothing, which on
+   its own reads as "admin access is inconsistent".
+
+2. **`platformEmployees` is empty for every account that holds an admin claim.** It is not a mirror
+   of authority: `invitations-core.js` writes it in `acceptInvitation()` only. A claim granted by any
+   other path — and all three live admins were granted by another path — never produces a row. The
+   registry records *accepted invitations*, not *who is an administrator*. Two different things
+   wearing similar names.
+
+3. **`ochisaac@gmail.com` holds `admin` but has never signed in.** The claim is in place, so their
+   first token will carry it. Their invitation is `status: sent`, `setupMailDelivery: queued` — it
+   reached them via the queue fallback (see 48305b6). Not a bug; a pending setup.
+
+4. **Claim changes do not force a token reissue.** 17 `setCustomUserClaims()` call sites; only a
+   handful call `revokeRefreshTokens()`. `index.js` grant/revoke-admin does. `invitations-core.js`,
+   `admin-os.js`, `super-admin.js` and four other paths do not. A device therefore keeps its old
+   claims for up to an hour — or indefinitely if the user never returns — and the UI's only recourse
+   is to ask the user to sign out and back in. **This is the mechanism behind "inconsistent".**
+
+5. **Two role fields disagree in `users/{uid}`.** `role` (string) is `"admin"` for one account and
+   `null` for the other two; `roles` (array) is the marketplace axis and never contains an admin
+   value. Neither is read by any gate — `firestore.rules isAdmin()` and `admin.html` both read the
+   token — but both are readable by code that might mistake them for authority.
+
+6. **The gate itself is correct.** `admin.html` calls `getIdTokenResult(true)` (force refresh) and,
+   on denial, says so explicitly *and* tells the user that a recent grant needs a sign-out. It does
+   not fail silently. The gap is server-side, not in the UI.
+
+### Authoritative source
+
+**Firebase custom claims.** Both enforcement points read them and nothing else. Every other store is
+a projection and must be repaired toward the claims, never the reverse.
+
+### Why nothing was repaired yet
+
+The deterministic fix is to call `revokeRefreshTokens(uid)` wherever an authorization-relevant claim
+changes. That is correct and it is also a **sign-out for that user on every device**, at 17 call
+sites, in security-critical code — some of it in files another agent is actively working in. Making
+that change inside an investigation commit would ship a user-visible consequence the founder has not
+agreed to, in a change that could not be reviewed independently. Proposed, with the evidence, for an
+explicit decision.
+
+Files: `functions/scripts/audit-admin-claims.js` (new).
+Database changes: none. API changes: none. Breaking changes: none.
+
+---
+
+## [2026-08-01] — fix(admin): P0 — the Applications panel was a blank box, not an empty queue
+
+**Firestore was not empty.** Production held four applications — 2 pending, 2 approved, all
+`provider`, all carrying `createdAt`: `k Riss`, `Kasindi holdings limited`, `Langa'ta mamafua`,
+`Hometown Movers kenya`. Verified from the server with `functions/scripts/probe-applications.js`
+before touching any code, because answering "is there data?" by reading the broken panel is circular.
+
+### Root cause
+
+`admin.html` has **two** applications containers. The desktop pane `#appsGrid` is rendered by
+`renderApps()`. The Business sub-tab container **`#bizAppsGrid` is referenced exactly once in the
+entire file — by the markup that creates it.** Nothing ever writes to it, and `_subTabSwitch()` only
+toggles `display`. So the tab showed an empty `<div>`: no spinner, no empty state, no error.
+Indistinguishable from "nobody has applied", which is why it read as a data problem.
+
+`#biz-app-count`, the badge on that tab, was orphaned the same way.
+
+### Fix
+
+- **`renderApps()` renders every container**, via `_APPS_TARGETS`. Both grids and the badge now show
+  the same list.
+- **A blank area is no longer a reachable state.** Empty renders *"No applications found."*; a load
+  failure renders *"Could not load applications: … This is a read failure, not an empty queue."*;
+  the loading state is written only where a resolution is guaranteed to follow, plus a 12s backstop
+  that reports a session that never established rather than showing an empty box forever.
+- **One malformed document can no longer abort the batch.** The list was built inside a single
+  `.map()`, so a throw on record 3 meant records 1, 2, 4 and 5 never reached the DOM either. Each
+  record now renders inside its own `try`; a bad one becomes a visible, id-bearing failure card and
+  the rest still list.
+- **`bizSubTab('applications')` re-renders on open.** `_subTabSwitch` only toggles display, so a
+  container populated by a listener showed whatever it had when last hidden — nothing, on first open.
+- **A missing container is warned about** instead of `return`ing silently, which is precisely how
+  `#bizAppsGrid` stayed invisible.
+
+### Listener
+
+- **`sokoni-db.js` `listenApplications()` gained an `onError` callback.** It used to warn to the
+  console and stop, so a rules rejection or a missing index left the caller holding whatever it had
+  and no way to tell failure from emptiness.
+- **The listener is now attached exactly once.** It was started from two places — the
+  `sokoniAdminReady` event *and* a 1.5s timer — so an admin who unlocked quickly got two live
+  snapshot listeners on the same query: double the reads, two renders per change.
+- `orderBy('createdAt','desc')` is load-bearing and is documented as such: Firestore omits documents
+  that lack the ordering field, so a write path that forgets `createdAt` makes its own record
+  invisible rather than erroring. Measured on the same collection: `orderBy('updatedAt')` returns
+  **1 of 4**.
+
+### Diagnostics
+
+Every render emits `[Admin][applications]` with documents returned, pending count, active collection,
+ordering, limit, listener attached, listener update count, and which targets are present or missing —
+followed by `rendered` / `failed` counts.
+
+### This is a class of bug, not one instance
+
+`scripts/audit-orphan-panels.js` (new) finds containers declared once and written to by nothing.
+**`admin.html` has 29 more**, cross-checked repo-wide: `disputesGrid`, `returnsGrid`,
+`deliveriesBody`, `couriersBody`, `propsBody`, `verificationBody`, `communityGrid`,
+`communityPostsGrid`, `groundSlotsGrid`, `modStats`, `verificationStats`, `disputeStats`, `invDiag`,
+`userDetailContent`, `ord-dispute-cnt`, `ride-payout-cnt`, `verif-badge`, `mod-badge` and others.
+Each renders as a permanently blank area. `super-admin.html`, `moderation.html` and
+`trust-safety.html` are clean. **Reported, not fixed — each needs a product decision about whether it
+should be populated or removed, and that is a bigger scope than this P0.**
+
+### Cross-console consistency — a real divergence, deliberately left standing
+
+The three consoles do **not** read one source:
+
+| console | source |
+|---|---|
+| `super-admin.html` | `applicationList` Cloud Function — canonical |
+| `admin.html` | client Firestore, `orderBy('createdAt')`, limit 100 |
+| `moderation.html` | client Firestore, no ordering, limit 300 |
+
+Converging `admin.html` and `moderation.html` onto `applicationList` is the right end state and is
+what the Publication Contract implies. It is **not** in this commit: that is a data-path change to two
+live consoles, and folding it into a P0 blank-screen fix would make the fix impossible to verify or
+roll back independently. Filed as the next step.
+
+### Verification
+
+`scripts/test-apps-render.js` (new) lifts `renderApps` **verbatim out of `admin.html`** and runs it
+against a stub DOM — testing a reimplementation would prove nothing about the page actually served.
+**25/25**: both containers rendered, badge populated, explicit empty state, `undefined` handled,
+three healthy records surviving a throwing fourth, failure distinguishable from empty, loading
+resolving, missing container warned, and the full diagnostics payload.
+
+**Not yet verified in a live authenticated browser session** — that needs an admin ID token this
+environment cannot mint, so no screenshot accompanies this. The production data is server-verified and
+the render contract is source-verified; the end-to-end confirmation is a manual step.
+
+Files: `admin.html`, `sokoni-db.js`, `scripts/audit-orphan-panels.js` (new),
+`scripts/test-apps-render.js` (new), `functions/scripts/probe-applications.js` (new).
+Database changes: none. API changes: `listenApplications(cb, limit, onError)` — third argument
+optional, existing callers unaffected. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(privacy): explicit Reject control + revocable consent (Sprint 3 P0.1)
+
+The consent gate stopped analytics from running without a "yes", but the banner offered only
+**Accept** and a "Learn more" link — declining was expressible only by not answering, and the prompt
+came back on every page load until you gave in. Correct code, coercive interface. KDPA/ODPC practice
+expects rejecting to be as easy as accepting.
+
+### Reject is now a first-class answer
+
+- **`security.js`** — the banner has **Reject** beside **Accept**: same row, same width, same 48px
+  height, one tap each. Both run **one** dismiss path (`_decide`), because that teardown — pad
+  restore, FAB re-show, scroll-lock release, bfcache-safe removal — is the accumulated fix for several
+  real production freezes, and forking it per button would mean rediscovering all of them.
+- Initial focus moved from Accept to the **dialog**, so neither answer is a keystroke cheaper.
+- Copy fixed: *"By continuing you accept"* was implied consent — it claimed an answer the user had not
+  given, and with a Reject button present it was simply untrue.
+- The prompt now shows until the user has **answered** (`decided()`), not until they have accepted.
+  Gating on "accepted" alone re-asks someone who said no on every page load — attrition, not consent.
+
+### Consent became revocable, so analytics had to become stoppable
+
+`SokoniConsent` gains `denied()`, `decided()`, `grant()`, `deny()` and **`onChange(fn)`**, and a
+`storage` listener so a decision made in one tab reaches the others. Exactly one of
+`sokoniPrivacyAccepted` / `sokoniPrivacyRejected` is ever set — no state where both are true and a
+reader has to guess. `sokoniPrivacyAccepted` is kept as the "yes" marker so no already-consented
+device is re-prompted.
+
+`analytics.js` now subscribes to the **decision** rather than to a single grant. A grant-only
+subscription gets withdrawal wrong: gtag.js cannot be unloaded, so without more than a flag, "reject"
+after a session of accepting is cosmetic. `_stopAnalytics()` therefore stops Layer 2 writes, flips
+Google's own `ga-disable-<ID>` kill switch (now **defaulted ON** and released only on consent), and
+deletes what is already on the device — the `sokoniAnalytics` store, the session stamp, and the GA
+cookies on both the host and registrable-domain forms. A `_bootstrapped` latch keeps a re-grant from
+recording the same page view twice.
+
+### Privacy Settings
+
+**`legal.html`** gains a *Your Privacy Settings* card (`#cookie-choices`) showing the current setting
+and offering both actions, wired to the same authority — it never touches the consent keys directly.
+Also: the essential-storage list documents both decision keys, and the analytics card states that
+nothing is created until you accept.
+
+### Verification
+
+`scripts/verify-consent-gate.js` extended to **86 checks, all passing** — the six scenarios requested
+plus the ones that make them meaningful: reject, refresh-after-reject, **withdrawal mid-session after
+accepting** (store deleted, cookies cleared, kill switch engaged, later events collect nothing),
+accept-after-reject (no duplicate init, page view not re-recorded), returning rejecter, and
+republishing an unchanged decision. Mutation-tested: dropping the purge fails 3, subscribing with
+`onGrant` fails 6, removing the Reject button fails 3.
+
+**`scripts/check-consent-render.js` (new, manual, needs Playwright — deliberately NOT in predeploy):
+24/24.** It proves the pixels, and it earned its place immediately.
+
+### What the render check caught — twice
+
+Equal width did not survive contact with the real page, and the cause was not in this code:
+
+1. **`flex:1 1 0` → 170px / 132px.** `button[style*="background:linear-gradient(135deg,#71ff00"]` in
+   `mobile.css` forces `padding:13px 20px !important; font-size:14px !important` on Accept **only**,
+   and the extra padding skewed the flex distribution.
+2. **`grid-template-columns:1fr 1fr` → 311px / 311px, stacked.** That exact substring is matched by
+   `[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}` — a deliberate
+   rule that collapses two-column layouts on phones, and correct for the forms it was written for.
+
+Both are `!important` rules keyed off the **inline style string**. Fixed with explicit
+`width:calc(50% - 5px)` that no substring rule targets and that padding cannot perturb, plus identical
+padding and type size on both buttons so the Accept-only rule cannot make Reject the smaller one.
+Measured: **151px each, same row, both tappable at their centre.**
+
+Worth recording separately: my first CSS scan reported "no rule matches" because it walked only 325
+rules across 46 stylesheets. That was a scanner blind spot, not a fact. Chrome's own
+`CSS.getMatchedStylesForNode` over CDP gave the real answer.
+
+Files: `security.js`, `analytics.js`, `legal.html`, `scripts/verify-consent-gate.js`,
+`scripts/check-consent-render.js` (new).
+Database changes: none. API changes: `SokoniConsent` gains `denied/decided/grant/deny/onChange`;
+`onGrant` and `_notifyGranted` kept for back-compat.
+Security/privacy: consent is now revocable and withdrawal is enforced, not merely recorded.
+Breaking changes: none — an already-consented device is unaffected and is never re-prompted.
+
+---
+
+## [2026-08-01] — fix(email): a failed send silently deduped its own retry; admin invitation re-issued
+
+**The queue fallback that exists to rescue a failed send was guaranteed to be discarded by that
+failure.** Re-issuing the lapsed `ochisaac@gmail.com` admin invitation exposed it: the invitation
+reported success, wrote `status: sent` / `signInReady: true`, and delivered nothing.
+
+### Root cause — dedup could not tell "already sent" from "failed to send"
+
+`_log()` records **failures** under the same `emailId` as the attempt, stamping `sentAt` on them.
+`_isDuplicate()` matched on the id alone and treated any row inside the 5-minute window as proof of
+delivery. So the sequence was:
+
+1. inline send fails (`SENDGRID_API_KEY not set` in that runtime) → `emailLogs` row, `status: failed`, `sentAt` now
+2. `sendPasswordSetupMail()` falls back to the durable queue, reusing the same `emailId` — as designed
+3. `processEmailQueue` drains it 41s later → `_isDuplicate()` sees the **failure** row → duplicate
+
+Observed: `emailQueue/1NIBiH09rdI2TqYEyhWu` → `status: "skipped"`, invitee still `lastSignInTime: null`.
+This is the 2026-08-01 stranding defect one layer down — the invitation engine's guarantee held its end
+(mail was queued, and the queue is durable), while the mail layer dropped it and reported nothing.
+
+### Fix
+
+- **`functions/email-service.js`** — `_isDuplicate()` now suppresses an attempt only when a matching row
+  has `status: "sent"` within the window. Genuine double-submits still collapse. Filtered in code, not
+  with a second `where()`, so **no new composite index** is required.
+- **`functions/invitations-core.js`** — the queued fallback no longer reuses the emailId of the attempt
+  that just failed (`…-queued`). Derived rather than random, so two fallbacks in the same minute bucket
+  still collapse to one message instead of mailing an invitee twice. This is what makes the fix effective
+  from any runtime **before** the Cloud Functions redeploy, since the queue row's id is written by the caller.
+- **`functions/invitations-core.js`** — invitation records gain `setupMailDelivery` (`sent` | `queued` | `null`).
+  The record previously showed only a queue id, which reads as delivered — the ambiguity that hid this.
+
+### Ops tooling (new)
+
+- **`functions/scripts/resend-invite.js`** — re-issues an invitation through the canonical
+  `createInvitation()` (fresh token, fresh 7-day expiry, role-consistency re-check, mandatory setup mail,
+  audit entry). Dry run by default; `--send` to apply. Exists because `resendPasswordSetup` /
+  `invitePlatformEmployee` both set `enforceAppCheck: true` and no admin UI is wired to either yet.
+- **`functions/scripts/verify-invite-mail.js`** — polls the queue row to a **terminal** status. "Pending"
+  and "will never send" are identical at the instant of queueing; this refuses to call a message delivered
+  until a provider accepted it.
+
+### Result — `ochisaac@gmail.com`
+
+Invitation re-issued as **admin** (the claim the account already held; consistency verdict `noop`, so no
+privilege changed). `emailQueue/qPY4mCwp7W7tyhOsicFi` → `status: sent`, `emailLogs` `outcome: delivered`
+at 2026-08-01T16:57:04Z. Invitation valid to 2026-08-08; the Firebase `oobCode` inside it expires sooner
+(~1h), which is the likeliest reason the previous link lapsed unused.
+
+**Files:** `functions/email-service.js`, `functions/invitations-core.js`,
+`functions/scripts/resend-invite.js` (new), `functions/scripts/verify-invite-mail.js` (new).
+**Database:** `invitations` gains `setupMailDelivery`. **API:** none. **Tests:** 783 pass.
+**Deployment:** the `_isDuplicate` fix requires a `functions` deploy to take effect for sends originating
+in production; the invitation above was delivered without one. **Breaking:** none.
+
+---
+
+## [2026-08-01] — fix(privacy): consent-gated analytics — the consent answer is now acted on (P0)
+
+SOKONI put a KDPA consent modal in front of every user and then ignored the answer. `analytics.js`
+injected `gtag.js` and fired GA4 `config` with `send_page_view` on **every** page load, before any
+decision was made. Layer 2 (the localStorage behavioural store) had the same defect: page views,
+sessions, scroll depth, dwell time, hub visits, retention and engagement were all written before
+consent. `legal.html` already promised "Analytics Cookies (Opt-In)" — the code did not honour it.
+
+Root cause was structural, not a missing `if`: there was no shared definition of "has the user
+agreed?", so `security.js` owned the modal and `analytics.js` never looked at the result.
+
+### Fix — analytics subscribes to consent, it does not poll for it
+
+- **`security.js`** — new `window.SokoniConsent`, the single authority for the decision:
+  `granted()` reads the persisted answer, `onGrant(fn)` runs a subscriber once consent exists (firing
+  immediately for a returning visitor), `_notifyGranted()` is published by the Accept handler **before**
+  the dismiss animation so analytics starts on the same tick the user consented. A `sokoni:consent`
+  DOM event is dispatched alongside, for any future consumer.
+- **`analytics.js`** — GA4 init moved into `_initGA4()`; Layer 2 gated at its single write choke point
+  (`_saveStore` + the `_sokoniLastSession` stamp). Both layers start from **one** subscription,
+  `SokoniConsent.onGrant(_startAnalytics)`. `analytics.js` no longer reads the consent key itself —
+  two readers of one key is how the original drift happened.
+
+Design decisions worth recording:
+
+- **Nothing is buffered.** A pre-consent action is discarded, not queued and replayed. Replaying it
+  would attribute an event to a session the user had not yet agreed to have measured.
+- **The no-op `gtag` shim is installed unconditionally**, so the ~30 `sokoniTrack*` helpers and the
+  three external callers (`kass-widget.js`, `seo.js`, `success.html`) stay safe to call before consent.
+- **Reads stay open.** Only writes are gated, so `sokoniGetAnalytics()` and the admin dashboard are
+  unaffected.
+- **Missing authority fails CLOSED** — no analytics — rather than silently reverting to the ungated path.
+- **Storing locally is not an exemption.** Layer 2 is behavioural data persisted on the user's device
+  and is gated exactly like Layer 1.
+- **The session stamp is gated too.** Otherwise a pre-consent visit would burn the 30-minute session
+  window and the first consented page view would not count as a session.
+
+### Verification — `scripts/verify-consent-gate.js` (new, no browser deps, wired into `predeploy`)
+
+Two halves, because either alone can pass while the product is broken.
+
+- **Static contract (13 checks):** gtag.js is injected nowhere outside `_initGA4`; `_saveStore` is
+  guarded; exactly one subscription; fails closed; `analytics.js` never reads the consent key. Plus:
+  all **91** pages that load `analytics.js` run `security.js` first — evaluated against real HTML
+  script-execution rules (blocking beats deferred regardless of position, `async` is never safe), not
+  document order.
+- **Behaviour (23 checks):** the **real** `SokoniConsent` block is lifted verbatim out of `security.js`
+  and the **real** `analytics.js` is executed in a sandboxed DOM, asserting the observable side effects —
+  what left the device and what was written to it — across 8 scenarios: first visit, pre-consent
+  tracking calls, accept, decline, refresh, returning visitor, double-notify, admin read path.
+
+**36/36 passing.** Mutation-tested to prove the gate can fail: removing the `_saveStore` guard fails 3
+checks; starting analytics unconditionally fails 8.
+
+### Performance
+
+Paired A/B, 6 pairs, consented steady state (`perf-ab.js --consent`, new flag): **no Category A
+regression** — styleMs +0.1%, layoutMs −1.6%, TBT +1.8%, CLS 0.0%, every delta inside its calibrated
+floor and none consistent above 3/6. `--consent` was added because an unconsented benchmark now
+measures a *first-time* visitor, which is not the population the startup numbers claim to represent.
+
+### Also
+
+- **`legal.html`** — lawful basis corrected: analytics moved from "Legitimate interest" to "Consent",
+  matching both the Cookie Policy's "Opt-In" heading and the implementation.
+- **`docs/index-registry.json`** — registered a pre-existing orphan index that was blocking the deploy
+  gate: `bookings|venueId,status,startTs DESC`, used by `venue-manager.html` `loadBookings`. Registered,
+  not dropped (index policy: only add).
+
+Files: `security.js`, `analytics.js`, `legal.html`, `scripts/verify-consent-gate.js` (new),
+`scripts/perf-ab.js`, `package.json`, `docs/index-registry.json`.
+Database changes: none. API changes: none (public `sokoniTrack*` surface unchanged).
+Security/privacy: analytics is now consent-gated end to end (KDPA 2019; ODPC reg. 630-8669-F056).
+Breaking changes: none — with consent granted, behaviour is identical to before.
+
+**Known gap (product decision, not shipped here):** the banner has Accept and "Learn more" but no
+explicit **Reject** control — declining is expressed only by not accepting. The gate treats that
+correctly as a hard no, but KDPA/ODPC practice expects reject to be as easy as accept. Raised for a
+product call.
+
+---
+
+## [2026-08-01] — fix(availability): provider bookability convergence — auto-onboard + default schedule + logging (P1)
+
+Live QA exposed a real blocker: a provider with no/empty availability was permanently unbookable
+("No open times") and the dashboard availability tab hung on "Loading availability…". Root cause: the
+manager created `schedule:{}` + `appt:{}` (every day closed, appointments disabled), and the slot
+generator threw `not-found` for a missing doc. Convergence fix (one availability authority, no new system):
+
+- **`functions/availability.js`** `getAvailabilitySlots` — never leaves an approved provider unbookable:
+  if the doc is missing OR effectively unconfigured (no open day / appointments disabled), it applies a
+  usable default (**Mon–Fri 09:00–17:00, appointments enabled**) and **persists it once** (auto-onboarding),
+  then generates slots. Reads the canonical `providerAvailability/{providerId}` only. Now **logs the exact
+  per-day rejection reason** (closed / appointments_disabled / no_periods) and no-open-slots (booked/too-soon).
+  Emulator-proven 4/4 (empty-schedule + missing-doc both become bookable + backfilled).
+- **`availability-manager.html`** — `DEFAULT_CONFIG` now Mon–Fri 09:00–17:00 + appointments enabled (matches
+  the server), so first visit shows a bookable default instead of an empty all-closed schedule.
+- **`provider-dashboard.html`** — the Settings→Availability tab called `loadAvail` only when dashboard data
+  had loaded, so it could hang on "Loading availability…" forever; now always renders (null-safe).
+- **`provider-profile.html`** — pricing display convergence: reads the canonical `providerServices` and shows
+  "From KES X" when priced services exist, instead of "Pricing not published yet" (which disagreed with the
+  booking modal's live price).
+- **`functions/booking-availability-guard.js`** — fixed a day-key bug I introduced (3-letter `mon` vs the
+  canonical `monday`) that made the impact/freeze check silently under-detect.
+
+Deploy: `functions:bookingDispatch,getAvailabilitySlots,providerDispatch` + hosting. Extend-don't-rebuild;
+one availability authority, one pricing authority. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(pricing): customer package/add-on selector (Advanced Rate Cards — Slice D) — pipeline complete
+
+The customer booking flow now presents packages/add-ons/duration and shows the server-authoritative price
+before payment. THIN by design — zero pricing math on the client (backend already deployed in Slices B/C).
+
+- `sokoni-book-service.js` — after slot pick, an **options step** (`chooseOptions`): renders a Package radio
+  list (incl. "Custom / base"), **available** add-ons with quantity, and a Duration select (when an
+  extra-hour rate exists). Every change calls **`bookingPreviewPrice`** and renders the returned breakdown
+  (line items + total + deposit) — the UI never computes. On "Continue to payment", `bookingCreateService`
+  is called with the SELECTION ONLY (`packageId`, `addOns`, `durationMins`, `distanceKm`); the server
+  computes the authoritative total + snapshot. Services with no advanced pricing skip the step entirely
+  (unchanged flow — no regression).
+
+Deploy: hosting only (backend ops already live). **Advanced Rate Cards is now end-to-end:** provider
+configures (Studio) → customer selects → server computes authoritative total → booking snapshot → held
+payment → settlement → commission → refund all use the ONE snapshot. Breaking changes: none.
+NEXT: stop building pricing — run the live QA booking with the real DJ.
+
+---
+
+## [2026-08-01] — feat(pricing): Pricing Studio — provider rate-card editor (Advanced Rate Cards — Slice C)
+
+Gives providers the workspace to configure the pricing rules the engine already consumes.
+
+- `functions/provider-ops.js` — `providerUpdateServicePricing` (owner-scoped; sanitises + coerces cents;
+  writes `providerServices/{id}.pricing` + **`pricingUpdatedAt`**) and `bookingPreviewPrice` (THE preview
+  authority — runs the SAME `service-pricing.computePrice` on a saved service `{serviceId}` or an unsaved
+  draft `{pricing}`, so provider preview == customer charge). Sanitiser validates rates/deposit/travel/
+  packages/add-ons and drops nameless entries. Smoke-proven 6/6 (incl. preview(saved)==direct computePrice).
+- `functions/provider-dispatch.js` — registered both ops.
+- `sokoni-pricing-studio.js` (new, shared) — `SokoniPricingStudio.open(serviceId, pricing, onSaved)`: a
+  full editor (General, Dynamic pricing weekend/holiday/peak/off-peak, Travel, Duration/extra-hour, unlimited
+  Packages + Add-ons repeaters) with a **live Preview** rendered from the server engine. Money shown in KES,
+  sent as cents; draft package/add-on ids match the sanitiser's index fallback so previews resolve.
+- `provider-dashboard.html` — "💰 Pricing" button on each rate card → opens the Studio; script included.
+
+Deploy: `functions:providerDispatch` + hosting. Slice D (customer selector) next. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(pricing): wire pricing engine into booking (Advanced Rate Cards — Slice B)
+
+The pricing engine is now the single authority for every service booking. The server computes the
+authoritative total from the provider's rate card + the customer's selection and snapshots it.
+
+- **`functions/booking-service.js`** `bookingCreateService` — accepts the customer SELECTION
+  (`packageId`, `addOns:[{id,qty}]`, `durationMins`, `distanceKm`); if the service has a `pricing` config
+  it calls `service-pricing.computePrice(...)` → `booking.price` = the authoritative TOTAL, `deposit` =
+  computed deposit, `durationMins` follows the package/selection (drives the slot span). Persists an
+  immutable **`pricingSnapshot`** (version, package, base, surcharges, extra-hours, travel, add-ons,
+  subtotal, deposit, balance-due, full line-item breakdown) so a later rate-card edit never changes an
+  existing booking. `PRICING_VERSION` bumped 1.1.0 → **2.0.0**.
+  **Back-compat:** a service with NO `pricing` config prices at `svc.price` exactly as before (no snapshot).
+- Settlement, commission, and refund already consume `booking.price` **snapshot-only** (never re-read the
+  rate card) — so the authoritative total flows through payment → held → settlement → commission → refund
+  unchanged. No recomputation anywhere downstream.
+- **`functions/qa-booking-pricing-e2e.js`** (new) — emulator-proven **13/13** (advanced total + snapshot,
+  package price/deposit/duration, client can't inject price, legacy back-compat).
+
+Deploy: `functions:providerDispatch` (hosts bookingCreateService). No client change yet — the selection
+fields are accepted but nothing sends them until Slice D. FOLLOW-ON: Slice C provider rate-card editor,
+Slice D customer package/add-on selector. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(pricing): canonical service pricing engine (Advanced Rate Cards — Slice A)
+
+The ONE authority for a service's final price — a PURE, universal function (DJs, photographers, caterers,
+tutors, lawyers, cleaners, movers … only packages/add-ons differ). Foundation for Advanced Rate Cards.
+
+- `functions/service-pricing.js` (new) — `computePrice(pricing, selection, ctx)` → authoritative cents
+  breakdown. Handles: base/standard price + duration; **packages** (own price/duration/deposit); time-based
+  **weekend / public-holiday / peak / off-peak** rates (pct or flat; holiday overrides weekend); **extra-hour**
+  rate; **travel** (free radius + per-km beyond); **add-ons** (qty-aware, availability-gated, qtyMax-capped);
+  **deposit** modes (fixed / pct / full, capped at subtotal, package-deposit precedence, balance-due timing).
+  Returns a full line-item breakdown. No I/O → identical on server (authoritative) and for client estimates.
+- `functions/qa-service-pricing.js` (new) — unit-proven **16/16**.
+
+No deploy (pure module, dormant until wired). FOLLOW-ON: Slice B wire into `bookingCreateService` (server
+computes the authoritative total from the service's `pricing` config + customer selection; settlement/
+commission use that total — backward-compatible: services without a `pricing` config keep `service.price`).
+Slice C provider rate-card editor UI; Slice D customer package/add-on selector. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(booking): freeze availability edits on in-resolution bookings (Slice 2 step 4)
+
+Preserves negotiation integrity: a provider can no longer change availability in a way that affects a
+booking already mid-resolution (ACTION_REQUIRED) — which would move the negotiation target while the
+customer is deciding.
+
+- `functions/booking-availability-guard.js` — `providerCheckAvailabilityImpact` now splits stranded
+  bookings into `affected` (raisable) vs **`locked`** (already `resolution.status === ACTION_REQUIRED`),
+  returning `lockedCount` + `locked`. Read-only. Emulator 2/2.
+- `availability-manager.html` — `saveAll()` BLOCKS the save (alert listing the locked bookings) when any
+  locked booking would be affected; the provider must resolve them (reschedule/refund) first. Non-locked
+  affected bookings still flow through the Step-2 reason→raise path.
+
+Completes the booking resolution engine: impact → ACTION_REQUIRED → negotiation → { reschedule | refund }
+with the target frozen during resolution. Deploy: `functions:providerDispatch` + hosting. Breaking: none.
+
+---
+
+## [2026-08-01] — feat(provider): duplicate service (completes service-management CRUD)
+
+Provider service management audit (before more booking features): Add / Edit-every-field (name,
+category, description, price, price-type, duration, fee, deposit, photos) / Pause-Hide / Delete were all
+already present and working; edited prices are authoritative at booking (bookingCreateService reads
+providerServices live). The one missing management action was **Duplicate** — added:
+
+- `functions/provider-ops.js` — `providerDuplicateService`: copies a service as a new active listing,
+  preserving the source's EXACT cents (no KES↔cents rescale) and enforcing the same plan listings cap.
+  Owner-scoped. Emulator-smoke 5/5.
+- `functions/provider-dispatch.js` — registered the op.
+- `provider-dashboard.html` — "Duplicate" button on each rate card → `Sv.duplicate`.
+
+Deploy: `functions:providerDispatch` + hosting. Breaking changes: none.
+KNOWN GAP (enhancement, not built): rate-card surcharges (weekend/holiday/travel/extra-hour/deposit-%) —
+the form has price/fee/deposit/duration only.
+
+---
+
+## [2026-08-01] — feat(booking): canonical refund terminal (Slice 2 step 3) — completes the lifecycle
+
+The customer "Request Refund" resolution, routed through the ONE existing money engine. No new
+refund/payment logic. Completes the lifecycle: ACTION_REQUIRED → { reschedule | refund→cancel }.
+
+- **`functions/booking-resolution.js`** — `customerRequestRefund` (single refund authority). Money moves
+  ONLY via `provider-ops._disburseHeldFunds` with `by:'provider'` (FULL refund — the provider caused the
+  change; no deposit forfeit). Freezes negotiation (`resolution.refundLock`; `_propose`/`_respond` now reject
+  while locked), first-claim-wins txn, then cancels the booking + frees the slot lock + deletes the calendar
+  mirror, sets `resolution=CANCELLED`, appends the immutable chain CUSTOMER_REQUESTED_REFUND → REFUND_STARTED
+  → REFUND_COMPLETED → BOOKING_CANCELLED, notifies customer (refunded) + provider (cancelled). Guardrailed +
+  **resumable/idempotent** (completed→reject; already-refunded/cancelled→alreadyDone, no double credit).
+- **`functions/provider-ops.js`** — export `_disburseHeldFunds` + `_slotLockRef` (the reused engine + slot ref;
+  no behavior change) via the module.exports at the file end (the earlier `exports.` lines were being wiped).
+- **`functions/provider-dispatch.js`** — registered `customerRequestRefund`.
+- **`sokoni-booking-resolution.js`** — customer card gains a "Request refund" button (confirm dialog).
+- **`functions/qa-booking-refund-e2e.js`** (new) — emulator-proven **11/11** (full refund to wallet, cancel,
+  CANCELLED, audit chain, idempotent no-double-refund, ownership, negotiation frozen, unpaid→refunds 0).
+
+Note: an availability-affected booking is `confirmed`+`paid_held` (not yet settled), so the before-service
+release path applies; the after-settlement reversal (`order-settlement.reverseSettledOrder`) is for the
+completed-then-refunded edge and is left to that engine (a completed booking can't reach this path).
+Deploy: `functions:providerDispatch` + hosting. Breaking changes: none. FOLLOW-ON: Step 4 freeze provider
+availability edits on ACTION_REQUIRED, escalation scheduler, emergency closure, analytics.
+
+---
+
+## [2026-08-01] — feat(booking): resolution UI + negotiation timeline (Slice 2 step 2b)
+
+Wires the (already-proven) negotiation engine to real UI on both sides + a timeline that renders the
+immutable bookingEvents. No new booking logic.
+
+- **`sokoni-booking-resolution.js`** (new, shared) — `SokoniResolution.mount({role, containerId})`.
+  Customer: Action-Required cards → Accept / Decline / Suggest another time (per proposal state), or
+  "Waiting for provider". Provider: Propose new time / Accept-or-Decline the customer's suggestion.
+  Every card has a **History** toggle rendering the negotiation timeline. Uses `window.sokoniCallable`
+  (modular) or `firebase.functions()` (compat); degrades to hidden if the bridge/ops aren't ready.
+- **`functions/booking-resolution.js`** — `bookingGetTimeline` (participant-scoped resolution overlay +
+  event list) and `customerListAffectedBookings` (customer queue). Smoke-proven 4/4 (incl. stranger denied).
+- **`functions/provider-dispatch.js`** — registered both read ops.
+- **`provider-dashboard.html`** — `#skResolution` in the Bookings panel; mounts on the bookings tab.
+- **`profile.html`** — `#skResolution` Action-Required card near the top; mounts once the callable bridge is ready.
+
+Deploy: `functions:providerDispatch` + hosting. Additive; hidden when nothing is affected → no regression.
+Completes the usable lifecycle: availability change → impact → ACTION_REQUIRED → negotiation → canonical
+reschedule. FOLLOW-ON: Step 3 refund (existing engines), Step 4 freeze edits, escalation, emergency, analytics.
+Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(booking): resolution negotiation state machine (Slice 2 step 2 — backend)
+
+The customer/provider resolution workflow for an ACTION_REQUIRED booking. Touches NO money — a
+reschedule keeps the payment held; the REFUND terminal is Step 3. Reuses the canonical engine.
+
+- **`functions/booking-resolution.js`** — four ops (in providerDispatch):
+  `providerProposeReschedule` (provider), `customerRespondToProposal` (customer accept/decline),
+  `customerProposeTime` (customer), `providerRespondToCustomerProposal` (provider approve/decline).
+  Ownership matrix enforced per op; **single active proposal** per booking; 48h expiry stamped.
+  A proposed time MUST pass the canonical validator (`booking-service._prepareSlot`); accept REUSES
+  `providerRescheduleBooking` (no duplicate reschedule/payment logic) — the booking is actually moved
+  via slot-CAS. **Core `status` + held payment stay untouched**; only the `resolution` overlay + slot move.
+  Immutable events per transition: PROVIDER_PROPOSED_RESCHEDULE, CUSTOMER_PROPOSED_TIME, CUSTOMER_ACCEPTED,
+  CUSTOMER_DECLINED, PROVIDER_ACCEPTED_TIME, PROVIDER_DECLINED, BOOKING_RESCHEDULED.
+- **`functions/provider-dispatch.js`** — registered the four ops.
+- **`functions/qa-booking-negotiation-e2e.js`** (new) — emulator-proven **16/16** (propose/accept/decline/
+  suggest/approve, single-active, ownership, booking-moved, status+payment untouched, events).
+
+Production impact: additive backend ops, dormant until Step 2b wires the customer/provider UI (My Bookings
++ dashboard). No hosting change this step. FOLLOW-ON: Step 2b UI, Step 3 refund via existing engines
+(release-hold / settlement reversal), Step 4 freeze provider edits, then emergency closure + analytics.
+Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(booking): resolution engine (Slice 2 step 1) — ACTION_REQUIRED state + records + immutable events
+
+The single resolution engine for every "affected booking". Availability changes still never directly
+modify a confirmed booking — they raise a managed workflow. State machine:
+`(none) → ACTION_REQUIRED → RESCHEDULED | CANCELLED | EXCEPTION`.
+
+- **`functions/booking-resolution.js`** (new) — `providerRaiseAffectedBookings({bookingIds,reason})` moves
+  stranded confirmed bookings into ACTION_REQUIRED. **Core `status` and HELD PAYMENT are left untouched**
+  (resolution lives in a `resolution` overlay) — settlement/dashboard/customer logic still sees a normal
+  confirmed booking. Per booking (transactional, idempotent, owner-scoped): sets the overlay, creates
+  `affectedBookings/{id}` (admin/provider queue, data-only), emits immutable `bookingEvents`
+  (AVAILABILITY_CHANGED, BOOKING_AFFECTED, CUSTOMER_NOTIFIED), notifies the customer via notify.js.
+  Reason is REQUIRED (sick/emergency/venue_unavailable/equipment_failure/personal_emergency/weather/other).
+  `providerListAffectedBookings` reads the provider's queue. **Emulator-proven 15/15.**
+- **`functions/provider-dispatch.js`** — merged handler + registered the two ops.
+- **`firestore.rules`** — `bookingEvents` (append-only: create/update/delete `if false`, participant+admin read)
+  and `affectedBookings` (server-write only, participant+admin read).
+- **`availability-manager.html`** — `saveAll()` now: detect affected → require a reason (premium modal) →
+  save future availability → raise affected into resolution + notify. Degrades gracefully if ops absent.
+
+Production impact: additive; changes provider save-flow to flag (not delete) affected bookings; core
+status/payment unchanged (back-compatible). Deploy: `functions:providerDispatch` + `firestore:rules` + hosting.
+FOLLOW-ON (Steps 2-6): customer accept/reschedule/refund choices, refund/reschedule via existing engines,
+more events, admin queue UI (OFF-LIMITS here), emergency closure, analytics. Breaking changes: none.
+
+---
+
+## [2026-08-01] — fix(mobile): P0 responsive pass — one shared admin module, measured on real viewports
+
+**P0 per founder priority: make the platform usable on a phone before expanding admin tooling.**
+Every claim below is measured by `scripts/probe-admin-mobile-output.js` at 375 / 393 / 412 / 768 px on
+emulated touch devices — not eyeballed.
+
+**Result: 6 pages × 4 devices = 24/24 PASS**, stable across repeat runs.
+`admin.html` · `super-admin.html` · `moderation.html` · `trust-safety.html` · `login.html` · `signup.html`
+
+### New: `sokoni-admin-responsive.css` — one module, not 61 copies
+
+Adopt with a single `<link>` after the page's own `<style>`. Additive only: nothing above 768 px
+changes, so adopting it cannot regress an existing console.
+
+- **Tables become cards below 768 px.** `.mod-table` carried `min-width:600px` inside an
+  `overflow-x:auto` wrapper, so every admin table scrolled sideways — and the action buttons live in
+  the last column, meaning an operator could *see* a row but not act on it. Rows now stack as cards
+  with `data-label` driving the field names; renderers without labels still produce a readable card,
+  so adoption is incremental.
+- **Sidebars collapse.** `trust-safety.html` had a fixed 220 px rail — 56% of a 390 px viewport.
+- **Safe-area insets** for the notch and home indicator, including installed PWA. `trust-safety.html`
+  was missing `viewport-fit=cover` entirely, so its insets could only ever resolve to 0.
+- **Sticky bars anchor to `--sk-header-h`** (measured and published by shared-header.js) rather than
+  `top:0`, which slides them under the header.
+- **16 px inputs** below 768 px, so iOS Safari stops zooming the viewport on focus.
+
+### Tap targets — 44 px floor
+
+Measured misses, all of them shared components repeated across the platform rather than one-off
+page bugs:
+
+| Control | Was | Where it appears |
+|---|---|---|
+| `.auth-switch a` ("Create Account") | 17 px | login, signup, every admin auth gate |
+| Terms / Privacy consent links | 16 px | signup |
+| `.auth-pw-toggle`, `.auth-skip`, `.auth-forgot-link`, auth inputs | 43 px | every auth gate |
+| `tel:` / WhatsApp links in review queues | 17 px | moderation — a reviewer's *primary* action |
+| `.mod-action-btn` | ~26 px | every moderation table |
+
+Fixed in `auth.css` (customer-facing login/signup) and mirrored into the shared module for consoles
+that do not load `auth.css`. The auth-overlay floors use `!important` deliberately: the overlay injects
+its own `<style>` *after* this sheet, so an equal-specificity rule loses the cascade — and a tap target
+must not be overridable by load order.
+
+### Measurement honesty
+
+The probe produced **three false failures** before it produced a true one, each fixed in the probe
+rather than by changing the product:
+
+1. `#sokoniScrollTop` reported 30 px — it is a 46 px button carrying inline `transform:scale(0.65)`
+   while hidden (`opacity:0; pointer-events:none`). Now only genuinely tappable elements are measured.
+2. Force-showing `.main`/`#app` to bypass the auth gate un-hid a sign-in prompt no operator can reach,
+   and its 17 px link was reported as a defect. The bypass is now narrowed to `#dashboard`.
+3. The injected table fixture used `href="#"` instead of a real `tel:` href, so it did not match the
+   rule that styles the actual markup. A fixture must mirror what it stands in for.
+
+Also added a 0.5 px tolerance — 43.5 px rounding to 44 is not a real miss — and raised the settle wait
+to 900 ms after identical pages passed on some devices and failed on others, which was the auth overlay
+injecting late rather than any layout difference.
+
+### Files
+`sokoni-admin-responsive.css` (new), `auth.css`, `moderation.html`, `trust-safety.html`, `admin.html`,
+`super-admin.html`, `scripts/probe-admin-mobile-output.js` (new).
+
+**Rollout:** 4 of 34 admin consoles adopted. The remaining 30 need only the `<link>` plus `data-label`
+attributes on their table renderers. **Tests:** 781 pass; deploy gate APPROVED (55 suites).
+**Breaking:** none — desktop rendering is untouched.
+
+---
+
+## [2026-08-01] — feat(booking): availability-vs-booking impact guard (Slice 1 — detection + provider awareness)
+
+Booking-integrity principle: an availability change must never silently strand a confirmed
+customer booking. (Availability config and bookings are already separate stores, so a change
+does not mutate a booking — but the provider got NO warning that their change conflicts with
+existing confirmed bookings.) Slice 1 adds the read-only impact pre-check + provider awareness;
+existing bookings are KEPT and honored (Option A) — the change applies to future availability only.
+
+- **`functions/booking-availability-guard.js`** (new) — `providerCheckAvailabilityImpact` op
+  (READ-ONLY, no writes). Returns the provider's own future confirmed/active bookings that fall in
+  a newly-unavailable window under the proposed config. `_servable()` mirrors booking-service's gate
+  (vacation range / day-closed / reduced working-hours / blackout date / 24/7). Unit-verified 8/8.
+- **`functions/provider-dispatch.js`** — merged the guard's handler + registered the op.
+- **`availability-manager.html`** — `saveAll()` now calls the pre-check before saving and, if any
+  confirmed bookings are affected, shows the list and asks the provider to confirm. Degrades
+  gracefully (proceeds exactly as before) if the op isn't deployed yet or offline → no regression.
+
+Production impact: additive, read-only. Activating the warning requires redeploying `providerDispatch`
+(`firebase deploy --only functions:providerDispatch`); until then the UI hook no-ops safely.
+FOLLOW-ON SLICES (not in this change): reschedule/cancel resolution + held-payment refund, emergency
+closure mode, immutable audit-event expansion, customer accept/reschedule/refund choices, admin
+affected-bookings queue, provider quality analytics. Breaking changes: none.
+
+---
+
+## [2026-08-01] — feat(profile): Business Management hub (role-driven) + provider deep-links + onboarding routing
+
+Consolidates the scattered seller/provider entry points into one **Business Management** section on
+the profile that renders ONLY the modules the user can access — additive, never exclusive.
+
+- **`profile.html`** — new `_renderBusinessHub()` renders titled modules by role:
+  Marketplace (seller → My Shops/Products/Orders/POS), Services (provider → My Services/Availability/
+  Bookings/Reviews), Finance (any business → Wallet/Payouts/Transactions), Insights (Analytics), Rider
+  (driver → Rider Dashboard), Admin (admin → Admin OS). A seller+provider sees BOTH; a buyer sees none
+  (hub hidden). Verified against the real functions: seller→3 modules, provider→3, seller+provider→4
+  (12 links), rider/admin→own module, buyer→hidden, no dead links.
+- **Priority-2 onboarding routing** — `_bizRouteProvider()` checks `providerProfiles/{uid}` up front and
+  points "My Services" straight to `provider-dashboard.html` (profile exists) or `provider-onboarding.html`
+  (doesn't), eliminating the dashboard→not-found→onboarding bounce. Applies to both the header button and
+  the hub link.
+- **`provider-dashboard.html`** — added URL-hash routing (`_applyHash`) so hub deep-links open the right
+  panel/tab: `#calendar` `#bookings` `#earnings` `#reviews`, and `#services`→Settings/Rate Cards,
+  `#availability`→Settings/Availability. Fires on load + `hashchange`.
+
+All links target already-built pages (extend, don't rebuild). Client-only. No backend/runtime change.
+Breaking changes: none.
+
+---
+
+## [2026-08-01] — fix(onboarding): invited admins could never sign in; one invitation engine
+
+**An invited administrator had no way into the platform, and nothing recorded it.**
+`ochisaac@gmail.com` was created 2026-07-21 by an ops script with a deliberately random password
+("never returned, never logged, never usable"), granted `admin` via identitytoolkit, and sent exactly
+one email: `template=welcome`, containing no password-setup link. Firebase showed a perfectly healthy
+account. It had `lastSignInTime: null` for eleven days, and every attempt returned
+`auth/invalid-credential` — the modern collapse of `wrong-password`/`user-not-found` — because the
+password was a 32-byte random string nobody had ever known.
+
+Authentication was never the defect. Sign-in failed *before* any invitation logic ran, so the
+invitation (valid, unexpired, unused) was never reached.
+
+### Root cause: two invitation systems, neither closing the loop
+
+| | `invitations` (admin-invitations.js) | `platformInvites` (index.js) |
+|---|---|---|
+| Auth account | created | **none** |
+| Password setup mail | sent | **none** |
+| Acceptance flow | none (reset link *is* the flow) | token + claims |
+
+`invitePlatformEmployee` wrote a token document and returned it to the caller — no account, no email,
+no way for the invitee to learn the link existed.
+
+### New: `functions/invitations-core.js` — one engine, one acceptance flow
+
+- **The guarantee (tasks 1+2).** `provisionInvitee()` will not report success unless the invitee can
+  actually sign in: either the account has signed in before (it owns a password we never touched), or a
+  password-setup mail carrying a real reset link was delivered. Otherwise the invitation is recorded
+  `blocked_no_setup_mail` and the call **fails**. A stranded invitee is a defect, not a pending state.
+- **`hasUsablePassword()`** is the signal nobody was checking: a password provider plus
+  `lastSignInTime: null` is precisely the stranded shape. `lastSignInTime` is set by Firebase and cannot
+  be faked, so it is the only trustworthy server-side evidence.
+- **Sent, not merely queued.** `queue()` writes a pending row drained every 2 minutes; "queued" is
+  indistinguishable from "delivered" to the admin who just clicked Invite. Setup mail now sends inline,
+  falling back to the durable queue on provider failure and reporting which occurred.
+  `invitePlatformEmployee` had to declare `secrets: EMAIL_SECRETS`: SendGrid is configured and working
+  in production, but a Cloud Function can only read a secret it *declares*, so without this the inline
+  send would fail on a correctly-configured provider and silently degrade to the queue.
+- **Consolidation (task 3).** `invitations` is canonical. `invitePlatformEmployee` and
+  `acceptPlatformInvite` both delegate here. Acceptance resolves a token against the canonical
+  collection **and** legacy `platformInvites`, so links already in circulation keep working, and a
+  legacy record that is honoured is mirrored forward — no migration needed.
+- **Role consistency (task 4).** The old handler spread `{...prev, [role]: true}` unconditionally, so a
+  `moderator` invite landing on an `admin` account produced one holding **both** — privileges nobody
+  granted. `checkRoleConsistency()` now refuses a downgrade, permits an upgrade, no-ops a match, and
+  correctly treats vertical roles (`merchant`) as non-claims — the first audit reported three merchant
+  invites as conflicts purely because `merchant` is a `registeredAs` key, not an Auth claim.
+- **Audit (task 6).** `auditInviteOnboarding` (admin onCall) finds accounts that cannot sign in and
+  invitations that contradict existing claims. A bare welcome email does **not** clear the flag —
+  otherwise any "did we email them?" check passes while the person still cannot get in.
+  `resendPasswordSetup` sends the remedy.
+
+### Production audit result
+
+61 Auth accounts scanned. **Exactly one stranded: `ochisaac@gmail.com`.** No other invitee was affected.
+
+### Resolved
+
+- Founder decision: ochisaac is an **admin**. The contradictory `moderator` invite
+  (`platformInvites/94707b34-…`, created 9 days after the owner-authorised admin grant) was **revoked**
+  so acceptance could never downgrade them. Recorded in `adminAudit`.
+- Password-setup mail delivered — `emailQueue/KCa6YLillF14Psxgm6aW`, `status: sent`,
+  `template: invitation-password-setup`, 2026-08-01T05:27:04Z.
+- `alexochieng3030@gmail.com` verified as already holding `superAdmin` (signs in normally). Unchanged.
+
+### Files
+`functions/invitations-core.js` (new), `functions/test/invitations-core.test.js` (new, 25 tests),
+`functions/index.js` (`invitePlatformEmployee` / `acceptPlatformInvite` delegate; new
+`auditInviteOnboarding`, `resendPasswordSetup`).
+
+**Database:** `invitations` gains `token`, `roleKind`, `setupMailQueueId`, `signInReady`,
+`provisionReason`; `platformInvites` retained read-only for links in circulation.
+**API:** 2 new admin callables. **Tests:** 781 pass. **Breaking:** none — existing invite links still work.
+
+---
+
+## [2026-07-30] — fix(search): stale catalogue cache hid newly approved providers; predeploy index gate unblocked
+
+**Search cache staleness.** `lsWrite` stamped only the blob-level `at`, so a write to ANY collection
+refreshed the apparent freshness of EVERY collection. A busy `products` cache therefore kept the
+`providers` copy looking fresh, its stale-while-revalidate refresh never fired, and a provider approved
+after that copy was taken stayed absent from search on that device indefinitely — the exact symptom of
+"I updated everything and Kasindi still isn't searchable".
+
+- Per-collection `colAt` stamps; `scanCollection` now ages the collection's own copy, falling back to
+  `at` so payloads written before this change behave as before.
+- `LS_KEY` bumped `v2` → `v3` — the only way to discard a stale copy already sitting on users' devices.
+
+**Predeploy index gate was false-failing.** It hard-failed at "Firebase limit is 200" while
+**386 composite indexes are deployed and serving** in `sokoni-aeb26` (measured with
+`firebase firestore:indexes`) against 384 in the file — i.e. it blocked every deploy on a limit the
+project passed long ago, for a condition that demonstrably works in production. A gate that fails on a
+false premise gets bypassed, which costs more than it protects. Thresholds are now evidence-based
+(warn 450 / fail 600) so the check still catches runaway index generation. Gate: 12 passed, 0 failed.
+
+**Correction to the previous entry's investigation.** A headless probe reporting
+`scan providers: Missing or insufficient permissions` was an **App Check artifact, not a rules defect** —
+`products`, `sellers` and `categories` were denied in the very same context, and those demonstrably work
+for real users. No rules were widened on that false signal. Recorded here because the false reading
+looked exactly like a platform-wide search outage.
+
+**Files:** `sokoni-firestore-search.js`, `scripts/pre-deploy-check.js`.
+No schema or API change. **Breaking:** none.
+
+---
+
+## [2026-07-30] — fix(onboarding): approval → registry convergence; applications reach admin with number + location
+
+**Approval was a dead end.** Every intake surface wrote a document into `applications`, every dashboard
+flipped `status` to `'approved'` from the browser, and nothing projected the approved applicant onto the
+registry customers actually read. Verified live on `sokoni-aeb26` (2026-07-30): `providers` held 4
+documents, **`drivers` / `rideDrivers` / `riders` held 0**, and `applications/e0cOABIk…`
+("Langa'ta mamafua") was already `approved` while its business name had never reached `providers/{uid}`
+— it appeared in the directory only because that person had separately self-registered.
+
+A cleaning company (`applications/PRVMS7IACKG`, "Kasindi holdings limited", Nairobi/Kilimani) sat
+`pending` with no registry document: invisible in the directory and unsearchable.
+
+### New: one convergence engine — `functions/application-lifecycle.js`
+
+`applications` is the REQUEST; the registries are the TRUTH. Approval projects request → registry,
+rejection retracts it. Server-side, idempotent, with a receipt the dashboards display.
+
+| Role | Projected onto |
+|---|---|
+| provider / business / professional | `providers/{uid}` |
+| driver / rider | `drivers/{uid}` **and** `rideDrivers/{uid}` (+ restricted `driverVerification/{uid}`) |
+
+- **Indexing is part of the projection, not a follow-up.** Every projection stamps `updatedAt` and builds
+  `searchableTerms`/`nameLower` through the shared `./search-terms` generator in the *same* commit as the
+  visibility flip. `updatedAt` is load-bearing: `sokoni-providers.js` orders by it and Firestore omits
+  documents lacking the ordering field — the old approve path never wrote it, so "approve" could publish a
+  provider straight into permanent invisibility.
+- **Two driver collections** because two engines read two: `dispatch.js` ranks `rideDrivers`,
+  `navigation.js`/`admin-os.js` read `drivers`. Writing one left the rider half-dispatchable.
+- Riders are created **offline** (`isOnline`/`available: false`) — approval grants the right to work, it
+  does not put an unverified rider on the road. **No invented rating or acceptance rate.**
+- `'boda'` → `'moto'`: `VEHICLE_CAPACITY` has no `boda` key, so every boda rider scored 0.7 instead of 1.0
+  on vehicle match and was quietly de-ranked.
+- Role routing pools *every* descriptive field. Production used two disjoint vocabularies
+  (`type:'business'`+`category:'cleaning'` vs `type:'Cleaning Company / Housekeeper'`+`hub:'service'`);
+  routing on `type` alone dropped whole surfaces. An unrecognised vocabulary is still applied but raises an
+  `adminAlerts` row — never a silent mis-file.
+
+New CFs (re-exported by name in `functions/index.js`): `applicationLifecycle` (trigger `applications/{appId}`),
+`applicationDecide`, `applicationReconcile` (drift repair), `applicationList` (one canonical admin read).
+
+### Applications now carry the number and location needed to identify people
+
+- `onboarding-driver.html` — the M-Pesa number was stored only as `mpesa`, so every admin card rendered
+  `phone` as "—" and its WhatsApp/Approve buttons built a number from an empty string and refused with
+  "No valid phone number". Now writes `phone`; adds a required **county + area** step (GPS alone is a
+  coordinate pair a reviewer cannot say on the phone).
+- Server normaliser derives `phone` (07…) **and** `phoneNumber` (+254…) from any shape, falling back to the
+  account's verified number, splits `location` into `city`/`area` against the 47 gazetted counties, and
+  stamps one server `receivedAt`. `provider.html` had written `submittedAt` as `"30/07/2026"`
+  (`toLocaleDateString`), which cannot order anything next to ISO strings — now ISO-8601.
+- Absent data is labelled ("no reachable number", "location not stated") instead of an em dash that reads
+  as a formatting quirk.
+
+### Fake success removed (this is why no rider record existed)
+
+`onboarding-driver.html`, `onboarding-professional.html`, `hub-register.js` and `provider.html` each wrapped
+the Firestore write in a `catch` that logged a warning and then **showed the success screen anyway**. A rider
+whose write was rejected saw "Application submitted!" and left no trace — consistent with three empty driver
+collections. The write is now the gate: it lands, or the applicant is told why and can retry. `hub-register.js`
+and `provider.html` also now require a real Auth session (a `localStorage` uid can never satisfy
+`request.resource.data.uid == request.auth.uid`).
+
+### Admin + super-admin synchronised
+
+- **`moderation.html`** — the verifications query was `where('status','in',[…])` + `orderBy('submittedAt')`,
+  needing a `(status, submittedAt)` composite index that was never declared (only `(status, createdAt)`).
+  Firestore rejected every call with `failed-precondition` into a bare `console.warn`, so the tab read
+  **"No pending verifications." forever** regardless of how many were waiting. Now a no-index listener with
+  in-memory filtering, and a read failure is *reported* rather than rendered as a convincing zero.
+- **`super-admin.html`** — had **no view of `applications` at all**. New Applications panel (nav + badge)
+  reading the same `applicationList`, with a bulk **Repair all** action.
+- **`admin.html`** — `seedApps()` injected four *fabricated* applicants ("Kamau Electronics", …) whenever
+  the real list was empty, inflating the pending badge on a production dashboard; now behind the standard
+  `_demoAllowed` gate. The rider pane's `where('type','==','driver')` missed a boda operator who registered
+  through the business form; now filters on the server-resolved `role`. A failed read no longer silently
+  substitutes localStorage.
+- All three surfaces now show **"approved but NOT published"** — the state none of them could previously
+  express — with a one-click re-projection, and route decisions through `applicationDecide` instead of
+  partial client-side writes wrapped in empty catches.
+
+### Security
+
+- **`applications` had TWO rule blocks.** Firestore unions matching allow rules, so the effective read
+  included `resource.data.status == 'open' || 'active'` — **unauthenticated read** of any application in
+  either state. Applications carry the applicant's phone; rider applications carry National ID and
+  driving-licence number. No code ever wrote either status (production held only `pending`/`approved`), so
+  the clause bought nothing and risked everything. Consolidated into one block, no public read, and
+  `noAdminFields()` on create/self-update so nobody can approve themselves.
+- **`drivers/{uid}` had no rule block at all** — default-deny meant a rider could not read their own record.
+  Added owner-or-admin read, `write: if false` (CF-only).
+- Rider identity documents go to **`driverVerification/{uid}`** (CF-write, admin/owner-read), never into
+  `rideDrivers`, which is `allow read: if isAuthed()` — putting a National ID there would expose every
+  rider's to any account. Consistent with the ODPC treatment of high-sensitivity identifiers.
+- **Stored XSS against admins fixed.** Application ids are client-chosen
+  (`setDoc(doc(db,'applications',app.id))`) and applicant names are attacker-controlled, yet both were
+  interpolated into inline `onclick` handlers. HTML entities are decoded *before* the JS is parsed, so
+  `h()`/`esc()` does not protect a JS string context — a crafted id or name executed in the reviewing
+  admin's session. All such handlers now pass integer indices.
+- `_sanText` keeps apostrophes for human-readable fields: the platform-wide `_san` strips `'`, silently
+  rewriting `Langa'ta` as `Langata` and the county `Murang'a` as `Muranga`. Escape on output, don't mutilate
+  on input.
+
+### Files
+`functions/application-lifecycle.js` (new), `functions/test/application-lifecycle.test.js` (new, 83 tests),
+`functions/index.js`, `functions/test/firestore-rules-audit.test.js` (+6), `firestore.rules`,
+`admin.html`, `super-admin.html`, `moderation.html`, `onboarding-driver.html`,
+`onboarding-professional.html`, `hub-register.js`, `provider.html`.
+
+**Database:** new `driverVerification` collection; `applications` gains `role`, `phoneNumber`, `city`,
+`area`, `geo`, `receivedAt`, `intakeVersion`, `projectionStatus`, `decisionAppliedFor`.
+**API:** 4 new CFs. **Indexes:** none added (all new queries are index-free by design).
+**Breaking:** none — every projection uses `merge`, and existing ratings/admin flags are never overwritten.
+
+---
+
+## [2026-07-29] — feat(profile): "My Services" button → provider dashboard (symmetry with "My Store")
+
+Service providers now get a prominent one-tap entry to manage everything about their services —
+Calendar, Availability, Bookings, service listings — exactly as sellers get "My Store".
+
+Previously the profile had a prominent **My Store** button (`upMyStoreBtn` → `seller.html`, shown for
+sellers by `_syncMyStoreBtn`), but providers only had a conditional *list section*. Added the symmetric
+provider control (extend, don't rebuild — it reuses the already-built `provider-dashboard.html`):
+
+- `profile.html` — new **My Services** button (`upMyServicesBtn` → `provider-dashboard.html`), styled in
+  the provider accent (#f97316). Shown only for provider/freelancer roles by `_syncMyServicesBtn()`, a
+  line-for-line mirror of `_syncMyStoreBtn()` using the existing `_isProviderUser()` predicate (same test
+  as the Services section + workspace switcher, so they can't disagree). Wired into `renderHeaderCard()`.
+- `provider-dashboard.html` is the existing management surface (Calendar / Availability "Working Schedule" /
+  Bookings / reviews / settings) — unchanged; this only adds the entry point.
+
+Client-only. Non-providers never see the button (no dead link). Breaking changes: none.
+Note: live-DOM verification via the headless harness was blocked by the page's multi-layer auth gate;
+change verified structurally (coherent id/href/wiring) as a mirror of the in-production My Store pattern.
+
+---
+
+## [2026-07-29] — docs(compliance): evaluate National ID / KRA PIN at-rest protection (ODPC SHOULD-FIX #12)
+
+Evidence-based evaluation of masking/tokenisation for high-sensitivity identifiers — the finding is that
+they are **already protected**, so no speculative crypto change was made (which would have risked breaking
+invoicing/eTIMS):
+
+- **National ID** — hashed with salt (`age-verification.js`, raw identity not retained); stored as a
+  document URL in **restricted Storage** for KYC (`provider-onboarding.js`); **AES-256-GCM encrypted** in
+  payroll (`hr-payroll.js`); **excluded from the search index** (`algolia-admin.js`); **redacted from
+  logs/DLQ** (`ecc.js`, `wap.js`).
+- **KRA PIN** — eTIMS credentials encrypted + Secret Manager (`etims.js`); index-excluded. The only
+  plaintext instance is the **business** KRA PIN (`businesses/{merchantId}`), a semi-public invoice/tax
+  identifier where masking is inappropriate.
+
+Documented in `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` (Activity 3 + open items) and
+`docs/ODPC_COMPLIANCE_CERTIFICATION.md` (§3 + gap #12). Docs only. No runtime change. Breaking: none.
+
+---
+
+## [2026-07-29] — docs(compliance): Records of Processing Activities + processor/DPA register (ODPC SHOULD-FIX #11)
+
+Added `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` — the accountability record an ODPC-registered
+Data Processor is expected to maintain (KDPA; Art. 30-style). Evidence-based from the compliance
+audit + live privacy notice, reflecting the post-remediation state (durable consent + right-to-erasure
+implemented). Contents:
+
+- Data-subject categories + personal-data-category inventory (flags National ID / KRA PIN as high-sensitivity).
+- 9-activity processing register: purpose, subjects, data, KDPA lawful basis, processors, retention,
+  cross-border, safeguards (settlement, KYC, delivery/GPS, comms, analytics, search, tax, trust & safety).
+- Processor / sub-processor / DPA register (Google, IntaSend, SendGrid, GA4, Nominatim/OSRM, Algolia/
+  Typesense, KRA eTIMS, Meta, Redis) with location + KDPA Part VI transfer basis + DPA status.
+- Open items feeding the record: #7 ID/KRA masking, per-processor DPA execution, named DPO.
+
+`docs/ODPC_COMPLIANCE_CERTIFICATION.md` §12 + gap #11 updated. Docs only; no runtime change. Breaking: none.
+
+---
+
+## [2026-07-29] — docs(privacy): cross-border transfer clause, KDPA Part VI (ODPC SHOULD-FIX #5)
+
+Added an explicit international-data-transfer disclosure to the privacy notice. Previously the policy
+named its processors (§8) but did not state a KDPA Part VI legal basis for transferring Kenyan personal
+data out of the country — even though Firestore/Auth/Storage/Hosting run on Google Cloud `us-central1` (USA).
+
+- `privacy.html` §8.1 "International Data Transfers" — names the out-of-Kenya processing (Google Cloud US,
+  payment processor), states the Part VI (ss.48–50) bases and safeguards (contract necessity; contractual
+  data-protection terms; TLS 1.2+ / AES-256; processor certifications) and an objection route to
+  privacy@mysokoni.co.ke. Placed inside §8 (no section renumbering, ToC unchanged).
+- `docs/ODPC_COMPLIANCE_CERTIFICATION.md` — §11 GAP + gap-summary #5 marked RESOLVED.
+
+Client-only notice text. No functional/runtime change. Breaking changes: none.
+
+---
+
+## [2026-07-28] — fix(ui): Messages page — duplicate search bar, title overlap, mojibake placeholders (P1)
+
+Reported from iPhone Safari during public testing: the "Messages" heading overlapped the search bar,
+the conversation search placeholder read `Search conversationsâ€¦`, and two search inputs stacked.
+Three independent defects, all confirmed by measurement (not inspection) before and after.
+
+**1 — Duplicate search bar (root cause: `cleanUrls` vs a hardcoded `.html` list).**
+`firebase.json` sets `cleanUrls: true`, so production serves `/messages`; `/messages.html` 301-redirects.
+`shared-header.js` derived its page key from `location.pathname`, so the key is always `messages` — but
+`NO_SEARCH` listed only `'messages.html'`, so the lookup never matched and the shared header injected its
+own "Search products, services…" bar onto a page that already had one. The neighbouring `EXCLUDED` array
+survived this only because someone hand-wrote both spellings of all 17 entries. **All 12 `NO_SEARCH`
+pages were affected** (checkout, cart, track, messages, dispute, invoice, notifications, profile, reviews,
+referral, subscriptions, loyalty) — Messages was simply the one where a second search bar was visible.
+
+- **`shared-header.js`** — normalise both sides of the lookup once (`_match()` strips a trailing `.html`
+  from list entries and the page key) instead of asking every future list to remember the two spellings.
+  Proven no-op for `EXCLUDED` (exhaustive diff over the union of both lists: zero behaviour changes).
+
+**2 — "Messages" title overlapping the search bar.**
+`.topbar` was `position:sticky; top:0; z-index:100`. The injected header is `position:fixed; z-index:100001`.
+Body padding clears it only at scroll offset 0; once scrolled, the topbar pinned to viewport top *underneath*
+the header — measured **111px of overlap**, with the `<h1>` completely covered.
+
+- **`messages.html`** — `.topbar` now sticks at `top: var(--sk-header-h, 58px)`, the measured header height
+  shared-header.js publishes on `<html>` and re-measures on resize/rotate. Same contract `.sk-sub-nav`
+  already uses (shared-header.js:629-634). Scrolled overlap: **111px → 1px**; `elementFromPoint` over the
+  heading returns `H1` instead of the header. No visual redesign — one CSS value.
+
+**3 — Mojibake (`â€¦`, `â€”`) in placeholders and titles.**
+Not a configuration fault: `<meta charset="UTF-8">` was present, `Content-Type: text/html; charset=utf-8`
+was correct, and `document.characterSet` reported `UTF-8`. The *source bytes* were double-encoded — UTF-8
+read as CP1252 and re-saved (`…` U+2026 → `C3A2 E282AC C2A6`). The browser was faithfully rendering corrupt
+input, so no header or meta change could have fixed it.
+
+- **`messages.html` / `chat.html` / `messages-admin.html`** — byte-level repair of 7 distinct sequences
+  (`—  ─  …  ═  →  ✓  ·`), 7,008 replacements. Buffer-level substitution, so the UTF-8 BOM, line endings and
+  every other byte are untouched: 147 insertions / 147 deletions, identical line counts, and the byte-size
+  delta (22,846) equals the sum of per-sequence savings exactly. User-visible strings restored include
+  `Search conversations…`, `Type a message…`, `Loading…`, `typing…` and the `— SOKONI` title separators.
+
+**Verification** (Playwright, `cleanUrls` emulated, iPhone 390×844 / Android 412×915 / desktop 1280×900):
+visible search inputs on Messages 2 → 1; header 110px → 57px; `sk-has-search` correctly off; scrolled
+overlap 111px → 1px; mojibake scan of every rendered text node, title and placeholder returns `[]`; exactly
+one `#sk-top-nav`, one `.topbar`, one bottom nav. Regression sweep over all 11 other `NO_SEARCH` pages plus
+6 control pages: no page has content clipped by the header, and control pages retain search (`navBottom`
+110px, `bodyPad` 106px) unchanged. `scripts/predeploy-syntax-gate.js` passes (1142 files).
+
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Known follow-up (NOT in this change): the same mojibake corruption exists in ~20 other files
+(`functions/index.js`, `style.css`, `chat.html`'s siblings, several hub pages) — mostly inside comments and
+box-drawing separators. Tracked separately; a repo-wide sweep should not ride on a P1 UI hotfix.
+
+---
+
+## [2026-07-29] — fix(auth): centre the Google/Phone login buttons
+
+The social-login row was a 3-column grid built for Google/Phone/Facebook. Facebook login was
+removed, so the two remaining buttons sat in columns 1–2 with an empty phantom third column,
+making them look left-shifted rather than centred.
+
+- `auth.css` `.auth-social-grid` — grid → `display:flex; justify-content:center; flex-wrap:wrap`
+  so the two buttons form a centred cluster; `.auth-social-btn` gets `flex:0 1 150px` (fixed-ish
+  width, shrinks on narrow screens). The 320px rule now stacks them centred (it previously set
+  `grid-template-columns`, dead once the container is flex).
+- Applies to both `login.html` and `signup.html` (shared stylesheet; both have exactly the two buttons).
+
+Verified with a Playwright measurement at 480px and 360px: cluster midpoint == card midpoint,
+`offsetFromCentre: 0`. Client-only CSS. Breaking changes: none.
+
+---
+
+## [2026-07-28] — refactor(privacy): single-source requestDataExport (KDPA/ODPC SHOULD-FIX #8)
+
+Removed the duplicate, shadowed `requestDataExport` definition from `functions/account-manager.js`.
+The canonical version in `functions/data-export.js` is unchanged and remains the deployed entry point —
+it writes both `dataExportRequests` (status) AND `dataExportQueue/{id}` so the `processDataExport` worker
+actually builds the export, and it enforces App Check. The removed duplicate wrote only
+`dataExportRequests` (worker never fired) and skipped App Check, so it was a latent landmine if anything
+had ever imported it by name.
+
+- `functions/account-manager.js` — deleted the duplicate `exports.requestDataExport` + updated the header
+  doc; `HttpsError` import retained (still used by `_assertAuth`/admin guards).
+- `functions/index.js` — updated the explanatory comment: the duplicate is now removed, not merely shadowed.
+- `docs/ODPC_COMPLIANCE_CERTIFICATION.md` — gap-summary #8 marked RESOLVED.
+
+Verified: both files pass `node -c`; no reference to `account-manager.requestDataExport` remains anywhere.
+No functional change (the deployed export pipeline was already `data-export.js`). Breaking changes: none.
+
+---
+
+## [2026-07-28] — fix(privacy): marketing defaults to opt-in (KDPA/ODPC SHOULD-FIX #7)
+
+Post-release backlog item — marketing consent must be opt-in, not opt-out.
+
+- **`pos-customers.js`** — a POS-created customer's `marketingOptIn` previously defaulted to `true`
+  (`data.marketingOptIn !== false`); now `data.marketingOptIn === true` (consent only when the merchant
+  explicitly captures it).
+- **`functions/email-service.js`** — `getPreferences` default `marketing` flipped `true → false`; a user
+  who has never set a preference no longer receives marketing email. Transactional categories
+  (orders/payments/security/account) stay `true` — service messages, not marketing consent. `newsletter`
+  already defaulted false.
+- **`docs/ODPC_COMPLIANCE_CERTIFICATION.md`** — §4 recommendation + gap-summary #7 marked RESOLVED.
+
+Behavioural note: existing users with an explicit `emailPreferences` doc are unaffected (their stored
+choice still wins via `{...defaults, ...snap.data()}`); only users with no preference set change from
+implicitly-in to opt-in. Security changes: none. Breaking changes: none.
+
+---
+
+## [2026-07-28] — test(qa): on-demand E2E harness certifies both dispatch branches + exactly-once settlement
+
+Repeatable emulator integration harness for the delivery-pipeline QA gate — proves the
+server-authoritative correctness a real prod transaction would exercise, with zero prod pollution.
+
+- **`functions/qa-dispatch-settlement-e2e.js`** — imports and runs the REAL `settleOrder`
+  (`order-settlement.js`) and mirrors the exact first-claim-wins `riderClaim` transaction
+  (`sokoni-orders.js:447`) against a live Firestore emulator. Lives outside `test/` so `npm test`
+  ignores it; refuses to run unless `FIRESTORE_EMULATOR_HOST` is set (never targets prod).
+- **`scripts/qa/run-dispatch-e2e.sh`** — boots the cached emulator (JDK17), runs the harness, tears down.
+- **Result: 14/14 PASS.** Branch A (auto-assigned rider → completed → settled once); Branch B
+  (no rider → 5 riders race → exactly one wins, losers cleanly rejected → completed → settled once);
+  idempotency (3 concurrent + 1 replayed `settleOrder` → single wallet credit, no double-pay).
+
+This certifies the code paths. The remaining **production QA gate** — a real M-Pesa charge + a real
+human rider claiming on production — is an operational validation owned by the business (runbook in the
+commit message / session handoff). Security changes: none. Breaking changes: none.
+
+---
+
+## [2026-07-28] — docs(compliance): ODPC Data Processor registration ISSUED — must-fix #4 RESOLVED (all 4 closed)
+
+The Office of the Data Protection Commissioner (ODPC) issued Bravilex International Co. Limited's
+**Data Processor** Certificate of Registration: **Registration No. 630-8669-F056** (certificate serial 24670),
+valid **28 Jul 2026 – 28 Jul 2028**. This closes the last of the four compliance must-fixes.
+
+- **`functions/company-identity.js`** — added a canonical, frozen `COMPANY.dataProtection` block (authority,
+  registration number, serial, category, registered entity, validity window, `status:'registered'`, and a
+  ready-to-render `statementLine`). Documented in-file that this is the **registration** status only and does
+  **not** by itself attest to ongoing technical compliance (tracked separately).
+- **Docs reconciled** from "pending"/"paid" to "registered": `docs/GO_LIVE_CHECKLIST.md` (EXT-2 + go/no-go table),
+  `docs/LAUNCH_READINESS_REVIEW.md`, `docs/PRODUCTION_OPERATIONS_MANUAL.md`, `security-compliance.html`.
+- **`docs/ODPC_COMPLIANCE_CERTIFICATION.md`** — §14 flipped PARTIAL→VERIFIED; overall banner updated; **Addendum A**
+  appended with the full must-fix remediation record and a targeted re-audit of the four remediated areas
+  (erasure, consent records, data-rights intake, registration) with `file:line` evidence. The report keeps ODPC
+  **registration** and the internal **platform compliance assessment** as explicitly separate concepts.
+
+No functional/runtime change; registration metadata + documentation only. Security changes: none. Breaking changes: none.
+
+---
+
+## [2026-07-28] — fix(auth): avoid auth-guard redirect loop when Firebase session restoration is delayed
+
+Platform availability hardening for authenticated pages. `auth-guard.js` could redirect a still-signed-in
+visitor to `login.html` before Firebase's auth bootstrap restored the live session, causing a redirect
+bounce and a broken page load. `firebase.js` now exposes `window.__sokoniAuthReady` and `waitForSokoniAuthReady`,
+so late listeners can await the live session state instead of relying on stale localStorage.
+
+Also fixed `firebase.js` session restore logic where an undefined `safeUpdates` reference could throw while
+reconciling an existing user's profile. The auth-ready signal is now published cleanly and safe profile
+merges happen only when necessary.
+
+Fixed missing auth gate wiring on pages marked `data-require-auth="true"` so protected pages now
+use `auth-guard.js` before the app renders.
+
+**Files:** `auth-guard.js`, `firebase.js`, `dispute-portal.html`, `fleet-monitor.html`.
+
+## [2026-07-28] — fix(commerce): post-settlement refund reversal (the deferred settlement follow-up)
+
+Product Settlement Convergence guarded only PRE-settlement refunds (mark REFUNDED, block settlement).
+A refund landing AFTER an order settled — seller wallet already credited — had no reversal: the seller
+kept funds for a refunded order. This closes it, exactly-once, through the EXISTING `initiateRefund`.
+
+**Files:** `functions/order-settlement.js` (`reverseSettledOrder` + `handleOrderRefund` router + `settleOrder`
+now snapshots `ledgerPlan`), `functions/index.js` (`initiateRefund` calls the router). **Deploy:** functions
+(`initiateRefund`, `onOrderStatusChange`, `expireOldEscrows`). **Rules/DB/hosting:** none.
+
+- **`reverseSettledOrder`** — debits the seller's `wallets.balance` by the exact net that was credited,
+  posts a reversing double-entry (the settlement's `ledgerPlan` with debit/credit **swapped** → nets to
+  zero), sets the order `settlementStatus: 'REVERSED'` (new terminal state) + `escrow.refunded`, and writes
+  a deterministic reversing wallet transaction. **Exactly-once** (state guard + deterministic ids).
+- **`handleOrderRefund` router** wired into `initiateRefund`: order already `SETTLED` → reverse; otherwise
+  mark `REFUNDED` (blocks a pending settlement). One entry point; the refund record stands regardless.
+- **Explicit recoverable-debt policy (ratified).** `wallets.balance` is **floored at 0 — never a raw
+  negative.** If the seller already withdrew, the un-recovered amount becomes an explicit
+  `refundRecoveryDebt` field (surfaceable as "Available 0 / Outstanding Refund Recovery X"). **Future
+  settlements auto-recover the debt FIRST** (`appliedToDebt`), and only the remainder becomes withdrawable
+  balance — automatic and transparent, no silent write-off. An immutable **`settlementReversals/{orderId}`**
+  record links Settlement → Reversal → Refund (settlementId, refundId, reversalId, netReversed,
+  recoveredFromBalance, debtAdded, recoveryStatus) for audit/support.
+- Scope: **full** reversal (full refund/cancel/dispute). Partial-refund-after-settlement is a documented follow-up.
+  Seller/admin UI surfacing of the debt (the data is now emitted) is a hosting follow-on.
+- Proof: **18/18** emulator — debit floors balance at 0 + explicit debt, auto-recovery pays debt before
+  withdrawable (full + partial), immutable link recorded, exactly-once (no double-debit), router settled→reverse
+  / unsettled→REFUNDED.
+
+## [2026-07-28] — feat(commerce): Product Settlement Convergence — wire the dormant engine to fulfillment
+
+The audit found that a checkout product order was created `paid` with `escrow.held = full, released:0`,
+stock deducted — but **no fulfillment event ever released funds to the seller** (the canonical settlement
+engine, webhook credit, and escrow sweep were all dormant/unreachable). Sellers were never paid for a
+checkout product sale. (Currently zero production impact — the `orders` collection is empty — so this is a
+latent gap fixed before real product sales, not an active incident.) This wires the EXISTING engine in;
+it does NOT create a second settlement/commission/wallet system.
+
+**Files:** `functions/order-settlement.js` (new), `functions/index.js` (order-create + `onOrderStatusChange`
++ `expireOldEscrows`). **Deploy:** functions (`verifyIntasendPayment`, `onOrderStatusChange`, `expireOldEscrows`).
+**Rules/DB/hosting:** none.
+
+- **Held-model mirror of provider bookings.** Order created `paid` now stamps `settlementStatus:'HELD'`.
+  Funds release to the seller ONLY at fulfillment.
+- **Settlement state machine** on the order: `UNSETTLED → HELD → ELIGIBLE_FOR_SETTLEMENT → SETTLING →
+  SETTLED` (`REFUNDED` if refunded before settlement) — so operators can see exactly where an order sits.
+- **`settleOrder`** reuses `settlement-engine.computeSettlement` (the SAME `calculateCommission`) for the
+  breakdown, credits the ONE canonical withdrawable wallet **`wallets.balance` (shillings)** — not the
+  retired cents rail — and writes `settlements/{orderId}` + `walletTransactions` + the engine's balanced
+  double-entry `ledger`, all `orderId`-correlated. **Exactly-once** (deterministic ids + `settlementStatus`
+  transaction guard); commission on product gross (order total **minus** delivery fee, which is split
+  separately). Wired into the existing `onOrderStatusChange` on the `→completed` transition (no new Cloud Run).
+- **Auto-confirm sweep** (config `_systemConfig/settlement.autoConfirmDays`, default **3** — a value, not a
+  constant): delivered orders past the window with no open dispute become `completed` → settle. Folded into
+  the existing `expireOldEscrows` scheduler (no new Cloud Run).
+- **Refund guard:** a refund before settlement marks the order `REFUNDED` so `settleOrder` is a no-op
+  (post-settlement reversal remains a separate follow-up).
+- Proof: **19/19** emulator — wallet credited exactly the engine's net, settlement/wallet/balanced-ledger
+  records, exactly-once (no double-credit), refund/cancelled skip, gross excludes delivery, sweep
+  confirms past-window & pauses on dispute.
+- Scope boundary (D5): money path only. Fulfillment UX (seller queue, rider tracking, order chat, timeline)
+  is a separate program — much already exists (dispatch, delivery tracking, `sokoni-chat-engine.js`).
+
+## [2026-07-28] — fix(booking): provider activation gate — reject bookings for non-active providers
+
+Trust & safety hardening (its own focused workstream; from the universality audit). `bookingCreateService`
+validated the *service* but never the *provider's* status, so **suspending/disabling a provider had no
+effect** while their services + availability stayed published — bookings kept succeeding.
+
+**Files:** `functions/booking-service.js` (`bookingCreateService`). **Deploy:** functions (`providerDispatch`).
+**Rules/DB/hosting:** none.
+
+- The create path now reads the canonical registry doc `providers/{providerId}` and requires
+  `status ∈ {active, approved}` **and** `acceptsBookings !== false` before any write. Server-side only.
+- **Fail-closed:** a missing registry doc (never published / unapproved) is not bookable. Verified against
+  live — all 4 production provider docs are `active` + `acceptsBookings:true`, so zero regression; and
+  `providerPublish` writes the registry doc atomically with services+availability, so any bookable provider
+  has one.
+- Clear customer-facing error ("This provider isn't currently available for bookings."); the gate precedes
+  all writes, so a rejected provider leaves no orphan `providerBookings` doc.
+- Proof: **9/9** emulator — active/approved succeed; suspended/disabled/pending/missing/paused rejected;
+  message present; no booking doc created on rejection.
+- Scope note: reschedule (a provider-side op on an already-created booking) is intentionally not gated here.
+
+## [2026-07-28] — fix(booking): webhook-after-expiry race — refund a payment that lands after the slot expired
+
+Canonical-path money-integrity hardening (its own focused workstream, NOT part of the convergence
+build phase, NOT a Phase F prerequisite). A latent race: the 15-min TTL reaper cancels an unpaid
+booking (`status:'cancelled'`, slot lock released) but leaves `paymentStatus:'pending'`; the payment
+webhook guarded ONLY on `paymentStatus`, so a payment landing seconds later flipped a **cancelled**
+booking to `paid_held` — customer charged, funds held, slot gone, and no refund (the refund path
+triggers on cancel-of-a-held booking, but here the cancel preceded the hold). Narrow window, real money.
+
+**Files:** `functions/booking-payment-sweep.js` (`holdServiceBookingPayment`). **Deploy:** functions
+(`intasendWebhook`, `webhookIntasend`). **Rules/DB/hosting:** none.
+
+- **The webhook now consults the booking STATE MACHINE, not just `paymentStatus`.** Terminal states
+  `{cancelled, declined, no_show}` are recognized: a payment landing on a terminal booking does NOT
+  revive it.
+- **Deterministic compensation** — a system/expiry cancellation is a **full refund** (no deposit
+  forfeit): the payment is credited to the customer's `users.walletBalance` (the platform's established
+  refund destination, matching `_disburseHeldFunds`) with a `booking_refund` `ledger` row, the booking
+  marked `paymentStatus:'refunded'` + `refundReason:'paid-after-<status>'`, and the intent → `refunded`.
+- **Replay-safe & idempotent** — the existing `paymentStatus ∈ {paid_held,settled,refunded}` guard makes
+  a webhook replay a complete no-op (no double-credit), reinforced by a deterministic
+  `{uid}_{ref}_latepay_refund` ledger id. The active-booking hold path is unchanged.
+- Proof: **15/15** emulator — both interleavings (expiry→webhook refunds; webhook→expiry stays safe via
+  `isExpired`'s paymentStatus guard, expiry sweep skips the held booking), refund replay no-double-credit,
+  declined/no_show also refund, active hold + its replay unchanged.
+
+## [2026-07-28] — feat(booking): WS4b — persistent My Bookings + review entry
+
+Completes the customer side of the canonical booking flow. Before this, a customer had NO
+persistent view of their canonical `providerBookings` after dismissing the live booking modal
+— the profile "Bookings" tab queried top-level `bookings where userId == uid`, which no writer
+populates for service bookings.
+
+**Files:** `profile.html`, `sokoni-book-service.js`, `sokoni-db.js`, `functions/booking-convergence.js`.
+**Deploy:** functions (`aggregatePlatformMetrics` — the free-request count) + hosting. **Rules:** none (see below).
+
+- **Rules unchanged (evidence-driven).** Proven 4/4 in the emulator that the current rule already
+  authorizes the customer list query `providerBookings where customerUid == me` (and denies both
+  unscoped and other-customer lists). Per the agreed process, no rule was added because none was needed.
+- **Canonical My Bookings** (`profile.html`) — a self-contained "Service Bookings" card with its own
+  `providerBookings where customerUid == me` listener and its own render, **deliberately not interwoven
+  with the legacy sources** so Phase F retirement of the legacy list is a deletion, not a refactor.
+  Every visible state derives from the booking doc; lifecycle status shown per booking.
+- **Persistent review entry** — a completed + unreviewed booking exposes "Leave a review" wired to the
+  new `SokoniBookService.review({bookingId})`, which reuses the SAME WS3 review prompt +
+  `bookingSubmitReview` gate (one review UI, one server path). Delivers the surface deferred from WS3.
+- **Free-request telemetry gap closed** (the WS4a documented gap) — `SokoniDB.saveBooking` now tags the
+  legacy free-request create with `bookingSource:'legacy-request'`; `computeBookingConvergence` counts it
+  with a `.count()` aggregation, folds it into `legacyAll`, and only reports `legacyRetired` when EVERY
+  legacy path (webhook counter + free-request tag) is zero — the Phase F signal.
+- Proof: 4/4 rules + 10/10 convergence-summary + 11/11 real render logic (extracted from profile.html,
+  incl. XSS escaping + review-entry exposure) + WS3 17/17 reused submit path.
+
+## [2026-07-28] — feat(booking): WS4a — service-booking convergence telemetry
+
+The Phase F retirement decision must be evidence-based ("zero legacy traffic for a sustained
+window"), so WS4a stands up the meter first — before the customer cutover — to start the
+observation window immediately. Measures what share of provider-service bookings flow through
+the canonical path vs the legacy path.
+
+**Files:** `functions/booking-convergence.js` (new), `functions/booking-service.js`, `functions/index.js`.
+**Deploy:** functions only (`providerDispatch`, `webhookIntasend`, `aggregatePlatformMetrics`). **Rules/DB/hosting:** none.
+
+- **`systemHealth/bookingConvergence`** — mirrors the proven `availabilityConvergence` pattern
+  (best-effort `FieldValue.increment`, no new scheduler/Cloud Run). Two layers so adoption is a
+  computable **trend**, not a cumulative total needing interpretation: cumulative
+  `canonicalTotal`/`legacyTotal` **and** per-day buckets `daily[YYYY-MM-DD].{canonical,legacy}`
+  (Africa/Nairobi, matching the platform calendar TZ).
+- **Canonical counter** increments in `bookingCreateService` on a genuinely new create (idempotent
+  replays return earlier — proven not to double-count). **Legacy counter** increments in the
+  `webhookIntasend` top-level `bookings`-create branch on a new create. Every increment is
+  best-effort: a telemetry failure can never affect a booking.
+- **Read-only fold** into the existing `aggregatePlatformMetrics` (`computeBookingConvergence` →
+  `platformMetrics/{date}.bookingConvergence`, canonical-share %), surfaced like `settlementConvergence`.
+  `canonicalShare` is `null` until the first booking (a zero-data platform never reports a misleading 0%).
+- **Known gap (documented, not silent):** the client-direct free-request path (`SokoniDB.saveBooking`,
+  fallback-only) is not in the live counter — a client can't write `systemHealth`. It will be tagged +
+  counted in **WS4b** (which touches hosting). The two material server paths are fully instrumented.
+- Proof: **14/14** emulator assertions, including that the counter **fires from the real handler**
+  (guards against the lazy-`require`-in-`try/catch` silently swallowing a wrong path → dead telemetry).
+
+## [2026-07-28] — feat(booking): WS3 — reviews gated on a completed booking
+
+Provider/service reviews had two disconnected halves: `providerReviews` (what the provider
+dashboard reads) had rule `write:false` and **nothing wrote it**, while `submitReview`→`reviews`
+was writable but invisible to provider surfaces and gated only optionally on `orders` — never on
+a booking. There was **no completed-booking gate anywhere**. WS3 adds the authoritative path.
+
+**Files:** `functions/booking-service.js` (new `bookingSubmitReview` handler), `functions/provider-dispatch.js`
+(route registration), `sokoni-book-service.js` (live review prompt). **Deploy:** functions + hosting.
+**Rules/DB:** none — `providerReviews` is already CF-only (`write:false`) + public read. **Docs:** `docs/BOOKING_CONVERGENCE.md`.
+
+- **`bookingSubmitReview`** — a customer-authed op on the existing `providerDispatch` route
+  (**zero new Cloud Run services**). Creates a review only when the caller is the booking's
+  `customerUid` **and** `status === 'completed'` (the canonical terminal state). Otherwise
+  `permission-denied` / `failed-precondition`.
+- **Converges the two surfaces** — writes `providerReviews` (dashboard read) and, in the *same
+  transaction*, updates the denormalized `providerProfiles` aggregate (`rating`/`reviewCount`/
+  drift-free `ratingSum`) the public profile reads. Review + aggregate + booking-stamp all commit
+  together or none do.
+- **Deterministic id `providerReviews/{bookingId}`** — one review per completed booking, replay-safe,
+  no uniqueness index. Repeat submission = idempotent no-op (`{ alreadyReviewed:true }`); aggregate
+  never double-counts.
+- **Immutable `bookingStatusAtReview:'completed'`** preserved on the review for audit/analytics;
+  booking stamped `reviewedAt`. Client shows a live review prompt on completion, flipping to a
+  thank-you off the `reviewedAt` server stamp (single source of truth).
+- **Architectural direction (through Phase F):** all future provider/service reviews must originate
+  from a completed `providerBooking`; the legacy `submitReview(targetType:'service')` path is
+  deprecated for provider bookings, retired in Phase F. Persistent "My Bookings" review entry = WS4.
+- Proof: **17/17** emulator assertions (created / aggregate updated / booking stamped / duplicate
+  no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
+
+## [2026-07-28] — fix(images): product & provider photos render everywhere (canonical resolver)
+
+Product/provider images rendered inconsistently — the same item showed on some pages and a
+placeholder/emoji on others — because every render site hand-read a different field and
+sokoni-image.js rejected base64 to a placeholder.
+
+**Files:** `sokoni-image.js`, `script.js`, `category.js`, `product.js`, `cart.js`, `wishlist.js`,
+`services.html`, `flashsale.html`, `store.html`, `seller-public.html`, `providers.html`, +
+`sokoni-image.js` include added to category/product/cart/wishlist/seller-public/providers/services/flashsale.
+**Deploy:** hosting only.
+
+- **Canonical resolver** `SokoniImage.pick()` (window.pickProductImage): prefers a real Storage
+  URL, then base64, then ''. Fixes the biggest bug — a doc can have `image:''` with the real
+  URL only in `imageStorageUrls[0]` (seller.js strips base64 before the Firestore write / on
+  cache degradation), so single-field readers showed placeholders for products whose photo was
+  fine. Every render site now resolves the same way.
+- **base64 now renders** instead of forcing a placeholder (the homepage OOM was fixed by
+  BOUNDING the catalogue listener, not by hiding images) — resolves the cross-page inconsistency.
+- **`data:`-only inversions fixed** — services.html service cards & flashsale.html rendered the
+  image ONLY when it was base64, hiding every real uploaded Storage-URL photo (showed emoji).
+- **Provider photos now show** on the services.html directory (was initials-only) with an
+  initials fallback on load error; providers.html avatar gained an onerror fallback.
+- **Missing onerror fallbacks added** (product.js gallery, cart, wishlist, seller-public, store)
+  so a dead URL degrades to the placeholder instead of a broken-image icon.
+
+## [2026-07-28] — fix(pos): profile button works + syncs with the SOKONI account
+
+The POS header pill showed a dead "Login" and the Business Profile settings were blank
+and manually retyped — neither reflected the signed-in SOKONI account. Added an SPos.profile
+module that binds the POS device to the canonical identity (offline-first: localStorage
+`sokoniUser`, enriched by Firestore `users/{uid}` when online).
+
+**Files:** `pos.js`, `pos.html`. **Deploy:** hosting only. No CF/rules/migration.
+
+- **Header account pill** now reflects the signed-in owner (avatar initial + name) instead
+  of "Login" when no cashier has logged in; an explicit cashier login still wins.
+- **PIN modal** shows a "Signed in as …" strip with an **Open my SOKONI Profile →** button
+  (opens `profile.html`) — the profile surface now works without hijacking the cashier PIN.
+- **Business Profile settings** auto-seed a blank business name/phone from the account at
+  boot (so receipts/branding match) and gain a **🔄 Sync from my profile** button that pulls
+  name, phone, address & KRA PIN. Non-destructive: never overwrites values the merchant
+  already typed unless they tap Sync.
+
+## [2026-07-28] — feat(earn): richer plan table — show what each tier INCLUDES, not just price
+
+The earn page's live plans table (subGetPlans) rendered only Plan/Monthly/Annual and
+discarded the whole `features` payload — so it read as "less info." Now each plan shows
+its free-trial period and an "Includes" column of canonical feature chips (listings
+limit, photos/listing, featured, commission discount, analytics, AI assistant, bulk
+import, priority support, API, team seats, storage, verified badge). Still sourced live
+from subGetPlans → sub-billing.js (no invented figures); prices unchanged.
+
+**Files:** `earnings.html`. **Deploy:** hosting only.
+
+## [2026-07-27] — fix(perf): homepage scroll-crash (renderer OOM) — bound catalogue feed
+
+The homepage subscribed to the **entire `products` collection** with no cap. The Firestore
+SDK retained every doc (many with base64 image blobs) in the mobile renderer heap, and the
+home merge re-serialized the whole array to `localStorage` on every snapshot — scrolling
+tipped the saturated renderer into OOM ("Chrome crashes when I scroll", "Can't open this
+page"). Same class as the Android Aw-Snap sentinel.
+
+**Files:** `sokoni-db.js`, `script.js`. **Deploy:** hosting only. No CF/rules/migration.
+**Docs:** `docs/HOMEPAGE_FEED_SCALING.md` (release note + tracked technical debt).
+
+- **Bounded listener** — `listenProducts` home path now `orderBy(documentId(),'desc'), limit(200)`
+  (ids are `Date.now()` timestamps → newest-first, built-in `__name__` index, no composite
+  index). Filtered category/seller paths use a plain index-safe `limit(200)`. Boosting is
+  client-side (`sokoniAds`) and lives on active inventory, so boosted cards still float.
+- **Warm cache** — persist a 60-item slice with base64 image blobs stripped (rejected on
+  render anyway): measured **15.5 MB → 39 KB** (0.76% of quota), no `QuotaExceededError`.
+- **Honest count** — new `SokoniDB.countProducts()` server count aggregate (1 RPC, no docs
+  read), fetched once at idle, corrects the "N+ products" labels the 200-cap would under-report.
+- **No storefront regression** (verified): search → `search.html` (Algolia/Typesense/Firestore),
+  category → per-category listener, product detail → `getDoc` by id — all bypass the capped array.
+- **Documented behavioral change:** very old boosted products (outside newest 200) no longer
+  float; per-category >200 returns oldest-200. Edge cases; tracked toward a server-ranked,
+  paginated feed that removes the age↔visibility dependency.
+- **Tracked separately:** `inspiq.js`/`feeds.html` unbounded infinite-scroll (same OOM class,
+  different page). **Close criteria:** on-device iPhone Chrome + Safari scroll/navigate/reload
+  stability — engineering-complete ≠ production-proven.
+
+## [2026-07-28] — fix(social): converge Follow onto the canonical follows/{uid}--{type}--{entityId} schema
+
+Follow appeared to work but never persisted server-side. Root cause: `sokoni-social.js` wrote to
+`userFollowing/{uid}/following/{id}` — a path with NO rule (default-deny) — so follows were localStorage-only
+(per-device) and it silently no-op'd on the ~40 pages that don't load `SokoniDB` (incl. store.html).
+
+**File:** `sokoni-social.js`. **Deploy:** hosting only. No rules change, no new collection, no page edits.
+
+- **Canonical schema:** every follow now writes `follows/{uid}--{type}--{entityId}` — matching the already-deployed
+  `follows` rule and `SokoniDB`. `type` is entity-agnostic (provider / store / shop / hub / future).
+- **Self-sufficient:** uses `firebase.firestore()` directly (present on all 57 follow pages), so it no longer
+  depends on `SokoniDB` — fixes follow on store.html + the other db-less pages.
+- **Firestore authoritative; localStorage = UI cache only.** Removed the broken `userFollowing` write.
+- **Idempotent toggle** (safe cross-device); **follower counts best-effort** (deferred aggregation — a count
+  write never fails the follow). Cross-device state via per-doc gets (the rule allows per-doc reads; bulk lists
+  are denied — verified).
+- **Verified (rules emulator):** user can create/read/delete own `follows/{uid}--…`; cannot write another's; no
+  more `userFollowing` writes.
+- **KNOWN FOLLOW-UP (UX, not correctness):** inline hub follow buttons with dynamically-built ids can't hydrate
+  their initial label cross-device (persistence + action are correct). Enhancement: add `data-follow-*` markers to
+  inline buttons so each can do an authoritative per-doc lookup on render. `renderFollowBtn` buttons already do.
+
+## [2026-07-28] — feat(booking): Phase E WS2 — customer booking UI (canonical held-payment flow)
+
+Repoints the customer "Book Now" onto the WS1 authoritative backend. Thin orchestration — no client business logic.
+
+**Files:** `firestore.rules`, `sokoni-book-service.js` (new), `services.html`, `provider-profile.html`.
+**Deploy:** `firestore:rules` + hosting. No functions.
+
+- **Rules fix:** `providerBookings` read now authorizes the customer via `customerUid` (the canonical field the
+  engine writes; `customerId` kept for legacy) so a customer can OBSERVE their own booking in real time. Writes
+  stay CF-only. Verified 4/4 (customer/provider read own; stranger denied; write denied).
+- **`sokoni-book-service.js`:** one shared flow both pages use — service picker (public providerServices) → slot
+  picker (canonical `getAvailabilitySlots`, no client slot math) → `bookingCreateService` (booking created FIRST)
+  → `createPaymentIntent(service_booking)` (amount from the server snapshot) → `initiateSTKPush` → `onSnapshot`
+  the booking → "Paid • Held". Every visible state derives from the booking doc (single source of truth); resume-
+  after-refresh via sessionStorage + re-observe; dup-click locks; states Pending/Paid•Held/Cancelled/Expired/Completed.
+- **Repointed** the primary Book Now in `services.html` (`openBookingModal`) and `provider-profile.html` (`book()`);
+  legacy `SokoniPay.bookNow` kept as a fallback until WS4 retirement (isolation preserved).
+- No client-side amount calculation; no booking without a canonical slot; legacy flows unaffected.
+
+## [2026-07-28] — feat(booking): Phase E WS1 — Payments & Deposit Engine
+
+Customer payments for service bookings — held until completion, provider credited exactly once at settlement.
+Implements `docs/BOOKING_PAYMENT_CONTRACT.md` v1.0. Backend-only (no UI — that is WS2). No parallel payment path.
+
+**Files:** `functions/payment-purposes.js`, `functions/index.js`, `functions/provider-ops.js`,
+`functions/booking.js`, `functions/booking-payment-sweep.js` (new), `docs/BOOKING_PAYMENT_CONTRACT.md`.
+**Deploy:** `functions:createPaymentIntent,webhookIntasend,intasendWebhook,providerDispatch,bookingCleanupHolds`.
+No new function, no rules, no migration.
+
+- **Amount authority:** new `service_booking` payment purpose prices from the booking's IMMUTABLE snapshot
+  (`price + fee`, cents); binds `resourceType:providerBooking` + `resourceId:bookingId`. Client cannot name the amount.
+- **Held, not credited:** both IntaSend COMPLETE handlers call a shared `holdServiceBookingPayment` first —
+  marks the booking `paid_held`, credits NO wallet, returns early (skips commission/credit/legacy-bookings-create).
+  bookingId resolved from the server-minted intent (anti-tamper). Replay-safe: a duplicate or post-settlement
+  webhook is a no-op. Legacy `type:'booking'` flow is untouched and isolated by construction.
+- **Single credit point:** Phase C completion is the ONLY provider credit — gated on `paid_held`, transitions
+  `paid_held → settled`, credits `(price − commission) + fee` (commission on price only; fee passes through),
+  snapshot-only, replay-safe. Unpaid completion moves no money (payout `unpaid`). Invariant: **`paid_held` is the
+  only valid predecessor of `settled`**.
+- **Refund/forfeit:** cancel/no-show move held money per contract §3 — refund → customer `users.walletBalance`
+  (+`ledger`); forfeited deposit → provider earnings via the SAME commission engine. Idempotent on `paid_held`.
+- **Payment-expiry:** an unpaid pending booking past the 15-min TTL is reaped (slot lock released, cancelled
+  `payment-expired`, intent invalidated) — hosted inside the EXISTING every-5-min `bookingCleanupHolds` (no new
+  Cloud Run service, per prior quota discipline).
+- **Payment states:** pending → paid_held → settled (happy) · → refunded (cancel/no-show) · pending → cancelled (expiry).
+- **Verification:** 33/33 WS1 emulator (intent authority, held-not-credited, exactly-once payment + replay,
+  exactly-once settlement +fee, legacy isolation, refund/forfeit, cancel windows, expiry) + regressions green
+  (readiness 33, D1 31, D2 10, D2b 9, D3 11, Phase B 14).
+
+## [2026-07-27] — feat(booking): Phase D4 — provider calendar (presentation-only, real-time)
+
+A week/month calendar in the provider dashboard that **visualizes** authoritative booking data.
+
+**Files:** `provider-dashboard.html`. **Deploy:** hosting only. No CF, collection, rules, or migration.
+
+- **Presentation-only:** reads canonical availability (`providerAvailability` + `overrides`) and subscribes to
+  the provider's own bookings via Firestore `onSnapshot`. It never writes bookings (providerBookings stays
+  CF-only) and never becomes a second source of scheduling state.
+- **Real-time:** a slot booked by a customer while the provider is viewing updates the calendar live, no
+  refresh — providers can't act on stale availability. Owner-scoped by auth UID (rules already permit the read).
+- **Views:** week (Mon-start, default) + month toggle; prev/next/today nav. Per-day slot view shows
+  available / booked / break / blackout / closed-unavailable; off-grid (rescheduled) bookings still render.
+- **Timezone-safe:** all bucketing done in Africa/Nairobi (UTC+3, no DST), consistent with the booking engine.
+- **Actions:** clicking a booking reuses the D1 lifecycle actions (confirm/start/complete/no-show/cancel/
+  reschedule/contact) — no calendar-originated writes.
+- **Verification:** 18/18 logic tests (tz bucketing incl. no UTC day-leak, Monday week-start, slot generation,
+  day-state classification); inline JS syntax-checked.
+
+## [2026-07-27] — feat(booking): Phase D3 — provider service model (fee/deposit/images)
+
+Enriches the canonical `providerServices` model + establishes the platform money-representation invariant.
+
+**Files:** `functions/provider-ops.js`, `functions/booking-service.js`, `storage.rules`,
+`provider-dashboard.html`, `docs/BOOKING_CONVERGENCE.md`.
+**Deploy:** `functions:providerDispatch` + `storage` rules + hosting. No Firestore rules/migration.
+
+- **Schema:** `providerAddService`/`providerUpdateService` gain `fee`, `deposit` (integer **cents**, clamped
+  ≥0) and `images[]` (https-only, capped at 8; http/non-URL/js dropped). Backend is the authoritative validator.
+- **Money Representation (platform invariant):** ALL persisted monetary amounts are integer **cents**; the UI
+  converts KSh↔cents at the form boundary only (×100 save / ÷100 display). Applied to price, fee, deposit.
+  This corrects a latent 100× bug (rate-card form stored raw KSh while the engine reads cents) — safe because
+  0 `providerServices` existed in prod. Codified in `docs/BOOKING_CONVERGENCE.md`.
+- **Booking snapshot:** `bookingCreateService` stamps declared `fee`/`deposit`; `pricingVersion` bumped to
+  `rate-card@1.1.0`. The stamped price/fee/deposit are an **immutable snapshot** — later service edits never
+  retroactively change an existing booking.
+- **Storage:** new `provider-service-images/{uid}/**` rule (owner-only writes, safe-image types, 15 MB cap,
+  public read); rate-card form gains fee/deposit inputs + service-photo upload with thumbnails.
+- **Deposit boundary:** D3 defines/stamps amounts only — collection + refund/forfeit (lifecycle §6) is Phase E.
+- **Verification:** 11/11 D3 (cents storage, image filtering, negative clamp, booking stamp + pricingVersion,
+  legacy-shape service graceful, KSh↔cents round-trip) + regressions (D1 31, D2 10, D2b 9).
+
+## [2026-07-27] — feat(booking): Phase D2b — onboarding→canonical availability adapter
+
+Closes the last availability correctness gap before Phase E: onboarding-only providers are now bookable.
+
+**Files:** `functions/provider-onboarding.js`. **Deploy:** `functions:providerDispatch` only. No client/rules/migration.
+
+- **Problem:** the onboarding "availability" step captures a simple form; publish wrote it **raw**, with no
+  `schedule`/`appt`/`modes` the authoritative engine reads → an onboarding-only provider was **unbookable**
+  via `bookingCreateService` (every slot rejected "outside working hours").
+- **Fix (adapter, not a new model):** `_onboardingAvailabilityToConfig(draft)` translates the onboarding
+  form (day chips → schedule, from/to → periods, break → breaks, lead-time code → minNoticeHours, emergency
+  → modes; the `bookings` step → appt/cap) into the input shape of the ONE canonical pipeline. Publish now
+  writes `normalizeAvailabilityConfig(_onboardingAvailabilityToConfig(draft), uid)` — the **same** normalizer
+  the rich editor uses. Governance invariant now holds across BOTH UX surfaces.
+- **Gate met:** 9/9 emulator — an onboarding-only provider receives a booking with zero manual edits, and the
+  mapped schedule/break/closed-days are actually enforced by `_prepareSlot`. D2 regression 10/10.
+- **Historical:** onboarding-only providers created before D2b still carry the old raw doc; recorded as a
+  dry-run, approval-gated backfill candidate (report only) — not executed here.
+
+## [2026-07-27] — feat(booking): Phase D2 — availability convergence + broken-save fix
+
+One authoritative availability configuration path, and a fix for a live production defect.
+
+**Files:** `functions/availability.js`, `functions/booking-service.js`, `functions/provider-onboarding.js`,
+`sokoni-availability.js`, `availability-manager.html`, `provider-dashboard.html`, `docs/BOOKING_CONVERGENCE.md`.
+**Deploy:** `functions:bookingDispatch` + `functions:providerDispatch` + hosting. No rules/migration.
+
+- **Production defect fixed:** the rich availability editor called `setProviderAvailability`/`setLiveStatus`/
+  `reserveSlot`/`releaseSlot`/`getAvailabilitySlots` by **raw name** — none deployed standalone (they exist
+  only as `bookingDispatch` ops) — so the editor **could not save availability**. `sokoni-availability.js`
+  now routes all of them through `bookingDispatch({op,…})`.
+- **Canonical normalization pipeline:** extracted `normalizeAvailabilityConfig()` in availability.js as THE
+  single normalization/validation impl (exported for the D2b onboarding adapter). Governance invariant:
+  *every persisted availability configuration reaches this pipeline before storage.*
+- **maxSim round-trip fix:** the pipeline accepts `maxSimultaneous` or legacy `maxSim`, persists canonical
+  `maxSimultaneous` (the editor previously saved one key and read the other).
+- **Breaks:** enforced in the shared `_prepareSlot` gate (create AND reschedule reject a slot overlapping a
+  break — one place, thanks to the D1 extraction), plus a **breaks editor** in `availability-manager.html`
+  (the UI previously hard-coded `breaks:[]`).
+- **Dashboard:** Availability tab links to the now-working `availability-manager.html`; onboarding-stub
+  deep-link retired.
+- **Deprecation:** `providerUpdateAvailability` (blind-merge, bypasses the pipeline, zero callers) marked
+  `@deprecated` + instrumented (`logger.warn`) for the standard telemetry-gated retirement.
+- **Verification:** 10/10 D2 emulator (normalizer round-trip incl breaks + maxSim, breaks enforced on
+  create + reschedule) + 14/14 Phase B + 31/31 D1 regressions.
+- **Follow-up:** D2b (onboarding→engine adapter; an onboarding-only provider must be bookable via
+  `bookingCreateService`) required before Phase E.
+
+## [2026-07-27] — feat(booking): Phase D1 — booking lifecycle operations
+
+Provider operational control over the canonical booking, implementing
+`docs/BOOKING_LIFECYCLE_CONTRACT.md` v1.0.
+
+**Files:** `functions/provider-ops.js`, `functions/booking-service.js`,
+`functions/provider-dispatch.js`, `provider-dashboard.html`.
+**Deploy:** `functions:providerDispatch` + hosting (`provider-dashboard.html`). No rules/migration.
+
+- **New ops** (via providerDispatch): `providerStartBooking` (confirmed→in_progress),
+  `providerCancelBooking` (active→cancelled, provider **or** customer), `providerMarkNoShow`
+  (confirmed→no_show), `providerRescheduleBooking` (in-place slot move), `providerContactCustomer`
+  (non-transition — returns customer phone).
+- **Reschedule = in-place, identity-preserving** (§4): same booking id/provider/customer; moves the
+  reservation in ONE transaction that acquires the new slot lock **before** releasing the old, so the
+  booking never holds two locks or zero; reuses the shared `_prepareSlot` availability gate + reservation-
+  core CAS; records `rescheduleCount` + `rescheduleHistory[]`.
+- **Shared availability gate:** extracted `_prepareSlot()` from the create path so create AND reschedule
+  validate identically (one place for D2 to add breaks). `slotKey` now stamped on the booking for exact
+  lock release. Phase B create is behavior-preserving (14/14 regression).
+- **Contract §3.2 fix:** `providerDeclineBooking` and `providerCompleteBooking` now **release the slot
+  lock** (decline previously stranded the slot forever). Every terminal transition now frees its slot.
+- **Dashboard:** per-status action buttons gated on the lifecycle matrix (Start/Complete/No-show/
+  Reschedule/Cancel/Contact); `declined`/`no_show` labels. Reschedule uses a temporary prompt entry
+  (clearly labelled) pending the Phase E slot picker.
+- **Verification:** 31/31 D1 emulator acceptance (transitions, guards, slot-lock release on all terminals,
+  atomic reschedule keeps exactly one lock, identity immutable, contact non-transition) + 14/14 Phase B
+  regression.
+
+## [2026-07-27] — feat(observability): settlement convergence monitor (Phase C)
+
+Operational confidence for the Phase C money path: booking completion must stay convergent with
+settled payouts and booking wallet credits, and any divergence must ALERT, not be discovered days later.
+
+**Files:** `functions/settlement-monitor.js` (new), `functions/index.js` (`aggregatePlatformMetrics` wired),
+`scripts/settlement-convergence-report.js` (new, read-only CLI).
+**Deployed:** `functions:aggregatePlatformMetrics` (existing scheduled fn — no new Cloud Run service,
+no new scheduler, no quota risk). Prod baseline: all-zero, HEALTHY (legacy pending = 0 → nothing to reconcile).
+
+- **`computeSettlementConvergence(db)`** — five single-field-equality `.count()` aggregations (auto-indexed,
+  no composite index to manage): completed bookings, settled/pending/paid payouts, booking_earning wallet txns.
+- **Invariants designed to survive legacy data** (no false alarms): `completedWithoutPayout = completed −
+  (settled + pending + paid)` must be 0 (legacy `pending` is *accounted for*); `walletTxExceedsSettled =
+  max(0, walletTx − settled)` must be 0 (no duplicate/orphan credit). `settledUncredited` (zero/sub-shilling
+  settlements) and `legacyPendingPayouts` (backlog → 0) are informational, not alerts.
+- **Delivery:** the 6-hourly `aggregatePlatformMetrics` computes it, writes `systemHealth/settlementConvergence`
+  (dashboard-readable) + folds it into `platformMetrics/{date}`, and `console.warn`s on any anomaly. Best-effort
+  — wrapped so it can never fail the platform-metrics run. On-demand/CI check via the CLI script (exit 2 on anomaly).
+- **Verification:** 9/9 emulator (healthy state absorbs legacy pending + sub-shilling without alarm; both
+  anomaly classes flagged). Read-only report verified against production.
+
+## [2026-07-27] — feat(booking): convergence Phase C — settlement → wallet (exactly-once)
+
+Provider service earnings now reach the withdrawable wallet at booking completion, instead of sitting
+forever as a `pending` providerPayouts row. Closes the financial half of the booking loop.
+
+**Files:** `functions/provider-ops.js` (`providerCompleteBooking`, `providerGetEarnings`), `functions/wallet.js` (comment fix).
+**Deployed:** `functions:providerDispatch` only. No client, rules, or migration changes.
+
+- **Exactly-once settlement:** `providerCompleteBooking` converted from a batch to a `runTransaction`
+  that re-reads booking status inside the txn. Two concurrent completions can no longer both credit —
+  the loser retries, sees `completed`, and exits. Credits `wallets.balance += floor(net/100)` shillings
+  (`balance` is whole-shilling / withdrawable; `net` is cents) and writes one `walletTransactions` row
+  (deterministic id `${uid}_${bookingId}_bookingsettle`), atomically with the status flip + payout write.
+- **Single money path (double-pay fix):** the payout row is written `status:'settled'` (was `'pending'`),
+  which removes it from `providerRequestPayout`'s `status==='pending'` sweep. An earning is now
+  withdrawable through exactly ONE channel (the wallet) — not the wallet AND the mechanism-1 scheduler.
+  Does not touch FinOS availableBalance/withdrawableBalance, so `sweepEarningsToWallet` never sees it
+  either (two disjoint paths → no double credit).
+- **Money integrity:** credits floor (never rounds up); sub-shilling `remainderCents` recorded on the
+  payout for exact reconciliation. Settlement evidence stored: `walletCredited`, `netShillingsCredited`,
+  `remainderCents`, `walletTxnId`, `settledAt`, plus explicit FKs `sourceType:'booking'` + `sourceId`
+  on both the payout and the wallet transaction.
+- **`providerGetEarnings`** gains a `settled` bucket (in-wallet) distinct from `pending` (legacy,
+  pre-Phase-C) and `paid` (withdrawn to M-Pesa).
+- **Verification:** 22/22 emulator acceptance (exactly-once, one payout/one credit/one txn, idempotent
+  retry, failed settlement leaves balances unchanged, withdrawal balance == settled balance, settled row
+  not re-payable, sub-shilling floored + recorded, explicit FKs present).
+- **Scoped OUT (separate, sign-off required):** reconciling legacy `pending` payouts from pre-Phase-C
+  completions (a dry-run report, zero writes); retiring the now-vestigial `providerRequestPayout`.
+
+## [2026-07-27] — feat(booking): service-booking convergence Phases A+B backend — DEPLOYED
+
+Provider-driven booking convergence (design: docs/BOOKING_CONVERGENCE.md). 4 read-only audits found
+the service-booking loop OPEN: customer "Book Now" wrote top-level `bookings` (raw client addDoc, no
+server logic), the provider dashboard read `providerBookings` (nothing wrote it), the authoritative
+engines were bypassed, and firestore.rules let clients self-declare booking price/status. SoT decided:
+provider stack canonical for service appointments + a shared reservation core.
+
+- **Phase A — `functions/reservation-core.js`**: the ONE definition of the reservation primitives
+  (slot-key, buffered overlap, capacity + per-customer caps). `booking.js` rewired to call it —
+  behavior-identical (emulator concurrency harness still 44/44). Both engines now share one definition.
+- **Phase B backend (DEPLOYED, clients unchanged):**
+  - `functions/booking-service.js` `bookingCreateService` (via providerDispatch): the authoritative
+    service-appointment create. Runs reservation-core against `providerAvailability` (working hours,
+    buffers, **blackout overrides** — the reserveSlot gap, capacity, min-notice, same-day); writes
+    canonical `providerBookings`; SERVER owns price (from the rate card), status, payment state,
+    timestamps; deterministic slot-lock CAS + idempotency; provenance stamped (bookingSource/engine/
+    reservation/pricing versions) for migration-free evolution. Fixed a real maxSimultaneous bug
+    (concurrent = overlapping, not whole-day). Acceptance 14/14.
+  - `firestore.rules`: TIGHTENED `bookings` create — status must be absent/'pending', financial fields
+    (price/pricingBreakdown/paymentStatus/paymentId/commission/net/amountPaid/settlement) FORBIDDEN.
+    Closes the client money/status manipulation vector; still allows a pending request. Rules-unit 5/5.
+
+Deployed: functions:providerDispatch + firestore:rules (both safe standalone). **Client "Book Now"
+repoint DEFERRED to Phase E** (the service page needs rate-card + slot pickers to supply serviceId +
+a real slot; repointing an under-equipped client would weaken the authoritative API). Server capability
+first, cut clients over when they can consume it correctly.
+
+---
+
+## [2026-07-27] — feat(search): business search indexing + Publication Contract enforcement (Release 1) — DEPLOYED
+
+Completes the businesses publication pipeline (last user-facing gap) and turns the Publication Contract
+into an enforced gate. All three entities now certified under Contract v1.0.
+
+- `functions/index.js`: `indexBusinessCreate`/`indexBusinessUpdate` — give `businesses/{uid}` the
+  searchableTerms/nameLower the store search reads (mirror the product/provider indexers; shared
+  `_buildSearchTerms`; output-comparison idempotency guard). Deployed + ACTIVE.
+- `sokoni-firestore-search.js`: "businesses" search spec now reads the canonical `businesses` collection
+  (was the empty `sellers`), `indexed:true`, links `business.html`. Archive/hide honoured by the existing
+  `isVisibleDoc` contract. Live.
+- `scripts/test-publication-contract.js` (NEW): the parameterized `publicationContract(entityType)`
+  acceptance suite — create→index→discover→rename(new-in/stale-out)→archive-removed, over products/
+  providers/businesses on the SHARED `buildSearchTerms` + visibility contract. 36/36. New content type =
+  one `ENTITIES` entry.
+- Enforcement LIVE: CI (`.github/workflows/ci.yml` static-analysis) + hosting predeploy (auto-run by
+  `gate-inventory.js` suite discovery). A regression fails the deploy — proven: the deploy BLOCKED on
+  `test-firestore-search` (20/23) until its fixtures were updated to the canonical `businesses` collection.
+- `docs/PUBLICATION_CONTRACT.md`: certification matrix → Products/Providers/Businesses **Certified under v1.0**.
+
+Roadmap remaining is capability-only: product `businessId` stamping → dry-run backfill.
+
+---
+
+## [2026-07-27] — perf(startup): kill the white flash before first paint (P0+P1)
+
+A 3-agent read-only audit of the startup pipeline found SOKONI already does most
+first-paint best practices (skeletons + local-first render, auth never blocks the
+UI, parallel/single Firestore reads, splash is dark not white, no hide-until-JS
+gate). The white screen has ONE structural cause: sync render-blocking `<head>`
+scripts run before first paint while **most pages lack an inline dark background**,
+so the exposed canvas is browser-default white until `style.css`/splash JS applies
+the dark theme. `store.html` already avoided this with an inline `<html>` bg;
+`earnings.html` avoids it with inline critical CSS.
+
+- **P0 — white flash killed (root cause):** added inline `style="background:#050505"`
+  to `<html>` on `index/category/product/search/checkout` (matching `store.html`).
+  The page paints dark instantly, independent of script/CSS/JS timing. Near-zero
+  risk; proven by the two pages that already did it.
+- **P1 — trim the critical path:**
+  - `checkout.html` — the external `unpkg.com` IntaSend SDK is now `defer` (it's
+    used only on pay-click behind a fail-closed guard, never at parse), removing a
+    third-party round-trip from first paint.
+  - `index.html` — `sokoni-image.js` is now `defer` (still runs before `script.js`
+    since deferred scripts execute in document order, so `renderProductImage` is
+    ready for the grid, but it no longer blocks paint).
+  - `index.html` + `category.html` — `modulepreload` for the Firebase module graph
+    (`sokoni-init.js`/`firebase.js`) + a `category.js` preload, so critical fetches
+    start in the head instead of at end-of-body.
+
+Deferred by scope (not done): deferring `security.js`/`root-guard`/`crash-sentinel`
+(security-ordering risk), lazy-loading the eager heavy modules via the existing
+`SokoniPerformance.importWhenVisible`/`importOnInteraction` primitives, and bounding
+the unbounded home products listener with `.limit()` (P2 — pending before/after
+Web Vitals measurement).
+
+Files: `index.html`, `category.html`, `product.html`, `search.html`, `checkout.html`.
+No JS logic, security, or payment behaviour changed — only load ordering + a paint bg.
+
+---
+
 ## [2026-07-27] — fix(commerce): stop overselling + propagate shop renames + Buy Now on category cards
 
 Scoped from a user real-time-sync design proposal. A 3-agent read-only audit mapped the 7-point
@@ -32,6 +4947,31 @@ Files: `functions/index.js`, `functions/shop-name-sync.js` (new), `category.js`,
 DB: writes `sellerNameSyncedAt` on products during a rename; `oversoldAlerts.path` field added.
 Security/payments: strengthens payment integrity (no charge for non-existent stock); no rules change.
 Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout changes) + hosting.
+
+---
+
+## [2026-07-27] — fix(shop): marketplace shops appear in the business directory — DEPLOYED
+
+Audited the shop/product publish pipeline with the same methodology as providers (create→edit→project→
+index→visibility). **Products: HEALTHY** (create/edit write the same `products` collection the feed reads,
+both index triggers exist, absent status = visible, no orderBy silent-drop). **Shops: provider-class bug**
+— a 3-way collection split: the marketplace wizard writes `sellers/{uid}`, but the directory
+(`businesses.html`) reads `businesses`, so a launched marketplace shop never appeared there (only SmartPOS
+`createBusiness` merchants did).
+
+Scope chosen: DIRECTORY VISIBILITY FIRST (defer search indexer + product businessId stamping):
+- `seller.html swSaveStore` now also writes a COMPLETE `businesses/{uid}` doc (name/businessName/category/
+  description/city/phone/status:'active'/createdAt-once/updatedAt) — the collection the directory reads.
+  Rules-compliant (uid==auth.uid, no admin fields); createdAt set once via a getDoc guard so the
+  directory's orderBy('createdAt') can't silently drop it. `sellers/{uid}` write kept for the store.html
+  fallback.
+- `business.html loadProducts` falls back to `where('sellerUid','==',BIZ_ID)` when the businessId query is
+  empty — marketplace products link by sellerUid, so a uid-keyed shop's storefront renders instead of empty.
+
+Verified: both pages parse; `@firebase/rules-unit-testing` 5/5 (owner create/update + public read allowed;
+non-owner uid-mismatch and admin-field `verified` writes rejected). Deployed: hosting only; live-verified.
+Deferred follow-ups: indexBusiness searchableTerms trigger, product `businessId` stamping, search spec
+`sellers`→`businesses`, optional dry-run backfill of existing sellers→businesses.
 
 ---
 
@@ -22106,3 +27046,55 @@ Key milestones previously achieved:
 - Hyper-scale sprint (14 phases, sokoni-scale/queue/cache/search/monitor.js)
 - 8-role RBAC (sokoni-permissions.js)
 - Platform audit 2026 (monitor.html, 4 Cloud Functions, 15+ indexes)
+
+## 2026-08-02 — Delivery: courier layer composes the shared engine (ADR-012)
+
+**delivery-hub.js** computed `base + km*perKm` itself — the fourth implementation of distance
+pricing on the platform. It now composes the merchant delivery engine for that component and keeps
+only the genuinely logistics multipliers (vehicle, weight, urgency). The dependency runs one way:
+logistics composes merchant pricing, never the reverse.
+
+Equivalence proven across **768 combinations** before the change and pinned as a permanent test with
+the old formula as oracle. It holds because `Math.round(n + x) === n + Math.round(x)` for integer
+`n`, so the test also asserts every vehicle `base` IS an integer instead of assuming it.
+
+`_calcFee` returns `null` rather than falling back to a second formula when the engine is absent;
+the caller refuses to create the delivery. An unpriced delivery is not a cheaper delivery — it is a
+broken financial record. The engine is now loaded on `delivery.html`, `delivery-tracking.html` and
+`driver.html`, which previously did not have it.
+
+**Files:** `delivery-hub.js`, `delivery.html`, `delivery-tracking.html`, `driver.html`,
+`functions/test/courier-quote.test.js`.
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deployed:** no.
+
+## 2026-08-02 — Server-authoritative delivery pricing; documentation close-out
+
+**Delivery pricing authority (ADR-011).** `functions/index.js` accepted a client-supplied
+`deliveryFee` and clamped it to 0..5000. Inside that range the client set the price. The server now
+loads `deliveryConfig`, recomputes with the shared engine, and REJECTS a mismatch, returning the
+authoritative figure. Unconfigured merchants keep the legacy path and are logged as
+`delivery_fee_unverified` — a temporary state with an exit condition, not an exemption.
+
+**Engine vendored, drift gated.** Firebase uploads only `functions/`, so a parent `require` would
+deploy green and throw on the first checkout. `functions/shared/delivery-engine.js` is a copy;
+`verify-delivery-engine-sync.js` hash-compares it in predeploy because divergent copies would make
+the server reject every order. Both new guards mutation-tested.
+
+**Layering (ADR-012).** vehicle/weight/urgency are dispatch concerns, not merchant pricing. The
+logistics layer may consume the merchant engine; the merchant engine must never consume logistics.
+
+**Brand.** YouTube handle `@mysokonike` → `@mysokoni_ke`, matching `x.com/mysokoni_ke`. Three
+occurrences — two hrefs and one VISIBLE LABEL; fixing only the links would still have shown the old
+handle to users.
+
+**Documentation.** Image Pipeline survey (read path converged, WRITE path is not: 19 files
+`readAsDataURL` vs 5 using the helper; base64 in Firestore risks the 1 MiB limit) · Email Link client
+design (provider is ENABLED — the earlier "disabled" report was a proto3 default-omission trap) ·
+ADR-011, ADR-012 and index · canonical `deliveryConfig` schema.
+
+**Files:** `functions/index.js`, `functions/shared/delivery-engine.js`, `index.html`,
+`scripts/verify-delivery-engine-sync.js`, `scripts/verify-server-delivery-authority.js`,
+`firebase.json`, `docs/` (5 new/updated).
+**API:** delivery fee mismatch now returns `failed-precondition` with `serverDeliveryFee`.
+**Security:** closes a client-controlled pricing input. **Breaking:** none. **Deployed:** no.
+

@@ -269,6 +269,8 @@
       .sa-content{padding:16px}
     }
   </style>
+<!-- Shared admin responsive module (Constitution Rule 8 cross-device clause). -->
+<link rel="stylesheet" href="sokoni-admin-responsive.css">
 </head>
 <body>
 
@@ -288,6 +290,10 @@
     </div>
   </div>
 
+  <a href="admin-os.html" class="nav-item" style="text-decoration:none;display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    <span class="nav-icon">&#8592;</span>Back to Admin
+  </a>
+
   <div class="nav-group">
     <div class="nav-group-label">Overview</div>
     <button class="nav-item active" data-section="overview" onclick="SA.nav('overview');_closeSidebar()">
@@ -304,6 +310,10 @@
 
   <div class="nav-group">
     <div class="nav-group-label">Finance</div>
+    <button class="nav-item" data-section="applications" onclick="SA.nav('applications');_closeSidebar()">
+      <span>&#x1F4EC;</span><span>Applications</span>
+      <span id="saAppsBadge" style="margin-left:auto;background:#ff3c3c;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:800;display:none"></span>
+    </button>
     <button class="nav-item" data-section="financial" onclick="SA.nav('financial');_closeSidebar()">
       <span class="nav-icon">&#x1F4B0;</span>Financial Oversight
     </button>
@@ -418,6 +428,60 @@
             </tr>
           </thead>
           <tbody id="saUsersBody">
+            <tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 2b: Applications & Onboarding ══
+         The super-admin portal had no view of `applications` at all, so the one
+         surface with authority over the whole platform could not see who was
+         waiting to join, who had been approved, or — the state that matters —
+         who was approved and never actually published. Reads the same
+         server-side `applicationList` the admin dashboard uses, so both
+         surfaces cannot disagree. -->
+    <section class="sa-panel" id="panel-applications" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4EC; Applications &amp; Onboarding</h2>
+        <p>Providers, riders and businesses waiting to join &mdash; with the contact number and location needed to verify who they are.</p>
+      </div>
+
+      <div class="panel-toolbar">
+        <h2 id="saAppsHeading">All Applications</h2>
+        <select class="sa-input" id="saAppsFilter" onchange="SA.loadApplications()" style="width:190px">
+          <option value="">All statuses</option>
+          <option value="pending" selected>Pending decision</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="unpublished">&#x26A0; Approved, not published</option>
+        </select>
+        <select class="sa-input" id="saAppsRole" onchange="SA.loadApplications()" style="width:160px">
+          <option value="">All roles</option>
+          <option value="provider">Providers</option>
+          <option value="driver">Riders</option>
+          <option value="seller">Sellers</option>
+        </select>
+        <button class="sa-btn" onclick="SA.loadApplications()">&#x21BB; Refresh</button>
+        <button class="sa-btn" onclick="SA.reconcileAllApplications()" title="Re-run the registry projection for every approved application">&#x1F501; Repair all</button>
+      </div>
+
+      <div id="saAppsSummary" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px"></div>
+
+      <div class="table-wrap">
+        <table class="sa-table" id="saAppsTable">
+          <thead>
+            <tr>
+              <th>Applicant</th>
+              <th>Role</th>
+              <th>Contact</th>
+              <th>Location</th>
+              <th>Received</th>
+              <th>Published</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="saAppsBody">
             <tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
           </tbody>
         </table>
@@ -893,6 +957,7 @@ const SA={
     // Lazy-load each section
     if(section==='overview')this.loadOverview();
     else if(section==='users')this.loadUsers();
+    else if(section==='applications')this.loadApplications();
     else if(section==='financial')this.loadFinancial();
     else if(section==='config')this.loadConfig();
     else if(section==='emergency')this.loadEmergency();
@@ -1121,6 +1186,173 @@ const SA={
       suspend?'Suspend User':'Restore User',
       suspend
     );
+  },
+
+  // ══ SECTION 2b: Applications & Onboarding ══════════════════
+  /* One server-side read (`applicationList`) shared with the admin dashboard, so
+     the two surfaces cannot show different queues. The CF resolves the canonical
+     role, normalises both phone shapes, splits the location and reports whether
+     the registry projection actually landed — none of which a raw client query
+     could tell this page. */
+  _apps: [],
+
+  async loadApplications(){
+    const body=document.getElementById('saAppsBody');
+    const status=document.getElementById('saAppsFilter').value;
+    const role=document.getElementById('saAppsRole').value;
+    body.innerHTML='<tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>';
+
+    let data;
+    try{
+      const fn=this._fns.httpsCallable('applicationList');
+      const res=await fn({ status: status==='unpublished' ? 'approved' : (status||null), role: role||null });
+      data=res.data||{};
+    }catch(e){
+      /* A read failure is reported as a failure. Rendering an empty table here
+         would be indistinguishable from "nobody has applied". */
+      body.innerHTML='<tr><td colspan="7" class="empty-cell" style="color:#ff6b6b">'
+        +'Could not load applications: '+_esc(e.message)
+        +'<div style="color:var(--muted);font-weight:400;margin-top:6px">This is a read failure, not an empty queue.</div></td></tr>';
+      document.getElementById('saAppsSummary').innerHTML='';
+      return;
+    }
+
+    let items=data.items||[];
+    if(status==='unpublished') items=items.filter(a=>a.projectionStatus!=='applied');
+    this._apps=items;
+
+    /* Summary chips — including the count that used to be invisible everywhere:
+       approved applicants who never reached a registry and so cannot be found. */
+    const c=data.counts||{};
+    const chip=(label,val,colour)=>'<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);'
+      +'border-radius:10px;padding:8px 14px;font-size:12px">'+label
+      +' <b style="color:'+colour+';font-size:15px">'+val+'</b></div>';
+    document.getElementById('saAppsSummary').innerHTML=
+      chip('Pending',c.pending||0,'#ffd93d')
+      +chip('Approved',c.approved||0,'#71ff00')
+      +chip('Rejected',c.rejected||0,'#ff6b6b')
+      +(data.unpublished
+        ? chip('&#x26A0; Approved but NOT published',data.unpublished,'#ff3c3c')
+        : chip('Publication drift',0,'#71ff00'));
+
+    const badge=document.getElementById('saAppsBadge');
+    if(badge){
+      const n=(c.pending||0)+(data.unpublished||0);
+      badge.textContent=n||''; badge.style.display=n>0?'inline-block':'none';
+    }
+    document.getElementById('saAppsHeading').textContent='Applications ('+items.length+')';
+
+    if(!items.length){
+      body.innerHTML='<tr><td colspan="7" class="empty-cell">No applications match this filter.</td></tr>';
+      return;
+    }
+
+    const ROLE={provider:'&#x1F6E0;&#xFE0F; Provider',driver:'&#x1F6F5; Rider',seller:'&#x1F3EA; Seller',
+                legal:'&#x2696;&#xFE0F; Legal',health:'&#x1F3E5; Health'};
+
+    body.innerHTML=items.map((a,i)=>{
+      const p=a.phone||'';
+      const intl=p?'254'+p.replace(/\D/g,'').slice(1):'';
+      /* The reviewer's job is to ring the applicant and confirm identity, so the
+         number is a live link — and where there is none that is stated, because
+         it means this applicant cannot be verified by phone at all. */
+      const contact=p
+        ? '<a href="tel:+'+_esc(intl)+'" style="color:var(--accent);font-weight:700;text-decoration:none">'+_esc(p)+'</a>'
+          +' <a href="https://wa.me/'+_esc(intl)+'" target="_blank" rel="noopener" style="text-decoration:none">&#x1F4AC;</a>'
+          +(a.email?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.email)+'</div>':'')
+        : '<span style="color:#ff8c42;font-weight:700">no number</span>';
+
+      let loc=a.location
+        ? _esc(a.location)+(a.city?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.city)+(a.area?' &middot; '+_esc(a.area):'')+'</div>':'')
+        : '<span style="color:#ff8c42">not stated</span>';
+      if(a.geo&&a.geo.lat!=null){
+        loc+=' <a href="https://maps.google.com/?q='+encodeURIComponent(a.geo.lat+','+a.geo.lng)
+            +'" target="_blank" rel="noopener" style="text-decoration:none">&#x1F4CD;</a>';
+      }
+
+      /* Published column: the difference between a decision and a live listing. */
+      let pub;
+      if(a.status==='pending') pub='<span style="color:var(--muted)">&mdash;</span>';
+      else if(a.projectionStatus==='applied') pub='<span style="color:#71ff00;font-weight:700">&#x2713; live</span>';
+      else pub='<span style="color:#ff3c3c;font-weight:800" title="'+_esc(a.projectionError||'projection never ran')+'">&#x26A0; NOT live</span>';
+
+      /* Index into this._apps, never the id. Entities in an inline handler are
+         decoded BEFORE the JS is parsed, so _esc() does not protect a JS string
+         context — and these ids are client-chosen (provider.html does
+         setDoc(doc(db,'applications',app.id))), which made a crafted application
+         id stored XSS against the super-admin. An integer carries no payload. */
+      const acts=a.status==='pending'
+        ? '<button class="sa-btn" onclick="SA.decideApplication('+i+',\'approve\')">Approve</button> '
+          +'<button class="sa-btn" onclick="SA.decideApplication('+i+',\'reject\')">Reject</button>'
+        : (a.projectionStatus!=='applied'
+            ? '<button class="sa-btn" onclick="SA.decideApplication('+i+',\'republish\')">Publish now</button>'
+            : '<span style="color:var(--muted);font-size:11px">'+_esc(a.status)+'</span>');
+
+      return '<tr'+(a.status!=='pending'&&a.projectionStatus!=='applied'?' style="background:rgba(255,60,60,.07)"':'')+'>'
+        +'<td><b>'+_esc(a.name||'—')+'</b>'
+          +(a.categoryLabel||a.category?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.categoryLabel||a.category)+'</div>':'')
+          +(a.vehicleType?'<div style="font-size:10px;color:var(--muted)">'+_esc(a.vehicleType)+(a.plate?' '+_esc(a.plate):'')+'</div>':'')
+          +(a.uid?'':'<div style="font-size:10px;color:#ff8c42">no account linked</div>')+'</td>'
+        +'<td>'+(ROLE[a.role]||_esc(a.role||'—'))+'</td>'
+        +'<td style="font-size:12px">'+contact+'</td>'
+        +'<td style="font-size:12px">'+loc+'</td>'
+        +'<td style="font-size:11px;color:var(--muted)">'+_fmtDate(a.receivedAt||a.createdAt)+'</td>'
+        +'<td>'+pub+'</td>'
+        +'<td>'+acts+'</td>'
+        +'</tr>';
+    }).join('');
+  },
+
+  /* Every decision goes through the server engine, which projects the applicant
+     onto the right registry, indexes them for search and grants the role in one
+     atomic step. 'republish' re-runs that projection for anything approved before
+     the engine existed. */
+  async decideApplication(rowIndex,decision){
+    const app=this._apps[rowIndex];
+    if(!app){ _toast('Application not found — refresh the list.','error'); return; }
+    const appId=app.id;
+    let reason=null;
+    if(decision==='reject'){
+      reason=prompt('Reason for rejection (optional):');
+    }
+    try{
+      if(decision==='republish'){
+        const fn=this._fns.httpsCallable('applicationReconcile');
+        const r=await fn({applicationId:appId});
+        const w=((r.data&&r.data.results)||[])[0]||{};
+        if(w.ok===false) throw new Error(w.reason||w.error||'projection failed');
+        _toast('Published: '+((w.writes||[]).map(x=>x.collection+' '+x.action).join('; ')||'no change'),'success');
+      }else{
+        const fn=this._fns.httpsCallable('applicationDecide');
+        const r=await fn({applicationId:appId,decision,reason:reason||null});
+        const w=((r.data&&r.data.receipt&&r.data.receipt.writes)||[]);
+        _toast((decision==='approve'?'Approved: ':'Rejected: ')
+          +(w.map(x=>x.collection+' '+x.action).join('; ')||'no registry change'),'success');
+      }
+      this.loadApplications();
+    }catch(e){
+      /* Never report success on a failed decision. */
+      _toast('Failed: '+e.message,'error');
+    }
+  },
+
+  /* Bulk drift repair — re-projects every approved application. This is what
+     brings applicants approved before the engine existed into the registries. */
+  async reconcileAllApplications(){
+    _confirm('Repair all approved applications?',
+      'Re-runs the registry projection for every approved application. Safe and idempotent: '
+      +'anything already published is left unchanged.',
+      async ()=>{
+        try{
+          const fn=this._fns.httpsCallable('applicationReconcile');
+          const r=await fn({all:true});
+          const res=(r.data&&r.data.results)||[];
+          const ok=res.filter(x=>x.ok).length;
+          _toast('Repaired '+ok+' of '+res.length+' approved applications.','success');
+          this.loadApplications();
+        }catch(e){ _toast('Repair failed: '+e.message,'error'); }
+      },
+      'Repair', false);
   },
 
   // ══ SECTION 3: Financial Oversight ══════════════════════
@@ -1650,6 +1882,28 @@ const SA={
 // Auth Gate — superAdmin custom claim check
 // ═══════════════════════════════════════════════════════════
 (function(){
+  /* Master passcode gate (3026). Shown only AFTER the superAdmin claim is verified,
+     so a legitimate super admin who knows the code always passes. Convenience code,
+     not a secret — the claim above is the real gate. */
+  function _promptSuperPass(onOk){
+    var gate=document.getElementById('authGate');
+    gate.innerHTML=
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;max-width:280px;text-align:center;">'+
+        '<div style="font-size:15px;font-weight:800;color:#fff;">Super Admin Passcode</div>'+
+        '<input id="saPass" type="password" inputmode="numeric" maxlength="8" placeholder="Enter passcode" autocomplete="off" '+
+          'style="width:200px;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;text-align:center;letter-spacing:.3em;outline:none;">'+
+        '<button id="saPassBtn" type="button" style="width:200px;padding:12px;background:var(--accent,#71ff00);color:#000;border:0;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;">Unlock &rarr;</button>'+
+        '<div id="saPassErr" style="color:#ff6b6b;font-size:12px;min-height:16px;"></div>'+
+      '</div>';
+    function submit(){
+      var v=(document.getElementById('saPass')||{}).value||'';
+      if(v==='3026'){ onOk(); }
+      else { document.getElementById('saPassErr').textContent='Incorrect passcode.'; var i=document.getElementById('saPass'); if(i){ i.value=''; i.focus(); } }
+    }
+    document.getElementById('saPassBtn').onclick=submit;
+    var inp=document.getElementById('saPass');
+    if(inp){ inp.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); }); inp.focus(); }
+  }
   function runGate(){
     firebase.auth().onAuthStateChanged(async user=>{
       if(!user){
@@ -1663,9 +1917,11 @@ const SA={
           location.href='admin-os.html?error=insufficient_privileges';
           return;
         }
-        // Authorized — hide gate, init app
-        document.getElementById('authGate').style.display='none';
-        SA.init(user);
+        // Claim verified — require the master passcode 3026 before revealing the console.
+        _promptSuperPass(function(){
+          document.getElementById('authGate').style.display='none';
+          SA.init(user);
+        });
       }catch(err){
         console.error('[SuperAdmin] Auth check failed:',err);
         location.href='login.html?error=auth_check_failed';

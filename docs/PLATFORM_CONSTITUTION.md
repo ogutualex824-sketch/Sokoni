@@ -69,6 +69,88 @@ Everything revolves around the user's **permanent identity**.
 - Redesign working systems.
 - Break existing APIs.
 - Break existing users.
+- Duplicate administrative consoles.
+
+---
+
+## Rule 9 — Single Writer for Shared Layout State (Permanent)
+
+> Every shared CSS custom property that affects layout must have **exactly one authoritative
+> writer**. Everything else observes it. Nobody else writes it.
+
+Covers `--sk-header-h`, safe-area offsets, bottom-navigation height, sticky header offsets, and any
+future positional token.
+
+**Why this is a rule.** Two writers is a *correctness* defect, not a style preference. Measured
+2026-08-01: `--sk-header-h` was written by both `sokoni-layout.js` and `shared-header.js`, neither
+aware of the other. Any caching by one was silently invalidated by the other — which is how a
+dirty-check produced a **10% style-recalculation regression**: layout.js cached a value it did not
+own, then stopped correcting a property it no longer controlled, and elements settled at wrong
+offsets. It also explains the header height observed jumping 100px → 110px during load in the earlier
+CLS investigation, which had been filed at the time as a timing artefact.
+
+Establishing single ownership improved style recalculation by **6–12%** across two independent paired
+A/B runs (−12.0% at 5/6 pairs, then −6.0% at 5/6; ±2% floor).
+
+**Choosing the owner:** the module that owns the DOM element owns the property. `shared-header.js`
+wins on merit here — it owns the header element, knows when it changes, and publishes
+`getBoundingClientRect().bottom`, i.e. where the header actually *ends*, which accounts for safe-area
+insets and banners. `sokoni-layout.js` was publishing `offsetHeight`, which does not. A consumer that
+needs the value reads the CSS variable; it never re-derives and re-publishes it.
+
+**Enforcement:** `node scripts/audit-layout-ownership.js` classifies every tracked property as
+OWNED / CONTESTED / STATIC / ORPHAN and exits non-zero on any CONTESTED property.
+Current state: **CONTESTED 0 · OWNED 7 · STATIC 4 · ORPHAN 4**.
+
+The 4 ORPHAN properties (`--sk-content-pad-bottom`, `--sk-keyboard-h`, `--sk-tab-bar-h`, `--sk-viewport-w`) are
+written on every measurement pass and read by nobody. Each write invalidates style document-wide for
+no consumer. Removing them is a separate, individually-measured change — not folded in here.
+
+---
+
+## Rule 8 — Administrative Authority (Permanent)
+
+> Every operational subsystem — marketplace, services, bookings, dispatch, finance,
+> compliance, support, analytics, onboarding — **must expose its management functions
+> through the single Admin OS**. No subsystem may require a separate administrative
+> console to perform its core operational tasks. The Admin OS reads from the same
+> canonical data sources the platform itself uses, ensuring one authoritative
+> operational view across all devices.
+
+This completes the set of single-authority rules the platform already holds: one
+settlement authority, one booking authority, one provider identity, one wallet, one
+dispatch engine, one invitation engine — and now **one admin authority**.
+
+**Why this is a rule and not a preference.** Fragmented administration does not merely
+duplicate UI; it splits *truth*. Measured 2026-08-01: **61 admin-gated pages, 34 of them
+genuine admin consoles, ~35,000 lines.** Three separate surfaces queried the same
+`applications` collection three different ways and two of the three were broken — one
+ordered on a field with no composite index and rendered the failure as "No pending
+verifications", another merged seeded demo rows into the live queue. Nobody could tell
+which console was right, because none of them was authoritative.
+
+**What compliance requires**
+
+1. **One read path.** A management view calls the subsystem's canonical server function
+   (e.g. `applicationList`), not its own ad-hoc client query. Two consoles must not be
+   able to disagree.
+2. **One write path.** State transitions go through the subsystem's server-authoritative
+   handler (e.g. `applicationDecide`), never a sequence of client-side writes. A decision
+   is atomic and returns a receipt the console displays verbatim.
+3. **Read canonical, never recompute.** The Admin OS must never calculate money. It
+   displays what the settlement engine recorded.
+4. **Report failure as failure.** A read error must never render as an empty state. "No
+   results" and "the query was denied" are different facts and must look different.
+5. **No fabricated data.** Demo/seed rows are gated behind `_demoAllowed` and never reach
+   a production console.
+6. **Cross-device parity.** Every management action must be completable on a phone.
+   An administrator approves a provider, dispatches a rider or resolves a dispute from
+   whatever device they are holding. Desktop-only workflows are non-compliant.
+
+**Migration discipline.** This rule is satisfied by *convergence, not rebuild*. Existing
+consoles are consolidated module by module behind the canonical read/write paths; a
+working surface is retired only after telemetry shows its replacement carrying the load.
+See `docs/ADMIN_OS_CONVERGENCE.md` for the audit and phased programme.
 
 ---
 

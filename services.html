@@ -396,6 +396,7 @@
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-intasend.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"SOKONI Services — Book Local Professionals in Kenya","description":"Find and hire verified plumbers, electricians, cleaners, mechanics, barbers, tutors and 30+ service providers in Nairobi, Mombasa, Kisumu. Pay via M-Pesa.","url":"https://mysokoni.co.ke/services.html","provider":{"@type":"Organization","name":"SOKONI","legalName":"Bravilex International Co. Limited"},"areaServed":{"@type":"Country","name":"Kenya"},"serviceType":["Plumbing","Electrical","Cleaning","Photography","Graphic Design","Tutoring","Catering","Event Planning","Hair & Beauty","IT Repair","Fitness Training","Accounting","Legal Services","Healthcare"]}</script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
@@ -1105,7 +1106,9 @@ function renderProviders(){
     <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}">
       <div class="pv-cover ${coverCls}">
         <div class="pv-avatar-wrap">
-          <div class="pv-avatar">${esc(initials)}</div>
+          <div class="pv-avatar" data-initials="${esc(initials)}">${p.photo
+            ? `<img src="${esc(p.photo)}" alt="${firstName}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" onerror="this.onerror=null;this.parentNode.textContent=this.parentNode.dataset.initials">`
+            : esc(initials)}</div>
         </div>
       </div>
       <div class="pv-body">
@@ -1141,6 +1144,9 @@ let _svcBkgId = null;
 function openBookingModal(providerId){
   const p = getProviders().find(x=>String(x.uid)===String(providerId));
   if(!p) return;
+  /* Phase E WS2 — canonical held-payment booking flow (server-authoritative). The
+     legacy SokoniPay.bookNow path below stays as a fallback until WS4 retires it. */
+  if(window.SokoniBookService){ SokoniBookService.open({ providerId: providerId, providerName: p.name }); return; }
   if(typeof SokoniPay !== "undefined"){
     SokoniPay.bookNow({
       providerName:  p.name,
@@ -1957,8 +1963,13 @@ function renderServices(){
 
   grid.innerHTML = filtered.map(p => {
     const emoji = CAT_EMOJI[p.category] || "🛠️";
-    const imgHtml = p.image && p.image.startsWith("data:")
-      ? `<img class="sv-card-img" src="${p.image}" alt="${p.name}" loading="lazy">`
+    /* Was rendered ONLY when p.image was base64 — so real uploaded Storage-URL
+       photos (the healthy post-upload state) showed the emoji instead. Resolve the
+       canonical field (URL preferred, base64 last) and render any real source;
+       on load error fall back to the category emoji. */
+    const _svImg = (window.pickProductImage ? pickProductImage(p) : (p.image || ""));
+    const imgHtml = _svImg
+      ? `<img class="sv-card-img" src="${esc(_svImg)}" alt="${esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.outerHTML='<div class=&quot;sv-card-emoji&quot;>${emoji}</div>'">`
       : `<div class="sv-card-emoji">${emoji}</div>`;
     return `<div class="sv-card" onclick="bookService('${p.id}')">
       ${imgHtml}
@@ -2125,6 +2136,7 @@ document.addEventListener('keydown', function(e){
   <script src="sokoni-ui-extras.js" defer></script>
   <script src="sokoni-inbox.js" defer></script>
   <script src="sokoni-verifications.js" defer></script>
+  <script src="sokoni-image.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */

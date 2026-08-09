@@ -224,11 +224,21 @@
      This gives every page: design tokens, toast system, layout manager,
      notification engine, and notification center bell/panel.         */
 
+  /* Absolutize a relative asset path so it resolves to the SITE ROOT, not the current URL.
+     On path-prefixed pages (/shop/**, /@**, /profile/**) a relative "sokoni-x.css" resolves to
+     "/shop/sokoni-x.css" → 404 → the whole design system fails to load and the page looks blank. */
+  function _skAbs(p) {
+    return (typeof p === 'string' && !/^(https?:|\/|data:|blob:)/.test(p)) ? '/' + p : p;
+  }
+
   function _injectAsset(tag, attrs, id) {
     if (document.getElementById(id)) return;
     const el = document.createElement(tag);
     el.id = id;
-    Object.assign(el, attrs);
+    const a = Object.assign({}, attrs);
+    if (a.href) a.href = _skAbs(a.href);
+    if (a.src)  a.src  = _skAbs(a.src);
+    Object.assign(el, a);
     (document.head || document.documentElement).appendChild(el);
   }
 
@@ -271,31 +281,45 @@
      loaded here would silently wipe the restored footer. Rolled back to 911a042. */
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
   _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
-  /* Notification engine — real-time engine, preferences, grouping */
-  _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
-  /* Notification center — bell UI, slide-in panel, inline actions */
-  /* Canonical full-screen sheet: header, 44px close, safe-area, five ways out.
-     Loaded BEFORE the notification centre so any overlay can adopt it. Every future
-     hub/overlay (Messages, Wishlist, Orders, Settings…) should use SokoniSheet rather
-     than hand-rolling a panel and picking the wrong z-index tier, which is exactly how
-     Notifications became impossible to close. */
-  _injectAsset('script', { src: 'sokoni-sheet.js', defer: true }, 'sk-sheet-script');
-  /* Production Validation Mode — OFF unless ?validate=1. When off it defines a handful of
-     no-ops and returns: it patches nothing, listens to nothing, writes nothing, and cannot
-     affect a real customer. When on, it traces every Cloud Function call, the auth chain,
-     push/email/PO delivery, performance and mobile diagnostics for ONE real-device session. */
-  _injectAsset('script', { src: 'sokoni-validate.js', defer: true }, 'sk-validate-script');
-  _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
+  /* Zero Trust, Performance and Observability stay EAGER: their init hooks below run
+     one-shot on `load` and expect the global to already exist, so deferring the script
+     past `load` would silently skip initialisation. */
   /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
   _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
-  /* Phase 3 — Performance SDK: lazy loading, WebP, prefetch, optimistic UI */
+  /* Phase 3 — Performance SDK: lazy loading, WebP, prefetch, optimistic UI (also
+     optimises first-paint images, so it earns its eager slot). */
   _injectAsset('script', { src: 'sokoni-performance.js', defer: true }, 'sk-performance-script');
-  /* Phase 3 — Resilience SDK: circuit breakers, retry, offline queue */
-  _injectAsset('script', { src: 'sokoni-resilience.js', defer: true }, 'sk-resilience-script');
   /* Phase 3 — Observability SDK: error tracking, Core Web Vitals, user journey */
   _injectAsset('script', { src: 'sokoni-observability.js', defer: true }, 'sk-observability-script');
-  /* Command palette — Ctrl+K / Cmd+K global launcher */
-  _injectAsset('script', { src: 'sokoni-command-palette.js', defer: true }, 'sk-command-palette-script');
+
+  /* P2A — NOT needed for first paint: notifications (bell UI + engine), the shared
+     full-screen sheet, validation mode (off unless ?validate=1), resilience, and the
+     Ctrl+K command palette. Loaded eagerly these cost ~160 KB of startup parse/execute
+     on EVERY page. Inject them after `load`, on main-thread idle, in order (sheet before
+     notif-center, which adopts it). async=false keeps execution ordered while allowing
+     parallel download. Each self-initialises when it lands, so the bell/palette simply
+     appear a beat later instead of blocking the product grid. */
+  (function _sokoniIdleModules() {
+    var LAZY = [
+      ['sokoni-sheet.js',           'sk-sheet-script'],
+      ['sokoni-notif-engine.js',    'sk-notif-engine-script'],
+      ['sokoni-notif-center.js',    'sk-notif-center-script'],
+      ['sokoni-resilience.js',      'sk-resilience-script'],
+      ['sokoni-validate.js',        'sk-validate-script'],
+      ['sokoni-command-palette.js', 'sk-command-palette-script'],
+    ];
+    function flush() {
+      LAZY.forEach(function (m) {
+        if (document.getElementById(m[1])) return;
+        var s = document.createElement('script');
+        s.src = _skAbs(m[0]); s.async = false; s.id = m[1];   /* ordered exec, parallel download */
+        document.head.appendChild(s);
+      });
+    }
+    function start() { (window.requestIdleCallback || function (f) { setTimeout(f, 200); })(flush, { timeout: 3000 }); }
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
+  }());
 
   /* Initialize Observability after page load */
   (function () {
@@ -326,9 +350,9 @@
     const _forceOffline = location.search.includes('offline=1') || localStorage.getItem('sokoni_force_offline') === '1';
     function _loadMock() {
       if (document.getElementById('sk-mock-data')) return;
-      const d = document.createElement('script'); d.id = 'sk-mock-data'; d.src = 'sokoni-mock-data.js';
+      const d = document.createElement('script'); d.id = 'sk-mock-data'; d.src = _skAbs('sokoni-mock-data.js');
       d.onload = function () {
-        const m = document.createElement('script'); m.id = 'sk-mock-engine'; m.src = 'sokoni-dev-mock.js';
+        const m = document.createElement('script'); m.id = 'sk-mock-engine'; m.src = _skAbs('sokoni-dev-mock.js');
         document.head.appendChild(m);
       };
       document.head.appendChild(d);
@@ -359,7 +383,7 @@
     const polishLink = document.createElement('link');
     polishLink.rel = 'stylesheet';
     polishLink.id = 'sk-polish-link';
-    polishLink.href = 'sokoni-polish.css';
+    polishLink.href = _skAbs('sokoni-polish.css');
     (document.head || document.documentElement).appendChild(polishLink);
   }
 
@@ -368,7 +392,7 @@
     const mfLink = document.createElement('link');
     mfLink.rel = 'stylesheet';
     mfLink.id = 'sk-mobile-fixes-link';
-    mfLink.href = 'sokoni-mobile-fixes.css';
+    mfLink.href = _skAbs('sokoni-mobile-fixes.css');
     (document.head || document.documentElement).appendChild(mfLink);
   }
 
@@ -377,7 +401,7 @@
     const respLink = document.createElement('link');
     respLink.rel = 'stylesheet';
     respLink.id = 'sk-responsive-link';
-    respLink.href = 'sokoni-responsive.css';
+    respLink.href = _skAbs('sokoni-responsive.css');
     (document.head || document.documentElement).appendChild(respLink);
   }
 
@@ -386,7 +410,7 @@
     const premLink = document.createElement('link');
     premLink.rel = 'stylesheet';
     premLink.id = 'sk-premium-link';
-    premLink.href = 'premium.css';
+    premLink.href = _skAbs('premium.css');
     (document.head || document.documentElement).appendChild(premLink);
   }
 
@@ -395,7 +419,7 @@
     const pv2Link = document.createElement('link');
     pv2Link.rel = 'stylesheet';
     pv2Link.id = 'sk-premium-v2-link';
-    pv2Link.href = 'sokoni-premium-v2.css';
+    pv2Link.href = _skAbs('sokoni-premium-v2.css');
     (document.head || document.documentElement).appendChild(pv2Link);
   }
 
@@ -417,13 +441,13 @@
     const drawLink = document.createElement('link');
     drawLink.rel = 'stylesheet';
     drawLink.id = 'sk-drawers-link';
-    drawLink.href = 'sokoni-drawers.css';
+    drawLink.href = _skAbs('sokoni-drawers.css');
     (document.head || document.documentElement).appendChild(drawLink);
   }
   if (!document.getElementById('sk-drawer-script')) {
     const drawScript = document.createElement('script');
     drawScript.id = 'sk-drawer-script';
-    drawScript.src = 'sokoni-drawer.js';
+    drawScript.src = _skAbs('sokoni-drawer.js');
     drawScript.onload = function() {
       if (window._skMenuPending && window.SokoniDrawer) {
         const _pendBtn = window._skMenuPending;
@@ -440,7 +464,7 @@
   if (!document.getElementById('sk-promo-script')) {
     const promoJs = document.createElement('script');
     promoJs.id = 'sk-promo-script';
-    promoJs.src = 'sokoni-promotions.js';
+    promoJs.src = _skAbs('sokoni-promotions.js');
     promoJs.defer = true;
     (document.head || document.documentElement).appendChild(promoJs);
   }
@@ -449,7 +473,7 @@
   if (!document.getElementById('sk-offline-script')) {
     const offlineJs = document.createElement('script');
     offlineJs.id = 'sk-offline-script';
-    offlineJs.src = 'sokoni-offline.js';
+    offlineJs.src = _skAbs('sokoni-offline.js');
     offlineJs.defer = true;
     (document.head || document.documentElement).appendChild(offlineJs);
   }
@@ -458,7 +482,7 @@
   if (!document.getElementById('sk-float-script')) {
     const floatJs = document.createElement('script');
     floatJs.id = 'sk-float-script';
-    floatJs.src = 'sokoni-float.js';
+    floatJs.src = _skAbs('sokoni-float.js');
     floatJs.defer = true;
     (document.head || document.documentElement).appendChild(floatJs);
   }
@@ -468,13 +492,13 @@
     const navCss = document.createElement('link');
     navCss.rel = 'stylesheet';
     navCss.id = 'sk-nav-engine-link';
-    navCss.href = 'sokoni-nav-engine.css';
+    navCss.href = _skAbs('sokoni-nav-engine.css');
     (document.head || document.documentElement).appendChild(navCss);
   }
   if (!document.getElementById('sk-nav-engine-script')) {
     const navJs = document.createElement('script');
     navJs.id = 'sk-nav-engine-script';
-    navJs.src = 'sokoni-nav-engine.js';
+    navJs.src = _skAbs('sokoni-nav-engine.js');
     navJs.defer = true;
     (document.head || document.documentElement).appendChild(navJs);
   }
@@ -484,13 +508,13 @@
     const feLink = document.createElement('link');
     feLink.rel = 'stylesheet';
     feLink.id = 'sk-form-engine-link';
-    feLink.href = 'sokoni-form-engine.css';
+    feLink.href = _skAbs('sokoni-form-engine.css');
     (document.head || document.documentElement).appendChild(feLink);
   }
   if (!document.getElementById('sk-form-engine-script')) {
     const feJs = document.createElement('script');
     feJs.id = 'sk-form-engine-script';
-    feJs.src = 'sokoni-form-engine.js';
+    feJs.src = _skAbs('sokoni-form-engine.js');
     feJs.defer = true;
     (document.head || document.documentElement).appendChild(feJs);
   }
@@ -504,7 +528,7 @@
       const lnk = document.createElement('link');
       lnk.rel  = 'stylesheet';
       lnk.id   = 'sk-platform-override';
-      lnk.href = 'sokoni-platform-override.css';
+      lnk.href = _skAbs('sokoni-platform-override.css');
       document.head.appendChild(lnk);
     }
     if (document.readyState === 'loading') {
@@ -530,7 +554,16 @@
     'superadmin', 'monitor', 'moderation', 'verification-admin',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
-  if (EXCLUDED.includes(page)) return;
+  /* firebase.json sets cleanUrls:true, so production serves /messages — never
+     /messages.html (that 301-redirects). The page key is therefore ALWAYS extension-free,
+     while the lists below are written with .html. Strip it from both sides before
+     comparing. EXCLUDED survived this only because somebody hand-wrote both spellings of
+     all 17 entries; NO_SEARCH did not, so all 12 of its pages silently never matched in
+     production and kept the header's search bar. Normalise once, here, rather than asking
+     every future list to remember the two spellings. */
+  const pageKey = page.replace(/\.html$/, '');
+  const _match = (list) => list.some((e) => e.replace(/\.html$/, '') === pageKey);
+  if (_match(EXCLUDED)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
   /* NOTE: pages that bake #sk-top-nav as static HTML (e.g. index.html) still need
      the CSS injection and event wiring below — _inject() handles that gracefully
@@ -542,8 +575,13 @@
     'dispute.html', 'invoice.html', 'notifications.html',
     'profile.html', 'reviews.html', 'referral.html',
     'subscriptions.html', 'loyalty.html',
+    /* Admin/console pages must NOT get the MARKETPLACE product search — typing an
+       email returned products (Johnnie Walker, MacBook…). Admin searches its own
+       entities within its panes. Both forms because cleanUrls serves prod extensionless
+       (the '.html' entries above silently never match in prod — see the note above). */
+    'admin.html', 'admin', 'super-admin.html', 'super-admin',
   ];
-  const showSearch = !NO_SEARCH.includes(page);
+  const showSearch = !_match(NO_SEARCH);
 
   /* ── CSS (injected into <head> immediately to prevent flash) ── */
   const CSS = `
@@ -1127,31 +1165,38 @@
     /* ── Mobile: logo+actions row, search second row ── */
     @media (max-width: 600px) {
       #sk-top-nav {
-        height: auto; min-height: 48px; flex-wrap: wrap; padding: 7px 12px 6px; gap: 4px;
+        /* ~21% shorter + iPhone safe-area: content clears the notch (padding-top folds in
+           env(safe-area-inset-top)); header is no longer over-tall on phones. */
+        height: auto; min-height: 40px; flex-wrap: wrap;
+        padding: calc(4px + env(safe-area-inset-top, 0px)) 12px 5px; gap: 3px;
         align-items: center;
       }
       #sk-nav-logo { order: 0; flex-shrink: 0; }
-      #sk-nav-logo img { height: 26px; }
-      #sk-nav-actions { order: 1; margin-left: auto; gap: 0; }
-      /* Search second row — full width */
+      #sk-nav-logo img { height: 24px; }
+      #sk-nav-actions { order: 1; margin-left: auto; gap: 3px; }   /* equal spacing between action icons */
+      /* Search second row — full width, tighter */
       #sk-nav-search-wrap {
-        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 2px;
+        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 3px;
       }
-      #sk-nav-search { padding: 8px 14px 8px 36px; font-size: 16px; }
+      /* !important: an inline/JS style (design-system search enhancer) otherwise wins and
+         keeps the input tall. Force the compact height so the header can actually shrink. */
+      #sk-nav-search { padding: 6px 14px 6px 34px !important; font-size: 16px; min-height: 0 !important; }
       /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }
       /* Activity visible on mobile */
       #sk-activity-btn { display: flex !important; }
       /* Cart pill: compact */
-      #sk-nav-cart { padding: 6px 10px; font-size: 11px; }
+      #sk-nav-cart { padding: 5px 9px; font-size: 11px; }
       /* Avatar */
-      #sk-nav-avatar { width: 28px; height: 28px; font-size: 12px; }
-      /* Icon buttons */
-      .sk-nav-icon-btn { width: 34px; height: 34px; font-size: 16px; }
-      /* Body padding: row1 ~48px + row2 search ~40px + gaps ~6px = ~94px */
-      body { padding-top: max(52px, calc(52px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(106px, calc(106px + env(safe-area-inset-top, 0px))) !important; }
+      #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
+      /* Icon buttons — 32px keeps a comfortable 44px-ish tap area with padding while trimming the row */
+      .sk-nav-icon-btn { width: 32px !important; height: 32px !important; font-size: 16px; }
+      /* Reserve exactly the MEASURED header height (--sk-header-h, published from the real
+         header bottom incl. safe-area) so content can never hide under it nor leave a gap.
+         The calc() fallback covers only the brief pre-measurement window. */
+      body { padding-top: var(--sk-header-h, calc(44px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: var(--sk-header-h, calc(80px + env(safe-area-inset-top, 0px))) !important; }
     }
     /* ── Very small phones (320–380px) ── */
     @media (max-width: 380px) {
@@ -1160,8 +1205,8 @@
       #sk-nav-cart { padding: 5px 8px; font-size: 10px; }
       #sk-nav-logo img { height: 24px; }
       #sk-nav-avatar { width: 26px; height: 26px; font-size: 11px; }
-      body { padding-top: max(48px, calc(48px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(100px, calc(100px + env(safe-area-inset-top, 0px))) !important; }
+      body { padding-top: var(--sk-header-h, calc(42px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: var(--sk-header-h, calc(76px + env(safe-area-inset-top, 0px))) !important; }
     }
 
     /* ── Global responsive table overflow (applies to all pages) ── */
@@ -1245,6 +1290,11 @@
             '<span id="sk-nav-search-icon" aria-hidden="true">🔍</span>' +
             '<input id="sk-nav-search" type="search" placeholder="Search products, services…" ' +
               'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ' +
+              /* Chrome ignores autocomplete="off" once it has a saved email for the site and
+                 pops its autofill dropdown over the search box. A field that is readonly at
+                 page-load is excluded from autofill; we drop readonly on first focus/pointer
+                 so typing still works normally. */
+              'readonly onfocus="this.removeAttribute(\'readonly\')" onpointerdown="this.removeAttribute(\'readonly\')" ' +
               'enterkeyhint="search" aria-label="Search SOKONI" ' +
               'onkeydown="if(event.key===\'Enter\'&&this.value.trim()){' +
                 'document.getElementById(\'sk-nav-search-dropdown\').classList.remove(\'open\');' +
@@ -1717,6 +1767,8 @@
     const input = document.getElementById('sk-nav-search');
     const dropdown = document.getElementById('sk-nav-search-dropdown');
     if (!input || !dropdown) return;
+    if (input.dataset.skWired) return;   /* idempotent — never double-wire (no duplicate listeners on re-mount) */
+    input.dataset.skWired = '1';
 
     let _acTimer = null;
     let _focusIdx = -1;
@@ -1957,10 +2009,17 @@
       _acTimer = setTimeout(function() { _query(q); }, 220);
     });
 
-    input.addEventListener('focus', function() {
+    /* Open the recent/trending panel ONLY on an explicit user click — NOT on bare
+       focus. Programmatic focus (or focus restored after a pane re-render) must
+       never pop the dropdown open; that was the "search opens by itself" bug. */
+    input.addEventListener('click', function() {
       if (this.value.trim().length === 0) _renderFocusState();
+    });
+
+    input.addEventListener('focus', function() {
       /* Warm the catalogue on first focus — the user has signalled intent to
-         search, so the data is loading while they type the first character. */
+         search, so the data is loading while they type the first character.
+         (Deliberately does NOT open the dropdown — see the click handler above.) */
       if (!_warmStarted && window.firebaseDB) {
         _warmStarted = true;
         import('/sokoni-firestore-search.js')

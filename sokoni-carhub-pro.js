@@ -10,6 +10,8 @@
 window.CarHubPro = (function(){
   'use strict';
 
+  var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+
   /* ── Utilities ── */
   const _esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -289,8 +291,8 @@ window.CarHubPro = (function(){
   function getMechanics(){
     try{
       const saved=JSON.parse(localStorage.getItem('chpro_mechanic_listings')||'[]');
-      return [...DEMO_MECHANICS,...saved];
-    }catch(e){ return DEMO_MECHANICS; }
+      return [...(_demoAllowed?DEMO_MECHANICS:[]),...saved];
+    }catch(e){ return _demoAllowed?DEMO_MECHANICS:[]; }
   }
 
   let activeMechSpec='all';
@@ -451,8 +453,8 @@ window.CarHubPro = (function(){
   function getParts(){
     try{
       const saved=JSON.parse(localStorage.getItem('chpro_parts_listings')||'[]');
-      return [...DEMO_PARTS,...saved];
-    }catch(e){ return DEMO_PARTS; }
+      return [...(_demoAllowed?DEMO_PARTS:[]),...saved];
+    }catch(e){ return _demoAllowed?DEMO_PARTS:[]; }
   }
 
   let activePartCat='all';

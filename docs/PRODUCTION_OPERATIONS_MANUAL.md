@@ -217,7 +217,7 @@ When AT approves the SOKONI alphanumeric sender ID:
 3. **AT Sender ID** — using shared shortcode until AT approves SOKONI branded sender
 4. **Quota-blocked CFs** — 23 functions pending GCP quota increase
 5. **External status page** — status.html is Firebase-hosted; inaccessible during Firebase outage
-6. **ODPC registration** — data controller registration pending submission
+6. **ODPC registration** — ✅ registered as Data Processor (Reg. No. 630-8669-F056, valid 28 Jul 2026 – 28 Jul 2028)
 
 ---
 

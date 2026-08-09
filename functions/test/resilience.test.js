@@ -513,6 +513,13 @@ describe('Inventory Fraud Rules — negative_stock', () => {
 });
 
 describe('Inventory Fraud composite scoring', () => {
+  /* Fixed, in-hours timestamp. These cases used Date.now(), and the off_hours
+   * rule scores 20 for getHours() >= 22 || <= 5 — so "Theft alone scores 50"
+   * returned 70 and "supervisor_bypass alone scores 15" returned 35, every
+   * night between 22:00 and 06:00 and in any overnight CI run. The product was
+   * correct; the fixture was wall-clock dependent. Local noon keeps every
+   * single-signal assertion measuring the one rule it names. */
+  const IN_HOURS_TS = new Date(2026, 0, 15, 12, 0, 0).getTime();
   test('Clean movement has zero score', () => {
     const m   = { type: 'sale', qty: 1, reason: 'Normal sale', ts: new Date().setHours(10) };
     const ctx = { avgAdj: 5, recentMovements: 2, sameUserSameProduct: 1, stockAfter: 10 };
@@ -521,7 +528,7 @@ describe('Inventory Fraud composite scoring', () => {
   });
 
   test('Theft alone scores 50', () => {
-    const m = { type: 'theft', qty: 5, reason: 'Theft reported', ts: Date.now() };
+    const m = { type: 'theft', qty: 5, reason: 'Theft reported', ts: IN_HOURS_TS };
     const { total, triggered } = computeRulesScore(m, {});
     expect(triggered).toContain('theft_pattern');
     expect(total).toBe(50);
@@ -548,7 +555,7 @@ describe('Inventory Fraud composite scoring', () => {
   });
 
   test('supervisor_bypass alone scores 15', () => {
-    const m   = { type: 'adjustment', qty: 1, supervisorOverride: true, reason: 'OK reason here', ts: Date.now() };
+    const m   = { type: 'adjustment', qty: 1, supervisorOverride: true, reason: 'OK reason here', ts: IN_HOURS_TS };
     const ctx = { avgAdj: 5, stockAfter: 5, sameUserSameProduct: 1, recentMovements: 1 };
     const { total, triggered } = computeRulesScore(m, ctx);
     expect(triggered).toContain('supervisor_bypass');

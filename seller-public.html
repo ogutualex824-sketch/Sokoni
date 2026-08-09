@@ -549,47 +549,47 @@
 
   /* ── read seller name from URL ── */
   const params = new URLSearchParams(window.location.search);
-  const sellerName = params.get("seller") || "";
+  let sellerName = params.get("seller") || "";   /* mutable: for ?id links, filled from products below */
+  const sellerId = params.get("id") || "";
 
-  if(!sellerName){
+  if(!sellerName && !sellerId){
     qs("spName").textContent = "Seller not found";
     return;
   }
 
-  document.title = sellerName + " — SOKONI";
+  document.title = (sellerName || "Shop") + " — SOKONI";
 
-  /* ── load data ── */
-  let allProducts = [];
-  try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
-
-  const products = allProducts.filter(p => (p.sellerName || "Sokoni Seller") === sellerName);
-
-  let allOrders = [];
-  try { allOrders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
-
-  /* orders that contain at least one product from this seller */
-  const sellerProductIds = new Set(products.map(p => p.id));
-  const sellerOrders = allOrders.filter(o =>
-    (o.items||[]).some(item => sellerProductIds.has(item.id))
-  );
-
-  let allRatings = {};
-  try { allRatings = JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{}; } catch(e){}
-  const ratings = allRatings[sellerName] || [];
-
-  let disputes = [];
-  try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
-
-  /* verification */
-  let verified = false;
-  try {
-    const v = JSON.parse(localStorage.getItem("sokoniSellerVerification")||"null");
-    if(v && v.status === "verified" && v.business === sellerName) verified = true;
-  } catch(e){}
-
-  /* location — prefer miniStore city, fall back to first product location */
-  let miniStore = null;
-  try { miniStore = JSON.parse(localStorage.getItem("sokoniStore") || localStorage.getItem("sokoniMiniStore")); } catch(e){}
+  /* ── MIGRATED: load canonical products from Firestore via the public /api/catalogue endpoint.
+     App-Check-free → works on ANY device (incl. iOS Safari) and on direct/shared links. NO
+     localStorage, NO demo fallback. Everything from here runs inside this async loader; a fetch
+     failure shows an error state (see the catch at the IIFE close). ── */
+  qs("spProductsGrid").innerHTML = '<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);padding:28px;">Loading shop…</div>';
+  (async function(){
+   try {
+    let allProducts = [];
+    const _byId = params.get("id");   /* stable sellerUid link (preferred over the legacy ?seller=name) */
+    if (_byId) {
+      const r = await fetch('/api/catalogue?sellerUid=' + encodeURIComponent(_byId) + '&cb=' + Date.now(), { cache:'no-store' });
+      const j = r.ok ? await r.json() : null;
+      allProducts = (j && j.ok && Array.isArray(j.products)) ? j.products : [];
+    } else {
+      const r = await fetch('/api/catalogue?cb=' + Date.now(), { cache:'no-store' });
+      const j = r.ok ? await r.json() : null;
+      allProducts = ((j && j.ok && Array.isArray(j.products)) ? j.products : [])
+        .filter(function(p){ return (p.sellerName || "Sokoni Seller") === sellerName; });
+    }
+    const products = allProducts;
+    /* ?id (sellerUid) links carry no name — take the shop name from its products. */
+    if (!sellerName && products.length) sellerName = products[0].sellerName || products[0].storeName || "Shop";
+    const sellerProductIds = new Set(products.map(p => p.id));
+    /* Seller-PRIVATE data (orders / ratings / disputes / verification / store profile) is NOT
+       exposed on a public buyer-facing page — it was fabricated from localStorage. A public shop =
+       identity + products. These stay empty until wired to their canonical Firestore sources. */
+    const sellerOrders = [];
+    const ratings = [];
+    const disputes = [];
+    const verified = false;
+    const miniStore = null;
   const CITY_NAMES = { nairobi:"Nairobi", mombasa:"Mombasa", kisumu:"Kisumu", nakuru:"Nakuru", eldoret:"Eldoret", thika:"Thika", nyeri:"Nyeri", machakos:"Machakos", malindi:"Malindi", garissa:"Garissa", kisii:"Kisii", kericho:"Kericho", meru:"Meru", nanyuki:"Nanyuki", kakamega:"Kakamega", bungoma:"Bungoma", kitale:"Kitale", bomet:"Bomet", lamu:"Lamu", naivasha:"Naivasha", nationwide:"Nationwide", worldwide:"Worldwide" };
   const locationRaw  = miniStore?.city || products[0]?.location || "nairobi";
   const locationName = CITY_NAMES[locationRaw] || locationRaw;
@@ -604,7 +604,7 @@
                         (products.find(function(p){ return p.sellerId; }) || {}).sellerId || null;
 
   const badgesEl = qs("spBadges");
-  var _vmap={}; try{_vmap=JSON.parse(localStorage.getItem('sokoniVerifiedSellers')||'{}');}catch(e){}
+  var _vmap={};   /* verified-seller badges: were localStorage; empty until wired to canonical Firestore verification (providers/{uid}.status) */
   var _vb=_vmap[sellerName]||{};
   if(!_vb.verifiedSeller && verified) _vb.verifiedSeller=true;
   if(_vb.verifiedSeller)  badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-seller">&#10003; Verified Seller</span>';
@@ -683,11 +683,12 @@
 
   /* ── products tab ── */
   if(!products.length){
+    qs("spProductsGrid").innerHTML = "";   /* clear the "Loading shop…" placeholder */
     qs("spProductsEmpty").style.display = "block";
   } else {
     qs("spProductsGrid").innerHTML = products.map(p => `
       <a class="sp-product-card" href="product.html?id=${p.id}">
-        <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">
         <div class="sp-product-info">
           <div class="sp-product-name">${p.name}</div>
           <div class="sp-product-price">KES ${Number(p.price).toLocaleString()}</div>
@@ -935,11 +936,10 @@
     `;
   }
 
-  /* ── followers state ── */
+  /* ── followers state ── canonical: populated from Firestore below (SokoniDB.getFollowerCount /
+     isFollowing / listenFollowerCount). No localStorage seed. ── */
   let spFollowerData = {};
-  try { spFollowerData = JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{}; } catch(e){}
   let spMyFollowing = {};
-  try { spMyFollowing = JSON.parse(localStorage.getItem("sokoniFollowing"))||{}; } catch(e){}
 
   const spFollowers = spFollowerData[sellerName] || 0;
   const spIsFollowing = !!spMyFollowing[sellerName];
@@ -1009,6 +1009,13 @@
   /* ── render achievements tab ── */
   renderAchievements(spAch, totalSales, avgRating, deliveryRate, spFollowers);
 
+   } catch(_e){
+     /* Error state — fetch/render failed. Never leave the shop on a spinner. */
+     qs("spProductsGrid").innerHTML = '<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.5);padding:28px;">Couldn\'t load this shop right now — check your connection and refresh.</div>';
+     console.warn('[seller-public] shop load failed:', _e && _e.message);
+   }
+  })();   /* end async shop loader */
+
 })();
 
 /* ── tab switching ── */
@@ -1039,6 +1046,7 @@ function switchTab(name, btn){
 </script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
+<script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>

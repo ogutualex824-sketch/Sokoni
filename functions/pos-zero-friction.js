@@ -8,6 +8,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { writeAudit } = require('./pos-audit');
 
 const db      = getFirestore();
 const REGION  = 'us-central1';
@@ -75,6 +76,41 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
 
+  /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
+     Side-effect-FREE: validate + price against the CANONICAL products collection and compute
+     what the order + stock deltas WOULD be, then return — NO idempotency claim, NO order, NO
+     stock write, NO payment, NO customer-visible effect. Lets the shadow compare the canonical
+     result against the legacy till with zero risk. Gated by an explicit flag existing callers
+     never pass, so the real settlement path below is completely untouched. */
+  if (data && data.dryRun === true) {
+    const refs  = items.map(it => db.collection('products').doc(it.productId));
+    const snaps = await Promise.all(refs.map(r => r.get()));
+    let serverSubtotal = 0;
+    const enriched = [], stockDeltas = [], differences = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i], s = snaps[i];
+      if (!s.exists) { differences.push({ productId: it.productId, error: 'not-found' }); continue; }
+      const p = s.data();
+      const serverPrice = p.salePrice || p.price || 0;
+      if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
+        differences.push({ productId: it.productId, field: 'unitPrice', expected: it.unitPrice, canonical: serverPrice });
+      }
+      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice });
+      serverSubtotal += serverPrice * (it.qty || 1);
+      const from = Number(p.stock || 0), to = Math.max(0, from - (it.qty || 0));
+      stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
+    }
+    return {
+      dryRun: true,
+      ok: differences.length === 0,
+      serverSubtotal,
+      grandTotal: serverSubtotal - (discountTotal || 0) + (taxTotal || 0),
+      items: enriched,
+      stockDeltas,
+      differences,
+    };
+  }
+
   /* ── 1. Idempotency claim — atomic ──
      The previous version read, checked, then set: two concurrent requests (double-tap, HTTP
      retry, two till terminals) could both read "not exists" and both proceed — the race window
@@ -93,8 +129,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   }
 
   try {
-    /* ── 2. Validate cart totals server-side — batch fetch all products ── */
-    const productRefs  = items.map(item => db.collection('posProducts').doc(item.productId));
+    /* ── 2. Validate cart totals server-side — batch fetch all products ──
+       Reads the CANONICAL `products` collection (Stage 2 convergence). posProducts was empty for
+       most merchants, so the till failed "product not found" on every sale; and it deducted a
+       separate stock counter from the one inventory/catalogue/dispatch use. One source now. */
+    const productRefs  = items.map(item => db.collection('products').doc(item.productId));
     const productSnaps = await Promise.all(productRefs.map(r => r.get()));
 
     let serverSubtotal = 0;
@@ -108,7 +147,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const serverPrice = prod.salePrice || prod.price || 0;
       const diff = Math.abs(serverPrice - (item.unitPrice || 0));
       if (diff > 1) _e(`Price mismatch for ${prod.name}: expected ${serverPrice}, got ${item.unitPrice}`);
-      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.categoryId });
+      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.category || prod.categoryId || null });
       serverSubtotal += serverPrice * (item.qty || 1);
     }
 
@@ -161,7 +200,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const { loyaltyAwarded } = await db.runTransaction(async txn => {
 
       /* ── PHASE 1: ALL READS (parallel) ── */
-      const productRefs = enrichedItems.map(item => db.collection('posProducts').doc(item.productId));
+      const productRefs = enrichedItems.map(item => db.collection('products').doc(item.productId));
       const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
       const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
 
@@ -187,7 +226,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
         const prod  = snap.data();
-        const stock = prod.stockQty ?? prod.quantity ?? 9999;
+        /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
+        const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)
           throw new Error(`Insufficient stock for ${prod.name}`);
       });
@@ -213,10 +253,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const item = enrichedItems[i];
         if (snap.data().trackInventory !== false) {
           txn.update(productRefs[i], {
-            stockQty:       FieldValue.increment(-(item.qty || 1)),
-            lastSoldAt:     FieldValue.serverTimestamp(),
-            totalUnitsSold: FieldValue.increment(item.qty || 1),
-            totalRevenue:   FieldValue.increment(item.unitPrice * (item.qty || 1)),
+            /* Deduct the CANONICAL `stock` — the same field inventory, catalogue and dispatch
+               read, so a till sale is immediately reflected everywhere. inventoryVersion bumps
+               so client caches invalidate. Pre-check above guarantees stock ≥ qty. */
+            stock:            FieldValue.increment(-(item.qty || 1)),
+            inventoryVersion: FieldValue.increment(1),
+            sold:             FieldValue.increment(item.qty || 1),
+            lastSoldAt:       FieldValue.serverTimestamp(),
+            totalUnitsSold:   FieldValue.increment(item.qty || 1),
+            totalRevenue:     FieldValue.increment(item.unitPrice * (item.qty || 1)),
+            updatedAt:        FieldValue.serverTimestamp(),
           });
         }
       });
@@ -506,7 +552,7 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     /* ── ALL READS FIRST ──
        The original read each product INSIDE the write loop (txn.get after txn.update), which
        Firestore rejects — every multi-item refund threw at runtime. */
-    const prodRefs = items.map(it => db.collection('posProducts').doc(it.productId));
+    const prodRefs = items.map(it => db.collection('products').doc(it.productId));   /* canonical — symmetric with sale deduction */
     const [refundSnap, ...prodSnaps] = await Promise.all([
       txn.get(refundRef),
       ...prodRefs.map(r => txn.get(r)),
@@ -530,9 +576,12 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     plan.forEach(pItem => {
       if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
         txn.update(pItem.ref, {
-          stockQty:       FieldValue.increment(pItem.qty),
-          totalUnitsSold: FieldValue.increment(-pItem.qty),
-          totalRevenue:   FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
+          stock:            FieldValue.increment(pItem.qty),   /* return canonical stock */
+          inventoryVersion: FieldValue.increment(1),
+          sold:             FieldValue.increment(-pItem.qty),
+          totalUnitsSold:   FieldValue.increment(-pItem.qty),
+          totalRevenue:     FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
+          updatedAt:        FieldValue.serverTimestamp(),
         });
       }
     });
@@ -552,7 +601,55 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     return false;
   });
 
+  /* Audit (canonical schema) — only on a real refund, not an idempotent replay. */
+  if (!alreadyDone) {
+    writeAudit(db, {
+      action:     'pos.refund',
+      actorUid:   managerId,
+      actorRole:  (auth && auth.token && auth.token.role) || null,
+      branchId:   sale.branchId || 'default',
+      objectType: 'order',
+      objectId:   saleId,
+      before:     { paymentStatus: 'paid' },
+      after:      { paymentStatus: 'refunded' },
+      delta:      -refundTotal,
+      reason:     reason || null,
+      metadata:   { refundId, refundTotal, refundMethod, merchantId, items: (items || []).map(i => ({ productId: i.productId, qty: i.qty })) },
+    });
+  }
+
   return { refundId, refundTotal, idempotent: alreadyDone };
+});
+
+/* ════════════════════════════════════════════════════════════════
+   posLogReprint — audit a receipt reprint (client-initiated, so logged via a callable).
+   Increments an authoritative per-order reprint counter and writes the canonical audit entry.
+════════════════════════════════════════════════════════════════ */
+exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
+  await _assertAuth(auth);
+  const { orderId, receiptType = 'sale', printerName = null, branchId = 'default', merchantId = null } = data || {};
+  if (!orderId) _e('orderId required');
+
+  const cntRef = db.collection('posReprintCounters').doc(String(orderId));
+  let count = 1;
+  try {
+    await db.runTransaction(async (txn) => {
+      const s = await txn.get(cntRef);
+      count = (((s.exists && s.data().count) || 0)) + 1;
+      txn.set(cntRef, { orderId: String(orderId), count, lastAt: FieldValue.serverTimestamp() }, { merge: true });
+    });
+  } catch (_) { /* counter is best-effort; the audit below is the record of truth */ }
+
+  writeAudit(db, {
+    action:     'pos.receipt_reprint',
+    actorUid:   auth.uid,
+    actorRole:  (auth.token && auth.token.role) || null,
+    branchId,
+    objectType: 'receipt',
+    objectId:   String(orderId),
+    metadata:   { receiptType, printerName, reprintCount: count, merchantId },
+  });
+  return { ok: true, reprintCount: count };
 });
 
 /* ════════════════════════════════════════════════════════════════

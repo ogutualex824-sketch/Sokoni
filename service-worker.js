@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260727083122-v124";
+const CACHE_VERSION = "sokoni-20260809103856-v495";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -267,7 +267,7 @@ const PRECACHE_STATIC = [
   "/sokoni-media.js", "/sokoni-creative.js", "/sokoni-ai-subscriptions.js",
   "/sokoni-entitlement.js", "/sokoni-subscription-brain.js",
   /* Enterprise v2.0 modules */
-  "/sokoni-qr.js", "/sokoni-barcode.js", "/sokoni-receipt-engine.js", "/sokoni-event-bus.js", "/sokoni-observability.js", "/sokoni-service-mesh.js", "/sokoni-gateway.js",
+  "/sokoni-qr.js", "/sokoni-barcode.js", "/sokoni-receipt-engine.js", "/sokoni-event-bus.js", "/sokoni-sync.js", "/sokoni-availability.js", "/sokoni-analytics.js", "/sokoni-reconcile.js", "/sokoni-branch.js", "/sokoni-observability.js", "/sokoni-service-mesh.js", "/sokoni-gateway.js",
   "/sokoni-payment-engine.js", "/sokoni-fraud-engine.js", "/sokoni-webhook-engine.js", "/sokoni-search-pro.js",
   "/firebase.js", "/seller.js", "/cart.js", "/checkout.js",
   "/inventory-manager.js", "/market-actions.js",

@@ -38,6 +38,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
 const logger                 = require('firebase-functions/logger');
+/* Canonical payment vocabulary — one definition, in shared/constants.js. */
+const { isPaid } = require('./shared/constants');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
@@ -391,7 +393,17 @@ exports.autoOnDisputeCreate = onDocumentCreated(
 
     /* Small, clear-evidence disputes → auto-resolve */
     const isSmall = amount <= (rule.autoResolveBelow || 1000);
-    const paymentConfirmed = payment?.status === 'completed';
+    /* payments/{id} stores UPPERCASE ('COMPLETE' | 'PENDING' | 'FAILED') while
+       this compared against lowercase 'completed', which matches neither — so
+       paymentConfirmed was permanently false and the small-dispute auto-resolve
+       below has never fired. It failed CLOSED (disputes fell through to manual
+       review rather than being wrongly resolved), which is why it went unnoticed.
+
+       isPaid() comes from shared/constants.js, the one definition. It had been
+       written out independently in booking.js and entitlement-engine.js; two
+       copies of a financial vocabulary is one drift from two different answers
+       to "has this been paid?". */
+    const paymentConfirmed = isPaid(payment?.status);
     const deliveryConfirmed = delivery?.status === 'delivered';
 
     if (isSmall && paymentConfirmed) {
@@ -414,8 +426,25 @@ exports.autoOnDisputeCreate = onDocumentCreated(
             sellerUid: dispute.sellerId,
             amount,
             reason: 'dispute_auto_resolved_buyer_wins',
-            status: 'approved',
-            approvedBy: 'automation',
+            /* 'pending', NOT 'approved'. autoOnRefundRequest below triggers on
+               refundRequests and returns immediately unless status === 'pending'.
+               Writing 'approved' here skipped it entirely, so the refund was
+               marked approved and then executed by nobody: no wallet credit, no
+               ledger entry, no notification, no idempotency guard. An approved
+               refund that never reaches the customer is worse than none, because
+               it looks settled.
+
+               Handing it to that pipeline instead gives duplicate protection, a
+               transactional idempotency re-check, the wallet credit, a ledger
+               entry, an audit action and the buyer notification — and routes
+               anything at or above requireManualAbove to human review. A dispute
+               rule decides the OUTCOME; the financial engine moves the money.
+
+               Deliberately 'pending' rather than a new value: the consumer
+               defines this vocabulary, and inventing 'pending_execution' would
+               bypass the trigger exactly as 'approved' did. */
+            status: 'pending',
+            requestedBy: 'automation:dispute_auto_resolve',
             createdAt: _ts(),
           });
         }

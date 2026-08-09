@@ -727,16 +727,16 @@ class P58EService {
           const rs = String(r).slice(0, W - 1);
           return String(l).slice(0, W - rs.length - 1).padEnd(W - rs.length - 1) + ' ' + rs;
         };
-        const center = s => {
-          const str = String(s).slice(0, W);
-          return ' '.repeat(Math.max(0, Math.floor((W - str.length) / 2))) + str;
-        };
+        /* Native alignment (enc.ac()) centers every line below. This MUST NOT also pad with spaces
+           — doing BOTH double-centers the text and shifts it off-line (the reported misalignment).
+           Just clamp to the paper width and let the printer center it. */
+        const center = s => String(s).slice(0, W);
 
         /* Wrap only descriptive prose. Labels, branding and status rows are
            authored to fit 32 columns and must never be reflowed. */
         const wrap = (t) => {
           const out = []; let line = '';
-          for (const word of String(t).split(/s+/)) {
+          for (const word of String(t).split(/\s+/)) {
             if (!word) continue;
             if ((line + (line ? ' ' : '') + word).length > W) { if (line) out.push(line); line = word.slice(0, W); }
             else line += (line ? ' ' : '') + word;
@@ -749,7 +749,8 @@ class P58EService {
            safe for any length — that is why headings use it. */
         const bigOrTall = (t) => (String(t).length <= Math.floor(W / 2) ? 'big' : 'tall');
         const label = (l, v) => enc.text(String(l).padEnd(13).slice(0, 13) + String(v).slice(0, W - 13)).lf();
-        const check = (t) => enc.text('✓ ' + String(t).slice(0, W - 2)).lf();
+        /* ASCII marker — the encoder maps any char >=256 (e.g. the ✓ glyph) to "?", so use [x]. */
+        const check = (t) => enc.text('[x] ' + String(t).slice(0, W - 4)).lf();
 
         /* ══ HEADER ══ */
         enc.al().text(sep).lf().ac()
@@ -799,7 +800,7 @@ class P58EService {
         /* ══ SYSTEM STATUS ══ */
         enc.ac().bold(true).text(center('SYSTEM STATUS')).lf().bold(false)
            .text(center('Overall Result')).lf()
-           .bold(true).sz('tall').text(center('✓ CERTIFIED')).lf().sz('normal').bold(false)
+           .bold(true).sz('tall').text(center('CERTIFIED')).lf().sz('normal').bold(false)
            .text(center('Ready to Accept Sales')).lf().lf();
 
         /* ══ FOOTER ══ */

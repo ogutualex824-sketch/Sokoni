@@ -35,7 +35,7 @@ function initEmployeeSession(){
   /* Apply employee restrictions based on role */
   const ROLE_PERMS = {
     cashier: {
-      tabs: ["orders-section","buyer-orders-section","seller-dms","seller-stats","customers-section","receipts-section"],
+      tabs: ["buyer-orders-section","seller-dms","seller-stats","customers-section","receipts-section"],
       hideSections: ["wallet-section","expense-section","analytics-section","sales-analytics-section","profit-section","employees-section","verify-section","ads-section","tax-section"],
       label: "💰 Cashier"
     },
@@ -51,7 +51,7 @@ function initEmployeeSession(){
     },
     inventory: {
       tabs: ["upload-section","products-section","bulk-upload-section","restock-section","inventory-section","qa-section"],
-      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","employees-section","orders-section","seller-dms","tax-section"],
+      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","employees-section","seller-dms","tax-section"],
       label: "📦 Inventory Clerk"
     },
     support: {
@@ -358,7 +358,9 @@ function showNotification(message,type){
         "notificationContainer"
     );
 
-    if(!notificationContainer) return;
+    /* No page container → route to the CANONICAL toast (Slice A) instead of silently dropping
+       the message. Preserves the in-container behaviour where a container exists. */
+    if(!notificationContainer){ if(window._sokoniToast) window._sokoniToast(message, type, 3000); return; }
 
     const notification =
     document.createElement("div");
@@ -811,7 +813,10 @@ async function addProduct(){
             location: productLocation,
             description: productDescription,
             kebsCert,
-            sellerName: user ? user.name : "Sokoni Seller",
+            /* Denormalise the STORE name (falls back to the person's name), so a
+               product card shows the shop, and it matches what shopNameSync fans
+               out on a later rename. */
+            sellerName: user ? (user.storeName || user.name) : "Sokoni Seller",
             sellerEmail: user ? user.email : "",
             views: 0,
             uploadedAt: Date.now(),
@@ -995,7 +1000,23 @@ async function addProduct(){
                     fsProduct.images = fsProduct.images.filter(function(v){ return !_isDataUri(v); });
                 }
 
+                /* Branch isolation (v474): tag the canonical product with the ACTIVE branch so
+                   POS/Inventory/Shop/Search scope it to one shop. sellerUid is already present;
+                   branchId is added alongside it. Never overwrite an existing branchId. */
+                try { if (fsProduct.branchId == null) fsProduct.branchId = window._currentBranchId || (window.SokoniShell && window.SokoniShell.activeShopId) || null; } catch (_) {}
+
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
+
+                /* Canonical PRODUCT event → SokoniSync → analytics/shop/inventory ingestion.
+                   Emitted at the write point (not on screen open). Fire-and-forget. */
+                try {
+                  if (window.SokoniSync && window.SokoniSync.productChanged) window.SokoniSync.productChanged({
+                    type: 'PRODUCT_CREATED', source: 'Seller', entityType: 'product',
+                    entityId: newProduct.id, id: newProduct.id,
+                    sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+                    timestamp: Date.now(), metadata: { name: newProduct.name || null }
+                  });
+                } catch (_) {}
 
                 /* ── SYNC TO INVENTORY MANAGER ──────────────────────────────────
                    The storefront product (top-level `products`) and the back-office
@@ -1123,6 +1144,18 @@ function displaySellerProducts(){
         )
 
     ) || [];
+
+    /* CROSS-ACCOUNT SAFETY: the sellerProducts cache is a single global key that can
+       hold a previous account's listings on a shared device. Render ONLY the
+       signed-in user's own products so another seller's inventory can never appear
+       here. No live uid (auth not resolved) → render nothing rather than risk a leak;
+       the hydrate/auth flow re-renders once the uid is known. Unstamped entries are
+       excluded. This is the render-side guard behind the sokoni-seller-products.js
+       cache purge. */
+    const _liveUid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+    sellerProducts = _liveUid
+        ? sellerProducts.filter(p => String(p.sellerUid || p.uid || '') === String(_liveUid))
+        : [];
 
     if(sellerProducts.length === 0){
 
@@ -1411,6 +1444,15 @@ function deleteProduct(index){
             console.warn("[seller] archive sync deferred:", e && e.message);
         }
     })();
+
+    /* Propagate the retirement across every surface (POS cache, inventory, search count) via
+       the ONE shared bus — same infrastructure as create/edit. Carries deleted:true so POS
+       removes THIS id immediately (no full rebuild) and cannot resurrect it. Idempotent by id. */
+    try {
+        if (window.SokoniSync && window.SokoniSync.productChanged) {
+            window.SokoniSync.productChanged({ productId: String(target.id || ''), id: String(target.id || ''), deleted: true, action: 'PRODUCT_DELETED', branchId: (target.branchId || null) }, { source: 'seller' });
+        }
+    } catch (_) {}
 
     showNotification("🗑️ Product Archived", "delete");
 }
@@ -1709,6 +1751,16 @@ function saveEditProduct() {
                 if (_cleanImgs.length) fsPatch.images = _cleanImgs; else delete fsPatch.images;
             }
             await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), fsPatch);
+            /* Propagate the edit (incl. Color/Material/Size) from the canonical product to
+               Shop/POS/Inventory/Search/Analytics — not a UI-only change. Fire-and-forget. */
+            try {
+              if (window.SokoniSync && window.SokoniSync.productChanged) window.SokoniSync.productChanged({
+                type: 'PRODUCT_UPDATED', source: 'Seller', entityType: 'product',
+                entityId: prod.id, id: prod.id,
+                sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+                timestamp: Date.now()
+              });
+            } catch (_) {}
         } catch (e) {
             console.warn('[seller] edit Firestore sync deferred:', e && e.message);
         }
@@ -1750,30 +1802,87 @@ function previewImage(event){
    SELLER STATS + COMMISSION
 ========================= */
 
-function updateSellerStats(){
+/* Seller dashboard headline stats — CANONICAL single source.
+   Previously these were FABRICATED: revenue = Σ(product listing prices), orders =
+   products × 3.2, all read from an empty-on-a-fresh-device localStorage array, which
+   is why a shop with real activity showed KES 0 / 0 orders. Now every business metric
+   is read from the Analytics Engine aggregate shops/{uid}/analytics/summary
+   (paidOrders / gmvShillings / platformRevenueShillings / sellerEarningsShillings),
+   maintained exactly-once server-side on every paid/settled order. Product count is a
+   server-side count of canonical products. On a read failure we show "—", NEVER a
+   fabricated number and never a misleading 0. */
+async function updateSellerStats(){
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
+    const moneyIds = ["totalRevenue","commissionAmount","netEarnings"];
 
-    let sellerProducts;
-    try {
-        sellerProducts = JSON.parse(localStorage.getItem("sellerProducts")) || [];
-    } catch(e) {
-        sellerProducts = [];
+    const u = JSON.parse(localStorage.getItem("sokoniUser") || "null");
+    const sellerUid = (u ? (u.uid || u.id || null) : null)
+                   || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+
+    if (!sellerUid || !window.firebaseDB) {
+        /* Not connected/signed in yet — neutral placeholders, never fabricated data. */
+        set("totalOrders", "—"); moneyIds.forEach(id => set(id, "KES —"));
+        return;
     }
 
-    const count = sellerProducts.length;
-    const totalRevenue = sellerProducts.reduce((sum, p) => sum + Number(p.price || 0), 0);
-    const commission = Math.round(totalRevenue * (SokoniCommission.pct("marketplace") / 100));
-    const netEarnings = totalRevenue - commission;
+    try {
+        const m  = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const db = window.firebaseDB;
 
-    const set = (id, val) => {
-        const el = document.getElementById(id);
-        if(el) el.innerText = val;
-    };
+        /* Canonical business metrics — the single source every dashboard must agree on. */
+        const snap = await m.getDoc(m.doc(db, "shops", sellerUid, "analytics", "summary"));
+        const a    = snap.exists() ? (snap.data() || {}) : {};
+        let   gmv    = Number(a.gmvShillings || 0);
+        let   orders = Number(a.paidOrders || 0);
+        const fee    = Number(a.platformRevenueShillings || 0);
+        let   net    = Number.isFinite(Number(a.sellerEarningsShillings)) && a.sellerEarningsShillings != null
+                         ? Number(a.sellerEarningsShillings) : (gmv - fee);
 
-    set("totalProducts", count);
-    set("totalOrders", count > 0 ? Math.floor(count * 3.2) : 0);
-    set("totalRevenue", "KES " + totalRevenue.toLocaleString());
-    set("commissionAmount", "KES " + commission.toLocaleString());
-    set("netEarnings", "KES " + netEarnings.toLocaleString());
+        /* Safety net: if this shop has no per-shop analytics summary yet (e.g. not backfilled
+           for this uid, or a freshly-active seller), derive REAL figures from the canonical
+           orders so the dashboard never shows a false 0 when orders actually exist. Bounded
+           read, still canonical (never localStorage). */
+        if (!snap.exists() || (orders === 0 && gmv === 0)) {
+            try {
+                const NOT_PAID = ["pending_payment","pending","awaiting_payment","cancelled","refunded","failed","expired"];
+                const os = await m.getDocs(m.query(m.collection(db, "orders"), m.where("sellerUid", "==", sellerUid), m.limit(500)));
+                let oCount = 0, oGmv = 0;
+                os.forEach(d => {
+                    const o = d.data() || {};
+                    if (o._apPaidCounted === true || !NOT_PAID.includes(String(o.status || ""))) {
+                        oCount++;
+                        oGmv += Math.max(0, Math.round(Number(o.orderTotal ?? o.total ?? 0) - Number(o.deliveryFee ?? 0)));
+                    }
+                });
+                if (oCount > 0) { orders = oCount; gmv = oGmv; net = gmv - fee; }
+            } catch(_) { /* keep the summary values on failure — never fabricate */ }
+        }
+
+        set("totalOrders",      orders.toLocaleString());
+        set("totalRevenue",     "KES " + gmv.toLocaleString());
+        set("commissionAmount", "KES " + fee.toLocaleString());
+        set("netEarnings",      "KES " + net.toLocaleString());
+
+        /* ACTIVE product count — archived/hidden products must NOT inflate it (#2/#8). A server
+           getCountFromServer over `uid==sellerUid` counts EVERYTHING incl. archived, so deleting
+           (=archiving) products left the tile at 103. A `where('status','!=',...)` /
+           `where('isVisible','!=',false)` aggregate would wrongly drop the legacy docs that have
+           no status/isVisible field at all (the 92/103 the catalogue warns about). So read the
+           docs (bounded) and apply the SAME visibility predicate the catalogue + grid use, then
+           count the survivors — active = active only, matching the grid and /api/catalogue. */
+        try {
+            const _snap = await m.getDocs(m.query(m.collection(db, "products"), m.where("uid", "==", sellerUid), m.limit(500)));
+            const _V = window.SokoniProductVisibility;
+            const _HIDDEN = new Set(["deleted", "removed", "hidden", "draft", "archived", "banned", "suspended", "paused", "inactive", "rejected"]);
+            const _isActive = _V ? _V.isActiveProduct : (v => !_HIDDEN.has(String(v.status || "").toLowerCase()) && v.isVisible !== false && v.isDeleted !== true && v.deleted !== true);
+            const _active = _snap.docs.filter(d => _isActive(d.data() || {})).length;
+            set("totalProducts", _active.toLocaleString());
+        } catch(_) { /* leave the existing product-count widget rather than fabricate */ }
+    } catch (e) {
+        console.warn("[sellerStats] canonical analytics read failed:", e && e.message);
+        /* Read failed (e.g. transient App Check) — show unknown, NEVER fabricated numbers. */
+        set("totalOrders", "—"); moneyIds.forEach(id => set(id, "KES —"));
+    }
 }
 
 /* =========================
@@ -1844,7 +1953,7 @@ function parseBulkCsv(input){
                 kebsCert:     get(row,"kebscert") || "",
                 image:        "assets/default-product.png",
                 sold: 0, views: 0, outOfStock: false,
-                sellerName:  user ? user.name : "Sokoni Seller",
+                sellerName:  user ? (user.storeName || user.name) : "Sokoni Seller",
                 sellerEmail: user ? user.email : "",
                 uploadedAt: Date.now()
             });
@@ -1874,20 +1983,50 @@ function showBulkPreview(){
     `).join("");
 }
 
-function confirmBulkUpload(){
+async function confirmBulkUpload(){
     if(!bulkParsedProducts.length) return;
-    let existing = [];
-    try { existing = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
-    existing.push(...bulkParsedProducts);
+    /* FALSE-SUCCESS FIX: bulk upload must PUBLISH to the canonical `products` collection, not just
+       write localStorage. Success is shown ONLY after the Firestore batch commits — otherwise a
+       merchant was told "uploaded!" while buyers saw nothing. Mirrors addProduct's write. */
+    if(!window.firebaseDB){ showNotification("Not connected yet — try again in a moment.", "error"); return; }
+    const u = JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    const sellerUid = (u ? (u.uid||u.id||null) : null)
+                   || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+    if(!sellerUid){ showNotification("Sign in required to publish products.", "error"); return; }
+
+    const rows = bulkParsedProducts.slice();
+    showNotification(`Publishing ${rows.length} product${rows.length>1?'s':''}…`, "info");
     try {
-        localStorage.setItem("sellerProducts", JSON.stringify(existing));
-        showNotification(`✅ ${bulkParsedProducts.length} products uploaded!`, "success");
+        const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const db = window.firebaseDB;
+        const base = Date.now();
+        const docs = rows.map((p, i) => {
+            const id = String(base + i);   /* product ids are Date.now()-style timestamps (catalogue sort) */
+            return { id, data: Object.assign({}, p, {
+                id, uid: sellerUid, sellerUid,
+                price: Number(p.price ?? 0),
+                stock: Number(p.stock ?? 0),
+                status: 'active',
+                createdAt: m.serverTimestamp(),
+                updatedAt: m.serverTimestamp(),
+                inventoryVersion: 0,
+            }) };
+        });
+        /* Commit in chunks of 400 (Firestore batch cap is 500). Only report success after ALL commit. */
+        let written = 0;
+        for (let i = 0; i < docs.length; i += 400) {
+            const batch = m.writeBatch(db);
+            docs.slice(i, i + 400).forEach(d => batch.set(m.doc(db, 'products', d.id), d.data));
+            await batch.commit();
+            written += Math.min(400, docs.length - i);
+        }
+        /* Writes confirmed → now refresh the local cache + UI (best-effort; the doc is the truth). */
+        try { const ex = JSON.parse(localStorage.getItem("sellerProducts"))||[]; ex.push(...docs.map(d=>d.data)); localStorage.setItem("sellerProducts", JSON.stringify(ex)); } catch(_){}
+        showNotification(`✅ ${written} product${written>1?'s':''} published to your shop.`, "success");
         cancelBulk();
-        displaySellerProducts();
-        updateSellerStats();
-        renderInventoryTable();
+        try { displaySellerProducts(); updateSellerStats(); renderInventoryTable(); } catch(_){}
     } catch(err) {
-        showNotification("Storage full! Try smaller batches.", "error");
+        showNotification("Upload failed — no products were published. " + ((err&&err.message)||"Please try again."), "error");
     }
 }
 
@@ -2226,7 +2365,7 @@ function previewStoreLogo(input){
     reader.readAsDataURL(file);
 }
 
-function saveMiniStore(){
+async function saveMiniStore(){
     const name      = document.getElementById("storeName")?.value.trim();
     const tagline   = document.getElementById("storeTagline")?.value.trim();
     const about     = document.getElementById("storeAbout")?.value.trim();
@@ -2255,7 +2394,40 @@ function saveMiniStore(){
     };
 
     localStorage.setItem("sokoniMiniStore", JSON.stringify(store));
-    showNotification("🏪 Store saved! Buyers can now visit your store.", "success");
+
+    /* Persist to Firestore. Without this the rename lived ONLY in localStorage, so
+       store.html (which reads sellers/{uid}.name) never updated AND the shopNameSync
+       Cloud Function — which fans the new name out to every already-uploaded
+       product's denormalised `sellerName` and the search indexes — never fired,
+       because it triggers on a sellers/{uid} UPDATE that was never happening. That
+       is the "shop-name change doesn't take effect on existing products" bug. */
+    const uid = user?.uid;
+    if (uid && window.firebaseDB) {
+        try {
+            const { doc, setDoc, serverTimestamp } = await import(
+                "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+            );
+            await setDoc(doc(window.firebaseDB, "sellers", uid), {
+                name,                 /* canonical field store.html reads + shopNameSync triggers on */
+                storeName: name,      /* mirror for readers that use storeName */
+                tagline, about, phone, email, website, sellerType,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+
+            /* Keep future uploads consistent — the product upload denormalises
+               user.storeName into each product's sellerName. */
+            if (user) {
+                user.storeName = name;
+                localStorage.setItem("sokoniUser", JSON.stringify(user));
+            }
+            showNotification("🏪 Store saved! Your existing products are being updated with the new name.", "success");
+        } catch (e) {
+            console.warn("[saveMiniStore] Firestore write failed:", e && e.message);
+            showNotification("🏪 Store saved locally, but syncing to your products failed — check your connection and save again.", "error");
+        }
+    } else {
+        showNotification("🏪 Store saved! Sign in to sync the name across your products and devices.", "success");
+    }
 
     const link = document.getElementById("visitMiniStoreLink");
     if(link){
@@ -2326,48 +2498,17 @@ window.toggleDigitalFields = toggleDigitalFields;
    FEATURE SHOP ON HOME PAGE
 ========================= */
 
+/* Featured placement is admin-curated (functions/admin-os.js → featuredShops/{uid}),
+   NOT self-serve. The previous implementation wrote only per-device localStorage and
+   falsely told the seller their shop was featured platform-wide — a false-success bug
+   (no backend write ever happened, so no other visitor could see it). Neutered to an
+   honest, non-committal message until a real seller-facing promotion backend exists.
+   Left in place because the onclick binding may persist in cached pages. */
 function featureShopOnHome(){
-    const hours  = Number(document.getElementById("shopFeatureDuration")?.value || 24);
-    const user   = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-    const store  = JSON.parse(localStorage.getItem("sokoniMiniStore")||"null");
-    const sellerName = user?.name || "Sokoni Seller";
-    const storeName  = store?.name || sellerName;
-
-    let products = [];
-    try { products = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
-    const myProducts = products.filter(p => (p.sellerName||"Sokoni Seller") === sellerName);
-    const loc = myProducts[0]?.location || "nairobi";
-
-    let allRatings = {};
-    try { allRatings = JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{}; } catch(e){}
-    const ratings = allRatings[sellerName] || [];
-    const avgRating = ratings.length ? (ratings.reduce((s,r)=>s+(r.avgScore||r.stars||0),0)/ratings.length).toFixed(1) : null;
-
-    const feature = {
-        sellerName,
-        storeName,
-        storeUrl:  `store.html?store=${encodeURIComponent(storeName)}`,
-        logo:      store?.logo || "",
-        banner:    store?.banner || "",
-        tagline:   store?.tagline || "Quality products from a trusted seller",
-        location:  loc,
-        productCount: myProducts.length,
-        avgRating,
-        endsAt:    Date.now() + hours * 3600000,
-        startedAt: Date.now()
-    };
-
-    let featured = [];
-    try { featured = JSON.parse(localStorage.getItem("sokoniFeaturedShops"))||[]; } catch(e){}
-    featured = featured.filter(f => f.sellerName !== sellerName); // replace if exists
-    featured.unshift(feature);
-    localStorage.setItem("sokoniFeaturedShops", JSON.stringify(featured));
-
     const statusEl = document.getElementById("featuredShopStatus");
     if(statusEl){
-        statusEl.innerHTML = `<span style="color:#71ff00;">✅ Your shop is now featured on the home page for ${hours} hours!</span>`;
+        statusEl.innerHTML = `<span style="color:rgba(255,255,255,0.6);">Featured placement is curated by the Sokoni team — high-performing verified shops are selected automatically. There's nothing to activate here.</span>`;
     }
-    showNotification(`🏠 Shop featured on home page for ${hours}h!`, "success");
 }
 
 window.featureShopOnHome = featureShopOnHome;
@@ -2835,74 +2976,44 @@ window.generateAiDescription = generateAiDescription;
 function renderWallet(){
   const el = document.getElementById("wallet-section");
   if(!el) return;
-
-  let wallet = { balance:0, transactions:[] };
-  try { wallet = JSON.parse(localStorage.getItem("sokoniWallet"))||wallet; } catch(e){}
-
-  let orders = [];
-  try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
-
-  /* Auto-credit from new delivered orders not yet credited */
-  const credited = new Set((wallet.transactions||[]).filter(t=>t.type==="credit").map(t=>t.ref));
-  orders.filter(o=>o.status==="delivered"&&!credited.has(o.id)).forEach(o=>{
-    const net = Math.round(Number(o.total||0) * 0.95);
-    wallet.balance += net;
-    wallet.transactions.unshift({ type:"credit", amount:net, ref:o.id, desc:`Order ${o.id} payment`, date:o.date||new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short"}) });
-  });
-  localStorage.setItem("sokoniWallet", JSON.stringify(wallet));
-
+  /* CANONICAL WALLET (false-success fix). The wallet is server-authoritative: the withdrawable
+     balance is `wallets/{uid}.balance` (shillings) and withdrawals go through the CF-backed
+     seller-wallet.html (requestWithdrawal → payoutRequests, success only after M-Pesa settles).
+     This tab previously FABRICATED a balance from localStorage orders and faked an M-Pesa send —
+     both removed. It now shows the REAL balance (read-only, best-effort) and routes the action to
+     the secure wallet page. Never write balance or claim success on the client. */
   el.innerHTML = `
     <div class="seller-section-header">
       <h2>💳 Seller Wallet</h2>
-      <p class="seller-section-sub">Your earnings balance — withdraw to M-PESA anytime</p>
+      <p class="seller-section-sub">Your real earnings balance — withdrawn securely to M-PESA</p>
     </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-      <div style="background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(113,255,0,0.03));border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;">
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Available Balance</div>
-        <div style="font-size:36px;font-weight:900;color:#71ff00;">KES ${wallet.balance.toLocaleString()}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:4px;">Withdrawable anytime</div>
-      </div>
-      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">💸 Withdraw to M-PESA</div>
-        <input type="tel" id="walletPhone" placeholder="07XXXXXXXX" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;margin-bottom:10px;font-family:inherit;">
-        <input type="number" id="walletAmount" placeholder="Amount (KES)" min="100" max="${wallet.balance}" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;margin-bottom:10px;font-family:inherit;">
-        <button onclick="withdrawWallet()" style="width:100%;padding:12px;background:linear-gradient(135deg,#4caf50,#2e7d32);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📱 Send to M-PESA</button>
-      </div>
+    <div style="background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(113,255,0,0.03));border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Available Balance</div>
+      <div id="walletBalanceLive" style="font-size:36px;font-weight:900;color:#71ff00;">…</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:4px;">Server-verified withdrawable balance</div>
     </div>
-
-    <!-- Transaction History -->
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">Transaction History</div>
-    <div>
-      ${(wallet.transactions||[]).slice(0,10).map(t=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:10px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:13px;color:white;font-weight:600;">${t.desc}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.35);">${t.date} · ${t.ref}</div>
-          </div>
-          <div style="font-size:15px;font-weight:900;color:${t.type==='credit'?'#71ff00':'#ff4444'};">${t.type==='credit'?'+':'-'}KES ${Number(t.amount).toLocaleString()}</div>
-        </div>
-      `).join("") || `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:12px 0;">No transactions yet — deliver orders to earn.</div>`}
-    </div>
+    <a href="seller-wallet.html" style="display:block;text-align:center;padding:14px;background:linear-gradient(135deg,#4caf50,#2e7d32);color:white;font-weight:800;border-radius:12px;text-decoration:none;font-size:14px;font-family:inherit;">📱 Open Wallet &amp; Withdraw to M-PESA →</a>
+    <p style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:10px;">Withdrawals are processed on your secure Wallet page and confirmed only after M-PESA settles.</p>
   `;
+  /* Best-effort real balance — never fabricate; on any failure just prompt to open the wallet. */
+  (async () => {
+    const set = (t) => { const b=document.getElementById("walletBalanceLive"); if(b) b.textContent=t; };
+    try {
+      const uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+               || (JSON.parse(localStorage.getItem("sokoniUser")||"null")||{}).uid || null;
+      if(!uid || !window.firebaseDB){ set("Open wallet →"); return; }
+      const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const snap = await m.getDoc(m.doc(window.firebaseDB, "wallets", String(uid)));
+      set("KES " + (snap.exists() ? Number(snap.data().balance || 0) : 0).toLocaleString());
+    } catch(e){ set("Open wallet →"); }
+  })();
 }
 
 function withdrawWallet(){
-  const phone  = document.getElementById("walletPhone")?.value.trim();
-  const amount = Number(document.getElementById("walletAmount")?.value||0);
-
-  let wallet = { balance:0, transactions:[] };
-  try { wallet = JSON.parse(localStorage.getItem("sokoniWallet"))||wallet; } catch(e){}
-
-  if(!phone||phone.length<9){ showNotification("Enter valid M-PESA number","error"); return; }
-  if(amount<100){ showNotification("Minimum withdrawal is KES 100","error"); return; }
-  if(amount>wallet.balance){ showNotification("Insufficient balance","error"); return; }
-
-  wallet.balance -= amount;
-  wallet.transactions.unshift({ type:"debit", amount, ref:"WTH"+Date.now(), desc:`M-PESA withdrawal to ${phone}`, date:new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short"}) });
-  localStorage.setItem("sokoniWallet", JSON.stringify(wallet));
-  showNotification(`✅ KES ${amount.toLocaleString()} sent to ${phone}!`,"success");
-  renderWallet();
+  /* False-success path REMOVED. Withdrawals must go through the CF-backed wallet flow
+     (requestWithdrawal → payoutRequests, gated IntaSend B2C) which only reports success after a
+     confirmed backend response. Never decrement a client balance or claim "sent to M-PESA" here. */
+  window.location.href = "seller-wallet.html";
 }
 
 window.withdrawWallet = withdrawWallet;
@@ -4115,55 +4226,67 @@ function renderInventoryTable(){
     }).join("");
 }
 
+/* FALSE-SUCCESS FIX (inventory): stock edits must update the canonical `products` doc, not just
+   localStorage — otherwise buyers/POS/dispatch see stale stock and oversell. Writes stock +
+   inventoryVersion(+1) + updatedAt; the increment triggers the canonical inventoryMovements audit.
+   Pattern: optimistic cache/UI, persist, and on failure ROLL BACK + tell the truth. */
+async function _persistStockToFirestore(productId, patch){
+    if(!window.firebaseDB) throw new Error("not connected");
+    const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    await m.updateDoc(m.doc(window.firebaseDB, 'products', String(productId)), Object.assign({}, patch, {
+        updatedAt: m.serverTimestamp(),
+        inventoryVersion: m.increment(1),
+        lastStockSource: 'seller-edit',
+    }));
+    return true;
+}
+function _applyStockLocal(productId, stock, outOfStock){
+    const products = JSON.parse(localStorage.getItem("sellerProducts")||"[]");
+    const idx = products.findIndex(p => String(p.id) === String(productId));
+    if(idx === -1) return null;
+    const prev = { stock: products[idx].stock, outOfStock: products[idx].outOfStock };
+    products[idx].stock = stock; products[idx].outOfStock = outOfStock;
+    localStorage.setItem("sellerProducts", JSON.stringify(products));
+    return prev;
+}
+function _rollbackStockLocal(productId, prev){
+    if(!prev) return;
+    const products = JSON.parse(localStorage.getItem("sellerProducts")||"[]");
+    const idx = products.findIndex(p => String(p.id) === String(productId));
+    if(idx !== -1){ products[idx].stock = prev.stock; products[idx].outOfStock = prev.outOfStock; localStorage.setItem("sellerProducts", JSON.stringify(products)); }
+    renderInventoryTable();
+}
+function _saveStockCanonical(productId, newStock, okMsg){
+    const outOfStock = newStock === 0;
+    const prev = _applyStockLocal(productId, newStock, outOfStock);
+    if(prev === null) return;
+    renderInventoryTable();
+    _persistStockToFirestore(productId, { stock: newStock, outOfStock })
+        .then(()=>{ showNotification(okMsg, outOfStock ? "delete" : "success"); checkLowStockAlerts(); })
+        .catch((e)=>{
+            _rollbackStockLocal(productId, prev);
+            showNotification("Stock NOT saved — " + ((e&&e.message)||"try again") + ". Buyers still see the old stock.", "error");
+        });
+}
+
 function saveStock(productId){
     const input = document.getElementById("stock-input-" + productId);
     if(!input) return;
     const newStock = Math.max(0, Number(input.value) || 0);
-
-    let products = JSON.parse(localStorage.getItem("sellerProducts")||"[]");
-    const idx = products.findIndex(p => String(p.id) === String(productId));
-    if(idx === -1) return;
-
-    products[idx].stock = newStock;
-    products[idx].outOfStock = newStock === 0;
-    localStorage.setItem("sellerProducts", JSON.stringify(products));
-
-    showNotification(`Stock updated to ${newStock}`, "success");
-    renderInventoryTable();
-    checkLowStockAlerts();
+    _saveStockCanonical(productId, newStock, `Stock updated to ${newStock}`);
 }
 
 function markOutOfStock(productId){
-    let products = JSON.parse(localStorage.getItem("sellerProducts")||"[]");
-    const idx = products.findIndex(p => String(p.id) === String(productId));
-    if(idx === -1) return;
-    products[idx].stock = 0;
-    products[idx].outOfStock = true;
-    localStorage.setItem("sellerProducts", JSON.stringify(products));
-    showNotification("Marked as Out of Stock", "delete");
-    renderInventoryTable();
+    _saveStockCanonical(productId, 0, "Marked as Out of Stock");
 }
 
 function restoreStock(productId){
     const qty = prompt("Enter stock quantity to restore:", "10");
     if(qty === null) return;
     const n = Math.max(1, Number(qty) || 1);
-
-    let products = JSON.parse(localStorage.getItem("sellerProducts")||"[]");
-    const idx = products.findIndex(p => String(p.id) === String(productId));
-    if(idx === -1) return;
-    products[idx].stock = n;
-    products[idx].outOfStock = false;
-
-    // Clear low stock alert for this product
-    let alerts = JSON.parse(localStorage.getItem("sokoniStockAlerts")||"[]");
-    alerts = alerts.filter(a => String(a.productId) !== String(productId));
-    localStorage.setItem("sokoniStockAlerts", JSON.stringify(alerts));
-
-    localStorage.setItem("sellerProducts", JSON.stringify(products));
-    showNotification(`Stock restored: ${n} units`, "success");
-    renderInventoryTable();
-    checkLowStockAlerts();
+    /* Clear any low-stock alert for this product (local cache only — cosmetic) */
+    try { let alerts = JSON.parse(localStorage.getItem("sokoniStockAlerts")||"[]"); alerts = alerts.filter(a => String(a.productId) !== String(productId)); localStorage.setItem("sokoniStockAlerts", JSON.stringify(alerts)); } catch(_){}
+    _saveStockCanonical(productId, n, `Stock restored: ${n} units`);
 }
 
 window.saveStock = saveStock;
@@ -5188,7 +5311,7 @@ renderMyStories();
 
 const DASH_PAGES = {
   overview: [
-    "upload-section","seller-stats","analytics-section","orders-section",
+    "upload-section","seller-stats","analytics-section",
     "products-section","flash-section","ads-section","buyer-orders-section"
   ],
   products: [
@@ -5200,7 +5323,7 @@ const DASH_PAGES = {
     "seller-ratings-section","profit-section"
   ],
   orders: [
-    "orders-section","buyer-orders-section","returns-section","offers-section"
+    "buyer-orders-section","returns-section","offers-section"
   ],
   customers: [
     "customers-section"
@@ -5247,7 +5370,7 @@ const DASH_PAGES = {
 };
 
 const ALL_DASH_SECTIONS = [
-  "upload-section","seller-stats","analytics-section","orders-section","products-section",
+  "upload-section","seller-stats","analytics-section","products-section",
   "flash-section","tax-section","ads-section","buyer-orders-section","seller-dms",
   "marketing-section","verify-section","bulk-upload-section","customer-analytics-section",
   "qa-section","employees-section","ai-desc-section","ministore-section","stories-section",

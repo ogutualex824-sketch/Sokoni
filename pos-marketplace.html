@@ -13,6 +13,13 @@
   <meta name="theme-color" content="#0f172a">
   <title>Marketplace Integration — SOKONI SmartPOS</title>
   <script src="sokoni-config.js"></script>
+  <!-- Printer stack: P58E BLE thermal receipt printing. sokoni-universal-printer.js
+       defines window.SokoniPrinter (transport); sokoni-bluetooth-printer.js defines
+       window.P58EPrinter (P58E engine) and silently auto-reconnects on load to a
+       previously-paired printer, so new paid orders can print automatically. -->
+  <script src="sokoni-universal-printer.js" defer></script>
+  <script src="sokoni-bluetooth-printer.js" defer></script>
+  <script src="sokoni-receipt.js" defer></script>
   <style>
     /* ── Design tokens ── */
     :root {
@@ -593,10 +600,15 @@
 </head>
 <body>
 
-<!-- ══ Auth gate ══ -->
+<!-- ══ Auth gate (self-diagnosing — never hangs) ══ -->
 <div id="auth-screen">
-  <span class="spinner spinner-lg"></span>
-  <div class="auth-msg">Verifying credentials…</div>
+  <span class="spinner spinner-lg" id="auth-spinner"></span>
+  <div class="auth-msg" id="auth-msg">Verifying credentials…</div>
+  <div id="auth-steps" style="margin-top:18px;display:flex;flex-direction:column;gap:9px;font-size:13px;min-width:230px;text-align:left"></div>
+  <div id="auth-actions" style="display:none;gap:10px;margin-top:20px">
+    <button type="button" onclick="location.reload()" style="background:#71ff00;color:#04120a;border:none;border-radius:12px;padding:12px 18px;font-weight:800;min-height:46px;cursor:pointer">&#8635; Retry</button>
+    <button type="button" onclick="_posSignOut()" style="background:transparent;color:#f5f5f5;border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:12px 18px;font-weight:700;min-height:46px;cursor:pointer">Sign out</button>
+  </div>
 </div>
 
 <!-- ══ Header ══ -->
@@ -743,14 +755,14 @@
 <script type="module">
 'use strict';
 
-import { initializeApp, getApps }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getApp, getApps, initializeApp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFunctions, httpsCallable }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 import { getFirestore, collection, query, where, orderBy, onSnapshot }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ══════════════════════════════════════
    Firebase init
@@ -763,11 +775,12 @@ const FB_CFG = window.SOKONI_CONFIG || {
   messagingSenderId: '24799054989',
   appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
 };
-const app = getApps().find(a => a.name === 'pos-marketplace')
-  || initializeApp(FB_CFG, 'pos-marketplace');
-const auth = getAuth(app);
-const db   = getFirestore(app);
-const fns  = getFunctions(app, 'us-central1');
+/* Bind to firebase.js's ALREADY-initialised app. firebase.js loads the 10.12.2 SDK; importing the
+   SAME version here makes the browser DEDUPE the module so getApps() returns that app — the one
+   holding the ONE warm logged-in session + App Check. The old 11.0.1 import was a SEPARATE SDK copy
+   whose registry never saw it, so getApps() was empty and it built a private app that cold-read the
+   session and hung on "Verifying credentials". Assigned in _bootstrapAuth() once firebase.js exists. */
+let app, auth, db, fns;
 
 /* ══════════════════════════════════════
    Helpers
@@ -871,51 +884,160 @@ let _reserveTimer   = null;
 
 const MANAGER_ROLES = new Set(['manager', 'owner', 'admin', 'super_admin']);
 
+/* Custom claims are inconsistent across the platform: some accounts carry `role` as a STRING,
+   others `roles` as an ARRAY, and a few an object. `_role` must ALWAYS be a plain string — a
+   non-string here crashed startup at `_role.replace(...)` ("POS Ready" step). Normalize once at
+   the source so every consumer (isManager, badge, tab gating) is safe. When given an array we
+   keep the HIGHEST privilege present so a manager is never silently downgraded to cashier. */
+function _normalizeRole(r) {
+  if (typeof r === 'string' && r) return r;
+  if (Array.isArray(r)) {
+    const mgr = r.find(x => MANAGER_ROLES.has(String(x)));
+    return String(mgr || r[0] || 'cashier');
+  }
+  if (r && typeof r === 'object') return String(r.role || r.name || 'cashier');
+  return 'cashier';
+}
+
 function isManager() { return MANAGER_ROLES.has(_role); }
 
 /* ══════════════════════════════════════
    Auth guard
 ══════════════════════════════════════ */
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    window.location.href = 'login.html?redirect=pos-marketplace.html';
-    return;
-  }
-  _uid = user.uid;
+let _authGateShown = false;
 
-  // Read role + sellerId from custom claims or Firestore profile
+/* ── Startup diagnostics ──────────────────────────────────────────────────
+   The gate reports each real startup step and CANNOT hang: a hard watchdog fails the
+   blocking step after 14s and surfaces Retry + Sign out. Steps mirror what actually runs —
+   we never show a ✓ for work the page didn't do. */
+const _STEPS = [
+  ['firebase', 'Firebase engine'],
+  ['session',  'Merchant session'],
+  ['access',   'Access & role'],
+  ['ready',    'POS ready'],
+];
+const _stepState = {};
+function _renderSteps() {
+  const box = document.getElementById('auth-steps'); if (!box) return;
+  const ico = (s) => s === 'ok' ? '<span style="color:#22c55e">✓</span>'
+    : s === 'fail' ? '<span style="color:#ff4d4d">✗</span>'
+    : '<span style="color:rgba(255,255,255,.4)">◌</span>';
+  box.innerHTML = _STEPS.map(([k, label]) => {
+    const st = _stepState[k] || 'idle';
+    const dim = st === 'idle' ? 'opacity:.45' : '';
+    const note = _stepState['_' + k] ? ' — <span style="color:' + (st === 'fail' ? '#ff8a8a' : 'rgba(255,255,255,.55)') + '">' + esc(_stepState['_' + k]) + '</span>' : '';
+    return '<div style="display:flex;gap:9px;align-items:center;' + dim + '">' + ico(st) + '<span>' + esc(label) + note + '</span></div>';
+  }).join('');
+}
+function _diag(key, state, note) {
+  _stepState[key] = state;
+  if (note) _stepState['_' + key] = note;
+  _renderSteps();
+}
+function _authFail(msg) {
+  if (_authGateShown) return;                    /* already inside the app */
+  const sp = document.getElementById('auth-spinner'); if (sp) sp.style.display = 'none';
+  const m  = document.getElementById('auth-msg');     if (m)  { m.textContent = msg || 'Startup could not complete.'; m.style.color = '#ff8a8a'; }
+  const a  = document.getElementById('auth-actions'); if (a)  a.style.display = 'flex';
+}
+async function _posSignOut() {
+  try { if (auth && auth.signOut) await auth.signOut(); } catch (_) {}
+  try { if (window.firebaseAuth && window.firebaseAuth.signOut) await window.firebaseAuth.signOut(); } catch (_) {}
+  try { localStorage.removeItem('sokoniUser'); } catch (_) {}
+  window.location.href = 'login.html?redirect=pos-marketplace.html';
+}
+window._posSignOut = _posSignOut;
+
+async function _proceedAuth(user) {
+  if (_authGateShown || !user) return;
+  _authGateShown = true;
+  _uid = user.uid;
+  _diag('session', 'ok');
+  _diag('access', 'pending');
+
+  /* Read role + sellerId from claims, but NEVER block forever — race a 4s timeout
+     and fall back to cashier + own uid so the POS always opens. */
   try {
-    const token = await user.getIdTokenResult();
-    _role     = token.claims?.role     || 'cashier';
+    const token = await Promise.race([
+      user.getIdTokenResult(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('token-timeout')), 4000)),
+    ]);
+    _role     = _normalizeRole(token.claims?.role ?? token.claims?.roles);
     _sellerId = token.claims?.sellerId || _uid;
   } catch {
+    /* Claims slow/unavailable — open as cashier on the own uid rather than block. Non-fatal. */
     _role     = 'cashier';
     _sellerId = _uid;
   }
+  _diag('access', 'ok', 'role: ' + _role);
+  _diag('ready', 'pending');
 
-  // Show UI
-  document.getElementById('auth-screen').style.display  = 'none';
-  document.getElementById('main-hdr').style.display     = 'flex';
-  document.getElementById('main-nav').style.display     = 'flex';
-  document.getElementById('main-content').style.display = 'block';
+  try {
+    document.getElementById('auth-screen').style.display  = 'none';
+    document.getElementById('main-hdr').style.display     = 'flex';
+    document.getElementById('main-nav').style.display     = 'flex';
+    document.getElementById('main-content').style.display = 'block';
+    /* String() guard: even if a future path leaves _role non-string, the badge never crashes. */
+    document.getElementById('role-badge').textContent = String(_role || 'cashier').replace(/_/g, ' ').toUpperCase();
+    if (!isManager()) document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
 
-  // Role badge
-  document.getElementById('role-badge').textContent = _role.replace('_', ' ').toUpperCase();
-
-  // Manager-only tabs: hide for cashier
-  if (!isManager()) {
-    document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
+    startClock();
+    initCCOrders();
+    if (isManager()) { loadReport(); loadPromotions(); startReserveAutoRefresh(); }
+    _diag('ready', 'ok');
+  } catch (e) {
+    /* A rendering/listener failure must not leave a blank screen — reveal the gate with the error. */
+    _authGateShown = false;
+    _diag('ready', 'fail', (e && e.message) || 'POS failed to render');
+    const scr = document.getElementById('auth-screen'); if (scr) scr.style.display = 'flex';
+    _authFail('The POS could not finish loading.');
   }
+}
 
-  startClock();
-  initCCOrders();
-  if (isManager()) {
-    loadReport();
-    loadPromotions();
-    // Reserve section loaded on demand but also kickoff auto-refresh
-    startReserveAutoRefresh();
+/* Resolve the signed-in user from any available auth ref (the bound `auth`, or firebase.js's
+   warm globals) — robust even if onAuthStateChanged is slow to fire. */
+function _resolvePosUser() {
+  try { if (auth && auth.currentUser) return auth.currentUser; } catch (_) {}
+  try { if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; } catch (_) {}
+  try { if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser; } catch (_) {}
+  return null;
+}
+
+/* Wait for firebase.js's warm app, bind the shared instances, THEN attach the auth listener + a
+   forgiving poll. Same-version SDK → window.firebase* interoperate with the modular helpers above.
+   No forced redirect — a signed-in user is never bounced; sign-in is only OFFERED after ~20s. */
+async function _bootstrapAuth() {
+  _diag('firebase', 'pending');
+  for (let i = 0; i < 80 && !window.firebaseApp && !getApps().length; i++) { await new Promise(r => setTimeout(r, 150)); }
+  try {
+    app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(FB_CFG));
+    auth = window.firebaseAuth || getAuth(app);
+    db   = window.firebaseDB || getFirestore(app);
+    fns  = window.firebaseFunctions || getFunctions(app, 'us-central1');
+  } catch (e) {
+    _diag('firebase', 'fail', (e && e.message) || 'init failed');
+    _authFail('Could not start Firebase on this device.');
+    return;
   }
-});
+  _diag('firebase', (app && auth) ? 'ok' : 'fail', (app && auth) ? '' : 'no app/auth');
+  if (!app || !auth) { _authFail('Could not start Firebase on this device.'); return; }
+  _diag('session', 'pending');
+
+  try { onAuthStateChanged(auth, (user) => { if (user) _proceedAuth(user); }); } catch (_) {}
+
+  let _posAuthTries = 0;
+  const _posAuthPoll = setInterval(() => {
+    if (_authGateShown) { clearInterval(_posAuthPoll); return; }
+    const u = _resolvePosUser();
+    if (u) { clearInterval(_posAuthPoll); _diag('session', 'ok'); _proceedAuth(u); return; }
+    if (++_posAuthTries >= 28) {   /* ~14s — FAIL the session step, surface Retry + Sign out (never hang) */
+      clearInterval(_posAuthPoll);
+      _diag('session', 'fail', 'no active login on this device');
+      _authFail('We couldn’t verify your session on this device.');
+    }
+  }, 500);
+}
+_bootstrapAuth();
 
 /* ══════════════════════════════════════
    Section switcher
@@ -967,16 +1089,149 @@ function initCCOrders() {
   attachSnapshot('collected');
 }
 
+/* ══════════════════════════════════════
+   AUTO-PRINT — print each NEW paid order to the connected P58E
+══════════════════════════════════════ */
+const _ccSeen = new Set();   /* order ids already handled (seeds on first snapshot) */
+let _ccPrimed = false;       /* first snapshot seeds without printing existing orders */
+
+function _autoPrintEnabled() {
+  /* Default ON; a merchant can disable with localStorage sokoni_pos_autoprint='off'. */
+  try { return localStorage.getItem('sokoni_pos_autoprint') !== 'off'; } catch (_) { return true; }
+}
+
+async function _printOrderReceipt(order, manual) {
+  try {
+    if (!manual && !_autoPrintEnabled()) return;
+    const SP = window.SokoniPrinter, P = window.P58EPrinter;
+    if (!SP || !SP.print) { console.log('[POS] printer stack not loaded'); return; }
+    /* Ensure a live GATT connection — try one silent reconnect if idle. */
+    if (!P || !P.isConnected) {
+      if (P && P.autoConnect) { try { await P.autoConnect(); } catch (_) {} }
+      if (!P || !P.isConnected) {
+        console.log('[POS] printer offline — receipt saved, print later:', order.orderId || order.id);
+        toast('🖨️ Printer offline — receipt saved, reprint later', 'warn');
+        return;
+      }
+    }
+    const items    = Array.isArray(order.items) ? order.items : [];
+    const total    = Math.round(Number(order.total || 0));
+    const subtotal = Math.round(Number(order.subtotal || total));
+    const delivery = Math.max(0, total - subtotal);
+    const shopName = order.sellerName || 'SOKONI';
+    const ref      = order.receiptNumber || order.orderId || order.id || '';
+    const dateStr  = new Date().toLocaleString('en-KE', { hour12: true });
+
+    await SP.print('custom', {
+      build (enc, W) {
+        /* Canonical layout engine — ASCII-sanitized (no "?"), wrapped at the real 58mm width,
+           native alignment. Falls back to the legacy manual build only if the engine isn't loaded. */
+        if (window.SokoniReceipt) {
+          const doc = SokoniReceipt.doc()
+            .center(shopName, { bold: true, size: 'big' })
+            .center('SOKONI Receipt')
+            .rule()
+            .row('Receipt', String(ref))
+            .row('Date', dateStr);
+          if (order.customerName) doc.row('Customer', String(order.customerName));
+          doc.row('Fulfillment', (order.fulfillmentType === 'pickup') ? 'Pickup' : 'Delivery');
+          if (order.fulfillmentType !== 'pickup') {
+            const _addr = order.deliveryAddress || order.address || order.customerAddress || '';
+            if (_addr) { doc.left('Deliver to:'); doc.left(String(_addr)); }
+            const _ph = order.customerPhone || order.buyerPhone || order.phone || '';
+            if (_ph) doc.row('Phone', String(_ph));
+          } else if (order.pickupLocation) {
+            doc.left('Collect at:'); doc.left(String(order.pickupLocation));
+          }
+          doc.rule();
+          items.forEach(it => doc.row(Number(it.qty || 1) + ' x ' + String(it.name || 'Item'), 'KES ' + Math.round(Number(it.price || it.unitPrice || 0))));
+          doc.rule().row('Subtotal', 'KES ' + subtotal);
+          if (delivery > 0) doc.row('Delivery', 'KES ' + delivery);
+          doc.row('TOTAL PAID', 'KES ' + total).rule().center('Paid via M-PESA');
+          if (order.mpesaCode) doc.center('M-PESA: ' + order.mpesaCode);
+          else if (ref) doc.center('Ref: ' + ref);
+          doc.rule().center('Thank you!').feed(2);
+          doc.renderTo(enc);
+          return;
+        }
+        /* ── legacy fallback (engine not yet loaded) ── */
+        const dash   = '-'.repeat(W);
+        const center = s => { s = String(s).slice(0, W); return ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s; };
+        const row    = (l, r) => { const rs = String(r).slice(0, W - 1); return String(l).slice(0, W - rs.length - 1).padEnd(W - rs.length - 1) + ' ' + rs; };
+        enc.text(center(shopName)).lf(); enc.text(center('SOKONI Receipt')).lf(); enc.text(dash).lf();
+        enc.text(row('Receipt', String(ref).slice(0, W - 9))).lf();
+        enc.text(row('TOTAL PAID', 'KES ' + total)).lf(); enc.text(dash).lf();
+        enc.text(center('Thank you!')).lf(); enc.lf(); enc.lf();
+      },
+    });
+    toast('🧾 Receipt printed: ' + ref, 'success');
+  } catch (e) {
+    console.warn('[POS] auto-print failed (recoverable):', e && e.message);
+  }
+}
+
+/* Floating printer control. Web Bluetooth requires a USER GESTURE to (re)connect,
+   so the cashier taps this once per session; afterwards new paid orders print
+   automatically. Colour shows live status: green=ready, orange=paired but offline
+   (tap), grey=none. */
+function _setupPrinterFab() {
+  if (document.getElementById('pos-printer-fab')) return;
+  const fab = document.createElement('button');
+  fab.id = 'pos-printer-fab';
+  fab.type = 'button';
+  fab.style.cssText = 'position:fixed;right:14px;bottom:78px;z-index:9999;padding:10px 14px;border:none;border-radius:24px;font:600 13px/1 system-ui,sans-serif;color:#fff;background:#64748b;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer';
+  const paint = () => {
+    const P = window.P58EPrinter;
+    const on = !!(P && P.isConnected), paired = !!(P && P.paired);
+    fab.style.background = on ? '#16a34a' : (paired ? '#ea580c' : '#64748b');
+    fab.textContent = on ? '🖨️ Printer ready' : (paired ? '🖨️ Tap to connect' : '🖨️ Set up printer');
+  };
+  fab.addEventListener('click', async () => {
+    const P = window.P58EPrinter;
+    if (!P) { toast('Printer engine still loading — try again', 'warn'); return; }
+    fab.textContent = '🖨️ Connecting…';
+    try {
+      let ok = await P.autoConnect();
+      if (!ok && P.requestAndPair) ok = !!(await P.requestAndPair());
+      paint();
+      toast(ok ? '🖨️ Printer connected — orders will print automatically' : 'Could not connect — power the printer on and retry', ok ? 'success' : 'warn');
+    } catch (e) { paint(); toast('Printer: ' + ((e && e.message) || 'failed'), 'error'); }
+  });
+  document.body.appendChild(fab);
+  paint();
+  const P = window.P58EPrinter;
+  if (P && P.on) ['connected', 'disconnected', 'reconnecting', 'reconnect_failed'].forEach(ev => P.on(ev, paint));
+  if (P && P.autoConnect && !P.isConnected) P.autoConnect().then(paint).catch(() => {});
+}
+window.addEventListener('load', () => setTimeout(_setupPrinterFab, 800));
+
 function attachSnapshot(status) {
   const colRef = collection(db, 'sellers', _sellerId, 'clickAndCollect');
-  const q = query(colRef, where('status', '==', status), orderBy('createdAt', 'desc'));
+  /* No orderBy → avoids a missing composite index (status + createdAt) that made this query fail
+     silently and show ZERO orders despite orders existing. Sort newest-first client-side. */
+  const q = query(colRef, where('status', '==', status));
 
   const unsub = onSnapshot(q, (snap) => {
-    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const _ms = (v) => (v && (v.toMillis ? v.toMillis() : (v.seconds ? v.seconds * 1000 : 0))) || 0;
+    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => _ms(b.createdAt) - _ms(a.createdAt));
     if (status === 'pending') {
       _pendingOrders = orders;
       updateCCBadge('pending', orders.length);
       updateNavBadge(orders.length);
+      /* Auto-print genuinely-NEW paid orders. The first snapshot seeds _ccSeen
+         without printing existing pending orders; later 'added' changes are new
+         paid orders arriving from the payment webhook (clickAndCollect/{ref}). */
+      try {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const o = { id: ch.doc.id, ...ch.doc.data() };
+          if (_ccSeen.has(o.id)) return;
+          _ccSeen.add(o.id);
+          if (_ccPrimed && o.paymentStatus === 'paid') _printOrderReceipt(o);
+        });
+        _ccPrimed = true;
+      } catch (e) { console.warn('[POS] auto-print scan failed', e && e.message); }
     } else if (status === 'ready') {
       _readyOrders = orders;
       updateCCBadge('ready', orders.length);
@@ -1050,6 +1305,11 @@ function renderOrderCard(o, status) {
   const payBadge  = isPrepaid
     ? '<span class="pay-badge prepaid">&#10003; Prepaid</span>'
     : '<span class="pay-badge counter">&#9679; Counter Payment</span>';
+  /* Fulfillment: pickup = in-store collection, delivery = rider. */
+  const _ff = o.fulfillmentType || 'delivery';
+  const ffBadge = _ff === 'pickup'
+    ? '<span class="pay-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8">&#127978; Ready for Pickup</span>'
+    : '<span class="pay-badge" style="background:rgba(251,146,60,0.15);color:#fb923c">&#128676; Awaiting Rider</span>';
 
   const items = Array.isArray(o.items) ? o.items : [];
   const itemsHtml = items.length
@@ -1067,12 +1327,16 @@ function renderOrderCard(o, status) {
   const pickupHtml = o.pickupTime
     ? `<div class="order-pickup">&#128336; Pickup: ${esc(o.pickupTime)}</div>` : '';
 
+  const _readyLabel = (_ff === 'pickup') ? '&#127978; Ready for Pickup' : '&#128666; Ready for Dispatch';
   let actionsHtml = '';
   if (status === 'pending') {
     actionsHtml = `
       <div class="order-actions">
         <button class="btn btn-green btn-sm" onclick="markOrderReady('${esc(o.id)}')" id="btn-ready-${esc(o.id)}">
-          &#10003; Mark Ready
+          ${_readyLabel}
+        </button>
+        <button class="btn btn-sm" style="background:#334155;color:#fff" onclick="printOrder('${esc(o.id)}')" id="btn-print-${esc(o.id)}">
+          &#128424; Print
         </button>
         <button class="btn btn-red-outline btn-sm" onclick="promptCancelOrder('${esc(o.id)}','${esc(o.customerName||'customer')}')">
           Cancel
@@ -1101,7 +1365,7 @@ function renderOrderCard(o, status) {
           ${o.customerPhone ? `<div class="order-phone">&#128222; ${esc(o.customerPhone)}</div>` : ''}
         </div>
         <div style="text-align:right">
-          ${payBadge}
+          ${payBadge}<br>${ffBadge}
           <div class="order-time" id="order-time-${esc(o.id)}">${esc(relTime(o.createdAt))}</div>
         </div>
       </div>
@@ -1119,11 +1383,16 @@ window.markOrderReady = async function(orderId) {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating…'; }
   try {
     await CF('updateClickAndCollectStatus')({ sellerId: _sellerId, orderId, status: 'ready' });
-    toast('Order marked ready for pickup', 'success');
+    /* Server now creates the rider dispatch job (delivery) + notifies the buyer — printing is
+       optional and never gates dispatch. */
+    const _o = (_pendingOrders || []).find(x => x.id === orderId) || {};
+    toast((_o.fulfillmentType === 'pickup')
+      ? '🏪 Marked ready — customer notified for pickup'
+      : '🛵 Ready for dispatch — sent to riders + customer notified', 'success');
   } catch (err) {
     console.error('markOrderReady', err);
     toast('Failed: ' + esc(err.message), 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '&#10003; Mark Ready'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128666; Ready for Dispatch'; }
   }
 };
 
@@ -1145,6 +1414,19 @@ window.promptCancelOrder = function(orderId, customerName) {
   document.getElementById('cancel-modal-msg').textContent =
     'Cancel the order for ' + (customerName || 'this customer') + '? This cannot be undone.';
   openModal('modal-cancel');
+};
+
+/* Manual print / reprint — reuses the SAME receipt data (no regeneration). The
+   click is a user gesture, so it can (re)connect the P58E if idle. */
+window.printOrder = async function(orderId) {
+  const all = (_pendingOrders || []).concat(_readyOrders || [], _collectedOrders || []);
+  const o = all.find(x => x.id === orderId);
+  if (!o) { toast('Order not found', 'warn'); return; }
+  const btn = document.getElementById('btn-print-' + orderId);
+  const t = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Printing…'; }
+  try { await _printOrderReceipt(o, true); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = t; } }
 };
 
 window.confirmCancelOrder = async function() {

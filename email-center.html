@@ -823,14 +823,14 @@ window.loadQueue = async function() {
 };
 
 window.cancelQueueItem = async function(id) {
-  if (!confirm('Cancel this queued email?')) return;
+  if (!(await SK.dialog.confirm('Cancel this queued email?'))) return;
   await updateDoc(doc(db,'emailQueue',id),{status:'cancelled'});
   loadQueue();
   showToast('Email cancelled');
 };
 
 window.retryFailedQueue = async function() {
-  if (!confirm('Retry all failed emails?')) return;
+  if (!(await SK.dialog.confirm('Retry all failed emails?'))) return;
   const snap = await getDocs(query(collection(db,'emailQueue'),where('status','==','failed'),limit(50)));
   const batch = writeBatch(db);
   snap.docs.forEach(d => batch.update(d.ref,{status:'pending',retryCount:0,nextAttempt:Timestamp.now()}));
@@ -840,7 +840,7 @@ window.retryFailedQueue = async function() {
 };
 
 window.purgeQueue = async function() {
-  if (!confirm('Delete all sent/skipped/cancelled items from the queue?')) return;
+  if (!(await SK.dialog.confirm('Delete all sent/skipped/cancelled items from the queue?', null, null, { title: 'Purge queue', variant: 'danger', confirmLabel: 'Delete all' }))) return;
   const snap = await getDocs(query(collection(db,'emailQueue'),where('status','in',['sent','skipped','cancelled']),limit(200)));
   const batch = writeBatch(db);
   snap.docs.forEach(d => batch.delete(d.ref));
@@ -942,7 +942,7 @@ window.sendBroadcast = async function() {
     } catch(e) { showToast('Failed to load segment: '+e.message); return; }
   }
   if (!targets.length) { showToast('No recipients found'); return; }
-  if (!confirm(`Send broadcast to ${targets.length} recipients?`)) return;
+  if (!(await SK.dialog.confirm(`Send broadcast to ${targets.length} recipients?`, null, null, { title: 'Send broadcast', confirmLabel: 'Send' }))) return;
   try {
     const fn = httpsCallable(fns, 'sendBroadcastEmail');
     const result = await fn({ subject, html: body, to: targets, category });
@@ -1115,7 +1115,7 @@ async function loadBounces() {
 }
 
 window.removeBounce = async function(id) {
-  if (!confirm('Unblock this email address?')) return;
+  if (!(await SK.dialog.confirm('Unblock this email address?'))) return;
   await deleteDoc(doc(db,'emailBounces',id));
   loadBounces();
   showToast('Address unblocked');

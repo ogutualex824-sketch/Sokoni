@@ -27,8 +27,14 @@
   <script src="sokoni-branch.js" defer></script>
   <!-- Keyboard avoidance for POS wizard — inline for immediate availability -->
   <script>
-  // Plug-and-Play boot guard — redirect first-time users to setup wizard
+  // Plug-and-Play boot guard — redirect first-time STANDALONE users to setup wizard.
+  // MUST NOT fire when embedded in the merchant shell: the shell opens pos.html directly for
+  // Cashier/Inventory, and sokoni_setup_complete / sokoni_merchant_id are only written by the
+  // standalone pos-setup flow — so an embedded merchant who never ran the wizard was hard-
+  // redirected to pos-setup.html on EVERY POS/Inventory entry (the splash). POS Setup stays
+  // reachable as the explicit sidebar module. Standalone first-run still redirects.
   (function() {
+    try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
     var setupDone = localStorage.getItem('sokoni_setup_complete');
     if (!setupDone || setupDone !== '1') {
       // Check if this is a fresh device (no merchantId stored)
@@ -281,17 +287,49 @@
       </button>
       <!-- Printer health chip — injected by PosPrintService at runtime; fallback static button -->
       <button class="pos-header-btn" id="pps-printer-chip"
-        onclick="window.open('pos-printer-setup.html','_blank','width=560,height=900')"
-        title="Printer not connected — click to set up" style="font-size:13px">
+        onclick="(window.openPrinterMenu?window.openPrinterMenu(this):(window.openPrinterSetup&&window.openPrinterSetup()))"
+        title="Printer — click to connect" style="font-size:13px">
         ⚪ 🖨️
       </button>
       <!-- SmartPOS 2.0: device hub status -->
       <button class="pos-header-btn" id="btn-device-hub" onclick="SPos.deviceHub.showPanel()" title="Peripherals" aria-label="Peripheral devices" style="position:relative;">
         🔌<span id="device-hub-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);">0</span>
       </button>
+      <!-- Fullscreen toggle — Fullscreen API on THIS tab. Never opens a second window/PWA
+           instance (that would fork Service Workers, Firestore listeners and printer state). -->
+      <button class="pos-header-btn" id="btn-fullscreen" onclick="posToggleFullscreen()" title="Toggle full screen" aria-label="Toggle full screen">⛶</button>
       <button class="pos-header-btn pos-kb-help-btn" onclick="SPos.modal.open('kb-help-modal')" title="Keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
     </div>
   </header>
+  <script>
+  /* Single-instance fullscreen: toggles the CURRENT tab in/out of fullscreen. No window.open,
+     no target=_blank, no new PWA — so the cart, printer connection, session and Firestore
+     listeners are all preserved. If the browser blocks it, we stay put and say so. */
+  function posToggleFullscreen () {
+    try {
+      if (!document.fullscreenElement) {
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (!req) { _posFsBlocked('Fullscreen is not supported in this browser.'); return; }
+        Promise.resolve(req.call(el, { navigationUI: 'hide' })).catch(function () {
+          _posFsBlocked('Fullscreen was blocked by the browser.');
+        });
+      } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+      }
+    } catch (e) { _posFsBlocked('Fullscreen was blocked by the browser.'); }
+  }
+  function _posFsBlocked (msg) {
+    try { if (window.SPos && SPos.toast) SPos.toast(msg, 'error'); else console.warn(msg); } catch (_) {}
+  }
+  document.addEventListener('fullscreenchange', function () {
+    var b = document.getElementById('btn-fullscreen');
+    if (!b) return;
+    var on = !!document.fullscreenElement;
+    b.textContent = on ? '🗗' : '⛶';
+    b.title = on ? 'Exit full screen' : 'Toggle full screen';
+  });
+  </script>
 
   <!-- SmartPOS 2.0: Peripheral status bar -->
   <div id="pos-peripheral-bar" style="display:none;background:#0e1117;border-bottom:1px solid rgba(255,255,255,0.06);padding:6px 16px;display:flex;align-items:center;gap:12px;overflow-x:auto;font-size:12px;">
@@ -302,6 +340,7 @@
 
   <nav class="pos-tabs" role="tablist" aria-label="POS sections">
     <button class="pos-tab active" role="tab" aria-selected="true"  data-tab="pos"      onclick="SPos.ui.switchTab('pos')">      <span class="tab-icon" aria-hidden="true">🛒</span><span>Checkout</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="orders"    onclick="SPos.ui.switchTab('orders')">  <span class="tab-icon" aria-hidden="true">🧾</span><span>Orders</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="inventory" onclick="SPos.ui.switchTab('inventory')"><span class="tab-icon" aria-hidden="true">📦</span><span>Inventory</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="reports"   onclick="SPos.ui.switchTab('reports')">  <span class="tab-icon" aria-hidden="true">📊</span><span>Reports</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="customers" onclick="SPos.ui.switchTab('customers')"><span class="tab-icon" aria-hidden="true">👤</span><span>Customers</span></button>
@@ -310,6 +349,7 @@
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="repair"    onclick="SPos.ui.switchTab('repair')">   <span class="tab-icon" aria-hidden="true">🔧</span><span>Repairs</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="audit"     onclick="SPos.ui.switchTab('audit')">    <span class="tab-icon" aria-hidden="true">📋</span><span>Audit</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="settings"  onclick="SPos.ui.switchTab('settings')" aria-label="POS Settings"><span class="tab-icon" aria-hidden="true">⚙️</span><span>Settings</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="more"      onclick="SPos.ui.switchTab('more')"     aria-label="More modules"><span class="tab-icon" aria-hidden="true">⋯</span><span>More</span></button>
   </nav>
 
   <div class="pos-content">
@@ -429,6 +469,16 @@
       </aside>
     </div>
 
+    <!-- More — control center: launches every merchant module without leaving the POS shell -->
+    <div id="panel-more" class="pos-panel">
+      <div id="more-body"></div>
+    </div>
+
+    <!-- Orders — unified order hub: in-store POS sales (live) + online marketplace orders (Phase 2) -->
+    <div id="panel-orders" class="pos-panel">
+      <div id="orders-body"><div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders…</p></div></div>
+    </div>
+
     <!-- Inventory -->
     <div id="panel-inventory" class="pos-panel">
       <div class="inv-toolbar">
@@ -463,7 +513,7 @@
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('today')">Today</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('week')">Week</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('month')">Month</button>
-        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-reports.html','_blank')" title="Full Analytics Dashboard">📊 Full Dashboard</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab('reports')" title="Full Analytics Dashboard">📊 Full Dashboard</button>
       </div>
       <div class="inv-tabs" style="margin:0;padding:0 12px;border-bottom:1px solid var(--border)">
         <button class="inv-tab rep-subtab active" data-subtab="summary" onclick="SPos.reports.switchSubTab('summary')">Summary</button>
@@ -478,7 +528,7 @@
         <input class="inv-search" id="cust-search" placeholder="Search customers..." oninput="SPos._debouncedCustSearch(this.value)">
         <button class="inv-btn inv-btn-green" onclick="SPos.customers.addDialog()">+ Add Customer</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.customers.exportCSV()">Export</button>
-        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-customers.html','_blank')" title="Full Customer Manager">👥 Full Manager</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab('customers')" title="Full Customer Manager">👥 Full Manager</button>
       </div>
       <div class="inv-body" id="customers-body"><div class="pos-empty"><div class="empty-icon">👤</div><p>No customers yet</p></div></div>
     </div>
@@ -529,11 +579,37 @@
           <div class="settings-row"><div class="settings-row-label"><strong>Phone</strong></div><input class="settings-input" id="s-biz-phone"></div>
           <div class="settings-row"><div class="settings-row-label"><strong>KRA PIN</strong></div><input class="settings-input" id="s-biz-pin"></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Receipt Footer</strong></div><input class="settings-input" id="s-receipt-footer" placeholder="Thank you!"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Sync</strong><span>Pull name, phone, address &amp; KRA PIN from your SOKONI profile</span></div><button class="inv-btn inv-btn-outline" onclick="SPos.profile.syncBusinessProfile({interactive:true,force:true,persist:true})">🔄 Sync from my profile</button></div>
           <div class="settings-row"><div></div><button class="settings-save-btn" onclick="SPos.settings.save()">Save</button></div>
         </div>
         <div class="settings-section">
+          <div class="settings-section-title">BUILD / VERSION</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Build</strong><span id="pos-build-info">Checking…</span></div><button class="inv-btn inv-btn-outline" id="pos-build-update" style="display:none" onclick="window.sokoniCheckForUpdates&&window.sokoniCheckForUpdates(this)">⬇️ Update Now</button></div>
+        </div>
+        <script>
+          /* Build-version evidence — shows what this DEVICE is running vs. what's DEPLOYED,
+             so "is it live?" is answered on screen. Refreshes each time Settings opens. */
+          (function () {
+            async function _posShowBuild() {
+              var el = document.getElementById('pos-build-info');
+              if (!el || !window.sokoniBuildInfo) return;
+              try {
+                var b = await window.sokoniBuildInfo();
+                el.innerHTML = 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
+                  (b.deployedCommit ? ' · ' + b.deployedCommit : '') +
+                  (b.stale ? ' — <span style="color:#ff8c00;font-weight:800;">update available</span>'
+                           : ' — <span style="color:#71ff00;">up to date</span>');
+                var btn = document.getElementById('pos-build-update');
+                if (btn) btn.style.display = b.stale ? '' : 'none';
+              } catch (_) { el.textContent = 'unavailable'; }
+            }
+            window._posShowBuild = _posShowBuild;
+            setTimeout(_posShowBuild, 1500);
+          })();
+        </script>
+        <div class="settings-section">
           <div class="settings-section-title">PRINTER</div>
-          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="window.open('pos-printer-setup.html','_blank')">&#9881;&#65039; Printer Setup</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="(window.openPrinterMenu?window.openPrinterMenu(this):(window.openPrinterSetup&&window.openPrinterSetup()))">&#128295; Connect Printer</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Paper Width</strong></div><select class="settings-input" id="s-paper-width" onchange="SPos.settings.savePaperWidth(this.value)"><option value="58">58mm</option><option value="80">80mm</option></select></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Auto-print receipts</strong><span>After every sale</span></div><label class="toggle"><input type="checkbox" id="s-auto-print" onchange="SPos.settings.saveToggle('autoPrint',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Open Cash Drawer</strong><span>After cash payment</span></div><label class="toggle"><input type="checkbox" id="s-cash-drawer" onchange="SPos.settings.saveToggle('openCashDrawer',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
@@ -731,6 +807,14 @@
   <div class="modal" style="max-width:280px">
     <div class="modal-header"><span class="modal-title">Cashier Login</span></div>
     <div class="modal-body" style="text-align:center">
+      <!-- Signed-in SOKONI account (populated by SPos.profile.fillPinModal) + link to the
+           canonical profile, so this "profile" surface reflects the account and opens it. -->
+      <div id="pin-acct" style="display:none;text-align:left;background:var(--bg2,rgba(255,255,255,.03));border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Signed in as</div>
+        <div id="pin-acct-name" style="font-size:13.5px;font-weight:800"></div>
+        <div id="pin-acct-sub" style="font-size:11.5px;color:var(--txt2)"></div>
+        <button class="modal-btn modal-btn-primary" style="width:100%;margin-top:9px" onclick="SPos.profile.open()">👤 Open my SOKONI Profile →</button>
+      </div>
       <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Enter your 4-digit PIN</div>
       <div class="pin-dots"><div class="pin-dot" id="pd-1"></div><div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div><div class="pin-dot" id="pd-4"></div></div>
       <div id="pin-error" style="color:var(--red);font-size:11px;min-height:16px;margin-bottom:6px"></div>
@@ -1439,6 +1523,8 @@
      JS parse + compile blocking during page load). See CHANGELOG 2026-07-22. ══ -->
 <!-- ══ Core database layer ══ -->
 <script src="pos-db.js" defer></script>
+<!-- Canonical products → POS inventory screen (offline-safe merge; pure core, unit-tested) -->
+<script src="pos-inventory-sync.js" defer></script>
 <!-- ══ Enterprise resilience (load before pos.js) ══ -->
 <script src="pos-resilience.js" defer></script>
 <script src="pos-idempotency.js" defer></script>
@@ -1920,15 +2006,17 @@ var SPosBranch = (function(){
 <script>
 /* Auto-init universal print engine after POS loads */
 document.addEventListener('DOMContentLoaded', function() {
-  if (window.SokoniPosprint) {
-    SokoniPosprint.init().catch(function() {});
-    SokoniPosprint.on('printer:connected', function(d) {
+  /* Keep initialising the v2 engine (queue/transport plumbing) but DO NOT read printer
+     status from it — status now has exactly one source: PosPrintService's canonical state. */
+  if (window.SokoniPosprint) { SokoniPosprint.init().catch(function() {}); }
+
+  /* Single status source (Phase 2): subscribe #printer-status-txt to the ONE printer-state
+     machine. Fires immediately with the current state, then on every change. No polling,
+     no competing calculation. */
+  if (window.PosPrintService && typeof PosPrintService.onState === 'function') {
+    PosPrintService.onState(function(m) {
       const el = document.getElementById('printer-status-txt');
-      if (el) el.textContent = '✅ ' + (d.name || 'Connected');
-    });
-    SokoniPosprint.on('printer:disconnected', function() {
-      const el = document.getElementById('printer-status-txt');
-      if (el) el.textContent = 'Disconnected';
+      if (el) el.textContent = m.icon + ' ' + (m.name || m.text);
     });
   }
 
@@ -1955,10 +2043,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const shortcutBar = document.createElement('div');
     shortcutBar.style.cssText = 'display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap';
     shortcutBar.innerHTML = [
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-inventory.html\',\'_blank\')">📦 Full Inventory Manager</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-inventory-intelligence.html\',\'_blank\')" style="border-color:rgba(113,255,0,0.4);color:#71ff00">🧠 Inventory Intelligence</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-suppliers.html\',\'_blank\')">🏭 Suppliers &amp; POs</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-reports.html\',\'_blank\')">📊 Full Reports</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'inventory\')">📦 Full Inventory Manager</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="location.href=\'pos-inventory-intelligence\'" style="border-color:rgba(113,255,0,0.4);color:#71ff00">🧠 Inventory Intelligence</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'inventory\');SPos.inv.showTab(\'suppliers\')">🏭 Suppliers &amp; POs</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'reports\')">📊 Full Reports</button>',
     ].join('');
     invPanel.insertBefore(shortcutBar, invPanel.firstChild);
   }
@@ -2825,6 +2913,100 @@ window.SPosCustomer = (function () {
     obs.observe(cartItems, { childList: true, subtree: true });
   });
 
+})();
+</script>
+
+<script>
+/* ── Merchant Shell bridge ─────────────────────────────────────────────────
+   When the POS runs inside the Merchant Application Shell (merchant.html), the
+   shell owns navigation. This lets the shell deep-switch POS tabs without any
+   reload, and pushes the POS printer status + cashier name UP to the shell so
+   the global top bar reflects them. No-op when the POS is opened standalone. */
+(function () {
+  if (window.parent === window) return;   /* standalone — no shell */
+
+  function ready () { return !!(window.SPos && SPos.ui && typeof SPos.ui.switchTab === 'function'); }
+
+  /* Robust tab switch: the shell's message often arrives BEFORE the POS finishes booting
+     (all its scripts + SPos), so a naive switchTab() was dropped and the POS stayed on the
+     default Checkout tab — which is exactly why every shell button showed Checkout. Retry
+     until SPos is ready (up to ~12s), then apply. Latest requested tab wins. */
+  var wantTab = null, applying = false;
+  function applyTab (tab) {
+    wantTab = tab || 'pos';
+    if (applying) return;
+    applying = true;
+    var tries = 0;
+    (function attempt () {
+      if (!wantTab) { applying = false; return; }
+      if (ready()) {
+        try { SPos.ui.switchTab(wantTab); } catch (_) {}
+        wantTab = null; applying = false; return;
+      }
+      if (++tries > 120) { applying = false; return; }   /* ~12s */
+      setTimeout(attempt, 100);
+    })();
+  }
+  function runAction (act) {
+    var tries = 0;
+    (function attempt () {
+      if (!window.SPos) { if (++tries > 120) return; return void setTimeout(attempt, 100); }
+      try {
+        if (act === 'devices' && SPos.deviceHub && SPos.deviceHub.showPanel) SPos.deviceHub.showPanel();
+        else if (act === 'printer' && window.openPrinterMenu) window.openPrinterMenu();
+      } catch (_) {}
+    })();
+  }
+
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    /* Shell pushes its printer state down → mirror it in every POS status surface. */
+    if (d.__sokoniPrinterState && window.__sokoniApplyShellPrinter) { window.__sokoniApplyShellPrinter(d.state || { connected: false }); return; }
+    if (!d.__sokoniShell) return;
+    if (d.action === 'switchTab') applyTab(d.tab || 'pos');
+    else if (d.action === 'devices' || d.action === 'printer') runAction(d.action);
+    /* Shell-owned printer: this POS iframe is the single printer HOST. The shell routes every
+       module's print/reconnect/forget/test here so there is only ONE printer manager. */
+    else if (d.action === 'print') {
+      var r = d.receipt || {};
+      try {
+        if (window.PosPrintService && PosPrintService.smartPrint) PosPrintService.smartPrint(r, { viaShell: true });
+        else if (window.PosPrintService && PosPrintService.printReceipt) PosPrintService.printReceipt(r, {});
+        else if (window.PosPrinter) PosPrinter.print(r);
+      } catch (_) {}
+    }
+    else if (d.action === 'reconnectPrinter') { try { var e2 = window.SokoniPrinter || window.PrinterManager; if (e2 && e2.autoReconnect) e2.autoReconnect(); else if (window.openPrinterMenu) window.openPrinterMenu(); } catch (_) {} }
+    else if (d.action === 'forgetPrinter') {
+      try {
+        if (window.SokoniPrinter && window.SokoniPrinter.forget) window.SokoniPrinter.forget();
+        if (window.P58EPrinter && window.P58EPrinter.forget) window.P58EPrinter.forget();
+        ['spp_profile','pps_store_profile','sokoni_printer_last_print','p58e_paired_device','pps_remember']
+          .forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+      } catch (_) {}
+    }
+    else if (d.action === 'testPrint') { try { var e3 = window.SokoniPrinter || window.PrinterManager; if (e3 && e3.testPrint) e3.testPrint(); } catch (_) {} }
+  });
+
+  /* On first load the shell also encodes the target tab in the hash (pos.html#orders), so the
+     very first navigation lands correctly even if the message raced the boot. */
+  try {
+    var h = (location.hash || '').replace('#', '').trim();
+    if (h) applyTab(h);
+  } catch (_) {}
+
+  /* Tell the shell we're alive so it can (re)send the desired tab + we push live status. */
+  var lastP = null, lastU = null;
+  function tick () {
+    try {
+      window.parent.postMessage({ __sokoniPos: true, type: 'ready' }, location.origin);
+      var up = !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected));
+      if (up !== lastP) { lastP = up; window.parent.postMessage({ __sokoniPos: true, type: 'printerStatus', connected: up }, location.origin); }
+      var u = (window.SPos && SPos.state && SPos.state.currentCashier && SPos.state.currentCashier.name) || null;
+      if (u && u !== lastU) { lastU = u; window.parent.postMessage({ __sokoniPos: true, type: 'userInfo', name: u }, location.origin); }
+    } catch (_) {}
+  }
+  setInterval(tick, 2000); tick();
 })();
 </script>
 

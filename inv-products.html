@@ -1260,7 +1260,7 @@ th .inv-sort-icon::before{content:'↕'}
 
   async function bulkDuplicate() {
     if (!_selected.size) return;
-    if (!confirm(`Duplicate ${_selected.size} product(s)? Copies will be created as inactive drafts with zero stock.`)) return;
+    if (!(await SK.dialog.confirm(`Duplicate ${_selected.size} product(s)? Copies will be created as inactive drafts with zero stock.`, null, null, { title: 'Duplicate products', confirmLabel: 'Duplicate' }))) return;
     let done = 0;
     for (const p of _productsForSelected()) {
       try {
@@ -1282,7 +1282,7 @@ th .inv-sort-icon::before{content:'↕'}
 
   async function bulkArchive() {
     if (!_selected.size) return;
-    if (!confirm(`Archive ${_selected.size} product(s)? They will be hidden from active views but not deleted.`)) return;
+    if (!(await SK.dialog.confirm(`Archive ${_selected.size} product(s)? They will be hidden from active views but not deleted.`, null, null, { title: 'Archive products', confirmLabel: 'Archive' }))) return;
     let done = 0;
     for (const id of _selected) {
       try { await SokoniInventory.updateProduct(id, { active: false }); done++; } catch (_) {}
@@ -1293,7 +1293,7 @@ th .inv-sort-icon::before{content:'↕'}
   }
 
   async function bulkDelete() {
-    if (!confirm(`Delete ${_selected.size} products? This cannot be undone.`)) return;
+    if (!(await SK.dialog.confirm(`Delete ${_selected.size} products? This cannot be undone.`, null, null, { title: 'Delete products', variant: 'danger', confirmLabel: 'Delete' }))) return;
     let done = 0;
     for (const id of _selected) {
       try { await SokoniInventory.deleteProduct(id); done++; } catch (_) {}
@@ -1316,7 +1316,7 @@ th .inv-sort-icon::before{content:'↕'}
   /* ── PRODUCT ACTIONS ── */
   function editProduct(id) { openAddProductModal(id); }
   async function deleteProduct(id) {
-    if (!confirm('Delete this product?')) return;
+    if (!(await SK.dialog.confirm('Delete this product?', null, null, { title: 'Delete product', variant: 'danger', confirmLabel: 'Delete' }))) return;
     try { await SokoniInventory.deleteProduct(id); showToast('Product deleted', 'success'); loadProducts(); }
     catch (e) { showToast('Delete failed: ' + e.message, 'error'); }
   }

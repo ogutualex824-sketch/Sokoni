@@ -699,8 +699,8 @@ function _renderEscrows(list){
     '</tr>';
   }).join('');
 }
-window._releaseEscrow=function(escrowId){
-  if(!confirm('Release escrow '+escrowId+' to seller?'))return;
+window._releaseEscrow=async function(escrowId){
+  if(!(await SK.dialog.confirm('Funds will be released to the seller immediately.', null, null, { title: 'Release escrow '+escrowId+'?', variant: 'danger', confirmLabel: 'Release' })))return;
   _cf('finosReleaseEscrow')({escrowId,reason:'Admin manual release'})
   .then(function(){_toast('Escrow released','green');_loadEscrows();}).catch(function(e){_toast(e.message,'red');});
 };
@@ -940,13 +940,13 @@ window._lookupWallet=function(){
       '</div></div>';
   }).catch(function(e){_toast('Error: '+e.message,'red');});
 };
-window._adjustWallet=function(){
+window._adjustWallet=async function(){
   var uid=(document.getElementById('adj-uid').value||'').trim();
   var amt=parseInt(document.getElementById('adj-amount').value)||0;
   var dir=document.getElementById('adj-dir').value;
   var reason=(document.getElementById('adj-reason').value||'').trim();
   if(!uid||!amt||!reason)return _toast('UID, amount, and reason required','red');
-  if(!confirm('Adjust wallet '+uid+': '+dir+' KES '+_kes(amt)+'?'))return;
+  if(!(await SK.dialog.confirm('Adjust wallet '+uid+': '+dir+' KES '+_kes(amt)+'?', null, null, { title: 'Adjust wallet', variant: 'danger', confirmLabel: 'Apply adjustment' })))return;
   _cf('adjustWallet')({entityId:uid,amountCents:amt,direction:dir,reason,entityType:document.getElementById('adj-type').value})
   .then(function(){_toast('Wallet adjusted','green');}).catch(function(e){_toast(e.message,'red');});
 };
@@ -980,11 +980,11 @@ function _renderAudit(list){
 }
 
 /* ── Admin Tools ── */
-window._reverseLedger=function(){
+window._reverseLedger=async function(){
   var id=(document.getElementById('rev-id').value||'').trim();
   var reason=(document.getElementById('rev-reason').value||'').trim();
   if(!id||!reason)return _toast('Ledger ID and reason required','red');
-  if(!confirm('Reverse ledger entry '+id+'? This is an emergency action.'))return;
+  if(!(await SK.dialog.confirm('Reverse ledger entry '+id+'? This is an emergency action.', null, null, { title: 'Reverse ledger entry', variant: 'danger', confirmLabel: 'Reverse' })))return;
   _cf('reverseTransaction')({ledgerId:id,reason})
   .then(function(){_toast('Ledger entry reversed','green');}).catch(function(e){_toast(e.message,'red');});
 };

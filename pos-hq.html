@@ -1010,7 +1010,7 @@ window.editPrice = raw => {
 };
 
 window.removePrice = async id => {
-  if (!confirm('Remove this central price override?')) return;
+  if (!(await SK.dialog.confirm('Remove this central price override?', null, null, { title: 'Remove price override', variant: 'danger', confirmLabel: 'Remove' }))) return;
   try {
     await CF('removeCentralPrice')({ id });
     toast('Price override removed', 'success');
@@ -1327,7 +1327,7 @@ window.syncBranch = async (branchId, branchName) => {
 };
 
 async function publishCatalog() {
-  if (!confirm('Publish catalog update? This will mark all branches as needing a sync.')) return;
+  if (!(await SK.dialog.confirm('Publish catalog update? This will mark all branches as needing a sync.', null, null, { title: 'Publish catalog', confirmLabel: 'Publish' }))) return;
   spin('spinner-pub', true);
   try {
     const res = await CF('publishCatalogUpdate')({});

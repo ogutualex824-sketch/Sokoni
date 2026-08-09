@@ -1700,7 +1700,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
              single icon source; the previous default (sokoni-logo-dark.png) is the HEADER
              brand mark, so the avatar and the app icon disagreed. onerror keeps the old
              file as a last-resort fallback rather than rendering a broken image. -->
-        <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="this.src='assets/sokoni-logo-dark.png'">
+        <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}">
         <div class="up-verified-badge" id="upVerifiedBadge" style="display:none;" title="Verified">&#10003;</div>
         <input type="file" id="avatarUpload" class="up-avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
       </div>
@@ -1720,10 +1720,19 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
              dozen unrelated tiles. This surfaces it next to Edit Profile.
              Hidden by default; revealed only for seller/vendor roles by
              _syncMyStoreBtn(), so buyers never see a dead link. -->
-        <a href="seller.html" id="upMyStoreBtn" class="up-edit-btn"
+        <a href="/merchant" id="upMyStoreBtn" class="up-edit-btn"
            style="display:none;text-decoration:none;align-items:center;justify-content:center;gap:6px;
                   background:rgba(113,255,0,0.14);border-color:rgba(113,255,0,0.4);color:#71ff00;">
           &#127978; My Store
+        </a>
+        <!-- My Services — the provider equivalent of "My Store". Leads to the provider
+             dashboard (Calendar, Availability, Bookings, service management). Hidden by
+             default; revealed only for provider/freelancer roles by _syncMyServicesBtn(),
+             mirroring _syncMyStoreBtn(), so non-providers never see a dead link. -->
+        <a href="provider-dashboard.html" id="upMyServicesBtn" class="up-edit-btn"
+           style="display:none;text-decoration:none;align-items:center;justify-content:center;gap:6px;
+                  background:rgba(249,115,22,0.14);border-color:rgba(249,115,22,0.4);color:#f97316;">
+          &#128296; My Services
         </a>
         <!-- My Shops & Branches — the seller's shop (business identity, distinct
              from the person's name above) and each of its branches, every one a
@@ -1733,6 +1742,14 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         <div id="upBranchesWrap" style="display:none;width:100%;margin-top:12px;">
           <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#127978; My Shops &amp; Branches</div>
           <div id="upBranchesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+        <!-- My Services — the provider's bookable services, the service equivalent of "My Shops".
+             ADDITIVE-role-aware: renders independently of My Shops (a user can be seller AND
+             provider). Populated by _renderMyServices() from providerServices where providerId==uid;
+             "Manage" opens the existing service management surface (provider-dashboard.html). -->
+        <div id="upServicesWrap" style="display:none;width:100%;margin-top:12px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#128296; My Services</div>
+          <div id="upServicesList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
       </div>
 
@@ -2038,6 +2055,19 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
+    <!-- ── Booking Resolution — "Action Required" cards for bookings affected by a provider
+         availability change (accept / decline / suggest / timeline). Rendered by the shared
+         sokoni-booking-resolution.js from the deployed providerDispatch ops. Hidden if none. -->
+    <div class="up-card" id="skResolution" style="padding:16px;display:none;"></div>
+
+    <!-- ── Business Management hub — role-driven modules (Marketplace / Services / Finance /
+         Insights / Rider / Admin). Additive: shows ONLY the modules the user has access to,
+         and a seller+provider sees BOTH. Populated by _renderBusinessHub(). -->
+    <div class="up-card" id="upBizHub" style="padding:16px;display:none;">
+      <div class="up-card-title">&#128188; Business Management</div>
+      <div id="upBizHubGrid" style="display:flex;flex-direction:column;gap:14px;margin-top:6px;"></div>
+    </div>
+
     <!-- ── S7: Cross-Module Summaries ── -->
     <div class="up-card" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
 
@@ -2159,6 +2189,13 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 
   <!-- BOOKINGS panel -->
   <div id="panel-bookings" class="up-panel">
+    <!-- WS4b — canonical service bookings (providerBookings). Own card + own listener +
+         own render, deliberately NOT interwoven with the legacy sources below, so Phase F
+         retirement of the legacy list is a deletion, not a refactor. -->
+    <div class="up-card" id="myServiceBookingsCard" style="display:none">
+      <div class="up-card-title">Service Bookings <a href="services.html" class="up-card-link">Book More</a></div>
+      <div id="myServiceBookingsPanel"></div>
+    </div>
     <div class="up-card">
       <div class="up-card-title">My Bookings <a href="services.html" class="up-card-link">Book More</a></div>
       <div id="bookingsPanel">
@@ -2343,6 +2380,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
             <div class="pi-sec-sub" id="piSecId">National ID or Passport</div>
           </div>
           <span id="piSecIdStatus"></span>
+          <a href="account-centre.html#verification" class="pi-sec-action">Verify</a>
         </div>
         <div class="pi-sec-item">
           <div class="pi-sec-icon">&#128274;</div>
@@ -2367,6 +2405,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
             <div class="pi-sec-sub" id="piSecLegal">Terms &amp; Privacy Policy</div>
           </div>
           <span id="piSecLegalStatus"></span>
+          <a href="account-centre.html#legal" class="pi-sec-action">Review</a>
         </div>
       </div>
     </div>
@@ -2828,6 +2867,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
      in". Loads before permissions/guards so they consume it and never conclude
      "logged out" while Firebase Auth is still resolving. -->
 <script src="sokoni-auth-state.js"></script>
+<script src="sokoni-identity-guard.js"></script>
 <script src="sokoni-permissions.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>
@@ -2849,6 +2889,20 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
 <script src="sw-register.js" defer></script>
+<script src="sokoni-booking-resolution.js" defer></script>
+<script>
+/* Mount the customer "Action Required" resolution surface once the callable bridge is ready. */
+(function(){
+  function boot(tries){
+    if(window.SokoniResolution && (typeof window.sokoniCallable==='function' || (window.firebase&&window.firebase.functions))){
+      try{ SokoniResolution.mount({ role:'customer', containerId:'skResolution' }); }catch(e){}
+    } else if((tries||0) < 20){ setTimeout(function(){ boot((tries||0)+1); }, 500); }
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ boot(0); }, 800); });
+})();
+</script>
+<script src="sokoni-book-service.js" defer></script>
+
 <script src="nav-active.js" defer></script>
 
 <script>
@@ -2904,10 +2958,26 @@ function upToast(msg, ok){
   }, 2800);
 }
 
+/* Roles must be a UNIQUE, lowercased set. Account merges concatenated arrays, leaving duplicates
+   like ['buyer','buyer','seller'] that rendered as "Buyer Buyer Seller". Normalize on every read
+   and write so every consumer (chips, role switcher, hub gates) sees one of each, order preserved. */
+function _dedupeRoles(arr){
+  var seen = {}, out = [];
+  (Array.isArray(arr) ? arr : []).forEach(function(r){
+    var k = String(r == null ? '' : r).trim().toLowerCase();
+    if (k && !seen[k]) { seen[k] = 1; out.push(k); }
+  });
+  return out.length ? out : ['buyer'];
+}
 function getUser(){
-  try{ return JSON.parse(localStorage.getItem('sokoniUser') || 'null'); }catch(e){ return null; }
+  try{
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    if (u && Array.isArray(u.roles)) u.roles = _dedupeRoles(u.roles);
+    return u;
+  }catch(e){ return null; }
 }
 function setUser(u){
+  try{ if (u && Array.isArray(u.roles)) u.roles = _dedupeRoles(u.roles); }catch(_){}
   localStorage.setItem('sokoniUser', JSON.stringify(u));
 }
 
@@ -2967,7 +3037,13 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
 (function _profileAuthGate(){
   var HTML = document.documentElement;
   function reveal(){ HTML.classList.add('sk-auth-ok'); }
+  /* The live Firebase user is the ground truth. By the time SokoniAuthState.ready
+     resolves, onAuthStateChanged has fired, so currentUser is authoritative. */
+  function liveUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
   function toLogin(){
+    /* Only reached when auth AUTHORITATIVELY reports NO user (stale loggedIn flag
+       with no real session). Clear the stale cache so login.html's already-logged-in
+       guard can't bounce us to home, then go to login. */
     try { localStorage.removeItem('loggedIn'); localStorage.removeItem('sokoniUser'); } catch(_){}
     try { location.replace('login.html?redirect=profile.html'); }
     catch(_){ location.href = 'login.html?redirect=profile.html'; }
@@ -2975,28 +3051,52 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
   var AS = window.SokoniAuthState;
   if (AS && AS.ready && typeof AS.ready.then === 'function'){
     AS.ready.then(function(session){
-      if (session && session.uid) reveal(); else toLogin();
-    }).catch(function(){
-      /* Never trap a real user on the splash: fall back to the flag we already know is 'true'. */
+      var lu = liveUser();
+      var luid = (session && session.uid) || (lu && lu.uid) || null;
+      /* Redirect only when BOTH the resolution-aware state AND the live SDK agree
+         there is no user — stops a signed-in user being bounced on a slow restore. */
+      if (!luid){ toLogin(); return; }
+      /* IDENTITY ISOLATION: never reveal another account's cached data. If the
+         cached profile belongs to a DIFFERENT uid than the live user, purge every
+         user cache and reload so all loads rebind to the correct uid — before the
+         splash lifts, so no cross-account data is ever shown. */
+      var cached = getUser();
+      if (cached && cached.uid && cached.uid !== luid){
+        try {
+          var mk = '_sokIdReloaded_' + luid;
+          if (!sessionStorage.getItem(mk)){
+            sessionStorage.setItem(mk, '1');
+            if (window.SokoniIdentity) SokoniIdentity.purgeUserCaches();
+            else { localStorage.removeItem('sokoniUser'); }
+            /* Live session is valid (we have luid) — keep the flag so the reload
+               doesn't bounce us through login; only the DATA caches are stale. */
+            try { localStorage.setItem('loggedIn','true'); } catch(_){}
+            location.reload(); return;
+          }
+        } catch(_){}
+      }
       reveal();
-    });
+    }).catch(function(){ reveal(); });
   } else {
-    /* SokoniAuthState unavailable — we only reached here because the flag was
-       'true', so reveal rather than strand the user on the splash. */
+    /* SokoniAuthState unavailable — we only reached here because the loggedIn flag
+       was 'true'; reveal rather than strand the user on the splash. */
     reveal();
   }
-  /* Absolute failsafe past SokoniAuthState's own 12s optimistic backstop. */
+  /* Failsafe: if resolution stalls past 12s, REVEAL optimistically — never sign a
+     user out on a slow network (the app-wide anti-loop rule). Redirect only if
+     Firebase has authoritatively resolved with NO user AND the SDK has none live. */
   setTimeout(function(){
     if (HTML.classList.contains('sk-auth-ok')) return;
     if (AS && AS.isResolved && AS.isResolved() &&
-        !(AS.getCurrentSession && AS.getCurrentSession())) toLogin();
+        !(AS.getCurrentSession && AS.getCurrentSession()) && !liveUser()) toLogin();
     else reveal();
-  }, 14000);
+  }, 12000);
 })();
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
 var _profSellerProductsUnsub = null;
 var _profBookingsUnsub = null;
+var _myServiceBookingsUnsub = null;   /* WS4b — canonical providerBookings listener (its own source) */
 var _profReviewsUnsub = null;
 var _profFollowingUnsub = null;
 var _profWalletUnsub = null;
@@ -3004,6 +3104,7 @@ var _profUserDataUnsub = null;
 window.addEventListener('beforeunload', function() {
   if (_profSellerProductsUnsub) _profSellerProductsUnsub();
   if (_profBookingsUnsub) _profBookingsUnsub();
+  if (_myServiceBookingsUnsub) _myServiceBookingsUnsub();
   if (_profReviewsUnsub) _profReviewsUnsub();
   if (_profFollowingUnsub) _profFollowingUnsub();
   if (_profWalletUnsub) _profWalletUnsub();
@@ -3119,12 +3220,119 @@ async function _renderMyBranches(u){
   } catch(e){ wrap.style.display = 'none'; }
 }
 
+/* Is the user a service provider? (additive roles — independent of seller/vendor). */
+function _isProviderUser(u){
+  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
+  return roles.indexOf('provider') > -1 || roles.indexOf('freelancer') > -1 ||
+         !!(u && u.isProvider) || !!(u && u.registeredAs && u.registeredAs.provider);
+}
+/* Show the My Services shortcut only to service providers. Mirrors _syncMyStoreBtn()
+   (seller → seller.html) exactly, using the same provider test as the Services section
+   and the workspace switcher, so they can never disagree about who is a provider. */
+function _syncMyServicesBtn(u){
+  var btn = document.getElementById('upMyServicesBtn');
+  if(!btn) return;
+  btn.style.display = _isProviderUser(u) ? 'inline-flex' : 'none';
+}
+/* Additive role predicates for the Business Hub (rider/admin, and any-business). */
+function _isRiderUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('driver')>-1||r.indexOf('rider')>-1||!!(u&&u.isDriver)||!!(u&&u.registeredAs&&u.registeredAs.driver); }
+function _isAdminUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('admin')>-1||r.indexOf('superAdmin')>-1||!!(u&&u.isAdmin); }
+
+/* ── Business Management hub ─────────────────────────────────────────────────
+   Role-driven and ADDITIVE: renders ONLY the modules the user can access, and a
+   seller+provider sees BOTH (no exclusive roles). Consolidates the scattered entry
+   points into one titled surface. Each item links to an already-built page. */
+function _renderBusinessHub(u){
+  var wrap=document.getElementById('upBizHub'), grid=document.getElementById('upBizHubGrid');
+  if(!wrap||!grid) return;
+  var seller=_isSellerUser(u), provider=_isProviderUser(u), rider=_isRiderUser(u), admin=_isAdminUser(u);
+  var anyBiz=seller||provider, mods=[];
+  if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',items:[
+    {label:'My Shops',href:'seller.html'},{label:'Products',href:'seller.html'},
+    {label:'Orders',href:'seller.html'},{label:'Open POS',href:'pos.html'}]});
+  if(provider) mods.push({icon:'🛠',title:'Services',accent:'#f97316',items:[
+    {label:'My Services',href:'provider-dashboard.html#services',id:'bizSvcMain'},
+    {label:'Availability',href:'availability-manager.html'},
+    {label:'Bookings',href:'provider-dashboard.html#bookings'},
+    {label:'Reviews',href:'provider-dashboard.html#reviews'}]});
+  if(anyBiz) mods.push({icon:'💰',title:'Finance',accent:'#22d3ee',items:[
+    {label:'Wallet',href:'wallet.html'},{label:'Payouts',href:'wallet.html'},{label:'Transactions',href:'wallet.html'}]});
+  if(anyBiz) mods.push({icon:'📊',title:'Insights',accent:'#a78bfa',items:[{label:'Analytics',href:'analytics.html'}]});
+  if(rider) mods.push({icon:'🛵',title:'Rider',accent:'#71ff00',items:[{label:'Rider Dashboard',href:'driver.html'}]});
+  if(admin) mods.push({icon:'🛡',title:'Admin',accent:'#ff5470',items:[{label:'Admin OS',href:'admin.html'}]});
+  if(!mods.length){ wrap.style.display='none'; return; }
+  grid.innerHTML=mods.map(function(m){
+    var chips=m.items.map(function(it){
+      return '<a href="'+it.href+'"'+(it.id?' id="'+it.id+'"':'')+' style="padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.82);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">'+escHtml(it.label)+'</a>';
+    }).join('');
+    return '<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:'+m.accent+';margin:0 0 8px;">'+m.icon+' '+escHtml(m.title)+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+chips+'</div></div>';
+  }).join('');
+  wrap.style.display='block';
+  if(provider) _bizRouteProvider(u);   /* Priority 2 — dashboard-or-onboarding, no bounce */
+}
+/* Priority 2 — resolve the provider's "My Services" destination up front so we NEVER do the
+   dashboard→not-found→onboarding round-trip: dashboard if a providerProfiles doc exists,
+   onboarding if it doesn't. Updates both the header button and the hub link. */
+async function _bizRouteProvider(u){
+  var uid=u&&(u.uid||u.id); if(!uid) return;
+  for(var i=0;i<40&&!window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db=window.firebaseDB; if(!db) return;
+  try{
+    var m=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap=await m.getDoc(m.doc(db,'providerProfiles',String(uid)));
+    var exists=!!(snap && snap.exists && snap.exists());
+    var link=document.getElementById('bizSvcMain'); if(link) link.setAttribute('href', exists?'provider-dashboard.html#services':'provider-onboarding.html');
+    var btn=document.getElementById('upMyServicesBtn'); if(btn) btn.setAttribute('href', exists?'provider-dashboard.html':'provider-onboarding.html');
+  }catch(e){}
+}
+/* List the provider's bookable services — the service equivalent of "My Shops & Branches".
+   Additive: shows for a provider (or anyone who has services) INDEPENDENTLY of the shops section.
+   "Manage" reuses the existing provider-dashboard service management (extend, don't rebuild). */
+async function _renderMyServices(u){
+  var wrap = document.getElementById('upServicesWrap');
+  var list = document.getElementById('upServicesList');
+  if(!wrap || !list) return;
+  var uid = u && (u.uid || u.id);
+  if(!uid){ wrap.style.display = 'none'; return; }
+  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db = window.firebaseDB;
+  if(!db){ wrap.style.display = 'none'; return; }
+  try {
+    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap = await m.getDocs(m.query(m.collection(db, 'providerServices'), m.where('providerId','==',String(uid)), m.limit(20)));
+    var svcs = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); })
+                        .filter(function(s){ return !s.removedAt && s.active !== false; });
+    /* Show the section for a provider OR anyone who already has services; hide for pure buyers. */
+    if(!svcs.length && !_isProviderUser(u)){ wrap.style.display = 'none'; return; }
+    var rows = svcs.map(function(s){
+      var name  = escHtml(s.name || 'Service');
+      var price = (typeof s.price === 'number') ? ('KSh ' + Math.round(s.price/100).toLocaleString()) : '';
+      var vurl  = 'provider-profile.html?id=' + encodeURIComponent(uid);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
+        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + name + '</div>'
+        + (price ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);">' + price + '</div>' : '')
+        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<a href="' + vurl + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
+        + '<a href="provider-dashboard.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
+        + '</div></div>';
+    }).join('');
+    /* + Add Service (opens the provider service-management surface / onboarding). */
+    rows += '<a href="' + (svcs.length ? 'provider-dashboard.html' : 'provider-onboarding.html') + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:rgba(113,255,0,0.08);border:1px dashed rgba(113,255,0,0.35);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">&#43; Add Service</a>';
+    list.innerHTML = rows;
+    wrap.style.display = 'block';
+  } catch(e){ wrap.style.display = 'none'; }
+}
+
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
 
   _syncMyStoreBtn(_user);
-  _renderMyBranches(_user);   /* seller's shop + branches, each its own storefront */
+  _syncMyServicesBtn(_user);  /* provider equivalent of My Store → provider-dashboard.html */
+  _renderBusinessHub(_user);  /* consolidated role-driven Business Management modules */
+  _renderMyBranches(_user);   /* seller's shop + branches (Marketplace module) */
+  _renderMyServices(_user);   /* provider's services (Services module) — additive, independent of shops */
 
   /* Name — the PERSON's name (personal identity), independent of the shop name
      which lives on the seller doc and is shown in "My Shops & Branches" below. */
@@ -3150,10 +3358,17 @@ function renderHeaderCard(){
   var avatarEl = document.getElementById('upAvatar');
   if(avatarEl) window.SokoniAvatar.bind(avatarEl, _user);
 
-  /* Cover */
+  /* Cover — a real uploaded cover fills the area via the <img>; otherwise every new profile shows
+     the SOKONI logo painted as the AREA BACKGROUND. Using a background (not an <img>) for the
+     default means it can't error-hide or flash off on a re-render — fixes "shows then disappears". */
+  var coverImg  = document.getElementById('upCoverImg');
+  var coverArea = document.getElementById('upCoverArea');
   if(_user.coverUrl){
-    var coverImg = document.getElementById('upCoverImg');
-    if(coverImg){ coverImg.src = _user.coverUrl; coverImg.style.display='block'; }
+    if(coverImg){ coverImg.src=_user.coverUrl; coverImg.style.display='block'; coverImg.style.objectFit='cover'; }
+    if(coverArea){ coverArea.style.background=''; }
+  } else {
+    if(coverImg){ coverImg.style.display='none'; }
+    if(coverArea){ coverArea.style.background = "#050505 url('/assets/Sokoni%20Logo.png') center/auto 62% no-repeat"; }
   }
 
   /* Verified */
@@ -3226,11 +3441,27 @@ function _renderProfileCompletion(u){
   hint.textContent = 'Add: ' + missing.slice(0,3).join(', ') + (missing.length > 3 ? ' + ' + (missing.length-3) + ' more' : '');
 }
 
+/* One-time canonical self-heal: if the STORED roles array had duplicates (merge artifact),
+   write the deduped set back to Firestore so every server-side consumer is corrected too. */
+function _healRolesOnce(){
+  if(window.__rolesHealed) return;
+  try{
+    var raw = JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    if(!raw || !Array.isArray(raw.roles) || !raw.uid) return;
+    var clean = _dedupeRoles(raw.roles);
+    if(clean.length !== raw.roles.length){
+      window.__rolesHealed = true;
+      raw.roles = clean; setUser(raw);
+      if(typeof saveToFirestore==='function'){ saveToFirestore({roles:clean}).catch(function(){}); }
+    }
+  }catch(_){}
+}
 function renderRoleChips(){
   _user = getUser();
   var container = document.getElementById('upRoleChips');
   if(!container) return;
-  var roles = _user.roles || ['buyer'];
+  _healRolesOnce();
+  var roles = _dedupeRoles(_user.roles || ['buyer']);
   container.innerHTML = roles.map(function(rk){
     var rd = getRoleDef(rk);
     return '<span class="up-role-chip '+escHtml(rd.chipClass)+'" title="'+escHtml(rd.hubLabel)+'">'+rd.emoji+' '+escHtml(rd.label)+'</span>';
@@ -3740,6 +3971,7 @@ function toggleListing(id, btn){
    BOOKINGS PANEL
 ══════════════════════════════════════════════════════════════ */
 function loadBookings(){
+  try{ loadMyServiceBookings(); }catch(e){}   /* WS4b — canonical providerBookings (independent card) */
   var el = document.getElementById('bookingsPanel');
   if(!el) return;
 
@@ -3789,6 +4021,80 @@ function loadBookings(){
       }, function(){});
     }).catch(function(){});
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WS4b — CANONICAL SERVICE BOOKINGS (providerBookings)
+   Self-contained: own listener, own render, own card. The customer's
+   authoritative service bookings, filtered by customerUid (rules already
+   authorize this list — proven in the emulator). Completed + unreviewed
+   bookings expose a review entry that reuses SokoniBookService.review()
+   → bookingSubmitReview (one review UI, one server gate). Deleting this
+   whole block + its card is all Phase F needs — no legacy entanglement.
+══════════════════════════════════════════════════════════════ */
+function loadMyServiceBookings(){
+  var el = document.getElementById('myServiceBookingsPanel');
+  var card = document.getElementById('myServiceBookingsCard');
+  if(!el || !card) return;
+  var uid = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+  if(!uid || !firebase.firestore) return;
+
+  /* Display state derives ONLY from the booking doc (single source of truth). */
+  var STATUS = {
+    pending:      {t:'Awaiting provider', c:'rgba(255,185,0,0.18)'},
+    confirmed:    {t:'Confirmed',         c:'rgba(113,255,0,0.15)'},
+    in_progress:  {t:'In progress',       c:'rgba(113,255,0,0.15)'},
+    completed:    {t:'Completed',         c:'rgba(113,255,0,0.22)'},
+    cancelled:    {t:'Cancelled',         c:'rgba(255,77,77,0.15)'},
+    declined:     {t:'Declined',          c:'rgba(255,77,77,0.15)'},
+    no_show:      {t:'No-show',           c:'rgba(255,77,77,0.15)'}
+  };
+  function label(b){
+    if(b.paymentStatus==='refunded') return {t:'Refunded', c:'rgba(255,185,0,0.18)'};
+    if(b.status!=='completed' && b.paymentStatus==='paid_held') return {t:'Paid · Held', c:'rgba(113,255,0,0.15)'};
+    return STATUS[b.status] || {t:(b.status||'pending'), c:'rgba(255,255,255,0.07)'};
+  }
+  function render(list){
+    if(!list.length){ card.style.display='none'; return; }
+    card.style.display='';
+    el.innerHTML = list.slice(0,20).map(function(b){
+      var st = label(b);
+      var when = (b.date?escHtml(b.date):'') + (b.startTime?(' &middot; '+escHtml(b.startTime)):'');
+      var reviewed = !!b.reviewedAt;
+      var canReview = b.status==='completed' && !reviewed;
+      var svc = escHtml(b.service||'Service');
+      var action = canReview
+        ? '<button type="button" class="up-card-link" style="border:none;background:none;cursor:pointer;color:#71ff00;font-weight:800" '
+          + 'onclick="SokoniBookService.review({bookingId:\''+escHtml(b.id)+'\',serviceName:\''+svc.replace(/'/g,"&#39;")+'\'})">Leave a review</button>'
+        : reviewed
+          ? '<span style="color:#9a9a9a;font-size:12px">&#11088; '+(b.reviewRating?escHtml(String(b.reviewRating)):'')+' Reviewed</span>'
+          : '';
+      return '<div class="up-booking-card">'
+        +'<div class="up-booking-header">'
+        +'<span class="up-booking-type">&#128295; '+svc+'</span>'
+        +'<span style="font-size:10px;font-weight:800;background:'+st.c+';color:#fff;padding:2px 9px;border-radius:6px;">'+escHtml(st.t.toUpperCase())+'</span>'
+        +'</div>'
+        +'<div class="up-booking-meta">'+when+'</div>'
+        + (action?('<div style="margin-top:8px">'+action+'</div>'):'')
+        +'</div>';
+    }).join('');
+  }
+
+  try{
+    if(_myServiceBookingsUnsub){ _myServiceBookingsUnsub(); _myServiceBookingsUnsub=null; }
+    /* customerUid list query — authorized by the current rule (no rule change). No orderBy
+       (avoids a composite index); sort newest-first in memory by startTs/createdAt. */
+    _myServiceBookingsUnsub = firebase.firestore().collection('providerBookings')
+      .where('customerUid','==',uid).limit(50)
+      .onSnapshot(function(snap){
+        var rows = snap.docs.map(function(d){ var x=d.data()||{}; x.id=d.id; return x; })
+          .sort(function(a,b){
+            var av=(a.startTs||(a.createdAt&&a.createdAt.seconds*1000)||0), bv=(b.startTs||(b.createdAt&&b.createdAt.seconds*1000)||0);
+            return bv-av;
+          });
+        render(rows);
+      }, function(){ /* listener error — leave last rendered state */ });
+  }catch(e){ /* non-fatal */ }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3927,8 +4233,23 @@ function loadWallet(){
       if(!snap.exists()) return;
       var data = snap.data();
       var bal = data.balance || 0;
-      document.getElementById('walletBalance').textContent = 'KES ' + Number(bal).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-      document.getElementById('walletSub').textContent = 'Updated ' + timeAgo(data.updatedAt||null);
+      var _f = function(n){ return 'KES ' + Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+      var _wb = document.getElementById('walletBalance'); if(_wb) _wb.textContent = _f(bal);
+      var _ws = document.getElementById('walletSub'); if(_ws) _ws.textContent = 'Updated ' + timeAgo(data.updatedAt||null);
+
+      /* Profile↔Wallet single source of truth (#3): the overview command-center wallet
+         card reads the SAME live wallets/{uid} doc, so Profile and Wallet never drift
+         (this fixes the overview showing "KES 0.00"). Pending withdrawals + frozen
+         status surface here too. */
+      var _cb = document.getElementById('cmdWalletBal'); if(_cb) _cb.textContent = _f(bal);
+      var _cp = document.getElementById('cmdWalletPending');
+      if(_cp){
+        var _pend = Number(data.pendingPayout||0);
+        var _bits = [];
+        if(_pend > 0) _bits.push(_f(_pend) + ' pending withdrawal');
+        if(data.frozen) _bits.push('Wallet frozen');
+        _cp.textContent = _bits.join(' · ');
+      }
 
       /* transactions */
       var txEl = document.getElementById('walletTxPanel');
@@ -4020,39 +4341,121 @@ function saveSettings(){
   upToast('Preferences saved!', true);
 }
 
-function deactivateAccount(_c){
-  if(!_c){_skConfirm('Are you sure you want to deactivate your account? You can reactivate by logging in again.',()=>deactivateAccount(true));return;}
-  saveToFirestore({deactivated:true, deactivatedAt: new Date().toISOString()});
-  logoutUser();
+async function deactivateAccount(_c){
+  if(!_c){_skConfirm('Deactivate your account? Your profile, shop and listings will be hidden from SOKONI, and you won\'t be able to post, order or message until you reactivate. You can reactivate anytime by signing back in.',()=>deactivateAccount(true));return;}
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
+  try{
+    toast('Deactivating…','info');
+    /* Server-authoritative: the CF sets a custom claim + hides merchant surfaces +
+       revokes tokens. Client no longer writes the flag directly. */
+    var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns = mod.getFunctions(undefined, 'us-central1');
+    await mod.httpsCallable(fns, 'accountDeactivate')({ confirm:true });
+    toast('Account deactivated. Signing you out…','success');
+    setTimeout(function(){ logoutUser(true); }, 800);
+  }catch(e){
+    toast('Could not deactivate: ' + ((e&&e.message)||'please try again.'),'error');
+  }
+}
+window.deactivateAccount = deactivateAccount;
+
+/* Explicit reactivation gate (never auto): when a signed-in but DEACTIVATED user
+   opens their profile, block it behind a prompt to reactivate. Rules already stop
+   their writes everywhere; this is the recovery path. */
+function _maybeReactivateGate(data){
+  try{
+    if(!(data && data.deactivated === true)) return;
+    if(document.getElementById('pv-react-gate')) return;
+    var ov = document.createElement('div'); ov.id='pv-react-gate'; ov.className='pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Account deactivated">' +
+        '<div class="pv-title">Your account is deactivated</div>' +
+        '<div class="pv-hint">Your profile, shop and listings are hidden, and posting, ordering and messaging are disabled. Reactivate to restore everything.</div>' +
+        '<button id="pv-react-yes" type="button" class="pv-cta">Reactivate my account</button>' +
+        '<button id="pv-react-no" type="button" class="pv-link">Sign out</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    try{ document.body.style.overflow='hidden'; }catch(_){}
+    document.getElementById('pv-react-yes').onclick = _doReactivate;
+    document.getElementById('pv-react-no').onclick  = function(){ (window.sokoniSignOut?window.sokoniSignOut():Promise.resolve()).finally(function(){ location.href='login.html'; }); };
+  }catch(_){}
+}
+async function _doReactivate(){
+  var btn = document.getElementById('pv-react-yes');
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
+  if(btn){ btn.disabled=true; btn.textContent='Reactivating…'; }
+  try{
+    var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns = mod.getFunctions(undefined, 'us-central1');
+    await mod.httpsCallable(fns, 'accountReactivate')({});
+    /* Refresh the ID token so Firestore rules immediately see the cleared claim. */
+    try{ if(window.firebaseAuth && window.firebaseAuth.currentUser) await window.firebaseAuth.currentUser.getIdToken(true); }catch(_){}
+    toast('Welcome back! Your account is active again.','success');
+    try{ document.body.style.overflow=''; }catch(_){}
+    setTimeout(function(){ location.reload(); }, 800);
+  }catch(e){
+    toast('Could not reactivate: ' + ((e&&e.message)||'please try again.'),'error');
+    if(btn){ btn.disabled=false; btn.textContent='Reactivate my account'; }
+  }
 }
 
-async function deleteAccountPermanently(_c){
-  if(!_c){_skConfirm('⚠️ PERMANENTLY DELETE your account? This cannot be undone. All your data will be removed within 30 days.',()=>deleteAccountPermanently(true));return;}
-  var confirm2 = prompt('Type DELETE to permanently delete your account:');
-  if(confirm2 !== 'DELETE') return;
+/* In-page typed confirmation (mobile-reliable — native prompt() is often
+   suppressed in installed PWAs / in-app browsers, which is why Delete "did
+   nothing" on phones). Resolves true only when the word is typed exactly. */
+function _acctTypedConfirm(word, message){
+  return new Promise(function(resolve){
+    var ov = document.createElement('div');
+    ov.className = 'pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Confirm">' +
+        '<div class="pv-title">Delete account</div>' +
+        '<div class="pv-hint">' + message + '</div>' +
+        '<input id="_actIn" class="pv-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type ' + word + '">' +
+        '<button id="_actYes" type="button" class="pv-cta" disabled style="background:#dc2626;color:#fff;">Delete permanently</button>' +
+        '<button id="_actNo" type="button" class="pv-link">Cancel</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    try { document.body.style.overflow = 'hidden'; } catch(_){}
+    var inp = ov.querySelector('#_actIn'), yes = ov.querySelector('#_actYes'), no = ov.querySelector('#_actNo');
+    function close(v){ try{ ov.remove(); }catch(_){}; try{ document.body.style.overflow=''; }catch(_){}; resolve(v); }
+    inp.addEventListener('input', function(){ yes.disabled = inp.value.trim().toUpperCase() !== word.toUpperCase(); });
+    yes.onclick = function(){ if(!yes.disabled) close(true); };
+    no.onclick  = function(){ close(false); };
+    ov.addEventListener('click', function(e){ if(e.target === ov) close(false); });
+    try { inp.focus(); } catch(_){}
+  });
+}
+
+async function deleteAccountPermanently(){
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
+  /* Reliable in-page confirmation (replaces native prompt(), which is suppressed
+     in many mobile/PWA/in-app browsers — the reason Delete appeared to do nothing
+     on phones). */
+  var ok = await _acctTypedConfirm('DELETE',
+    'This permanently deletes your account. All your data is removed within 30 days and cannot be recovered. Type DELETE to confirm.');
+  if(!ok) return;
   try{
     var {getAuth} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
     var {getFunctions,httpsCallable} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
     var auth = getAuth();
-    var user = auth.currentUser;
-    if(!user){ (window._skToast||alert)('Please sign in again before deleting your account.'); window.location.href='login.html'; return; }
-    /* Wipe local state before CF call so nothing lingers if CF is slow */
-    ['sokoniUser','sokoniStore','sokoniMiniStore','sokoniNotifications',
-     'sokoniRecentSearches','sokoniLoyaltyPoints','sokoniEvents',
-     'sellerProducts','sokoniCart'].forEach(function(k){ localStorage.removeItem(k); });
-    /* Call server-side CF — disables Auth, anonymises user doc, revokes tokens, queues 30-day purge */
+    if(!auth.currentUser){ toast('Please sign in again before deleting your account.','error'); window.location.href='login.html?redirect=profile.html'; return; }
+    toast('Deleting your account…','info');
+    /* Server-side CF — disables Auth, anonymises the user doc, revokes tokens,
+       queues a 30-day purge. Authoritative; the client only reflects the result. */
     var fns = getFunctions(undefined, 'us-central1');
-    var deleteMyAccount = httpsCallable(fns, 'deleteMyAccount');
-    var result = await deleteMyAccount();
-    var purgeDate = result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : '30 days';
-    (window._skToast||alert)('Your account has been deleted. Personal data will be permanently purged by ' + purgeDate + '.');
-    window.location.href = "/";
+    var result = await httpsCallable(fns, 'deleteMyAccount')();
+    var purgeDate = result && result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : 'about 30 days';
+    toast('Your account has been deleted. Data will be purged by ' + purgeDate + '.','success');
+    /* Fully clear the client session (listeners + all user storage) before leaving. */
+    try { if(window.sokoniSignOut) await window.sokoniSignOut(); } catch(_){}
+    setTimeout(function(){ window.location.replace('/'); }, 900);
   }catch(e){
-    if(e.code === 'auth/requires-recent-login'){
-      (window._skToast||alert)('For security, please sign out and sign back in before deleting your account.');
-      window.location.href = 'login.html?next=profile.html';
+    var code = (e && e.code) || '';
+    if(code === 'auth/requires-recent-login' || code === 'functions/unauthenticated'){
+      toast('For security, please sign out and sign back in, then delete.','error');
+      window.location.href = 'login.html?redirect=profile.html';
     } else {
-      (window._skToast||alert)('Error deleting account: ' + (e.message||'Please try again or contact support@mysokoni.co.ke'));
+      toast('Could not delete account: ' + ((e&&e.message)||'please try again or email support@mysokoni.co.ke'),'error');
     }
   }
 }
@@ -4157,6 +4560,7 @@ function listenFirestoreProfile(uid){
     _profUserDataUnsub = m.onSnapshot(m.doc(db,'users',uid), function(snap){
       if(!snap.exists()) return;
       var data = snap.data();
+      _maybeReactivateGate(data);
       /* merge non-sensitive fields into localStorage user */
       _user = getUser() || {};
       if(data.name) _user.name = data.name;
@@ -4435,15 +4839,23 @@ window.logoutUser = logoutUser;
       ];
       var grid = document.getElementById('piVerifGrid');
       if (grid && data.verifications) {
+        /* Each badge is a TAP TARGET into its verification flow — a pending badge that does
+           nothing is a dead-end. All identity/KYC verifications live in the Verification Center. */
+        var VERIF_HREF = {
+          email:'account-centre.html#verification', phone:'account-centre.html#verification',
+          identity:'account-centre.html#verification', business:'account-centre.html#verification',
+          kra:'account-centre.html#verification', bank:'account-centre.html#verification',
+        };
         grid.innerHTML = VERIF_MAP.map(function(v) {
           var done = data.verifications[v.k];
-          return '<div class="pi-verif-item' + (done ? ' done' : '') + '">'
+          var href = VERIF_HREF[v.k] || 'account-centre.html#verification';
+          return '<a href="' + href + '" class="pi-verif-item' + (done ? ' done' : '') + '" style="text-decoration:none;color:inherit;cursor:pointer;">'
                + '<span class="pi-verif-icon">' + v.icon + '</span>'
                + '<span class="pi-verif-label">' + v.label + '</span>'
                + '<span class="pi-verif-status ' + (done ? 'pi-vs-yes' : 'pi-vs-no') + '">'
-               + (done ? '✓ Verified' : 'Pending')
+               + (done ? '✓ Verified' : 'Tap to verify')
                + '</span>'
-               + '</div>';
+               + '</a>';
         }).join('');
       }
 
@@ -4476,23 +4888,31 @@ window.logoutUser = logoutUser;
       if (pctEl) pctEl.textContent = pct + '%';
       if (doneEl) doneEl.textContent = done + ' of ' + total + ' steps complete';
 
+      /* Every actionable step needs a destination. Photo/cover/bio/name/location edit on THIS page
+         (toggleInlineEdit); the rest route to the relevant flow. No step should be a dead-end. */
       var HREFS = {
-        photo:'', bio:'professional-profile.html', email:'account-centre.html',
-        phone:'account-centre.html', identity:'account-centre.html',
-        address:'', skills:'professional-profile.html', cert:'professional-profile.html',
-        bank:'account-centre.html', kra:'account-centre.html',
+        photo:'#edit', cover:'#edit', bio:'#edit', name:'#edit', location:'#edit',
+        email:'account-centre.html#verification', phone:'account-centre.html#verification',
+        identity:'account-centre.html#verification', bank:'account-centre.html#verification',
+        kra:'account-centre.html#verification', business:'account-centre.html#verification',
+        merchant:'account-centre.html#verification', legal:'account-centre.html#legal',
+        address:'account-centre.html', role:'#edit',
+        skills:'professional-profile.html', cert:'professional-profile.html',
       };
 
       var list = document.getElementById('piStepsList');
       if (list) {
         list.innerHTML = steps.map(function(s) {
-          var linkHtml = (!s.done && HREFS[s.id]) ?
-            '<a href="' + HREFS[s.id] + '" class="pi-step-link">Fix</a>' : '';
-          return '<div class="pi-step' + (s.done ? ' done' : '') + '">'
-               + '<div class="pi-step-check">' + (s.done ? '✓' : '') + '</div>'
-               + '<div class="pi-step-lbl">' + _esc(s.label) + '</div>'
-               + linkHtml
-               + '</div>';
+          var target = (!s.done && (HREFS[s.id] || HREFS[slugify(s.label)])) || '';
+          var inner = '<div class="pi-step-check">' + (s.done ? '✓' : '') + '</div>'
+                    + '<div class="pi-step-lbl">' + _esc(s.label) + '</div>'
+                    + (target ? '<span class="pi-step-link">Fix</span>' : '');
+          if (!target) return '<div class="pi-step' + (s.done ? ' done' : '') + '">' + inner + '</div>';
+          /* On-page edits open the inline editor; off-page steps navigate. Whole row is tappable. */
+          if (target === '#edit') {
+            return '<div class="pi-step" role="button" tabindex="0" style="cursor:pointer;" onclick="toggleInlineEdit()">' + inner + '</div>';
+          }
+          return '<a href="' + target + '" class="pi-step" style="text-decoration:none;color:inherit;cursor:pointer;">' + inner + '</a>';
         }).join('');
       }
 
@@ -4711,7 +5131,7 @@ window.logoutUser = logoutUser;
   var _pvVerifier = null;       /* RecaptchaVerifier (invisible, reused)       */
   var _pvPendingPhone = '';     /* E.164 phone awaiting OTP confirmation        */
 
-  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : alert(msg)); } catch(_){ try{ alert(msg); }catch(e){} } }
+  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : SK.dialog.alert(msg)); } catch(_){ try{ SK.dialog.alert(msg); }catch(e){} } }
   function _pvUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
 
   /* Kenya-first E.164 normaliser: 07.. / 01.. / 2547.. / +2547.. / 7XXXXXXXX */
@@ -5541,9 +5961,9 @@ window.logoutUser = logoutUser;
     );
   };
 
-  window.piVaultDelete = function(docId, storagePath) {
+  window.piVaultDelete = async function(docId, storagePath) {
     if (!docId) return;
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!(await SK.dialog.confirm('Delete this document? This cannot be undone.', null, null, { title: 'Delete document', variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     var user = firebase.auth && firebase.auth().currentUser;
     if (!user) { _toast('Not authenticated.'); return; }
@@ -5974,7 +6394,9 @@ window.logoutUser = logoutUser;
       links.push({ icon: '👥', label: 'Applicants', href: 'jobs.html#applications' });
     }
     if (roles.indexOf('provider') !== -1) {
-      links.push({ icon: '🔧', label: 'My Services', href: 'services.html#provider', primary: true });
+      /* "My Services" = the provider's OWN service management (Rate Cards tab), not the
+         customer-facing services browse page. Matches the canonical target used elsewhere. */
+      links.push({ icon: '🔧', label: 'My Services', href: 'provider-dashboard.html#services', primary: true });
     }
 
     /* Universal hubs */

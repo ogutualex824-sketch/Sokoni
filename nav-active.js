@@ -165,7 +165,7 @@
 
   function applyActiveNav() {
     const page   = (location.pathname.split('/').pop() || '').replace(/\?.*$/, '') || 'index.html';
-    const target = NAV_MAP[page];
+    const target = NAV_MAP[page] || NAV_MAP[page + '.html'];  /* cleanUrls: prod serves extension-free, so also try the .html key */
     if (!target) return;
 
     const items = document.querySelectorAll('.bottom-nav .bnav-item, .bottom-nav a');

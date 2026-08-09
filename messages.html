@@ -9,17 +9,23 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Messages â€” SOKONI</title>
+<title>Messages — SOKONI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="sokoni-tokens.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--c-bg:#f7f8fa;--c-surface:#fff;--c-border:#e5e7eb;--c-primary:#1a56db;--c-primary-light:#eff6ff;--c-text:#111827;--c-sub:#6b7280;--c-red:#dc2626;--radius:12px}
+/* Premium dark by default (was light + gated behind prefers-color-scheme:dark, which
+   left it light on light-OS devices while the platform forces data-theme="dark"). */
+:root{--c-bg:#050505;--c-surface:#111115;--c-border:rgba(255,255,255,0.08);--c-primary:#71ff00;--c-primary-light:rgba(113,255,0,0.07);--c-text:rgba(255,255,255,0.9);--c-sub:rgba(255,255,255,0.42);--c-red:#f87171;--radius:12px}
 body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh;padding-bottom:80px}
 
-.topbar{position:sticky;top:0;z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
+/* Sticks BELOW the shared header, not at viewport top. shared-header.js injects a
+   position:fixed nav and publishes its measured height as --sk-header-h; a sticky bar
+   pinned at top:0 scrolls straight underneath it (z-index 100 vs 100001) and the
+   "Messages" title disappears behind the header. Same contract .sk-sub-nav uses. */
+.topbar{position:sticky;top:var(--sk-header-h,58px);z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
 .topbar h1{font-size:20px;font-weight:700;flex:1}
 .icon-btn{width:40px;height:40px;border:none;background:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub)}
 .icon-btn:hover{background:var(--c-bg)}
@@ -32,13 +38,13 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 .filters{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
 .filters::-webkit-scrollbar{display:none}
 .filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1.5px solid var(--c-border);background:var(--c-surface);cursor:pointer;color:var(--c-sub);transition:.15s}
-.filter-chip.active{background:var(--c-primary);border-color:var(--c-primary);color:#fff}
+.filter-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00}
 
 .conv-list{padding:8px 0}
 .conv-item{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:1px solid var(--c-border);background:var(--c-surface);transition:.1s;text-decoration:none;color:inherit}
-.conv-item:hover{background:#f9fafb}
+.conv-item:hover{background:rgba(255,255,255,0.04)}
 .conv-item.unread{background:var(--c-primary-light)}
-.conv-avatar{width:48px;height:48px;border-radius:50%;background:var(--c-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0;overflow:hidden}
+.conv-avatar{width:48px;height:48px;border-radius:50%;background:var(--c-primary);display:flex;align-items:center;justify-content:center;color:#000;font-size:20px;flex-shrink:0;overflow:hidden}
 .conv-avatar img{width:100%;height:100%;object-fit:cover}
 .conv-body{flex:1;min-width:0}
 .conv-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -47,14 +53,14 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 .conv-item.unread .conv-preview{color:var(--c-text);font-weight:500}
 .conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .conv-time{font-size:11px;color:var(--c-sub)}
-.unread-badge{background:var(--c-primary);color:#fff;font-size:11px;font-weight:700;border-radius:10px;min-width:20px;height:20px;padding:0 6px;display:flex;align-items:center;justify-content:center}
+.unread-badge{background:var(--c-primary);color:#000;font-size:11px;font-weight:700;border-radius:10px;min-width:20px;height:20px;padding:0 6px;display:flex;align-items:center;justify-content:center}
 
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 24px;text-align:center}
-.empty .material-icons{font-size:64px;color:#d1d5db;margin-bottom:16px}
+.empty .material-icons{font-size:64px;color:rgba(255,255,255,0.18);margin-bottom:16px}
 .empty h3{font-size:18px;font-weight:600;margin-bottom:8px}
 .empty p{font-size:14px;color:var(--c-sub);max-width:280px;line-height:1.5}
 
-.skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);background-size:200%;animation:shimmer 1.2s infinite;border-radius:6px}
+.skeleton{background:linear-gradient(90deg,#1a1a1e 25%,#222226 50%,#1a1a1e 75%);background-size:200%;animation:shimmer 1.2s infinite;border-radius:6px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .sk-conv{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--c-border);background:var(--c-surface)}
 .sk-avatar{width:48px;height:48px;border-radius:50%;flex-shrink:0}
@@ -62,35 +68,16 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 .sk-line{height:13px;margin-bottom:7px;border-radius:4px}
 .sk-line.w80{width:80%}.sk-line.w60{width:60%}.sk-line.w40{width:40%}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:64px;z-index:100}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--c-sub);text-decoration:none;border:none;background:none}
-.nav-item.active{color:var(--c-primary)}
-.nav-item .material-icons{font-size:24px}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:calc(64px + env(safe-area-inset-bottom,0px));z-index:100;padding-bottom:env(safe-area-inset-bottom,0px)}
+/* .bnav-item tabs are styled by the canonical fallback in sokoni-platform-override.css */
 
 @media(min-width:769px){
   .bottom-nav{display:none}
   body{padding-bottom:0;max-width:640px;margin:0 auto}
 }
 
-/* â”€â”€ Dark mode â”€â”€ */
-@media(prefers-color-scheme:dark){
-  :root{
-    --c-bg:#050505;
-    --c-surface:#111115;
-    --c-border:rgba(255,255,255,0.08);
-    --c-primary:#71ff00;
-    --c-primary-light:rgba(113,255,0,0.07);
-    --c-text:rgba(255,255,255,0.9);
-    --c-sub:rgba(255,255,255,0.42);
-    --c-red:#f87171;
-  }
-  .conv-item:hover{background:rgba(255,255,255,0.04)}
-  .conv-item.unread{background:rgba(113,255,0,0.05)}
-  .filter-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00}
-  .empty .material-icons{color:rgba(255,255,255,0.18)}
-  .skeleton{background:linear-gradient(90deg,#1a1a1e 25%,#222226 50%,#1a1a1e 75%);background-size:200%}
-  .unread-badge{background:#71ff00;color:#000}
-}
+/* Dark is now the single default (folded into the base rules above), so the platform's
+   forced data-theme="dark" is honoured on every device regardless of OS colour scheme. */
 </style>
 </head>
 <body>
@@ -103,7 +90,7 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 <div class="search-wrap">
   <div class="search-box">
     <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
-    <input type="text" id="searchInput" placeholder="Search conversationsâ€¦" autocomplete="off">
+    <input type="text" id="searchInput" placeholder="Search conversations…" autocomplete="off">
   </div>
 </div>
 
@@ -129,11 +116,15 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
   <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
 </div>
 
-<nav class="bottom-nav">
-  <a href="/"    class="nav-item"><span class="material-icons" aria-hidden="true">&#xe88a;</span>Home</a>
-  <a href="services.html" class="nav-item"><span class="material-icons" aria-hidden="true">&#xf100;</span>Services</a>
-  <a href="messages.html" class="nav-item active"><span class="material-icons" aria-hidden="true">&#xe0b7;</span>Messages</a>
-  <a href="profile.html"  class="nav-item"><span class="material-icons" aria-hidden="true">&#xe7fd;</span>Profile</a>
+<!-- Canonical bottom nav — matches sokoni-nav-engine _CANONICAL_TABS so first paint
+     equals the hydrated state (the engine overwrites this at runtime). Styled by the
+     nav-unification fallback in sokoni-platform-override.css. -->
+<nav class="bottom-nav" data-workspace="buyer" aria-label="Primary navigation">
+  <a href="/" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🛠️</span><span>Services</span></a>
+  <a href="my-orders.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">👤</span><span>Profile</span></a>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>

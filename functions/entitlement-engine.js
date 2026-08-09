@@ -44,7 +44,9 @@ const AUDIT       = 'entitlementAuditLog';
 
 /* Payment states that mean "the money is really ours". Anything else — and
    especially anything a client asserts — is not honourable. */
-const TERMINAL_PAID = new Set(['COMPLETE', 'COMPLETED', 'PAID', 'SUCCESS']);
+/* One definition, in shared/constants.js. Re-exported here so existing
+   importers of this module keep working unchanged. */
+const { TERMINAL_PAID } = require('./shared/constants');
 const REVERSED      = new Set(['REFUNDED', 'REVERSED', 'CHARGEBACK', 'CANCELLED']);
 
 const STATUS = { ACTIVE: 'ACTIVE', REVOKED: 'REVOKED', NONE: 'NONE' };

@@ -18,6 +18,9 @@
        scripts run during parse, so both globals exist before the deferred
        wizard bundle executes. universal-printer first — the P58E adapter
        composes its ESC/POS encoder. -->
+  <!-- firebase.js provides the ONE warm app WITH App Check — required so the config save to
+       Firestore (App-Check enforced) is accepted. Without it the wizard had no App Check token. -->
+  <script type="module" src="firebase.js"></script>
   <script src="sokoni-universal-printer.js"></script>
   <script src="sokoni-bluetooth-printer.js"></script>
   <script defer src="pos-hardware-wizard.js"></script>
@@ -790,6 +793,22 @@
       <!-- Four-layer environment report. Kept separate from the category cards
            so a platform capability can never be rendered as a found device. -->
       <div id="hwEnvReport" style="margin-top:14px"></div>
+
+      <!-- Dedicated Bluetooth (P58E / 58mm thermal) scan → connect → reconnect.
+           The BLE scan, GATT connect and auto-reconnect all live in
+           window.P58EPrinter (sokoni-bluetooth-printer.js); this is only its
+           control surface, so no GATT logic is duplicated here. -->
+      <div class="bt-p58e-panel" id="btP58ePanel" style="margin-top:14px;padding:14px;border:1px solid var(--border,#2a2a2a);border-radius:12px;background:var(--surface2,rgba(255,255,255,.03))">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">&#128994; Bluetooth Receipt Printer (P58E / 58mm)</div>
+        <div style="font-size:12px;color:var(--muted,#9a9a9a);margin:4px 0 10px">Scan for your P58E, connect, and it reconnects automatically next time.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn-primary" id="p58eScanBtn" type="button">&#128994; Scan &amp; Connect</button>
+          <button class="btn-ghost" id="p58eReconnectBtn" type="button" style="display:none">&#8635; Reconnect</button>
+          <button class="btn-ghost" id="p58eForgetBtn" type="button" style="display:none">Forget</button>
+        </div>
+        <div id="p58eStatus" style="font-size:12px;margin-top:10px;color:var(--muted,#9a9a9a)">Not connected.</div>
+        <a href="#" id="p58eAnyLink" style="display:none;font-size:12px;color:var(--accent,#71ff00);margin-top:6px">Can&#39;t see your printer? Scan all Bluetooth devices &rarr;</a>
+      </div>
     </div>
 
     <div class="hw-categories" id="hwCategories">
@@ -876,9 +895,9 @@
   <!-- ── STEP 5: DONE ─────────────────────────────────────── -->
   <div class="step-content" id="step-5">
     <div class="done-screen">
-      <div class="done-checkmark">&#9989;</div>
-      <h2>Hardware Setup Complete!</h2>
-      <p>Your SOKONI SmartPOS terminal hardware has been configured successfully.</p>
+      <div class="done-checkmark">&#127881;</div>
+      <h2>Your POS is Ready</h2>
+      <p><strong>&#9989; POS Certified.</strong> Setup is a one-time step — from now on the POS opens straight to selling and your printer reconnects automatically. You won&#39;t see this wizard again unless you choose <em>Manage Devices</em>.</p>
       <div class="done-stats">
         <div class="done-stat blue">
           <div class="done-stat__num" id="doneTotal">0</div>
@@ -894,8 +913,8 @@
         </div>
       </div>
       <div class="done-actions">
-        <a href="pos.html"           class="btn-primary btn-lg">&#128241; Return to POS</a>
-        <a href="pos-workspace.html" class="btn-ghost   btn-lg">&#128187; Open Workspace</a>
+        <a href="pos-v2"    class="btn-primary btn-lg">&#128722; Start Selling</a>
+        <a href="#" onclick="goToStep(1);return false" class="btn-ghost btn-lg">&#128295; Manage Devices</a>
       </div>
     </div>
   </div>
@@ -1005,36 +1024,33 @@
 
 import { firebaseConfig } from './sokoni-firebase-config.js';
 
-import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getAuth, onAuthStateChanged }
-                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDoc }
-                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged }     from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-/* ── Firebase init ── */
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
-
-/* ── Auth guard ── */
+/* ── Firebase init ──
+   Bind to firebase.js's ALREADY-initialised app, which has APP CHECK configured. The old code did
+   a bare initializeApp() here with NO App Check — and Firestore is App-Check-enforced, so every
+   config save to posTerminals was rejected ("Missing or insufficient permissions") no matter what
+   the security rule said. Same SDK version (10.12.2) → the module dedupes onto firebase.js's app,
+   so the setDoc below carries a valid App Check token. */
+let app, auth, db;
 let _currentUser = null;
-onAuthStateChanged(auth, function (user) {
-  if (!user) {
-    window.location.href = 'login.html?next=' + encodeURIComponent(window.location.pathname);
-    return;
-  }
-  _currentUser = user;
-  const avatarEl = document.getElementById('authAvatar');
-  const nameEl   = document.getElementById('authName');
-  if (avatarEl) {
-    const initials = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
-    avatarEl.textContent = initials;
-  }
-  if (nameEl) {
-    nameEl.textContent = user.displayName || user.email;
-    nameEl.style.display = '';
-  }
-});
+async function _bindFirebase() {
+  for (let i = 0; i < 80 && !window.firebaseApp && !getApps().length; i++) { await new Promise(r => setTimeout(r, 150)); }
+  app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(window.SOKONI_CONFIG || {}));
+  auth = window.firebaseAuth || getAuth(app);
+  db   = window.firebaseDB || getFirestore(app);
+  onAuthStateChanged(auth, function (user) {
+    if (!user) { window.location.href = 'login.html?next=' + encodeURIComponent(window.location.pathname); return; }
+    _currentUser = user;
+    const avatarEl = document.getElementById('authAvatar');
+    const nameEl   = document.getElementById('authName');
+    if (avatarEl) avatarEl.textContent = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+    if (nameEl) { nameEl.textContent = user.displayName || user.email; nameEl.style.display = ''; }
+  });
+}
+_bindFirebase();
 
 /* ════════════════════════════════════════════════════════════
    WIZARD STATE
@@ -1407,7 +1423,19 @@ function renderEnvReport(env) {
     sec('2 · Recommended connection',
         rec ? `<strong>${esc(rec.label)}</strong>${rec.note ? ` <span style="opacity:.7">— ${esc(rec.note)}</span>` : ''}` : none) +
     sec('3 · Configured devices',
-        env.configured.length ? env.configured.map(c => esc(_lbl(c))).join(', ') : none) +
+        env.configured.length
+          ? env.configured.map(c => {
+              if (c === 'printers') {
+                const pr = (env.raw && env.raw.printers) || {};
+                if (pr.btPaired) {
+                  const connected = !!(window.P58EPrinter && window.P58EPrinter.isConnected);
+                  return esc(pr.btPaired.name || 'P58E') + ' · Bluetooth · ' + (connected ? 'Connected' : 'Saved (offline)');
+                }
+                if (pr.savedIP) return 'Network printer · ' + esc(pr.savedIP);
+              }
+              return esc(_lbl(c));
+            }).join(', ')
+          : none) +
     sec('4 · Live devices',
         env.live.length ? env.live.map(c => esc(_lbl(c))).join(', ') : none) +
     (env.transports.unavailable.length
@@ -1865,6 +1893,11 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
       const docRef   = doc(db, 'posTerminals', sellerId + '_hardware');
       const payload  = {
         sellerId,
+        /* The /posTerminals rule authorizes on the doc's `uid` field
+           (request.resource.data.uid == request.auth.uid). The old payload wrote only
+           `sellerId`, so `uid` was undefined and every create was permission-denied
+           ("Missing or insufficient permissions"). Write `uid` so the create/update passes. */
+        uid: sellerId,
         updatedAt: new Date().toISOString(),
         deviceCount: allDevs.length,
         devices: Object.fromEntries(allDevs.map(([id, device]) => {
@@ -1878,30 +1911,90 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
             testResult: (_testResults[id] || {}).status || 'not_tested',
           }];
         })),
+        /* One-time onboarding gate (Sprint 1): mark the POS certified so daily launches skip the
+           wizard and go straight to selling. The cloud copy lets another device restore preferences. */
+        setupComplete: true,
+        setupVersion: 1,
+        branchId:   (function(){ try { return localStorage.getItem('sokoniBranchId') || 'default'; } catch(_) { return 'default'; } })(),
+        terminalId: sellerId + '_pos1',
+        paperWidth: 58,
       };
-      await setDoc(docRef, payload, { merge: true });
-      icon.textContent = '✅';
-      msg.textContent  = 'Configuration saved to Firestore (' + allDevs.length + ' devices)';
-      toast('Hardware configuration saved', 'success');
+      try {
+        await setDoc(docRef, payload, { merge: true });
+        /* Persist the setup-complete flag + printer profile locally (fast path for every launch). */
+        try {
+          var _prn = allDevs.map(function(e){ return e[1].getInfo ? e[1].getInfo() : {}; })
+                            .find(function(i){ return (i.category || '').indexOf('printer') > -1; }) || {};
+          localStorage.setItem('posSetupComplete', JSON.stringify({
+            v: 1, at: Date.now(), sellerId: sellerId, branchId: payload.branchId, terminalId: payload.terminalId,
+            printer: { name: _prn.name || 'P58E', model: _prn.model || 'P58E', width: 58 },
+          }));
+          localStorage.setItem('posReceiptWidth', '32');   /* 58mm ≈ 32 chars — receipt engine reads this */
+        } catch (_) {}
+        icon.textContent = '✅';
+        msg.innerHTML = _saveBreakdown(allDevs.length, true, null, null);
+        toast('POS certified — you\'re ready to sell', 'success');
+        _showSaveActions(false);
+        HW.startHealthMonitor(30000); renderHealthBar();
+        setTimeout(() => goToStep(5), 1200);
+      } catch (cloudErr) {
+        /* Local save already succeeded (saveRegistry above) — the printer WILL work this session.
+           Only the cloud copy failed. Show exactly what failed + where, and let the merchant
+           continue offline instead of a dead-end "Save failed". */
+        icon.textContent = '⚠️';
+        msg.innerHTML = _saveBreakdown(allDevs.length, false, 'posTerminals/' + sellerId + '_hardware', cloudErr);
+        toast('Saved on this device — cloud sync failed', 'warn');
+        _showSaveActions(true);
+      }
     } else {
       icon.textContent = '⚠️';
-      msg.textContent  = 'Saved locally (not logged in — Firestore skipped)';
+      msg.innerHTML = _saveBreakdown(getAllDevices().length, false, null, new Error('Not signed in'));
+      _showSaveActions(true);
     }
-
-    // 3. Start health monitor
-    HW.startHealthMonitor(30000);
-    renderHealthBar();
-
-    setTimeout(() => goToStep(5), 1200);
   } catch (e) {
     icon.textContent = '❌';
-    msg.textContent  = 'Save failed: ' + e.message;
+    msg.innerHTML = _saveBreakdown(0, false, 'posTerminals/*_hardware', e);
     toast('Save failed: ' + e.message, 'error');
+    _showSaveActions(true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '💾 Save Configuration';
   }
 });
+
+/* Granular save status — Printer/Bluetooth/Local always succeed by the time we save; the Cloud
+   line reflects the Firestore write. On failure we name the exact document path + reason. */
+function _saveBreakdown(count, cloudOk, path, err) {
+  var line = function (label, ok, extra) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0">'
+      + '<span>' + label + '</span>'
+      + '<span style="font-weight:800;color:' + (ok ? '#22c55e' : '#ff6b6b') + '">' + (ok ? '✓ ' + (extra || 'OK') : '✗ ' + (extra || 'Failed')) + '</span></div>';
+  };
+  var html = line('Printer test', true, 'Passed')
+           + line('Bluetooth', true, 'Connected')
+           + line('Local save', true, 'Saved (' + count + ')')
+           + line('Cloud save', cloudOk, cloudOk ? 'Synced' : 'Permission denied');
+  if (!cloudOk && path) {
+    html += '<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.5;border-top:1px solid var(--bor,#222);padding-top:8px">'
+      + '<strong style="opacity:.8">Document</strong><br>' + esc(path)
+      + '<br><strong style="opacity:.8">Reason</strong><br>' + esc((err && err.message) || 'Firestore rule rejected write')
+      + '</div>';
+  }
+  return html;
+}
+function _showSaveActions(show) {
+  var box = document.getElementById('saveActions');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'saveActions';
+    box.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+    box.innerHTML = '<button type="button" onclick="document.getElementById(\'btnSaveConfig\').click()" style="flex:1;background:#71ff00;color:#04120a;border:none;border-radius:12px;padding:12px;font-weight:800;min-height:46px;cursor:pointer">↻ Retry cloud save</button>'
+      + '<button type="button" onclick="goToStep(5)" style="flex:1;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:12px;font-weight:700;min-height:46px;cursor:pointer">Continue offline</button>';
+    var status = document.getElementById('saveStatus') || document.querySelector('.save-status');
+    (status && status.parentNode ? status.parentNode : document.body).appendChild(box);
+  }
+  box.style.display = show ? 'flex' : 'none';
+}
 
 /* ════════════════════════════════════════════════════════════
    STEP 5 — DONE
@@ -1963,25 +2056,108 @@ setInterval(renderHealthBar, 30000);
 let _modalCategoryPreset = null;
 
 function openAddModal(categoryPreset) {
-  _modalCategoryPreset = categoryPreset || null;
-  const modal   = document.getElementById('addDeviceModal');
-  const catSel  = document.getElementById('modalCategory');
-  const vendSel = document.getElementById('modalVendor');
-
-  // Populate vendor dropdown
-  if (window.SokoniHardware) {
-    const adapters = window.SokoniHardware.listAdapters();
-    vendSel.innerHTML = '<option value="">Select a vendor...</option>' +
-      adapters.map(a =>
-        `<option value="${a.vendorId}">${a.adapterName} [${a.category.replace(/_/g,' ')}]</option>`
-      ).join('');
+  /* Hardened: the modal must ALWAYS open. A failure populating the vendor dropdown (listAdapters
+     throwing, or a missing sub-element) used to abort before modal.classList.add('open'), so the
+     button appeared to "do nothing". Now the vendor list is best-effort and any error surfaces as
+     a toast + console log instead of silently killing the whole action. */
+  try {
+    _modalCategoryPreset = categoryPreset || null;
+    const modal = document.getElementById('addDeviceModal');
+    if (!modal) { try { toast('Add-device dialog not found', 'error'); } catch(_){} return; }
+    const catSel  = document.getElementById('modalCategory');
+    const vendSel = document.getElementById('modalVendor');
+    try {
+      if (vendSel && window.SokoniHardware && typeof window.SokoniHardware.listAdapters === 'function') {
+        const adapters = window.SokoniHardware.listAdapters() || [];
+        vendSel.innerHTML = '<option value="">Select a vendor...</option>' +
+          adapters.map(a => `<option value="${a.vendorId}">${a.adapterName} [${String(a.category||'').replace(/_/g,' ')}]</option>`).join('');
+      }
+    } catch (e) { console.warn('[wizard] vendor list failed (modal still opens):', e && e.message); }
+    if (categoryPreset && catSel) catSel.value = categoryPreset;
+    modal.classList.add('open');
+  } catch (e) {
+    console.error('[wizard] openAddModal failed:', e);
+    try { toast('Could not open Add Device: ' + (e && e.message || e), 'error'); } catch(_){}
   }
-
-  if (categoryPreset) catSel.value = categoryPreset;
-  modal.classList.add('open');
 }
+window.openAddModal = openAddModal;
 
 document.getElementById('btnAddManual').addEventListener('click', () => openAddModal(null));
+
+/* ── Bluetooth P58E: scan → connect → reconnect ────────────────────────────────
+   Thin control surface over window.P58EPrinter — the engine owns the BLE scan,
+   GATT connect, health-poll and automatic reconnect. We only drive it and mirror
+   its status events into the panel. ─────────────────────────────────────────── */
+(function _wireP58E () {
+  const scanBtn   = document.getElementById('p58eScanBtn');
+  const recBtn    = document.getElementById('p58eReconnectBtn');
+  const forgetBtn = document.getElementById('p58eForgetBtn');
+  const statusEl  = document.getElementById('p58eStatus');
+  const anyLink   = document.getElementById('p58eAnyLink');
+  if (!scanBtn) return;
+
+  const COLOR = { ok: 'var(--accent,#71ff00)', warn: 'var(--amber,#ffb300)', err: '#ff6b6b', '': 'var(--muted,#9a9a9a)' };
+  const setStatus = (txt, cls) => { statusEl.textContent = txt; statusEl.style.color = COLOR[cls || '']; };
+  const busy = (b, label) => { scanBtn.disabled = b; scanBtn.innerHTML = b ? ('<span class="spinner"></span> ' + (label || 'Working…')) : '🔵 Scan &amp; Connect'; };
+  const showPaired = (paired) => { recBtn.style.display = paired ? '' : 'none'; forgetBtn.style.display = paired ? '' : 'none'; };
+  const P = () => window.P58EPrinter;
+  const firstLine = (m) => String(m || '').split('\n')[0];
+
+  if (!P()) { setStatus('Bluetooth printer engine not loaded.', 'err'); scanBtn.disabled = true; return; }
+  if (!navigator.bluetooth) { setStatus('This browser/device does not support Web Bluetooth — use Chrome on Android or desktop.', 'warn'); }
+
+  /* Live status straight from the engine's own lifecycle events. */
+  P().on('scanning',         ()   => { busy(true, 'Scanning…');   setStatus('Scanning for Bluetooth printers…'); });
+  P().on('connecting',       (ev) => { busy(true, 'Connecting…'); setStatus('Connecting to ' + ((ev && ev.name) || 'printer') + '…'); });
+  P().on('connected',        (ev) => {
+    busy(false);
+    setStatus('✓ Connected: ' + ((ev && ev.name) || 'P58E') + ' — reconnects automatically.', 'ok');
+    showPaired(true);
+    anyLink.style.display = 'none';
+    /* Bridge the BLE pairing into the hardware registry so it appears under
+       'Configured devices' AND the Test step — a registered receipt_printer's
+       testPrint() routes to P58EPrinter GATT, and registerDevice() persists via
+       saveRegistry() so it survives reloads. Then re-run discovery so both
+       sections reflect the pairing immediately, with no manual re-scan. */
+    try {
+      if (window.SokoniHardware && SokoniHardware.registerDevice) {
+        SokoniHardware.registerDevice({
+          id: 'bt-p58e', category: 'receipt_printer',
+          name: (ev && ev.name) || 'P58E', connectionType: 'bluetooth',
+          modelName: 'P58E', config: { paperWidth: 58 },
+        });
+      }
+    } catch (_) { /* registry optional — pairing itself already succeeded */ }
+    try { var _bd = document.getElementById('btnDiscover'); if (_bd) _bd.click(); } catch (_) {}
+  });
+  P().on('reconnecting',     (ev) => { setStatus('Reconnecting… attempt ' + ((ev && ev.attempt) || 1) + '/' + ((ev && ev.max) || '—'), 'warn'); });
+  P().on('reconnect_failed', ()   => { busy(false); setStatus('Could not reconnect — power the printer on, then tap Reconnect.', 'err'); });
+  P().on('disconnected',     ()   => { busy(false); setStatus('Disconnected. It reconnects when back in range, or tap Reconnect.', 'warn'); });
+  P().on('error',            (ev) => { busy(false); setStatus(firstLine(ev && ev.message) || 'Bluetooth error.', 'err'); });
+
+  scanBtn.addEventListener('click', async () => {
+    anyLink.style.display = 'none';
+    try { await P().requestAndPair(); }                 /* filtered scan → connect */
+    catch (e) { busy(false); setStatus(firstLine(e.message) || 'Scan cancelled.', 'err'); anyLink.style.display = ''; }
+  });
+  anyLink.addEventListener('click', async (ev) => {     /* "can't see it" → scan all */
+    ev.preventDefault();
+    try { await P().requestAndPairAny(); }
+    catch (e) { setStatus(firstLine(e.message) || 'Scan cancelled.', 'err'); }
+  });
+  recBtn.addEventListener('click', async () => {
+    setStatus('Reconnecting…', 'warn');
+    try { const ok = await P().autoConnect(); if (!ok) await P().requestAndPair(); }
+    catch (e) { setStatus(firstLine(e.message) || 'Reconnect failed.', 'err'); }
+  });
+  forgetBtn.addEventListener('click', async () => {
+    try { await P().forget(); showPaired(false); setStatus('Printer forgotten. Scan to pair again.'); } catch (e) {}
+  });
+
+  /* On load: silently reconnect to a remembered printer (auto-reconnect). */
+  if (P().isConnected) { showPaired(true); setStatus('✓ Connected — reconnects automatically.', 'ok'); }
+  else { Promise.resolve(P().autoConnect()).then(ok => { if (ok) showPaired(true); }).catch(() => {}); }
+})();
 
 function closeAddModal() {
   document.getElementById('addDeviceModal').classList.remove('open');

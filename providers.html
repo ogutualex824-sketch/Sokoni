@@ -332,6 +332,7 @@
 </div>
 
 <script src="nav-active.js" defer></script>
+<script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-providers.js" defer></script>
 <script>
@@ -419,7 +420,7 @@ function renderGrid(list) {
       + '<div class="pv-card-body">'
       + '<div class="pv-avatar-row">'
       + (p.photo
-          ? '<img class="pv-avatar" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" style="object-fit:cover;">'
+          ? '<img class="pv-avatar" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" loading="lazy" decoding="async" style="object-fit:cover;" data-initials="' + esc(initials) + '" onerror="this.onerror=null;var d=document.createElement(\'div\');d.className=this.className;d.style.cssText=\'font-size:22px;font-weight:800;\';d.textContent=this.dataset.initials;this.replaceWith(d);">'
           : '<div class="pv-avatar" style="font-size:22px;font-weight:800;">' + esc(initials) + '</div>')
       + '</div>'
       + '<div class="pv-name"><a href="' + esc(p.profileUrl) + '" style="color:inherit;text-decoration:none;">'

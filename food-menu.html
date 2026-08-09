@@ -94,6 +94,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 </head>
 <body>
 <script src="splash.js"></script>
+<script src="sokoni-delivery-engine.js"></script>
 <script src="sokoni-food.js"></script>
 
 <nav class="fn">
@@ -313,11 +314,44 @@ document.getElementById('starSelect').innerHTML = [1,2,3,4,5].map(i=>`<button on
 updateCartBar();
 
 /* ── CHECKOUT ── */
+/* One delivery config for this restaurant, fed to the shared engine.
+
+   Both call sites below previously computed `_rest.deliveryFee || 50`
+   independently — a duplicate within a duplicate, in the same file. The
+   literal 50 is preserved EXACTLY so pricing is unchanged for every existing
+   restaurant, but it is now a named legacy default rather than an inline
+   number, so it is visible when merchants get real delivery configuration.
+
+   ONE deliberate behaviour change, surfaced rather than hidden: the old form was
+   `_rest.deliveryFee || 50`, so a restaurant that set deliveryFee to 0 — free
+   delivery — had its customers charged 50 anyway, because 0 is falsy. The != null
+   check honours the 0. Verified against production first: all three restaurant
+   collections hold 0 documents, so no existing merchant prices change. Had any
+   restaurant carried a 0, this would have needed the founder's decision rather
+   than a silent fix. */
+var FOOD_LEGACY_DEFAULT_FEE = 50;
+
+function _foodDeliveryConfig(){
+  return {
+    enabled: true,
+    mode: 'flat',
+    defaultFee: (_rest && _rest.deliveryFee != null) ? _rest.deliveryFee : FOOD_LEGACY_DEFAULT_FEE,
+  };
+}
+
+/* Falls back to the legacy arithmetic if the engine has not loaded, so a
+   slow script cannot block a customer from checking out. */
+function _foodDeliveryFee(){
+  var cfg = _foodDeliveryConfig();
+  if (!window.SokoniDeliveryEngine) return cfg.defaultFee;
+  return window.SokoniDeliveryEngine.calculateDelivery(cfg, {}).fee;
+}
+
 function openCheckout(){
   const cart = SokoniFood.getCart().filter(c => c.restaurantId === _id);
   if(!cart.length){ return; }
   const subtotal   = cart.reduce((s,c)=>s+c.price*c.qty,0);
-  const deliveryFee = _rest.deliveryFee || 50;
+  const deliveryFee = _foodDeliveryFee();
   const total      = subtotal + deliveryFee;
   const rn = document.getElementById('coRestName'); if(rn) rn.textContent = _rest.emoji+' '+_rest.name;
   const summary = document.getElementById('coOrderSummary');
@@ -341,7 +375,7 @@ function placeOrder(){
   if(!cart.length){ if(msg){ msg.textContent='⚠️ Your cart is empty'; msg.style.color='#f59e0b'; } return; }
 
   const subtotal   = cart.reduce((s,c)=>s+c.price*c.qty,0);
-  const deliveryFee = _rest.deliveryFee || 50;
+  const deliveryFee = _foodDeliveryFee();
   const total      = subtotal + deliveryFee;
 
   if(!window.SokoniPay?.platformBook){ if(msg){ msg.textContent='Payment module loading…'; } return; }

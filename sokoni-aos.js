@@ -61,6 +61,8 @@ window.SokoniAOS = (() => {
       services:      () => _loadServices(),
       delivery:      () => _loadDelivery(),
       financial:     () => _loadFinancial(),
+      bookings:      () => _loadBookings(),
+      payments:      () => _loadPayments(),
       support:       () => _loadSupport(),
       comms:         () => _loadComms(),
       content:       () => _loadContent(),
@@ -80,13 +82,13 @@ window.SokoniAOS = (() => {
 
   // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
   const _ADMIN_OS_OPS = new Set([
-    'adminApprovePayouts','adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
+    'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
-    'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFraudAlerts',
-    'adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
-    'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
-    'adminGetSearchStats','adminGetSupportTickets','adminGetUser','adminRemoveReview',
+    'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
+    'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
+    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
+    'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
@@ -123,7 +125,8 @@ window.SokoniAOS = (() => {
     _listen(_db.collection("supportTickets").where("status", "==", "open"),
       snap => _set("kpiOpenTickets", snap.size));
 
-    _listen(_db.collection("payouts").where("status", "==", "pending"),
+    /* Canonical: withdrawals live in `payoutRequests` (was stale `payouts` → KPI read 0). */
+    _listen(_db.collection("payoutRequests").where("status", "==", "pending"),
       snap => _set("kpiPendingPayouts", snap.size));
 
     _listen(_db.collection("disputes").where("status", "==", "open"),
@@ -132,7 +135,8 @@ window.SokoniAOS = (() => {
     _listen(_db.collection("businesses").where("status", "==", "active"),
       snap => _set("kpiActiveBusinesses", _fmt(snap.size)));
 
-    _listen(_db.collection("bookings").where("status", "in", ["confirmed", "pending"]),
+    /* Canonical service bookings = `providerBookings` (was venue `bookings`). */
+    _listen(_db.collection("providerBookings").where("status", "in", ["confirmed", "pending"]),
       snap => _set("kpiActiveBookings", _fmt(snap.size)));
   }
 
@@ -142,17 +146,91 @@ window.SokoniAOS = (() => {
   }
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
+  function _kes(v) { return "KES " + _fmt(Math.round(Number(v) || 0)); }
+  function _ecSkeleton() { return '<div class="ec-grid">' + Array.from({ length: 8 }).map(function () { return '<div class="ec-skel"></div>'; }).join('') + '</div>'; }
+  /* Render an object as a readable key-value block (recursive) — never raw JSON to admins. */
+  function _kvHtml(obj) {
+    if (obj == null) return '<div class="aos-muted">No data</div>';
+    if (typeof obj !== "object") return _esc(String(obj));
+    var keys = Object.keys(obj);
+    if (!keys.length) return '<div class="aos-muted">Empty</div>';
+    return '<div class="kv">' + keys.map(function (k) {
+      var v = obj[k], disp;
+      if (Array.isArray(v)) disp = '<strong>' + v.length + ' item' + (v.length === 1 ? '' : 's') + '</strong>';
+      else if (v && typeof v === "object") disp = _kvHtml(v);
+      else disp = '<strong>' + _esc(String(v)) + '</strong>';
+      return '<div class="kv-row"><span>' + _esc(_titleCase(k)) + '</span>' + disp + '</div>';
+    }).join("") + '</div>';
+  }
+  /* P1 Command Center — 4 sections, canonical single entry (adminGetExecutiveDashboard)
+     + reused Finance data (adminGetFinance.reconciliation). No recalculation here. */
+  function _renderExecCommand(x, f, sysHealth, pipeline) {
+    var ec = document.getElementById("execCommand"); if (!ec) return;
+    function cell(l, v, attn) { return '<div class="ec-cell' + (attn ? ' attn' : '') + '"><div class="l">' + l + '</div><div class="v">' + v + '</div></div>'; }
+    function money(l, v) { return '<div class="ec-cell"><div class="l">' + l + '</div><div class="v money">' + _kes(v) + '</div></div>'; }
+    var kpis = [
+      cell('Total Users', _fmt(x.totalUsers || 0)), cell('Active Users', _fmt(x.activeUsers || 0)),
+      cell('Providers', _fmt(x.totalProviders || 0)), cell('Active Providers', _fmt(x.activeProviders || 0)),
+      cell('Merchants', _fmt(x.merchants || 0)), cell('Product Orders', _fmt(x.totalOrders || 0)),
+      cell('Service Bookings', _fmt(x.totalServiceBookings || 0)),
+      money('GMV · 30d', f.grossRevenue), money('Net Revenue · 30d', f.netPlatformRevenue), money('Wallet Float', f.walletFloat),
+      cell('Pending Payouts', _fmt(x.pendingPayouts || 0) + (x.pendingPayoutAmount ? ' · ' + _kes(x.pendingPayoutAmount) : '')),
+    ].join('');
+    var ops = [
+      cell('Pending Verification', _fmt(x.pendingProviderVerification || 0), (x.pendingProviderVerification || 0) > 0),
+      cell('Merchant Approvals', _fmt(x.pendingMerchantApprovals || 0), (x.pendingMerchantApprovals || 0) > 0),
+      cell('Pending Withdrawals', _fmt(x.pendingPayouts || 0), (x.pendingPayouts || 0) > 0),
+      cell('Support Tickets', _fmt(x.openTickets || 0), (x.openTickets || 0) > 0),
+      cell('Open Disputes', _fmt(x.openDisputes || 0), (x.openDisputes || 0) > 0),
+      cell('Reviews to Moderate', _fmt(x.reviewsAwaitingModeration || 0), (x.reviewsAwaitingModeration || 0) > 0),
+    ].join('');
+    var fin = [
+      money('Revenue Today', x.revenueToday), money('Revenue · 30d', f.grossRevenue), money('Commissions · 30d', f.commission),
+      money('Pending Withdrawals', f.pendingWithdrawals), money('Completed Withdrawals', f.completedWithdrawals), money('Wallet Float', f.walletFloat),
+    ].join('');
+    /* Health strip — real per-service status from adminGetSystemHealth (P2). Services
+       without a server-side signal report 'unknown' (never faked green). */
+    var H = (sysHealth && sysHealth.services) || {};
+    function st(key) { return (H[key] && H[key].status) || 'unknown'; }
+    function dt(key) { return (H[key] && H[key].detail) ? ' title="' + String(H[key].detail).replace(/"/g, '') + '"' : ''; }
+    var svc = [
+      ['Payments', 'payments'], ['Wallet', 'wallet'], ['Search', 'search'], ['Email', 'email'],
+      ['SMS', 'sms'], ['Notifications', 'notifications'], ['Cloud Functions', 'cloudFunctions'], ['eTIMS', 'etims'],
+    ];
+    var strip = svc.map(function (a) { return '<div class="ec-svc"' + dt(a[1]) + '><span class="ec-dot ' + st(a[1]) + '"></span>' + a[0] + '</div>'; }).join('');
+    /* Merchant pipeline funnel — Applied → … → Active. Bar width ∝ stage count. */
+    var stages = (pipeline && pipeline.stages) || [];
+    var mx = stages.reduce(function (a, st2) { return Math.max(a, st2.count || 0); }, 1);
+    var funnel = stages.map(function (st2) {
+      var w = Math.max(6, Math.round((st2.count || 0) / mx * 100));
+      return '<div class="ec-stage"><div class="ec-stage-bar"><span style="width:' + w + '%"></span></div><div class="ec-stage-n">' + _fmt(st2.count || 0) + '</div><div class="ec-stage-l">' + st2.label + '</div></div>';
+    }).join('');
+    ec.innerHTML =
+      '<div class="ec-section"><div class="ec-title">Executive KPIs</div><div class="ec-grid">' + kpis + '</div></div>' +
+      '<div class="ec-section"><div class="ec-title">Operational Status</div><div class="ec-grid">' + ops + '</div></div>' +
+      '<div class="ec-section"><div class="ec-title">Financial Summary · 30-day</div><div class="ec-grid">' + fin + '</div></div>' +
+      (stages.length ? '<div class="ec-section"><div class="ec-title">Merchant Pipeline</div><div class="ec-funnel">' + funnel + '</div></div>' : '') +
+      '<div class="ec-section"><div class="ec-title">Platform Health <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--aos-sub)">· real-time signals</span></div><div class="ec-strip">' + strip + '</div></div>';
+  }
+
   async function _loadDashboard() {
+    var _ec = document.getElementById("execCommand"); if (_ec) _ec.innerHTML = _ecSkeleton();
     try {
-      const [metrics, health, daily] = await Promise.allSettled([
+      const [metrics, health, daily, execRes, finRes, sysRes, pipeRes] = await Promise.allSettled([
         _call("adminGetPlatformOverview"),
         _call("getPlatformHealthScores"),
         _call("getDailyReport"),
+        _call("adminGetExecutiveDashboard"),
+        _call("adminGetFinance"),
+        _call("adminGetSystemHealth"),
+        _call("adminGetMerchantPipeline"),
       ]);
 
       const m = metrics.value || {};
       const h = health.value  || {};
       const d = daily.value   || {};
+      /* Command center — canonical single entry + reused Finance + real health + pipeline. */
+      _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {}, sysRes.value || {}, pipeRes.value || {});
 
       _set("kpiActiveSellers",    _fmt(m.activeSellers    || 0));
       _set("kpiActiveProviders",  _fmt(m.activeProviders  || 0));
@@ -184,7 +262,11 @@ window.SokoniAOS = (() => {
       // Recent alerts
       _loadAlerts();
 
-    } catch (e) { console.error("[AOS] Dashboard load error:", e); }
+    } catch (e) {
+      console.error("[AOS] Dashboard load error:", e);
+      var ec = document.getElementById("execCommand");
+      if (ec) ec.innerHTML = '<div class="ec-section" style="text-align:center;padding:24px;color:var(--aos-sub)">Couldn’t load the command center. <button class="aos-btn-sm" onclick="SokoniAOS.reloadDashboard()">Try again</button></div>';
+    }
   }
 
   async function _loadAlerts() {
@@ -216,7 +298,7 @@ window.SokoniAOS = (() => {
       if (!users.length) { tbody.innerHTML = _emptyRow(7, "No users found"); return; }
       tbody.innerHTML = users.map(u => `
         <tr>
-          <td><img class="avatar" src="${_esc(u.photoURL||"")||"https://ui-avatars.com/api/?name="+encodeURIComponent(u.name||u.email||"?")}"> ${_esc(u.name || "—")}</td>
+          <td><img class="avatar" src="${_esc(u.photoURL||"")||"/assets/logosokoni.png"}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}"> ${_esc(u.name || "—")}</td>
           <td class="aos-muted">${_esc(u.email||"")}</td>
           <td><span class="role-badge role-${u.role||"buyer"}">${_esc(u.role||"buyer")}</span></td>
           <td><span class="status-badge st-${u.status||"active"}">${_esc(u.status||"active")}</span></td>
@@ -257,7 +339,7 @@ window.SokoniAOS = (() => {
 
   async function banUser(uid, currentStatus) {
     const action = currentStatus === "banned" ? "restore" : "ban";
-    if (!confirm(`${_titleCase(action)} this user?`)) return;
+    if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
     await _call("tsBanUser", { userId: uid, action }).catch(e => _toast(e.message, "error"));
     _toast("User " + action + "ned successfully", "success");
     _panelCache.users = false; _loadUsers();
@@ -388,24 +470,76 @@ window.SokoniAOS = (() => {
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const snap = await _db.collection("providers").where("status", "==", "active")
-        .orderBy("createdAt", "desc").limit(30).get();
-      const rows = snap.docs.map(d => {
-        const p = d.data();
-        return `<tr>
-          <td>${_esc(p.name||p.businessName||"—")}</td>
+      /* Canonical: adminGetProviders (was a direct `providers` Firestore read — a
+         non-canonical-source defect). Wires the deployed, previously-unused op. */
+      const data = await _call("adminGetProviders", { limit: 50 });
+      const items = data.items || data.providers || [];
+      const rows = items.map(p => `<tr>
+          <td>${_esc(p.name||"—")}</td>
           <td class="aos-muted">${_esc(p.category||"—")}</td>
           <td>${_esc(p.location||"—")}</td>
-          <td><span class="status-badge st-${p.status||"active"}">${_esc(p.status||"active")}</span></td>
-          <td>${_fmt(p.bookingCount||0)}</td>
+          <td><span class="status-badge st-${_esc(p.status||"—")}">${_esc(p.status||"—")}${p.verified?" ✓":""}</span></td>
+          <td>${_fmt(p.jobsCompleted||0)}</td>
           <td>${(p.rating||0).toFixed(1)} ⭐</td>
-          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${d.id}')">View</button></td>
-        </tr>`;
-      });
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(p.uid)}')">View</button></td>
+        </tr>`);
       body.innerHTML = rows.length
-        ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Bookings</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
-        : _emptyMsg("No active providers");
-    } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+        ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Jobs</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg("No providers found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load providers.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'services\')">Try again</button></div>';
+    }
+  }
+
+  // ── Bookings (canonical providerBookings via adminGetBookings) ───────────────
+  async function _loadBookings(status) {
+    const body = document.getElementById("bookingsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const data = await _call("adminGetBookings", status ? { status: status, limit: 60 } : { limit: 60 });
+      const items = data.bookings || data.items || [];
+      const q = ((document.getElementById("bookingsSearch") || {}).value || "").toLowerCase();
+      const list = q ? items.filter(b => ((b.customerName || "") + " " + (b.service || "") + " " + (b.status || "") + " " + (b.id || "")).toLowerCase().indexOf(q) > -1) : items;
+      const rows = list.map(b => `<tr>
+          <td>${_esc(b.customerName||"—")}</td>
+          <td class="aos-muted">${_esc(b.service||"—")}</td>
+          <td>${_esc(((b.date||"")+" "+(b.startTime||"")).trim()||"—")}</td>
+          <td><span class="status-badge st-${_esc(b.status||"")}">${_esc(b.status||"—")}</span></td>
+          <td class="aos-muted">${_esc(b.paymentStatus||"—")}</td>
+          <td>${b.price?("KES "+_fmt(Math.round((b.price||0)/100))):"—"}</td>
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(b.customerUid||"")}')">Customer</button></td>
+        </tr>`);
+      body.innerHTML = rows.length
+        ? `<table class="aos-table"><thead><tr><th>Customer</th><th>Service</th><th>When</th><th>Status</th><th>Payment</th><th>Amount</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg(q ? "No matching bookings" : "No bookings found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load bookings.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'bookings\')">Try again</button></div>';
+    }
+  }
+
+  // ── Payments — collections (canonical `payments` via adminGetPayments) ────────
+  async function _loadPayments(status) {
+    const body = document.getElementById("paymentsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const data = await _call("adminGetPayments", { limit: 100 });
+      let items = data.payments || data.items || data.rows || [];
+      if (status) items = items.filter(p => String(p.status || "").toLowerCase() === status);
+      const rows = items.map(p => `<tr>
+          <td class="aos-muted" style="font-family:monospace;font-size:.74rem">${_esc(String(p.id||"").slice(0,12))}</td>
+          <td>KES ${_fmt(Math.round(p.amount||0))}</td>
+          <td><span class="status-badge st-${_esc(String(p.status||"").toLowerCase())}">${_esc(p.status||"—")}</span></td>
+          <td>${_esc(p.sellerName||"—")}</td>
+          <td class="aos-muted">${_esc(p.mpesaCode||"—")}</td>
+        </tr>`);
+      body.innerHTML = rows.length
+        ? `<table class="aos-table"><thead><tr><th>Ref</th><th>Amount</th><th>Status</th><th>Seller</th><th>M-Pesa Ref</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg("No payments found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load payments.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'payments\')">Try again</button></div>';
+    }
   }
 
   // ── Delivery ─────────────────────────────────────────────────────────────────
@@ -555,20 +689,58 @@ window.SokoniAOS = (() => {
             <td><button class="aos-btn-sm success" onclick="SokoniAOS.releaseEscrow('${a.id}')">Release</button></td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No held escrow funds");
       } else if (tab === "report") {
-        const data = await _call("getFinancialReport", { period: "monthly" }).catch(() => ({}));
-        const r = data.report || data;
-        body.innerHTML = `<div style="display:flex;gap:8px;margin-bottom:16px">
-          <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
-          <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
-        </div>
-        <div class="fin-report">${JSON.stringify(r, null, 2)}</div>`;
+        /* Executive report — reconciled from adminGetFinance (canonical 30-day) +
+           adminGetExecutiveDashboard (booking stats). No recomputation, no raw JSON. */
+        const [finR, execR] = await Promise.all([
+          _call("adminGetFinance").catch(() => ({})),
+          _call("adminGetExecutiveDashboard").catch(() => ({})),
+        ]);
+        const rec = (finR && finR.reconciliation) || {};
+        const x = execR || {};
+        const row = (l, v) => `<div class="rep-row"><span>${l}</span><strong>${v}</strong></div>`;
+        body.innerHTML = `
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
+            <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
+          </div>
+          <div class="rep-card"><div class="rep-h">Executive Summary &middot; 30-day</div>
+            ${row("GMV (gross revenue)", _kes(rec.grossRevenue))}
+            ${row("Net Platform Revenue", _kes(rec.netPlatformRevenue))}
+            ${row("Wallet Float (liability)", _kes(rec.walletFloat))}
+            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Revenue Breakdown</div>
+            ${row("Product / Merchant Revenue", _kes(rec.productRevenue))}
+            ${row("Service / Provider Revenue", _kes(rec.serviceRevenue))}
+            ${row("Total Commission", _kes(rec.commission))}
+            ${row("&mdash; Product Commission", _kes(rec.productCommission))}
+            ${row("&mdash; Service Commission", _kes(rec.serviceCommission))}
+            ${row("Gateway Fees (absorbed)", _kes(rec.gatewayFees))}
+            ${row("Refunds", _kes(rec.refunds))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Withdrawals &amp; Settlement</div>
+            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
+            ${row("Completed Withdrawals", _kes(rec.completedWithdrawals))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Booking Statistics</div>
+            ${row("Total Service Bookings", _fmt(x.totalServiceBookings || 0))}
+            ${row("Active Bookings", _fmt(x.activeServiceBookings || 0))}
+            ${row("Bookings Today", _fmt(x.serviceBookingsToday || 0))}
+            ${row("Total Product Orders", _fmt(x.totalOrders || 0))}
+          </div>
+          <div style="font-size:.72rem;color:var(--aos-sub);margin-top:8px">Reconciled from adminGetFinance (canonical 30-day window) &mdash; no recomputation.</div>`;
       }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
 
   async function releaseEscrow(id) {
-    if (!confirm("Release this escrow to the seller? This is irreversible.")) return;
-    await _call("finosReleaseEscrow", { escrowId: id }).catch(e => _toast(e.message, "error"));
+    if (!(await SK.dialog.confirm("Funds will be transferred to the seller immediately. This is irreversible.", null, null, { title: "Release escrow?", variant: "danger", confirmLabel: "Release Funds" }))) return;
+    try {
+      await _call("finosReleaseEscrow", { escrowId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Escrow released to seller", "success");
     _financialTab("escrow");
   }
@@ -585,31 +757,75 @@ window.SokoniAOS = (() => {
   }
 
   async function markCommPaid(id) {
-    await _call("markCommissionPaid", { entryId: id }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("markCommissionPaid", { entryId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Marked as paid","success"); _financialTab("commissions");
   }
+  /* Bulk approval ORCHESTRATES the canonical single-payout engine — one
+     adminProcessPayout call per request, identical to a single approval. There is NO
+     second payout path: the frozen wallet engine (wallet.js adminProcessPayout) owns
+     all validation, the atomic approving-gate, idempotency, reconciliation, audit,
+     notifications and the IntaSend B2C flow. Admin OS only iterates. callFn is injected
+     so this is unit-testable (scripts/test-admin-bulk-payout.js). */
+  async function _bulkApprovePayouts(ids, callFn) {
+    var ok = 0, failed = [];
+    for (var i = 0; i < ids.length; i++) {
+      try { await callFn("adminProcessPayout", { requestId: ids[i], status: "approved" }); ok++; }
+      catch (e) { failed.push({ id: ids[i], error: (e && e.message) || String(e) }); }
+    }
+    return { ok: ok, failed: failed, total: ids.length };
+  }
   async function approveAllPayouts() {
-    if (!confirm("Approve all pending payouts?")) return;
-    await _call("adminApprovePayouts", { all: true }).catch(e => _toast(e.message,"error"));
-    _toast("All payouts approved","success"); _financialTab("payouts");
+    var data = await _call("aosGetPendingPayouts").catch(function () { return { payouts: [] }; });
+    var ids = (data.payouts || []).map(function (p) { return p.id; }).filter(Boolean);
+    if (!ids.length) { _toast("No pending payouts", "info"); return; }
+    if (!(await SK.dialog.confirm("Each of the " + ids.length + " payouts is processed individually by the wallet engine.", null, null, { title: "Approve all " + ids.length + " payouts?", variant: "danger", confirmLabel: "Approve All" }))) return;
+    var res = await _bulkApprovePayouts(ids, _call);
+    if (res.failed.length) { console.warn("[payouts] bulk failures", res.failed); _toast(res.ok + " approved · " + res.failed.length + " failed (see console)", "error"); }
+    else _toast("All " + res.ok + " payouts approved", "success");
+    _financialTab("payouts");
   }
   async function approvePayout(id) {
-    await _call("adminApprovePayouts", { payoutId: id }).catch(e => _toast(e.message,"error"));
-    _toast("Payout approved","success"); _financialTab("payouts");
+    try {
+      await _call("adminProcessPayout", { requestId: id, status: "approved" });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
+    _toast("Payout approved", "success"); _financialTab("payouts");
   }
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
-    await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Payout rejected","success"); _financialTab("payouts");
   }
   async function resolveDispute(id, winnerSide) {
     const note = prompt("Resolution note:");
-    await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Dispute resolved","success"); _financialTab("disputes");
   }
   async function processRefund(id, action) {
     const note = action === "rejected" ? prompt("Rejection reason:") : "";
-    await _call("processRefund", { refundId: id, action, note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("processRefund", { refundId: id, action, note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Refund " + action,"success"); _financialTab("refunds");
   }
 
@@ -801,7 +1017,7 @@ window.SokoniAOS = (() => {
     const html    = document.getElementById("emailHtml")?.value;
     const target  = document.getElementById("emailTarget")?.value || "all";
     if (!subject || !html) { _toast("Subject and body are required", "error"); return; }
-    if (!confirm(`Send email blast to all ${target}? This will queue emails immediately.`)) return;
+    if (!(await SK.dialog.confirm(`This will queue emails to all ${target} immediately.`, null, null, { title: `Send email blast to all ${target}?`, variant: "danger", confirmLabel: "Send blast" }))) return;
     await _call("adminSendEmailBlast", { subject, html, target }).catch(e => _toast(e.message, "error"));
     _toast("Email blast queued for " + target, "success");
   }
@@ -810,7 +1026,7 @@ window.SokoniAOS = (() => {
     const message = document.getElementById("smsBody")?.value;
     const target  = document.getElementById("smsTarget")?.value || "all";
     if (!message) { _toast("Message body is required", "error"); return; }
-    if (!confirm(`Send SMS to all ${target}? Carrier charges apply.`)) return;
+    if (!(await SK.dialog.confirm(`Carrier charges apply for every recipient.`, null, null, { title: `Send SMS to all ${target}?`, variant: "danger", confirmLabel: "Send SMS" }))) return;
     await _call("adminSendSMSBlast", { message, target }).catch(e => _toast(e.message, "error"));
     _toast("SMS queued for " + target, "success");
   }
@@ -910,7 +1126,7 @@ window.SokoniAOS = (() => {
   }
 
   async function deleteCampaign(id) {
-    if (!confirm("Permanently delete this campaign?")) return;
+    if (!(await SK.dialog.confirm("Permanently delete this campaign?", null, null, { title: "Delete campaign", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteCampaign", { campaignId: id })
       .catch(e => _toast(e.message, "error"));
     _toast("Campaign deleted", "success");
@@ -926,8 +1142,20 @@ window.SokoniAOS = (() => {
     await _call("adminSaveBanner", { title, imageUrl: url, position }).catch(e => _toast(e.message,"error"));
     _toast("Banner added","success"); _panelCache.content = false; _contentTab("banners");
   }
+  async function editBanner(id) {
+    const title    = prompt("New banner title (blank = keep current):");
+    const url      = prompt("New image URL (blank = keep current):");
+    const position = prompt("Position (hero/sidebar/footer, blank = keep):");
+    if (!title && !url && !position) return;
+    const patch = { id: id };
+    if (title) patch.title = title;
+    if (url) patch.imageUrl = url;
+    if (position) patch.position = position;
+    await _call("adminSaveBanner", patch).catch(e => _toast(e.message, "error"));
+    _toast("Banner updated", "success"); _panelCache.content = false; _contentTab("banners");
+  }
   async function deleteBanner(id) {
-    if (!confirm("Delete banner?")) return;
+    if (!(await SK.dialog.confirm("Delete this banner?", null, null, { title: "Delete banner", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteBanner", { bannerId: id }).catch(e => _toast(e.message,"error"));
     _toast("Banner deleted","success"); _panelCache.content = false; _contentTab("banners");
   }
@@ -938,7 +1166,7 @@ window.SokoniAOS = (() => {
     _toast("FAQ added","success"); _panelCache.content = false; _contentTab("faqs");
   }
   async function deleteFaq(id) {
-    if (!confirm("Delete FAQ?")) return;
+    if (!(await SK.dialog.confirm("Delete this FAQ?", null, null, { title: "Delete FAQ", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteFaq", { faqId: id }).catch(e => _toast(e.message,"error"));
     _toast("FAQ deleted","success"); _panelCache.content = false; _contentTab("faqs");
   }
@@ -951,7 +1179,7 @@ window.SokoniAOS = (() => {
     _toast("Announcement posted","success"); _panelCache.content = false; _contentTab("announcements");
   }
   async function deleteAnnouncement(id) {
-    if (!confirm("Remove announcement?")) return;
+    if (!(await SK.dialog.confirm("Remove this announcement?", null, null, { title: "Remove announcement", variant: "danger", confirmLabel: "Remove" }))) return;
     await _call("adminSaveAnnouncement", { id, deleted: true }).catch(e => _toast(e.message,"error"));
     _toast("Removed","success"); _panelCache.content = false; _contentTab("announcements");
   }
@@ -962,12 +1190,19 @@ window.SokoniAOS = (() => {
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const [aiStats, aiSubs] = await Promise.all([
+      const [aiStats, aiSubs, flagsRes] = await Promise.all([
         _call("adminGetAiStats").catch(() => ({})),
         _call("getAISubscriptionStats").catch(() => ({})),
+        _call("adminGetFeatureFlags").catch(() => ({})),
       ]);
       const s = aiStats.stats || aiStats;
       const sub = aiSubs.stats || aiSubs;
+      /* Hydrate module toggles from REAL feature-flag state (was hard-coded checked). */
+      const _rawFlags = flagsRes.flags || flagsRes.items || [];
+      const _flagMap = {};
+      (Array.isArray(_rawFlags) ? _rawFlags : Object.keys(_rawFlags).map(k => ({ key: k, enabled: _rawFlags[k] && _rawFlags[k].enabled !== false })))
+        .forEach(fl => { _flagMap[fl.key] = fl.enabled !== false; });
+      const _aiOn = m => { const k = "ai_" + m.toLowerCase().replace(/\s/g, "_"); return _flagMap[k] === undefined ? true : _flagMap[k]; };
       body.innerHTML = `
         <div class="ai-stats-grid">
           <div class="stat-card"><span>Total AI Requests</span><strong>${_fmt(s.totalRequests||0)}</strong></div>
@@ -982,7 +1217,7 @@ window.SokoniAOS = (() => {
           ${["KASS Chat","AI Recommendations","AI Moderation","AI Search","Price Prediction"].map(m => `
             <div class="toggle-row">
               <span>${m}</span>
-              <label class="toggle-sw"><input type="checkbox" checked onchange="SokoniAOS.toggleAIModule('${m}',this.checked)"><span></span></label>
+              <label class="toggle-sw"><input type="checkbox" ${_aiOn(m)?"checked":""} onchange="SokoniAOS.toggleAIModule('${m}',this.checked)"><span></span></label>
             </div>`).join("")}
         </div>`;
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
@@ -1044,7 +1279,7 @@ window.SokoniAOS = (() => {
   }
 
   async function reindex() {
-    if (!confirm("This will reindex all data. Continue?")) return;
+    if (!(await SK.dialog.confirm("This will reindex all data. It may take a while.", null, null, { title: "Reindex all data?", confirmLabel: "Reindex" }))) return;
     await _call("searchFullReindex").catch(e => _toast(e.message,"error"));
     _toast("Reindex started","success");
   }
@@ -1054,7 +1289,7 @@ window.SokoniAOS = (() => {
   }
   async function searchReport() {
     const data = await _call("searchSystemReport").catch(e => { _toast(e.message,"error"); return null; });
-    if (data) _modal("Search Report", `<pre class="aos-pre">${JSON.stringify(data,null,2)}</pre>`);
+    if (data) _modal("Search Report", _kvHtml(data.report || data));
   }
 
   // ── SmartPOS ──────────────────────────────────────────────────────────────────
@@ -1180,7 +1415,7 @@ window.SokoniAOS = (() => {
     if (!receiptId) return;
     const reason = prompt("Void reason (required for audit):");
     if (!reason) return;
-    if (!confirm(`Permanently void receipt ${receiptId}?\nThis action is irreversible and will be logged.`)) return;
+    if (!(await SK.dialog.confirm(`Receipt ${receiptId} will be permanently voided. This action is irreversible and will be logged.`, null, null, { title: "Void receipt?", variant: "danger", confirmLabel: "Void receipt" }))) return;
     await _call("voidTrustReceipt", { receiptId, reason }).catch(e => _toast(e.message, "error"));
     _toast("Receipt voided — audit trail recorded", "success");
   }
@@ -1209,7 +1444,7 @@ window.SokoniAOS = (() => {
 
   async function investigateAlert(id) {
     const data = await _call("evaluateFraudRisk", { alertId: id }).catch(() => null);
-    if (data) _modal("Fraud Investigation", `<pre class="aos-pre">${JSON.stringify(data,null,2)}</pre>`);
+    if (data) _modal("Fraud Investigation", _kvHtml(data.result || data.report || data));
   }
 
   // ── Analytics ─────────────────────────────────────────────────────────────────
@@ -1600,7 +1835,7 @@ window.SokoniAOS = (() => {
   }
 
   async function revokeAllSessions() {
-    if (!confirm("Revoke ALL active sessions? Every signed-in user will be signed out.")) return;
+    if (!(await SK.dialog.confirm("Every signed-in user will be signed out immediately.", null, null, { title: "Revoke ALL active sessions?", variant: "danger", confirmLabel: "Revoke all" }))) return;
     const snap = await _db.collection("activeSessions").get().catch(() => null);
     if (!snap || snap.empty) { _toast("No active sessions to revoke", "info"); return; }
     const batch = _db.batch();
@@ -1612,7 +1847,7 @@ window.SokoniAOS = (() => {
   }
 
   async function revokeSession(sessionId) {
-    if (!confirm("Revoke this session?")) return;
+    if (!(await SK.dialog.confirm("This device will be signed out immediately.", null, null, { title: "Revoke this session?", variant: "danger", confirmLabel: "Revoke" }))) return;
     await _db.collection("activeSessions").doc(sessionId).delete().catch(e => _toast(e.message,"error"));
     _toast("Session revoked","success"); _panelCache.security = false; _loadSecurity();
   }
@@ -2006,6 +2241,9 @@ window.SokoniAOS = (() => {
   return {
     init,
     navigate:            _navigate,
+    reloadDashboard:     _loadDashboard,
+    loadBookings:        _loadBookings,
+    loadPayments:        _loadPayments,
     // Users
     loadUsers:           _loadUsers,
     viewUser,
@@ -2038,7 +2276,7 @@ window.SokoniAOS = (() => {
     // Content
     contentTab:          _contentTab,
     addBanner,
-    editBanner:          (id) => _toast("Open full editor — banner: "+id,"info"),
+    editBanner,
     deleteBanner,
     addFaq,
     addAnnouncement,

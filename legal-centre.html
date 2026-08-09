@@ -191,7 +191,7 @@ async function exportRecord() {
     a.href = URL.createObjectURL(blob);
     a.download = 'sokoni-legal-acceptances.json';
     a.click(); URL.revokeObjectURL(a.href);
-  } catch (_) { alert('Could not export right now.'); }
+  } catch (_) { SK.dialog.alert('Could not export right now.'); }
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -315,7 +315,7 @@ async function downloadCert(c, btn) {
     const full = c._full || (await LEGAL('legalGetCertificate', { certificateId: c.id })).certificate;
     await window.SokoniLegalCertificate.download(full);
   } catch (e) {
-    alert((e && e.message) || 'Could not generate the certificate PDF.');
+    SK.dialog.alert((e && e.message) || 'Could not generate the certificate PDF.');
   } finally { btn.disabled = false; btn.textContent = label; }
 }
 

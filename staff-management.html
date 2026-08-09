@@ -6,7 +6,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-  <script src="auth-guard.js"></script>
+  <script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>SOKONI — Staff Management</title>
@@ -850,7 +851,7 @@ window.shareQr = function() {
   if (navigator.share) {
     navigator.share({ title: 'Join our team on SOKONI', text: `Scan this QR or use code: ${_qrInvCode}`, url: _qrInvLink });
   } else {
-    try { navigator.clipboard.writeText(_qrInvLink); alert('Link copied!'); } catch (_) { prompt('Copy this link:', _qrInvLink); }
+    try { navigator.clipboard.writeText(_qrInvLink); SK.dialog.alert('Link copied!'); } catch (_) { prompt('Copy this link:', _qrInvLink); }
   }
 };
 
@@ -914,7 +915,7 @@ function showErr(msg) {
 window.copyInviteLink = async function() {
   try {
     await navigator.clipboard.writeText(_invLink);
-    alert('Link copied to clipboard!');
+    SK.dialog.alert('Link copied to clipboard!');
   } catch (_) {
     prompt('Copy this link:', _invLink);
   }
@@ -1024,9 +1025,9 @@ window.saveStaffChanges = async function(membershipId) {
     ]);
     document.getElementById('staffModal').classList.remove('open');
     await loadMembers();
-    alert('Staff member updated.');
+    SK.dialog.alert('Staff member updated.');
   } catch (e) {
-    alert('Failed to update: ' + e.message);
+    SK.dialog.alert('Failed to update: ' + e.message);
   }
 };
 
@@ -1038,20 +1039,20 @@ window.confirmRevoke = async function(membershipId, name) {
   try {
     await _revoke({ membershipId, reason });
     await loadMembers();
-    alert(`${name} has been removed. Their personal SOKONI account is unaffected.`);
+    SK.dialog.alert(`${name} has been removed. Their personal SOKONI account is unaffected.`);
   } catch (e) {
-    alert('Failed to remove: ' + e.message);
+    SK.dialog.alert('Failed to remove: ' + e.message);
   }
 };
 
 /* ── Cancel invitation ────────────────────────────────────── */
 window.confirmCancelInv = async function(invitationId, target) {
-  if (!confirm(`Cancel the invitation to ${target}?`)) return;
+  if (!(await SK.dialog.confirm(`Cancel the invitation to ${target}?`, null, null, { title: 'Cancel invitation', confirmLabel: 'Cancel invitation' }))) return;
   try {
     await _cancelInv({ invitationId });
     await loadMembers();
   } catch (e) {
-    alert('Failed to cancel: ' + e.message);
+    SK.dialog.alert('Failed to cancel: ' + e.message);
   }
 };
 
@@ -1067,8 +1068,8 @@ window.smSetStatus = async function(membershipId, newStatus) {
     await _updateStatus({ membershipId, newStatus, reason: reason.trim() });
     document.getElementById('staffModal').classList.remove('open');
     await loadMembers();
-    alert(`Status updated to: ${newStatus}`);
-  } catch(e) { alert('Failed: ' + e.message); }
+    SK.dialog.alert(`Status updated to: ${newStatus}`);
+  } catch(e) { SK.dialog.alert('Failed: ' + e.message); }
 };
 
 /* ── Reporting line ───────────────────────────────────────── */
@@ -1083,8 +1084,8 @@ window.smOpenRepModal = async function(membershipId, targetUid, name) {
   if (chosen === null) return;
   try {
     await _setRepLine({ businessId: _activeBizId, targetUid, reportsToUid: chosen.trim() || null });
-    alert('Reporting line updated.');
-  } catch(e) { alert('Failed: ' + e.message); }
+    SK.dialog.alert('Reporting line updated.');
+  } catch(e) { SK.dialog.alert('Failed: ' + e.message); }
 };
 
 /* ── Utilities ────────────────────────────────────────────── */

@@ -1,6 +1,11 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-require-auth="true" data-no-header="true">
 <head>
+  <!-- Auth gate: inventory is an authenticated owner surface. security.js +
+       auth-guard.js honour data-require-auth and redirect a signed-out visitor to
+       login BEFORE any inventory UI or 'default' tenant fallback can render. -->
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -384,15 +389,17 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div id="offline-bar">⚠ You are offline — showing cached data</div>
 
 <!-- ── HEADER ── -->
-<header class="header">
-  <span class="header-logo">SOKONI</span>
-  <span class="header-title">Inventory</span>
-  <div class="header-actions">
+<!-- Top bar removed (shared header suppressed via data-no-header). Compact toolbar: Back so the
+     user is never stranded + a MiniShop button to open their storefront from Inventory. -->
+<div class="header-actions" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;">
+  <button class="icon-btn" onclick="if(history.length>1){history.back()}else{location.href='/pos-marketplace.html'}" title="Back" aria-label="Back" style="font-size:18px;">&#8592;</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <a href="minishop-admin.html" class="icon-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 14px;color:#71ff00;border-color:rgba(113,255,0,0.35);font-weight:800;font-size:13px;" title="Open your MiniShop">&#127978; MiniShop</a>
     <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
     <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
     <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
   </div>
-</header>
+</div>
 
 <!-- ── ALERT BANNER ── -->
 <div id="alert-bar" class="alert-bar"></div>
@@ -1301,7 +1308,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Opening Stock</label>
+          <label class="form-label">Current Stock</label>
           <input class="form-input" id="pm-qty" type="number" min="0" step="1" placeholder="0">
         </div>
         <div class="form-group">
@@ -1909,13 +1916,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   await SokoniInventory.init({ firestore: window.db, auth: window.auth });
   SokoniInventory.on('alerts_updated', onAlertsUpdated);
   SokoniInventory.on('sync_complete',  () => showToast('Synced'));
-  await Promise.all([loadKPIs(), loadProducts(), loadWarehouses(), loadSuppliers()]);
-  await loadOverviewData();
+  /* Products first + independent — a slow KPI/warehouse/supplier read (empty tenant collections
+     via the compat shim) must never block the grid. */
+  loadProducts();
+  Promise.all([loadKPIs(), loadWarehouses(), loadSuppliers()]).catch(() => {});
+  loadOverviewData().catch(() => {});
 });
 
-function waitForFirebase(retries = 20) {
+function waitForFirebase(retries = 30) {
   return new Promise(res => {
-    const check = () => { if (window.db || retries-- <= 0) return res(); setTimeout(check, 150); };
+    const ready = () => window.db || window.firebaseDB
+      || (typeof firebase !== 'undefined' && firebase.firestore)
+      || window.__sokoniFirebaseReady;
+    const check = () => { if (ready() || retries-- <= 0) return res(); setTimeout(check, 100); };
     check();
   });
 }
@@ -1968,17 +1981,28 @@ async function loadKPIs() {
       SokoniInventory.getAlerts().catch(() => []),
     ]);
 
+    /* Compute Value / Low / Out-of-stock straight from the canonical products (each carries
+       sellingPrice + stockLevel). getAnalytics() reads the empty inventory_levels store, so it
+       reported KES 0 / no records even with 103 stocked products. */
+    const _num = v => Number(v) || 0;
+    const invValue = products.reduce((s, p) => s + _num(p.sellingPrice) * _num(p.stockLevel), 0);
+    const lowCount = products.filter(p => _num(p.stockLevel) > 0 && _num(p.stockLevel) <= (_num(p.reorderPoint) || 5)).length;
+    const oosCount = products.filter(p => _num(p.stockLevel) <= 0).length;
+
     // Legacy KPI strip (top row)
     const qryKpi = id => document.querySelector(`#${id} .kpi-val`);
     if (qryKpi('kpi-skus')) qryKpi('kpi-skus').textContent = products.length;
-    if (qryKpi('kpi-val'))  qryKpi('kpi-val').textContent  = fmt(analytics.inventoryValue || 0);
-    if (qryKpi('kpi-low'))  qryKpi('kpi-low').textContent  = analytics.lowStockCount  || 0;
-    if (qryKpi('kpi-oos'))  qryKpi('kpi-oos').textContent  = analytics.outOfStockCount|| 0;
+    if (qryKpi('kpi-val'))  qryKpi('kpi-val').textContent  = fmt(invValue);
+    if (qryKpi('kpi-low'))  qryKpi('kpi-low').textContent  = lowCount;
+    if (qryKpi('kpi-oos'))  qryKpi('kpi-oos').textContent  = oosCount;
+    // Summary cards
+    const _setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    _setTxt('sumTotal', products.length); _setTxt('sumLow', lowCount); _setTxt('sumOut', oosCount);
 
     // Health score KPI grid
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('kpi-products',  products.length);
-    set('kpi-value',     fmt(analytics.inventoryValue || 0));
+    set('kpi-value',     fmt(invValue));
     set('kpi-alerts',    alerts.length || '✓');
     set('kpi-suppliers', suppliers.length);
     set('kpi-low-hs',    analytics.lowStockCount || 0);
@@ -2122,8 +2146,34 @@ async function loadProducts(reset = true) {
     renderProducts(_products);
     renderCategories();
     document.getElementById('load-more-btn').style.display = batch.length < 50 ? 'none' : '';
+    _startProductLive();   /* attach the cross-device live listener (idempotent) */
   } catch (e) { showToast('Error loading products'); }
 }
+
+/* ── Live cross-device products ──────────────────────────────────────────
+   One subscription pushes the seller's full canonical product list on every change (a till sale,
+   a price edit on another device, an adjustment) so this screen — list, KPIs and stock — stays
+   current WITHOUT a refresh. Respects the active category filter and debounces KPI refreshes. */
+let _liveUnsub = null, _allProducts = [], _kpiTimer = null;
+function _debouncedKpis() {
+  if (_kpiTimer) return;
+  _kpiTimer = setTimeout(() => { _kpiTimer = null; loadKPIs().catch(() => {}); if (_currentPage === 'stock') loadStockLevels().catch(() => {}); }, 1200);
+}
+function _startProductLive() {
+  if (_liveUnsub || !window.SokoniInventory || !SokoniInventory.subscribeProducts) return;
+  _liveUnsub = SokoniInventory.subscribeProducts((all) => {
+    _allProducts = all || [];
+    if (_currentPage === 'products' || !_currentPage) {
+      _products = _allProducts;                 /* full list → category chips stay complete */
+      renderCategories();
+      _products = _catFilter ? _allProducts.filter(p => (p.category || '') === _catFilter) : _allProducts;
+      renderProducts(_products);
+      const lm = document.getElementById('load-more-btn'); if (lm) lm.style.display = 'none';  /* full list is live; paging retired */
+    }
+    _debouncedKpis();
+  });
+}
+window.addEventListener('beforeunload', () => { try { _liveUnsub && _liveUnsub(); } catch (_) {} });
 
 function renderProducts(products) {
   const el = document.getElementById('products-list');
@@ -2131,7 +2181,13 @@ function renderProducts(products) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">&#128230;</div><div class="empty-text">No products found</div><div class="empty-sub">Add your first product to get started</div></div>`;
     return;
   }
-  el.innerHTML = products.map(p => `
+  el.innerHTML = products.map(p => {
+    /* Canonical stock: the quantity lives on the product (products.stock → p.stockLevel via
+       _toInv). The old row fetched a per-warehouse inventory_levels record that doesn't exist,
+       so every product read 0. Show the product's own stock, matching Shop + Catalogue. */
+    const qty   = Number(p.stockLevel != null ? p.stockLevel : (p.stock || 0)) || 0;
+    const color = qty <= 0 ? 'var(--danger)' : qty <= (p.reorderPoint || 5) ? 'var(--warn)' : 'var(--success)';
+    return `
     <div class="product-item" onclick="openProductModal('${p.id}')">
       <div class="product-thumb">${p.images?.[0] ? `<img src="${escHtml(p.images[0])}" alt="">` : '&#128230;'}</div>
       <div class="product-info">
@@ -2140,21 +2196,11 @@ function renderProducts(products) {
         <div class="product-meta" style="margin-top:1px">KES ${(p.sellingPrice||0).toFixed(2)} sell · KES ${(p.costPrice||0).toFixed(2)} cost</div>
       </div>
       <div class="product-stock">
-        <div class="stock-qty" id="qty-${p.id}">—</div>
+        <div class="stock-qty" id="qty-${p.id}" style="color:${color}">${qty}</div>
         <div class="stock-unit">${escHtml(p.unit||'each')}</div>
       </div>
-    </div>`).join('');
-
-  // Load stock levels asynchronously
-  products.forEach(async p => {
-    try {
-      const sl  = await SokoniInventory.getStockLevel(p.id);
-      const el2 = document.getElementById(`qty-${p.id}`);
-      if (!el2) return;
-      el2.textContent = sl.available;
-      el2.style.color = sl.available <= 0 ? 'var(--danger)' : sl.available <= (p.reorderPoint||5) ? 'var(--warn)' : 'var(--success)';
-    } catch (_) {}
-  });
+    </div>`;
+  }).join('');
 }
 
 function renderCategories() {
@@ -2193,14 +2239,23 @@ function onSearch(q) {
 
 // ── STOCK LEVELS ──────────────────────────────────────────
 async function loadStockLevels() {
-  const wh  = document.getElementById('warehouse-filter')?.value;
   const flt = document.getElementById('stock-filter')?.value;
   try {
-    const levels = await SokoniInventory.getAllStockLevels({ warehouseId: wh || undefined });
+    /* Derive stock levels from the canonical products — getAllStockLevels() reads the empty
+       inventory_levels store, which showed "No stock records" despite 103 stocked products.
+       One level per product using its own stock (single-stock model until branch inventory). */
+    const products = await SokoniInventory.getProducts({ active: true });
+    const levels = products.map(p => ({
+      id: p.id, productId: p.name || p.id, warehouseId: 'main',
+      available: Number(p.stockLevel) || 0, onHand: Number(p.stockLevel) || 0,
+      reserved: 0, incoming: 0,
+      reorderPoint: Number(p.reorderPoint) || 5, maxStock: Number(p.maxStock) || 0,
+    }));
     _stockLevels = levels;
-    const filtered = flt === 'low' ? levels.filter(l => l.available > 0 && l.available <= 10)
+    const rp = l => (l.reorderPoint || 10);
+    const filtered = flt === 'low' ? levels.filter(l => l.available > 0 && l.available <= rp(l))
                    : flt === 'out' ? levels.filter(l => l.available <= 0)
-                   : flt === 'ok'  ? levels.filter(l => l.available > 10)
+                   : flt === 'ok'  ? levels.filter(l => l.available > rp(l))
                    : levels;
     renderStockList(filtered);
     loadMovementHistory();
@@ -2661,7 +2716,7 @@ async function openProductModal(id) {
     document.getElementById('pm-maxstock').value   = p.maxStock   || '';
     document.getElementById('pm-serial').checked   = !!p.trackSerial;
     document.getElementById('pm-batch').checked    = !!p.trackBatch;
-    document.getElementById('pm-qty').value        = '';
+    document.getElementById('pm-qty').value        = (p.stockLevel != null ? p.stockLevel : (p.stock || 0));  /* current stock, editable */
     document.getElementById('pm-desc').value       = p.description || '';
     document.getElementById('pm-tax').value        = p.taxRate != null ? String(p.taxRate) : '16';
     const supEl = document.getElementById('pm-supplier');
@@ -2713,12 +2768,12 @@ async function saveProduct() {
     taxRate:      parseFloat(document.getElementById('pm-tax').value) || 0,
     supplierId:   document.getElementById('pm-supplier').value || null,
   };
-  const qty = parseFloat(document.getElementById('pm-qty').value) || 0;
+  /* Current stock, written directly to the canonical product (Stage 1). Only include it when
+     the field has a value so a blank never zeroes existing stock. */
+  const _qv = document.getElementById('pm-qty').value;
+  if (_qv !== '' && _qv != null) product.stockLevel = parseInt(_qv) || 0;
   try {
     const saved = await SokoniInventory.saveProduct(product);
-    if (qty > 0) {
-      await SokoniInventory.adjustStock({ productId: saved.id, quantity: qty, type: 'opening_stock', reason: 'Opening stock' });
-    }
     showToast(`${product.id ? 'Updated' : 'Added'}: ${name}`);
     closeModal('product-modal');
     loadProducts();
@@ -5334,7 +5389,7 @@ async function applyShelfCount() {
     showToast('No discrepancies to apply — system stock matches AI count', 'info');
     return;
   }
-  if (!confirm(`Apply AI count as stock adjustment for ${adjustable.length} product(s)?\nThis will update system quantities to match the shelf count.`)) return;
+  if (!(await SK.dialog.confirm(`Apply AI count as stock adjustment for ${adjustable.length} product(s)? This will update system quantities to match the shelf count.`, null, null, { title: 'Apply stock adjustment', confirmLabel: 'Apply' }))) return;
 
   let done = 0;
   const db = firebase.firestore();

@@ -46,6 +46,22 @@ function _legalNameLines(width) {
 (function (root) {
 
 /* ─────────────────────────────────────────────────────────────────
+   DIAGNOSTIC TRACE — records every connect/reconnect/forget step to a ring buffer
+   (window.__skPrinterTrace) and the console, so failures can be diagnosed from the
+   actual execution path in production instead of a vague "couldn't connect". Read it
+   via SokoniPrinter.getTrace() or the POS dropdown's 🩺 Diagnostics view.
+───────────────────────────────────────────────────────────────── */
+function _spTrace (step, data) {
+  try {
+    const buf = (root.__skPrinterTrace = root.__skPrinterTrace || []);
+    buf.push({ t: Date.now(), step: step, data: data || null });
+    if (buf.length > 80) buf.shift();
+    /* eslint-disable-next-line no-console */
+    console.log('[Printer]', step, data != null ? JSON.stringify(data) : '');
+  } catch (_) {}
+}
+
+/* ─────────────────────────────────────────────────────────────────
    PRINTER ERROR CODES
 ───────────────────────────────────────────────────────────────── */
 const PRINTER_ERRORS = {
@@ -924,31 +940,38 @@ class BtAdapter {
 
   async discover () {
     if (!this.avail) return [];
-    const filters = [
-      { services: ['0000ff00-0000-1000-8000-00805f9b34fb'] }, // P58E / Goojprt / Chinese BLE printers
-      { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
-      { services: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2'] },
-      { services: ['0000ffe0-0000-1000-8000-00805f9b34fb'] },
-      { namePrefix: 'P58'  }, { namePrefix: 'P80'   }, { namePrefix: 'PT-'  },
-      { namePrefix: 'BTP'  }, { namePrefix: 'HOP'   }, { namePrefix: 'SP-'  },
-      { namePrefix: 'MTP'  }, { namePrefix: 'Rongta'}, { namePrefix: 'Xprinter' },
-      { namePrefix: 'EPSON'}, { namePrefix: 'Star'  }, { namePrefix: 'POS'  },
-      { namePrefix: 'BP-'  }, { namePrefix: 'RPP'   }, { namePrefix: 'BTPT' },
-      { namePrefix: 'Printer'}, { namePrefix: 'TM-' }, { namePrefix: 'iDPRT'},
-      { namePrefix: 'Cashino'}, { namePrefix: 'GT'  },
+    /* Every service UUID a thermal printer might expose — used both as optionalServices
+       (so getPrimaryService() works post-connect) AND as advertisement filters below. */
+    const printerServices = [
+      '0000ff00-0000-1000-8000-00805f9b34fb', // P58E / Goojprt / Chinese BLE printers
+      '000018f0-0000-1000-8000-00805f9b34fb', // ESC/POS over BLE (common)
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Serial Port Profile emulation
+      '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 / CC254x UART bridge
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Microchip transparent UART (ISSC)
+      '0000ff12-0000-1000-8000-00805f9b34fb',
+      '0000fee7-0000-1000-8000-00805f9b34fb',
     ];
+    /* Why acceptAllDevices instead of tight filters:
+       A P58E only appears in the Web-Bluetooth chooser if its *advertisement packet*
+       carries one of our filtered service UUIDs or name prefixes. Many P58E units (and
+       the countless clones) advertise NEITHER — so a filtered requestDevice() shows an
+       EMPTY chooser and the user concludes "scanning can't find my printer". Accepting
+       all devices guarantees the printer is listed; optionalServices still grants access
+       to the print service after the user picks it. requestDevice() can only run once per
+       user gesture, so we cannot filter-then-fallback in a single tap. */
     try {
       const d = await navigator.bluetooth.requestDevice({
-        filters,
-        optionalServices: [
-          '0000ff00-0000-1000-8000-00805f9b34fb',
-          '000018f0-0000-1000-8000-00805f9b34fb',
-          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-          '0000ffe0-0000-1000-8000-00805f9b34fb',
-        ],
+        acceptAllDevices: true,
+        optionalServices: printerServices,
       });
       return [{ id: d.id, name: d.name || 'Bluetooth Printer', type: 'bluetooth', _dev: d }];
-    } catch(e) { return []; }
+    } catch(e) {
+      /* NotFoundError is thrown both when the user cancels the chooser AND when zero
+         devices matched. With acceptAllDevices the latter is effectively impossible, so a
+         throw here means the user dismissed the picker — return empty, no error surfaced. */
+      console.log('[BtAdapter] discover cancelled/empty:', e && e.name);
+      return [];
+    }
   }
 
   async connect (info) {
@@ -965,45 +988,64 @@ class BtAdapter {
     if (!this._srv)  throw new Error('GATT server is null after connect() — printer may be off or out of range');
     console.log('[BtAdapter] GATT server connected');
 
-    /* ── Stage 3: discover print service ── */
+    /* ── Stage 3+4: find a (service, WRITABLE characteristic) pair ──────────
+       A printer is only usable if we hold a characteristic we can write() to. The
+       previous code picked services[0] and chars.find(writable) INDEPENDENTLY: with a
+       generic first service (0x1800 Generic Access) that has no writable characteristic,
+       it threw AFTER GATT had already paired — the device bonded at the OS level but the
+       app never flipped to Connected ("pairs but doesn't turn connected"). Instead, walk
+       services and, for each, look for a writable characteristic; keep the first pair that
+       actually yields one. Known P58E UUIDs are tried first as a fast path. */
     const serviceUUIDs = [
       '0000ff00-0000-1000-8000-00805f9b34fb', // P58E primary — check first
       '000018f0-0000-1000-8000-00805f9b34fb',
       'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
       '0000ffe0-0000-1000-8000-00805f9b34fb',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',
     ];
-    let svc = null;
-    for (const u of serviceUUIDs) {
-      try { svc = await this._srv.getPrimaryService(u); console.log('[BtAdapter] Service found:', u); break; }
-      catch(e) { /* try next */ }
-    }
-    if (!svc) {
-      /* Last resort: enumerate all primary services */
-      console.log('[BtAdapter] Known UUIDs failed — enumerating all services');
-      const all = await this._srv.getPrimaryServices().catch(() => []);
-      console.log('[BtAdapter] All services:', all.map(s => s.uuid));
-      svc = all[0] || null;
-    }
-    if (!svc) throw new Error('No print service found on this Bluetooth device. Check printer is P58E / ESC-POS compatible.');
-
-    /* ── Stage 4: discover write characteristic ── */
     const charUUIDs = [
       '0000ff02-0000-1000-8000-00805f9b34fb', // P58E write characteristic
       '00002af1-0000-1000-8000-00805f9b34fb',
       'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
       '0000ffe1-0000-1000-8000-00805f9b34fb',
+      '49535343-8841-43f4-a8d4-ecbe34729bb3',
     ];
-    for (const u of charUUIDs) {
-      try { this._char = await svc.getCharacteristic(u); console.log('[BtAdapter] Char found:', u); break; }
-      catch(e) { /* try next */ }
+    const isWritable = c => c && c.properties && (c.properties.write || c.properties.writeWithoutResponse);
+
+    let svc = null;
+    this._char = null;
+
+    /* Fast path: known service → known writable char. */
+    for (const su of serviceUUIDs) {
+      let s;
+      try { s = await this._srv.getPrimaryService(su); } catch (e) { continue; }
+      for (const cu of charUUIDs) {
+        try { const c = await s.getCharacteristic(cu); if (isWritable(c)) { svc = s; this._char = c; break; } }
+        catch (e) { /* next char */ }
+      }
+      if (this._char) { console.log('[BtAdapter] Fast-path match — service:', su); break; }
+      /* Known service but unknown char layout — scan its characteristics. */
+      const chars = await s.getCharacteristics().catch(() => []);
+      const w = chars.find(isWritable);
+      if (w) { svc = s; this._char = w; console.log('[BtAdapter] Known service, scanned char on', su); break; }
     }
+
+    /* Robust fallback: enumerate every accessible service, pick the FIRST that exposes a
+       writable characteristic — never a generic service with none. */
     if (!this._char) {
-      console.log('[BtAdapter] Known char UUIDs failed — enumerating all characteristics');
-      const chars = await svc.getCharacteristics().catch(() => []);
-      console.log('[BtAdapter] All chars:', chars.map(c => c.uuid + ' write=' + c.properties.write + ' writeNoResp=' + c.properties.writeWithoutResponse));
-      this._char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+      console.log('[BtAdapter] Fast path failed — enumerating all services for a writable char');
+      const all = await this._srv.getPrimaryServices().catch(() => []);
+      console.log('[BtAdapter] Accessible services:', all.map(s => s.uuid));
+      for (const s of all) {
+        const chars = await s.getCharacteristics().catch(() => []);
+        const w = chars.find(isWritable);
+        if (w) { svc = s; this._char = w; console.log('[BtAdapter] Writable char on', s.uuid, '→', w.uuid); break; }
+      }
     }
-    if (!this._char) throw new Error('No writable characteristic found — printer may not support BLE ESC/POS');
+
+    if (!svc || !this._char) {
+      throw new Error('No writable print service found on this device — is it a P58E / ESC-POS BLE printer, and powered on?');
+    }
 
     /* ── Stage 5: ready ── */
     this.ok = true;
@@ -1025,30 +1067,18 @@ class BtAdapter {
       await new Promise(r => setTimeout(r, delay));
       delay = Math.min(delay * 2, 30000);
       try {
-        const srv = await device.gatt.connect();
-        this._srv = srv;
-        const serviceUUIDs = [
-          '0000ff00-0000-1000-8000-00805f9b34fb',
-          '000018f0-0000-1000-8000-00805f9b34fb',
-          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-          '0000ffe0-0000-1000-8000-00805f9b34fb',
-        ];
-        let svc = null;
-        for (const u of serviceUUIDs) { try { svc = await srv.getPrimaryService(u); break; } catch(e) {} }
-        if (!svc) continue;
-        const charUUIDs = [
-          '0000ff02-0000-1000-8000-00805f9b34fb',
-          '00002af1-0000-1000-8000-00805f9b34fb',
-          'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
-          '0000ffe1-0000-1000-8000-00805f9b34fb',
-        ];
+        this._srv = await device.gatt.connect();
+        /* Same robust rule as first-connect: keep the first service that yields a WRITABLE
+           characteristic — never a generic service with none (that left ok=false forever). */
+        const isWritable = c => c && c.properties && (c.properties.write || c.properties.writeWithoutResponse);
+        const all = await this._srv.getPrimaryServices().catch(() => []);
         let ch = null;
-        for (const u of charUUIDs) { try { ch = await svc.getCharacteristic(u); if (ch) break; } catch(e) {} }
-        if (!ch) {
-          const chars = await svc.getCharacteristics().catch(() => []);
-          ch = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+        for (const s of all) {
+          const chars = await s.getCharacteristics().catch(() => []);
+          const w = chars.find(isWritable);
+          if (w) { ch = w; break; }
         }
-        if (ch) { this._char = ch; this.ok = true; return; }
+        if (ch) { this._char = ch; this.ok = true; console.log('[BtAdapter] Reconnected — char', ch.uuid); return; }
       } catch(e) { /* retry */ }
     }
   }
@@ -1420,13 +1450,37 @@ class SPEngine {
 
   async autoReconnect () {
     const last = this._profile.lastDevice;
-    if (!last) return false;
+    _spTrace('reconnect:start', { savedType: last && last.type, savedName: last && last.name, savedId: last && last.id });
+    if (!last) { _spTrace('reconnect:abort', { reason: 'no saved device in profile' }); return false; }
 
     /* Bluetooth: getDevices() returns previously-granted devices without a user gesture (Chrome 85+) */
     if (last.type === 'bluetooth' && navigator.bluetooth?.getDevices) {
       try {
         const devices = await navigator.bluetooth.getDevices();
+        _spTrace('reconnect:getDevices', { count: devices.length, names: devices.map(d => d.name || d.id || '(unnamed)') });
         const matched = devices.find(d => d.name === last.name || d.id === last.id);
+        _spTrace('reconnect:match', { matched: !!matched, matchedName: matched && (matched.name || matched.id) });
+        if (!matched) {
+          _spTrace('reconnect:fail', { reason: devices.length === 0
+            ? 'getDevices() returned 0 — browser did not retain the pairing grant (WebView/PWA or permission-backend), OR nothing paired here'
+            : 'granted device(s) present but none matched the saved printer name/id' });
+          return false;
+        }
+        _spTrace('reconnect:gatt', { step: 'gatt.connect + service discovery' });
+        await this.connect({ ...last, _dev: matched });
+        _spTrace('reconnect:success', { name: matched.name || matched.id });
+        return true;
+      } catch(e) { _spTrace('reconnect:error', { name: e && e.name, message: e && e.message }); return false; }
+    }
+
+    /* USB (wired): getDevices() returns previously-granted USB devices without a gesture. */
+    if (last.type === 'usb' && navigator.usb?.getDevices) {
+      try {
+        const devices = await navigator.usb.getDevices();
+        const matched = devices.find(d =>
+          (last.serialNumber && d.serialNumber === last.serialNumber) ||
+          (last.productId != null && d.productId === last.productId && d.vendorId === last.vendorId)
+        ) || (devices.length === 1 ? devices[0] : null);   /* single known printer → reuse it */
         if (!matched) return false;
         await this.connect({ ...last, _dev: matched });
         return true;
@@ -1441,6 +1495,47 @@ class SPEngine {
     if (this._active) { await this._active.disconnect().catch(()=>{}); this._active = null; }
     this.emit('disconnected', null);
   }
+
+  /* Fully FORGET the remembered printer: disconnect, revoke the browser's Bluetooth grant so
+     getDevices() no longer returns it (next connect shows the chooser), and wipe the saved
+     device identity + reconnect metadata from the profile. App-side localStorage keys owned by
+     other layers are cleared by the caller. */
+  async forget () {
+    const last = this._profile.lastDevice;
+    _spTrace('forget:start', { savedName: last && last.name, savedId: last && last.id });
+    /* Revoke the OS/browser permission for the device(s) we know about (Chrome 101+ exposes
+       BluetoothDevice.forget()). Covers both the actively-connected device and a saved-but-
+       disconnected one still present in getDevices(). */
+    let revoked = 0, hasForgetApi = false;
+    try {
+      const dev = this._active && this._active._dev;
+      if (dev && typeof dev.forget === 'function') { hasForgetApi = true; await dev.forget(); revoked++; }
+    } catch (e) { _spTrace('forget:activeRevokeError', { name: e && e.name, message: e && e.message }); }
+    try {
+      if (navigator.bluetooth && navigator.bluetooth.getDevices) {
+        const grants = await navigator.bluetooth.getDevices();
+        _spTrace('forget:getDevices', { count: grants.length });
+        for (const d of grants) {
+          const match = last && (d.name === last.name || d.id === last.id);
+          if ((match || !last) && typeof d.forget === 'function') { hasForgetApi = true; try { await d.forget(); revoked++; } catch (_) {} }
+        }
+      }
+    } catch (e) { _spTrace('forget:getDevicesError', { name: e && e.name, message: e && e.message }); }
+    _spTrace('forget:revoke', { revoked: revoked, forgetApiSupported: hasForgetApi,
+      note: hasForgetApi ? 'browser grant revoked' : 'BluetoothDevice.forget() NOT supported here — the OS-level pairing persists, but the app profile is cleared so it will not auto-reconnect; next connect still shows the chooser' });
+    await this.disconnect();
+    this._profile.lastDevice     = null;
+    this._profile.connectionType = null;
+    this._saveProfile();
+    /* Verify the profile really cleared (the acceptance check "no remembered printer"). */
+    let after = null; try { after = JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice || null; } catch (_) {}
+    _spTrace('forget:done', { profileLastDeviceAfter: after });
+    this.emit('forgotten', null);
+    return { revoked: revoked, forgetApiSupported: hasForgetApi, cleared: !after };
+  }
+
+  getTrace () { try { return (root.__skPrinterTrace || []).slice(); } catch (_) { return []; } }
+  clearTrace () { try { root.__skPrinterTrace = []; } catch (_) {} }
 
   get connected () { return !!(this._active?.ok); }
 
@@ -1744,6 +1839,26 @@ class SPEngine {
 let _inst = null;
 function getInstance () { if (!_inst) _inst = new SPEngine(); return _inst; }
 
+/* Canonical printer-setup navigation — ONE code path for EVERY printer button in the
+   app (POS header, Settings, no-printer warnings, diagnostics, first-time setup). Opens
+   the ONE canonical page in the SAME tab (no new window) with a return path, so the page
+   auto-returns after a successful connect. The in-POS dropdown is the primary connect UX;
+   this page is only for advanced / first-time / diagnostics. */
+function _openPrinterSetup (opts) {
+  opts = opts || {};
+  /* Inside the Merchant Shell, NEVER navigate to the standalone setup page (that would leave
+     the shell and reload). Ask the shell to open its in-place Devices/Printer-Setup module —
+     the shell + printer connection stay alive. Only standalone pages navigate. */
+  try {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      window.parent.postMessage({ __sokoniGoModule: 'devices' }, location.origin);
+      return;
+    }
+  } catch (_) {}
+  var ret = opts.returnTo || (location.pathname + location.search) || 'pos.html';
+  location.href = 'pos-printer-setup.html?return=' + encodeURIComponent(ret);
+}
+
 const api = {
   getInstance,
 
@@ -1754,7 +1869,11 @@ const api = {
   /* Connection */
   connect:            (...a) => getInstance().connect(...a),
   disconnect:         (...a) => getInstance().disconnect(...a),
+  forget:             (...a) => getInstance().forget(...a),
   autoReconnect:      (...a) => getInstance().autoReconnect(...a),
+  getTrace:           (...a) => getInstance().getTrace(...a),
+  clearTrace:         (...a) => getInstance().clearTrace(...a),
+  openSetup:          (opts) => _openPrinterSetup(opts),
   get connected ()          { return getInstance().connected; },
 
   /* Status & capabilities */
@@ -1811,5 +1930,9 @@ const api = {
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.SokoniPrinter = api;
+
+/* Global canonical printer-setup route — one code path for EVERY printer button,
+   from any page. Same-tab, with a return path so the setup page auto-returns. */
+if (typeof window !== 'undefined') window.openPrinterSetup = _openPrinterSetup;
 
 })(typeof window !== 'undefined' ? window : global);

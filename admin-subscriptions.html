@@ -370,7 +370,7 @@
       if (!auth?.currentUser) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return false; }
       const token = await auth.currentUser.getIdTokenResult(true).catch(() => null);
       if (!token?.claims?.admin && !token?.claims?.superAdmin) {
-        alert('Admin access required.'); history.back(); return false;
+        SK.dialog.alert('Admin access required.'); history.back(); return false;
       }
       return true;
     }
@@ -460,7 +460,7 @@
     }
 
     function viewSubscriber(uid) {
-      alert(`Open subscriber detail for: ${uid}\n(Wire to /profile.html?admin=1&uid=${uid})`);
+      SK.dialog.alert(`Open subscriber detail for: ${uid}\n(Wire to /profile.html?admin=1&uid=${uid})`);
     }
 
     function exportSubscribers() {
@@ -543,7 +543,7 @@
             await subs.admin.updatePlanConfig(planId, config);
             btn.textContent = 'Saved!';
             setTimeout(() => { btn.textContent = `Save ${subs.PLANS[planId]?.name || ''} Plan`; }, 2000);
-          } catch (e) { alert('Save failed: ' + e.message); }
+          } catch (e) { SK.dialog.alert('Save failed: ' + e.message); }
         });
       });
     }
@@ -636,7 +636,7 @@
 
     document.getElementById('promo-create-btn').addEventListener('click', async () => {
       const code = document.getElementById('promo-code').value.trim().toUpperCase();
-      if (!code) { alert('Please enter a coupon code.'); return; }
+      if (!code) { SK.dialog.alert('Please enter a coupon code.'); return; }
       try {
         const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         await addDoc(collection(window.firebaseDB, 'aiPromotions'), {
@@ -651,19 +651,19 @@
           createdAt: Date.now(),
           active:    true,
         });
-        alert('Promotion created!');
+        SK.dialog.alert('Promotion created!');
         loadPromos();
         ['promo-name','promo-code','promo-value','promo-max-uses','promo-expires'].forEach(id => { document.getElementById(id).value = ''; });
-      } catch (e) { alert('Failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
     });
 
     async function deletePromo(id) {
-      if (!confirm('Delete this promotion?')) return;
+      if (!(await SK.dialog.confirm('Delete this promotion?', null, null, { title: 'Delete promotion', variant: 'danger', confirmLabel: 'Delete' }))) return;
       try {
         const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         await deleteDoc(doc(window.firebaseDB, 'aiPromotions', id));
         loadPromos();
-      } catch (e) { alert('Failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
     }
 
     /* ── Settings ─────────────────────────────────────────────── */
@@ -705,14 +705,14 @@
     }
 
     document.getElementById('suspend-ai-btn').addEventListener('click', async () => {
-      if (!confirm('This will disable all AI features globally. Existing subscriptions are paused. Confirm?')) return;
+      if (!(await SK.dialog.confirm('This will disable all AI features globally. Existing subscriptions are paused. Confirm?', null, null, { title: 'Disable AI globally', variant: 'danger', confirmLabel: 'Disable' }))) return;
       try {
         const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         await setDoc(doc(window.firebaseDB, 'aiSettings', 'globalToggles'), {
           aiServiceActive: false, suspendedAt: Date.now(),
         }, { merge: true });
-        alert('AI service suspended.');
-      } catch (e) { alert('Failed: ' + e.message); }
+        SK.dialog.alert('AI service suspended.');
+      } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
     });
 
     /* ── Bootstrap ─────────────────────────────────────────────── */

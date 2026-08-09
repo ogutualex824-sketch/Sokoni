@@ -413,10 +413,10 @@
   window.subscribeStatus = function(){
     var email = (document.getElementById('subEmail')?.value||'').trim();
     if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-      alert('Please enter a valid email address.');
+      SK.dialog.alert('Please enter a valid email address.');
       return;
     }
-    alert('Thanks! We’ll email '+email+' when there are status updates.');
+    SK.dialog.alert('Thanks! We’ll email '+email+' when there are status updates.');
     document.getElementById('subEmail').value='';
   };
 </script>

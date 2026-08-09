@@ -254,16 +254,16 @@ window.registerWebhook = async function() {
   const secret = document.getElementById('wh-secret').value.trim();
   const desc   = document.getElementById('wh-desc').value.trim();
   const events = [...document.querySelectorAll('.evt-chk:checked')].map(c => c.value);
-  if (!url) { alert('Endpoint URL is required.'); return; }
-  if (!events.length) { alert('Select at least one event.'); return; }
+  if (!url) { SK.dialog.alert('Endpoint URL is required.'); return; }
+  if (!events.length) { SK.dialog.alert('Select at least one event.'); return; }
   const btn = document.getElementById('reg-btn');
   btn.disabled = true; btn.textContent = 'Registering…';
   try {
     await _call('webhookRegister', { url, secret: secret||undefined, description: desc||undefined, events });
     clearForm();
-    alert('Webhook registered successfully.');
+    SK.dialog.alert('Webhook registered successfully.');
     loadWebhooks();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Register Webhook'; }
 };
 
@@ -299,16 +299,16 @@ window.loadWebhooks = async function() {
 };
 
 window.deleteWebhook = async function(id, url) {
-  if (!confirm(`Delete webhook for ${url}?`)) return;
+  if (!(await SK.dialog.confirm(`Delete webhook for ${url}?`, null, null, { title: 'Delete webhook', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try { await _call('webhookDelete', { webhookId: id }); loadWebhooks(); }
-  catch(e) { alert('Delete failed: ' + e.message); }
+  catch(e) { SK.dialog.alert('Delete failed: ' + e.message); }
 };
 
 window.testWebhook = async function(id) {
   try {
     const d = await _call('webhookTestEndpoint', { webhookId: id });
-    alert('Test sent. Status: ' + (d && d.status || 'unknown') + (d && d.httpStatus ? ' (HTTP '+d.httpStatus+')' : ''));
-  } catch(e) { alert('Test failed: ' + e.message); }
+    SK.dialog.alert('Test sent. Status: ' + (d && d.status || 'unknown') + (d && d.httpStatus ? ' (HTTP '+d.httpStatus+')' : ''));
+  } catch(e) { SK.dialog.alert('Test failed: ' + e.message); }
 };
 
 // ── Deliveries ────────────────────────────────────────────────────────────
@@ -339,7 +339,7 @@ window.loadDeliveries = async function() {
 
 window.retryDelivery = async function(id) {
   try { await _call('webhookDeliver', { deliveryId: id, retry: true }); loadDeliveries(); }
-  catch(e) { alert('Retry failed: ' + e.message); }
+  catch(e) { SK.dialog.alert('Retry failed: ' + e.message); }
 };
 
 // ── Stats ─────────────────────────────────────────────────────────────────

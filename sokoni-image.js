@@ -37,13 +37,19 @@
   if (typeof window !== 'undefined') {
     window.SokoniImage = api;
     window.renderProductImage = api.render;   // named alias per the design
+    window.pickProductImage = api.pick;       // canonical field resolver for raw <img> sites
     window.SOKONI_IMAGE_VERSION = api.version; // production diagnostics: which helper is running
     api._autoInit();
   }
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '1.1.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  var VERSION = '1.2.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  /* v1.2.0 — base64 data: URIs now RENDER instead of falling back to the placeholder
+     (the homepage OOM was fixed by BOUNDING the catalogue listener + stripping base64
+     from the warm cache, not by hiding images), and added pick() — the canonical
+     image-field resolver (prefers a real Storage URL, then base64, then '') plus
+     render({product}) support. isBadSrc now rejects only empty/blank. */
   /* v1.1.0 — added the optional `fallbackMode` (placeholder | css-hide | remove).
      Backward compatible: default is 'placeholder' (v1.0 behaviour). This lets an
      existing page keep its OWN intended fallback (a branded CSS placeholder via a
@@ -67,10 +73,44 @@
     });
   }
 
-  /* A src is unusable if empty or a base64 data: URI (which the whole catalog work
-     exists to keep out of product docs) — fall back to the placeholder. */
+  function isData(src) {
+    return typeof src === 'string' && src.slice(0, 5).toLowerCase() === 'data:';
+  }
+
+  /* A src is unusable only if empty/blank. base64 data: URIs are ALLOWED to render
+     now: the homepage OOM was fixed by BOUNDING the catalogue listener (newest 200)
+     + stripping base64 from the warm cache, not by hiding images — so rejecting
+     base64 here only produced placeholders for products whose upload fell back to
+     base64, and made the same item show on some pages but not others. Prefer real
+     Storage URLs via pick(); base64 is the last-resort source and still renders. */
   function isBadSrc(src) {
-    return !src || typeof src !== 'string' || src.slice(0, 5).toLowerCase() === 'data:';
+    return !src || typeof src !== 'string' || !src.trim();
+  }
+
+  /* CANONICAL image-field resolver. Products/providers store their image under a
+     drifting set of fields (image, images[], imageStorageUrls, imageUrl, thumbnail,
+     photo/photoURL, coverImage, logo, avatar) and a doc can legitimately have
+     image:'' while imageStorageUrls[0] holds the real URL (seller.js strips base64
+     from `image` before the Firestore write and on cache degradation). Reading a
+     single field is why real photos rendered as placeholders. This returns the BEST
+     source: first real URL (http/https or root-absolute) wins; base64 only if no URL
+     exists; '' if nothing. One resolver so every surface reads the same thing. */
+  function pick(o) {
+    if (!o || typeof o !== 'object') return (typeof o === 'string' ? o.trim() : '');
+    var c = [];
+    if (Array.isArray(o.imageStorageUrls)) c.push(o.imageStorageUrls[0]);
+    if (Array.isArray(o.images)) o.images.forEach(function (x) { c.push(x && typeof x === 'object' ? (x.url || x.src) : x); });
+    c.push(o.image, o.imageUrl, o.imageURL, o.thumbnail, o.photo, o.photoURL, o.coverImage, o.logo, o.avatar);
+    var data = '';
+    for (var i = 0; i < c.length; i++) {
+      var v = c[i];
+      if (typeof v !== 'string') continue;
+      v = v.trim();
+      if (!v || v === 'null' || v === 'undefined') continue;
+      if (v.charAt(0) === '/' || v.slice(0, 4).toLowerCase() === 'http') return v;   // real URL — best
+      if (isData(v) && !data) data = v;                                              // remember base64
+    }
+    return data;   // base64 only when no URL was found
   }
 
   /* Optionally route a URL through the (future) CDN/resize hook. No-op today. */
@@ -97,7 +137,10 @@
   /* ── MAIN: return an <img> (CLS-wrapped when dimensions are unknown) HTML string ── */
   function render(opts) {
     opts = opts || {};
-    var src = isBadSrc(opts.src) ? CONFIG.placeholder : opts.src;
+    /* Pass {product: p} to resolve the canonical image field automatically, or a
+       plain {src}. product wins when it yields something, else fall back to src. */
+    var chosen = opts.product ? (pick(opts.product) || opts.src) : opts.src;
+    var src = isBadSrc(chosen) ? CONFIG.placeholder : chosen;
     var fallback = opts.placeholder || CONFIG.placeholder;
     var cls = CLASS + (opts.className ? ' ' + opts.className : '');
 
@@ -241,7 +284,7 @@
 
   /* Preload a hero/LCP image — call for above-the-fold priority images. */
   function preload(src) {
-    if (typeof document === 'undefined' || isBadSrc(src)) return;
+    if (typeof document === 'undefined' || isBadSrc(src) || isData(src)) return;
     var l = document.createElement('link');
     l.rel = 'preload'; l.as = 'image'; l.href = src;
     try { l.setAttribute('fetchpriority', 'high'); } catch (_) {}
@@ -259,6 +302,7 @@
     render: render,
     renderProductImage: render,
     html: render,
+    pick: pick,
     apply: apply,
     preload: preload,
     configure: configure,

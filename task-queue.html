@@ -349,9 +349,9 @@ window.viewTask = function(id) {
 };
 
 window.cancelById = async function(id) {
-  if (!confirm('Cancel task ' + id + '?')) return;
+  if (!(await SK.dialog.confirm('Cancel task ' + id + '?'))) return;
   try { await _call('tqCancelTask', { taskId: id }); loadJobs(); }
-  catch(e) { alert('Cancel failed: ' + e.message); }
+  catch(e) { SK.dialog.alert('Cancel failed: ' + e.message); }
 };
 
 // ── Enqueue ────────────────────────────────────────────────────────────────
@@ -363,9 +363,9 @@ window.enqueueTask = async function() {
   const retries = parseInt(document.getElementById('tq-retries').value) || 3;
   const timeout = parseInt(document.getElementById('tq-timeout').value) || 300;
   const raw     = document.getElementById('tq-payload').value.trim();
-  if (!type) { alert('Task type is required.'); return; }
+  if (!type) { SK.dialog.alert('Task type is required.'); return; }
   let payload;
-  try { payload = JSON.parse(raw || '{}'); } catch(e) { alert('Invalid JSON payload: ' + e.message); return; }
+  try { payload = JSON.parse(raw || '{}'); } catch(e) { SK.dialog.alert('Invalid JSON payload: ' + e.message); return; }
   const btn = document.getElementById('enq-btn');
   btn.disabled = true; btn.textContent = 'Enqueueing…';
   try {
@@ -373,7 +373,7 @@ window.enqueueTask = async function() {
     const box = document.getElementById('enq-result');
     box.style.display = 'block';
     document.getElementById('enq-result-pre').textContent = JSON.stringify(d, null, 2);
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Enqueue Task'; }
 };
 
@@ -392,8 +392,8 @@ window.resetEnqueue = function() {
 window.bulkEnqueue = async function() {
   const raw = document.getElementById('bulk-tasks').value.trim();
   let tasks;
-  try { tasks = JSON.parse(raw); } catch(e) { alert('Invalid JSON: ' + e.message); return; }
-  if (!Array.isArray(tasks) || !tasks.length) { alert('Must be a non-empty JSON array.'); return; }
+  try { tasks = JSON.parse(raw); } catch(e) { SK.dialog.alert('Invalid JSON: ' + e.message); return; }
+  if (!Array.isArray(tasks) || !tasks.length) { SK.dialog.alert('Must be a non-empty JSON array.'); return; }
   const btn = document.getElementById('bulk-btn');
   btn.disabled = true; btn.textContent = 'Enqueueing ' + tasks.length + ' tasks…';
   try {
@@ -401,14 +401,14 @@ window.bulkEnqueue = async function() {
     const box = document.getElementById('bulk-result');
     box.style.display = 'block';
     document.getElementById('bulk-result-pre').textContent = JSON.stringify(d, null, 2);
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Bulk Enqueue'; }
 };
 
 // ── Job Status ─────────────────────────────────────────────────────────────
 window.checkStatus = async function() {
   const id = document.getElementById('check-id').value.trim();
-  if (!id) { alert('Enter a task ID.'); return; }
+  if (!id) { SK.dialog.alert('Enter a task ID.'); return; }
   const box    = document.getElementById('status-result');
   const detail = document.getElementById('status-detail');
   box.style.display = 'block';
@@ -444,9 +444,9 @@ window.checkStatus = async function() {
 
 window.cancelTask = async function() {
   const id = document.getElementById('cancel-btn').dataset.taskId || document.getElementById('check-id').value.trim();
-  if (!confirm('Cancel task ' + id + '?')) return;
+  if (!(await SK.dialog.confirm('Cancel task ' + id + '?'))) return;
   try { await _call('tqCancelTask', { taskId: id }); checkStatus(); loadStats(); }
-  catch(e) { alert('Cancel failed: ' + e.message); }
+  catch(e) { SK.dialog.alert('Cancel failed: ' + e.message); }
 };
 
 // Auto-refresh stats every 30s

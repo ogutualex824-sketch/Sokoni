@@ -395,11 +395,15 @@ function _friendlyError (err) {
       return e;
     }
   }
-  /* Unknown error — wrap with generic enterprise message */
-  const e = new Error('Printer Manager encountered an unexpected error.');
-  e.detail = err?.message || String(err || 'Unknown error');
-  e.action = 'Check the Diagnostics tab for details. Reload the page and try again.';
-  e.code   = 'ERR_UNKNOWN';
+  /* Unknown error — DO NOT hide it behind a generic title. Surface the real message so the
+     dialog is actionable and debuggable (the founder specifically flagged the dead-end
+     "unexpected error"). Keep the technical string in .detail/.original for a Details view. */
+  const realMsg = (err?.message || String(err || '') || '').trim() || 'Unknown error';
+  const short   = realMsg.length <= 140 ? realMsg : realMsg.slice(0, 137) + '…';
+  const e = new Error('Printer connection failed: ' + short);
+  e.detail   = realMsg + (err?.name ? '  (' + err.name + ')' : '');
+  e.action   = 'Make sure the printer is powered on and in range, then Reconnect. Tap Details for the technical error.';
+  e.code     = 'ERR_UNKNOWN';
   e.original = err;
   return e;
 }
@@ -632,6 +636,18 @@ class PrinterManager {
   async reconnect () {
     await this.disconnect();
     return this.autoReconnect();
+  }
+
+  /* Single canonical Forget — clears the remembered printer across BOTH underlying engines and
+     every storage key, and revokes the browser grant where supported. Every "Forget" button in
+     the app calls this, so nothing keeps auto-reconnecting a printer the merchant forgot. */
+  async forget () {
+    try { if (window.SokoniPrinter && window.SokoniPrinter.forget) await window.SokoniPrinter.forget(); } catch (_) {}
+    try { if (window.P58EPrinter && window.P58EPrinter.forget)    await window.P58EPrinter.forget(); } catch (_) {}
+    ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print', 'p58e_paired_device', 'pps_remember']
+      .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+    this._activeTransport = null;
+    this._emit('disconnected', null);
   }
 
   async autoReconnect () {

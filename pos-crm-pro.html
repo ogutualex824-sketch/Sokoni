@@ -872,7 +872,7 @@ window.toggleOffer = async (id, active) => {
 };
 
 window.deleteOffer = async id => {
-  if (!confirm('Delete this offer?')) return;
+  if (!(await SK.dialog.confirm('Delete this offer?', null, null, { title: 'Delete offer', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await cf('toggleOffer')({ offerId: id, deleted: true });
     toast('Offer deleted.', 'success');

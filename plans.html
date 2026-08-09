@@ -282,7 +282,12 @@ function renderPlans() {
   const curSub    = currentSubs[currentHub];
 
   const cards = hubPlans.map(plan => {
-    const priceRaw   = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
+    /* subGetPlans/sub-billing.js store price NESTED as price:{monthly,annual} in
+       cents — NOT flat priceMonthly/priceAnnual. Reading the flat field gave "KES
+       NaN". Read nested first; fall back to a flat field for any custom plan. */
+    const priceRaw   = billingCycle === 'annual'
+      ? (plan.price && plan.price.annual  != null ? plan.price.annual  : plan.priceAnnual)
+      : (plan.price && plan.price.monthly != null ? plan.price.monthly : plan.priceMonthly);
     const priceNum   = Number(priceRaw);
     /* Never render "KES NaN": a plan that is missing/misconfigured for this cycle
        shows "Contact Sales" instead of a broken number. Only a real, finite value
@@ -335,7 +340,7 @@ function renderPlans() {
          `price` variable (declared nowhere in this scope) → undefined → "KES NaN" in
          the modal, and checkout read plan.priceMonthly/Annual that were never on the
          modal object, blocking every paid subscription. */
-      ctaHtml = `<button class="btn-plan btn-plan-primary" onclick="openModal(${JSON.stringify({id:plan.id,name:plan.name,hubType:plan.hubType,priceMonthly:plan.priceMonthly,priceAnnual:plan.priceAnnual,trialDays,tier:plan.tier}).replace(/"/g,'&quot;')})">
+      ctaHtml = `<button class="btn-plan btn-plan-primary" onclick="openModal(${JSON.stringify({id:plan.id,name:plan.name,hubType:plan.hubType,priceMonthly:(plan.price&&plan.price.monthly!=null?plan.price.monthly:plan.priceMonthly),priceAnnual:(plan.price&&plan.price.annual!=null?plan.price.annual:plan.priceAnnual),trialDays,tier:plan.tier}).replace(/"/g,'&quot;')})">
         ${trialDays>0?`Start Free Trial`:`Subscribe Now`}
       </button>`;
     }

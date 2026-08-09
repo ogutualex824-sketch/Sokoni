@@ -560,7 +560,11 @@ exports.navGetFleetStatus = onCall({ enforceAppCheck: true }, async request => {
 exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
-  const { tripId, earnings } = request.data;
+  /* NOTE: any client-supplied `earnings` is intentionally IGNORED — never trust the client
+     for a payout amount. The rider is credited server-authoritatively by onOrderStatusChange
+     when the order flips to `delivered` below (the ONE proven, exactly-once delivery-payout
+     rail). We do not enqueue a client amount here. */
+  const { tripId } = request.data;
   if (!tripId) throw new HttpsError('invalid-argument', 'tripId required');
 
   const snap = await db.collection('trips').doc(tripId).get();
@@ -576,7 +580,6 @@ exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
   const batch = db.batch();
   batch.update(snap.ref, {
     status:      'completed',
-    earnings:    earnings || null,
     completedAt: FieldValue.serverTimestamp(),
     updatedAt:   FieldValue.serverTimestamp(),
   });
@@ -590,27 +593,20 @@ exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
     });
   }
 
-  // Update driver stats
+  // Update driver stats (activity counters only — earnings are NOT taken from the client)
   batch.update(db.collection('drivers').doc(trip.riderId), {
     activeDeliveries: FieldValue.increment(-1),
     tripsCompleted:   FieldValue.increment(1),
-    totalEarnings:    FieldValue.increment(earnings || 0),
     currentTripId:    null,
   });
 
   await batch.commit();
 
-  // Queue earnings payout via FinOS
-  if (earnings && earnings > 0) {
-    await db.collection('driverEarningQueue').add({
-      riderId:   trip.riderId,
-      tripId,
-      orderId:   trip.orderId,
-      amount:    earnings,
-      status:    'pending',
-      createdAt: FieldValue.serverTimestamp(),
-    }).catch(() => {});
-  }
+  /* No driverEarningQueue enqueue here. Flipping the order to `delivered` above fires
+     onOrderStatusChange, which credits the rider the server-computed delivery-fee split
+     exactly-once (walletTransactions/{rider}_{order}_delivery). Enqueuing a client-supplied
+     amount was a double-pay + client-trust vector; removed. If order-less trip payouts are
+     ever needed, add a SERVER-derived amount here — never request.data. */
 
   return { ok: true };
 });
@@ -784,26 +780,41 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
      construction). Exactly-once with respect to money. */
   const docId     = event.params.docId;
   const walletRef = db.collection('wallets').doc(riderId);
-  const txRef     = db.collection('walletTransactions').doc(docId);   // deterministic
+  /* Cross-rail exactly-once. When this earning is tied to an order, share the SAME
+     idempotency key the delivered-trigger payout uses: onOrderStatusChange writes
+     walletTransactions/{rider}_{order}_delivery when orders.status flips to `delivered`.
+     A trip completion flips its order to `delivered` (→ that rail) AND could enqueue here
+     (→ this rail); with different keys each rail would credit once = double-pay. Sharing
+     the key makes the two rails mutually exclusive — whichever fires first pays, the other
+     no-ops. Order-less trips (no orderId) fall back to the queue-doc id. */
+  const canonicalId = orderId ? `${riderId}_${orderId}_delivery` : docId;
+  const txRef       = db.collection('walletTransactions').doc(canonicalId);
 
   const applied = await db.runTransaction(async (txn) => {
     const q = await txn.get(snap.ref);
     if (!q.exists || q.data().processed === true) return false;       // redelivery — already paid
+    const paid = await txn.get(txRef);
+    if (paid.exists) {                                                // the delivered-trigger rail already credited
+      txn.update(snap.ref, { processed: true, processedAt: FieldValue.serverTimestamp(), skippedReason: 'already_paid_delivered_trigger' });
+      return false;
+    }
 
     txn.set(txRef, {
       userId:      riderId,
-      type:        'credit',
+      uid:         riderId,
+      type:        'delivery_earning',
       amount,
       currency:    'KES',
       description: `Delivery earning — Order ${(orderId || '').slice(0, 8).toUpperCase()}`,
       source:      'delivery_earning',
+      sourceType:  'delivery',
       orderId:     orderId || null,
       tripId:      tripId  || null,
       status:      'completed',
       createdAt:   FieldValue.serverTimestamp(),
     });
 
-    /* Safe here: runs at most once, guarded by the `processed` check above. */
+    /* Safe here: runs at most once, guarded by the `processed` + shared-key checks above. */
     txn.set(walletRef, {
       balance:   FieldValue.increment(amount),
       currency:  'KES',

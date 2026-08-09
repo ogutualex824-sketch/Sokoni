@@ -13,6 +13,11 @@
 const https  = require('https');
 const crypto = require('crypto');
 
+/* Shared keep-alive agent — reuse TCP+TLS connections to the gateway across requests
+   instead of a fresh handshake every call (saves ~100–300ms/request under load). Module
+   scope so all adapter instances share the pool for the lifetime of a warm function. */
+const _keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 15000 });
+
 /* ═══════════════════════════════════════════════════════════════
    Base Adapter — all adapters extend this
 ═══════════════════════════════════════════════════════════════ */
@@ -85,16 +90,22 @@ class IntaSendAdapter extends PaymentAdapter {
     this._host = sandbox ? 'sandbox.intasend.com' : 'payment.intasend.com';
   }
 
-  async _request(path, method = 'POST', body = null) {
+  async _request(path, method = 'POST', body = null, authScheme = 'Bearer') {
     return new Promise((resolve, reject) => {
       const payload = body ? JSON.stringify(body) : '';
       const opts = {
         hostname: this._host,
         path,
         method,
+        agent: _keepAliveAgent,
         headers: {
           'Content-Type':   'application/json',
-          'Authorization':  `Token ${this._key}`,
+          /* IntaSend authenticates the SECRET key as "Bearer <key>" on BOTH the
+             collection/STK endpoints AND send-money (B2C) — empirically proven by the
+             live wallet top-up (Bearer via intasend-node) and the live B2C payout.
+             The default is Bearer; callers no longer need to pass a scheme. A "Token"
+             scheme was assumed for collections but never worked on this account. */
+          'Authorization':  `${authScheme} ${this._key}`,
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
       };
@@ -112,21 +123,44 @@ class IntaSendAdapter extends PaymentAdapter {
     });
   }
 
+  /* M-Pesa STK push (customer collection). Same wire contract proven by the live wallet
+     top-up via intasend-node: POST /api/v1/payment/mpesa-stk-push/, Bearer auth, numeric
+     amount. The response carries invoice.invoice_id, which the webhook/confirm/sweep paths
+     key off — surfaced as invoiceId (checkoutId kept as an alias for existing callers). */
   async initiatePayment({ phone, amountKES, ref, narrative, currency = 'KES' }) {
+    /* method:'M-PESA' is MANDATORY — the intasend-node SDK's mpesaStkPush injects it
+       (collection.js) and WITHOUT it the endpoint mints an invoice but never pushes the
+       STK popup. Omitting it was the top-up regression. This body is now byte-equivalent
+       to the proven SDK request: { method, currency, amount(number), phone_number,
+       api_ref, narrative } with Bearer auth. */
+    const account = this._normalizeKenyanPhone(phone);
+    console.log('[IntaSendAdapter.initiatePayment] STK contract', JSON.stringify({
+      endpoint: `https://${this._host}/api/v1/payment/mpesa-stk-push/`, auth: 'Bearer',
+      method: 'M-PESA', currency, amount: Math.round(Number(amountKES)), api_ref: ref,
+      phone: account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2),
+    }));
     const res = await this._request('/api/v1/payment/mpesa-stk-push/', 'POST', {
-      phone_number: this._normalizeKenyanPhone(phone),
-      amount:       String(Math.round(amountKES)),
+      method:       'M-PESA',
       currency,
+      amount:       Math.round(Number(amountKES)),
+      phone_number: account,
       narrative:    narrative || `SOKONI ${ref}`,
       api_ref:      ref,
     });
     const ok = res.status === 200 || res.status === 201;
+    const invoiceId = res.body?.invoice?.invoice_id || res.body?.checkout_id || res.body?.id || null;
+    console.log('[IntaSendAdapter.initiatePayment] STK response', JSON.stringify({
+      http: res.status, ok, invoiceId,
+      state: res.body?.invoice?.state || res.body?.state || null,
+      body: (typeof res.body === 'string' ? res.body.slice(0, 200) : res.body),
+    }));
     return {
       success:     ok,
-      checkoutId:  res.body?.checkout_id || res.body?.id || null,
+      invoiceId,
+      checkoutId:  invoiceId,   /* alias — some callers read checkoutId */
       providerRef: ref,
       rawResponse: res.body,
-      error:       ok ? null : (res.body?.detail || 'IntaSend error'),
+      error:       ok ? null : (res.body?.detail || res.body?.errors?.[0]?.detail || 'IntaSend STK error'),
     };
   }
 
@@ -143,21 +177,44 @@ class IntaSendAdapter extends PaymentAdapter {
     };
   }
 
-  async initiatePayout({ phone, amountKES, ref, reason }) {
-    const res = await this._request('/api/v1/send-money/mpesa/', 'POST', {
-      phone_number: this._normalizeKenyanPhone(phone),
-      amount:       String(Math.round(amountKES)),
-      currency:     'KES',
-      narrative:    reason || `SOKONI Payout ${ref}`,
-      api_ref:      ref,
-    });
+  /* Send-Money (M-Pesa B2C) — the VERIFIED contract (probed against the live API +
+     the official intasend-node SDK): POST /api/v1/send-money/initiate/, Bearer auth,
+     provider MPESA-B2C, transactions[]. The previous /send-money/mpesa/ + Token + flat
+     body returned HTML 404 and NEVER worked. Throws a gateway-tagged Error on failure
+     (so the caller's retry/refund path handles it); returns the raw response on success. */
+  async sendMoneyB2C({ phone, amountKES, ref, narrative }) {
+    const account = this._normalizeKenyanPhone(phone);
+    const amt = Math.round(Number(amountKES));
+    console.log('[IntaSendAdapter.sendMoneyB2C] contract', JSON.stringify({
+      endpoint: `https://${this._host}/api/v1/send-money/initiate/`, auth: 'Bearer',
+      provider: 'MPESA-B2C', currency: 'KES', amount: amt,
+      account: account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2),
+    }));
+    const res = await this._request('/api/v1/send-money/initiate/', 'POST', {
+      provider: 'MPESA-B2C', currency: 'KES', requires_approval: 'NO',
+      transactions: [{ name: narrative || 'SOKONI Payout', account, amount: amt, narrative: narrative || 'SOKONI earnings payout' }],
+    }, 'Bearer');
     const ok = res.status === 200 || res.status === 201;
-    return {
-      success:     ok,
-      payoutId:    res.body?.id || null,
-      rawResponse: res.body,
-      error:       ok ? null : (res.body?.detail || 'IntaSend payout error'),
-    };
+    const b = res.body;
+    console.log('[IntaSendAdapter.sendMoneyB2C] response', JSON.stringify({ http: res.status, ok, body: (typeof b === 'string' ? b.slice(0, 200) : b) }));
+    if (!ok) {
+      const code = (b && (b.errors?.[0]?.code || b.code)) || `HTTP_${res.status}`;
+      const msg  = (b && (b.errors?.[0]?.detail || b.detail || b.message)) || (typeof b === 'string' ? b.slice(0, 160) : JSON.stringify(b).slice(0, 160));
+      const e = new Error(`IntaSend B2C failed (${res.status}): [${code}] ${msg}`);
+      e.gateway = { name: 'IntaSend', http: res.status, code, message: msg };
+      throw e;
+    }
+    return b || {};
+  }
+
+  /* Interface-shape wrapper (never throws) over sendMoneyB2C. */
+  async initiatePayout({ phone, amountKES, ref, reason }) {
+    try {
+      const b = await this.sendMoneyB2C({ phone, amountKES, ref, narrative: reason });
+      return { success: true, payoutId: b?.tracking_id || b?.file_id || b?.invoice_id || null, rawResponse: b, error: null };
+    } catch (e) {
+      return { success: false, payoutId: null, rawResponse: e.gateway || null, error: e.message };
+    }
   }
 
   async initiateRefund({ originalRef, amountKES, reason }) {

@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" style="background:#050505">
 
 <head>
   <!-- ── CANONICAL TEMPLATE IDENTIFIER ─────────────────────────────────────────
@@ -31,7 +31,10 @@
   <script src="security.js"></script>
   <!-- Image rendering abstraction — loaded early so window.renderProductImage exists
        before the deferred trending grid (script.js) and recommendations render. -->
-  <script src="sokoni-image.js"></script>
+  <!-- defer: still executes before script.js (deferred scripts run in document
+       order), so window.renderProductImage exists before the grid renders — but
+       it no longer blocks first paint. -->
+  <script src="sokoni-image.js" defer></script>
   <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
@@ -54,6 +57,10 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preload" href="assets/Sokoni%20Logo.png" as="image" type="image/png">
   <link rel="preload" href="script.js" as="script">
+  <!-- modulepreload: start fetching the Firebase module graph now instead of at
+       end-of-body (sokoni-init.js → firebase.js), so auth/firestore are ready sooner. -->
+  <link rel="modulepreload" href="sokoni-init.js">
+  <link rel="modulepreload" href="firebase.js">
 
   <!-- --- iOS Splash Screens --- -->
   <link rel="apple-touch-startup-image" href="assets/logosokoni.png">
@@ -152,11 +159,34 @@
   <link rel="stylesheet" href="sokoni-hscroll.css">
   <script src="market-actions.js" defer></script>
   <script src="sokoni-commission-rates.js"></script>
-<script src="sokoni-pay.js" defer></script>
+
 <script src="sokoni-intasend.js" defer></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-home-v3.css">
+
+  <!-- ══ Pre-paint header space reservation ══════════════════════════════════
+       index.html bakes in a static #sk-top-nav for zero-flash render, but the
+       matching body padding lives inside the stylesheet shared-header.js INJECTS
+       at runtime — and a stylesheet delivered by JS can never be pre-paint. So
+       the page rendered at ~64px of top padding and jumped to 106px once that
+       style landed, pushing everything below down 42px.
+
+       Measured 2026-08-01 on production: body padding-top 64px -> 106px at
+       ~3.2s, moving .glass-hero from top:80 to top:122. That single +42px move
+       was the homepage's entire CLS (0.0491 + 0.0442 of 0.0932) — the hero was
+       blamed by the layout-shift API because it MOVED, not because it resized.
+
+       These values mirror shared-header.js lines 712 / 1151-1177 / 1180-1187
+       exactly. Keep them in sync: if the header's own padding rules change,
+       change these too, or the jump returns.
+       ══════════════════════════════════════════════════════════════════════ -->
+  <style>
+    body.sk-has-search { padding-top: max(106px, calc(106px + env(safe-area-inset-top, 0px))); }
+    @media (max-width: 380px) {
+      body.sk-has-search { padding-top: max(100px, calc(100px + env(safe-area-inset-top, 0px))); }
+    }
+  </style>
 </head>
 
 <body class="sk-has-search">
@@ -1820,7 +1850,21 @@
     </div>
 
     <!-- -- PRODUCTS GRID — PREMIUM LAYOUT -- -->
-    <div id="productsContainer" class="ptrend-grid"></div>
+    <!-- Inline skeletons: the grid area shows placeholders at FIRST PAINT instead of
+         staying empty until the deferred 213 KB script.js executes (~9.5 s under
+         throttle). script.js's _p8ShowSkeletons/displayProducts sets innerHTML, so
+         these are replaced the moment real data renders — no double-render. Markup
+         mirrors _p8ShowSkeletons; .p8-sk styles live in style.css. -->
+    <div id="productsContainer" class="ptrend-grid">
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+    </div>
 
     <!-- See All footer — shown on home page when filter hides products -->
     <div id="trendingSeeAllFooter" style="display:none;text-align:center;padding:4px 28px 16px;">
@@ -2316,7 +2360,7 @@
 
     <!-- Browse all button -->
     <div id="inspiqBrowseMore" style="display:none;text-align:center;padding:4px 28px 28px;">
-      <a href="feeds.html" style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;
+      <a href="inspiq.html" style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;
               background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(113,255,0,0.06));
               border:1px solid rgba(113,255,0,0.32);border-radius:14px;
               color:#71ff00;font-size:14px;font-weight:900;text-decoration:none;
@@ -2455,8 +2499,8 @@
           <a href="https://facebook.com/mysokoni.ke" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
             <i class="fab fa-facebook-f"></i> @mysokoni.ke
           </a>
-          <a href="https://youtube.com/@mysokonike" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
-            <i class="fab fa-youtube"></i> @mysokonike
+          <a href="https://youtube.com/@mysokoni_ke" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
+            <i class="fab fa-youtube"></i> @mysokoni_ke
           </a>
           <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer" class="social-handle-pill social-whatsapp">
             <i class="fab fa-whatsapp"></i> WhatsApp Us
@@ -2648,7 +2692,7 @@
           <a href="https://tiktok.com/@sokonike" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on TikTok">
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.4 2.5c.3 1.7 1.4 2.9 3.1 3.1v2.5a5.6 5.6 0 0 1-3.1-1v4.8a4.7 4.7 0 1 1-4.7-4.7c.3 0 .5 0 .8.1v2.6a2.2 2.2 0 1 0 1.5 2.1V2.5h2.4Z"/></svg>
           </a>
-          <a href="https://youtube.com/@mysokonike" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on YouTube">
+          <a href="https://youtube.com/@mysokoni_ke" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on YouTube">
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.2 6.2a2.2 2.2 0 0 0-1.5-1.5C15.3 4.3 10 4.3 10 4.3s-5.3 0-6.7.4A2.2 2.2 0 0 0 1.8 6.2 23 23 0 0 0 1.4 10c0 1.3.1 2.6.4 3.8a2.2 2.2 0 0 0 1.5 1.5c1.4.4 6.7.4 6.7.4s5.3 0 6.7-.4a2.2 2.2 0 0 0 1.5-1.5c.3-1.2.4-2.5.4-3.8s-.1-2.6-.4-3.8ZM8.4 12.4V7.6l4.2 2.4-4.2 2.4Z"/></svg>
           </a>
           <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on WhatsApp">
@@ -2708,7 +2752,7 @@
              gone nowhere. -->
         <a href="mailto:info@mysokoni.co.ke">📧 info@mysokoni.co.ke</a>
         <a href="tel:+254705726803">📞 +254 705 726 803</a>
-        <a href="tel:+254710176275">📞 +254 710 176 275</a>
+        <a href="tel:+254722376801">📞 +254 722 376 801</a>
         <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp fa-fw"></i> WhatsApp Us</a>
         <a href="https://instagram.com/mysokoni.ke" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram fa-fw"></i> @mysokoni.ke</a>
         <a href="services.html">🛠️ Services Hub</a>
@@ -3061,7 +3105,7 @@ import SokoniDB from "./sokoni-db.js";
   <script src="sokoni-share.js" defer></script>
   <script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
-  <script src="inspiq.js" defer></script>
+  
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       setTimeout(function () {
@@ -3426,7 +3470,18 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     margin:16px auto !important;
     width:calc(100% - 32px) !important;   /* 16px each side, matches the auto margin */
     max-width:none !important;
-    min-height:auto !important;
+    /* Reserve the hero's height BEFORE its text renders.
+       This was `min-height:auto`, i.e. zero reserved space on mobile, so roughly
+       450px of hero appeared out of nothing once the heading, sub-heading and
+       buttons laid out — measured as the homepage's two largest layout shifts
+       (0.0468 + 0.0444 of a 0.0912 CLS, against a 0.1 budget).
+
+       450px is the MEASURED floor, not a guess: the settled hero is 450px at
+       393px wide, 453px at 412px and 467px at 375px (narrower wraps taller).
+       Because the floor equals the smallest real height, content always wins and
+       the reservation can never open an empty gap — it only stops the collapse.
+       Desktop keeps its 44vh rule above this breakpoint. */
+    min-height:450px !important;
   }
   /* Card follows the section: it is a card on all four sides now, not a bleed panel.
      border-radius returns to all four corners and the side/top borders are restored,
@@ -3934,7 +3989,7 @@ document.addEventListener('DOMContentLoaded',function(){
 <script type="module" src="sokoni-ai-policy.js"></script>
 
 <!-- ── PERSONALISED RECOMMENDATIONS ── -->
-<script src="sokoni-recommendations.js" defer></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   /* This chain had NO error handling: if init() or getForYou() rejected, the
@@ -3997,7 +4052,7 @@ document.addEventListener('DOMContentLoaded', function(){
         .map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
       return '<a class="sk-featprov-card" role="listitem" href="' + esc(p.profileUrl) + '">'
         + (p.photo
-            ? '<img class="sk-featprov-av" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">'
+            ? '<img class="sk-featprov-av" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" loading="lazy" decoding="async" data-initials="' + esc(initials) + '" onerror="this.onerror=null;var d=document.createElement(\'div\');d.className=this.className;d.textContent=this.dataset.initials;this.replaceWith(d);">'
             : '<div class="sk-featprov-av">' + esc(initials) + '</div>')
         + '<div class="sk-featprov-name">' + esc(p.name) + '</div>'
         + '<div class="sk-featprov-cat">' + esc(p.emoji) + ' ' + esc(p.categoryLabel)
@@ -4048,17 +4103,30 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 400);
 });
 </script>
-<script defer src="kass-widget.js"></script>
-  <script defer src="hub-register.js"></script>
-  <!-- Enterprise v2.0 modules — event bus and observability must load first -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-service-mesh.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-payment-engine.js"></script>
-  <script defer src="sokoni-fraud-engine.js"></script>
-  <script defer src="sokoni-webhook-engine.js"></script>
-  <script defer src="sokoni-search-pro.js"></script>
+<!-- P2A: these are post-paint modules (KASS widget, hub registry, and the
+     Enterprise v2.0 engines) — none is needed to render the shell, nav, or the
+     product grid. Loaded eagerly they added ~230 KB to startup parse/execute and
+     inflated TBT. Inject them AFTER the load event, on main-thread idle, in order
+     (event-bus/observability before the engines). async=false preserves execution
+     order while allowing parallel download. -->
+  <script>
+  (function _sokoniLazyEngines() {
+    var LAZY = ["kass-widget.js","hub-register.js","sokoni-event-bus.js",
+                "sokoni-observability.js","sokoni-service-mesh.js","sokoni-gateway.js",
+                "sokoni-payment-engine.js","sokoni-fraud-engine.js",
+                "sokoni-webhook-engine.js","sokoni-search-pro.js"];
+    function flush() {
+      LAZY.forEach(function (src) {
+        var s = document.createElement('script');
+        s.src = src; s.async = false;   /* ordered execution, parallel download */
+        document.body.appendChild(s);
+      });
+    }
+    function start() { (window.requestIdleCallback || function (f) { setTimeout(f, 200); })(flush, { timeout: 3000 }); }
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
+  }());
+  </script>
   <script>
   /* Hidden admin access: tap the home logo 9× → super admin (which still enforces the
      admin claim). Robustness fixes for "9-tap not working": (1) also handle touchend —
@@ -4097,6 +4165,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('touchend', bump, true);
   })();
   </script>
+
+  <!-- Idle-loaded: 158KB of optional modules (payment SDK, recommendations,
+       Inspiq) that the homepage never references at first paint. Loads on idle
+       OR first interaction, whichever comes first. See sokoni-lazy.js. -->
+  <script src="sokoni-lazy.js" defer data-lazy="sokoni-pay.js,sokoni-recommendations.js,inspiq.js"></script>
 </body>
 
 </html>

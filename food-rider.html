@@ -6,6 +6,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
+<script type="module" src="sokoni-init.js"></script>
 <script src="auth-guard.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
@@ -384,6 +385,7 @@ function renderActiveDelivery() {
   <div class="fr-map-section" style="margin-bottom:14px;">
     <div class="fr-map-hdr">🗺️ Navigation Map</div>
     <div id="riderMap" style="height:240px;"></div>
+    <button onclick="openRiderNav()" style="width:100%;margin-top:10px;padding:12px;background:rgba(66,133,244,0.12);border:1px solid rgba(66,133,244,0.4);color:#8ab4f8;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;font-family:inherit;">🧭 Open in Maps — turn-by-turn to ${isPickup ? 'pickup' : 'customer'}</button>
   </div>
 
   <!-- CONTACT -->
@@ -435,6 +437,30 @@ function _fetchNavRoute() {
       if(_routeLine){ _map?.removeLayer(_routeLine); _routeLine=null; }
       if(coords.length>1 && _map){ _routeLine=L.polyline(coords,{color:'#71ff00',weight:4,opacity:0.7,dashArray:'8 4'}).addTo(_map); _map.fitBounds(_routeLine.getBounds(),{padding:[30,30]}); }
     }).catch(()=>{});
+}
+
+/* Launch the rider's native maps app for turn-by-turn navigation.
+   Destination = restaurant while picking up, customer while delivering.
+   Prefers real coordinates; falls back to the free-text address. */
+function openRiderNav() {
+  const o = _activeOrder;
+  if (!o) { (window._skToast||alert)('No active delivery to navigate to.'); return; }
+  const status = o.status || 'confirmed';
+  const isPickup = status === 'confirmed' || status === 'preparing';
+  const vend = (o.vendors || [])[0];
+  let lat, lng, addr;
+  if (isPickup) {
+    lat = vend?.restaurantLat; lng = vend?.restaurantLng;
+    addr = vend?.restaurantAddress || vend?.restaurantName;
+  } else {
+    lat = o.deliveryLat; lng = o.deliveryLng;
+    addr = o.deliveryAddress;
+  }
+  const hasCoords = Number.isFinite(+lat) && Number.isFinite(+lng) && +lat !== 0 && +lng !== 0;
+  const dest = hasCoords ? (lat + ',' + lng) : String(addr || '').trim();
+  if (!dest) { (window._skToast||alert)('No destination location available for this order yet.'); return; }
+  const url = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest) + '&travelmode=driving';
+  window.open(url, '_blank', 'noopener');
 }
 
 function markPickedUp() {

@@ -224,6 +224,28 @@
     document.getElementById("bnbBookModal").style.display = "flex";
   }
 
+  /* Reopens the booking the guest was making when they were sent to sign in.
+     Without this the gate costs them every field they had typed, which is how a
+     correct security boundary turns into an abandoned booking. */
+  window._bnbResumeIntent = function(){
+    let intent = null;
+    try { intent = JSON.parse(sessionStorage.getItem("sokoniBnBIntent") || "null"); } catch(e) {}
+    if (!intent || !intent.bnbId) return;
+    /* 30 minutes: long enough to sign in, short enough not to resurrect a
+       stale intent days later. */
+    if (Date.now() - (intent.at || 0) > 30 * 60 * 1000) {
+      try { sessionStorage.removeItem("sokoniBnBIntent"); } catch(e) {}
+      return;
+    }
+    try { sessionStorage.removeItem("sokoniBnBIntent"); } catch(e) {}
+    if (typeof openBookModal !== "function") return;
+    openBookModal(intent.bnbId);
+    const set = function(id, v){ const el = document.getElementById(id); if (el && v) el.value = v; };
+    set("bookName", intent.name); set("bookPhone", intent.phone);
+    set("bookIn", intent.checkIn); set("bookOut", intent.checkOut);
+    showNotif("Signed in — your booking details were kept.", "success");
+  };
+
   function confirmBooking(bnbId){
     const _btn = document.querySelector('.modal-confirm-btn');
     if(_btn){ _btn.disabled = true; _btn.textContent = '⏳ Processing...'; }
@@ -234,29 +256,115 @@
     if(!name || !phone || !checkIn || !checkOut){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Fill all booking details","error"); return; }
     if(new Date(checkOut) <= new Date(checkIn)){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Check-out must be after check-in","error"); return; }
 
+    /* ── Authentication is required BEFORE payment ────────────────────────
+       firestore.rules requires request.resource.data.uid == request.auth.uid on
+       bnbBookings create, so an unauthenticated booking CANNOT be persisted. It
+       used to be attempted anyway: payment was taken, the write was rejected,
+       and the empty catch reported success. Since the commit-point gating the
+       guest is told the truth — but they have still paid for a booking that was
+       never creatable.
+
+       Never collect payment for a booking that cannot legally be persisted. The
+       rules are NOT weakened to admit anonymous bookings: a booking needs a
+       verified identity for its history, its disputes, its notifications and its
+       payment reconciliation. */
+    if (!window._bnbAuthUid) {
+      if(_btn){ _btn.disabled = false; _btn.textContent = "Confirm Booking"; }
+      /* Keep what they entered so signing in does not cost them the form. */
+      try {
+        sessionStorage.setItem("sokoniBnBIntent", JSON.stringify({
+          bnbId, name, phone, checkIn, checkOut, at: Date.now()
+        }));
+      } catch(e) {}
+      showNotif("Please sign in to complete your booking — it keeps your booking history, notifications and payment protection.", "error");
+      setTimeout(function(){
+        window.location.href = "login.html?redirect=" + encodeURIComponent("bnb.html");
+      }, 1600);
+      return;
+    }
+
     const b      = allBnBs.find(b => b.id === bnbId);
     const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
     const total  = nights * Number(b?.pricePerNight || 0);
     const ref    = _bnbRef || ("BNB" + Date.now().toString().slice(-6));
 
-    function _finalise(mpesaCode){
+    /* Waits for the Firestore module, which is a type="module" block later in
+       the document and therefore not defined when this inline script runs. */
+    async function _persistBnBBooking(payload){
+      const deadline = Date.now() + 4000;
+      while (!window._saveBnBBookingFS && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      if (!window._saveBnBBookingFS) {
+        console.error('[BnB] Firestore module never loaded — booking not persisted', payload && payload.id);
+        return { ok:false, reason:'the booking service did not load' };
+      }
+      return window._saveBnBBookingFS(payload);
+    }
+
+    async function _finalise(mpesaCode){
       _bnbRef = null;
-      /* Save booking */
-      let bookings = [];
-      try { bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; } catch(e) {}
       const _bkData = { id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode:mpesaCode||null, bookedAt: Date.now() };
-      bookings.unshift(_bkData);
-      localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
-      /* Persist to Firestore */
-      if(window._saveBnBBookingFS){
-        window._saveBnBBookingFS({
-          ..._bkData,
-          listingId:bnbId,
-          hostUid:b?.hostUid||'',
-          hostPhone:b?.phone||b?.hostPhone||b?.contact||''
-        });
+      /* Persist first. Nothing downstream may run until this resolves — see the
+         commit-point note below. The write is not retried, and the guest is never
+         told to try again on failure: payment may already have been taken and a
+         retry would risk a second charge. */
+      const _fsOutcome = await _persistBnBBooking({
+        ..._bkData,
+        listingId:bnbId,
+        hostUid:b?.hostUid||'',
+        hostPhone:b?.phone||b?.hostPhone||b?.contact||''
+      });
+
+      document.getElementById("bnbBookModal").style.display = "none";
+
+      /* ── The booking document is the commit point ────────────────────────
+         Everything below depends on the booking existing. Until Firestore has
+         accepted it there is no booking, whatever the payment did — so the host
+         is not notified, no invoice is raised, no commission is recorded, and
+         the guest is not told it is confirmed.
+
+         Previously all of those ran unconditionally, and the local record was
+         written as status:"confirmed" BEFORE the write was even attempted. A
+         failed persist produced a host WhatsApp, an invoice, a commission entry
+         and a confirmation banner for a booking that existed nowhere.
+
+         The money does not need a new home: darajaSTKCallback records every
+         payment in posPayments/{checkoutId} server-side, and where the
+         paid-for document is absent it already writes orphanPayments/{checkoutId}
+         with reason "order_document_absent_at_callback". That is the platform
+         reconciliation path; this deliberately does not invent a second one.
+         The reference shown to the guest is the key that matches the two up. */
+      if (!(_fsOutcome && _fsOutcome.ok)) {
+        /* A recovery record, under a DIFFERENT key and a non-confirmed status.
+           Writing it into sokoniBnBBookings would manufacture a confirmed
+           booking on the device — the exact thing that made this dangerous. */
+        try {
+          const rec = JSON.parse(localStorage.getItem("sokoniBnBBookingRecovery") || "[]");
+          rec.unshift({ ..._bkData, status:"payment_received_not_persisted",
+            failureReason:(_fsOutcome && _fsOutcome.reason) || "unknown error",
+            failedAt:new Date().toISOString() });
+          localStorage.setItem("sokoniBnBBookingRecovery", JSON.stringify(rec));
+        } catch(e) {}
+
+        console.error("[BnB] BOOKING NOT PERSISTED — payment may have been taken", {
+          ref, bnbId, total, mpesaCode: mpesaCode || null,
+          reason: (_fsOutcome && _fsOutcome.reason) || "unknown error" });
+
+        showNotif(`Payment received. Your booking is being verified. Keep this reference: ${ref}.`, "error");
+        return;
       }
 
+      /* ── Commit succeeded: the downstream workflow, in order ───────────── */
+
+      /* 1. Local record — only now, and confirmed because it genuinely is. */
+      try {
+        const bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings") || "[]");
+        bookings.unshift(_bkData);
+        localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
+      } catch(e) {}
+
+      /* 2. Host notification */
       /* Notify host via WhatsApp */
       const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
       if(hostPhone){
@@ -267,6 +375,7 @@
         setTimeout(()=> window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank"), 1000);
       }
 
+      /* 3. Invoice */
       /* Auto-invoice */
       if(window.SokoniInvoice){
         SokoniInvoice.generate({
@@ -279,6 +388,7 @@
         });
       }
 
+      /* 4. Commission */
       /* Commission */
       if(window.SokoniPay && SokoniPay.saveCommission && total > 0){
         var _cPct =SokoniCommission.pct('bnb');
@@ -286,7 +396,7 @@
         SokoniPay.saveCommission({ref,providerName:b?.hostName||b?.name||'BnB Host',category:'bnb',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'BnB booking · '+nights+' night(s)',createdAt:Date.now()});
       }
 
-      document.getElementById("bnbBookModal").style.display = "none";
+      /* 5. Customer confirmation */
       showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
     }
 
@@ -405,7 +515,14 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 let _uid = null;
-onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
+onAuthStateChanged(auth, u => {
+  _uid = u ? u.uid : null;
+  /* The booking flow runs in the inline script above, which cannot see _uid.
+     It needs the answer BEFORE taking payment, so publish it. */
+  window._bnbAuthUid   = _uid;
+  window._bnbAuthReady = true;
+  if (_uid && typeof window._bnbResumeIntent === "function") window._bnbResumeIntent();
+});
 
 /* ── Load listings from Firestore and merge with localStorage ── */
 let _bnbUnsub = null;
@@ -417,10 +534,23 @@ try {
 } catch(e) {}
 window.addEventListener('beforeunload', () => { if (_bnbUnsub) _bnbUnsub(); });
 
-/* ── Save booking to Firestore after confirmed payment ── */
+/* ── Save booking to Firestore after confirmed payment ──────────────────────
+   Returns the outcome. This used to be `catch(e) {}` — an empty body — so a
+   rules rejection, an offline device or a quota error lost the booking
+   silently while the guest was told "Booking confirmed". The caller now awaits
+   this and reports honestly. */
 window._saveBnBBookingFS = async function(bk) {
-  try { await addDoc(collection(db,'bnbBookings'), {...bk, uid:_uid||null, createdAt:serverTimestamp()}); } catch(e) {}
+  try {
+    const ref = await addDoc(collection(db,'bnbBookings'), {...bk, uid:_uid||null, createdAt:serverTimestamp()});
+    return { ok: true, id: ref.id };
+  } catch (e) {
+    console.error('[BnB] booking did NOT persist to Firestore:', e && (e.code || e.message), bk && bk.id);
+    return { ok: false, reason: (e && (e.code || e.message)) || 'unknown error' };
+  }
 };
+/* Signals that the module above has executed, so a booking completed in the
+   first moments of the page can wait for it rather than skip Firestore. */
+window._bnbFsReady = true;
 </script>
 </body>
 </html>

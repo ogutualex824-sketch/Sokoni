@@ -985,12 +985,21 @@ window.bizMessage = function () {
 /* ── Products ── */
 async function loadProducts() {
   try {
-    const q = query(
+    let snap = await getDocs(query(
       collection(_db, 'products'),
       where('businessId', '==', BIZ_ID),
       limit(60)
-    );
-    const snap = await getDocs(q);
+    ));
+    /* Marketplace products link to their owner by `sellerUid`, not `businessId`.
+       A uid-keyed business (a marketplace shop) therefore matches nothing by
+       businessId — fall back to sellerUid so its storefront isn't empty. */
+    if (snap.empty) {
+      snap = await getDocs(query(
+        collection(_db, 'products'),
+        where('sellerUid', '==', BIZ_ID),
+        limit(60)
+      ));
+    }
     _allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a,b) => (b.createdAt?.toMillis?.()||0) - (a.createdAt?.toMillis?.()||0));
   } catch (e) {

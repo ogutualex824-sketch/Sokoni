@@ -1756,6 +1756,7 @@ if(urlCat){ setCat(urlCat); } else { filterPerformers(); }
 /* =============================================================
    EVENTS & TICKETS
 ============================================================= */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_EVENTS = [
   { id:'EV01', name:'Nairobi Jazz Festival', type:'festival', date:'2026-07-05', venue:'Uhuru Gardens', price:1500, desc:'3-day outdoor jazz festival. 20+ artists.', phone:'0712400001', emoji:'🎷', color:'rgba(168,85,247,0.1)', border:'rgba(168,85,247,0.25)' },
   { id:'EV02', name:'Laugh Factory Kenya', type:'comedy', date:'2026-06-20', venue:'Carnivore Grounds', price:1000, desc:'Kenya\'s biggest comedy night. 8 comedians.', phone:'0723400002', emoji:'😂', color:'rgba(234,179,8,0.08)', border:'rgba(234,179,8,0.2)' },
@@ -1797,7 +1798,7 @@ function renderEventsGrid() {
     totalCapacity: e.totalCapacity, fsId: e._id,
     color: 'rgba(168,85,247,0.06)', border: 'rgba(168,85,247,0.2)',
   }));
-  const demoFallback = DEMO_EVENTS.filter(d => !fsNorm.some(f => f.date === d.date && f.name === d.name));
+  const demoFallback = _demoAllowed ? DEMO_EVENTS.filter(d => !fsNorm.some(f => f.date === d.date && f.name === d.name)) : [];
   let list = [...fsNorm, ...local, ...demoFallback];
   if (_evtFilter !== 'all') list = list.filter(e => e.type === _evtFilter);
   if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No events found. <a href="ent-organizer.html" style="color:#c084fc;font-weight:700;">Create one →</a></div>'; return; }

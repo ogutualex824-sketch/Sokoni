@@ -98,7 +98,7 @@
 
       <div class="auth-divider">or sign in with</div>
 
-      <!-- Social provider grid: Google · Facebook · Phone -->
+      <!-- Social provider grid: Google · Phone (Facebook login removed) -->
       <div class="auth-social-grid">
 
         <!-- Google -->
@@ -110,14 +110,6 @@
             <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
           </svg>
           <span class="g-btn-text">Google</span>
-        </button>
-
-        <!-- Facebook -->
-        <button type="button" class="auth-social-btn fb-btn" onclick="signInWithFacebook()">
-          <svg class="ssb-icon" width="17" height="17" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true">
-            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.027 4.388 11.026 10.125 11.927V15.563H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.927-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.437C19.612 23.1 24 18.1 24 12.073z"/>
-          </svg>
-          Facebook
         </button>
 
         <!-- Phone OTP -->
@@ -197,7 +189,7 @@
 
   <!-- Password reset modal -->
   <div id="resetModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:32px 24px;max-width:380px;width:100%;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;">
+    <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:32px 24px;max-width:380px;width:100%;max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;">
       <h3 style="margin:0 0 6px;font-size:18px;font-weight:900;">🔑 Reset Password</h3>
       <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0 0 20px;line-height:1.5;">Enter your registered email — we'll send a secure reset link.</p>
       <div id="resetStep1">

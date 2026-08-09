@@ -1301,10 +1301,10 @@ window.toggleAlertPanel = () => {
 };
 
 window.ackAlert = async (id) => {
-  if(!confirm('Acknowledge this alert?')) return;
+  if(!(await SK.dialog.confirm('Acknowledge this alert?', null, null, { title: 'Acknowledge alert', confirmLabel: 'Acknowledge' }))) return;
   try {
     await updateDoc(doc(db,'eccAlerts',id), { status:'acknowledged', acknowledgedBy:_user?.uid, acknowledgedAt:serverTimestamp() });
-  } catch(e) { alert('Error: '+e.message); }
+  } catch(e) { SK.dialog.alert('Error: '+e.message); }
 };
 
 /* ── Incident actions ────────────────────────────── */
@@ -1316,7 +1316,7 @@ window.submitIncident = async () => {
   const desc  = document.getElementById('inc-desc').value.trim();
   const sev   = document.getElementById('inc-sev').value;
   const svcs  = document.getElementById('inc-services').value.split(',').map(s=>s.trim()).filter(Boolean);
-  if(!title) { alert('Title is required'); return; }
+  if(!title) { SK.dialog.alert('Title is required'); return; }
   try {
     const incId = 'INC-'+Date.now().toString(36).toUpperCase();
     await addDoc(collection(db,'eccIncidents'), {
@@ -1328,7 +1328,7 @@ window.submitIncident = async () => {
     await _audit('incident_created', {incId, title, sev});
     closeModal('incident-modal');
     nav('incidents');
-  } catch(e) { alert('Error creating incident: '+e.message); }
+  } catch(e) { SK.dialog.alert('Error creating incident: '+e.message); }
 };
 
 window.updateInc = async (id, status) => {
@@ -1338,7 +1338,7 @@ window.updateInc = async (id, status) => {
     if(status==='resolved') { update.resolvedAt=Date.now(); }
     await updateDoc(doc(db,'eccIncidents',id), update);
     await _audit('incident_updated',{id,status});
-  } catch(e) { alert('Error: '+e.message); }
+  } catch(e) { SK.dialog.alert('Error: '+e.message); }
 };
 
 /* ── Audit helper ────────────────────────────────── */

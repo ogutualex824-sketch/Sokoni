@@ -185,3 +185,65 @@ describe("Firestore rules — file integrity", () => {
     expect(opens).toBe(closes);
   });
 });
+
+describe("Firestore rules — onboarding applications & rider records", () => {
+  /* Regression guards for the 2026-07-30 application-lifecycle work. Every
+     assertion here corresponds to a defect that was live in production. */
+
+  test("there is exactly ONE `applications` rule block", () => {
+    /* Firestore unions all matching allow rules, so a second block for the same
+       path can only ever widen access — never narrow it. Two blocks existed, and
+       the second one's read clause was what exposed applicant PII. */
+    const blocks = rules.match(/^\s*match\s+\/applications\/\{[A-Za-z]+\}\s*\{/gm) || [];
+    expect(blocks).toHaveLength(1);
+  });
+
+  test("applications are NEVER world-readable by status", () => {
+    /* The removed clause was:
+         allow read: if resource.data.status == 'open' || … == 'active' || …
+       Applications carry the applicant's phone, and a rider's carry National ID
+       and driving-licence number. */
+    const block = rules.match(/match\s+\/applications\/\{[A-Za-z]+\}\s*\{[\s\S]*?\n\s{4}\}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).not.toMatch(/status\s*==\s*['"]open['"]/);
+    expect(block[0]).not.toMatch(/status\s*==\s*['"]active['"]/);
+    /* Read must require admin or ownership. */
+    expect(block[0]).toMatch(/allow\s+read\s*:\s*if\s+isAdmin\(\)\s*\|\|\s*isOwner\(\)/);
+  });
+
+  test("an applicant cannot approve their own application", () => {
+    const block = rules.match(/match\s+\/applications\/\{[A-Za-z]+\}\s*\{[\s\S]*?\n\s{4}\}/)[0];
+    /* noAdminFields() blocks `approved`/`verified`/`role` on both create and
+       self-update, so approval stays an admin act. */
+    expect(block).toMatch(/allow\s+create\s*:[^\n]*noAdminFields\(\)/);
+    expect(block).toMatch(/allow\s+update\s*:[\s\S]*?noAdminFields\(\)/);
+  });
+
+  test("drivers/{uid} is declared and client-write denied", () => {
+    /* `drivers` had NO rule block at all: default-deny meant a rider could not
+       read their own operational record, and it must never be client-writable —
+       a rider who could write it could approve themselves onto the road. */
+    const block = rules.match(/match\s+\/drivers\/\{uid\}\s*\{[\s\S]*?\n\s{4}\}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).toMatch(/allow\s+write\s*:\s*if\s+false/);
+    expect(block[0]).toMatch(/allow\s+read\s*:\s*if\s+isAdmin\(\)/);
+  });
+
+  test("driverVerification/{uid} is restricted, never broadly readable", () => {
+    /* Rider identity documents live here rather than in `rideDrivers`, which is
+       readable by every signed-in user. */
+    const block = rules.match(/match\s+\/driverVerification\/\{uid\}\s*\{[\s\S]*?\n\s{4}\}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).toMatch(/allow\s+write\s*:\s*if\s+false/);
+    expect(block[0]).not.toMatch(/allow\s+read\s*:\s*if\s+isAuthed\(\)\s*;/);
+    expect(block[0]).toMatch(/request\.auth\.uid\s*==\s*uid/);
+  });
+
+  test("rideDrivers stays readable to signed-in users but holds no identity docs", () => {
+    /* Dispatch needs the operational record, so the broad read is intentional —
+       which is exactly why nationalId/dlNumber must not be projected into it. */
+    const block = rules.match(/match\s+\/rideDrivers\/\{driverId\}\s*\{[\s\S]*?\n\s{4}\}/);
+    expect(block).not.toBeNull();
+    expect(block[0]).toMatch(/allow\s+read\s*:\s*if\s+isAuthed\(\)/);
+  });
+});

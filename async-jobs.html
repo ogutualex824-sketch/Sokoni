@@ -558,7 +558,7 @@ async function toggleQ(p, pause) {
 
 // ── Job actions ───────────────────────────────────────────────────────────────
 async function cancelJob(jobId) {
-  if (!confirm('Cancel this job?')) return;
+  if (!(await SK.dialog.confirm('Cancel this job?', null, null, { title: 'Cancel job', confirmLabel: 'Cancel job' }))) return;
   try { await call('asyncCancel', { jobId }); toast('Job cancelled'); loadDashboard(); }
   catch (e) { toast(e.message, true); }
 }
@@ -573,7 +573,7 @@ async function retryJob(jobId, fromDlq) {
 }
 
 async function discardDLQ(jobId) {
-  if (!confirm('Permanently delete from Dead Letter Queue?')) return;
+  if (!(await SK.dialog.confirm('Permanently delete from Dead Letter Queue?', null, null, { title: 'Delete from DLQ', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await fdb.collection('asyncDeadLetter').doc(jobId).delete();
     toast('Discarded from DLQ');

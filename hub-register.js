@@ -14,6 +14,7 @@
     { id:'wholesale',        label:'Wholesale / Distributor',         hub:'shopping',      emoji:'📦' },
     { id:'supermarket',      label:'Supermarket / Minimart',          hub:'shopping',      emoji:'🏪' },
     { id:'hardware',         label:'Hardware / Building Materials',    hub:'construction',  emoji:'🧱' },
+    { id:'water-supplier',   label:'Water Supplier / Refill Station', hub:'shopping',      emoji:'💧' },
     /* Food & Beverage */
     { id:'restaurant',       label:'Restaurant / Hotel',              hub:'food',          emoji:'🍽️' },
     { id:'cafe',             label:'Café / Coffee Shop',              hub:'food',          emoji:'☕' },
@@ -269,15 +270,19 @@
     return /^(07|01)[0-9]{8}$/.test(p.replace(/[\s\-]/g, ''));
   }
 
-  /* ── Save to Firestore via v9 dynamic import ─────────────── */
+  /* ── Save to Firestore via v9 dynamic import ─────────────────────────────
+     This used to swallow every failure into a console.warn and resolve anyway,
+     so `_submit` went on to render "<Business> is now on SOKONI!" over an
+     application that had never been written. The rejection now propagates —
+     the caller decides what the operator is told, and it is never "you're
+     registered" when nothing was saved. */
   function _saveToFirestore(data) {
-    if (!window.firebaseDB) return Promise.resolve();
+    if (!window.firebaseDB) {
+      return Promise.reject(new Error('Database unavailable — check your connection.'));
+    }
     return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
       .then(function (fs) {
         return fs.addDoc(fs.collection(window.firebaseDB, 'applications'), data);
-      })
-      .catch(function (e) {
-        console.warn('[HubRegister] Firestore save failed:', e.message);
       });
   }
 
@@ -352,9 +357,31 @@
     var user = null;
     try { user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
 
+    /* Only the Auth session counts. A uid read out of localStorage cannot be
+       trusted by firestore.rules (the create rule requires
+       request.resource.data.uid == request.auth.uid), so a cached value produced
+       an application that was either rejected outright or — worse — written with
+       a uid the server would never match, leaving an approved business with no
+       account to grant the role to. Sign-in is now a precondition, stated plainly
+       instead of failing later. */
     var uid = (window.firebaseAuth && window.firebaseAuth.currentUser)
       ? window.firebaseAuth.currentUser.uid
-      : (user && user.uid ? user.uid : null);
+      : null;
+
+    if (!uid) {
+      _err('Please sign in first — we link your listing to your account so you can manage it.');
+      setTimeout(function () {
+        window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+      }, 1400);
+      return;
+    }
+
+    /* Contact number in BOTH shapes. `phone` is the local form the dashboards
+       render and WhatsApp links use; `phoneNumber` is the E.164 form every SMS
+       path and _findUserByPhone key on. Storing only one made the applicant
+       un-messageable by whichever path wanted the other. */
+    var digits = phone.replace(/\D/g, '');
+    var e164 = /^0[17]\d{8}$/.test(digits) ? '+254' + digits.slice(1) : null;
 
     var data = {
       id:          'APP' + Date.now(),
@@ -363,13 +390,14 @@
       categoryLabel: catObj.label,
       hub:         catObj.hub,
       phone:       phone,
+      phoneNumber: e164,
       email:       email || (user && user.email ? user.email : ''),
       location:    loc,
       description: desc,
       plan:        plan,
       status:      'pending',
       type:        'business',
-      uid:         uid || '',
+      uid:         uid,
       submittedAt: new Date().toISOString(),
       createdAt:   Date.now()
     };
@@ -392,11 +420,19 @@
       localStorage.setItem('sokoniProviderProfile', JSON.stringify(pvProfile));
     } catch (e) {}
 
-    /* Firestore save then show success */
+    /* Firestore is the gate, not a nice-to-have.
+       The old version called _showSuccess() from BOTH branches — "still succeed
+       locally" — so a rejected write still told the operator their business was
+       on SOKONI. It was on nothing: the localStorage copy above is visible only
+       in that one browser and reaches no reviewer. Success is now reported only
+       when the application actually exists server-side. */
     _saveToFirestore(data).then(function () {
       _showSuccess(data);
-    }).catch(function () {
-      _showSuccess(data); /* still succeed locally */
+    }).catch(function (e) {
+      console.error('[HubRegister] save failed', e);
+      _err('We could not submit your registration: ' +
+           ((e && e.message) ? e.message : 'unknown error') +
+           ' — please check your connection and tap Register again.');
     });
   }
 

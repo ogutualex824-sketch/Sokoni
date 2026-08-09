@@ -6,8 +6,9 @@
  * Cloud Functions for account lifecycle management:
  *   scheduleAccountDeletion  — marks account for 30-day deletion
  *   cancelAccountDeletion    — removes deletion flag (called on sign-in)
- *   requestDataExport        — queues a full data export for the user
  *   revokeAllSessions        — revokes Firebase refresh tokens + marks all sessions inactive
+ *
+ * (requestDataExport was removed from here — the canonical version is ./data-export.js.)
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -139,51 +140,13 @@ exports.cancelAccountDeletion = onCall({ region: 'us-central1' }, async (request
   return { success: true, message: 'Account deletion cancelled. Welcome back!' };
 });
 
-/* ── requestDataExport ────────────────────────────────────────────────── */
-/**
- * Queues a data export request. A background job (or admin tool) processes
- * the queue and emails the export link within 24 hours.
- */
-exports.requestDataExport = onCall({ region: 'us-central1' }, async (request) => {
-  const uid = _assertAuth(request);
-
-  /* Rate-limit: 1 export request per 7 days */
-  const q = await db.collection('dataExportRequests')
-    .where('uid', '==', uid)
-    .where('status', 'in', ['pending', 'processing'])
-    .limit(1)
-    .get();
-
-  if (!q.empty) {
-    const existing = q.docs[0].data();
-    throw new HttpsError('resource-exhausted',
-      'An export is already in progress. You will receive an email when it\'s ready.');
-  }
-
-  const userSnap = await db.collection('users').doc(uid).get();
-  const email    = userSnap.exists ? (userSnap.data().email || request.auth.token?.email) : request.auth.token?.email;
-
-  const ref = await db.collection('dataExportRequests').add({
-    uid,
-    email:       email || '',
-    status:      'pending',
-    requestedAt: admin.firestore.FieldValue.serverTimestamp(),
-    expiresAt:   admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-  });
-
-  await db.collection('auditLog').add({
-    action: 'data_export_requested',
-    uid,
-    exportRequestId: ref.id,
-    ts:     admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  return {
-    success:   true,
-    requestId: ref.id,
-    message:   'Export requested. We\'ll send a download link to your email within 24 hours.',
-  };
-});
+/* ── requestDataExport — REMOVED (single-source reconciliation, ODPC should-fix #8) ──
+   The canonical requestDataExport lives in ./data-export.js and is the deployed entry
+   point (functions/index.js). That version writes BOTH dataExportRequests (status) AND
+   dataExportQueue/{id} so the processDataExport worker actually builds the export, and it
+   enforces App Check. This module's older duplicate wrote only dataExportRequests (worker
+   never fired) and skipped App Check — so it was a shadowed landmine. Deleted to leave ONE
+   implementation; nothing references account-manager.requestDataExport. */
 
 /* ── revokeAllSessions ────────────────────────────────────────────────── */
 /**
@@ -275,6 +238,26 @@ exports.finaliseExpiredDeletions = onSchedule(
           phone:     '[redacted]',
           photoURL:  '[redacted]',
         }, { merge: true });
+
+        /* 3b. Cross-collection erasure driven by the explicit purge spec — DELETE personal
+              collections, ANONYMIZE records under statutory retention (orders/wallet/tax kept,
+              PII stripped), purge Storage. Then write an IMMUTABLE erasure audit event BEFORE
+              the irreversible auth delete, so completion is evidenced even if a later step fails. */
+        const _purge   = require('./account-purge-spec');
+        let _summary   = { deleted: [], anonymized: [], retained: [], storage: [] };
+        try { _summary = await _purge.purgeUserData(db, admin, uid); }
+        catch (pe) { console.error('[AccountManager] cross-collection purge failed:', uid, pe.message); }
+        await db.collection('erasureLog').add({
+          uid,
+          requestedAt:           data.deletionScheduledAt || null,
+          executedAt:            admin.firestore.FieldValue.serverTimestamp(),
+          workerVersion:         _purge.PURGE_WORKER_VERSION,
+          collectionsDeleted:    _summary.deleted,
+          collectionsAnonymized: _summary.anonymized,
+          collectionsRetained:   _summary.retained,
+          storagePurged:         _summary.storage,
+          outcome:               'success',
+        }).catch(() => {});
 
         /* 4. Delete the Firebase Auth account — the irreversible step, last.
               Tolerate an already-deleted account so a retry can still complete. */

@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -17,6 +17,11 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://storage.googleapis.com">
+  <!-- Start the critical fetches early: the page's own CSS/JS and the Firebase
+       module graph, instead of waiting for the end-of-body module script. -->
+  <link rel="preload" href="category.js" as="script">
+  <link rel="modulepreload" href="sokoni-init.js">
+  <link rel="modulepreload" href="firebase.js">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="manifest" href="manifest.json">
@@ -498,6 +503,7 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
 <script src="analytics.js" defer></script>
 <script src="sokoni-share.js" defer></script>
   <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sokoni-image.js" defer></script>
   <script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */

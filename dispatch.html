@@ -407,26 +407,26 @@
   }
 
   /* ── Admin actions ── */
-  window._manualRedispatch = function (deliveryRef) {
-    if (!confirm('Re-dispatch this delivery to a new rider?')) return;
+  window._manualRedispatch = async function (deliveryRef) {
+    if (!(await SK.dialog.confirm('Re-dispatch this delivery to a new rider?', null, null, { title: 'Re-dispatch delivery', confirmLabel: 'Re-dispatch' }))) return;
     firebase.functions().httpsCallable('dispatchDelivery')({ deliveryRef })
-      .then(function (r) { alert('Re-dispatched. Status: ' + r.data.status); })
-      .catch(function (e) { alert('Error: ' + e.message); });
+      .then(function (r) { SK.dialog.alert('Re-dispatched. Status: ' + r.data.status); })
+      .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
   };
 
-  window._cancelDelivery = function (deliveryRef) {
-    if (!confirm('Cancel this delivery? This cannot be undone.')) return;
+  window._cancelDelivery = async function (deliveryRef) {
+    if (!(await SK.dialog.confirm('Cancel this delivery? This cannot be undone.', null, null, { title: 'Cancel delivery', variant: 'danger', confirmLabel: 'Cancel delivery' }))) return;
     firebase.firestore().collection('packageRequests').doc(deliveryRef).update({
       status: 'cancelled',
       cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
       cancelledBy: 'admin',
     }).then(function () {
       document.getElementById('detailPanel').classList.remove('open');
-    }).catch(function (e) { alert('Error: ' + e.message); });
+    }).catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
   };
 
-  window._suspendRider = function (riderId, alertId) {
-    if (!riderId || !confirm('Suspend rider ' + riderId + '?')) return;
+  window._suspendRider = async function (riderId, alertId) {
+    if (!riderId || !(await SK.dialog.confirm('Suspend rider ' + riderId + '?', null, null, { title: 'Suspend rider', variant: 'danger', confirmLabel: 'Suspend' }))) return;
     var batch = firebase.firestore().batch();
     batch.update(firebase.firestore().collection('rideDrivers').doc(riderId), {
       isOnline: false, suspended: true, suspendedAt: firebase.firestore.FieldValue.serverTimestamp(), suspendReason: 'GPS fraud',
@@ -434,15 +434,15 @@
     batch.update(firebase.firestore().collection('fraudAlerts').doc(alertId), {
       status: 'resolved', resolvedAt: firebase.firestore.FieldValue.serverTimestamp(), resolution: 'rider_suspended',
     });
-    batch.commit().then(function () { alert('Rider suspended.'); document.getElementById('detailPanel').classList.remove('open'); })
-      .catch(function (e) { alert('Error: ' + e.message); });
+    batch.commit().then(function () { SK.dialog.alert('Rider suspended.'); document.getElementById('detailPanel').classList.remove('open'); })
+      .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
   };
 
   window._dismissAlert = function (alertId) {
     firebase.firestore().collection('fraudAlerts').doc(alertId).update({
       status: 'dismissed', resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }).then(function () { document.getElementById('detailPanel').classList.remove('open'); })
-      .catch(function (e) { alert('Error: ' + e.message); });
+      .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
   };
 
   /* ── XSS escape ── */
@@ -484,7 +484,7 @@
     _riders.forEach(function(r) {
       if (r.lat && r.lng) points.push([r.lat, r.lng, 1.0]);
     });
-    if (!points.length) { alert('No location data for heat map.'); return; }
+    if (!points.length) { SK.dialog.alert('No location data for heat map.'); return; }
     if (_heatLayer) _map.removeLayer(_heatLayer);
     _heatLayer = L.heatLayer(points, { radius: 28, blur: 18, maxZoom: 17,
       gradient: { 0.2: '#00aaff', 0.5: '#ff8c00', 0.8: '#ff0000' } }).addTo(_map);

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOKONI — Version Diagnostics</title>
+<style>
+  :root { --bg:#050505; --sur:#111; --sur2:#1a1a1a; --bor:#262626; --txt:#fff; --sub:#8a8a8a; --g:#71ff00; --red:#ff4d4d; --amber:#f5a623; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding:20px; padding-top:calc(20px + env(safe-area-inset-top)); padding-bottom:calc(40px + env(safe-area-inset-bottom));
+         max-width:640px; margin:0 auto; line-height:1.5; }
+  h1 { font-size:20px; font-weight:900; margin-bottom:4px; }
+  .sub { color:var(--sub); font-size:13px; margin-bottom:20px; }
+  .verdict { border-radius:16px; padding:16px 18px; margin-bottom:20px; font-weight:800; font-size:16px; display:flex; align-items:center; gap:10px; }
+  .verdict.ok    { background:rgba(113,255,0,.10); border:1px solid rgba(113,255,0,.3); color:var(--g); }
+  .verdict.stale { background:rgba(245,166,35,.10); border:1px solid rgba(245,166,35,.35); color:var(--amber); }
+  .verdict.none  { background:rgba(255,77,77,.10); border:1px solid rgba(255,77,77,.3); color:var(--red); }
+  .verdict .dot { width:12px; height:12px; border-radius:50%; background:currentColor; flex-shrink:0; box-shadow:0 0 10px currentColor; }
+  .card { background:var(--sur); border:1px solid var(--bor); border-radius:16px; padding:4px 16px; margin-bottom:16px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--bor); font-size:13px; }
+  .row:last-child { border-bottom:none; }
+  .row .k { color:var(--sub); flex-shrink:0; }
+  .row .v { text-align:right; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; word-break:break-all; }
+  .v.match { color:var(--g); } .v.mismatch { color:var(--amber); } .v.bad { color:var(--red); }
+  .btns { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+  button { min-height:48px; border-radius:14px; border:1px solid var(--bor); background:var(--sur2); color:var(--txt);
+           font-size:14px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+  button.primary { background:var(--g); color:#000; border-color:var(--g); }
+  button:active { transform:scale(.98); }
+  .hint { color:var(--sub); font-size:12px; margin-top:14px; text-align:center; }
+  a { color:var(--g); }
+</style>
+</head>
+<body>
+  <h1>SOKONI Version Diagnostics</h1>
+  <div class="sub">Tells you instantly whether this device is on the current production build or a stale cached/service-worker copy. No fix needed to read it.</div>
+
+  <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">Checking…</span></div>
+
+  <div class="card" id="report"></div>
+
+  <div class="btns">
+    <button id="btnCheck">🔄 Check for updates</button>
+    <button id="btnForce" class="primary">⚡ Force fresh build (clear cache + reload)</button>
+  </div>
+  <div class="hint">If the verdict is amber/red, tap <b>Force fresh build</b>. That clears this device's caches and re-installs the latest service worker — the reliable fix for “still showing the old version”.</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const parseVer = (s) => { const m = String(s || "").match(/sokoni-\d{8,}-v\d+/); return m ? m[0] : null; };
+  const noStore = { cache: "no-store" };
+
+  async function collect() {
+    const d = {
+      controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+      serverBuild: null, serverBuildTime: null, serverCommit: null,
+      serverSwVersion: null, installedCacheVersion: null, cacheNames: [],
+      swActive: null, swWaiting: false, swInstalling: false, swScope: null,
+      online: navigator.onLine, checkedAt: new Date().toISOString(),
+    };
+
+    // 1) Server production build (version.json) — the source of truth for "latest".
+    try {
+      const vj = await (await fetch("/version.json?cb=" + Date.now(), noStore)).json();
+      d.serverBuild = vj.cacheVersion || null;
+      d.serverCommit = vj.commitShort || vj.commit || null;
+      d.serverBuildTime = vj.buildTime || null;
+    } catch (e) { d.serverBuild = "unreachable"; }
+
+    // 2) Server service worker version (parse CACHE_VERSION from the live SW file).
+    try {
+      const swText = await (await fetch("/service-worker.js?cb=" + Date.now(), noStore)).text();
+      const m = swText.match(/CACHE_VERSION\s*=\s*["'`]([^"'`]+)["'`]/);
+      d.serverSwVersion = m ? m[1] : null;
+    } catch (e) {}
+
+    // 3) Installed SW version — read from THIS device's Cache Storage names (…-vNN-*).
+    try {
+      if (window.caches) {
+        d.cacheNames = await caches.keys();
+        const versions = d.cacheNames.map(parseVer).filter(Boolean).sort();
+        d.installedCacheVersion = versions.length ? versions[versions.length - 1] : null;
+      }
+    } catch (e) {}
+
+    // 4) Registration state — active / waiting / installing.
+    try {
+      if (navigator.serviceWorker) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          d.swScope = reg.scope || null;
+          d.swWaiting = !!reg.waiting;
+          d.swInstalling = !!reg.installing;
+          d.swActive = reg.active ? (reg.active.scriptURL || "").split("/").pop() : null;
+        }
+      }
+    } catch (e) {}
+
+    return d;
+  }
+
+  function verdict(d) {
+    if (!("serviceWorker" in navigator)) return { cls: "none", txt: "This browser has no service worker — always live from network." };
+    if (!d.controlled && !d.installedCacheVersion) return { cls: "ok", txt: "No service worker installed — you are on the live network build." };
+    const inst = d.installedCacheVersion, srv = d.serverBuild;
+    if (inst && srv && inst === srv && !d.swWaiting) return { cls: "ok", txt: "UP TO DATE — this device matches the current production build." };
+    if (d.swWaiting || (inst && srv && inst !== srv)) return { cls: "stale", txt: "UPDATE AVAILABLE — an older service worker is still active. Tap “Force fresh build”." };
+    return { cls: "stale", txt: "Possibly stale — installed version could not be confirmed against the server." };
+  }
+
+  function render(d) {
+    const v = verdict(d);
+    $("verdict").className = "verdict " + v.cls;
+    $("verdictText").textContent = v.txt;
+
+    const match = (a, b) => (a && b) ? (a === b ? "match" : "mismatch") : "";
+    const rows = [
+      ["Production build (server)", d.serverBuild || "—", ""],
+      ["Server commit", d.serverCommit || "—", ""],
+      ["Server build time", d.serverBuildTime ? new Date(d.serverBuildTime).toLocaleString() : "—", ""],
+      ["Server SW version", d.serverSwVersion || "—", match(d.serverSwVersion, d.serverBuild)],
+      ["Installed cache version (this device)", d.installedCacheVersion || "none", match(d.installedCacheVersion, d.serverBuild)],
+      ["Page controlled by service worker", d.controlled ? "yes" : "no", d.controlled ? "" : "match"],
+      ["Active worker", d.swActive || "—", ""],
+      ["Waiting worker (update pending)", d.swWaiting ? "YES" : "no", d.swWaiting ? "mismatch" : "match"],
+      ["Installing worker", d.swInstalling ? "yes" : "no", ""],
+      ["SW scope", d.swScope || "—", ""],
+      ["Cache buckets on device", String(d.cacheNames.length), ""],
+      ["Online", d.online ? "yes" : "no", d.online ? "" : "bad"],
+      ["Checked at", new Date(d.checkedAt).toLocaleString(), ""],
+    ];
+    $("report").innerHTML = rows.map(([k, val, cls]) =>
+      `<div class="row"><span class="k">${k}</span><span class="v ${cls}">${String(val)}</span></div>`).join("");
+  }
+
+  async function refresh() { render(await collect()); }
+
+  $("btnCheck").addEventListener("click", async () => {
+    $("btnCheck").textContent = "Checking…";
+    try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+    await refresh();
+    $("btnCheck").textContent = "🔄 Check for updates";
+  });
+
+  // Reliable universal fix: delete all caches + unregister every SW + hard reload.
+  $("btnForce").addEventListener("click", async () => {
+    $("btnForce").textContent = "Clearing…";
+    try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+    try {
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch (e) {}
+    // Bust the HTTP layer too, then reload fresh.
+    location.replace("/wallet?fresh=" + Date.now());
+  });
+
+  refresh();
+})();
+</script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>

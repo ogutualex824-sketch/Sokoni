@@ -112,6 +112,12 @@
   </div>
   <!-- Rendered by JS from STAGES so the page cannot drift from the engine's stage list. -->
   <div id="timeline"></div>
+  <!-- Secure Delivery Authorization (Phase 0) — buyer's delivery PIN. -->
+  <div id="pinBox" style="display:none;margin:16px 0 4px;padding:16px;border:1px solid rgba(113,255,0,.35);border-radius:14px;background:rgba(113,255,0,.06);text-align:center">
+    <div style="font-size:12px;letter-spacing:.08em;color:rgba(255,255,255,.6);text-transform:uppercase">🔐 Delivery PIN</div>
+    <div id="pinCode" style="font-size:34px;font-weight:900;letter-spacing:.24em;color:#71ff00;margin:6px 0 2px">— — — — — —</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.5">Give this PIN to your rider <strong>only after</strong> you've received your package.</div>
+  </div>
 </div>
 
 <script src="leaflet.min.js"></script>
@@ -262,7 +268,7 @@ function _render(d){
 function _share(){
   var url=location.href;
   if(navigator.share) navigator.share({title:'Track my SOKONI delivery',url:url}).catch(function(){});
-  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){alert('Link copied!');});
+  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){SK.dialog.alert('Link copied!');});
   else prompt('Copy tracking link:',url);
 }
 
@@ -358,6 +364,20 @@ function _watchOrder(orderId){
     var stamps={};
     (o.timeline||[]).forEach(function(e){ if(e&&e.key) stamps[e.key]=e.at; });
     _renderTimeline(stage,stamps);
+
+    /* Secure Delivery Authorization (Phase 0) — show the buyer's delivery PIN until
+       the order is delivered. Plaintext lives on the buyer's own order doc; the rider
+       never sees it. Hidden once delivered/completed. */
+    var _pinBox=document.getElementById('pinBox');
+    if(_pinBox){
+      var _delivered=(stage==='delivered'||stage==='completed');
+      if(o.deliveryPin && !_delivered){
+        document.getElementById('pinCode').textContent=String(o.deliveryPin).split('').join(' ');
+        _pinBox.style.display='';
+      } else {
+        _pinBox.style.display='none';
+      }
+    }
 
     var st=STAGES[STAGE_IDX[stage]];
     document.getElementById('hdrStatus').textContent=st?st.i+' '+st.l:stage;

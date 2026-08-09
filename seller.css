@@ -405,7 +405,7 @@ body{
 /* SIDEBAR */
 
 .sidebar{
-    width:250px;
+    width:220px;   /* reduced from 250px to give the content panel more room */
     /* Subtract the consent banner's height while it is on screen. The banner is
        position:fixed at bottom:0 with z-index 99997; this sidebar is ALSO fixed, so body
        padding cannot move it — without this the banner sat on top of the sidebar's last
@@ -487,7 +487,7 @@ body{
     flex:1;
     min-width:0;
     overflow-x:hidden;
-    margin-left:250px;
+    margin-left:220px;   /* matches the reduced sidebar width */
     padding:30px;
     padding-top:98px;
     padding-bottom:90px;

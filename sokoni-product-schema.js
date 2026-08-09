@@ -224,6 +224,33 @@
       '.sk-var-chip:hover{border-color:rgba(113,255,0,.35);color:#fff}',
       '.sk-var-chip.on{background:rgba(113,255,0,.14);border-color:rgba(113,255,0,.55);color:#71ff00}',
       '@media(max-width:480px){.sk-var-chip{padding:8px 11px}}',
+      /* ── Premium compact variant dropdowns ── */
+      '.sk-vd-head{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px}',
+      '.sk-vd-row{display:flex;flex-wrap:wrap;gap:10px}',
+      '.sk-vd{flex:1 1 140px;min-width:0}',
+      '.sk-vd-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.5);margin-bottom:5px}',
+      '.sk-vd-btn{width:100%;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:11px 12px;color:#fff;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;min-height:44px;text-align:left}',
+      '.sk-vd-btn:hover{border-color:rgba(113,255,0,.4)}',
+      '.sk-vd-val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.sk-vd-val.empty{color:rgba(255,255,255,.4)}',
+      '.sk-vd-caret{color:rgba(255,255,255,.4);font-size:12px;flex:0 0 auto}',
+      /* picker sheet */
+      '.sk-vd-sheet{display:none;position:fixed;inset:0;z-index:var(--sk-z-sheet,100020);background:rgba(0,0,0,.72);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px}',
+      '.sk-vd-card{background:#0f0f0f;border:1px solid rgba(255,255,255,.1);border-radius:18px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}',
+      '.sk-vd-cardhead{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;font-size:15px;font-weight:900;color:#fff}',
+      '.sk-vd-x{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);border-radius:9px;min-width:40px;min-height:40px;cursor:pointer;font-size:14px;font-family:inherit}',
+      '.sk-vd-search{margin:0 16px 10px;padding:11px 13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:16px;outline:none;font-family:inherit}',
+      '.sk-vd-opts{overflow-y:auto;padding:0 10px;flex:1;-webkit-overflow-scrolling:touch}',
+      '.sk-vd-opt{display:flex;align-items:center;justify-content:space-between;padding:12px 12px;border-radius:10px;cursor:pointer;color:rgba(255,255,255,.82);font-size:15px;min-height:48px}',
+      '.sk-vd-opt:hover{background:rgba(255,255,255,.04)}',
+      '.sk-vd-opt.on{background:rgba(113,255,0,.1);color:#71ff00}',
+      '.sk-vd-check{color:#71ff00;font-weight:900}',
+      '.sk-vd-custom{display:flex;gap:8px;padding:12px 16px;border-top:1px solid rgba(255,255,255,.06)}',
+      '.sk-vd-custominput{flex:1;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-size:16px;outline:none;font-family:inherit}',
+      '.sk-vd-addcustom{padding:10px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;min-height:44px}',
+      '.sk-vd-done{margin:12px 16px 16px;padding:13px;background:rgba(113,255,0,.14);border:1px solid rgba(113,255,0,.5);color:#71ff00;border-radius:12px;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit}',
+      /* mobile → bottom sheet */
+      '@media(max-width:560px){.sk-vd-sheet{align-items:flex-end;padding:0}.sk-vd-card{max-width:none;border-radius:20px 20px 0 0;max-height:88vh;padding-bottom:env(safe-area-inset-bottom,0px)}}',
     ].join('');
     (d.head || d.documentElement).appendChild(s);
   }
@@ -234,6 +261,11 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
   }
 
+  /* Premium compact variant UI (v475): one dropdown per applicable attribute in a tidy
+     row, instead of a bulky chip grid. Multi-select is preserved (the canonical model is
+     still flat arrays: colors/sizes/materials …). Selection lives in data-selected JSON on
+     each .sk-vd; a searchable bottom-sheet/popover picker edits it with an Other/Custom
+     input. serializeVariants reads the same JSON — the data contract is unchanged. */
   function renderVariants(prefix, category, product, doc) {
     var d    = doc || document;
     var host = d.getElementById(prefix + 'Variants');
@@ -245,39 +277,114 @@
     host.style.display = '';
 
     var p = product || {};
-    host.innerHTML = attrs.map(function (a) {
-      var chosen = Array.isArray(p[a.key]) ? p[a.key].map(String) : [];
-      var chips = a.options.map(function (opt) {
-        var on = chosen.indexOf(String(opt)) !== -1;
-        return '<button type="button" class="sk-var-chip' + (on ? ' on' : '') + '"' +
-               ' data-attr="' + escAttr(a.key) + '" data-val="' + escAttr(opt) + '"' +
-               ' aria-pressed="' + (on ? 'true' : 'false') + '">' + escAttr(opt) + '</button>';
-      }).join('');
-      return '<div class="sk-var-group" data-attr="' + escAttr(a.key) + '">' +
-               '<div class="sk-var-label">' + escAttr(a.label) +
-                 (a.hint ? ' <span class="sk-var-hint">' + escAttr(a.hint) + '</span>' : '') +
-               '</div>' +
-               '<div class="sk-var-chips">' + chips + '</div>' +
-             '</div>';
-    }).join('');
+    host.innerHTML =
+      '<div class="sk-vd-head">Variants</div>' +
+      '<div class="sk-vd-row">' +
+      attrs.map(function (a) {
+        var chosen = variantValues(p[a.key]);          /* tolerant of every legacy shape */
+        return '<div class="sk-vd" data-attr="' + escAttr(a.key) + '" data-selected="' + escAttr(JSON.stringify(chosen)) + '">' +
+          '<div class="sk-vd-label">' + escAttr(a.label) + '</div>' +
+          '<button type="button" class="sk-vd-btn" data-attr="' + escAttr(a.key) + '">' +
+            '<span class="sk-vd-val' + (chosen.length ? '' : ' empty') + '">' + (chosen.length ? escAttr(chosen.join(', ')) : 'Select') + '</span>' +
+            '<span class="sk-vd-caret" aria-hidden="true">▾</span>' +
+          '</button>' +
+        '</div>';
+      }).join('') +
+      '</div>';
 
-    /* One delegated listener per render — no per-chip handlers to leak. */
-    if (!host._skVarBound) {
+    if (!host._skVdBound) {
       host.addEventListener('click', function (ev) {
-        var chip = ev.target.closest && ev.target.closest('.sk-var-chip');
-        if (!chip || !host.contains(chip)) return;
+        var btn = ev.target.closest && ev.target.closest('.sk-vd-btn');
+        if (!btn || !host.contains(btn)) return;
         ev.preventDefault();
-        var on = chip.getAttribute('aria-pressed') === 'true';
-        chip.setAttribute('aria-pressed', on ? 'false' : 'true');
-        chip.classList.toggle('on', !on);
+        _openVariantPicker(host, btn.getAttribute('data-attr'), category, d);
       });
-      host._skVarBound = true;
+      host._skVdBound = true;
     }
   }
 
-  /* Read selected chips back out. Attribute keys that do not apply to the
-     current category are returned as null so a category change actively CLEARS
-     stale values — a shirt re-categorised as a phone must not keep its sizes. */
+  /* Refresh one dropdown's button summary from its data-selected. */
+  function _paintVd(vd) {
+    var sel = []; try { sel = JSON.parse(vd.getAttribute('data-selected') || '[]'); } catch (_) {}
+    var val = vd.querySelector('.sk-vd-val');
+    if (val) { val.textContent = sel.length ? sel.join(', ') : 'Select'; val.classList.toggle('empty', !sel.length); }
+  }
+
+  /* Shared searchable multi-select picker (bottom-sheet on phone, centred card on desktop). */
+  function _openVariantPicker(host, attrKey, category, d) {
+    var attrObj = attrsForCategory(category).filter(function (a) { return a.key === attrKey; })[0];
+    if (!attrObj) return;
+    var vd = host.querySelector('.sk-vd[data-attr="' + attrKey + '"]');
+    var selected = []; try { selected = JSON.parse(vd.getAttribute('data-selected') || '[]'); } catch (_) {}
+    /* Options = predefined ∪ any custom values already chosen (so they persist/show). */
+    var opts = attrObj.options.slice();
+    selected.forEach(function (v) { if (opts.indexOf(v) === -1) opts.push(v); });
+
+    var ov = d.getElementById('sk-vd-sheet') || (function () {
+      var m = d.createElement('div'); m.id = 'sk-vd-sheet'; m.className = 'sk-vd-sheet';
+      d.body.appendChild(m);
+      m.addEventListener('click', function (e) { if (e.target === m) _closeSheet(d); });
+      return m;
+    })();
+
+    var searchable = opts.length > 8;
+    ov.innerHTML =
+      '<div class="sk-vd-card">' +
+        '<div class="sk-vd-cardhead"><span>' + escAttr(attrObj.label) + '</span>' +
+          '<button type="button" class="sk-vd-x" aria-label="Close">✕</button></div>' +
+        (searchable ? '<input type="text" class="sk-vd-search" placeholder="Search…" autocomplete="off">' : '') +
+        '<div class="sk-vd-opts">' + opts.map(function (o) {
+          var on = selected.indexOf(o) !== -1;
+          return '<label class="sk-vd-opt' + (on ? ' on' : '') + '" data-val="' + escAttr(o) + '">' +
+            '<span>' + escAttr(o) + '</span><span class="sk-vd-check">' + (on ? '✓' : '') + '</span></label>';
+        }).join('') + '</div>' +
+        '<div class="sk-vd-custom"><input type="text" class="sk-vd-custominput" placeholder="Other / custom value…" autocomplete="off">' +
+          '<button type="button" class="sk-vd-addcustom">Add</button></div>' +
+        '<button type="button" class="sk-vd-done">Done</button>' +
+      '</div>';
+    ov.style.display = 'flex';
+    try { d.body.style.overflow = 'hidden'; } catch (_) {}
+
+    var card = ov.querySelector('.sk-vd-card');
+    function commit(vals) { vd.setAttribute('data-selected', JSON.stringify(vals)); _paintVd(vd); }
+    function toggle(v) {
+      var i = selected.indexOf(v);
+      if (i === -1) selected.push(v); else selected.splice(i, 1);
+      var lab = card.querySelector('.sk-vd-opt[data-val="' + (window.CSS && CSS.escape ? CSS.escape(v) : v) + '"]');
+      if (lab) { lab.classList.toggle('on', selected.indexOf(v) !== -1); var ck = lab.querySelector('.sk-vd-check'); if (ck) ck.textContent = selected.indexOf(v) !== -1 ? '✓' : ''; }
+      commit(selected);
+    }
+    card.addEventListener('click', function (e) {
+      var opt = e.target.closest('.sk-vd-opt');
+      if (opt) { e.preventDefault(); toggle(opt.getAttribute('data-val')); return; }
+      if (e.target.closest('.sk-vd-x') || e.target.closest('.sk-vd-done')) { _closeSheet(d); return; }
+      if (e.target.closest('.sk-vd-addcustom')) {
+        var inp = card.querySelector('.sk-vd-custominput'); var v = (inp && inp.value.trim()) || '';
+        if (v && selected.indexOf(v) === -1) {
+          selected.push(v); commit(selected);
+          var list = card.querySelector('.sk-vd-opts');
+          var l = d.createElement('label'); l.className = 'sk-vd-opt on'; l.setAttribute('data-val', v);
+          l.innerHTML = '<span>' + escAttr(v) + '</span><span class="sk-vd-check">✓</span>'; list.appendChild(l);
+        }
+        if (inp) inp.value = '';
+      }
+    });
+    var srch = card.querySelector('.sk-vd-search');
+    if (srch) srch.addEventListener('input', function () {
+      var q = srch.value.toLowerCase();
+      card.querySelectorAll('.sk-vd-opt').forEach(function (l) {
+        l.style.display = l.getAttribute('data-val').toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+      });
+    });
+  }
+  function _closeSheet(d) {
+    var m = (d || document).getElementById('sk-vd-sheet');
+    if (m) m.style.display = 'none';
+    try { (d || document).body.style.overflow = ''; } catch (_) {}
+  }
+
+  /* Read selections back out — same {key:[values]|null} contract as before. Keys not in
+     the current category return null so a re-categorisation clears stale values. */
   function serializeVariants(prefix, category, doc) {
     var d = doc || document;
     var host = d.getElementById(prefix + 'Variants');
@@ -286,10 +393,10 @@
     if (!host) return {};                    /* form opted out — change nothing */
 
     attrsForCategory(category).forEach(function (a) {
+      var vd = host.querySelector('.sk-vd[data-attr="' + a.key + '"]');
       var picked = [];
-      host.querySelectorAll('.sk-var-chip[data-attr="' + a.key + '"][aria-pressed="true"]')
-          .forEach(function (c) { picked.push(c.getAttribute('data-val')); });
-      out[a.key] = picked.length ? picked : null;
+      if (vd) { try { picked = JSON.parse(vd.getAttribute('data-selected') || '[]'); } catch (_) {} }
+      out[a.key] = (picked && picked.length) ? picked : null;
     });
     return out;
   }

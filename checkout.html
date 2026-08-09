@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
+<html lang="en" data-splash="1" data-require-auth="true" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -864,9 +864,12 @@
      SRI pins the exact build: if unpkg ever serves different bytes the script is refused,
      window.IntaSend stays undefined, and the guard below fails closed with an honest
      "Payment unavailable" instead of running unverified third-party payment code. -->
+<!-- defer: keep the external CDN fetch off the critical render path. The SDK is
+     only used on pay-click (with a fail-closed "Payment unavailable" guard if it's
+     absent), never at parse time, so deferring it cannot break checkout. -->
 <script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"
         integrity="sha384-pCPVtxYA4nrrp9OU8Aaow61Mc7vLbjaVxxbUyfwHvpvItMottH1juZkJ+hTeimpo"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous" defer></script>
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
@@ -1048,9 +1051,16 @@
       </div>
 
 
-      <!-- Delivery Calculator -->
+      <!-- Fulfillment: Pickup vs Delivery -->
       <div class="co-card">
-        <div class="co-card-title">🚛 Delivery Cost Estimator</div>
+        <div class="co-card-title">📦 Fulfillment</div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+          <button type="button" id="ff-delivery" onclick="setFulfillment('delivery')" style="flex:1;padding:12px;border-radius:12px;border:2px solid #71ff00;background:rgba(113,255,0,0.1);color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">🚚 Delivery</button>
+          <button type="button" id="ff-pickup" onclick="setFulfillment('pickup')" style="flex:1;padding:12px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7);font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">🏪 Pickup · Free</button>
+        </div>
+        <div id="pickup-note" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.5;">✅ <strong>Pick up from the shop.</strong> No delivery fee, no rider — the shop marks your order <strong>Ready for Pickup</strong>.</div>
+        <div id="delivery-estimator">
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:8px;">🚛 Delivery Cost Estimator</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
             <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">To Zone</label>
@@ -1093,6 +1103,7 @@
         <div id="deliveryEtaResult" style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;min-height:16px;"></div>
         <!-- Surge notice -->
         <div id="deliverySurge" style="display:none;font-size:11px;color:rgba(251,191,36,0.85);font-weight:700;margin-top:6px;padding:6px 10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:8px;"></div>
+        </div><!-- /delivery-estimator -->
       </div>
 
       <!-- Installment Option -->
@@ -1611,13 +1622,34 @@ const btnTotalEl = document.getElementById("btnTotal");
 let subtotal = 0;
 let promoDiscount = 0;
 let deliveryFee = 0;
+let fulfillmentType = 'delivery';   /* 'delivery' (rider + fee) | 'pickup' (free, no rider) */
+
+/* Buyer chooses Delivery vs Pickup. Pickup → fee 0, no rider dispatch, order marked
+   for in-store collection ("Ready for Pickup"). Delivery → server-priced fee + rider. */
+window.setFulfillment = function(type){
+  fulfillmentType = (type === 'pickup') ? 'pickup' : 'delivery';
+  const del = document.getElementById('ff-delivery');
+  const pk  = document.getElementById('ff-pickup');
+  const est = document.getElementById('delivery-estimator');
+  const note= document.getElementById('pickup-note');
+  const on  = (el, active) => { if(!el) return;
+    el.style.borderColor = active ? '#71ff00' : 'rgba(255,255,255,0.12)';
+    el.style.background   = active ? 'rgba(113,255,0,0.1)' : 'transparent';
+    el.style.color        = active ? '#fff' : 'rgba(255,255,255,0.7)'; };
+  on(del, fulfillmentType === 'delivery');
+  on(pk,  fulfillmentType === 'pickup');
+  if (est)  est.style.display  = fulfillmentType === 'pickup' ? 'none'  : '';
+  if (note) note.style.display = fulfillmentType === 'pickup' ? 'block' : 'none';
+  if (fulfillmentType === 'pickup') { deliveryFee = 0; if (typeof updateTotals === 'function') updateTotals(); }
+  else if (typeof calcDelivery === 'function') { calcDelivery(); }
+};
 let _loyaltyBalance = 0;    // user's raw point balance
 let _loyaltyRedeeming = false; // toggle state
 const POINTS_TO_KES = 0.5;  // 1 point = KES 0.50
 const MAX_REDEEM_PCT = 0.25; // max 25% of order total can be paid with points
 const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const _itemsHTML = [];
-cart.forEach(item => {
+cart.forEach((item, _idx) => {
   /* Quantity-aware line total — mirrors the server (createCheckoutSession) so the
      displayed subtotal matches the amount actually charged when qty > 1. */
   const qty       = Math.max(1, Math.round(Number(item.qty) || Number(item.quantity) || 1));
@@ -1637,10 +1669,21 @@ cart.forEach(item => {
         <div class="os-item-price">KES ${safePrice}</div>
       </div>
       ${qty > 1 ? `<div class="os-item-qty">×${qty}</div>` : ``}
+      <button type="button" class="os-item-remove" onclick="removeCartItem(${_idx})" aria-label="Remove ${safeName}" title="Remove" style="margin-left:auto;background:rgba(255,61,61,0.12);border:1px solid rgba(255,61,61,0.3);color:#ff6b6b;width:34px;height:34px;min-width:34px;border-radius:9px;cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">&times;</button>
     </div>
   `);
 });
 itemsEl.innerHTML = _itemsHTML.join("");
+
+/* Remove a single line item from the cart on the checkout page. Splice localStorage
+   and reload so the item list, subtotal, delivery and total all recompute cleanly. */
+window.removeCartItem = function(idx){
+  try {
+    var c = JSON.parse(localStorage.getItem("cart") || "[]");
+    if(idx >= 0 && idx < c.length){ c.splice(idx, 1); localStorage.setItem("cart", JSON.stringify(c)); }
+  } catch(e){}
+  location.reload();
+};
 
 /* Auto-apply any promo code saved from the cart page */
 (function(){
@@ -1880,6 +1923,7 @@ function _ckOrderId(){
    button stays on "⏳ Processing..." forever and the customer cannot retry
    without reloading — losing their entered delivery details. */
 function _resetPlaceBtn(){
+  clearTimeout(window._placeBtnWatchdog);
   const btn = document.querySelector('.co-place-btn');
   if (!btn) return;
   btn.disabled = false;
@@ -1890,7 +1934,19 @@ function _resetPlaceBtn(){
 function placeOrder(){
   /* Prevent double-tap: capture original label then lock the button */
   const _placeBtn = document.querySelector('.co-place-btn');
-  if (_placeBtn) { window._placeBtnOrigHTML = _placeBtn.innerHTML; _placeBtn.disabled = true; _placeBtn.innerHTML = '⏳ Processing...'; }
+  if (_placeBtn) {
+    window._placeBtnOrigHTML = _placeBtn.innerHTML; _placeBtn.disabled = true; _placeBtn.innerHTML = '⏳ Processing...';
+    /* Watchdog: if any step hangs (e.g. the Zero-Trust guard promise never resolves,
+       or a network call stalls) the button must NEVER stay permanently disabled —
+       a disabled button ignores clicks, so the buyer could not recover without a
+       reload. Re-enable after 25s so a stalled attempt is retryable. Cleared by
+       _resetPlaceBtn on any normal exit; the STK flow re-enables the button itself. */
+    clearTimeout(window._placeBtnWatchdog);
+    window._placeBtnWatchdog = setTimeout(function(){
+      var b = document.querySelector('.co-place-btn');
+      if (b && b.disabled) { b.disabled = false; b.innerHTML = window._placeBtnOrigHTML || '🔒 Place Order'; }
+    }, 25000);
+  }
 
   /* Rate-limit order attempts: max 5 per minute per device */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('place_order', 5, 60000)){
@@ -1918,7 +1974,7 @@ function placeOrder(){
   _placeOrderCore();
 }
 
-function _placeOrderCore(){
+async function _placeOrderCore(){
   const name = document.getElementById("coName").value.trim();
   const phone = document.getElementById("coPhone").value.trim();
   const addr = document.getElementById("coAddress").value.trim();
@@ -1949,50 +2005,86 @@ function _placeOrderCore(){
       httpsCallable(getFunctions(undefined, "us-central1"), "recordFunnelEvent")({ step: "paymentAttempted" }).catch(() => {});
     } catch(_) {}
   })();
-  /* M-Pesa: use Daraja direct-to-seller when seller UID is known */
+  /* M-Pesa: keyless collection via SOKONI's IntaSend (Merchant-of-Record).
+     No per-seller Daraja credentials required — the platform collects and the
+     webhook credits the seller's wallet + finalises the order. */
   if (selectedPayment === 'mpesa') {
     const currentCart2 = JSON.parse(localStorage.getItem('cart') || '[]');
     const _sUid = currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerUid
                  || currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerId
                  || null;
-    if (_sUid && window.SokoniMpesa) {
+    if (_sUid && window.SokoniIntaSend) {
       const _sName = currentCart2[0]?.sellerName || 'SOKONI Seller';
       /* Deterministic, so a retry reuses the same order identity instead of
-         minting a new one that defeats the server's duplicate check. */
+         minting a new one that defeats the server's duplicate check. Also used
+         as the payment ref, so payments/{ref} and orders/{ref} share an id and
+         the webhook can link the confirmation straight to the order. */
       const _ordId = _ckOrderId();
 
-      /* Line items let the server price the cart from the catalogue. `amount`
-         is still sent for the mismatch audit trail, but the server discards it
-         as the charge basis — the client is not the pricing authority. */
+      /* {productId, qty} the webhook decrements stock from. */
       const _items = currentCart2.map(i => ({
         productId: i.id || i.productId,
         qty:       Math.max(1, parseInt(i.qty, 10) || 1),
       })).filter(i => i.productId);
 
-      window.SokoniMpesa.pay({
-        sellerUid:   _sUid,
-        amount:      orderTotal,
-        items:       _items,
-        deliveryFee: (typeof deliveryFee === 'number' ? deliveryFee : 0),
-        phone:       phone,
-        orderId:     _ordId,
-        hub:         'marketplace',
-        description: 'SOKONI Order',
-        sellerName:  _sName,
-        onSuccess(receipt) {
-          /* Update payment status bar */
-          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
-          /* verified: the provider itself called onSuccess with a receipt. */
-          saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId, null, true);
-        },
-        onFailure(reason) {
-          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
-          if (reason !== 'cancelled' && reason !== 'timeout') {
-            /* Graceful fallback: open IntaSend modal */
-            openModal('mpesa');
+      try {
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Creating your order…');
+        /* Best-effort client pre-write. If Firestore rules reject the create (e.g.
+           the auth token is not attached to this Firestore instance), we do NOT
+           block payment — the webhook creates the order server-side (Admin SDK)
+           from the meta below. The money is authoritative; the order must exist. */
+        try { await _ckPersistPendingOrder(_ordId, _sUid, _sName, _items); }
+        catch (persistErr) { console.warn('[checkout] pre-order write skipped, webhook will create it:', persistErr && persistErr.message); }
+
+        const _buyerName = document.getElementById('coName')?.value?.trim() || '';
+        const _buyerAddr = document.getElementById('coAddress')?.value?.trim() || '';
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Sending M-PESA prompt…');
+        /* Seller + order linkage ride in meta so the webhook credits the right
+           seller (meta.sellerUid, since the buyer is the caller) and creates/finalises
+           the right order (meta.orderId + meta.items + buyer name/address). */
+        await window.SokoniIntaSend.initiateSTKPush(phone, orderTotal, _ordId, {
+          category:    'product',
+          orderId:     _ordId,
+          sellerUid:   _sUid,
+          sellerName:  _sName,
+          hub:         'marketplace',
+          items:       _items,
+          buyerName:   _buyerName,
+          address:     _buyerAddr,
+          fulfillmentType: fulfillmentType,
+          serviceDesc: 'SOKONI Order',
+        });
+
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('waiting', 'M-PESA prompt sent — enter your PIN on your phone…');
+        await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: orderTotal, phone }, (status) => {
+          if (window._checkoutSetTrustStatus && status === 'PENDING') {
+            _checkoutSetTrustStatus('waiting', 'Waiting for M-PESA confirmation…');
           }
-        },
-      });
+        });
+
+        /* Clear the cart the MOMENT payment is confirmed — do not rely solely on
+           saveAndRedirect, which the page redirect can interrupt before it runs.
+           This is why the item lingered in the cart after a successful order. */
+        try {
+          localStorage.removeItem('cart');
+          localStorage.removeItem('sokoniAppliedPromo');
+          if (typeof cart !== 'undefined' && Array.isArray(cart)) cart.length = 0;
+          window.dispatchEvent(new Event('sokoni-cart-updated'));
+        } catch (_) {}
+
+        /* Webhook has finalised the order (paid + stock decremented + seller
+           credited). Do NOT re-write it — alreadyPersisted skips the client write.
+           Phase is 'completing' (the webhook is updating order/inventory/records);
+           no success text is asserted until the order document is authoritative. */
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('completing', 'Completing your order…');
+        saveAndRedirect(phone, 'mpesa', _ordId, null, true, /* alreadyPersisted */ true);
+      } catch (e) {
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
+        const _msg = (e && e.message) || 'Payment failed';
+        if (!/cancel/i.test(_msg) && !/timeout/i.test(_msg)) {
+          SK.dialog.alert('Payment could not be completed: ' + _msg);
+        }
+      }
       return;
     }
   }
@@ -2154,6 +2246,9 @@ async function sendStkPush(){
       const sessionRes = await createSession({
         cartItems:   cartForSession,
         deliveryFee: deliveryFee || 0,
+        /* Chosen fulfillment channel — the server enforces the seller's shop
+           availability (delivery/pickup on/off) against it before authorising. */
+        fulfillmentType: fulfillmentType,
         /* A NAME, not a discount. The server validates it and folds any discount
            into serverTotal — the client cannot assert a price reduction. */
         promoCode:   _appliedPromoCode || undefined,
@@ -2338,6 +2433,12 @@ async function sendStkPush(){
           phone:           phone,
           deliveryName:    document.getElementById("coName")?.value.trim()    || "",
           deliveryAddress: document.getElementById("coAddress")?.value.trim() || "",
+          /* Blocker B2 — send geo so the server can persist pickup/dropoff for rider dispatch.
+             Buyer (dropoff) from live geolocation; seller (pickup) best-effort from the cart's first item. */
+          deliveryCoords:  (window.deliveryLocation && window.deliveryLocation.lat)
+                             ? { lat: window.deliveryLocation.lat, lng: window.deliveryLocation.lng } : null,
+          pickupCoords:    (function(){ try { var c = JSON.parse(localStorage.getItem("cart")||"[]")[0]||{};
+                             return (c.sellerLat && c.sellerLng) ? { lat: c.sellerLat, lng: c.sellerLng } : null; } catch(_) { return null; } })(),
           /* amount and orderItems omitted when sessionId is present — server uses session data */
           ...(!_sessionId && { amount: orderTotal, orderItems: cart }),
         }),
@@ -2586,7 +2687,57 @@ function processPaypalPayment(){
    "pending_payment" and MUST NOT be fulfilled. If we are ever unsure whether the
    money arrived, the safe answer is "not yet" — a delayed order annoys a customer,
    an unpaid-but-shipped order costs a seller their stock. */
-function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified){
+/* Persist the order as pending_payment BEFORE payment, so the IntaSend webhook
+   can finalise it authoritatively (mark paid + decrement stock) the instant the
+   money confirms — even if this browser tab is gone. Mirrors saveAndRedirect's
+   order shape; the webhook (Admin SDK) later flips status→paid, which the client
+   never overwrites. Idempotent via the deterministic orderId + { merge:true }. */
+async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems){
+  const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
+  /* The orders CREATE rule requires request.auth.uid === the order's uid
+     (claimsOwner) with a real Firebase Auth token — a localStorage uid does NOT
+     satisfy it. Place Order can fire before Firebase has restored the session, so
+     currentUser may still be null; a localStorage fallback would write a uid that
+     fails the rule ("Missing or insufficient permissions"). Wait for the real
+     authenticated user, then use ITS uid strictly. */
+  if (typeof window.waitForFirebaseReady === 'function') { try { await window.waitForFirebaseReady(); } catch(_){} }
+  const _auth = window.firebaseAuth;
+  if (_auth && typeof _auth.authStateReady === 'function') { try { await _auth.authStateReady(); } catch(_){} }
+  let _cu = _auth && _auth.currentUser;
+  for (let i = 0; !_cu && i < 30; i++) { await new Promise(r => setTimeout(r, 100)); _cu = _auth && _auth.currentUser; }
+  const _uid = _cu && _cu.uid;
+  if(!_uid) throw new Error("Please sign in again to complete payment.");
+  if(!window.firebaseDB) throw new Error("Payment is still loading — please try again.");
+  const _coName  = document.getElementById("coName")?.value?.trim()  || "";
+  const _coPhone = document.getElementById("coPhone")?.value?.trim() || "";
+  const _coAddr  = document.getElementById("coAddress")?.value?.trim() || "";
+  const total = (typeof orderTotal === "number" && orderTotal > 0) ? orderTotal : 0;
+  const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+  await setDoc(
+    doc(window.firebaseDB, "orders", orderId),
+    {
+      id: orderId, uid: _uid, buyerUid: _uid, buyerName: _coName, buyerPhone: _coPhone,
+      sellerUid: sellerUid || null, sellerName: sellerName || null,
+      items: currentCart,
+      /* {productId, qty} the webhook decrements stock from — authoritative over
+         whatever display fields the cart objects carry. */
+      lineItems: lineItems,
+      subtotal, deliveryFee, total, orderTotal: total,
+      phone: _coPhone, method: "mpesa", paymentMethod: "mpesa_intasend",
+      name: _coName, address: _coAddr, deliveryAddress: _coAddr,
+      status: "pending_payment", hub: "marketplace",
+      fulfillmentType: fulfillmentType, deliveryMethod: fulfillmentType,
+      location: window.deliveryLocation || null,
+      pricing: { subtotal, deliveryFee, total },
+      timestamp: Date.now(),
+      createdAt: serverTimestamp(),
+      statusHistory: [{ status: "pending_payment", at: Date.now(), by: _uid }],
+    },
+    { merge: true }
+  );
+}
+
+function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified, alreadyPersisted){
   const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
   /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
      Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
@@ -2666,8 +2817,11 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
   orders.unshift(newOrder);
   localStorage.setItem("sokoniOrders", JSON.stringify(orders));
 
-  /* Dual-write to Firestore, then advance through the SokoniOrders state machine */
-  if(_uid && window.firebaseDB){
+  /* Dual-write to Firestore, then advance through the SokoniOrders state machine.
+     Skipped when the order was already persisted before payment and finalised
+     server-side by the webhook — re-writing status:pending_payment here would
+     downgrade the webhook's authoritative "paid". */
+  if(_uid && window.firebaseDB && !alreadyPersisted){
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
       .then(({doc, setDoc, serverTimestamp}) => {
         return setDoc(
@@ -2962,6 +3116,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
 
   /* ── Delivery: create via SokoniDelivery after overlay shows ── */
   (async function _createDelivery(){
+    if (fulfillmentType === 'pickup') return;   /* pickup: in-store collection, no rider dispatch */
     try {
       if(typeof window.SokoniDelivery === 'undefined'){
         /* Module may still be initialising — wait up to 4s */

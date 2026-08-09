@@ -1658,5 +1658,13 @@
     "feature": "Platform",
     "query": "healthProviders: status ASCENDING, specialization ASCENDING, rating DESCENDING",
     "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "bookings|venueId:ASCENDING,status:ASCENDING,startTs:DESCENDING": {
+    "purpose": "Venue owner browses their bookings filtered by status, newest first",
+    "feature": "Venue & Resource Booking",
+    "query": "venue-manager.html loadBookings/loadMoreBookings: bookings.where('venueId','==',id).where('status','==',filter).orderBy('startTs','desc').limit(20)",
+    "owner": "Booking Engine",
+    "dateAdded": "2026-08-01",
+    "expectedLifespan": "permanent"
   }
 }

@@ -186,8 +186,28 @@
     root.style.setProperty('--sk-viewport-h', _dims.viewportH + 'px');
     root.style.setProperty('--sk-viewport-w', _dims.viewportW + 'px');
 
-    /* Component heights */
-    root.style.setProperty('--sk-header-h',     _dims.headerH    + 'px');
+    /* Component heights.
+       `--sk-header-h` is deliberately NOT written here. It is owned by
+       shared-header.js::publishHeaderHeight, and this module is a consumer.
+
+       Two writers was a correctness defect, not a style preference. Both wrote
+       the property, neither knew about the other, and any caching by one was
+       invalidated silently by the other — which is precisely how a dirty-check
+       added on 2026-08-01 produced a 10% style-recalculation regression: this
+       module cached "I wrote 110px", shared-header.js wrote something else, and
+       this module then stopped correcting a value it no longer controlled.
+
+       shared-header.js is the canonical owner on merit, not by coin toss:
+         • it owns the header element and knows when it changes;
+         • it publishes getBoundingClientRect().bottom, i.e. where the header
+           actually ENDS, which correctly accounts for safe-area insets and
+           banners — whereas offsetHeight below does not;
+         • every page that loads sokoni-layout.js also loads shared-header.js
+           (verified: 0 exceptions), so no fallback writer is required.
+
+       `_dims.headerH` is still measured, because it is exposed on the public
+       `SokoniLayout.dims` surface. It is now advisory only: read the CSS
+       variable for authoritative positioning. */
     root.style.setProperty('--sk-tab-bar-h',     _dims.tabBarH    + 'px');
     root.style.setProperty('--sk-bottom-nav-h',  _dims.bottomNavH + 'px');
 

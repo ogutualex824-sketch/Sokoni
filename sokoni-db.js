@@ -7,7 +7,8 @@
 import { db, auth } from './firebase.js';
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  onSnapshot, query, where, orderBy, serverTimestamp, increment, limit,
+  onSnapshot, query, where, orderBy, serverTimestamp, increment, limit, documentId,
+  getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
@@ -85,11 +86,24 @@ const SokoniDB = {
     return id;
   },
 
-  listenApplications(callback, limitN = 100) {
+  /* onError is not optional here. This used to warn to the console and stop,
+     so a rules rejection or a missing index left the caller holding whatever
+     it had before — usually nothing — with no way to tell "failed to load"
+     from "nobody has applied". The caller now gets told, and can say so.
+
+     orderBy(createdAt) is load-bearing: Firestore omits documents that lack
+     the ordering field entirely, so a write path that forgets createdAt makes
+     its own record invisible here rather than erroring. Verified against
+     production 2026-08-01: 4/4 application documents carry createdAt.
+     (orderBy(updatedAt) on the same collection returns 1 of 4.) */
+  listenApplications(callback, limitN = 100, onError) {
     const q = query(collection(db, 'applications'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      err  => _log.warn('[SokoniDB] applications:', err.message)
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })), { source: 'firestore' }),
+      err  => {
+        _log.warn('[SokoniDB] applications:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
     );
   },
 
@@ -159,6 +173,10 @@ const SokoniDB = {
       ...booking,
       clientPhone: normalizedPhone,
       uid: _uid(),
+      /* WS4b — tag the legacy free-request create path so it is MEASURABLE for the
+         Phase F retirement decision (a client can't write systemHealth directly, so
+         it's counted server-side via a .count() on this tag). Observational only. */
+      bookingSource: 'legacy-request',
       createdAt: serverTimestamp()
     });
     return ref.id;
@@ -334,22 +352,37 @@ const SokoniDB = {
   },
 
   listenUserOrders(uid, callback) {
-    const q = query(
-      collection(db, 'orders'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc')
+    /* An order attributes its buyer on EITHER `uid` OR `buyerUid`. Account merges (e.g. a phone
+       account folded into a Google account) can leave older orders with uid=<old account> and
+       buyerUid=<merged account>, so a single `where uid ==` query silently misses them and the
+       buyer sees an empty list. Listen on BOTH fields and merge by id so none are hidden. Both
+       composite indexes (uid|buyerUid + createdAt) exist. Additive merge is correct here — a
+       buyer's orders are not deleted. */
+    const byId = new Map();
+    const emit = () => {
+      const list = [...byId.values()].sort((a, b) => {
+        const as = (a.createdAt && (a.createdAt.seconds || a.createdAt._seconds)) || 0;
+        const bs = (b.createdAt && (b.createdAt.seconds || b.createdAt._seconds)) || 0;
+        return bs - as;
+      });
+      callback(list);
+    };
+    const sub = (field) => onSnapshot(
+      query(collection(db, 'orders'), where(field, '==', uid), orderBy('createdAt', 'desc'), limit(200)),
+      snap => { snap.docs.forEach(d => byId.set(d.id, { _fsId: d.id, ...d.data() })); emit(); },
+      err  => _log.warn('[SokoniDB] userOrders ' + field + ':', err.message)
     );
-    return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      err  => _log.warn('[SokoniDB] userOrders:', err.message)
-    );
+    const unsubUid   = sub('uid');
+    const unsubBuyer = sub('buyerUid');
+    return () => { try { unsubUid(); } catch (_) {} try { unsubBuyer(); } catch (_) {} };
   },
 
   listenPOSOrders(callback) {
     const q = query(
       collection(db, 'orders'),
       where('type', '==', 'pos'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -408,7 +441,7 @@ const SokoniDB = {
   },
 
   listenUnboxingReviews(callback) {
-    const q = query(collection(db, 'unboxingReviews'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'unboxingReviews'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => _log.warn('[SokoniDB] unboxingReviews:', err.message)
@@ -503,7 +536,8 @@ const SokoniDB = {
     const q = query(
       collection(db, 'notifications'),
       where('targetUid', 'in', [uid, 'broadcast']),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(100)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -615,10 +649,58 @@ const SokoniDB = {
       try { window.dispatchEvent(new CustomEvent('sokoni:catalogue', { detail: payload })); } catch (_) {}
     };
 
+    /* App-Check-independent fallback for EVERY listenProducts consumer (home, category, …).
+       Client Firestore reads are gated by App Check, whose reCAPTCHA v3 token 403s
+       intermittently on iOS Safari (ITP). If the live listener hasn't delivered within a
+       short grace window, pull the same set from the public /api/catalogue endpoint (Admin
+       SDK, no App Check) so the grid fills. The listener still layers live updates on top
+       when its token is valid; `_delivered` prevents the fallback from clobbering a good
+       real-time read. */
+    let _delivered = false;
+    try {
+      const cap = Number(opts.limit) > 0 ? Number(opts.limit) : 200;
+      const qs  = new URLSearchParams({ limit: String(cap) });
+      if (opts.category)  qs.set('category',  opts.category);
+      if (opts.sellerUid) qs.set('sellerUid', opts.sellerUid);
+      setTimeout(() => {
+        if (_delivered || typeof fetch !== 'function') return;
+        fetch('/api/catalogue?' + qs.toString(), { cache: 'no-store' })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => {
+            if (_delivered || !j || !j.ok || !Array.isArray(j.products)) return;
+            emit('http-fallback-ok', { count: j.products.length });
+            callback(j.products);
+          })
+          .catch(() => {});
+      }, 2000);
+    } catch (_) {}
+
     const attach = (attempt) => {
       let q = collection(db, 'products');
       if (opts.category)  q = query(q, where('category', '==', opts.category));
       if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
+
+      /* BOUND the live subscription. Unbounded, this was `onSnapshot` over the
+         ENTIRE products collection: the SDK retained every doc (many still
+         carrying heavy base64 image blobs) in the mobile renderer's heap, the
+         home merge re-serialized the whole array to localStorage on every
+         snapshot, and as the catalogue grows the heap saturated on load —
+         scrolling then forced layout/paint/decode and tipped the renderer into
+         OOM (the reported "Chrome crashes when I scroll the homepage", same
+         class as the Android Aw-Snap sentinel). Product ids are Date.now()
+         timestamps, so `orderBy(documentId(),'desc')` returns the NEWEST N with
+         the built-in __name__ index (no composite index needed) — active
+         inventory, which is also where client-side boosts (sokoniAds) live, so
+         boosted cards still float. Filtered paths already narrow the set, so a
+         plain bounded limit keeps them index-safe (no orderBy → no composite
+         index). Override with opts.limit where a caller needs a different cap. */
+      const cap = Number(opts.limit) > 0 ? Number(opts.limit) : 200;
+      if (opts.category || opts.sellerUid) {
+        q = query(q, limit(cap));
+      } else {
+        q = query(q, orderBy(documentId(), 'desc'), limit(cap));
+      }
+
       emit('listener-attached', { attempt });
       return onSnapshot(q,
         snap => {
@@ -640,6 +722,7 @@ const SokoniDB = {
             setTimeout(() => attach(attempt + 1), 1500);
             return;
           }
+          _delivered = true;   /* real-time read landed — the HTTP fallback stands down */
           callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }));
         },
         err  => {
@@ -671,14 +754,36 @@ const SokoniDB = {
              than retried into a loop. App Check is not weakened — the client just
              stops treating a transient 403 as permanent. */
           const transient = /unavailable|deadline-exceeded|internal|permission-denied|unauthenticated/.test(code);
-          if (transient && attempt < 2) {
-            _log.warn('[SokoniDB] retrying products listener (App Check token likely not ready)', { code, attempt });
-            setTimeout(() => attach(attempt + 1), 1500);
+          /* Up to 5 attempts with backoff, and FORCE a fresh App Check token before each retry
+             — an intermittent 403 (common on iOS Safari/ITP) clears once a valid token is
+             re-exchanged. A single 1.5s retry gave up far too early and left the grid stuck. */
+          if (transient && attempt < 5) {
+            const delay = Math.min(1200 * attempt, 4000);
+            _log.warn('[SokoniDB] retrying products listener (forcing App Check token)', { code, attempt, delay });
+            Promise.resolve(
+              (typeof window !== 'undefined' && window.__sokoniRefreshAppCheckToken)
+                ? window.__sokoniRefreshAppCheckToken() : true
+            ).catch(() => false).then(() => setTimeout(() => attach(attempt + 1), delay));
           }
         }
       );
     };
     return attach(1);
+  },
+
+  /* True catalogue size without loading the catalogue. Since the home listener
+     is now bounded to the newest 200, `products.length` no longer reflects the
+     real total; this server-side count aggregate (one lightweight RPC, no docs
+     read) gives the honest number for the "N+ products" labels. Fail-safe:
+     returns null so the caller falls back to the in-memory length. */
+  async countProducts() {
+    try {
+      const snap = await getCountFromServer(collection(db, 'products'));
+      return snap.data().count;
+    } catch (e) {
+      _log.warn('[SokoniDB] countProducts failed', e && e.message);
+      return null;
+    }
   },
 
   async updateProductStock(productId, delta) {
@@ -945,13 +1050,15 @@ const SokoniDB = {
         collection(db, 'orders'),
         where('sellerUid', '==', sellerUid),
         where('status', '==', statusFilter),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(200)
       );
     } else {
       q = query(
         collection(db, 'orders'),
         where('sellerUid', '==', sellerUid),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(200)
       );
     }
     return onSnapshot(q,
@@ -963,6 +1070,81 @@ const SokoniDB = {
   /* ════════════════════════════════════════
      ADMIN — ALL ORDERS + DELIVERIES
   ════════════════════════════════════════ */
+
+  /* ── Users, for the admin console ──────────────────────────────────────────
+     Deliberately NOT ordered server-side. Firestore omits any document that
+     lacks the ordering field, and measured against production on 2026-08-01:
+
+         orderBy('createdAt') -> 59 of 61 documents
+         orderBy('updatedAt') -> 13 of 61
+         orderBy('joined')    ->  0 of 61   (the field does not exist)
+
+     Two real people would simply not appear in the admin Users list, with no
+     error to explain it — the same failure that made the Applications panel look
+     empty. The collection is small enough to sort in the caller, so it does.
+
+     If this ever needs server-side ordering for pagination, backfill createdAt
+     FIRST and verify the count matches, rather than accepting a query that
+     silently hides accounts. */
+  listenUsers(callback, onError, limitN = 500) {
+    const _q = query(collection(db, 'users'), limit(limitN));
+    return onSnapshot(_q,
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, uid: d.id, ...d.data() }))),
+      err  => {
+        _log.warn('[SokoniDB] users:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
+
+  /* Admin moderation of a BnB listing. firestore.rules already permits this:
+     `match /bnbListings/{listingId} { allow update: if isAdmin() || … }`, so no
+     Cloud Function is required and none was added.
+
+     Only the moderation fields are touched — status, updatedAt, updatedBy and a
+     reason where one applies. The host owns everything else on the document and
+     an admin decision has no business rewriting it. */
+  async updateBnbListingStatus(listingId, status, meta = {}) {
+    await updateDoc(doc(db, 'bnbListings', listingId), {
+      status,
+      ...meta,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  /* ── BnB listings & bookings, for the admin console ────────────────────────
+     Same shape as listenUsers, and unordered for the same reason: Firestore
+     omits documents that lack the ordering field, so a listing written without
+     createdAt would be invisible with nothing to explain it.
+
+     For users that risk was measured (59 of 61 carried createdAt). Here it
+     CANNOT be measured — both collections are empty in production as of
+     2026-08-01 — and an unmeasurable risk is not an acceptable one to take on a
+     query that hides rows silently. Sorting happens in the caller.
+
+     Before adding a server-side orderBy later: verify createdAt coverage against
+     real data first, and backfill if it is not 100%. bnb-hub.html and
+     bnb-manage.html both write serverTimestamp() today, so new documents should
+     be safe — but "should be" is not the standard for a query that drops rows. */
+  listenBnbListings(callback, onError, limitN = 500) {
+    return onSnapshot(query(collection(db, 'bnbListings'), limit(limitN)),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, id: d.id, ...d.data() }))),
+      err => {
+        _log.warn('[SokoniDB] bnbListings:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
+
+  listenBnbBookings(callback, onError, limitN = 500) {
+    return onSnapshot(query(collection(db, 'bnbBookings'), limit(limitN)),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      err => {
+        _log.warn('[SokoniDB] bnbBookings:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
 
   listenAllOrders(callback, statusFilter, limitN) {
     let _q;

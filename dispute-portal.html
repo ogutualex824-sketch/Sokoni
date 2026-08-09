@@ -7,6 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
   <script src="shared-header.js"></script>
+  <script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>My Disputes — SOKONI Buyer Protection</title>
@@ -392,8 +393,8 @@ function _addEvidence(id){
 }
 
 /* ── Cancel dispute ──────────────────────────────────────────────────────── */
-function _cancel(id){
-  if(!confirm('Withdraw this dispute? This cannot be undone.')) return;
+async function _cancel(id){
+  if(!(await SK.dialog.confirm('Withdraw this dispute? This cannot be undone.', null, null, { title: 'Withdraw dispute', variant: 'danger', confirmLabel: 'Withdraw' }))) return;
   _cf('cancelDispute')({ disputeId:id }).then(function(){
     _toast('Dispute withdrawn','green');
     _loadDisputes();

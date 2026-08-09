@@ -622,7 +622,7 @@ window.viewInstance = async function(instanceId) {
   if (!db) return;
   try {
     const snap = await getDoc(doc(db, 'workflowInstances', instanceId));
-    if (!snap.exists()) return alert('Instance not found');
+    if (!snap.exists()) return SK.dialog.alert('Instance not found');
     const i = { id: snap.id, ...snap.data() };
     const def = await wap.loadDefinition(i.definitionId).catch(() => null);
 
@@ -678,13 +678,13 @@ window.viewInstance = async function(instanceId) {
       </div>`).join('') || '<div style="color:var(--muted);font-size:12px">No history</div>';
 
     showPage('instance-detail');
-  } catch (e) { alert('Error loading instance: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Error loading instance: ' + e.message); }
 };
 
 window.pauseInstance   = async id => { await wap.pause(id);   loadInstances(); };
 window.resumeInstance  = async id => { await wap.unpause(id); loadInstances(); };
-window.cancelInstance  = async id => { if (confirm('Cancel this workflow?')) { await wap.cancel(id); loadInstances(); } };
-window.restartInstance = async id => { if (confirm('Restart this failed workflow?')) { await wap.restart(id); loadInstances(); } };
+window.cancelInstance  = async id => { if (await SK.dialog.confirm('Cancel this workflow?', null, null, { title: 'Cancel workflow', confirmLabel: 'Cancel workflow' })) { await wap.cancel(id); loadInstances(); } };
+window.restartInstance = async id => { if (await SK.dialog.confirm('Restart this failed workflow?', null, null, { title: 'Restart workflow', confirmLabel: 'Restart' })) { await wap.restart(id); loadInstances(); } };
 
 /* ── Approvals ───────────────────────────────────────────────── */
 window.loadApprovals = async function() {
@@ -738,7 +738,7 @@ window.hideRejectForm = function(approvalId) {
 };
 window.submitReject = async function(approvalId) {
   const reason = document.getElementById('reject-reason-' + approvalId)?.value?.trim();
-  if (!reason) { alert('A rejection reason is required'); return; }
+  if (!reason) { SK.dialog.alert('A rejection reason is required'); return; }
   await decideApproval(approvalId, 'rejected', reason);
 };
 
@@ -746,7 +746,7 @@ window.decideApproval = async function(approvalId, decision, reason = '') {
   try {
     await wap.decide(approvalId, decision, currentUser?.uid ?? 'admin', reason);
     loadApprovals();
-  } catch (e) { alert('Error: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Error: ' + e.message); }
 };
 
 /* ── Definitions ─────────────────────────────────────────────── */
@@ -775,10 +775,10 @@ window.triggerWorkflow = async function(defId) {
   try {
     const vars = JSON.parse(varsJson || '{}');
     const inst = await wap.start(defId, vars, { uid: currentUser?.uid, module: wap._definitions.get(defId)?.module });
-    alert(`Workflow started!\nInstance ID: ${inst.id}\nStatus: ${inst.status}`);
+    SK.dialog.alert(`Workflow started!\nInstance ID: ${inst.id}\nStatus: ${inst.status}`);
     showPage('instances');
     loadInstances();
-  } catch (e) { alert('Error: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Error: ' + e.message); }
 };
 
 window.editDefinition = function(defId) {
@@ -855,8 +855,8 @@ window.saveDesignerWorkflow = async function() {
   const id   = document.getElementById('des-id').value.trim();
   const name = document.getElementById('des-name').value.trim();
   const mod  = document.getElementById('des-module').value;
-  if (!id || !name) return alert('ID and Name are required');
-  if (!_designerSteps.length) return alert('Add at least one step');
+  if (!id || !name) return SK.dialog.alert('ID and Name are required');
+  if (!_designerSteps.length) return SK.dialog.alert('Add at least one step');
   try {
     /* Detect existing version and bump the minor number instead of resetting to 1.0 */
     const existing = wap._definitions.get(id);
@@ -867,10 +867,10 @@ window.saveDesignerWorkflow = async function() {
     }
     const def = { id, name, module: mod, version, steps: _designerSteps };
     await wap.saveDefinition(def, currentUser?.uid ?? 'admin');
-    alert(`Workflow saved to Firestore! (v${version})`);
+    SK.dialog.alert(`Workflow saved to Firestore! (v${version})`);
     showPage('definitions');
     loadDefinitions();
-  } catch (e) { alert('Save error: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Save error: ' + e.message); }
 };
 
 /* ── Metrics ─────────────────────────────────────────────────── */

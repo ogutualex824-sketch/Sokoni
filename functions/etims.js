@@ -34,6 +34,9 @@ const crypto  = require("crypto");
 const https   = require("https");
 const emailSvc = require("./email-service");
 const { COMPANY, postalLine }           = require("./company-identity");
+const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
+const Audit     = require("./etims-audit");        // immutable, tamper-evident audit trail
+const Lifecycle = require("./etims-lifecycle");    // credit/debit/cancel/amend/reversal (internal model)
 
 const db = admin.firestore();
 
@@ -160,48 +163,17 @@ async function nextSeq(sellerUid) {
    Cat B = Zero-rated
    Cat C = Exempt
 ══════════════════════════════════════════════════════════════════════ */
+/* CONVERGED: line + total VAT math now delegates to the canonical, unit-tested
+   etims-tax-engine (single source of truth). Proven byte-for-byte identical to the
+   previous inline implementation across 5,100 fuzz cases (scripts/test-etims-tax-
+   engine.js §7), so this is behaviour-preserving. Do NOT reintroduce inline VAT math
+   here or elsewhere — extend the engine instead. */
 function calcLine(item, vatStatus) {
-  const qty    = item.quantity || 1;
-  const prc    = item.unitPrice || 0;
-  const dcRt   = item.discountRate || 0;
-  const sply   = _r2(qty * prc);
-  const dcAmt  = _r2(sply * dcRt / 100);
-  const net    = _r2(sply - dcAmt);
-
-  let vatCatCd, taxblAmt, taxAmt;
-  if (vatStatus === "registered") {
-    vatCatCd = "A";
-    taxblAmt = _r2(net / (1 + VAT_RATE));
-    taxAmt   = _r2(net - taxblAmt);
-  } else if (vatStatus === "zero_rated") {
-    vatCatCd = "B"; taxblAmt = net; taxAmt = 0;
-  } else {
-    vatCatCd = "C"; taxblAmt = 0;  taxAmt = 0;
-  }
-
-  return {
-    itemSeq:  item.seq  || 1,
-    itemClsCd: item.itemClassCode || "57111500",
-    itemNm:   _trunc(item.name || "Item", 100),
-    pkgUnitCd: "NT", pkg: qty, qtyUnitCd: "U", qty,
-    prc, splyAmt: sply, dcRt, dcAmt: _r2(dcAmt),
-    vatCatCd, taxblAmt, taxAmt, totAmt: net,
-  };
+  return TaxEngine.computeLine(item, vatStatus);
 }
 
 function calcTotals(lines) {
-  const t = { taxblAmtA:0, taxblAmtB:0, taxblAmtC:0, taxblAmtD:0, taxblAmtE:0,
-              taxAmtA:0,   taxAmtB:0,   taxAmtC:0,   taxAmtD:0,   taxAmtE:0 };
-  for (const l of lines) {
-    if (l.vatCatCd === "A") { t.taxblAmtA += l.taxblAmt; t.taxAmtA += l.taxAmt; }
-    if (l.vatCatCd === "B") { t.taxblAmtB += l.taxblAmt; }
-    if (l.vatCatCd === "C") { t.taxblAmtC += l.taxblAmt; }
-  }
-  const totTaxblAmt = _r2(t.taxblAmtA + t.taxblAmtB + t.taxblAmtC);
-  const totTaxAmt   = _r2(t.taxAmtA);
-  const totAmt      = _r2(lines.reduce((s, l) => s + l.totAmt, 0));
-  return { ...Object.fromEntries(Object.entries(t).map(([k,v]) => [k, _r2(v)])),
-           totTaxblAmt, totTaxAmt, totAmt };
+  return TaxEngine.computeTotals(lines);
 }
 
 function _r2(n)       { return Math.round((n || 0) * 100) / 100; }
@@ -610,6 +582,8 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
     createdAt: now, updatedAt: now, submittedAt: null, acceptedAt: null,
   };
   await invRef.set(invDoc);
+  Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "created",
+    newStatus: "pending_submission", sellerUid, detail: `invoiceNumber=${invNo} order=${orderId || "-"} isPlatform=${!!isPlatform}` });
 
   /* Attempt immediate KRA submission */
   try {
@@ -619,9 +593,11 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
       pmtMethod: order?.paymentMethod, buyer,
       remark: orderId ? `Order ${orderId}` : null,
     });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "submitted", prevStatus: "pending_submission", newStatus: "submitting", sellerUid });
     const kraResult = await submitToKra(client, kraPayload);
 
     await invRef.update({ ...kraResult, updatedAt: new Date().toISOString() });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "accepted", prevStatus: "submitting", newStatus: kraResult.status || "accepted", sellerUid, detail: `rcptNo=${kraResult.receiptNumber || kraResult.rcptNo || ""}` });
     bumpStats(sellerUid, "totalInvoices");
 
     const merged  = { ...invDoc, ...kraResult };
@@ -634,6 +610,7 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
   } catch (err) {
     await invRef.update({ status: "pending_submission", errorMessage: err.message, updatedAt: new Date().toISOString() });
     await enqueue({ invoiceId: invRef.id, sellerUid, priority: 2 });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "queued", newStatus: "queued", sellerUid, detail: `error=${String(err.message || "").slice(0, 150)}` });
     notifySeller(sellerUid, invRef.id, err.message);
     bumpStats(sellerUid, "pendingInvoices");
     return { invoiceId: invRef.id, invoiceNumber: invNo, status: "queued", error: err.message };
@@ -843,11 +820,13 @@ const etimsProcessQueue = onSchedule(
           remark: inv.orderId ? `Order ${inv.orderId}` : null,
         });
 
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retried", newStatus: "submitting", sellerUid: q.sellerUid, detail: `attempt=${(inv.retryCount||0)+1}` });
         const kraResult = await submitToKra(client, kraPayload);
         await db.collection("etimsInvoices").doc(q.invoiceId).update({
           ...kraResult, retryCount: (inv.retryCount||0)+1, updatedAt: new Date().toISOString(),
         });
         await doc.ref.update({ status:"completed" });
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "accepted", newStatus: kraResult.status || "accepted", sellerUid: q.sellerUid, detail: `rcptNo=${kraResult.receiptNumber || kraResult.rcptNo || ""} (via retry)` });
         bumpStats(q.sellerUid, "totalInvoices");
 
         const merged  = { ...inv, ...kraResult, invoiceId: q.invoiceId };
@@ -860,10 +839,12 @@ const etimsProcessQueue = onSchedule(
         if (retries >= MAX_RETRIES) {
           await doc.ref.update({ status:"failed", retryCount: retries, error: err.message });
           await db.collection("etimsInvoices").doc(q.invoiceId).update({ status:"failed", retryCount: retries, errorMessage: err.message, updatedAt: new Date().toISOString() });
+          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "dead_lettered", newStatus: "failed", sellerUid: q.sellerUid, detail: `max_retries error=${String(err.message||"").slice(0,120)}` });
           notifySeller(q.sellerUid, q.invoiceId, `Max retries reached: ${err.message}`);
           bumpStats(q.sellerUid, "failedInvoices");
         } else {
           await doc.ref.update({ status:"pending", retryCount: retries, nextRetryAt: retryAt(retries), error: err.message });
+          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retry_scheduled", newStatus: "pending", sellerUid: q.sellerUid, detail: `attempt=${retries} error=${String(err.message||"").slice(0,100)}` });
         }
       }
     }
@@ -1227,11 +1208,51 @@ const etimsReconcileDaily = onSchedule(
   }
 );
 
+/* ─ Invoice lifecycle operations (credit note / debit note / cancellation /
+     amendment / reversal). Builds the canonical INTERNAL document, records the
+     immutable audit event, and enqueues for KRA transmission (blocked until the KRA
+     adapter is mapped from the spec). Auth: the invoice's seller or an admin. The KRA
+     payload is isolated in etims-kra-adapter — this CF never touches KRA fields. */
+const etimsInvoiceLifecycle = onCall({ enforceAppCheck: true }, async req => {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required");
+  const uid = req.auth.uid;
+  const { op, origInvoiceId, items, reason, idempotencyKey } = req.data || {};
+
+  if (!Object.values(Lifecycle.LIFECYCLE_OPS).includes(op))
+    throw new HttpsError("invalid-argument", `op must be one of: ${Object.values(Lifecycle.LIFECYCLE_OPS).join(", ")}`);
+  if (!origInvoiceId) throw new HttpsError("invalid-argument", "origInvoiceId is required");
+  if (['credit_note', 'debit_note', 'amendment'].includes(op) && (!Array.isArray(items) || !items.length))
+    throw new HttpsError("invalid-argument", `${op} requires items[]`);
+
+  // Load the original invoice (seller collection; hub collection as fallback).
+  let snap = await db.collection("etimsInvoices").doc(origInvoiceId).get();
+  if (!snap.exists) snap = await db.collection("hubInvoices").doc(origInvoiceId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Original invoice not found");
+  const inv = { id: origInvoiceId, ...snap.data() };
+
+  // Authorization: the invoice's seller, or a platform admin.
+  const isOwner = inv.sellerUid && inv.sellerUid === uid;
+  if (!isOwner && !_ac.isAdmin(req.auth)) throw new HttpsError("permission-denied", "Not authorized for this invoice");
+
+  try {
+    const res = await Lifecycle.applyLifecycleOp(db, { op, originalInvoice: inv, items, reason, actor: uid, idempotencyKey });
+    return { success: true, id: res.id, docType: op, deduplicated: !!res.deduplicated,
+             status: res.doc.status, transmittable: !!res.doc.transmittable,
+             note: res.doc.transmittable ? undefined : "Recorded internally; KRA transmission pending official spec mapping." };
+  } catch (e) {
+    if (e.code === 'INVALID_STATE') throw new HttpsError("failed-precondition", e.message);
+    if (e.code === 'INVALID_ARG' || e.code === 'UNKNOWN_OP') throw new HttpsError("invalid-argument", e.message);
+    console.error("[etimsInvoiceLifecycle]", op, origInvoiceId, e.message);
+    throw new HttpsError("internal", "Lifecycle operation failed");
+  }
+});
+
 /* ══════════════════════════════════════════════════════════════════════
    EXPORTS
 ══════════════════════════════════════════════════════════════════════ */
 module.exports = {
   etimsRegisterSeller,
+  etimsInvoiceLifecycle,
   etimsGetProfile,
   etimsUpdateProfile,
   etimsValidatePin,

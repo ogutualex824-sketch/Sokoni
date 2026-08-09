@@ -721,6 +721,12 @@ exports.sendMessage = onCall(
   { region: REGION, timeoutSeconds: 30, enforceAppCheck: true },
   exports._h.sendMessage = async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    /* Server-enforced deactivation: a frozen account cannot send messages.
+       (Messages are CF-only — allow create:false in rules — so the check lives
+       here, mirroring the isActive() gate rules apply to client writes.) */
+    if (req.auth.token && req.auth.token.deactivated === true) {
+      throw new HttpsError('permission-denied', 'Your account is deactivated. Reactivate it to send messages.');
+    }
 
     const {
       conversationId, type = 'text',

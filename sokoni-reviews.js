@@ -21,7 +21,7 @@
 (function (root) {
   "use strict";
 
-  const CF_BASE = "https://us-central1-sokoni-app.cloudfunctions.net";
+  const CF_BASE = "https://us-central1-sokoni-aeb26.cloudfunctions.net";
 
   /* ── helpers ── */
   function _esc(s) {

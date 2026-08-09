@@ -789,6 +789,7 @@ function showFhPanel(name, btn) {
 window.showFhPanel=showFhPanel;
 
 /* ── DATA ── */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_GYMS = [
   {id:'GYM01',type:'commercial',area:'westlands',emoji:'🏋️',name:'Westlands Fitness Centre',loc:'Westlands, Nairobi',monthly:3500,daypass:300,rating:4.8,members:450,facilities:['Free weights','Cardio','Classes','Sauna','Parking'],phone:'0712700001',tagline:'Where champions are made'},
   {id:'GYM02',type:'crossfit',area:'kilimani',emoji:'🏆',name:'Kilimani CrossFit Box',loc:'Kilimani, Nairobi',monthly:5000,daypass:500,rating:4.9,members:180,facilities:['CrossFit','Olympic lifting','Gymnastics rings'],phone:'0723700002',tagline:'Forged in fire'},
@@ -841,7 +842,7 @@ function filterGyms() {
   const q = (document.getElementById('gymSearch')?.value||'').toLowerCase();
   const t = document.getElementById('gymType')?.value||'';
   let local=[]; try{local=JSON.parse(localStorage.getItem('sokoniGyms')||'[]');}catch(e){}
-  let list=[...local,...DEMO_GYMS.filter(d=>!local.some(l=>l.id===d.id))];
+  let list=[...local,...(_demoAllowed?DEMO_GYMS.filter(d=>!local.some(l=>l.id===d.id)):[])];
   if(_gymArea!=='all') list=list.filter(g=>g.area===_gymArea);
   if(t) list=list.filter(g=>g.type===t);
   if(q) list=list.filter(g=>(g.name+g.loc+g.facilities?.join(' ')).toLowerCase().includes(q));
@@ -874,7 +875,7 @@ function renderGymsGrid(list) {
 function filterFitCoaches() {
   const q=(document.getElementById('coachSearch')?.value||'').toLowerCase();
   const sp=document.getElementById('coachSpec')?.value||'';
-  let list=[...DEMO_COACHES];
+  let list=[...(_demoAllowed?DEMO_COACHES:[])];
   if(sp) list=list.filter(c=>c.spec===sp);
   if(q) list=list.filter(c=>(c.name+c.bio+c.loc).toLowerCase().includes(q));
   setTimeout(function(){var g=document.getElementById('fitCoachesGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
@@ -911,7 +912,7 @@ window.filterWorkouts=filterWorkouts;
 
 function renderWorkouts() {
   let local=[]; try{local=JSON.parse(localStorage.getItem('sokoniWorkouts')||'[]');}catch(e){}
-  let list=[...local,...DEMO_WORKOUTS.filter(d=>!local.some(l=>l.id===d.id))];
+  let list=[...local,...(_demoAllowed?DEMO_WORKOUTS.filter(d=>!local.some(l=>l.id===d.id)):[])];
   if(_wkFilter!=='all') list=list.filter(w=>w.cat===_wkFilter);
   const grid=document.getElementById('workoutsGrid'); if(!grid) return;
   grid.innerHTML=list.map(w=>`
@@ -950,7 +951,7 @@ function filterEquipment() {
   const q=(document.getElementById('eqSearch')?.value||'').toLowerCase();
   const cond=document.getElementById('eqCondition')?.value||'';
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniGymEquip')||'[]');}catch(e){}
-  let list=[...local,...DEMO_EQUIPMENT.filter(d=>!local.some(l=>l.id===d.id))];
+  let list=[...local,...(_demoAllowed?DEMO_EQUIPMENT.filter(d=>!local.some(l=>l.id===d.id)):[])];
   if(cond) list=list.filter(e=>e.cond===cond);
   if(q) list=list.filter(e=>(e.name+e.desc).toLowerCase().includes(q));
   setTimeout(function(){var g=document.getElementById('equipmentGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
@@ -1210,7 +1211,7 @@ window.filterClasses = filterClasses;
 function renderClasses() {
   let local = []; try{local=JSON.parse(localStorage.getItem('sokoniClasses')||'[]');}catch(e){}
   (window._firestoreClasses||[]).forEach(c=>{if(!local.some(l=>l.id===c.id))local.unshift(c);});
-  let list = [...local, ...DEMO_CLASSES.filter(d=>!local.some(l=>l.id===d.id))];
+  let list = [...local, ...(_demoAllowed?DEMO_CLASSES.filter(d=>!local.some(l=>l.id===d.id)):[])];
   if(_clsFilter !== 'all') list = list.filter(c=>c.type===_clsFilter);
   const grid = document.getElementById('clsGrid'); if(!grid) return;
   if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;color:rgba(255,255,255,0.3);">No classes found</div>';return;}
@@ -1465,7 +1466,7 @@ function filterNutritionists(spec, btn) {
   _nutFilter = spec;
   if(btn) { document.querySelectorAll('#fhpanel-nutrition .fh-filter-bar .fh-pill').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
   const q=(document.getElementById('nutSearch')?.value||'').toLowerCase();
-  let list=[...DEMO_NUTRITIONISTS];
+  let list=[...(_demoAllowed?DEMO_NUTRITIONISTS:[])];
   if(_nutFilter!=='all') list=list.filter(n=>n.spec===_nutFilter);
   if(q) list=list.filter(n=>(n.name+n.bio+n.loc).toLowerCase().includes(q));
   const grid=document.getElementById('nutGrid'); if(!grid) return;
@@ -1514,7 +1515,7 @@ window.bookNutritionist = bookNutritionist;
 
 function renderMealPlan() {
   const el=document.getElementById('mealPlanGrid'); if(!el) return;
-  el.innerHTML=DEMO_MEAL_PLAN.map(day=>`
+  el.innerHTML=(_demoAllowed?DEMO_MEAL_PLAN:[]).map(day=>`
     <div class="meal-day">
       <div class="meal-title">🗓 ${day.day}</div>
       ${day.meals.map(m=>`<div class="meal-item"><span style="min-width:70px;color:rgba(57,255,20,0.7);font-weight:700;">${m.meal}</span><span style="flex:1;">${m.food}</span><span class="meal-cal">${m.cals} kcal</span></div>`).join('')}
@@ -1576,7 +1577,7 @@ window.showCmSection=showCmSection;
 function renderClubs() {
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClubs')||'[]');}catch(e){}
   (window._firestoreClubs||[]).forEach(c=>{if(!local.some(l=>l.id===c.id))local.unshift(c);});
-  let list=[...local,...DEMO_CLUBS.filter(d=>!local.some(l=>l.id===d.id))];
+  let list=[...local,...(_demoAllowed?DEMO_CLUBS.filter(d=>!local.some(l=>l.id===d.id)):[])];
   const grid=document.getElementById('cmClubsGrid');if(!grid)return;
   grid.innerHTML=list.map(c=>`
     <div class="cm-card">
@@ -1600,7 +1601,7 @@ window.joinClub=joinClub;
 function renderChallenges() {
   const grid=document.getElementById('cmChallengesGrid');if(!grid)return;
   let user=[];try{user=JSON.parse(localStorage.getItem('joinedChallenges')||'[]');}catch(e){}
-  grid.innerHTML=DEMO_CHALLENGES.map(c=>`
+  grid.innerHTML=(_demoAllowed?DEMO_CHALLENGES:[]).map(c=>`
     <div class="cm-card">
       <div style="font-size:32px;margin-bottom:10px;">${c.emoji}</div>
       <div style="font-size:14px;font-weight:900;color:white;margin-bottom:5px;">${c.name}</div>
@@ -1622,7 +1623,7 @@ window.joinChallenge=joinChallenge;
 
 function renderLeaderboard() {
   const el=document.getElementById('cmLeaderboard');if(!el)return;
-  el.innerHTML=DEMO_LEADERBOARD.map((e,i)=>`
+  el.innerHTML=(_demoAllowed?DEMO_LEADERBOARD:[]).map((e,i)=>`
     <div class="ch-row">
       <div class="ch-rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
       <div class="ch-name">${e.name}</div>
@@ -1633,7 +1634,7 @@ function renderLeaderboard() {
 
 function renderEvents() {
   const grid=document.getElementById('cmEventsGrid');if(!grid)return;
-  grid.innerHTML=DEMO_EVENTS.map(e=>`
+  grid.innerHTML=(_demoAllowed?DEMO_EVENTS:[]).map(e=>`
     <div class="cm-card">
       <div style="font-size:30px;margin-bottom:10px;">${e.emoji}</div>
       <div style="font-size:14px;font-weight:900;color:white;margin-bottom:5px;">${e.name}</div>

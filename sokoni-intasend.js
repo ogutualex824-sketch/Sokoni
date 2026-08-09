@@ -111,13 +111,31 @@
         }
       );
 
-      /* Fallback timeout */
+      /* Authed CF poll — the realtime listener above is DENIED when the buyer
+         cannot read payments/{ref} (the read rule keys on buyerId while the doc
+         has uid), and CF calls carry the auth token that this Firestore instance
+         does not. This poll is therefore the reliable confirmation path; the
+         listener stays as a fast-path for flows where the read is permitted. */
+      const _poll = async () => {
+        try {
+          const r = await _callFunction('verifyPaymentStatus', { ref: paymentRef });
+          const st = r && r.status;
+          if (st) {
+            if (onStatus) onStatus(st, r);
+            if (st === 'COMPLETE') { _done('COMPLETE', r); return; }
+            if (st === 'FAILED' || st === 'CANCELLED') { _done(st, r); return; }
+          }
+        } catch (e) { /* transient (not-yet-created, network) — keep polling */ }
+      };
       intervalId = setInterval(() => {
         attempts++;
         if (attempts >= MAX_POLL_ATTEMPTS) {
           _done('TIMEOUT', { failReason: 'No response from M-Pesa within 90 seconds.' });
+          return;
         }
+        _poll();
       }, POLL_INTERVAL_MS);
+      _poll();  /* immediate first check, don't wait a full interval */
     });
   }
 
@@ -231,6 +249,17 @@
           ...(options.type          ? { type:          options.type }          : {}),
           ...(options.providerId    ? { providerId:    options.providerId }    : {}),
           ...(options.providerPhone ? { providerPhone: options.providerPhone } : {}),
+          /* Marketplace product linkage — the webhook credits the SELLER
+             (meta.sellerUid, since the caller is the BUYER) and finalises the
+             order (meta.orderId → paid + meta.items → stock decrement). Only
+             present for buyer-initiated product checkouts. */
+          ...(options.orderId    ? { orderId:    options.orderId }    : {}),
+          ...(options.sellerUid  ? { sellerUid:  options.sellerUid }  : {}),
+          ...(options.sellerName ? { sellerName: options.sellerName } : {}),
+          ...(options.hub        ? { hub:        options.hub }        : {}),
+          ...(options.buyerName  ? { buyerName:  options.buyerName }  : {}),
+          ...(options.address    ? { address:    options.address }    : {}),
+          ...(Array.isArray(options.items) ? { items: options.items } : {}),
         },
       });
 

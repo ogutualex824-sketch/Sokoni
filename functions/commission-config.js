@@ -66,7 +66,7 @@ const RATES = {
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
-  hub:              { pct: 8,   fixedKES: 0,    _was: 'hub delivery 8% = category 8% (agreed)' },
+  hub:              { pct: 12,  fixedKES: 0,    _was: 'delivery 12% platform / 88% rider — the rider-facing promise everywhere (was 8%, which paid riders 92% and contradicted the app)' },
 
   /* ── the platform keeps the whole amount: these are not marketplace sales ── */
   subscriptions:    { pct: 100, fixedKES: 0,    _was: 'category only — full amount is platform revenue' },

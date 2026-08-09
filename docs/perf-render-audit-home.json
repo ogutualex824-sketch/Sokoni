@@ -1,0 +1,43 @@
+{
+  "page": "home",
+  "at": "2026-08-01T14:10:46.725Z",
+  "wrappedAt": 11016,
+  "totalCalls": 2,
+  "totalNodesCreated": 255,
+  "distinctProducts": 8,
+  "productsRenderedMoreThanOnce": 0,
+  "maxRendersOfOneProduct": 1,
+  "calls": [
+    {
+      "t": 27960,
+      "line": null,
+      "count": 0,
+      "ids": [],
+      "nodesBefore": 652,
+      "nodesAfter": 5,
+      "created": 0,
+      "replaced": true,
+      "reason": "line null"
+    },
+    {
+      "t": 28210,
+      "line": null,
+      "count": 8,
+      "ids": [
+        "F11",
+        "F12",
+        "F8",
+        "F20",
+        "F27",
+        "F2",
+        "F6",
+        "F19"
+      ],
+      "nodesBefore": 5,
+      "nodesAfter": 260,
+      "created": 255,
+      "replaced": true,
+      "reason": "line null"
+    }
+  ]
+}

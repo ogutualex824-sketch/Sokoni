@@ -201,12 +201,32 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
     return false;
   }
 
+  /* Resolve the CURRENT auth user only AFTER Firebase has restored the persisted session.
+     Reading firebaseAuth.currentUser synchronously races session restore (it reads IndexedDB
+     async), so a logged-in seller would read null and get bounced to /login. onAuthStateChanged
+     fires once with the restored user (or null if genuinely logged out) — the canonical signal
+     used across the seller/analytics/payments pages. */
+  function awaitAuthUser() {
+    const auth = window.firebaseAuth;
+    return new Promise(resolve => {
+      if (!auth) { resolve(null); return; }
+      let settled = false;
+      const finish = u => { if (settled) return; settled = true; resolve(u || null); };
+      if (auth.currentUser) { finish(auth.currentUser); return; }   /* already restored */
+      try {
+        const unsub = auth.onAuthStateChanged(u => { try { unsub && unsub(); } catch (_) {} finish(u); });
+      } catch (_) { finish(auth.currentUser); }
+      /* Backstop so we never hang if the listener never fires. */
+      setTimeout(() => finish(auth.currentUser), 6000);
+    });
+  }
+
   async function load() {
     if (!(await firebaseReady())) {
       $('board').innerHTML = '<div class="load">Could not reach SOKONI. Check your connection and refresh.</div>';
       return;
     }
-    const user = window.firebaseAuth.currentUser;
+    const user = await awaitAuthUser();
     if (!user) { location.href = '/login.html?next=/seller-fulfilment'; return; }
 
     /* ── RBAC ────────────────────────────────────────────────────────────────

@@ -6,7 +6,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-  <script src="auth-guard.js"></script>
+  <script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>SOKONI — Professional Profile</title>
@@ -688,7 +689,7 @@ window.ppAddSkill = function() {
   const inp = document.getElementById('ppSkillInput');
   const val = (inp.value || '').trim();
   if (!val || _dirty.skills.includes(val)) { inp.value = ''; return; }
-  if (_dirty.skills.length >= 30) { alert('Maximum 30 skills.'); return; }
+  if (_dirty.skills.length >= 30) { SK.dialog.alert('Maximum 30 skills.'); return; }
   _dirty.skills.push(val);
   inp.value = '';
   _save({ skills: _dirty.skills });

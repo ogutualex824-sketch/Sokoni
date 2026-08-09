@@ -625,7 +625,7 @@
   async function publishCurrent() {
     const eventId = document.getElementById('edit-event-id').value || currentEventId;
     if (!eventId) { toast('Save event first'); return; }
-    if (!confirm('Publish this event? It will go live on the Event Hub.')) return;
+    if (!(await SK.dialog.confirm('Publish this event? It will go live on the Event Hub.', null, null, { title: 'Publish event', confirmLabel: 'Publish' }))) return;
     try {
       await callCF('publishEvent', { eventId });
       toast('🚀 Event is LIVE on SOKONI Event Hub!');
@@ -635,7 +635,7 @@
   }
 
   async function publishEvent(eventId) {
-    if (!confirm('Publish this event?')) return;
+    if (!(await SK.dialog.confirm('Publish this event?', null, null, { title: 'Publish event', confirmLabel: 'Publish' }))) return;
     try {
       await callCF('publishEvent', { eventId });
       toast('Event published!');

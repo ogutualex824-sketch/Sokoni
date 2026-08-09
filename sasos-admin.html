@@ -1013,7 +1013,7 @@ async function revokeLicense() {
   const id     = document.getElementById('lic-revoke-id').value.trim();
   const reason = document.getElementById('lic-revoke-reason').value.trim();
   if (!id) return toast('License ID required.', true);
-  if (!confirm(`Revoke license ${id}? This will downgrade the org to free.`)) return;
+  if (!(await SK.dialog.confirm(`Revoke license ${id}? This will downgrade the org to free.`, null, null, { title: 'Revoke license', variant: 'danger', confirmLabel: 'Revoke' }))) return;
   try {
     await CF('sasosRevokeLicense')({ licenseId: id, reason });
     toast('License revoked.');
@@ -1114,7 +1114,7 @@ async function loadSystemStatus() {
 }
 
 async function syncLegacy() {
-  if (!confirm('Run legacy subscription migration? This will migrate aiSubscriptions and subscriptions collections to SASOS format.')) return;
+  if (!(await SK.dialog.confirm('Run legacy subscription migration? This will migrate aiSubscriptions and subscriptions collections to SASOS format.', null, null, { title: 'Run migration', confirmLabel: 'Run migration' }))) return;
   try {
     const res = await CF('sasosSyncLegacy')({});
     toast(`Migration complete. Migrated: ${res.data.migrated} records.`);
@@ -1125,7 +1125,7 @@ async function adminCancelSub() {
   const uid     = document.getElementById('act-uid').value.trim();
   const product = document.getElementById('act-product').value;
   if (!uid) return toast('UID required.', true);
-  if (!confirm(`Cancel ${product} subscription for ${uid.slice(0,12)}…?`)) return;
+  if (!(await SK.dialog.confirm(`Cancel ${product} subscription for ${uid.slice(0,12)}…?`, null, null, { title: 'Cancel subscription', variant: 'danger', confirmLabel: 'Cancel subscription' }))) return;
   try {
     await CF('sasosCancel')({ uid, product, immediate: true });
     toast('Subscription cancelled.');

@@ -1,0 +1,285 @@
+/* ============================================================================
+   SOKONI — Admin Responsive Module
+   ----------------------------------------------------------------------------
+   ONE stylesheet every admin console opts into, rather than 61 private copies of
+   the same media queries. Constitution Rule 8 requires every management action to
+   be completable on a phone; this is the mechanism.
+
+   Adopt by adding, AFTER the page's own <style>:
+       <link rel="stylesheet" href="sokoni-admin-responsive.css">
+
+   Design rules honoured (see docs/PLATFORM_CONSTITUTION.md):
+     • Premium dark — #050505 surface, #71ff00 accent. Never white.
+     • Sticky bars anchor to --sk-header-h, which shared-header.js MEASURES and
+       publishes at runtime. A hard top:0 slides the bar under the header.
+     • Inputs are 16px on mobile: anything smaller makes iOS Safari zoom the
+       viewport on focus and the operator loses the layout.
+     • Additive only. Desktop rendering above 768px is untouched, so adopting
+       this file cannot regress an existing console.
+
+   Verified problems this addresses (audit 2026-08-01):
+     • .mod-table min-width:600px inside an overflow-x wrapper — every table
+       scrolled horizontally on a 390px screen.
+     • .mod-action-btn padding 6px/12px at font-size 11px — a ~26px tap target,
+       far below the 44px minimum for a reliable thumb press.
+     • trust-safety.html — a fixed 220px sidebar, i.e. 56% of a 390px viewport.
+     • No safe-area insets anywhere: content sat under the iPhone notch and the
+       home indicator swallowed the last row of every table.
+   ========================================================================== */
+
+/* ── Safe area: applies at every width, including installed PWA ─────────────
+   The PWA runs without browser chrome, so the notch and home indicator are the
+   page's problem. `viewport-fit=cover` must also be present in the page's
+   viewport meta for these to resolve to anything but 0. */
+body {
+  padding-left:  env(safe-area-inset-left,  0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* Preserve whatever bottom padding the page already set, then add the inset. */
+@supports (padding: max(0px)) {
+  body { padding-bottom: max(var(--sk-admin-pad-bottom, 80px), env(safe-area-inset-bottom, 0px) + 72px); }
+}
+
+/* ── Tap targets ────────────────────────────────────────────────────────────
+   44x44 CSS px is the smallest reliably tappable area. Applied only on touch
+   pointers so a mouse-driven desktop keeps its compact, dense controls. */
+@media (pointer: coarse) {
+  .mod-action-btn, .mod-filter-btn, .mod-bulk-btn, .mod-refresh-btn,
+  .abtn, .sa-btn, .btn, .access-btn, .adm-card-actions button {
+    min-height: 44px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 13px;
+  }
+  /* Icon-only controls need width as well as height. */
+  .mod-tab, .nav-item, .ni { min-height: 44px; }
+
+  /* ── Shared global widgets ────────────────────────────────────────────────
+     Measured on real viewports, these two are injected on EVERY page (not just
+     admin) and both fell under the threshold, so they were the platform's most
+     widely-repeated tap-target defect:
+       #sokoniScrollTop  — scroll-top.js floating button, 30px tall
+       .auth-switch a    — "Create Account" link, 17px tall
+     Sized here rather than in each page's private CSS. */
+  #sokoniScrollTop {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .auth-switch a,
+  .auth-switch button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+  /* A tapped row must not also trigger a hover style that never clears. */
+  .mod-table tbody tr:hover { background: transparent; }
+}
+
+/* ── Forms: 16px prevents the iOS focus-zoom ───────────────────────────────── */
+@media (max-width: 768px) {
+  input, select, textarea,
+  .sa-input, .mod-input, .wiz-input, .wiz-select {
+    font-size: 16px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PHONE — ≤768px
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Tables become cards ──────────────────────────────────────────────────
+     A 6–9 column admin table cannot be read at 390px, and horizontal scrolling
+     hides the action buttons that live in the last column — the operator can
+     see the row but not act on it.
+
+     Each row becomes a card and each cell a label/value line. The label comes
+     from `data-label` on the <td>; renderers that do not set one still produce
+     a readable card, just without the field name, so adoption is incremental
+     and never breaks a page that has not been updated yet. */
+  .mod-table-wrap, .table-wrap, .tbl-wrap { overflow-x: visible; border: none; }
+
+  .mod-table, .sa-table, .tbl, table.adm-table {
+    min-width: 0 !important;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  .mod-table thead, .sa-table thead, .tbl thead, table.adm-table thead {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;              /* screen-reader accessible, visually gone */
+  }
+
+  .mod-table tbody tr, .sa-table tbody tr, .tbl tbody tr, table.adm-table tbody tr {
+    display: block;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 6px 4px;
+    margin-bottom: 10px;
+  }
+
+  .mod-table tbody td, .sa-table tbody td, .tbl tbody td, table.adm-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 14px !important;
+    border: none !important;
+    font-size: 13px;
+    text-align: right;
+    word-break: break-word;
+  }
+
+  .mod-table tbody td::before,
+  .sa-table tbody td::before,
+  .tbl tbody td::before,
+  table.adm-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 38%;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+  }
+  /* No label supplied → give the value the full width instead of a dead gutter. */
+  .mod-table tbody td:not([data-label])::before,
+  .sa-table tbody td:not([data-label])::before,
+  .tbl tbody td:not([data-label])::before,
+  table.adm-table tbody td:not([data-label])::before { display: none; }
+  .mod-table tbody td:not([data-label]),
+  .sa-table tbody td:not([data-label]),
+  .tbl tbody td:not([data-label]),
+  table.adm-table tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
+
+  /* Action cells: full-width buttons, comfortably apart. */
+  .mod-table tbody td .mod-action-row,
+  .sa-table tbody td .adm-card-actions,
+  .tbl tbody td .btn-row {
+    display: flex; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end;
+  }
+  .mod-table tbody td .mod-action-row .mod-action-btn { flex: 1 1 auto; }
+
+  /* An empty/error row must stay full width, not become a label/value pair. */
+  .mod-table-empty, .empty-cell {
+    display: block !important;
+    text-align: center !important;
+    padding: 28px 16px !important;
+  }
+  .mod-table-empty::before, .empty-cell::before { display: none !important; }
+
+  /* ── Sidebars collapse ────────────────────────────────────────────────────
+     A fixed 220px rail is 56% of a 390px viewport. Becomes a horizontal
+     scrolling strip so every destination stays reachable with one thumb. */
+  .sidebar {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--brd, rgba(255,255,255,0.08)) !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar .logo, .sidebar .sidebar-foot { display: none !important; }
+  .sidebar nav, .sidebar .nav { display: flex !important; flex-direction: row !important; }
+  .sidebar .ni, .sidebar .nav-item {
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin: 6px 4px !important;
+  }
+
+  /* ── Sticky bars anchor to the MEASURED header height ─────────────────────
+     shared-header.js publishes --sk-header-h at runtime; a literal top:0 puts
+     the bar underneath the header instead of below it. */
+  .mod-nav, .topbar, .panel-toolbar {
+    position: sticky;
+    top: var(--sk-header-h, 0px) !important;
+    z-index: 90;
+  }
+
+  /* ── Dense layouts relax ──────────────────────────────────────────────────*/
+  .stats, .sa-kpis, .adm-stats {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  }
+  .mod-pane, .pane, .panel, .main > .content { padding: 14px 12px !important; }
+  .panel-toolbar { flex-wrap: wrap; gap: 8px; }
+  .panel-toolbar .sa-input, .panel-toolbar select { width: 100% !important; }
+
+  /* Horizontal strips keep scrolling but stop clipping their focus ring. */
+  .mod-stats, .mod-tabs { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .mod-stats::-webkit-scrollbar, .mod-tabs::-webkit-scrollbar { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SMALL PHONE — ≤400px  (iPhone SE / mini, common Android)
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 400px) {
+  .mod-table tbody td::before,
+  .sa-table tbody td::before,
+  .tbl tbody td::before { flex-basis: 34%; font-size: 9px; }
+
+  .mod-table tbody td, .sa-table tbody td, .tbl tbody td { font-size: 12.5px; padding: 8px 12px !important; }
+  .mod-nav-title, .topbar h1 { font-size: 15px; }
+  .mod-stat { min-width: 118px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LANDSCAPE PHONE — keep the card layout, it is height-constrained not width
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) and (orientation: landscape) and (pointer: coarse) {
+  .sidebar { max-height: 44vh; }
+}
+
+/* ── Reduced motion: respect the OS setting on operational screens ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Contact links inside admin table cells — the tel:/WhatsApp links the review
+   queues render. Measured 17px: a reviewer's primary action on an application is
+   to phone the applicant, so this is the single most-used control on the page. */
+@media (pointer: coarse) {
+  .mod-table a[href^="tel:"], .mod-table a[href^="https://wa.me"],
+  .sa-table a[href^="tel:"], .sa-table a[href^="https://wa.me"],
+  .adm-card a[href^="tel:"], .adm-card a[href^="https://wa.me"] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 6px;
+  }
+}
+
+/* ── Auth overlay controls, for consoles that do NOT load auth.css ───────────
+   The sign-in gate is injected into every admin page, but admin.html and
+   super-admin.html link style.css/premium.css only — so the equivalent fixes in
+   auth.css never reach them and every gate control measured 43px. Duplicated
+   here deliberately: the alternative is making 34 consoles depend on auth.css. */
+@media (pointer: coarse) {
+  .auth-pw-toggle { min-width: 44px !important; min-height: 44px !important; display: inline-flex; align-items: center; justify-content: center; }
+  .auth-skip, .auth-forgot-link, .auth-remember .auth-forgot-link {
+    display: inline-flex; align-items: center; min-height: 44px !important; padding: 0 8px;
+  }
+  .auth-field input, .auth-input,
+  .auth-form input[type="text"], .auth-form input[type="email"],
+  .auth-form input[type="password"], .auth-form input[type="tel"] {
+    min-height: 48px !important; font-size: 16px !important;
+  }
+  .auth-card a, .auth-card p a { min-height: 44px !important; display: inline-flex; align-items: center; }
+}
+
+/* !important is deliberate here: these are accessibility FLOORS, and the auth
+   overlay injects its own <style> after this sheet, so equal-specificity rules
+   lose the cascade. A tap target must not be overridable by load order. */

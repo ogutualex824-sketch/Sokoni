@@ -112,17 +112,20 @@ const SPECS = [
     link: (d, id) => 'product.html?id=' + encodeURIComponent(id),
   },
   {
-    /* Stores. `shops/{uid}` has no rule in firestore.rules, so a list query
-       there is denied — sellers/{uid} is the readable copy store.html falls
-       back to, and the one that carries the shop name buyers type. */
-    col: 'sellers', tab: 'businesses', icon: '🏪', scan: 300,
-    fields: ['name', 'storeName', 'shopName', 'businessName', 'category', 'tagline', 'bio', 'about', 'description', 'address', 'location', 'sellerType', 'handle'],
-    title: d => d.name || d.storeName || d.shopName || d.businessName || '',
+    /* Stores. Canonical directory collection is `businesses` (businesses.html +
+       business.html read it; owner-writable per rules, public read). Was `sellers`,
+       which is empty in production, so store search returned nothing except via the
+       product `sellerName` fallback. `indexed:true` — searchableTerms/nameLower are
+       written by the indexBusinessCreate / indexBusinessUpdate triggers; archive/
+       hide is honoured by isVisibleDoc (status ∈ archived/hidden/… → excluded). */
+    col: 'businesses', tab: 'businesses', icon: '🏪', indexed: true, scan: 300,
+    fields: ['name', 'businessName', 'storeName', 'shopName', 'category', 'tagline', 'bio', 'about', 'description', 'address', 'location', 'city', 'sellerType', 'handle'],
+    title: d => d.name || d.businessName || d.storeName || d.shopName || '',
     subtitle: d => d.category || d.sellerType || 'Store',
     location: d => d.address || d.location || d.city || '',
     price: () => null,
     thumb: d => d.logo || d.logoUrl || d.banner || d.bannerUrl || null,
-    link: (d, id) => 'store.html?id=' + encodeURIComponent(id),
+    link: (d, id) => 'business.html?id=' + encodeURIComponent(id),
   },
   {
     col: 'services', tab: 'services', icon: '🔧', scan: 200,
@@ -274,7 +277,12 @@ const _scanCache = new Map(); /* col → { at, docs } */
 /* v2: KEEP gained the variant attributes. A v1 payload was slimmed without
    them, so serving it would make variant queries silently miss until the entry
    aged out. The version bump discards those entries on first read instead. */
-const LS_KEY  = 'sokoni_fs_catalogue_v2';
+/* v3: discards every v2 payload on first read. Needed because of the staleness
+   bug fixed in lsWrite below — a cached `providers` copy could be kept
+   "fresh-looking" indefinitely and never refetched, so a newly approved provider
+   stayed missing from search on any browser that had searched before. Bumping
+   the key is the only way to clear a copy already sitting in users' devices. */
+const LS_KEY  = 'sokoni_fs_catalogue_v3';
 const LS_TTL  = 30 * 60 * 1000;   /* serve from disk for half an hour … */
 const LS_SOFT = 3 * 60 * 1000;    /* … but revalidate in the background after 3 */
 const LS_MAX_DESC = 240;
@@ -332,8 +340,17 @@ function lsRead() {
 function lsWrite(col, docs) {
   try {
     if (typeof localStorage === 'undefined') return;
-    const cur = lsRead() || { at: Date.now(), cols: {} };
+    const cur = lsRead() || { at: Date.now(), cols: {}, colAt: {} };
     cur.cols[col] = docs.map(slim);
+    /* Per-collection stamp. `cur.at` is shared by the whole blob, so stamping
+       only that made EVERY write look like a refresh of EVERY collection: a
+       search that rescanned `products` bumped `at`, and the `providers` copy —
+       untouched and possibly hours old — kept passing the LS_TTL/LS_SOFT checks
+       and was never refetched. A provider approved after that copy was taken
+       stayed absent from search indefinitely. `at` is still maintained for the
+       blob-level TTL and for back-compat with readers that predate colAt. */
+    cur.colAt = cur.colAt || {};
+    cur.colAt[col] = Date.now();
     cur.at = Date.now();
     localStorage.setItem(LS_KEY, JSON.stringify(cur));
   } catch (_) {
@@ -526,7 +543,12 @@ async function scanCollection(db, sdk, spec) {
   const rows = disk && disk.cols && disk.cols[spec.col];
   if (rows) {
     _scanCache.set(spec.col, { at: Date.now(), docs: rows });
-    if (Date.now() - disk.at > LS_SOFT) {
+    /* Age THIS collection's copy, not the blob's. `disk.at` is refreshed by a
+       write to any collection, so a busy `products` cache kept `providers`
+       looking fresh and suppressed its revalidation entirely. Falling back to
+       `disk.at` keeps pre-colAt payloads behaving as before. */
+    const colAt = (disk.colAt && disk.colAt[spec.col]) || disk.at;
+    if (Date.now() - colAt > LS_SOFT) {
       /* Stale-while-revalidate: the user searches against what we already have
          while the fresh copy lands for the next query. */
       fetchCollection(db, sdk, spec).catch(() => {});

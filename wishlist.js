@@ -54,7 +54,7 @@ function renderWishlist(list){
     wishlistContainer.innerHTML = list.map((p, i) => `
         <div class="wish-card">
             <div class="wish-card-img-wrap">
-                <img src="${_wlSafeImg(p.image)}" alt="${_wlEsc(p.name)}">
+                <img src="${_wlSafeImg(window.pickProductImage ? pickProductImage(p) : p.image)}" alt="${_wlEsc(p.name)}" onerror="this.onerror=null;this.src='assets/default-product.png'">
                 <button class="wish-remove-icon" onclick="removeWishlist(${wishlist.indexOf(p)})" title="Remove">✕</button>
             </div>
             <div class="wish-card-body">

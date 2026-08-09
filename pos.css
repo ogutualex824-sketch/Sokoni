@@ -82,7 +82,11 @@ html, body {
 #pos-wizard {
   position: fixed; inset: 0;
   background: #050508;
-  display: flex; align-items: flex-start; justify-content: center;
+  /* Hidden by default so it NEVER flashes on Cashier/Inventory load. Only the standalone
+     first-run path shows it, explicitly, via pos.js (document.getElementById('pos-wizard')
+     .style.display='flex'). Embedded boots go through launchApp() and never show it. Painting
+     it flex-by-default was the "POS Setup splash" merchants saw during async boot on slow devices. */
+  display: none; align-items: flex-start; justify-content: center;
   z-index: 9999;
   padding: 20px 16px;
   /* Generous bottom padding accounts for virtual keyboard + home indicator */

@@ -1,0 +1,619 @@
+{
+  "page": "product",
+  "ref": "HEAD",
+  "at": "2026-08-01T10:31:29.789Z",
+  "cpuThrottle": 4,
+  "totalSampledMs": 10733,
+  "js": {
+    "deliveredKB": 2383,
+    "files": 70,
+    "compileMs": 75,
+    "scriptMs": 2331,
+    "taskMs": 6525,
+    "layoutMs": 1301,
+    "styleMs": 914,
+    "compilePerKB": 0.031
+  },
+  "longTasks": [
+    {
+      "d": 360,
+      "s": 3885
+    },
+    {
+      "d": 355,
+      "s": 7386
+    },
+    {
+      "d": 335,
+      "s": 5109
+    },
+    {
+      "d": 232,
+      "s": 5723
+    },
+    {
+      "d": 198,
+      "s": 3266
+    },
+    {
+      "d": 188,
+      "s": 3658
+    },
+    {
+      "d": 134,
+      "s": 4271
+    },
+    {
+      "d": 127,
+      "s": 6051
+    },
+    {
+      "d": 126,
+      "s": 6179
+    },
+    {
+      "d": 109,
+      "s": 3110
+    },
+    {
+      "d": 102,
+      "s": 3519
+    },
+    {
+      "d": 90,
+      "s": 5960
+    },
+    {
+      "d": 78,
+      "s": 4450
+    },
+    {
+      "d": 75,
+      "s": 2469
+    },
+    {
+      "d": 72,
+      "s": 6355
+    },
+    {
+      "d": 68,
+      "s": 2232
+    },
+    {
+      "d": 62,
+      "s": 4532
+    },
+    {
+      "d": 59,
+      "s": 6837
+    },
+    {
+      "d": 54,
+      "s": 6754
+    }
+  ],
+  "topFunctions": [
+    {
+      "fn": "(idle)",
+      "url": "",
+      "line": 0,
+      "ms": 4304.21
+    },
+    {
+      "fn": "(program)",
+      "url": "",
+      "line": 0,
+      "ms": 3435.572
+    },
+    {
+      "fn": "_buildSignals",
+      "url": "http://localhost:8289/sokoni-zero-trust.js",
+      "line": 111,
+      "ms": 347.022
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/sokoni-performance.js",
+      "line": 123,
+      "ms": 188.93
+    },
+    {
+      "fn": "_showBanner",
+      "url": "http://localhost:8289/security.js",
+      "line": 514,
+      "ms": 124.201
+    },
+    {
+      "fn": "injectWalletBalance",
+      "url": "http://localhost:8289/sokoni-ui-extras.js",
+      "line": 407,
+      "ms": 115.752
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 1,
+      "ms": 97.728
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 1,
+      "ms": 82.553
+    },
+    {
+      "fn": "injectDesktopBellBadge",
+      "url": "http://localhost:8289/sokoni-ui-extras.js",
+      "line": 158,
+      "ms": 58.437
+    },
+    {
+      "fn": "_initKeyboardDetect",
+      "url": "http://localhost:8289/sokoni-layout.js",
+      "line": 265,
+      "ms": 49.005
+    },
+    {
+      "fn": "_measure",
+      "url": "http://localhost:8289/sokoni-layout.js",
+      "line": 147,
+      "ms": 48.635
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/product",
+      "line": 36,
+      "ms": 37.825
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/sokoni-layout.js",
+      "line": 308,
+      "ms": 35.423
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 4,
+      "ms": 34.116
+    },
+    {
+      "fn": "l.ot",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 939,
+      "ms": 26.513
+    },
+    {
+      "fn": "_measure",
+      "url": "http://localhost:8289/sokoni-layout.js",
+      "line": 147,
+      "ms": 24.37
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 24.263
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 21.736
+    },
+    {
+      "fn": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "ms": 20.128
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 18.916
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/sokoni-observability.js",
+      "line": 32,
+      "ms": 17.127
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 282,
+      "ms": 14.008
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 13.17
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 12.942
+    },
+    {
+      "fn": "g",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 605,
+      "ms": 12.374
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/firebase.js",
+      "line": 1,
+      "ms": 12.317
+    },
+    {
+      "fn": "promote",
+      "url": "http://localhost:8289/sokoni-sheet.js",
+      "line": 343,
+      "ms": 12.311
+    },
+    {
+      "fn": "appendChild",
+      "url": "",
+      "line": 0,
+      "ms": 10.989
+    },
+    {
+      "fn": "promote",
+      "url": "http://localhost:8289/sokoni-sheet.js",
+      "line": 343,
+      "ms": 10.763
+    },
+    {
+      "fn": "OU",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 1006,
+      "ms": 10.155
+    },
+    {
+      "fn": "e",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 312,
+      "ms": 9.651
+    },
+    {
+      "fn": "_writeSafeAreaVars",
+      "url": "http://localhost:8289/sokoni-form-engine.js",
+      "line": 277,
+      "ms": 9.348
+    },
+    {
+      "fn": "e",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 312,
+      "ms": 8.518
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/analytics.js",
+      "line": 14,
+      "ms": 8.495
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 701,
+      "ms": 7.368
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 701,
+      "ms": 7.325
+    },
+    {
+      "fn": "RQ",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 903,
+      "ms": 7.175
+    },
+    {
+      "fn": "iG.render",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 1561,
+      "ms": 7.05
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 655,
+      "ms": 6.928
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/shared-header.js",
+      "line": 9,
+      "ms": 6.38
+    },
+    {
+      "fn": "Im",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 1011,
+      "ms": 6.159
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 66,
+      "ms": 5.933
+    },
+    {
+      "fn": "fetch",
+      "url": "",
+      "line": 0,
+      "ms": 5.908
+    },
+    {
+      "fn": "init",
+      "url": "http://localhost:8289/sokoni-ui-extras.js",
+      "line": 445,
+      "ms": 5.776
+    },
+    {
+      "fn": "hR.O",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 919,
+      "ms": 5.72
+    },
+    {
+      "fn": "_overlapCheck",
+      "url": "http://localhost:8289/sokoni-layout.js",
+      "line": 307,
+      "ms": 5.658
+    },
+    {
+      "fn": "_bnavHeight",
+      "url": "http://localhost:8289/sokoni-float.js",
+      "line": 23,
+      "ms": 5.656
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
+      "line": 1,
+      "ms": 5.644
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+      "line": 1,
+      "ms": 5.62
+    },
+    {
+      "fn": "_bnavHeight",
+      "url": "http://localhost:8289/sokoni-float.js",
+      "line": 23,
+      "ms": 5.563
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/product.js",
+      "line": 1,
+      "ms": 5.539
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "http://localhost:8289/security.js",
+      "line": 10,
+      "ms": 5.411
+    },
+    {
+      "fn": "init",
+      "url": "http://localhost:8289/security.js",
+      "line": 491,
+      "ms": 5.291
+    },
+    {
+      "fn": "dg",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 286,
+      "ms": 5.254
+    },
+    {
+      "fn": "YB",
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-QT32H65TJS",
+      "line": 671,
+      "ms": 5.208
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 335,
+      "ms": 5.123
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 793,
+      "ms": 5.028
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 655,
+      "ms": 4.979
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
+      "line": 1,
+      "ms": 4.773
+    },
+    {
+      "fn": "(anonymous)",
+      "url": "https://www.gstatic.com/recaptcha/releases/w_Yb7dGGXaKesJ7BMiqFJqBG/recaptcha__en.js",
+      "line": 682,
+      "ms": 4.742
+    }
+  ],
+  "byScript": [
+    [
+      "(vm)",
+      7945.216999999999
+    ],
+    [
+      "www.gstatic.comJ7BMiqFJqBG/recaptcha__en.js",
+      695.7070000000007
+    ],
+    [
+      "www.googletagmanager.com/gtag/js",
+      540.9270000000002
+    ],
+    [
+      "sokoni-zero-trust.js",
+      353.2370000000001
+    ],
+    [
+      "sokoni-performance.js",
+      195.845
+    ],
+    [
+      "sokoni-ui-extras.js",
+      185.801
+    ],
+    [
+      "sokoni-layout.js",
+      172.75199999999998
+    ],
+    [
+      "security.js",
+      143.89199999999997
+    ],
+    [
+      "www.gstatic.comejs/10.12.2/firebase-auth.js",
+      78.09900000000002
+    ],
+    [
+      "www.gstatic.comsejs/10.12.2/firebase-app.js",
+      58.368
+    ],
+    [
+      "product",
+      38.410000000000004
+    ],
+    [
+      "www.gstatic.com0.12.2/firebase-app-check.js",
+      35.989
+    ],
+    [
+      "sokoni-observability.js",
+      33.674
+    ],
+    [
+      "sokoni-sheet.js",
+      23.073999999999998
+    ],
+    [
+      "www.gstatic.com0.12.2/firebase-firestore.js",
+      22.664000000000012
+    ],
+    [
+      "shared-header.js",
+      20.359999999999996
+    ],
+    [
+      "firebase.js",
+      15.789
+    ],
+    [
+      "cdnjs.cloudflare.comompurify/3.0.9/purify.min.js",
+      13.193999999999999
+    ],
+    [
+      "analytics.js",
+      12.668
+    ],
+    [
+      "sokoni-float.js",
+      12.405
+    ],
+    [
+      "sokoni-form-engine.js",
+      11.676
+    ],
+    [
+      "sokoni-ui.js",
+      11.626000000000001
+    ],
+    [
+      "www.gstatic.com/10.12.2/firebase-storage.js",
+      9.655000000000001
+    ],
+    [
+      "provider-wiring.js",
+      9.335
+    ],
+    [
+      "kass-widget.js",
+      9.248999999999999
+    ],
+    [
+      "seo.js",
+      8.923
+    ],
+    [
+      "www.gstatic.com0.12.2/firebase-functions.js",
+      8.322
+    ],
+    [
+      "splash.js",
+      6.52
+    ],
+    [
+      "product.js",
+      6.119
+    ],
+    [
+      "sw-register.js",
+      5.6739999999999995
+    ],
+    [
+      "www.gstatic.com0.12.2/firebase-messaging.js",
+      5.037999999999999
+    ],
+    [
+      "realtime.js",
+      3.883
+    ],
+    [
+      "sokoni-monitor.js",
+      3.373
+    ],
+    [
+      "seller-wiring.js",
+      2.862
+    ],
+    [
+      "scroll-top.js",
+      2.772
+    ],
+    [
+      "sokoni-scale.js",
+      2.308
+    ],
+    [
+      "www.google.com/recaptcha/api.js",
+      2.267
+    ],
+    [
+      "sokoni-notif-center.js",
+      2.227
+    ],
+    [
+      "sokoni-notif-engine.js",
+      1.958
+    ],
+    [
+      "sokoni-event-bus.js",
+      1.866
+    ]
+  ]
+}

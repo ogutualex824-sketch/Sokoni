@@ -321,6 +321,19 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
   /* ── AUTH GATE — Firebase Auth required; Firestore role check ── */
   function checkAuth(){ return false; } /* disabled — use _verifySellerAccess() */
 
+  /* SOKONI's canonical user model stores roles as an ARRAY (roles:['seller']),
+     NOT a singular `role` string. The old gate only read `.role`, so a legitimate
+     seller (roles:['seller'] / isSeller) was DENIED → login.html → (already logged
+     in) → bounced to home. Accept the array, the legacy string, and seller flags. */
+  function _isSellerDoc(d){
+    if(!d || typeof d !== 'object') return false;
+    var roles = Array.isArray(d.roles) ? d.roles.map(function(x){ return String(x).toLowerCase(); }) : [];
+    if(roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1 || roles.indexOf('admin') !== -1 || roles.indexOf('superadmin') !== -1) return true;
+    var role = String(d.role || '').toLowerCase();
+    if(role === 'seller' || role === 'vendor' || role === 'admin') return true;
+    return d.isSeller === true || d.admin === true || d.superAdmin === true;
+  }
+
   function _verifySellerAccess(onGranted){
     if(localStorage.getItem('loggedIn') !== 'true'){
       window.location.replace('login.html'); return;
@@ -335,11 +348,11 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
         return fs.getDoc(fs.doc(window.firebaseDB, 'users', user.uid));
       }).then(function(snap){
-        var role = (snap.exists() ? (snap.data().role||'') : '').toLowerCase();
-        if(role === 'seller' || role === 'admin'){ _grant(); }
+        var d = snap.exists() ? (snap.data()||{}) : {};
+        if(_isSellerDoc(d)){ _grant(); }
         else {
           user.getIdTokenResult(true).then(function(r){
-            if(r.claims && r.claims.admin){ _grant(); } else { _deny(); }
+            if(r.claims && (r.claims.admin || r.claims.superAdmin)){ _grant(); } else { _deny(); }
           }).catch(_deny);
         }
       }).catch(function(){
@@ -347,8 +360,9 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
         _lsFallback();
       });
       function _lsFallback(){
-        var r = localStorage.getItem('userRole')||'';
-        if(r === 'seller' || r === 'admin'){ _grant(); } else { _deny(); }
+        var lsu = {}; try { lsu = JSON.parse(localStorage.getItem('sokoniUser')||'{}') || {}; } catch(e){}
+        var r = (localStorage.getItem('userRole')||'').toLowerCase();
+        if(_isSellerDoc(lsu) || r === 'seller' || r === 'admin' || r === 'vendor'){ _grant(); } else { _deny(); }
       }
     }
     function _poll(n){

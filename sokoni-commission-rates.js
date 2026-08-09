@@ -80,7 +80,7 @@
       "fixedKES": 0
     },
     "hub": {
-      "pct": 8,
+      "pct": 12,
       "fixedKES": 0
     },
     "subscriptions": {

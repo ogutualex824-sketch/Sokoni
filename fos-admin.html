@@ -472,7 +472,7 @@ window._loadRefunds = async function() {
 };
 
 window._approveRefund = async function(id) {
-  if (!confirm('Approve and process this refund? This will debit the seller wallet and initiate the refund.')) return;
+  if (!(await SK.dialog.confirm('Approve and process this refund? This will debit the seller wallet and initiate the refund.', null, null, { title: 'Approve refund', variant: 'danger', confirmLabel: 'Approve & refund' }))) return;
   try {
     await CF('fosApproveRefund')({ refundId: id, reject: false });
     _toast('Refund approved and processed.', 'ok');

@@ -287,7 +287,9 @@ const realFlash=flashSales.map(f=>{
   return{...p,discount:f.discount,salePrice:Math.round(p.price*(1-f.discount/100)),endsAt:f.endsAt,rating:4.7,reviews:0,remaining:10,totalStock:50,seller:p.sellerName||'Seller'};
 }).filter(Boolean);
 
-const flashProducts=[...realFlash,...DEMO_FLASH.map(p=>({...p,salePrice:Math.round(p.price*(1-p.discount/100))}))];
+/* Demo flash deals are dev-only — never pad a real user's flash sale with fabricated products. */
+const _fsDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+const flashProducts=[...realFlash,...(_fsDemoAllowed?DEMO_FLASH.map(p=>({...p,salePrice:Math.round(p.price*(1-p.discount/100))})):[])];
 
 /* ── STATE ── */
 let _fsCat='';
@@ -388,8 +390,12 @@ function renderGrid(){
   }
   el.innerHTML=list.map((p,i)=>{
     const soldPct=Math.min(Math.round(((p.totalStock-p.remaining)/p.totalStock)*100),97);
-    const imgHtml=p.image&&p.image.startsWith('data:')
-      ?`<div class="fs-img"><img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}"></div>`
+    /* Was rendered ONLY for base64 p.image, hiding real Storage-URL photos. Resolve
+       the canonical field (URL preferred) and render any real source; fall back to
+       the gradient+emoji tile on a missing image or a dead URL. */
+    const _fsImg=(window.pickProductImage?pickProductImage(p):(p.image||''));
+    const imgHtml=_fsImg
+      ?`<div class="fs-img"><img loading="lazy" decoding="async" src="${esc(_fsImg)}" alt="${esc(p.name)}" onerror="this.onerror=null;this.src='/assets/default-product.png'"></div>`
       :`<div class="fs-img" style="background:${p.bg||'linear-gradient(135deg,#1a1a2e,#16213e)'}"><span class="fs-emoji">${esc(p.emoji||'🛍️')}</span></div>`;
     return `
   <div class="fs-item" style="animation:cardFadeIn .${3+i%6}s ease">
@@ -447,6 +453,7 @@ if(_urlCat&&FS_CATS.find(c=>c.id===_urlCat)) setCat(_urlCat);
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-share.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
+<script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>

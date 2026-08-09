@@ -567,6 +567,19 @@
     font-size: 8px !important;
   }
 
+  /* Merchant line — subtle, below the price row (spec: "merchant below price") */
+  .ptrend-grid .pcard-ov-seller,
+  #productsContainer .pcard-ov-seller {
+    display: block !important;
+    margin-top: 3px !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    color: rgba(255,255,255,0.5) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
   /* ════ ACTION STRIP: social proof + buttons ════ */
   .ptrend-grid .pcard-mobile-strip,
   #productsContainer .pcard-mobile-strip {

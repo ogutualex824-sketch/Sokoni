@@ -63,9 +63,12 @@ const DATA = {
       status: 'active',
     },
   ],
-  sellers: [
-    { _id: 's_kass', name: 'Kass Vapes', category: 'Vape Store', address: 'Nairobi CBD' },
-    { _id: 's_other', name: 'Mama Mboga Fresh', category: 'Groceries' },
+  /* Canonical shop directory collection (was `sellers`, which is empty in prod).
+     The businesses spec is indexed, but — like p_coolmint above — a store with no
+     searchableTerms is still found via the field scan on `name`. */
+  businesses: [
+    { _id: 's_kass', name: 'Kass Vapes', businessName: 'Kass Vapes', category: 'Vape Store', address: 'Nairobi CBD', status: 'active' },
+    { _id: 's_other', name: 'Mama Mboga Fresh', businessName: 'Mama Mboga Fresh', category: 'Groceries', status: 'active' },
   ],
   services: [
     { _id: 'sv_ok',      name: 'Vape Coil Replacement', status: 'active', category: 'Repair' },
@@ -182,7 +185,7 @@ function check(name, fn) {
   check('finds the store by name ("kass vapes")', () => {
     const row = kass.find(r => r.id === 's_kass');
     assert.ok(row, 'store missing from ' + JSON.stringify(titles(kass)));
-    assert.strictEqual(row.link, 'store.html?id=s_kass');
+    assert.strictEqual(row.link, 'business.html?id=s_kass');
     assert.strictEqual(row.tab, 'businesses');
   });
   check('store query also surfaces that store\'s products', () => {

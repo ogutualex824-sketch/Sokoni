@@ -5,6 +5,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico"><script src="security.js"></script>
+<script type="module" src="sokoni-init.js"></script>
 <script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -423,10 +424,14 @@ let _urgency = "low";
 
 function loadRequests(){
   try{ allReqs = JSON.parse(localStorage.getItem("sokoniRequests"))||[]; }catch(e){ allReqs=[]; }
-  if(!allReqs.length){
-    allReqs = DEMO_REQS;
-    localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
-  }
+  /* Never seed fabricated buy-requests into a real user's storage. Demo content
+     is dev-only (localhost or explicit opt-in); real users get an honest empty
+     state handled by applyFilters()/the empty-state markup. */
+  var _demoAllowed = (function(){
+    try{ if(localStorage.getItem('sokoniDemoData')==='true') return true; }catch(e){}
+    return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  })();
+  if(!allReqs.length && _demoAllowed){ allReqs = DEMO_REQS; }
   updateHeroStats();
   applyFilters();
 }
@@ -965,7 +970,7 @@ loadDeliveries();
   header.addEventListener('click', function(){ panel.classList.toggle('form-open'); });
 })();
 </script>
-<script type="module" src="sokoni-init.js"></script>
+
 <script src="sokoni-security.js"></script>
 <script src="sokoni-guards.js"></script>
 <script src="sokoni-audit.js" defer></script>

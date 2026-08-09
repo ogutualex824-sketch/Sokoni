@@ -17,6 +17,11 @@ const _OPTS = {
   region:          REGION,
   enforceAppCheck: true,
   maxInstances:    10,
+  /* One warm instance: adminOsDispatch is the hub for every admin read, so a
+     cold start (several seconds) was leaving the Overview widgets on skeletons
+     ("takes long to load"). minInstances:1 keeps the common path hot. Deploy
+     with --force (minInstances is a cost-bearing change). */
+  minInstances:    1,
   timeoutSeconds:  60,
   memory:          '256MiB',
 };

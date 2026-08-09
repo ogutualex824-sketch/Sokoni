@@ -1,0 +1,112 @@
+/* ══════════════════════════════════════════════════════════════════════
+   SOKONI Seller Dashboard — Premium Layer (R1.1)
+   Loaded LAST so it wins the cascade. Additive polish only: it restyles the
+   existing markup into a premium commerce-OS look (rounded, soft shadows,
+   glass, smooth hover, skeleton loaders, no abrupt flashing). No structural or
+   behavioural changes — safe to ship without touching the tangled seller.css.
+   Brand: dark #050505 / accent #71ff00 (see [[reference_design_system]]).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Premium KPI cards ───────────────────────────────────────────────
+   seller.css already styles .seller-stat-card with !important, so this layer must
+   win on BOTH specificity (.seller-stats .seller-stat-card = 0,2,0 beats 0,1,0) AND
+   !important, or it is a silent no-op (which is exactly what happened first pass).
+   Deliberately BOLD so the upgrade is visible: deep glass, ambient green elevation,
+   an animated accent bar, and a light sheen that sweeps across on hover. */
+.seller-stats .seller-stat-card {
+  position: relative !important;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(113,255,0,0.10), transparent 42%),
+    linear-gradient(158deg, rgba(255,255,255,0.075), rgba(255,255,255,0.02)),
+    rgba(10,12,10,0.86) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.03) inset, 0 -14px 40px -22px rgba(113,255,0,0.35) inset !important;
+  backdrop-filter: blur(10px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.1) !important;
+  transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s ease, border-color .2s ease !important;
+  overflow: hidden !important;
+}
+/* Animated accent bar across the top edge (::before is taken by seller.css). */
+.seller-stats .seller-stat-card::after {
+  content: '' !important;
+  position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
+  background: linear-gradient(90deg, transparent, rgba(113,255,0,0.85), transparent);
+  background-size: 200% 100%;
+  animation: sk-accent 3.2s linear infinite;
+  opacity: .7;
+}
+@keyframes sk-accent { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.seller-stats .seller-stat-card:hover {
+  transform: translateY(-4px) !important;
+  border-color: rgba(113,255,0,0.45) !important;
+  box-shadow: 0 20px 46px rgba(0,0,0,0.55), 0 0 0 1px rgba(113,255,0,0.18) inset, 0 0 34px -6px rgba(113,255,0,0.30) !important;
+}
+.seller-stats .seller-stat-card h3 {
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: -0.01em !important;
+  text-shadow: 0 0 22px rgba(113,255,0,0.14);
+  transition: color .2s ease !important;
+}
+.seller-stats .seller-stat-card .stat-icon {
+  border-radius: 14px !important;
+  transition: transform .22s ease !important;
+}
+.seller-stats .seller-stat-card:hover .stat-icon { transform: scale(1.08) rotate(-3deg) !important; }
+
+/* ── Skeleton loaders — replace blank/0 flashes while data loads ────── */
+.sk-skeleton {
+  color: transparent !important;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.05) 25%,
+    rgba(255,255,255,0.14) 37%,
+    rgba(255,255,255,0.05) 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.25s ease-in-out infinite;
+  border-radius: 7px;
+  user-select: none;
+}
+.sk-skeleton * { visibility: hidden; }
+@keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* Value count-up: fade+rise the moment a real number lands (no hard flash) */
+@keyframes sk-value-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.sk-value-in { animation: sk-value-in .34s cubic-bezier(.2,.7,.3,1); }
+
+/* ── Live status chips (Printer / Sync / etc.) ─────────────────────── */
+.sk-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+.sk-chip .sk-dot { width: 7px; height: 7px; border-radius: 50%; background: #666; }
+.sk-chip.ok   { border-color: rgba(113,255,0,0.35); color: #71ff00; }
+.sk-chip.ok   .sk-dot { background: #71ff00; box-shadow: 0 0 7px #71ff00; }
+.sk-chip.warn { border-color: rgba(255,180,0,0.35); color: #ffb400; }
+.sk-chip.warn .sk-dot { background: #ffb400; }
+.sk-chip.bad  { border-color: rgba(255,80,80,0.35); color: #ff6464; }
+.sk-chip.bad  .sk-dot { background: #ff6464; }
+
+/* ── Smooth section transitions — kill abrupt tab flashes ──────────── */
+.seller-section[data-sdtab], section[data-sdtab] {
+  animation: sk-section-in .26s ease both;
+}
+@keyframes sk-section-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Live panel: premium glass + smoother motion ───────────────────── */
+#sellerLivePanel {
+  transition: transform .28s cubic-bezier(.2,.7,.3,1), opacity .2s ease;
+}
+.slp-drawer-close, #slpTrigger {
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
+}
+.slp-drawer-close:active { transform: scale(.92); }
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .seller-stats .seller-stat-card,
+  .seller-section[data-sdtab], section[data-sdtab],
+  .sk-value-in, #sellerLivePanel { animation: none !important; transition: none !important; }
+}

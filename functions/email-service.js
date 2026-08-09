@@ -318,12 +318,27 @@ async function _sendViaSmtp(payload) {
 /* ── Deduplication check ───────────────────────────────────── */
 async function _isDuplicate(emailId) {
   if (!emailId) return false;
-  const ref = db().collection("emailLogs").where("emailId", "==", emailId).limit(1);
-  const snap = await ref.get();
+  /* Only a SUCCESSFUL send may suppress a later attempt.
+     `_log()` records FAILURES under the same emailId and stamps `sentAt` on them
+     too, so matching on the id alone made "we failed to send this" indistinguishable
+     from "we already sent this" — and the queue fallback that exists precisely to
+     rescue a failed send was then discarded as a duplicate. Observed in production
+     2026-08-01: an admin invitation failed inline (no SENDGRID_API_KEY in that
+     runtime), fell back to the queue as designed, and `processEmailQueue` dropped it
+     41s later — emailQueue/1NIBiH09rdI2TqYEyhWu → status "skipped". The invitation
+     recorded itself as sent while the invitee remained unable to sign in.
+     Deduplication of genuine double-submits is unchanged: those match a row whose
+     status is "sent". Filtered in code rather than with a second where() clause so
+     this needs no composite index. */
+  const snap = await db().collection("emailLogs")
+    .where("emailId", "==", emailId).limit(10).get();
   if (snap.empty) return false;
-  const doc = snap.docs[0].data();
-  const age = Date.now() - (doc.sentAt?.toMillis?.() || 0);
-  return age < DEDUP_TTL_MS;
+  return snap.docs.some((d) => {
+    const x = d.data();
+    if (String(x.status) !== "sent") return false;
+    const age = Date.now() - (x.sentAt?.toMillis?.() || 0);
+    return age < DEDUP_TTL_MS;
+  });
 }
 
 /* ── Check user email preferences ─────────────────────────── */
@@ -670,7 +685,10 @@ async function markBounced(email, messageId) {
  * Get user email preferences (or defaults).
  */
 async function getPreferences(uid) {
-  const defaults = { orders: true, payments: true, security: true, marketing: true, account: true, newsletter: false };
+  /* Marketing/newsletter default to FALSE (opt-in, KDPA/ODPC): a user who has never set a
+     preference must NOT receive marketing email. Transactional categories (orders/payments/
+     security/account) stay true — they are service messages, not marketing consent. */
+  const defaults = { orders: true, payments: true, security: true, marketing: false, account: true, newsletter: false };
   if (!uid) return defaults;
   const snap = await db().collection("emailPreferences").doc(uid).get().catch(() => null);
   return snap && snap.exists ? { ...defaults, ...snap.data() } : defaults;

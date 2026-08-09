@@ -408,14 +408,14 @@
     var deliveryRef = document.getElementById('reportDeliveryRef').value;
     var reason = document.getElementById('reportReason').value;
     var note   = document.getElementById('reportNote').value.trim();
-    if (!reason) { alert('Please select a reason'); return; }
+    if (!reason) { SK.dialog.alert('Please select a reason'); return; }
     var handleFailed = firebase.functions().httpsCallable('handleFailedDelivery');
     handleFailed({ deliveryRef, reason, note })
       .then(function (result) {
         document.getElementById('reportModal').classList.remove('open');
-        alert('Report submitted. Action: ' + result.data.action);
+        SK.dialog.alert('Report submitted. Action: ' + result.data.action);
       })
-      .catch(function (err) { alert('Error: ' + err.message); });
+      .catch(function (err) { SK.dialog.alert('Error: ' + err.message); });
   };
 
   /* ── XSS escape ── */

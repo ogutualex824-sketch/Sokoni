@@ -1,0 +1,1594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOKONI Merchant OS</title>
+<meta name="theme-color" content="#050505">
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root{
+    --bg:#050505; --panel:#0a0a0a; --card:#0d0d0d; --line:rgba(255,255,255,.08);
+    --txt:#fff; --txt2:rgba(255,255,255,.55); --txt3:rgba(255,255,255,.35); --acc:#71ff00;
+    --rail:224px; --rail-collapsed:64px; --top:56px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;overflow:hidden}
+
+  .mshell{display:grid;grid-template-columns:var(--rail) 1fr;grid-template-rows:100vh;
+    transition:grid-template-columns .22s cubic-bezier(.2,.7,.3,1)}
+  .mshell.collapsed{grid-template-columns:var(--rail-collapsed) 1fr}
+
+  /* ── Sidebar ── */
+  .mrail{background:linear-gradient(180deg,#0b0b0b,#070707);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  /* Brand button = canonical shop/branch switcher */
+  .mbrand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;min-height:var(--top);
+    border-bottom:1px solid var(--line);width:100%;background:none;color:inherit;font-family:inherit;
+    cursor:pointer;text-align:left}
+  .mbrand:hover{background:rgba(255,255,255,.03)}
+  /* Brand logo — transparent PNG, no background box */
+  .mbrand .logo{height:30px;width:auto;max-width:120px;object-fit:contain;background:none;
+    border-radius:0;flex:0 0 auto;display:block}
+  .mshell.collapsed .mbrand .logo{max-width:40px}
+  .mbrand .name{font-weight:900;letter-spacing:.02em;white-space:nowrap;font-size:15px;
+    overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .mbrand-caret{margin-left:auto;color:var(--txt3);font-size:12px;flex:0 0 auto}
+  .mshell.collapsed .mbrand .name,.mshell.collapsed .mbrand-caret{opacity:0;width:0}
+  .mnav{flex:1;overflow-y:auto;padding:10px 8px;scrollbar-width:none}
+  .mnav::-webkit-scrollbar{display:none}
+  .mnav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;
+    cursor:pointer;color:var(--txt2);font-size:13.5px;font-weight:700;white-space:nowrap;
+    transition:background .14s,color .14s;user-select:none}
+  .mnav-item .ico{font-size:18px;flex:0 0 22px;text-align:center}
+  .mnav-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+  .mnav-item.active{background:rgba(113,255,0,.12);color:var(--acc)}
+  .mshell.collapsed .mnav-item .lbl{opacity:0;width:0;overflow:hidden}
+  .mnav-sep{height:1px;background:var(--line);margin:8px 12px}
+  .mnav-head{padding:14px 14px 6px;font-size:10px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--txt3);white-space:nowrap}
+  .mshell.collapsed .mnav-head{opacity:0;height:6px;padding:3px 0;overflow:hidden}
+
+  .mstatus{border-top:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:7px}
+  .mchip{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--txt2);white-space:nowrap}
+  .mdot{width:8px;height:8px;border-radius:50%;background:#555;flex:0 0 auto}
+  .mdot.ok{background:var(--acc);box-shadow:0 0 7px var(--acc)}
+  .mdot.bad{background:#ff6464}
+  .mdot.warn{background:#ffb400;box-shadow:0 0 7px rgba(255,180,0,.7)}
+  .mshell.collapsed .mchip .ctxt{opacity:0;width:0;overflow:hidden}
+
+  /* ── Main ── */
+  .mmain{display:flex;flex-direction:column;min-width:0;min-height:0;grid-column:2;grid-row:1}
+  .mtop{height:var(--top);flex:0 0 var(--top);display:flex;align-items:center;gap:12px;
+    padding:0 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .mtop .burger{background:none;border:1px solid var(--line);color:var(--txt2);width:34px;height:34px;
+    border-radius:9px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .mtop .burger:hover{color:var(--txt);border-color:rgba(113,255,0,.4)}
+  .mtitle{font-weight:800;font-size:15px}
+  .mtop .spacer{flex:1}
+  .mtop .tchip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--txt2);
+    padding:6px 11px;border:1px solid var(--line);border-radius:20px}
+  .mtop .tchip .mdot{width:7px;height:7px}
+
+  /* Integrated update bar — full width, below the top bar, pushes content (never overlaps).
+     Singleton by construction (one #mupdate element in the shell). */
+  .mupdate{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:9px 16px;
+    background:linear-gradient(90deg,rgba(113,255,0,.14),rgba(113,255,0,.06));
+    border-bottom:1px solid rgba(113,255,0,.28);color:var(--txt);font-size:13px;font-weight:700}
+  .mupdate[hidden]{display:none}
+  .mu-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mu-actions{display:flex;gap:8px;flex:0 0 auto}
+  .mupdate button{border-radius:9px;padding:7px 14px;font-weight:800;font-size:12.5px;cursor:pointer;border:1px solid}
+  .mu-now{background:var(--acc);color:#000;border-color:var(--acc)}
+  .mu-later{background:transparent;color:var(--txt2);border-color:var(--line)}
+  .mu-later:hover{color:var(--txt)}
+
+  .mcontent{flex:1;position:relative;min-height:0;background:var(--bg)}
+  .mpanel{position:absolute;inset:0;display:none}
+  .mpanel.show{display:block}
+  /* iframe is absolutely positioned so it stacks ABOVE the loading overlay (which is also
+     absolute). Without this the transparent "Loading…" layer sat on top of every module and
+     swallowed all clicks + scroll — the reported "buttons unresponsive / pages don't scroll". */
+  .mpanel iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:var(--bg);z-index:1}
+  /* Smooth, no-flash module transition when a panel becomes active. */
+  .mpanel.show{animation:mPanelIn .24s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes mPanelIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  /* Premium skeleton loader — shimmer placeholders instead of "Loading…" text. Never blocks
+     interaction; hides once the iframe reports loaded. */
+  .dloading{position:absolute;inset:0;padding:22px;pointer-events:none;z-index:0;overflow:hidden}
+  .mpanel.loaded .dloading{display:none}
+  .sk-line{height:14px;border-radius:7px;margin-bottom:12px;
+    background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.12) 37%,rgba(255,255,255,.05) 63%);
+    background-size:400% 100%;animation:skShim 1.25s ease-in-out infinite}
+  .sk-cardrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin:18px 0}
+  .sk-card{height:88px;border-radius:16px;background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.10) 37%,rgba(255,255,255,.04) 63%);
+    background-size:400% 100%;animation:skShim 1.25s ease-in-out infinite}
+  @keyframes skShim{0%{background-position:100% 0}100%{background-position:0 0}}
+  .sk-label{position:absolute;bottom:22px;left:22px;font-size:11.5px;color:var(--txt3);font-weight:700;letter-spacing:.02em}
+  @media (prefers-reduced-motion:reduce){.mpanel.show{animation:none}.sk-line,.sk-card{animation:none}}
+  .mpanel .native{position:absolute;inset:0;overflow-y:auto;padding:22px;z-index:2}
+
+  /* Native dashboard */
+  .dwrap{max-width:1100px;margin:0 auto}
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:22px}
+  .dcard{background:linear-gradient(158deg,rgba(255,255,255,.06),rgba(255,255,255,.02)),var(--card);
+    border:1px solid var(--line);border-radius:18px;padding:18px 16px;position:relative;overflow:hidden}
+  .dcard::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(113,255,0,.7),transparent)}
+  .dcard .n{font-size:26px;font-weight:900;color:var(--acc);font-variant-numeric:tabular-nums;line-height:1.1}
+  .dcard .l{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+  /* Phone: swipeable KPI cards — a horizontal scroll-snap rail, large-but-compact,
+     next card peeking to signal there's more. Desktop keeps the responsive grid. */
+  @media (max-width:560px){
+    .dgrid{display:flex;grid-template-columns:none;overflow-x:auto;gap:12px;
+      scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;margin:0 -16px 20px;padding:2px 16px 6px}
+    .dgrid::-webkit-scrollbar{display:none}
+    .dcard{flex:0 0 46%;scroll-snap-align:start;padding:16px 14px}
+    .dcard .n{font-size:23px}
+  }
+  .dsec-t{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:0 2px 12px}
+  .dbtn{display:inline-flex;align-items:center;gap:8px;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3);
+    color:var(--acc);border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none}
+  .dbtn.ghost{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--txt2)}
+  /* Devices page */
+  .dev-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:12px}
+  .dev-row{display:flex;align-items:center;gap:14px}
+  .dev-ico{font-size:30px;flex:0 0 auto}
+  .dev-name{font-weight:800;font-size:15px}
+  .dev-sub{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt2);margin-top:3px}
+  .dev-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+  .dev-note{font-size:11.5px;color:var(--txt3);line-height:1.55;margin-top:12px}
+  .dev-soon{opacity:.6}
+  /* Native Orders module */
+  .ord2-wrap{max-width:900px;margin:0 auto}
+  .ord2-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-bottom:14px}
+  .ord2-stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+  .ord2-stat-n{font-size:17px;font-weight:900;color:var(--acc);line-height:1.1}
+  .ord2-stat-l{font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+  .ord2-rangebar,.ord2-tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+  .ord2-rangebar::-webkit-scrollbar,.ord2-tabs::-webkit-scrollbar{display:none}
+  .ord2-chip,.ord2-tab{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .ord2-chip.active,.ord2-tab.active{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:var(--acc)}
+  .ord2-search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--txt);padding:11px 14px;font-size:14px;outline:none;margin:4px 0 10px;font-family:inherit}
+  .ord2-list{display:flex;flex-direction:column;gap:10px}
+  .ord2-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;transition:border-color .14s,transform .12s}
+  .ord2-card:hover{border-color:rgba(113,255,0,.35);transform:translateY(-1px)}
+  .ord2-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:9px}
+  .ord2-card-id{font-weight:800;font-size:14px}
+  .ord2-card-sub{font-size:11.5px;color:var(--txt2);margin-top:2px}
+  .ord2-card-amt{font-weight:900;font-size:15px}
+  .ord2-card-when{font-size:10.5px;color:var(--txt3);margin-top:2px;white-space:nowrap}
+  .ord2-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .ord2-pay{font-size:11px;color:var(--txt2)}
+  .ord2-badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px}
+  .ord2-ok{background:rgba(113,255,0,.13);color:var(--acc)} .ord2-warn{background:rgba(255,180,0,.14);color:#ffb400} .ord2-bad{background:rgba(255,80,80,.14);color:#ff6464}
+  .ord2-empty{text-align:center;color:var(--txt2);padding:40px 20px}
+  .ord2-note{font-size:12px;color:var(--txt3);margin-top:8px}
+  .ord2-diag{font-size:11px;color:var(--txt3);margin-top:10px;font-family:ui-monospace,Menlo,monospace;opacity:.75}
+  .ord2-drawer-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;justify-content:flex-end}
+  .ord2-drawer{width:100%;max-width:420px;height:100%;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;animation:ord2In .24s cubic-bezier(.2,.7,.3,1)}
+  @keyframes ord2In{from{transform:translateX(30px);opacity:.6}to{transform:none;opacity:1}}
+  /* Phone: order detail as a bottom-sheet (slides up, rounded top, partial height)
+     instead of a full-screen side drawer — premium mobile pattern. */
+  @media (max-width:560px){
+    .ord2-drawer-ov{justify-content:stretch;align-items:flex-end}
+    .ord2-drawer{max-width:none;height:auto;max-height:88vh;border-left:none;
+      border-top:1px solid var(--line);border-radius:20px 20px 0 0;animation:ord2Up .26s cubic-bezier(.2,.7,.3,1);
+      padding-bottom:env(safe-area-inset-bottom,0px)}
+    .ord2-dhead{position:relative}
+    /* grab handle */
+    .ord2-dhead::before{content:'';position:absolute;top:6px;left:50%;transform:translateX(-50%);
+      width:38px;height:4px;border-radius:3px;background:var(--line)}
+  }
+  @keyframes ord2Up{from{transform:translateY(24px);opacity:.5}to{transform:none;opacity:1}}
+  .ord2-dhead{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
+  .ord2-dtitle{font-weight:900;font-size:16px} .ord2-dsub{font-size:12px;color:var(--txt2);margin-top:4px;display:flex;gap:7px;align-items:center}
+  .ord2-dclose{background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer}
+  .ord2-dbody{padding:16px;overflow-y:auto;flex:1}
+  .ord2-drow{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:4px 0;color:var(--txt)}
+  .ord2-drow span:first-child{color:var(--txt2)}
+  .ord2-dtotal{font-weight:900;font-size:15px;border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
+  .ord2-dbody hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+  .ord2-dsec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:16px 0 10px}
+  .ord2-tl{position:relative}
+  .ord2-tl-row{display:flex;gap:12px;padding-bottom:14px;position:relative}
+  .ord2-tl-row:not(:last-child)::before{content:'';position:absolute;left:5px;top:14px;bottom:0;width:2px;background:var(--line)}
+  .ord2-tl-dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.2);flex:0 0 auto;margin-top:2px}
+  .ord2-tl-dot.now{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+  .ord2-tl-t{font-size:13px;font-weight:700} .ord2-tl-at{font-size:11px;color:var(--txt3);margin-top:1px}
+  .ord2-dfoot{padding:14px 16px;border-top:1px solid var(--line)}
+  .ord2-dfoot .dbtn{width:100%;justify-content:center}
+  /* ── Availability module ── */
+  .av-wrap{max-width:820px}
+  .av-shopcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;position:relative;overflow:hidden}
+  .av-shopcard.open{border-color:rgba(113,255,0,.35)} .av-shopcard.closed{border-color:rgba(255,90,90,.35)}
+  .av-shophead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .av-shopdot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+  .av-shopdot.on{background:var(--acc);box-shadow:0 0 10px var(--acc)} .av-shopdot.off{background:#ff5a5a;box-shadow:0 0 10px rgba(255,90,90,.6)}
+  .av-shoptitle{font-size:18px;font-weight:900}
+  .av-chiprow{display:flex;flex-wrap:wrap;gap:10px}
+  .av-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 12px;font-size:13px;font-weight:700;color:var(--txt);font-family:inherit;cursor:pointer;min-height:40px}
+  .av-chip:active{background:rgba(255,255,255,.09)} .av-chip[disabled]{opacity:.5;cursor:default}
+  .av-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto} .av-dot.on{background:var(--acc)} .av-dot.off{background:#ff5a5a}
+  .av-openbtn{margin-left:auto;border-radius:10px;padding:8px 14px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;min-height:38px}
+  .av-openbtn.open{background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.5);color:#ff6b6b}
+  .av-openbtn.close{background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.5);color:var(--acc)}
+  .av-openbtn[disabled]{opacity:.5;cursor:default}
+  .av-rowright{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .av-ptoggle{border-radius:20px;padding:5px 12px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer;min-height:32px;border:1px solid var(--line)}
+  .av-ptoggle.on{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:var(--acc)}
+  .av-ptoggle.off{background:rgba(255,255,255,.05);color:var(--txt3)}
+  .av-ptoggle[disabled]{opacity:.5;cursor:default}
+  .av-state{color:var(--txt3);font-size:11px;font-weight:800;margin-left:2px}
+  .av-note{font-size:11px;color:var(--txt3);margin-top:12px;opacity:.8}
+  .av-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px}
+  .av-stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center}
+  .av-stat .av-n{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1}
+  .av-stat .av-l{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:5px}
+  .av-stat.ok .av-n{color:var(--acc)} .av-stat.warn .av-n{color:#ffb400} .av-stat.bad .av-n{color:#ff6464} .av-stat.muted .av-n{color:var(--txt3)}
+  .av-sec{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--txt3);margin:0 2px 12px;display:flex;align-items:center;gap:8px}
+  .av-count{background:rgba(255,255,255,.08);border-radius:20px;padding:2px 9px;font-size:11px;color:var(--txt2)}
+  .av-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .av-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--card)}
+  .av-pname{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .av-badge{flex:0 0 auto;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .av-badge.ok{background:rgba(113,255,0,.13);color:var(--acc)} .av-badge.warn{background:rgba(255,180,0,.14);color:#ffb400}
+  .av-badge.bad{background:rgba(255,80,80,.14);color:#ff6464} .av-badge.muted{background:rgba(255,255,255,.06);color:var(--txt3)}
+  .av-empty{text-align:center;color:var(--txt2);padding:30px 20px}
+  /* Native Reports / Finance / Analytics */
+  .an-wrap{max-width:820px;margin:0 auto}
+  .an-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .an-title{font-size:18px;font-weight:900}
+  .an-range{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  .an-range::-webkit-scrollbar{display:none}
+  .an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:8px}
+  .an-stat{background:linear-gradient(158deg,rgba(255,255,255,.05),rgba(255,255,255,.02)),var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 14px;text-align:center}
+  .an-stat-n{font-size:19px;font-weight:900;color:var(--acc);line-height:1.1;font-variant-numeric:tabular-nums}
+  .an-stat-l{font-size:10.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:5px}
+  .an-sec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:20px 2px 10px}
+  .an-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:9px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:7px}
+  .an-row span:first-child{color:var(--txt2)}
+  .an-empty{color:var(--txt3);font-size:12.5px;padding:10px 2px}
+  .an-note{font-size:11.5px;color:var(--txt3);margin-top:14px;line-height:1.5}
+  .an-trace{font-size:10.5px;color:var(--txt3);margin-top:22px;padding-top:12px;border-top:1px solid var(--line);opacity:.7}
+
+  /* Drawer scrim — tap outside the open rail to dismiss it (mobile only). */
+  .mscrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:49;opacity:0;
+    pointer-events:none;transition:opacity .22s}
+  /* Top-bar command trigger — opens the ⌘K palette (search + quick actions). */
+  .mcmd-open{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.04);
+    border:1px solid var(--line);color:var(--txt2);border-radius:10px;height:34px;padding:0 11px;
+    font-family:inherit;font-size:13px;cursor:pointer;transition:border-color .15s,color .15s}
+  .mcmd-open:hover{color:var(--txt);border-color:rgba(113,255,0,.4)}
+  /* My MiniShop — the merchant's storefront identity in the header. Premium, compact, mobile-first. */
+  .mshop-btn{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,rgba(113,255,0,.14),rgba(113,255,0,.05));
+    border:1px solid rgba(113,255,0,.32);color:var(--txt);border-radius:11px;height:36px;padding:0 12px;
+    font-family:inherit;cursor:pointer;transition:border-color .15s,background .15s,transform .1s}
+  .mshop-btn:hover{border-color:rgba(113,255,0,.6);background:linear-gradient(135deg,rgba(113,255,0,.2),rgba(113,255,0,.07))}
+  .mshop-btn:active{transform:scale(.97)}
+  .mshop-ico{font-size:16px;line-height:1}
+  .mshop-txt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
+  .mshop-l1{font-size:12.5px;font-weight:800}
+  .mshop-l2{font-size:10px;font-weight:700;color:var(--acc);letter-spacing:.02em}
+  .mshop-btn.notclaimed .mshop-l2{color:#ffd24a}
+  @media (max-width:560px){ .mshop-txt{display:none} .mshop-btn{padding:0 10px;gap:0} }
+  .mcmd-open .kbd{font-size:10px;font-weight:800;color:var(--txt3);border:1px solid var(--line);
+    border-radius:5px;padding:1px 5px;letter-spacing:.03em}
+  /* Command palette */
+  .mcmd-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100050;display:none;
+    justify-content:center;align-items:flex-start;padding:12vh 16px 16px}
+  .mcmd-ov.open{display:flex}
+  .mcmd{width:100%;max-width:560px;max-height:70vh;background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.7);display:flex;flex-direction:column;overflow:hidden;
+    animation:mcmdIn .18s ease}
+  @keyframes mcmdIn{from{transform:translateY(-10px);opacity:.6}to{transform:none;opacity:1}}
+  .mcmd-input{background:none;border:none;border-bottom:1px solid var(--line);color:var(--txt);
+    font-family:inherit;font-size:16px;padding:16px 18px;outline:none}
+  .mcmd-list{overflow-y:auto;padding:8px}
+  .mcmd-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;cursor:pointer;color:var(--txt2)}
+  .mcmd-item .ci{font-size:18px;flex:0 0 22px;text-align:center}
+  .mcmd-item .cl{flex:1;font-size:14px;color:var(--txt)}
+  .mcmd-item .ck{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em}
+  .mcmd-item.sel,.mcmd-item:hover{background:rgba(113,255,0,.12);color:var(--acc)}
+  .mcmd-item.sel .cl{color:var(--acc)}
+  .mcmd-empty{padding:24px;text-align:center;color:var(--txt3);font-size:13px}
+  @media (max-width:560px){ .mcmd-open .kbd{display:none} .mcmd-open{padding:0 9px} }
+  /* Mobile bottom navigation — primary destinations one tap away (desktop: hidden). */
+  .mbnav{display:none}
+  @media (max-width:820px){
+    :root{--rail:200px}
+    .mshell{grid-template-columns:0 1fr}
+    .mshell.mobile-open{grid-template-columns:var(--rail) 1fr}
+    .mrail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);z-index:50;
+      transform:translateX(-100%);transition:transform .22s}
+    .mshell.mobile-open .mrail{transform:translateX(0);box-shadow:0 0 40px rgba(0,0,0,.6)}
+    .mshell.mobile-open .mscrim{opacity:1;pointer-events:auto}
+    /* leave room so fixed bottom-nav never covers content or the last action */
+    .mcontent{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+    .mbnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:48;
+      background:linear-gradient(180deg,#0b0b0b,#070707);border-top:1px solid var(--line);
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));}
+    .mbnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+      background:none;border:0;color:var(--txt2);font-family:inherit;cursor:pointer;
+      padding:6px 2px;min-height:52px;border-radius:12px;transition:color .15s,background .15s}
+    .mbnav-item .bi{font-size:20px;line-height:1}
+    .mbnav-item .bl{font-size:10px;font-weight:700;letter-spacing:.02em}
+    .mbnav-item.active{color:var(--acc);background:rgba(113,255,0,.10)}
+    .mbnav-item:active{background:rgba(255,255,255,.06)}
+  }
+</style>
+</head>
+<body>
+<div class="mshell" id="mshell">
+  <aside class="mrail">
+    <button class="mbrand" id="mbrand" title="Switch shop / branch" aria-label="Switch shop or branch">
+      <img class="logo" src="assets/logosokoni.png" alt="SOKONI">
+      <div class="name" id="mbrand-name">SOKONI</div>
+      <span class="mbrand-caret" aria-hidden="true">▾</span>
+    </button>
+    <nav class="mnav" id="mnav"></nav>
+    <div class="mstatus">
+      <div class="mchip"><span class="mdot" id="st-print"></span><span class="ctxt" id="st-print-t">Printer</span></div>
+      <div class="mchip"><span class="mdot ok" id="st-sync"></span><span class="ctxt" id="st-sync-t">Online</span></div>
+      <div class="mchip"><span class="mdot ok"></span><span class="ctxt" id="st-user">Merchant</span></div>
+    </div>
+  </aside>
+  <div class="mscrim" id="mscrim" aria-hidden="true"></div>
+  <div class="mmain">
+    <header class="mtop">
+      <button class="burger" id="burger" title="Toggle menu" aria-label="Toggle menu">☰</button>
+      <div class="mtitle" id="mtitle">Dashboard</div>
+      <div class="spacer"></div>
+      <button class="mshop-btn" id="mshop-btn" onclick="__openMiniShop()" title="My MiniShop — your SOKONI storefront" aria-label="My MiniShop">
+        <span class="mshop-ico">🏪</span>
+        <span class="mshop-txt"><span class="mshop-l1">My MiniShop</span><span class="mshop-l2" id="mshop-state">Storefront</span></span>
+      </button>
+      <button class="mcmd-open" id="mcmd-open" title="Search & actions (Ctrl/⌘K)" aria-label="Search and actions">🔍<span class="kbd">⌘K</span></button>
+      <div class="tchip"><span class="mdot" id="top-print"></span><span id="top-print-t">Printer</span></div>
+    </header>
+    <div class="mupdate" id="mupdate" hidden>
+      <span class="mu-txt">🔄 A new version of SOKONI is available</span>
+      <span class="mu-actions">
+        <button class="mu-now" onclick="__mUpdateNow()">Update Now</button>
+        <button class="mu-later" onclick="__mUpdateLater()">Later</button>
+      </span>
+    </div>
+    <div class="mcontent" id="mcontent"></div>
+  </div>
+  <nav class="mbnav" id="mbnav" aria-label="Primary"></nav>
+</div>
+
+<!-- ⌘K command palette — search modules + quick actions; one launcher for the whole shell. -->
+<div class="mcmd-ov" id="mcmd-ov" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="mcmd">
+    <input class="mcmd-input" id="mcmd-input" type="text" placeholder="Search or jump to… (orders, finance, new sale)" autocomplete="off" spellcheck="false">
+    <div class="mcmd-list" id="mcmd-list"></div>
+  </div>
+</div>
+
+<!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
+     so it is owned by the shell (not a module) and survives all navigation. -->
+<script src="sokoni-universal-printer.js"></script>
+<!-- Canonical "active product" predicate (archived excluded) — shared by reconcile + count tiles. -->
+<script src="sokoni-product-visibility.js"></script>
+<!-- Unified OrderService — one source of truth for orders (POS + marketplace + delivery). -->
+<script src="sokoni-order-service.js"></script>
+<!-- AnalyticsEngine — one aggregation layer over OrderService (Dashboard=Reports=Finance=Analytics). -->
+<script src="sokoni-analytics-engine.js"></script>
+<!-- Sync backbone — the existing event bus + the merchant domain facade. One change
+     (product/stock/availability/shop/order/payment/refund/customer) propagates to every
+     module through the bus's same-origin BroadcastChannel; no per-page refresh calls. -->
+<script src="sokoni-event-bus.js"></script>
+<script src="sokoni-sync.js"></script>
+<!-- AvailabilityService — canonical shop/product availability (reads shops/{uid} + products). -->
+<script src="sokoni-availability.js"></script>
+<!-- SokoniAnalytics — event ingestion + live shared analytics state (subscribes to SokoniSync,
+     idempotent, drives Dashboard/Reports/Finance/Analytics without navigation). -->
+<script src="sokoni-analytics.js"></script>
+<!-- SokoniReconcile — commerce data-convergence status + idempotent reconciliation (canonical
+     products vs POS/inventory caches; order sources vs unified view). -->
+<script src="sokoni-reconcile.js"></script>
+<!-- SokoniBranch — the canonical shop/branch switcher (reused, not rebuilt). The header
+     brand button is its entry point; the active shop drives SokoniShell.activeShopId. -->
+<script src="sokoni-branch.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   SOKONI Merchant Application Shell (R1.1)
+   One page that loads ONCE. The sidebar/topbar/status never reload; clicking a
+   module only swaps the content panel. Heavy legacy apps (POS, Seller Dashboard)
+   are hosted in PERSISTENT panels created once and never destroyed — so the
+   printer connection, auth, and Firestore listeners inside them survive every
+   navigation (the whole point). Native modules replace these panels over time.
+   ══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  /* Tell sw-register the shell owns the update UI, so it renders our integrated bar (below)
+     instead of its own floating toast. Must be set before sw-register.js runs (it's deferred). */
+  window.__sokoniShellHandlesUpdate = true;
+
+  /* Module registry. kind:
+       'native' — rendered by a JS function into the panel (instant, no reload)
+       'pos'    — the single persistent POS app panel; `tab` deep-switches its tab
+       'seller' — the single persistent Seller Dashboard panel; `sec` deep-switches its section */
+  /* MODULE REGISTRY — the union of the old Seller Dashboard + the Merchant OS. One destination
+     per button. kind: native | pos (Checkout app) | seller (Seller app section) | page (its own
+     page). Only genuinely-POS surfaces load the POS bundle. Seller `sec` keys MUST match
+     seller.js DASH_PAGES exactly; page `src` must be a real file. No dead links. */
+  /* v456 Navigation Convergence — the sidebar is the CANONICAL router. Every destination is a
+     direct entry that opens ITS module in the main content (kind: native | pos | seller | page).
+     No entry uses location.href / a new document — page-kind modules load in a persistent in-shell
+     panel (created once, never navigated). The founder's 20 canonical destinations are all here;
+     the remaining entries (Promotions, Messages, Stories, Riders, Receipts, Audit, Store Setup)
+     are preserved so no feature is lost. */
+  var MODULES = [
+    { id:'dashboard',    label:'Dashboard',    icon:'🏠', kind:'native' },
+    { id:'availability', label:'Availability', icon:'🟢', kind:'native' },
+
+    { head:'Commerce' },
+    { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
+    { id:'orders',    label:'Orders',    icon:'🧾', kind:'native' },
+    { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
+    { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
+    { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
+    { id:'shop',      label:'Shop',      icon:'🏪', kind:'seller', sec:'overview' },
+
+    { head:'Business' },
+    { id:'reports',   label:'Reports',   icon:'📊', kind:'native' },
+    { id:'finance',   label:'Finance',   icon:'💰', kind:'native' },
+    { id:'analytics', label:'Analytics', icon:'📈', kind:'native' },
+    { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
+    { id:'promotions',label:'Promotions',icon:'🎁', kind:'seller', sec:'flash' },
+
+    { head:'Fulfilment' },
+    { id:'fulfilment',label:'Fulfilment',icon:'🚚', kind:'page',   src:'seller-fulfilment.html' },
+    { id:'deliveries',label:'Deliveries',icon:'🛵', kind:'page',   src:'dispatch.html' },
+    { id:'returns',   label:'Returns',   icon:'↩️', kind:'page',   src:'returns.html' },
+    { id:'riders',    label:'Riders',    icon:'🏍️', kind:'page',   src:'driver.html' },
+    { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
+
+    { head:'Engage' },
+    { id:'messages',  label:'Messages',  icon:'💬', kind:'seller', sec:'messages' },
+    { id:'stories',   label:'Stories',   icon:'📸', kind:'seller', sec:'stories' },
+
+    { head:'Team & Ops' },
+    { id:'team',      label:'Staff',     icon:'👨‍🔧', kind:'seller', sec:'team' },
+    { id:'disputes',  label:'Disputes',  icon:'⚖️', kind:'seller', sec:'disputes' },
+    { id:'verification', label:'Verification', icon:'✅', kind:'page', src:'verification.html' },
+    { id:'audit',     label:'Audit Log', icon:'🛡️', kind:'pos',    tab:'audit' },
+
+    { head:'System' },
+    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'native' },
+    { id:'pos-setup', label:'POS Setup', icon:'🖨️', kind:'page',   src:'pos-printer-setup.html' },
+    { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos',    tab:'settings' },
+    { id:'store',     label:'Store Setup', icon:'🏬', kind:'seller', sec:'store' },
+  ];
+  var byId = {};
+  MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
+  /* My MiniShop is a header destination (not a sidebar row) that opens IN-SHELL as a page panel.
+     Its src is resolved from the canonical claimed-shop record at click time (window.__miniShopUrl):
+     claimed → the public storefront /shop/<handle>; unclaimed → the claim flow. */
+  byId['minishop'] = { id: 'minishop', label: 'My MiniShop', kind: 'page', src: 'minishop-admin.html', dynamic: true };
+
+  var shell   = document.getElementById('mshell');
+  var navEl   = document.getElementById('mnav');
+  var content = document.getElementById('mcontent');
+  var titleEl = document.getElementById('mtitle');
+  var panels  = {};          /* id/kind → panel element (persistent) */
+  var current = null;
+  var posPendingTab = null, posPendingAction = null, sellerPendingSec = null;
+
+  /* ── Sidebar render ── */
+  MODULES.forEach(function (m) {
+    if (m.sep)  { var s = document.createElement('div'); s.className = 'mnav-sep'; navEl.appendChild(s); return; }
+    if (m.head) { var hd = document.createElement('div'); hd.className = 'mnav-head'; hd.innerHTML = '<span class="lbl">' + m.head + '</span>'; navEl.appendChild(hd); return; }
+    var el = document.createElement('div');
+    el.className = 'mnav-item'; el.dataset.id = m.id;
+    el.innerHTML = '<span class="ico">' + m.icon + '</span><span class="lbl">' + m.label + '</span>';
+    el.title = m.label;
+    el.onclick = function () { go(m.id); };
+    navEl.appendChild(el);
+  });
+
+  /* ── Mobile bottom nav — the primary destinations, one tap away (phone only) ── */
+  var BOTTOM_NAV = [
+    { id:'dashboard', icon:'🏠', label:'Home' },
+    { id:'orders',    icon:'🧾', label:'Orders' },
+    { id:'cashier',   icon:'💳', label:'Sell' },
+    { id:'__more',    icon:'☰',  label:'More' }   /* opens the full drawer */
+  ];
+  var bnavEl = document.getElementById('mbnav');
+  BOTTOM_NAV.forEach(function (b) {
+    var el = document.createElement('button');
+    el.type = 'button'; el.className = 'mbnav-item'; el.dataset.id = b.id;
+    el.innerHTML = '<span class="bi">' + b.icon + '</span><span class="bl">' + b.label + '</span>';
+    el.onclick = function () {
+      if (b.id === '__more') { shell.classList.add('mobile-open'); return; }
+      go(b.id);
+    };
+    bnavEl.appendChild(el);
+  });
+
+  function setActive (id) {
+    Array.prototype.forEach.call(navEl.querySelectorAll('.mnav-item'), function (n) {
+      n.classList.toggle('active', n.dataset.id === id);
+    });
+    /* keep the bottom nav in sync — highlight the matching primary tab (none → nothing lit) */
+    Array.prototype.forEach.call(bnavEl.querySelectorAll('.mbnav-item'), function (n) {
+      n.classList.toggle('active', n.dataset.id === id);
+    });
+  }
+
+  /* ── Persistent panel factory. Each POS/Seller app is created ONCE and kept. ── */
+  var IFRAME_ALLOW = 'clipboard-write; payment; bluetooth; usb; serial; camera';
+  function posPanel (tab, label) {
+    if (!panels.pos) {
+      /* Encode the first tab in the hash so the very first POS load lands correctly even if
+         the postMessage races the iframe boot. */
+      var src = 'pos.html' + (tab && tab !== 'pos' ? '#' + tab : '');
+      panels.pos = _mkFramePanel(label || 'Checkout', src, 'mfx-pos', 'SOKONI POS');
+    }
+    return panels.pos;
+  }
+  function sellerPanel (sec, label) {
+    if (!panels.seller) {
+      var src = 'seller.html' + (sec && sec !== 'overview' ? '#' + sec : '');
+      panels.seller = _mkFramePanel(label || 'Shop', src, 'mfx-seller', 'SOKONI Shop');
+      /* The seller iframe is shared by Staff/Stories/Messages/Disputes and is pre-created at
+         'overview' when Dashboard loads its feed. seller.js's DOMContentLoaded resets to overview
+         AFTER the shell's one-shot showSection — so a seller route could show the overview body
+         under the wrong title. Re-assert the requested section on the iframe's load event (which
+         fires AFTER that reset), so the correct section wins. Belt-and-suspenders settle re-post. */
+      var _sf = document.getElementById('mfx-seller');
+      if (_sf) _sf.addEventListener('load', function () {
+        try {
+          if (current && byId[current] && byId[current].kind === 'seller') {
+            sellerSwitch(sellerPendingSec);
+            setTimeout(function () { if (current && byId[current] && byId[current].kind === 'seller') sellerSwitch(sellerPendingSec); }, 350);
+          }
+        } catch (_) {}
+      });
+    }
+    return panels.seller;
+  }
+  /* Standalone-page modules (Dispatch, Riders) — each gets its own persistent panel, kept alive
+     so it never reloads once opened. Per-module loader text. */
+  function pagePanel (id, src, label, dynamic) {
+    var key = 'page:' + id;
+    if (!panels[key]) panels[key] = _mkFramePanel(label || 'module', src, null, label || '');
+    else if (dynamic) {
+      /* A dynamic module (My MiniShop) resolves its src at click time — update the cached
+         iframe if it changed (e.g. after a branch switch) so it never shows a stale shop. */
+      var f = panels[key].querySelector('iframe');
+      if (f && src && f.getAttribute('src') !== src) { panels[key].classList.remove('loaded'); f.setAttribute('src', src); }
+    }
+    return panels[key];
+  }
+  /* Build a persistent iframe panel with a non-blocking loader that hides on iframe load.
+     Attaching onload in JS (not inline) keeps the app JS quoting clean. */
+  function _mkFramePanel (loaderText, src, frameId, title) {
+    var p = document.createElement('div'); p.className = 'mpanel';
+    var load = document.createElement('div'); load.className = 'dloading';
+    /* Premium skeleton: a header line, a KPI card row, and a few body lines — shimmering — with
+       the module name subtly labelled. Feels far better than a spinner while a heavy app loads. */
+    load.innerHTML =
+      '<div class="sk-line" style="width:32%;height:20px;margin-bottom:20px"></div>' +
+      '<div class="sk-cardrow"><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div></div>' +
+      '<div class="sk-line" style="width:88%"></div>' +
+      '<div class="sk-line" style="width:76%"></div>' +
+      '<div class="sk-line" style="width:82%"></div>' +
+      '<div class="sk-line" style="width:64%"></div>' +
+      '<div class="sk-label">Loading ' + loaderText + '…</div>';
+    var f = document.createElement('iframe');
+    if (frameId) f.id = frameId;
+    f.title = title || ''; f.setAttribute('allow', IFRAME_ALLOW); f.src = src;
+    f.addEventListener('load', function () { p.classList.add('loaded'); });
+    p.appendChild(load); p.appendChild(f);
+    content.appendChild(p);
+    return p;
+  }
+  function nativePanel (id) {
+    if (!panels['native:' + id]) {
+      var p = document.createElement('div'); p.className = 'mpanel';
+      p.innerHTML = '<div class="native" id="native-' + id + '"></div>';
+      content.appendChild(p); panels['native:' + id] = p;
+    }
+    return panels['native:' + id];
+  }
+
+  function showOnly (panel) {
+    Object.keys(panels).forEach(function (k) { panels[k].classList.toggle('show', panels[k] === panel); });
+  }
+
+  /* ── postMessage deep-switch into the persistent apps ── */
+  function posSwitch (tab) {
+    var f = document.getElementById('mfx-pos');
+    try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'switchTab', tab: tab }, location.origin); } catch (_) {}
+  }
+  function posAction (act) {
+    var f = document.getElementById('mfx-pos');
+    /* Small delay so the tab switch settles before the sub-action fires. */
+    try { setTimeout(function () { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: act }, location.origin); }, 250); } catch (_) {}
+  }
+  function sellerSwitch (sec) {
+    var f = document.getElementById('mfx-seller');
+    try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'showSection', section: sec }, location.origin); } catch (_) {}
+  }
+
+  /* ── Router ── */
+  var _lastModule = 'dashboard';
+  function go (id) {
+    var m = byId[id]; if (!m) { id = 'dashboard'; m = byId.dashboard; }
+    if (current && current !== 'devices' && current !== id) _lastModule = current;  /* for Devices "Done" */
+    current = id;
+    setActive(id);
+    titleEl.textContent = m.label;
+    if (location.hash.replace('#', '') !== id) history.replaceState(null, '', '#' + id);
+    if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
+
+    if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
+    if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab, m.label); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
+    if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec, m.label); showOnly(s); sellerSwitch(sellerPendingSec); return; }
+    if (m.kind === 'page')   { var _src = (m.dynamic && window.__miniShopUrl) ? window.__miniShopUrl : m.src; showOnly(pagePanel(id, _src, m.label, m.dynamic)); return; }
+  }
+  window.SokoniShell = window.SokoniShell || {};
+  window.SokoniShell.go = go;   /* expose the router so the header My MiniShop button navigates in-shell */
+
+  /* ── Native modules ── */
+  function renderNative (id) {
+    if (id === 'dashboard') renderDashboard();
+    else if (id === 'availability') renderAvailability();
+    else if (id === 'devices') renderDevices();
+    else if (id === 'orders') renderOrders();
+    else if (id === 'reports' || id === 'finance' || id === 'analytics') renderAnalytics(id);
+  }
+
+  /* ── Native Reports / Finance / Analytics — ALL read the ONE AnalyticsEngine.compute(),
+     so every screen shows identical figures (no independent revenue calc). ── */
+  /* 'analytics' defaults to ALL TIME so it reconciles with the Orders screen (both derive from
+     the same OrderService) and KASS's historical orders actually show — a 'today' default read
+     as "Analytics is empty" while Orders held 9. Reports/Finance stay periodic (their purpose),
+     each with a range selector. */
+  var _anRange = { reports: 'week', finance: 'month', analytics: 'all' };
+  function _anFmt (n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
+  function renderAnalytics (view) {
+    var host = document.getElementById('native-' + view);
+    if (!host) return;
+    _startOnlineFeed();
+    if (!host.dataset.an) {
+      host.dataset.an = '1';
+      host.innerHTML = '<div class="an-wrap">' +
+        '<div class="an-head"><div class="an-title" id="an-title-' + view + '"></div><div class="an-range" id="an-range-' + view + '"></div></div>' +
+        '<div id="an-body-' + view + '"><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:55%"></div></div>' +
+        '<div class="an-trace" id="an-trace-' + view + '">ⓘ source: OrderService → AnalyticsEngine.compute() → this screen</div>' +
+      '</div>';
+    }
+    document.getElementById('an-title-' + view).textContent = { reports: '📊 Reports', finance: '💰 Finance', analytics: '📈 Analytics' }[view];
+    var R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+    document.getElementById('an-range-' + view).innerHTML = R.map(function (r) {
+      return '<button class="ord2-chip ' + (_anRange[view] === r[0] ? 'active' : '') + '" onclick="__anRange(\'' + view + '\',\'' + r[0] + '\')">' + r[1] + '</button>';
+    }).join('');
+    _anLoad(view);
+  }
+  window.__anRange = function (view, r) { _anRange[view] = r; renderAnalytics(view); };
+  window.__anRefresh = function () { ['reports', 'finance', 'analytics'].forEach(function (v) { if (current === v) _anLoad(v); }); };
+
+  function _anLoad (view) {
+    var body = document.getElementById('an-body-' + view); if (!body || !window.SokoniAnalyticsEngine) return;
+    Promise.resolve(SokoniAnalyticsEngine.compute({ range: _anRange[view] })).then(function (a) {
+      if (!a || current !== view) return;
+      body.innerHTML = (view === 'finance') ? _anFinance(a) : (view === 'reports') ? _anReports(a) : _anAnalytics(a);
+    }).catch(function () {});
+  }
+  function _anStat (v, l, accent) { return '<div class="an-stat"><div class="an-stat-n"' + (accent ? ' style="color:' + accent + '"' : '') + '>' + v + '</div><div class="an-stat-l">' + l + '</div></div>'; }
+  function _anGrid (cards) { return '<div class="an-grid">' + cards.join('') + '</div>'; }
+  function _anOnline (a) { return (window.SokoniOrderService && SokoniOrderService.hasOnlineProvider()) ? String(a.online.count) : '<span style="color:var(--txt3)">—</span>'; }
+  function _anRows (obj, fmt) {
+    var ks = Object.keys(obj); if (!ks.length) return '<div class="an-empty">No data in this range</div>';
+    return ks.map(function (k) { return '<div class="an-row"><span>' + _ordEsc(k) + '</span><span>' + fmt(obj[k]) + '</span></div>'; }).join('');
+  }
+  function _anReports (a) {
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.completed), 'Completed')]) +
+      '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + '</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      '<div class="an-sec">Order status</div>' +
+      '<div class="an-row"><span>Pending</span><span>' + a.pending + '</span></div>' +
+      '<div class="an-row"><span>Completed</span><span>' + a.completed + '</span></div>' +
+      '<div class="an-row"><span>Refunded / Returned</span><span>' + (a.refunded + a.returned) + '</span></div>' +
+      '<div class="an-row"><span>Cancelled</span><span>' + a.cancelled + '</span></div>';
+  }
+  function _anFinance (a) {
+    /* Parity strip — the SAME compute() fields the other three surfaces show, so Finance is
+       directly comparable at a glance (no second query, no second calculation). */
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.refunded), 'Refunds')]) +
+      '<div class="an-sec">Financial breakdown</div>' +
+      _anGrid([_anStat(_anFmt(a.revenue), 'Gross Sales'), _anStat(_anFmt(a.tax), 'Tax'), _anStat(_anFmt(a.discount), 'Discounts'),
+        _anStat(_anFmt(a.deliveryFees), 'Delivery Fees'), _anStat(String(a.refunded), 'Refunds'), _anStat(a.grossProfit == null ? '—' : _anFmt(a.grossProfit), 'Gross Profit')]) +
+      '<div class="an-sec">Revenue by channel</div>' +
+      '<div class="an-row"><span>In-Store (POS)</span><span>' + _anFmt(a.pos.revenue) + '</span></div>' +
+      '<div class="an-row"><span>Online</span><span>' + (SokoniOrderService.hasOnlineProvider() ? _anFmt(a.online.revenue) : '—') + '</span></div>' +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      '<div class="an-note">Gross profit shows “—” until product cost data exists — never estimated.</div>';
+  }
+  function _anAnalytics (a) {
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.channels.delivery), 'Delivery'),
+      _anStat(String(a.channels.pickup), 'Pickup'), _anStat(String(a.refunded), 'Refunds')]) +
+      '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + ' sold</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
+      '<div class="an-sec">Top customers</div>' + (a.topCustomers.length ? a.topCustomers.map(function (c) { return '<div class="an-row"><span>' + _ordEsc(c.name) + ' · ' + c.orders + ' orders</span><span>' + _anFmt(c.spend) + '</span></div>'; }).join('') : '<div class="an-empty">No data</div>') +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      /* Operations — from the same compute(): units sold + canonical availability signals. */
+      '<div class="an-sec">Operations</div>' +
+      '<div class="an-row"><span>Units sold</span><span>' + String(a.unitsSold || 0) + '</span></div>' +
+      (a.availability ? (
+        '<div class="an-row"><span>Shop</span><span>' + (a.availability.shop.acceptingOrders ? 'Open' : 'Closed') +
+          ' · ' + (a.availability.shop.online ? 'Online' : 'Offline') + '</span></div>' +
+        '<div class="an-row"><span>Products (avail / low / out)</span><span>' +
+          a.availability.products.available + ' / ' + a.availability.products.low + ' / ' + a.availability.products.out + '</span></div>'
+      ) : '<div class="an-row"><span>Availability</span><span style="color:var(--txt3)">—</span></div>') +
+      '<div class="an-sec">Sync Diagnostics</div>' + _anDiag();
+  }
+  /* Live proof of synchronization — reads SokoniAnalytics ingestion diagnostics. */
+  function _anDiag () {
+    var SA = window.SokoniAnalytics;
+    if (!SA || !SA.diagnostics) return '<div class="an-empty">Sync layer not loaded</div>';
+    var d = SA.diagnostics();
+    var snap = SA.getSnapshot ? SA.getSnapshot() : { events: [] };
+    var when = d.lastEventTime ? new Date(d.lastEventTime).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    var srcNames = ['POS', 'Marketplace', 'Inventory', 'Orders', 'Shop', 'Availability'];
+    var srcRow = srcNames.map(function (s) {
+      var ok = d.sources[s] === 'ok' || d.sources[s.toLowerCase()] === 'ok';
+      return '<span class="av-chip" style="pointer-events:none"><span class="av-dot ' + (ok ? 'on' : 'off') + '"></span>' + s + '</span>';
+    }).join('');
+    var rows =
+      '<div class="an-row"><span>Last event</span><span>' + _ordEsc(d.lastEvent || '—') + '</span></div>' +
+      '<div class="an-row"><span>Last event time</span><span>' + when + '</span></div>' +
+      '<div class="an-row"><span>Events received</span><span>' + d.received + '</span></div>' +
+      '<div class="an-row"><span>Events processed</span><span>' + d.processed + '</span></div>' +
+      '<div class="an-row"><span>Duplicates (blocked)</span><span>' + d.duplicates + '</span></div>' +
+      '<div class="an-row"><span>Failed / Queued</span><span>' + d.failed + ' / ' + d.queued + '</span></div>';
+    var trace = (snap.events || []).slice(0, 5).map(function (e) {
+      return '<div class="an-row"><span>' + _ordEsc(e.type || 'EVENT') + '</span><span style="color:var(--txt3)">' + _ordEsc(e.source || '') + '</span></div>';
+    }).join('');
+    return rows + '<div class="av-chiprow" style="margin-top:12px">' + srcRow + '</div>' +
+      (trace ? '<div class="an-sec">Recent events</div>' + trace : '') +
+      '<div class="an-sec">KASS Shop Sync trace</div>' +
+      '<div id="an-trace"><div class="an-empty">Trace the source records into the analytics pipeline.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anSyncTrace()">🔎 Run sync trace</button></div></div>' +
+      '<div class="an-sec">Data Convergence</div>' +
+      '<div id="an-conv"><div class="an-empty">Check whether products/orders are converged across POS, Shop, Inventory & Analytics.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anConvCheck()">🔍 Check convergence</button></div></div>';
+  }
+  /* KASS Shop Sync trace (source → sync → OrderService → Analytics). Reads the live feed
+     counts + the unified OrderService + the ingestion diagnostics — proof, not assumption. */
+  window.__anSyncTrace = function () {
+    var host = document.getElementById('an-trace'); if (!host) return;
+    if (!window.SokoniOrderService || !SokoniOrderService.diagnose) { host.innerHTML = '<div class="an-empty">OrderService not loaded on this device.</div>'; return; }
+    host.innerHTML = '<div class="sk-line" style="width:60%"></div>';
+    var branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    Promise.resolve(SokoniOrderService.diagnose({ range: 'all', tab: 'all', branchId: branch })).then(function (r) {
+      var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+      /* found → accepted, with a ✓ only when NONE were dropped for that source. */
+      function srcRow (label, sec) {
+        var okk = sec.fetched > 0 && sec.accepted === sec.fetched;
+        var mark = sec.fetched === 0 ? '' : (okk ? ' <span style="color:var(--acc)">✓</span>' : ' <span style="color:#ff5c5c">✗ ' + (sec.fetched - sec.accepted) + ' dropped</span>');
+        return '<div class="an-row"><span>' + label + '</span><span>' + sec.fetched + ' → ' + sec.accepted + mark + '</span></div>';
+      }
+      /* Expose EVERY rejection with its reason — never a bare found→0. */
+      var rejects = [].concat(r.marketplace.rejected, r.posBackend.rejected, r.pos.rejected);
+      var rejHtml = '';
+      if (rejects.length) {
+        rejHtml = '<div class="an-sec" style="color:#ff5c5c">Rejected (' + rejects.length + ') — reason exposed, not dropped silently</div>' +
+          rejects.slice(0, 30).map(function (x) {
+            return '<div class="an-row" style="align-items:flex-start"><span style="font-family:monospace;font-size:11px">' + esc(x.id) + '</span>' +
+              '<span style="text-align:right;max-width:62%;font-size:11px;color:#ffb4b4">' + esc(x.reason) + (x.branchId ? '<br>branch=' + esc(x.branchId) : '') + '</span></div>';
+          }).join('') + (rejects.length > 30 ? '<div class="an-note">…' + (rejects.length - 30) + ' more</div>' : '');
+      }
+      var b = r.boundaries;
+      /* Pipeline markers reflect ACTUAL survival at each boundary, not decoration. */
+      function chip (label, ok) { return '<span class="av-chip" style="pointer-events:none"><span class="av-dot ' + (ok ? 'on' : 'off') + '"></span>' + label + '</span>'; }
+      var pipe = chip('Source ' + b.normalized, b.normalized > 0) + chip('Dedup ' + b.deduped, b.deduped > 0) +
+        chip('Branch ' + b.branchKept, b.branchKept > 0 || b.deduped === 0) + chip('Range ' + b.rangeKept, b.rangeKept > 0 || b.branchKept === 0) +
+        chip('Unified ' + b.unified, b.unified > 0 || b.normalized === 0);
+      var sm = r.summary || {};
+      host.innerHTML =
+        '<div class="an-note">Active branch: ' + (branch ? esc(branch) : 'all (unscoped)') + ' · range: all</div>' +
+        srcRow('Marketplace orders', r.marketplace) +
+        srcRow('POS sales (posRetailSales)', r.posBackend) +
+        srcRow('POS (local cache)', r.pos) +
+        '<div class="an-row"><span>Unified (OrderService)</span><span>' + b.unified + '</span></div>' +
+        '<div class="an-row"><span>Revenue · Orders</span><span>KES ' + Math.round(sm.revenue || 0).toLocaleString() + ' · ' + (sm.count || 0) + '</span></div>' +
+        '<div class="av-chiprow" style="margin-top:12px">' + pipe + '</div>' +
+        rejHtml +
+        '<div style="display:flex;gap:8px;margin-top:12px"><button class="dbtn" onclick="__anSyncTrace()">↻ Re-trace</button></div>' +
+        '<div class="an-note">found → accepted at each source. A ✗ means records were found but rejected — the reason is listed above. Legacy (untagged) records are kept; a branch mismatch is surfaced as needsReview, never deleted.</div>';
+    }).catch(function (e) { host.innerHTML = '<div class="an-empty">Could not run the trace: ' + (e && e.message || e) + '</div>'; });
+  };
+  window.__anConvCheck = function () {
+    var host = document.getElementById('an-conv'); if (!host || !window.SokoniReconcile) return;
+    host.innerHTML = '<div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:45%"></div>';
+    Promise.resolve(SokoniReconcile.status()).then(function (s) {
+      if (!s || (!s.products && !s.orders)) { host.innerHTML = '<div class="an-empty">Sign in on this device to check convergence.</div>'; return; }
+      var p = s.products, o = s.orders;
+      var dot = function (ok) { return '<span class="av-dot ' + (ok ? 'on' : 'off') + '" style="display:inline-block;margin-left:6px"></span>'; };
+      var html = '';
+      if (p) html +=
+        '<div class="an-row"><span>Products · canonical</span><span>' + p.canonical + '</span></div>' +
+        '<div class="an-row"><span>POS cache / Inventory</span><span>' + p.posCache + ' / ' + p.inventory + '</span></div>' +
+        '<div class="an-row"><span>Missing / Mismatched / Orphans</span><span>' + p.missing + ' / ' + p.mismatched + ' / ' + p.orphans + dot(p.ok) + '</span></div>';
+      if (o) html +=
+        '<div class="an-row"><span>Orders · marketplace / POS</span><span>' + o.marketplace + ' / ' + o.pos + '</span></div>' +
+        '<div class="an-row"><span>Unified / Duplicates / Orphans</span><span>' + o.unified + ' / ' + o.duplicates + ' / ' + o.orphans + dot(o.ok) + '</span></div>';
+      var needFix = p && (p.missing + p.mismatched) > 0;
+      html += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+        '<button class="dbtn" onclick="__anConvCheck()">↻ Re-check</button>' +
+        (needFix ? '<button class="dbtn" style="border-color:rgba(113,255,0,.5);color:var(--acc)" onclick="__anReconcile()">🔧 Reconcile caches</button>' : '') +
+        '<button class="dbtn" onclick="__anBackfillPreview()">🔎 Preview branch backfill (dry-run)</button>' +
+        '</div><div id="an-backfill"></div>';
+      host.innerHTML = html;
+    }).catch(function () { host.innerHTML = '<div class="an-empty">Could not read convergence.</div>'; });
+  };
+  /* Branch backfill — DRY-RUN preview only. Writes NOTHING; shows the exact plan so the
+     mapping can be proven before any historical record is touched. Financial records that
+     are ambiguous are surfaced for review, never auto-moved. */
+  window.__anBackfillPreview = function () {
+    var host = document.getElementById('an-backfill'); if (!host || !window.SokoniReconcile || !SokoniReconcile.backfill) return;
+    host.innerHTML = '<div class="sk-line" style="width:55%;margin-top:10px"></div>';
+    Promise.resolve(SokoniReconcile.backfill({ dryRun: true })).then(function (r) {
+      function line (label, k) { return k ? '<div class="an-row"><span>' + label + '</span><span>tagged ' + k.alreadyTagged + ' · assign ' + k.assignable + ' · review ' + (k.ambiguousReview || 0) + ' · skip ' + k.skipped + '</span></div>' : ''; }
+      var s = r.summary || {};
+      var review = (s.needsReview || 0);
+      /* Show up to 6 review records (ambiguous financial) with their suggested branch + reason. */
+      var revRows = [];
+      ['transactions', 'orders'].forEach(function (k) { var p = r[k]; if (p && p.review) p.review.forEach(function (x) { if (revRows.length < 6) revRows.push('<div class="an-row"><span>' + _ordEsc(x.id) + '</span><span style="color:#ffb400">review · ' + _ordEsc(x.reason) + '</span></div>'); }); });
+      host.innerHTML =
+        '<div class="an-sec">Branch backfill — DRY RUN (no writes)</div>' +
+        '<div class="an-row"><span>SAFE TO ASSIGN</span><span style="color:var(--acc)">' + (s.safeToAssign || 0) + '</span></div>' +
+        '<div class="an-row"><span>ALREADY CORRECT</span><span>' + (s.alreadyCorrect || 0) + '</span></div>' +
+        '<div class="an-row"><span>NEEDS REVIEW (financial)</span><span style="color:' + (review ? '#ffb400' : 'var(--txt3)') + '">' + review + '</span></div>' +
+        '<div class="an-row"><span>SKIPPED / FAILED</span><span>' + (s.skipped || 0) + ' / ' + (s.failed || 0) + '</span></div>' +
+        '<div class="an-sec">By record type</div>' +
+        line('Products', r.products) + line('POS transactions', r.transactions) + line('Marketplace orders', r.orders) +
+        (revRows.length ? '<div class="an-sec">Held for review</div>' + revRows.join('') : '') +
+        '<div class="an-row" style="margin-top:8px"><span>Preview ID</span><span style="font-family:monospace;font-size:11px;color:var(--txt3)">' + _ordEsc(r.previewId || '—') + '</span></div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anCopyPreview()">📋 Copy preview</button></div>' +
+        '<div class="an-note">Nothing was written. A confirmed write applies ONLY the ' + (s.safeToAssign || 0) + ' safe record(s), must quote this exact Preview ID, never overwrites an existing branchId, and never moves the ' + review + ' financial record(s) held for review.</div>';
+      /* Build the exact paste-back text so the reviewer copies, not transcribes. */
+      var revText = [];
+      ['transactions', 'orders'].forEach(function (k) { var pp = r[k]; if (pp && pp.review) pp.review.forEach(function (x) { revText.push('- ' + x.id + ' (' + k + ', ' + x.reason + ', suggested ' + x.suggested + ')'); }); });
+      window.__anPreviewText =
+        'SAFE TO ASSIGN: ' + (s.safeToAssign || 0) + '\n' +
+        'ALREADY CORRECT: ' + (s.alreadyCorrect || 0) + '\n' +
+        'NEEDS REVIEW: ' + (s.needsReview || 0) + '\n' +
+        'SKIPPED: ' + (s.skipped || 0) + '\n' +
+        'FAILED: ' + (s.failed || 0) + '\n' +
+        'PREVIEW ID: ' + (r.previewId || '—') + '\n\n' +
+        'Review records:\n' + (revText.length ? revText.join('\n') : '(none)');
+    }).catch(function () { host.innerHTML = '<div class="an-empty">Sign in on this device to preview the backfill.</div>'; });
+  };
+  window.__anCopyPreview = function () {
+    var t = window.__anPreviewText || ''; if (!t) return;
+    var done = function () { if (window.SokoniNotify) SokoniNotify.success('Preview copied — paste it back'); };
+    try { navigator.clipboard.writeText(t).then(done).catch(function () { _anFallbackCopy(t, done); }); }
+    catch (_) { _anFallbackCopy(t, done); }
+  };
+  function _anFallbackCopy (t, done) {
+    try { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (_) {}
+  }
+  window.__anReconcile = function () {
+    if (!window.SokoniReconcile) return;
+    var host = document.getElementById('an-conv'); if (host) host.innerHTML = '<div class="an-empty">Reconciling caches from canonical…</div>';
+    Promise.resolve(SokoniReconcile.reconcile()).then(function (r) {
+      if (window.SokoniNotify) SokoniNotify.success(r.alreadyOk ? 'Already converged' : ('Reconciled ' + r.written + ' cache record' + (r.written === 1 ? '' : 's')));
+      __anConvCheck();
+    }).catch(function () { if (window.SokoniNotify) SokoniNotify.error("Reconcile couldn't complete. Please try again."); __anConvCheck(); });
+  };
+
+  /* ── Native Availability module (Layer 1: read-only) — reads the canonical
+     AvailabilityService (shops/{uid} + products). Interactive toggles + canonical
+     writes land in Layer 2. Re-renders live on SokoniSync changes. ── */
+  function renderAvailability () {
+    var host = document.getElementById('native-availability');
+    if (!host) return;
+    if (!host.dataset.av) {
+      host.dataset.av = '1';
+      host.innerHTML = '<div class="av-wrap" id="av-body">' +
+        '<div class="sk-line" style="width:40%;height:20px;margin-bottom:16px"></div>' +
+        '<div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:55%"></div></div>';
+    }
+    _avLoad();
+  }
+  var _avState = { shop: null, products: [], busy: false };
+  function _avChip (key, on, label) {
+    return '<button type="button" class="av-chip" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avToggleShop(\'' + key + '\')">' +
+      '<span class="av-dot ' + (on ? 'on' : 'off') + '"></span>' + label +
+      '<span class="av-state">' + (on ? 'On' : 'Off') + '</span></button>';
+  }
+  function _avStat (n, l, cls) { return '<div class="av-stat ' + (cls || '') + '"><div class="av-n">' + n + '</div><div class="av-l">' + l + '</div></div>'; }
+  function _avLoad () {
+    var body = document.getElementById('av-body');
+    if (!body || !window.AvailabilityService) return;
+    Promise.all([AvailabilityService.readShop(), AvailabilityService.readProducts()]).then(function (res) {
+      if (current !== 'availability') return;
+      _avState.shop = res[0]; _avState.products = res[1];
+      _avPaint();
+    }).catch(function () {});
+  }
+  function _avPaint () {
+    var body = document.getElementById('av-body'); if (!body) return;
+    var shop = _avState.shop || { acceptingOrders: true, online: true, delivery: true, pickup: true };
+    var products = _avState.products || [];
+    var c = AvailabilityService.counts(products);
+    var open = shop.acceptingOrders;
+    var BADGE = { available: ['ok', 'Available'], low: ['warn', 'Low stock'], out: ['bad', 'Out of stock'], unavailable: ['muted', 'Unavailable'] };
+    body.innerHTML =
+      '<div class="av-shopcard ' + (open ? 'open' : 'closed') + '">' +
+        '<div class="av-shophead"><span class="av-shopdot ' + (open ? 'on' : 'off') + '"></span>' +
+          '<span class="av-shoptitle">Shop ' + (open ? 'Open' : 'Closed') + '</span>' +
+          '<button type="button" class="av-openbtn ' + (open ? 'close' : 'open') + '" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avSetOpen(' + (open ? 'false' : 'true') + ')">' + (open ? 'Close Shop' : 'Open Shop') + '</button></div>' +
+        '<div class="av-chiprow">' + _avChip('online', shop.online, 'Online orders') + _avChip('delivery', shop.delivery, 'Delivery') + _avChip('pickup', shop.pickup, 'Pickup') + '</div>' +
+        '<div class="av-note">Live &amp; enforced: a closed shop or disabled channel blocks new checkout server-side. Turning the shop off never changes your products.</div>' +
+      '</div>' +
+      '<div class="av-grid">' +
+        _avStat(String(c.available), 'Available', 'ok') + _avStat(String(c.low), 'Low Stock', 'warn') +
+        _avStat(String(c.out), 'Out of Stock', 'bad') + _avStat(String(c.unavailable), 'Unavailable', 'muted') +
+      '</div>' +
+      '<div class="av-sec">Products <span class="av-count">' + c.total + '</span></div>' +
+      (products.length ? '<div class="av-list">' + products.map(function (p, i) {
+        var b = BADGE[p._state] || BADGE.unavailable;
+        var paused = (p.isVisible === false || p.status === 'archived');
+        return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
+          '<span class="av-rowright"><span class="av-badge ' + b[0] + '">' + b[1] + (p._state === 'low' || p._state === 'out' ? ' · ' + Number(p.stock || 0) : '') + '</span>' +
+          '<button type="button" class="av-ptoggle ' + (paused ? 'off' : 'on') + '" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avToggleProduct(' + i + ')" title="' + (paused ? 'Make available' : 'Pause') + '">' + (paused ? 'Paused' : 'Live') + '</button></span></div>';
+      }).join('') + '</div>' : '<div class="av-empty">No products yet</div>') +
+      '<div class="an-trace">ⓘ source: shops/{uid} + products → AvailabilityService → this screen · writes are canonical</div>';
+  }
+  function _avGuard () { if (_avState.busy) return false; _avState.busy = true; _avPaint(); return true; }
+  function _avDone (okMsg) { _avState.busy = false; if (okMsg && window.SokoniNotify) SokoniNotify.success(okMsg); _avLoad(); }
+  function _avFail (e) { _avState.busy = false; if (window.SokoniNotify) SokoniNotify.error("We couldn't save that. Please try again."); _avPaint(); }
+  window.__avSetOpen = function (open) {
+    if (!_avGuard()) return;
+    AvailabilityService.setShop({ acceptingOrders: open }).then(function () { _avDone(open ? 'Shop opened' : 'Shop closed'); }).catch(_avFail);
+  };
+  window.__avToggleShop = function (key) {
+    if (!_avState.shop || !_avGuard()) return;
+    var patch = {}; patch[key] = !_avState.shop[key];
+    AvailabilityService.setShop(patch).then(function () { _avDone('Saved'); }).catch(_avFail);
+  };
+  window.__avToggleProduct = function (i) {
+    var p = _avState.products[i]; if (!p || !_avGuard()) return;
+    var paused = (p.isVisible === false || p.status === 'archived');
+    AvailabilityService.setProductAvailability(p.id, paused /* currently paused → make available */).then(function () { _avDone(paused ? 'Product available' : 'Product paused'); }).catch(_avFail);
+  };
+
+  /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
+  /* Default to All Time: the same window diagnose() reports, so every order the service
+     holds is visible (a 'today' default hid marketplace orders dated before local midnight —
+     the "Orders empty while OrderService has 9" boundary). The merchant can still narrow. */
+  var _ordState = { range: 'all', tab: 'all', search: '', rows: [] };
+  var _shellOnlineOrders = [];      /* latest live marketplace orders pushed up by the Seller feed */
+  var _shellPosSales = [];          /* authoritative backend POS sales (posRetailSales) from the Seller feed */
+  var _ordFeedStarted = false;
+  function _startOnlineFeed () {
+    /* Load the Seller module (hidden) once so its authenticated onSnapshot(orders) feed runs and
+       pushes live marketplace orders up — the ONE authenticated query, reused (not duplicated). */
+    if (_ordFeedStarted) return;
+    _ordFeedStarted = true;
+    try { sellerPanel('overview'); } catch (_) {}
+  }
+  var _ordSearchT = null;
+  function _ordFmt (n) { return Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
+  function _ordWhen (ts) { return new Date(ts).toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }); }
+  function _ordEsc (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  async function renderOrders () {
+    var host = document.getElementById('native-orders');
+    if (!host) return;
+    if (!host.dataset.shell) {
+      host.dataset.shell = '1';
+      host.innerHTML =
+        '<div class="ord2-wrap">' +
+          '<div id="ord2-summary" class="ord2-summary"></div>' +
+          '<div class="ord2-rangebar" id="ord2-range"></div>' +
+          '<input class="ord2-search" id="ord2-search" placeholder="Search order #, customer, phone, product…">' +
+          '<div class="ord2-tabs" id="ord2-tabs"></div>' +
+          '<div id="ord2-list" class="ord2-list"></div>' +
+        '</div>';
+      document.getElementById('ord2-search').addEventListener('input', function (e) {
+        clearTimeout(_ordSearchT); var v = e.target.value;
+        _ordSearchT = setTimeout(function () { _ordState.search = v; _ordLoad(); }, 220);
+      });
+    }
+    _startOnlineFeed();      /* bring in live marketplace orders */
+    _ordPaintChrome();
+    _ordLoad();
+  }
+  function _ordPaintChrome () {
+    var R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+    document.getElementById('ord2-range').innerHTML = R.map(function (r) {
+      return '<button class="ord2-chip ' + (_ordState.range === r[0] ? 'active' : '') + '" onclick="__ordRange(\'' + r[0] + '\')">' + r[1] + '</button>';
+    }).join('');
+    var T = [['all', '🟢 All'], ['online', '🛒 Online'], ['instore', '🏪 In-Store'], ['delivery', '🚚 Delivery'],
+             ['pickup', '📦 Pickup'], ['pending', '⏳ Pending'], ['completed', '✅ Completed'], ['refunded', '↩ Refunded'], ['cancelled', '❌ Cancelled']];
+    document.getElementById('ord2-tabs').innerHTML = T.map(function (t) {
+      return '<button class="ord2-tab ' + (_ordState.tab === t[0] ? 'active' : '') + '" onclick="__ordTab(\'' + t[0] + '\')">' + t[1] + '</button>';
+    }).join('');
+  }
+  window.__ordRange = function (r) { _ordState.range = r; _ordPaintChrome(); _ordLoad(); };
+  window.__ordTab   = function (t) { _ordState.tab = t; _ordPaintChrome(); _ordLoad(); };
+
+  /* Empty-state forensics (#6): expose the SAME source→unified boundary the diagnostics use, so
+     an empty Orders view tells the truth — service genuinely empty vs a filter hiding rows. */
+  async function _ordRenderEmpty (list) {
+    var branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    var d = null;
+    try { d = SokoniOrderService.diagnose ? await SokoniOrderService.diagnose({ range: 'all', tab: 'all', branchId: branch }) : null; } catch (_) {}
+    var unifiedAll = d ? d.boundaries.unified : 0;     /* orders the service holds (this branch, all time) */
+    var rendered = _ordState.rows.length;              /* 0 in this branch of the code */
+    var hint = '';
+    if (unifiedAll > rendered && (_ordState.range !== 'all' || _ordState.tab !== 'all')) {
+      hint = '<div class="ord2-note">' + unifiedAll + ' order' + (unifiedAll === 1 ? '' : 's') +
+        ' in this shop are outside the current filter. <button class="ord2-chip active" onclick="__ordRange(\'all\');__ordTab(\'all\')">Show all</button></div>';
+    } else if (!SokoniOrderService.hasOnlineProvider()) {
+      hint = '<div class="ord2-note">Connecting the marketplace order feed…</div>';
+    }
+    var diag = d ? ('<div class="ord2-diag">Source ' + d.marketplace.fetched + ' · Accepted ' + d.marketplace.accepted +
+      ' · POS ' + (d.posBackend.fetched + d.pos.fetched) + ' · Unified ' + unifiedAll + ' · Rendered ' + rendered + '</div>') : '';
+    list.innerHTML = '<div class="ord2-empty"><div style="font-size:34px">🧾</div><p>No orders in this view</p>' + hint + diag + '</div>';
+  }
+
+  async function _ordLoad () {
+    var list = document.getElementById('ord2-list'); if (!list) return;
+    if (!window.SokoniOrderService) { list.innerHTML = '<div class="ord2-empty">Order service unavailable.</div>'; return; }
+    list.innerHTML = '<div class="sk-line" style="width:80%"></div><div class="sk-line" style="width:66%"></div><div class="sk-line" style="width:74%"></div>';
+    var rows = [];
+    /* Scope to the active branch (#11) — the filter is lenient (null/legacy always shows), so
+       branch isolation never hides untagged history. Same OrderService identity as Analytics. */
+    var _branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    try { rows = await SokoniOrderService.query({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search, branchId: _branch }); } catch (_) {}
+    _ordState.rows = rows;
+    _ordPaintSummary();
+    if (!rows.length) {
+      /* An empty Orders view must never be a mystery: show the same source→unified boundary the
+         diagnostics report, so it's obvious whether the service is empty or a filter dropped rows. */
+      _ordRenderEmpty(list);
+      return;
+    }
+    list.innerHTML = rows.map(_ordCard).join('');
+  }
+  function _ordPaintSummary () {
+    var s = SokoniOrderService.summarize(_ordState.rows);
+    var el = document.getElementById('ord2-summary'); if (!el) return;
+    function card (v, l, accent) { return '<div class="ord2-stat"><div class="ord2-stat-n"' + (accent ? ' style="color:' + accent + '"' : '') + '>' + v + '</div><div class="ord2-stat-l">' + l + '</div></div>'; }
+    el.innerHTML =
+      card('KES ' + _ordFmt(s.revenue), 'Revenue') +
+      card(String(s.count), 'Orders') +
+      card(String(s.instore), 'In-Store') +
+      card(s.online ? String(s.online) : '<span style="color:var(--txt3)">—</span>', 'Online') +
+      card(s.pending ? String(s.pending) : '0', 'Pending', s.pending ? '#ffb400' : null) +
+      card(s.refunded ? String(s.refunded) : '0', 'Refunded', s.refunded ? '#ffb400' : null);
+  }
+  var _ORD_BADGE = { completed: 'ord2-ok', pending: 'ord2-warn', refunded: 'ord2-warn', returned: 'ord2-warn', cancelled: 'ord2-bad' };
+  var _ORD_CH = { in_store: '🏪 In-Store', online: '🛒 Online', delivery: '🚚 Delivery', pickup: '📦 Pickup' };
+  function _ordCard (o) {
+    var badge = '<span class="ord2-badge ' + (_ORD_BADGE[o.status] || 'ord2-ok') + '">' + o.status.charAt(0).toUpperCase() + o.status.slice(1) + '</span>';
+    return '<div class="ord2-card" onclick="__ordOpen(\'' + _ordEsc(o.source + '|' + o.canonicalId) + '\')">' +
+      '<div class="ord2-card-top">' +
+        '<div><div class="ord2-card-id">' + _ordEsc(o.id) + '</div>' +
+          '<div class="ord2-card-sub">' + _ordEsc(o.customer) + ' · ' + (_ORD_CH[o.channel] || o.channel) + ' · ' + o.itemCount + ' item' + (o.itemCount === 1 ? '' : 's') + '</div></div>' +
+        '<div style="text-align:right"><div class="ord2-card-amt">KES ' + _ordFmt(o.total) + '</div>' +
+          '<div class="ord2-card-when">' + _ordWhen(o.ts) + '</div></div>' +
+      '</div>' +
+      '<div class="ord2-card-foot">' + badge + '<span class="ord2-pay">' + _ordEsc((o.paymentMethod || '').toUpperCase()) + ' · ' + _ordEsc(o.paymentStatus) + '</span></div>' +
+    '</div>';
+  }
+
+  window.__ordOpen = function (key) {
+    var parts = key.split('|'); var o = _ordState.rows.filter(function (x) { return x.source === parts[0] && x.canonicalId === parts[1]; })[0];
+    if (!o) return;
+    _ordDrawer(o);
+  };
+  function _ordDrawer (o) {
+    var items = (o.items || []).map(function (i) { return '<div class="ord2-drow"><span>' + _ordEsc(i.name) + ' ×' + (i.qty || 1) + '</span><span>KES ' + _ordFmt((i.price || 0) * (i.qty || 1)) + '</span></div>'; }).join('') || '<div class="ord2-drow"><span>No line items</span><span></span></div>';
+    var LBL = SokoniOrderService.EVENT_LABELS || {};
+    var timeline = (o.events || []).map(function (e, idx, arr) {
+      var last = idx === arr.length - 1;
+      return '<div class="ord2-tl-row"><div class="ord2-tl-dot ' + (last ? 'now' : '') + '"></div><div class="ord2-tl-body"><div class="ord2-tl-t">' + (LBL[e.type] || e.type) + '</div><div class="ord2-tl-at">' + (e.at ? _ordWhen(e.at) : '') + '</div></div></div>';
+    }).join('');
+    var ov = document.createElement('div'); ov.className = 'ord2-drawer-ov';
+    ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+    ov.innerHTML =
+      '<div class="ord2-drawer">' +
+        '<div class="ord2-dhead"><div><div class="ord2-dtitle">' + _ordEsc(o.id) + '</div>' +
+          '<div class="ord2-dsub">' + (_ORD_CH[o.channel] || o.channel) + ' · <span class="ord2-badge ' + (_ORD_BADGE[o.status] || 'ord2-ok') + '">' + o.status + '</span></div></div>' +
+          '<button class="ord2-dclose" onclick="this.closest(\'.ord2-drawer-ov\').remove()">✕</button></div>' +
+        '<div class="ord2-dbody">' +
+          '<div class="ord2-drow"><span>Customer</span><span>' + _ordEsc(o.customer) + '</span></div>' +
+          (o.phone ? '<div class="ord2-drow"><span>Phone</span><span>' + _ordEsc(o.phone) + '</span></div>' : '') +
+          (o.rider ? '<div class="ord2-drow"><span>Rider</span><span>' + _ordEsc(o.rider) + '</span></div>' : '') +
+          '<div class="ord2-drow"><span>Date</span><span>' + new Date(o.ts).toLocaleString('en-KE') + '</span></div>' +
+          '<hr>' + items + '<hr>' +
+          '<div class="ord2-drow"><span>Subtotal</span><span>KES ' + _ordFmt(o.subtotal) + '</span></div>' +
+          (o.discount ? '<div class="ord2-drow"><span>Discount</span><span>-KES ' + _ordFmt(o.discount) + '</span></div>' : '') +
+          (o.deliveryFee ? '<div class="ord2-drow"><span>Delivery</span><span>KES ' + _ordFmt(o.deliveryFee) + '</span></div>' : '') +
+          (o.tax ? '<div class="ord2-drow"><span>Tax</span><span>KES ' + _ordFmt(o.tax) + '</span></div>' : '') +
+          '<div class="ord2-drow ord2-dtotal"><span>Total</span><span>KES ' + _ordFmt(o.total) + '</span></div>' +
+          '<div class="ord2-drow"><span>Payment</span><span>' + _ordEsc((o.paymentMethod || '').toUpperCase()) + ' · ' + _ordEsc(o.paymentStatus) + '</span></div>' +
+          '<div class="ord2-dsec">Timeline</div><div class="ord2-tl">' + timeline + '</div>' +
+        '</div>' +
+        '<div class="ord2-dfoot"><button class="dbtn" onclick="__ordPrint(\'' + _ordEsc(o.source + '|' + o.canonicalId) + '\')">🖨 Print / Reprint</button></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+  }
+  window.__ordPrint = function (key) {
+    var parts = key.split('|'); var o = _ordState.rows.filter(function (x) { return x.source === parts[0] && x.canonicalId === parts[1]; })[0];
+    if (!o) return;
+    try { window.SokoniShell.Printer.print(o.raw || o); } catch (_) {}
+  };
+
+  /* ── Native Devices page (shell-level DeviceManager UI) ── */
+  function renderDevices () {
+    var host = document.getElementById('native-devices');
+    if (!host) return;
+    var up = PrinterState.connected;
+    host.innerHTML =
+      '<div class="dwrap">' +
+        '<div class="dsec-t">Devices</div>' +
+        '<div class="dev-card">' +
+          '<div class="dev-row">' +
+            '<div class="dev-ico">🖨️</div>' +
+            '<div class="dev-meta"><div class="dev-name">' + (up ? (PrinterState.name || 'P58E') : 'Receipt Printer') + '</div>' +
+              '<div class="dev-sub"><span class="mdot ' + (up ? 'ok' : '') + '"></span>' + (up ? 'Connected' : 'Not connected') + '</div></div>' +
+          '</div>' +
+          '<div class="dev-actions">' +
+            (up
+              ? '<button class="dbtn" id="dv-test">🧪 Test Print</button><button class="dbtn ghost" id="dv-forget">Forget</button><button class="dbtn ghost" id="dv-done">Done ↩</button>'
+              : '<button class="dbtn" id="dv-connect">🔗 Connect Printer</button><button class="dbtn ghost" id="dv-reconnect">↻ Reconnect</button>') +
+          '</div>' +
+          '<div class="dev-note">The printer is a shell-level device: connect once and it stays connected as you move between modules. If your browser drops it, it reconnects silently; only if it can\'t will you need to tap Reconnect.</div>' +
+        '</div>' +
+        '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">📷</div><div class="dev-meta"><div class="dev-name">Barcode Scanner</div><div class="dev-sub">Camera / USB — available in Cashier</div></div></div></div>' +
+        '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">💵</div><div class="dev-meta"><div class="dev-name">Cash Drawer</div><div class="dev-sub">Opens via the printer after a cash sale</div></div></div></div>' +
+      '</div>';
+    var q = function (i) { return document.getElementById(i); };
+    if (q('dv-connect'))   q('dv-connect').onclick   = function () { window.SokoniShell.Printer.connect(); };
+    if (q('dv-reconnect')) q('dv-reconnect').onclick = function () { window.SokoniShell.Printer.reconnect(); setTimeout(renderDevices, 1500); };
+    if (q('dv-test'))      q('dv-test').onclick      = function () { window.SokoniShell.Printer.test(); };
+    if (q('dv-forget'))    q('dv-forget').onclick    = function () { window.SokoniShell.Printer.forget(); setTimeout(renderDevices, 800); };
+    if (q('dv-done'))      q('dv-done').onclick      = function () { go(_lastModule || 'dashboard'); };  /* return to previous module, no reload */
+  }
+  function renderDashboard () {
+    var host = document.getElementById('native-dashboard');
+    if (!host || host.dataset.done) { if (host) refreshDashboardLive(); return; }
+    host.dataset.done = '1';
+    host.innerHTML =
+      '<div class="dwrap">' +
+        '<div class="dsec-t">Today</div>' +
+        '<div class="dgrid" id="d-kpis">' +
+          kpi('d-revenue','—','Revenue') + kpi('d-orders','—','Orders') +
+          kpi('d-sales','—','Walk-in Sales') + kpi('d-online','—','Online Orders') +
+          kpi('d-aov','—','Avg Order') + kpi('d-refunds','—','Refunds') +
+          kpi('d-print','—','Printer') + kpi('d-sync','—','Sync') +
+        '</div>' +
+        '<div class="dsec-t">Quick actions</div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+          '<a class="dbtn" onclick="__mgo(\'cashier\')">💳 New Sale</a>' +
+          '<a class="dbtn" onclick="__mgo(\'orders\')">🧾 View Orders</a>' +
+          '<a class="dbtn" onclick="__mgo(\'inventory\')">📦 Inventory</a>' +
+          '<a class="dbtn" onclick="__mgo(\'devices\')">🖨️ Devices</a>' +
+        '</div>' +
+      '</div>';
+    _startOnlineFeed();   /* so Online numbers are real, from the same source as Orders */
+    refreshDashboardLive();
+  }
+  function kpi (id, v, l) { return '<div class="dcard"><div class="n" id="' + id + '">' + v + '</div><div class="l">' + l + '</div></div>'; }
+
+  /* Live connectivity + printer chips are read directly; business KPIs come from the ONE
+     AnalyticsEngine (same source as Orders/Reports/Finance) — never independently calculated. */
+  function refreshDashboardLive () {
+    var online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
+    setTxt('d-sync', !online ? '🔴' : (_syncPending ? '🟡' : '🟢'));
+    setTxt('d-print', shellPrinterUp ? '🟢' : '⚪');
+    _dashLoadAnalytics();
+  }
+  var _dashBusy = false;
+  function _dashLoadAnalytics () {
+    if (_dashBusy || !window.SokoniAnalyticsEngine) return;
+    _dashBusy = true;
+    /* ALL TIME so the dashboard KPIs reconcile with Orders and historical KASS data shows (was
+       'today' → empty for a shop whose orders predate today). AnalyticsEngine scopes by the
+       active branch internally; legacy untagged records still count (lenient branch filter). */
+    Promise.resolve(SokoniAnalyticsEngine.compute({ range: 'all' })).then(function (a) {
+      _dashBusy = false;
+      if (!a || current !== 'dashboard') return;
+      _animKpi('d-revenue', a.revenue, 'kes');
+      _animKpi('d-orders', a.orders, 'int');
+      _animKpi('d-sales', a.pos.count, 'int');
+      _animKpi('d-online', (SokoniOrderService && SokoniOrderService.hasOnlineProvider()) ? a.online.count : null, 'int');
+      _animKpi('d-aov', a.aov ? a.aov : null, 'kes');
+      _animKpi('d-refunds', a.refunded, 'int');
+    }).catch(function () { _dashBusy = false; });
+  }
+  function setTxt (id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+  /* Animated KPI counter — subtle count-up, but instant when the user prefers reduced motion
+     or the value is unknown (—, never a fake 0). */
+  var _reduceMotion = (typeof window !== 'undefined' && window.matchMedia) ? window.matchMedia('(prefers-reduced-motion:reduce)').matches : false;
+  function _kfmt (kind, n) { return kind === 'kes' ? 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }) : String(Math.round(n)); }
+  function _animKpi (id, target, kind) {
+    var el = document.getElementById(id); if (!el) return;
+    if (target == null) { el.__v = null; el.textContent = '—'; return; }   /* unknown → neutral, not 0 */
+    var from = (typeof el.__v === 'number') ? el.__v : 0;
+    if (_reduceMotion || from === target) { el.__v = target; el.textContent = _kfmt(kind, target); return; }
+    var start = null, dur = 500;
+    function step (ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / dur), e = 1 - Math.pow(1 - p, 3);   /* easeOutCubic */
+      el.textContent = _kfmt(kind, from + (target - from) * e);
+      if (p < 1) requestAnimationFrame(step); else { el.__v = target; el.textContent = _kfmt(kind, target); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  /* ── Status chips (shell-level) ── */
+  var shellPrinterUp = false;
+  /* Truthful sync state. _syncPending is ONLY ever set from a real reported count
+     (sokoni:sync event / iframe bridge) — we never fabricate a "syncing N". With no
+     signal it stays 0, so online == genuinely synced. */
+  var _syncPending = 0;
+  function _applySync (n) { _syncPending = Math.max(0, n | 0); paintStatus(); }
+  window.addEventListener('sokoni:sync', function (e) { _applySync((e.detail && e.detail.pending) || 0); });
+  function paintStatus () {
+    var online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
+    var syncCls, syncTxt;
+    if (!online)            { syncCls = 'bad';  syncTxt = _syncPending ? 'Offline · ' + _syncPending + ' queued' : 'Offline'; }
+    else if (_syncPending)  { syncCls = 'warn'; syncTxt = 'Syncing ' + _syncPending + (_syncPending === 1 ? ' change' : ' changes'); }
+    else                    { syncCls = 'ok';   syncTxt = 'Synced'; }
+    document.getElementById('st-sync').className   = 'mdot ' + syncCls;
+    document.getElementById('st-sync-t').textContent = syncTxt;
+    var pc = shellPrinterUp ? 'mdot ok' : 'mdot';
+    document.getElementById('st-print').className = pc;
+    document.getElementById('top-print').className = pc;
+    var pt = shellPrinterUp ? 'Printer connected' : 'Printer';
+    document.getElementById('st-print-t').textContent = pt;
+    document.getElementById('top-print-t').textContent = shellPrinterUp ? 'P58E' : 'Printer';
+    if (current === 'dashboard') refreshDashboardLive();
+    else if (current === 'devices') { try { renderDevices(); } catch (_) {} }
+  }
+  window.addEventListener('online',  paintStatus);
+  window.addEventListener('offline', paintStatus);
+
+  /* The POS app posts its printer status up to the shell so the top bar reflects it globally. */
+  /* ── One integrated, singleton update bar (shell-level) ── */
+  function showUpdateBar () { var b = document.getElementById('mupdate'); if (b) b.hidden = false; }
+  window.addEventListener('sokoni:update-available', showUpdateBar);
+  window.__mUpdateNow   = function () { try { if (window._sokoniApplyUpdate) window._sokoniApplyUpdate(); else location.reload(); } catch (_) { location.reload(); } };
+  window.__mUpdateLater = function () { var b = document.getElementById('mupdate'); if (b) b.hidden = true; };
+
+  /* ── SHELL-OWNED PRINTER (Phase 2) ─────────────────────────────────────────
+     ONE printer for the whole app. The persistent POS panel is the printer HOST —
+     its Bluetooth/GATT connection survives every navigation because that iframe is
+     never destroyed. The shell exposes a single API that routes every module's job
+     to that host, so any screen calls SokoniShell.Printer.print(receipt) and it
+     prints — no per-module printer, no reconnect-on-navigation. Connecting needs a
+     user gesture in the POS context, so connect() takes the user to Cashier and
+     opens the printer menu once; after that, print-from-anywhere works. */
+  /* ── ONE observable PrinterState (shell-owned) ─────────────────────────────
+     The shell's own SokoniPrinter holds the connection; this single state object is the only
+     source of truth. Every UI element (chip, Devices page, and any subscriber) reacts to it —
+     nobody keeps their own "connected" boolean. */
+  var PrinterState = { connected: false, name: null, deviceId: null, transport: null, lastSeen: 0, printing: false };
+  var _psSubs = [];
+  function _broadcastPrinter () {
+    /* Push the shell's printer state DOWN into every hosted iframe so their status surfaces
+       (e.g. POS Settings) mirror the ONE shell-owned connection. */
+    var msg = { __sokoniPrinterState: true, state: { connected: PrinterState.connected, name: PrinterState.name } };
+    Object.keys(panels).forEach(function (k) {
+      try { var f = panels[k].querySelector && panels[k].querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+    });
+  }
+  function _psNotify () { paintStatus(); if (current === 'devices') { try { renderDevices(); } catch (_) {} } _broadcastPrinter(); _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
+  function _psSet (patch) { for (var k in patch) PrinterState[k] = patch[k]; if (patch.connected) PrinterState.lastSeen = Date.now(); shellPrinterUp = PrinterState.connected; _psNotify(); }
+  window.SokoniPrinterState = { get: function () { return PrinterState; }, subscribe: function (fn) { _psSubs.push(fn); try { fn(PrinterState); } catch (_) {} } };
+
+  var _eng = window.SokoniPrinter || null;
+  function _engName (d) { try { var s = _eng && _eng.getStatus && _eng.getStatus(); return (d && d.name) || (s && s.name) || 'Printer'; } catch (_) { return 'Printer'; } }
+  if (_eng && _eng.on) {
+    _eng.on('connected',    function (d) { _psSet({ connected: true,  name: _engName(d) }); });
+    _eng.on('disconnected', function ()  { _psSet({ connected: false }); });
+    _eng.on('forgotten',    function ()  { _psSet({ connected: false, name: null }); });
+  }
+  function _remembered () { try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; } }
+
+  window.SokoniShell = window.SokoniShell || {};
+  window.SokoniShell.Printer = {
+    status:      function () { return { connected: PrinterState.connected, name: PrinterState.name }; },
+    isConnected: function () { return !!PrinterState.connected; },
+    /* Connect happens IN THE SHELL — the Bluetooth chooser opens here from a real user gesture
+       (Devices button / chip). No separate wizard page, so the connection is never destroyed. */
+    connect: async function () {
+      if (!_eng) return false;
+      try {
+        var list = await _eng.discoverBy('bluetooth');
+        if (list && list[0]) { await _eng.connect(list[0]); _psSet({ connected: true, name: list[0].name || 'Printer' }); return true; }
+      } catch (e) { _psSet({ connected: !!_eng.connected }); }
+      return false;
+    },
+    reconnect: async function () {
+      if (!_eng) return false;
+      try { var ok = await _eng.autoReconnect(); if (ok || _eng.connected) { _psSet({ connected: true }); return true; } } catch (_) {}
+      return this.connect();
+    },
+    forget: async function () {
+      try { if (_eng && _eng.forget) await _eng.forget(); } catch (_) {}
+      ['spp_profile','pps_store_profile','sokoni_printer_last_print','p58e_paired_device','pps_remember'].forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+      _psSet({ connected: false, name: null });
+    },
+    test:  function () { try { if (_eng && _eng.testPrint) _eng.testPrint(); } catch (_) {} },
+    print: function (receipt) { try { if (_eng && _eng.print) _eng.print('receipt', receipt); } catch (_) {} },
+  };
+  /* Top-bar printer chip → connect if disconnected, else open the Devices page. */
+  (function () { var c = document.getElementById('top-print'); var w = c && c.closest('.tchip');
+    if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
+      w.onclick = function () { if (PrinterState.connected) go('devices'); else window.SokoniShell.Printer.connect(); }; } })();
+
+  /* ── Startup auto-connect — ONE controlled reconnect scheduler ──────────────
+     On app open the shell restores the remembered P58E and tries getDevices()→GATT on a fixed
+     schedule (0/600/1800/3500/6000ms). The FIRST success cancels all remaining startup attempts.
+     After startup, an 8s health monitor acts ONLY on a genuinely-disconnected state, and the
+     first user interaction triggers ONE more silent attempt (never a repeated Bluetooth hammer).
+     If Chrome discarded the grant, it stays 🔴 with a one-tap Reconnect — the honest browser
+     boundary, not a faked green. */
+  if (_eng) {
+    var _arBusy = false, _startupDone = false, _wakeTried = false, _arTimers = [];
+    function _arCancelStartup () { _startupDone = true; _arTimers.forEach(function (t) { clearTimeout(t); }); _arTimers = []; }
+    function _arAttempt () {
+      if (_arBusy) return;
+      if (_eng.connected) { _arCancelStartup(); _psSet({ connected: true }); return; }
+      if (!_remembered()) return;
+      _arBusy = true;
+      Promise.resolve(_eng.autoReconnect())
+        .then(function (ok) { if (ok || _eng.connected) { _arCancelStartup(); _wakeTried = false; _psSet({ connected: true }); } })
+        .catch(function () {})
+        .then(function () { _arBusy = false; });
+    }
+    [0, 600, 1800, 3500, 6000].forEach(function (ms) { _arTimers.push(setTimeout(function () { if (!_startupDone) _arAttempt(); }, ms)); });
+    /* Health monitor — only for an ACTUAL disconnected state. */
+    setInterval(function () {
+      if (_eng.connected) { _wakeTried = false; _psSet({ connected: true }); }
+      else if (_remembered()) _arAttempt();
+    }, 8000);
+    /* First interaction: exactly ONE silent attempt while disconnected — no hammering. Reset
+       once a connection is (re)established. Reconnect (Devices/chip) remains the gesture fallback
+       that can open the chooser. */
+    var _onWake = function () { if (_eng.connected || _wakeTried || !_remembered()) return; _wakeTried = true; _arAttempt(); };
+    window.addEventListener('pointerdown', _onWake, { passive: true });
+    window.addEventListener('focus', _onWake);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) _onWake(); });
+  }
+
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
+    if (d.__sokoniSync) { _applySync((d.__sokoniSync.pending) || 0); return; }  /* a module reports real pending-write count → truthful sync chip */
+    if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
+    if (d.__sokoniGoModule && byId[d.__sokoniGoModule]) { go(d.__sokoniGoModule); return; }  /* a module asked to route in-shell (e.g. Advanced → Devices) */
+    if (d.__sokoniOrders) {                                        /* LIVE marketplace-order feed from the Seller module */
+      _shellOnlineOrders = d.orders || [];
+      try { if (window.SokoniOrderService) SokoniOrderService.setOnlineProvider(function () { return _shellOnlineOrders; }); } catch (_) {}
+      /* Live re-render whichever data screen is open — all from the same source, no reload. */
+      try {
+        if (current === 'orders') _ordLoad();
+        else if (current === 'dashboard') _dashLoadAnalytics();
+        else if (current === 'reports' || current === 'finance' || current === 'analytics') _anLoad(current);
+      } catch (_) {}
+      return;
+    }
+    if (d.__sokoniPosSales) {                                      /* AUTHORITATIVE backend POS sales (posRetailSales) — cross-device */
+      _shellPosSales = d.sales || [];
+      try { if (window.SokoniOrderService) SokoniOrderService.setPosProvider(function () { return _shellPosSales; }); } catch (_) {}
+      try {
+        if (current === 'orders') _ordLoad();
+        else if (current === 'dashboard') _dashLoadAnalytics();
+        else if (current === 'reports' || current === 'finance' || current === 'analytics') _anLoad(current);
+      } catch (_) {}
+      return;
+    }
+    if (!d.__sokoniPos) return;
+    /* NOTE: the shell now owns the printer + its state, so a hosted app's printerStatus is
+       ignored here (it must not clobber the shell's observable state). */
+    if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
+    else if (d.type === 'ready') {
+      /* POS finished booting — (re)send the tab the user is currently on, so a switch that
+         raced the boot still lands on the right tab (fixes "every button shows Checkout"). */
+      var m = byId[current];
+      if (m && m.kind === 'pos') { posSwitch(m.tab || 'pos'); if (m.action) posAction(m.action); }
+      _broadcastPrinter();   /* give the freshly-loaded POS the current printer state */
+    }
+  });
+
+  /* ── Sidebar collapse ── */
+  function isMobile () { return window.matchMedia('(max-width:820px)').matches; }
+  var _mscrim = document.getElementById('mscrim');
+  if (_mscrim) _mscrim.onclick = function () { shell.classList.remove('mobile-open'); };
+  document.getElementById('burger').onclick = function () {
+    if (isMobile()) shell.classList.toggle('mobile-open');
+    else {
+      shell.classList.toggle('collapsed');
+      try { localStorage.setItem('mshell_collapsed', shell.classList.contains('collapsed') ? '1' : '0'); } catch (_) {}
+    }
+  };
+  try { if (localStorage.getItem('mshell_collapsed') === '1' && !isMobile()) shell.classList.add('collapsed'); } catch (_) {}
+
+  /* ── ⌘K command palette — one launcher: jump to any module + quick actions ── */
+  (function () {
+    var ov = document.getElementById('mcmd-ov');
+    var input = document.getElementById('mcmd-input');
+    var list = document.getElementById('mcmd-list');
+    if (!ov || !input || !list) return;
+    /* Commands = every real module (navigate) + quick actions. No dead entries. */
+    var CMDS = MODULES.filter(function (m) { return m.id; }).map(function (m) {
+      return { icon: m.icon, label: m.label, kind: 'Go', run: function () { go(m.id); } };
+    }).concat([
+      { icon: '🛒', label: 'New Sale', kind: 'Action', run: function () { go('cashier'); } },
+      { icon: '➕', label: 'Add Product', kind: 'Action', run: function () { go('products'); } },
+      { icon: '🖨️', label: 'Printer & Devices', kind: 'Action', run: function () { go('devices'); } }
+    ]);
+    var sel = 0, shown = CMDS;
+    function render () {
+      if (!shown.length) { list.innerHTML = '<div class="mcmd-empty">No matches</div>'; return; }
+      list.innerHTML = shown.map(function (c, i) {
+        return '<div class="mcmd-item' + (i === sel ? ' sel' : '') + '" data-i="' + i + '">' +
+          '<span class="ci">' + c.icon + '</span><span class="cl">' + c.label + '</span><span class="ck">' + c.kind + '</span></div>';
+      }).join('');
+    }
+    function filter () {
+      var q = input.value.trim().toLowerCase();
+      shown = q ? CMDS.filter(function (c) { return c.label.toLowerCase().indexOf(q) !== -1; }) : CMDS;
+      sel = 0; render();
+    }
+    function open () { ov.classList.add('open'); input.value = ''; shown = CMDS; sel = 0; render(); setTimeout(function () { input.focus(); }, 30); }
+    function close () { ov.classList.remove('open'); }
+    function choose (i) { var c = shown[i]; if (!c) return; close(); c.run(); }
+    input.addEventListener('input', filter);
+    list.addEventListener('click', function (e) { var it = e.target.closest('.mcmd-item'); if (it) choose(+it.dataset.i); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, shown.length - 1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); }
+      else if (e.key === 'Enter') { e.preventDefault(); choose(sel); }
+      else if (e.key === 'Escape') { close(); }
+    });
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    document.getElementById('mcmd-open').onclick = open;
+    window.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); ov.classList.contains('open') ? close() : open(); }
+    });
+    window.__mCmd = { open: open, close: close };
+  })();
+
+  /* ── Layer 3 — ONE SokoniSync subscription re-renders whichever NATIVE module is
+     open when a canonical change lands, so a change propagates WITHOUT a page reload.
+     Events arrive from anywhere same-origin (this shell OR the POS/Seller iframes) via
+     the bus's BroadcastChannel. No second sync model. ── */
+  (function () {
+    if (!window.SokoniSync || !SokoniSync.onAny) return;
+    SokoniSync.onAny(function (name) {
+      try {
+        if (current === 'dashboard'    && /Order|Payment|Refund|Product|Stock|Availability|Shop|Customer/.test(name)) _dashLoadAnalytics();
+        else if (current === 'orders'  && /Order|Payment|Refund/.test(name)) _ordLoad();
+        else if ((current === 'reports' || current === 'finance' || current === 'analytics') && /Order|Payment|Refund|Product|Stock|Customer/.test(name)) _anLoad(current);
+        else if (current === 'availability' && /Product|Stock|Availability|Shop/.test(name)) _avLoad();
+      } catch (_) {}
+    });
+  })();
+
+  /* ── Shop / branch context switcher — the header brand IS the entry point ──
+     Reuses the canonical SokoniBranch (no new shop system). The active shop becomes
+     SokoniShell.activeShopId; switching refreshes the open module in-place (no reload)
+     and announces via SokoniSync so every module re-queries against the new shop. ── */
+  (function () {
+    window.SokoniShell = window.SokoniShell || {};
+    var brandBtn = document.getElementById('mbrand');
+    var brandName = document.getElementById('mbrand-name');
+    function _cur () { try { return (window.SokoniBranch && SokoniBranch.getCurrent && SokoniBranch.getCurrent()) || null; } catch (_) { return null; } }
+    function _applyShop (b) {
+      b = b || _cur();
+      window.SokoniShell.activeShopId = b ? b.id : null;
+      window.SokoniShell.activeShopName = b ? b.name : null;
+      if (brandName && b && b.name) brandName.textContent = b.name;
+      try { localStorage.setItem('activeShopId', b ? b.id : ''); } catch (_) {}
+    }
+    if (brandBtn) brandBtn.onclick = function () { try { if (window.SokoniBranch) SokoniBranch.openPicker(); } catch (_) {} };
+    /* Initial context (once SokoniBranch has inited). */
+    _applyShop();
+    if (!window.SokoniShell.activeShopId) setTimeout(_applyShop, 400);
+    /* Switch → update context, tell every module, refresh whichever is open. */
+    document.addEventListener('soBranchChanged', function (e) {
+      var b = (e && e.detail && e.detail.branch) || _cur();
+      _applyShop(b);
+      try { if (window.SokoniSync) SokoniSync.shopChanged({ type: 'SHOP_SWITCHED', shopId: window.SokoniShell.activeShopId, source: 'Shop', timestamp: Date.now() }); } catch (_) {}
+      /* Re-render the open module against the new shop (no shell reload). Persistent
+         POS/Seller panels are told to re-read via the shop event they already receive. */
+      try { if (current) { var m = byId[current]; if (m && m.kind === 'native') renderNative(current); } } catch (_) {}
+    });
+    window.SokoniShell.activeShop = function () { return { id: window.SokoniShell.activeShopId || null, name: window.SokoniShell.activeShopName || null }; };
+  })();
+
+  /* ── My MiniShop — the merchant's storefront identity ──
+     Resolves the CANONICAL claimed-shop relationship (shops where ownerId==uid, or the active
+     branch's own shop doc if it has one) — no hardcoding. Claimed (has minishopHandle) → open the
+     public storefront /shop/<handle>; not claimed → open the claim/manage flow. Respects the
+     active branch (prefers a branch-specific shop doc). Resolves eagerly so the click is a
+     synchronous user gesture (no popup block); re-resolves on branch switch. ── */
+  (function () {
+    var _mshop = { resolved: false, claimed: false, url: 'minishop-admin.html', handle: null };
+    function _uid () { try { var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); return (u && (u.uid || u.id)) || null; } catch (_) { return null; } }
+    async function _resolve () {
+      var uid = _uid();
+      if (!uid || !window.firebaseDB) return _mshop;
+      try {
+        var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var activeId = (window.SokoniShell && SokoniShell.activeShopId) || null;
+        var data = null;
+        var _get = async function (col, id) { try { var d = await m.getDoc(m.doc(window.firebaseDB, col, String(id))); return d.exists() ? d.data() : null; } catch (_) { return null; } };
+        var _q1 = async function (field) { try { var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'), m.where(field, '==', uid), m.limit(1))); return q.docs[0] ? q.docs[0].data() : null; } catch (_) { return null; } };
+        /* Canonical claimed-shop resolution — try the direct docs first (shops/{sellerUid} is the
+           canonical id), then the active branch's own shop doc, then ownership queries. KASS is
+           claimed, so one of these must carry the handle — never send a claimed shop to Claim. */
+        data = await _get('shops', uid);
+        if (!data && activeId) data = await _get('shops', activeId);
+        if (!data) data = await _q1('ownerId');
+        if (!data) data = await _q1('sellerUid');
+        if (!data) data = await _q1('uid');
+        /* Handle may be stored under any of these canonical fields. */
+        var handle = data && (data.minishopHandle || data.handle || data.slug || data.shopHandle || data.merchantSlug || data.username);
+        _mshop = handle
+          ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
+          : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };
+      } catch (_) {}
+      window.__miniShopUrl = _mshop.url;                 /* the minishop page module reads this */
+      window.__miniShopClaimed = _mshop.claimed;
+      return _mshop;
+    }
+    function _paint () {
+      var btn = document.getElementById('mshop-btn'), st = document.getElementById('mshop-state');
+      if (!btn || !st) return;
+      /* Honest state: never assert "Shop Live" until the canonical claimed-shop resolution
+         succeeds. Before that, a neutral label; after, the true claimed/unclaimed state. */
+      if (!_mshop.resolved) { btn.classList.remove('notclaimed'); st.textContent = 'My storefront'; return; }
+      if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
+      else { btn.classList.add('notclaimed'); st.textContent = '✨ Claim Shop'; }
+    }
+    /* IN-SHELL navigation — routes to the 'minishop' page module (same /merchant document,
+       same tab, no window.open, no full-page leave, shell panel transition not a splash).
+       Claimed → storefront /shop/<handle>; unclaimed → claim flow. Resolves first if needed so
+       the panel loads the right src immediately. */
+    function _go () { try { (window.__mgo || (window.SokoniShell && SokoniShell.go))('minishop'); } catch (_) { location.href = _mshop.url || 'minishop-admin.html'; } }
+    window.__openMiniShop = function () {
+      if (_mshop.resolved) { _go(); return; }
+      _resolve().then(function () { _paint(); _go(); });
+    };
+    window.__refreshMiniShop = function () { _resolve().then(function () { _paint(); if (current === 'minishop') { try { window.__mgo('minishop'); } catch (_) {} } }); };
+    setTimeout(window.__refreshMiniShop, 700);
+    document.addEventListener('soBranchChanged', function () { _mshop.resolved = false; window.__refreshMiniShop(); });
+  })();
+
+  window.__mgo = go;
+  window.addEventListener('hashchange', function () { var id = location.hash.replace('#', ''); if (byId[id] && id !== current) go(id); });
+
+  /* Boot */
+  paintStatus();
+  var boot = location.hash.replace('#', '');
+  go(byId[boot] ? boot : 'dashboard');
+
+  /* (Printer auto-reconnect on app open is now owned by the shell's own engine above — no need
+     to warm the POS host for the printer.) */
+})();
+</script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>

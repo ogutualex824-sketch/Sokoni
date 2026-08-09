@@ -1,0 +1,1683 @@
+[
+  {
+    "at": "2026-08-01T08:55:40.034Z",
+    "base": "https://mysokoni.co.ke",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 7116,
+            "p95": 7512,
+            "min": 6636,
+            "max": 7512,
+            "cv": 4.4,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.157,
+            "p95": 0.282,
+            "min": 0.153,
+            "max": 0.282,
+            "cv": 26.6,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "inp": {
+            "median": 528,
+            "p95": 552,
+            "min": 224,
+            "max": 552,
+            "cv": 34.1,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 8571,
+            "p95": 10446,
+            "min": 6814,
+            "max": 10446,
+            "cv": 14,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "longTasks": {
+            "median": 31,
+            "p95": 41,
+            "min": 30,
+            "max": 41,
+            "cv": 12.7,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 969,
+            "p95": 1045,
+            "min": 831,
+            "max": 1045,
+            "cv": 8.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "scriptMs": {
+            "median": 50481,
+            "p95": 58668,
+            "min": 41065,
+            "max": 58668,
+            "cv": 11.3,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "loadMs": {
+            "median": 15609,
+            "p95": 19055,
+            "min": 14654,
+            "max": 19055,
+            "cv": 11.7,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "requests": {
+            "median": 136,
+            "p95": 137,
+            "min": 133,
+            "max": 137,
+            "cv": 1.1,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 3,
+            "p95": 4,
+            "min": 2,
+            "max": 4,
+            "cv": 23.4,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "jsKB": {
+            "median": 1574,
+            "p95": 1574,
+            "min": 1574,
+            "max": 1574,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 187,
+            "p95": 187,
+            "min": 187,
+            "max": 187,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 2090,
+            "p95": 2091,
+            "min": 2090,
+            "max": 2091,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T08:57:59.599Z",
+    "base": "https://mysokoni.co.ke",
+    "runs": 9,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 9,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6760,
+            "p95": 10496,
+            "min": 6404,
+            "max": 10496,
+            "cv": 16.6,
+            "n": 9,
+            "grade": "INDICATIVE"
+          },
+          "cls": {
+            "median": 0.153,
+            "p95": 0.283,
+            "min": 0.153,
+            "max": 0.283,
+            "cv": 30.4,
+            "n": 9,
+            "grade": "NOISY"
+          },
+          "inp": {
+            "median": 328,
+            "p95": 656,
+            "min": 120,
+            "max": 656,
+            "cv": 59.4,
+            "n": 9,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 8655,
+            "p95": 11432,
+            "min": 7244,
+            "max": 11432,
+            "cv": 15.2,
+            "n": 9,
+            "grade": "INDICATIVE"
+          },
+          "longTasks": {
+            "median": 32,
+            "p95": 37,
+            "min": 28,
+            "max": 37,
+            "cv": 7.6,
+            "n": 9,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1046,
+            "p95": 1326,
+            "min": 924,
+            "max": 1326,
+            "cv": 10.8,
+            "n": 9,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 43666,
+            "p95": 94897,
+            "min": 40784,
+            "max": 94897,
+            "cv": 32.6,
+            "n": 9,
+            "grade": "NOISY"
+          },
+          "loadMs": {
+            "median": 16545,
+            "p95": 22867,
+            "min": 14537,
+            "max": 22867,
+            "cv": 14.7,
+            "n": 9,
+            "grade": "INDICATIVE"
+          },
+          "requests": {
+            "median": 137,
+            "p95": 145,
+            "min": 135,
+            "max": 145,
+            "cv": 2.4,
+            "n": 9,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 3,
+            "p95": 4,
+            "min": 2,
+            "max": 4,
+            "cv": 25.5,
+            "n": 9,
+            "grade": "NOISY"
+          },
+          "jsKB": {
+            "median": 1574,
+            "p95": 1574,
+            "min": 1574,
+            "max": 1574,
+            "cv": 0,
+            "n": 9,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 187,
+            "p95": 187,
+            "min": 187,
+            "max": 187,
+            "cv": 0,
+            "n": 9,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 2090,
+            "p95": 2091,
+            "min": 2090,
+            "max": 2091,
+            "cv": 0,
+            "n": 9,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:02:25.361Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6536,
+            "p95": 7324,
+            "min": 6452,
+            "max": 7324,
+            "cv": 5.4,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 144,
+            "p95": 152,
+            "min": 136,
+            "max": 152,
+            "cv": 5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "tbt": {
+            "median": 10732,
+            "p95": 11703,
+            "min": 9780,
+            "max": 11703,
+            "cv": 5.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 36,
+            "p95": 39,
+            "min": 32,
+            "max": 39,
+            "cv": 6.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1356,
+            "p95": 1395,
+            "min": 1220,
+            "max": 1395,
+            "cv": 4.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "scriptMs": {
+            "median": 41529,
+            "p95": 42237,
+            "min": 40999,
+            "max": 42237,
+            "cv": 1.1,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 20297,
+            "p95": 22035,
+            "min": 20062,
+            "max": 22035,
+            "cv": 3.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 139,
+            "p95": 140,
+            "min": 139,
+            "max": 140,
+            "cv": 0.3,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 1175,
+            "p95": 1175,
+            "min": 1175,
+            "max": 1175,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 2,
+            "p95": 2,
+            "min": 2,
+            "max": 2,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 1545,
+            "p95": 1545,
+            "min": 1545,
+            "max": 1545,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:05:24.933Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6824,
+            "p95": 11408,
+            "min": 6600,
+            "max": 11408,
+            "cv": 23,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "cls": {
+            "median": 0.134,
+            "p95": 0.135,
+            "min": 0.134,
+            "max": 0.135,
+            "cv": 0.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 168,
+            "p95": 1224,
+            "min": 152,
+            "max": 1224,
+            "cv": 111.4,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 12793,
+            "p95": 23342,
+            "min": 12154,
+            "max": 23342,
+            "cv": 28.4,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "longTasks": {
+            "median": 39,
+            "p95": 51,
+            "min": 36,
+            "max": 51,
+            "cv": 12.8,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 1695,
+            "p95": 2328,
+            "min": 1305,
+            "max": 2328,
+            "cv": 21,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 41539,
+            "p95": 44270,
+            "min": 38299,
+            "max": 44270,
+            "cv": 4.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 23146,
+            "p95": 41144,
+            "min": 22061,
+            "max": 41144,
+            "cv": 26.1,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "requests": {
+            "median": 141,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 227,
+            "max": 227,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4889,
+            "max": 4889,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      },
+      "search": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 2416,
+            "p95": 2708,
+            "min": 2152,
+            "max": 2708,
+            "cv": 8.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "cv": 50,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "inp": {
+            "median": 80,
+            "p95": 128,
+            "min": 40,
+            "max": 128,
+            "cv": 38,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 4911,
+            "p95": 5728,
+            "min": 4739,
+            "max": 5728,
+            "cv": 6.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 18,
+            "p95": 20,
+            "min": 16,
+            "max": 20,
+            "cv": 7.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1120,
+            "p95": 1855,
+            "min": 1089,
+            "max": 1855,
+            "cv": 22.6,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 31825,
+            "p95": 32234,
+            "min": 30330,
+            "max": 32234,
+            "cv": 2.2,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 8797,
+            "p95": 10276,
+            "min": 8285,
+            "max": 10276,
+            "cv": 8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 102,
+            "p95": 103,
+            "min": 101,
+            "max": 103,
+            "cv": 0.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 2421,
+            "p95": 2421,
+            "min": 2421,
+            "max": 2421,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 42,
+            "p95": 42,
+            "min": 42,
+            "max": 42,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 3360,
+            "p95": 3360,
+            "min": 3360,
+            "max": 3360,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      },
+      "category": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 3568,
+            "p95": 4496,
+            "min": 3556,
+            "max": 4496,
+            "cv": 9.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.002,
+            "p95": 0.003,
+            "min": 0.002,
+            "max": 0.003,
+            "cv": 30,
+            "n": 5,
+            "grade": "NOISY"
+          },
+          "inp": {
+            "median": 64,
+            "p95": 88,
+            "min": 48,
+            "max": 88,
+            "cv": 23.7,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "tbt": {
+            "median": 4032,
+            "p95": 6287,
+            "min": 3884,
+            "max": 6287,
+            "cv": 20.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "longTasks": {
+            "median": 24,
+            "p95": 29,
+            "min": 21,
+            "max": 29,
+            "cv": 12.2,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 804,
+            "p95": 1151,
+            "min": 771,
+            "max": 1151,
+            "cv": 16.3,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 36779,
+            "p95": 37023,
+            "min": 35116,
+            "max": 37023,
+            "cv": 1.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 8472,
+            "p95": 11592,
+            "min": 8203,
+            "max": 11592,
+            "cv": 13.7,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "requests": {
+            "median": 115,
+            "p95": 116,
+            "min": 115,
+            "max": 116,
+            "cv": 0.4,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 2,
+            "p95": 2,
+            "min": 2,
+            "max": 2,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 2458,
+            "p95": 2458,
+            "min": 2458,
+            "max": 2458,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 168,
+            "p95": 168,
+            "min": 168,
+            "max": 168,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 3714,
+            "p95": 3714,
+            "min": 3714,
+            "max": 3714,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      },
+      "product": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 2764,
+            "p95": 2860,
+            "min": 2700,
+            "max": 2860,
+            "cv": 1.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.002,
+            "p95": 0.002,
+            "min": 0.002,
+            "max": 0.002,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 24,
+            "p95": 24,
+            "min": 24,
+            "max": 24,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "tbt": {
+            "median": 2617,
+            "p95": 2799,
+            "min": 2508,
+            "max": 2799,
+            "cv": 4.3,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 17,
+            "p95": 22,
+            "min": 16,
+            "max": 22,
+            "cv": 11.7,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 767,
+            "p95": 809,
+            "min": 731,
+            "max": 809,
+            "cv": 3.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "scriptMs": {
+            "median": 37450,
+            "p95": 38394,
+            "min": 36272,
+            "max": 38394,
+            "cv": 2.2,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 7361,
+            "p95": 7544,
+            "min": 7195,
+            "max": 7544,
+            "cv": 1.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 103,
+            "p95": 104,
+            "min": 103,
+            "max": 104,
+            "cv": 0.4,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 2385,
+            "p95": 2385,
+            "min": 2385,
+            "max": 2385,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 33,
+            "p95": 33,
+            "min": 33,
+            "max": 33,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 3481,
+            "p95": 3481,
+            "min": 3481,
+            "max": 3481,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      },
+      "checkout": {
+        "status": "BLOCKED",
+        "reason": "no PERF_AUTH_STATE; page redirects to /login"
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:12:19.224Z",
+    "base": "http://localhost:8288",
+    "runs": 3,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 3,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6672,
+            "p95": 7224,
+            "min": 6660,
+            "max": 7224,
+            "cv": 3.8,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.8,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 144,
+            "p95": 232,
+            "min": 136,
+            "max": 232,
+            "cv": 25.5,
+            "n": 3,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 10642,
+            "p95": 12500,
+            "min": 10309,
+            "max": 12500,
+            "cv": 8.6,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 36,
+            "p95": 37,
+            "min": 35,
+            "max": 37,
+            "cv": 2.3,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1362,
+            "p95": 1551,
+            "min": 878,
+            "max": 1551,
+            "cv": 22.4,
+            "n": 3,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 40884,
+            "p95": 43021,
+            "min": 40862,
+            "max": 43021,
+            "cv": 2.4,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 20461,
+            "p95": 22899,
+            "min": 19905,
+            "max": 22899,
+            "cv": 6.2,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 139,
+            "p95": 140,
+            "min": 138,
+            "max": 140,
+            "cv": 0.6,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 227,
+            "max": 227,
+            "cv": 0,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4889,
+            "max": 4889,
+            "cv": 0,
+            "n": 3,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:20:30.404Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6560,
+            "p95": 7600,
+            "min": 6280,
+            "max": 7600,
+            "cv": 7.2,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 152,
+            "p95": 224,
+            "min": 128,
+            "max": 224,
+            "cv": 21.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "tbt": {
+            "median": 11579,
+            "p95": 12185,
+            "min": 10461,
+            "max": 12185,
+            "cv": 5.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 36,
+            "p95": 40,
+            "min": 33,
+            "max": 40,
+            "cv": 8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1360,
+            "p95": 1705,
+            "min": 1222,
+            "max": 1705,
+            "cv": 12,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 41330,
+            "p95": 43792,
+            "min": 40813,
+            "max": 43792,
+            "cv": 2.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 21002,
+            "p95": 23895,
+            "min": 19809,
+            "max": 23895,
+            "cv": 6.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 139,
+            "p95": 141,
+            "min": 138,
+            "max": 141,
+            "cv": 0.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3085,
+            "p95": 3085,
+            "min": 3085,
+            "max": 3085,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 227,
+            "max": 227,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4891,
+            "p95": 4891,
+            "min": 4891,
+            "max": 4891,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:23:50.223Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6564,
+            "p95": 6660,
+            "min": 6340,
+            "max": 6660,
+            "cv": 1.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 144,
+            "p95": 208,
+            "min": 128,
+            "max": 208,
+            "cv": 18.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "tbt": {
+            "median": 12438,
+            "p95": 13190,
+            "min": 10458,
+            "max": 13190,
+            "cv": 8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 38,
+            "p95": 40,
+            "min": 35,
+            "max": 40,
+            "cv": 4.6,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1370,
+            "p95": 1645,
+            "min": 1225,
+            "max": 1645,
+            "cv": 10.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 41664,
+            "p95": 42083,
+            "min": 41178,
+            "max": 42083,
+            "cv": 0.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 22219,
+            "p95": 23048,
+            "min": 20008,
+            "max": 23048,
+            "cv": 4.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 5.6,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:26:28.976Z",
+    "base": "http://localhost:8288",
+    "runs": 4,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 4,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6834,
+            "p95": 6928,
+            "min": 6536,
+            "max": 6928,
+            "cv": 2.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 252,
+            "p95": 312,
+            "min": 136,
+            "max": 312,
+            "cv": 30.9,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 13087,
+            "p95": 15402,
+            "min": 12177,
+            "max": 15402,
+            "cv": 9.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 40,
+            "p95": 45,
+            "min": 39,
+            "max": 45,
+            "cv": 6,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1513,
+            "p95": 1756,
+            "min": 1322,
+            "max": 1756,
+            "cv": 13.4,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 42428,
+            "p95": 43139,
+            "min": 41950,
+            "max": 43139,
+            "cv": 1.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 23342.5,
+            "p95": 25489,
+            "min": 21285,
+            "max": 25489,
+            "cv": 6.8,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 211.5,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 7.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4873.5,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:28:29.165Z",
+    "base": "http://localhost:8288",
+    "runs": 4,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 4,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 7192,
+            "p95": 9260,
+            "min": 6600,
+            "max": 9260,
+            "cv": 13.6,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 168,
+            "p95": 480,
+            "min": 120,
+            "max": 480,
+            "cv": 62,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 13115,
+            "p95": 19115,
+            "min": 11418,
+            "max": 19115,
+            "cv": 21.2,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "longTasks": {
+            "median": 38,
+            "p95": 43,
+            "min": 31,
+            "max": 43,
+            "cv": 12,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 1607.5,
+            "p95": 2637,
+            "min": 1247,
+            "max": 2637,
+            "cv": 29.6,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "scriptMs": {
+            "median": 40942.5,
+            "p95": 43384,
+            "min": 40447,
+            "max": 43384,
+            "cv": 2.8,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 24458.5,
+            "p95": 30996,
+            "min": 20461,
+            "max": 30996,
+            "cv": 16.6,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 6.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  }
+]

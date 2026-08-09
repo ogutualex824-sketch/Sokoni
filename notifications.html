@@ -6,7 +6,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-  <script src="auth-guard.js"></script>
+  <script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Notifications — SOKONI</title>
@@ -751,14 +752,14 @@
     if (!eng) return;
     eng.markAllRead(_activeCategory !== 'all' ? _activeCategory : null).then(_render);
   });
-  document.getElementById('nc-archive-all-btn').addEventListener('click', function() {
-    if (!confirm('Archive all visible notifications?')) return;
+  document.getElementById('nc-archive-all-btn').addEventListener('click', async function() {
+    if (!(await SK.dialog.confirm('Archive all visible notifications?', null, null, { title: 'Archive all', confirmLabel: 'Archive all' }))) return;
     var eng = window.SokoniNotifEngine;
     if (!eng) return;
     eng.archiveAll().then(_render);
   });
-  document.getElementById('nc-clear-read-btn').addEventListener('click', function() {
-    if (!confirm('Delete all read notifications? This cannot be undone.')) return;
+  document.getElementById('nc-clear-read-btn').addEventListener('click', async function() {
+    if (!(await SK.dialog.confirm('Delete all read notifications? This cannot be undone.', null, null, { title: 'Delete read notifications', variant: 'danger', confirmLabel: 'Delete all' }))) return;
     var eng = window.SokoniNotifEngine;
     if (!eng) return;
     var items = eng.getAll({ category: _activeCategory, grouped: false });
@@ -1059,7 +1060,9 @@
       _selectCategory('all');
     }
 
-    /* Wait for engine */
+    /* Wait for engine — bounded, so a failed/blocked engine script surfaces a
+       recoverable retry instead of a permanent "Loading…". */
+    var _wireTries = 0;
     function _tryWire() {
       var eng = window.SokoniNotifEngine;
       if (eng) {
@@ -1069,6 +1072,12 @@
           _render();
           _updateBadges(data.unreadCounts);
         });
+      } else if (++_wireTries > 25) {
+        var wrap = document.getElementById('nc-list-wrap');
+        if (wrap) wrap.innerHTML = '<div class="nc-empty"><div class="nc-empty-icon">⚠️</div>' +
+          '<div class="nc-empty-title">Couldn’t load notifications</div>' +
+          '<div class="nc-empty-sub">Check your connection, then try again.</div>' +
+          '<button onclick="location.reload()" style="margin-top:14px;background:var(--g,#71ff00);color:#000;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer">Try again</button></div>';
       } else {
         setTimeout(_tryWire, 400);
       }

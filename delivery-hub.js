@@ -69,13 +69,41 @@ function _haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* ── Courier quote — ADR-012 ───────────────────────────────────────────────
+   The DISTANCE component is the merchant delivery engine's `distance` mode
+   (base + km x perKm), so there is one implementation of distance pricing on
+   the platform rather than one per surface.
+
+   The multipliers stay HERE. vehicle, weight and urgency are chosen per parcel
+   at dispatch; merchant configuration is set once, in advance, by the merchant.
+   Pushing them into the shared engine would put courier fleet economics inside
+   the function that prices a bookshop's flat KES 150 delivery. The dependency
+   runs one way: logistics composes merchant pricing, never the reverse.
+
+   Equivalence with the previous inline formula was proven across 768
+   combinations (8 vehicles x 4 weights x 3 urgencies x 8 distances) before this
+   replaced it. It holds because Math.round(n + x) === n + Math.round(x) for
+   integer n, and every vehicle `base` is an integer. */
 function _calcFee(distKm, vehicleType, weight, urgency) {
-  const v       = VEHICLES[vehicleType] || VEHICLES.boda;
-  const base    = v.base;
-  const kmCh    = Math.round(distKm * v.perKm);
-  const wSur    = Math.round((base + kmCh) * (WEIGHT_SURCHARGE[weight] || 0));
-  const urgMult = URGENCY_MULT[urgency] || 1;
-  return Math.round((base + kmCh + wSur) * urgMult);
+  const v = VEHICLES[vehicleType] || VEHICLES.boda;
+
+  const engine = (typeof window !== 'undefined') && window.SokoniDeliveryEngine;
+  if (!engine) {
+    /* Refuse rather than fall back to a second formula. A duplicated
+       calculation that silently disagrees is worse than a visible failure —
+       it is how four implementations of one price came about. */
+    console.error('[delivery-hub] SokoniDeliveryEngine not loaded; cannot quote.');
+    return null;
+  }
+
+  const leg = engine.calculateDelivery(
+    { enabled: true, mode: 'distance', baseFee: v.base, perKm: v.perKm },
+    { distanceKm: distKm }
+  );
+  if (!leg.deliverable) return null;      /* e.g. distance unknown */
+
+  const wSur = Math.round(leg.fee * (WEIGHT_SURCHARGE[weight] || 0));
+  return Math.round((leg.fee + wSur) * (URGENCY_MULT[urgency] || 1));
 }
 
 /* Timestamp field → Date (or null). Accepts a Firestore Timestamp (new,
@@ -210,6 +238,11 @@ const DeliveryHub = {
     }
 
     const deliveryFee = _calcFee(distanceKm, vehicleType, weight, urgency);
+    /* A delivery without a fee is not a cheaper delivery — it is an unpriced
+       financial record. Refuse to create one. */
+    if (deliveryFee == null || !isFinite(deliveryFee)) {
+      throw new Error('Could not price this delivery. Please refresh and try again.');
+    }
     const deliveryRef = _delRef();
     const proofPIN    = _pin4();
     const now         = new Date().toISOString();

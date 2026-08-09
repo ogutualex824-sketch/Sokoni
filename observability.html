@@ -632,7 +632,7 @@ window.exportAudit = async function() {
     const period = document.getElementById('audit-period').value;
     const d = await _call('obsGetAuditLog', { action: action||undefined, period, limit: 2000 });
     const rows = (d && d.entries) || [];
-    if (!rows.length) { alert('No data to export.'); return; }
+    if (!rows.length) { SK.dialog.alert('No data to export.'); return; }
     const csv = ['timestamp,actor,action,resource,status,ip']
       .concat(rows.map(r => [
         _ts(r.ts), r.actorUid||'system', r.action||'', r.resource||'', r.status||'', r.ip||''
@@ -641,7 +641,7 @@ window.exportAudit = async function() {
     a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
     a.download = 'audit-log-' + period + '.csv';
     a.click();
-  } catch (e) { alert('Export failed: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Export failed: ' + e.message); }
 };
 
 // ══════════════════════════════ ALERTS ════════════════════════════════════
@@ -679,23 +679,23 @@ window.createAlert = async function() {
   const threshold = parseFloat(document.getElementById('al-threshold').value);
   const operator  = document.getElementById('al-op').value;
   const channel   = document.getElementById('al-channel').value;
-  if (!name || isNaN(threshold)) { alert('Name and threshold are required.'); return; }
+  if (!name || isNaN(threshold)) { SK.dialog.alert('Name and threshold are required.'); return; }
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await _call('obsCreateAlert', { name, metric, threshold, operator, channel });
     document.getElementById('al-name').value = '';
     document.getElementById('al-threshold').value = '';
     await loadAlerts();
-  } catch (e) { alert('Failed: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Failed: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Create Alert'; }
 };
 
 window.deleteAlert = async function(id) {
-  if (!confirm('Delete this alert?')) return;
+  if (!(await SK.dialog.confirm('Delete this alert?', null, null, { title: 'Delete alert', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await _call('obsCreateAlert', { delete: true, id });
     await loadAlerts();
-  } catch (e) { alert('Delete failed: ' + e.message); }
+  } catch (e) { SK.dialog.alert('Delete failed: ' + e.message); }
 };
 
 // ── Utility exposed to inline handlers ───────────────────────────────────

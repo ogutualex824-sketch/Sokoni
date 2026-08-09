@@ -63,6 +63,45 @@
     .kpi-card.warn{border-color:rgba(255,152,0,.3);background:rgba(255,152,0,.05)}
     .kpi-card.danger{border-color:rgba(244,67,54,.3);background:rgba(244,67,54,.05)}
     #healthScores{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}
+    /* P1 Command Center */
+    .exec-command{margin-bottom:24px}
+    .ec-section{margin-bottom:20px}
+    .ec-title{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--aos-sub);margin:0 0 10px}
+    .ec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+    .ec-cell{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px}
+    .ec-cell .l{font-size:.68rem;color:var(--aos-sub);text-transform:uppercase;letter-spacing:.03em}
+    .ec-cell .v{font-size:1.35rem;font-weight:800;color:var(--aos-text);margin-top:4px;line-height:1.1}
+    .ec-cell .v.money{color:var(--aos-accent)}
+    .ec-cell.attn{border-color:rgba(255,152,0,.35);background:rgba(255,152,0,.05)}
+    .ec-cell.attn .v{color:#ffb020}
+    .ec-strip{display:flex;flex-wrap:wrap;gap:10px}
+    .ec-svc{display:flex;align-items:center;gap:8px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:99px;padding:6px 12px;font-size:.78rem}
+    .ec-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .ec-dot.ok{background:#4caf50}.ec-dot.warn{background:#ffb020}.ec-dot.issue{background:#f44336}.ec-dot.unknown{background:#666}
+    .ec-funnel{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+    @media(max-width:640px){.ec-funnel{grid-template-columns:repeat(3,1fr)}}
+    .ec-stage{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px}
+    .ec-stage-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:8px}
+    .ec-stage-bar span{display:block;height:100%;background:var(--aos-accent);border-radius:99px}
+    .ec-stage-n{font-size:1.25rem;font-weight:800;color:var(--aos-text);line-height:1}
+    .ec-stage-l{font-size:.66rem;color:var(--aos-sub);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+    .ec-skel{height:60px;border-radius:var(--aos-radius);background:linear-gradient(90deg,var(--aos-surface) 25%,rgba(255,255,255,.05) 37%,var(--aos-surface) 63%);background-size:400% 100%;animation:ecsk 1.2s ease infinite}
+    .aos-input{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:8px;color:var(--aos-text);padding:8px 12px;font-size:14px;outline:none;min-width:200px}
+    .aos-input:focus{border-color:var(--aos-accent)}
+    /* Executive report */
+    .rep-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px;margin-bottom:14px;max-width:560px}
+    .rep-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--aos-sub);margin-bottom:10px}
+    .rep-row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid var(--aos-border);font-size:.86rem}
+    .rep-row:last-child{border-bottom:none}
+    .rep-row span{color:var(--aos-sub)}
+    .rep-row strong{color:var(--aos-text);font-weight:700}
+    /* Key-value display (replaces raw JSON in modals) */
+    .kv{display:flex;flex-direction:column;gap:2px}
+    .kv-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid var(--aos-border);font-size:.84rem}
+    .kv-row>span{color:var(--aos-sub)}
+    .kv-row>strong{color:var(--aos-text);text-align:right;word-break:break-word}
+    .kv .kv{margin-left:12px;padding-left:8px;border-left:2px solid var(--aos-border)}
+    @keyframes ecsk{0%{background-position:100% 50%}100%{background-position:0 50%}}
     .health-chip{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px 16px;min-width:130px}
     .health-chip span{font-size:11px;color:var(--aos-muted);display:block}
     .health-chip strong{font-size:22px;font-weight:700;display:block;margin:2px 0 6px}
@@ -263,6 +302,8 @@
     <div class="nav-group">
       <div class="nav-group-label">Operations</div>
       <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span>Financial</button>
+      <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span>Bookings</button>
+      <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span>Payments</button>
       <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
       <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Content</button>
@@ -327,6 +368,8 @@
           <a class="quick-link" href="launch-readiness.html" target="_blank">&#x1F680; Launch Readiness</a>
           <a class="quick-link" href="super-admin.html" target="_blank">&#x1F451; Super Admin</a>
         </div>
+        <!-- P1 Command Center — 4 sections from adminGetExecutiveDashboard + adminGetFinance (canonical). -->
+        <div id="execCommand" class="exec-command"></div>
         <div class="kpi-grid">
           <div class="kpi-card accent"><div class="kpi-label">Active Users</div><div class="kpi-value" id="kpiActiveUsers">&#x2014;</div><div class="kpi-sub">online</div></div>
           <div class="kpi-card success"><div class="kpi-label">Orders Today</div><div class="kpi-value" id="kpiOrdersToday">&#x2014;</div><div class="kpi-sub">live count</div></div>
@@ -427,6 +470,25 @@
           <button class="tab-btn" data-tab="report" onclick="SokoniAOS.financialTab('report')">Report</button>
         </div>
         <div id="finBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- Bookings (P2b) — canonical providerBookings via adminGetBookings -->
+      <div class="aos-panel" id="panel-bookings" hidden>
+        <div class="panel-toolbar">
+          <h2>Bookings</h2>
+          <select onchange="SokoniAOS.loadBookings(this.value)"><option value="">All statuses</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="no_show">No-show</option></select>
+          <input id="bookingsSearch" type="search" placeholder="Search customer / service…" oninput="SokoniAOS.loadBookings()" class="aos-input">
+        </div>
+        <div id="bookingsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- Payments (P2b) — collections via adminGetPayments -->
+      <div class="aos-panel" id="panel-payments" hidden>
+        <div class="panel-toolbar">
+          <h2>Payments</h2>
+          <select onchange="SokoniAOS.loadPayments(this.value)"><option value="">All</option><option value="complete">Complete</option><option value="pending">Pending</option><option value="failed">Failed</option></select>
+        </div>
+        <div id="paymentsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-support" hidden>
@@ -588,6 +650,18 @@
           });
         window.addEventListener('beforeunload', function() { if (_aosTicketUnsub) _aosTicketUnsub(); });
       } catch(e) {}
+      /* Loading watchdog — if the console never bootstraps (auth/engine failure or
+         offline), turn the perpetual "Loading…" identity into a recoverable retry. */
+      setTimeout(function () {
+        var nm = document.getElementById('aosUserName');
+        if (nm && /loading/i.test(nm.textContent) && !document.getElementById('aosRetryBar')) {
+          var b = document.createElement('div');
+          b.id = 'aosRetryBar'; b.setAttribute('role', 'alert');
+          b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:20px;z-index:99999;margin:0 auto;max-width:440px;background:var(--sur,#141414);border:1px solid var(--bor,rgba(255,255,255,.12));border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt,#fff);box-shadow:0 8px 32px rgba(0,0,0,.5)';
+          b.innerHTML = '<span style="flex:1">Couldn’t load the admin console. Check your connection.</span><button onclick="location.reload()" style="background:var(--g,#71ff00);color:#000;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Try again</button>';
+          document.body.appendChild(b);
+        }
+      }, 10000);
     });
   </script>
 </body>

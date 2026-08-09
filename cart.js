@@ -152,7 +152,7 @@ function renderProductSection(productItems){
         const qty = p.qty||1;
         return `
         <div class="cart-page-card" id="cart-item-${idx}">
-            <img src="${_safeImgSrc(p.image)}" alt="${_esc(p.name)}" class="cart-card-img">
+            <img src="${_safeImgSrc(window.pickProductImage ? pickProductImage(p) : p.image)}" alt="${_esc(p.name)}" class="cart-card-img" onerror="this.onerror=null;this.src='assets/default-product.png'">
             <div class="cart-card-info">
                 <h3>${_esc(p.name)}</h3>
                 <p class="cart-card-cat">${catDisplay}</p>

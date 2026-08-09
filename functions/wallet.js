@@ -35,10 +35,21 @@ function _payoutEvent(status, detail) {
   return { status, detail: detail || null, at: Timestamp.now() };
 }
 
+/**
+ * Calendar-day key in Africa/Nairobi time (product decision: "3 withdrawals per day"
+ * should reset at local midnight 00:00 EAT, not 03:00 EAT / UTC midnight). Kenya is
+ * UTC+3 year-round with no DST, so shifting +3h and reading the UTC date is exact.
+ * All payout "per day" buckets (velocity limit, metrics, analytics) MUST use this so
+ * "today" means one consistent thing across the system. Stored timestamps stay UTC.
+ */
+function _eatDay(d = new Date()) {
+  return new Date(d.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 /** Record a daily payout metric counter (best-effort; never breaks the flow). */
 async function _payoutMetric(db, field, incBy = 1, timingMs = null) {
   try {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = _eatDay();
     const ref = db.collection('payoutMetrics').doc(day);
     const upd = { [field]: FieldValue.increment(incBy), date: day, updatedAt: Timestamp.now() };
     if (timingMs != null) {
@@ -56,12 +67,18 @@ async function _payoutMetric(db, field, incBy = 1, timingMs = null) {
  */
 async function _settlePayoutPaid(db, rid, extra = {}) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  /* finalStatus distinguishes the TWO financial events:
+       'paid'             — confirmed by the IntaSend webhook (gateway evidence).
+       'settled_manually' — an admin attests the money was sent OUT-OF-BAND.
+     Both release the reserved hold and write the payout ledger row; they must NEVER
+     be conflated in the UI or in reporting. */
+  const finalStatus = extra.finalStatus || 'paid';
   let settled = null;   // set to the payout data only when THIS call performs the settlement
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
     const payout = reqSnap.data();
-    if (payout.status === 'paid') return;   // already settled — idempotent
+    if (['paid', 'settled_manually'].includes(payout.status)) return;   // idempotent
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
     const txRef     = db.collection('walletTransactions').doc(`${payout.sellerUid}_${rid}_payout`);
     const txExisting = await t.get(txRef);
@@ -70,17 +87,26 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
       t.update(walletRef, { pendingPayout: FieldValue.increment(-payout.amount) });
       t.set(txRef, {
         uid: payout.sellerUid, type: 'payout', amount: payout.amount,
-        description: `Payout via ${String(payout.method || 'mpesa').toUpperCase()} — ref ${rid}`,
-        status: 'completed', createdAt: Timestamp.now(),
+        description: `Payout via ${finalStatus === 'settled_manually' ? 'MANUAL' : String(payout.method || 'mpesa').toUpperCase()} — ref ${rid}`,
+        status: 'completed', settlementType: finalStatus === 'settled_manually' ? 'manual' : 'gateway', createdAt: Timestamp.now(),
       });
     }
     t.update(reqRef, {
-      status: 'paid', processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('paid', extra.detail || 'Payout completed')),
-      ...(extra.intasendRef ? { intasendRef: extra.intasendRef } : {}),
+      status: finalStatus, processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      paidAt: Timestamp.now(), confirmedAt: Timestamp.now(),
+      settlementMethod: finalStatus === 'settled_manually' ? 'manual' : 'gateway',
+      statusHistory: FieldValue.arrayUnion(_payoutEvent(finalStatus, extra.detail || (finalStatus === 'settled_manually' ? 'Settled manually by admin (attested)' : 'Payout confirmed by gateway'))),
+      ...(extra.intasendRef ? { intasendRef: extra.intasendRef, gatewayReference: extra.intasendRef } : {}),
+      ...(extra.webhookReceivedAt ? { webhookReceivedAt: extra.webhookReceivedAt } : {}),
       ...(extra.processedBy ? { processedBy: extra.processedBy } : {}),
+      /* Manual-settlement immutable attestation fields. */
+      ...(finalStatus === 'settled_manually' ? {
+        settledBy: extra.processedBy || null, settledAt: Timestamp.now(),
+        externalReference: extra.externalReference || null,
+        attestation: extra.attestation || null,
+      } : {}),
     });
-    settled = { ...payout, intasendRef: extra.intasendRef || payout.intasendRef };
+    settled = { ...payout, status: finalStatus, intasendRef: extra.intasendRef || payout.intasendRef };
   });
   if (settled) {
     /* Record end-to-end processing latency (request → paid) for analytics. */
@@ -104,10 +130,24 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
     const payout = reqSnap.data();
     if (['paid', 'rejected', 'failed'].includes(payout.status)) return;   // terminal — idempotent
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
+    /* Release the daily payout-velocity slot this request consumed at reserve time. A
+       failed/rejected payout returned the funds → it must NOT burn the seller's 3-per-day
+       allowance (this was the "Maximum 3 payout requests per day" seen right after a
+       payout: earlier failed attempts had silently eaten the quota). Only decrement when
+       the counter still belongs to the SAME day the request was created (a later day has
+       already reset it) and is > 0. Read BEFORE any write (transaction ordering rule). */
+    const velRef  = db.collection('payoutVelocity').doc(payout.sellerUid);
+    const velSnap = await t.get(velRef);
+    const createdDay = (payout.createdAt && payout.createdAt.toDate)
+      ? _eatDay(payout.createdAt.toDate()) : null;
+
     t.update(walletRef, {
       balance:       FieldValue.increment(payout.amount),
       pendingPayout: FieldValue.increment(-payout.amount),
     });
+    if (velSnap.exists && createdDay && velSnap.data().date === createdDay && (velSnap.data().count || 0) > 0) {
+      t.update(velRef, { count: FieldValue.increment(-1), updatedAt: Timestamp.now() });
+    }
     t.update(reqRef, {
       status: newStatus, processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent(newStatus, extra.detail || 'Payout refunded')),
@@ -159,6 +199,7 @@ const PAYOUT_CONFIG_DEFAULTS = {
   holdNewSellersDays: 7,       // accounts younger than this can't get instant
   dailyLimit:         50000,   // KES — max instant total per seller per day
   scheduledAbove:     0,       // KES — amounts >= this route to 'scheduled' (0 = off)
+  maxPayoutsPerDay:   3,       // velocity gate — max payout REQUESTS per seller per EAT day
 };
 
 async function _getPayoutConfig(db) {
@@ -255,14 +296,27 @@ async function _disburseB2C(db, rid, payout) {
   const tries  = (payout.retryCount || 0) + 1;
   _plog('b2c_initiate', ctx, { attempt: tries });
   try {
-    const resp = await intasendB2C(INTASEND_KEY.value(), {
-      phone: payout.accountNumber, amountKES: String(payout.amount),
-      reference: rid, remarks: 'SOKONI Earnings Payout',
+    /* SOKONI Pay convergence — the withdrawal no longer calls IntaSend directly. It
+       goes through the provider-agnostic adapter layer (payment-adapters.js), so the
+       gateway is a swappable plugin. Sandbox is config-driven (config/payouts.sandbox
+       or INTASEND_SANDBOX). sendMoneyB2C throws a gateway-tagged Error on failure, which
+       the catch below turns into retry/refund — unchanged behaviour. */
+    const { getAdapter } = require('./payment-adapters');
+    const useSandbox = process.env.INTASEND_SANDBOX === 'true' || !!(payout.sandbox);
+    const adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+    const resp = await adapter.sendMoneyB2C({
+      phone: payout.accountNumber, amountKES: payout.amount,
+      ref: rid, narrative: 'SOKONI Earnings Payout',
     });
     const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
     await reqRef.update({
       status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
       b2cResponse: _redact(resp),
+      /* Immutable gateway evidence — the record that justifies eventually marking paid.
+         confirmedAt/webhookReceivedAt are filled by the webhook on success. */
+      gatewayName: 'IntaSend', gatewayReference: ref,
+      gatewayStatus: String(resp?.status || resp?.state || 'accepted'),
+      gatewayResponse: _redact(resp), submittedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
     });
     await _payoutMetric(db, 'b2cInitiated');
@@ -529,87 +583,66 @@ exports.initiateWalletTopUp = onCall(
       throw new HttpsError('invalid-argument', 'Phone must be a valid Kenyan number (07XX or 01XX, with or without country code)');
     }
 
-    // Create pending transaction
+    /* Latency profiling — server-side stages only (grep [wallet-latency]). Carrier STK
+       delivery + PIN entry + webhook round-trip are downstream and logged separately. */
+    const _t0  = Date.now();
     const txId = _genId('wtop');
-    const txRef = db.collection('walletTransactions').doc(txId);
-    await txRef.set({
-      uid,
-      type: 'pending',
-      amount: amt,
-      description: 'Wallet top-up via M-Pesa',
-      status: 'pending',
-      mpesaRef: null,
-      invoiceId: null,
-      createdAt: Timestamp.now(),
-    });
+    const _lap = (stage) => { try { console.log('[wallet-latency]', JSON.stringify({ txId, stage, ms: Date.now() - _t0 })); } catch (_) {} };
+    _lap('validated');
 
-    // Flag pending top-up on wallet (creates wallet doc if needed)
+    const txRef     = db.collection('walletTransactions').doc(txId);
     const walletRef = db.collection('wallets').doc(uid);
-    const walletSnap = await walletRef.get();
-    if (!walletSnap.exists) {
-      await walletRef.set({
-        uid,
-        balance: 0,
-        currency: 'KES',
-        lastTopUp: null,
-        pendingTopUp: txId,
-        createdAt: Timestamp.now(),
-      });
-    } else {
-      await walletRef.update({ pendingTopUp: txId });
-    }
 
-    // Initiate IntaSend STK Push
+    /* LATENCY: fire the STK push as EARLY as possible and overlap the two minimal
+       pre-writes with the gateway network call, instead of the old 3 serial round-trips
+       (write tx → READ wallet → write flag → then STK). The wallet flag is a merge-set:
+       it neither reads first nor clobbers balance/createdAt. Nothing here changes the
+       money path — the pending records still exist before we return, and the webhook/
+       confirm/sweep paths are untouched. */
+    const { getAdapter } = require('./payment-adapters');
+    const useSandbox = process.env.INTASEND_SANDBOX === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
+    const adapter    = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+
+    const stkPromise = adapter.initiatePayment({
+      phone:     normalizedPhone,
+      amountKES: amt,
+      ref:       txId,
+      narrative: 'SOKONI wallet top-up',
+    });
+    const writesPromise = Promise.all([
+      txRef.set({
+        uid, type: 'pending', amount: amt, description: 'Wallet top-up via M-Pesa',
+        status: 'pending', mpesaRef: null, invoiceId: null, createdAt: Timestamp.now(),
+      }),
+      /* merge-set: creates the wallet if absent, never overwrites balance/createdAt */
+      walletRef.set({ uid, currency: 'KES', pendingTopUp: txId, updatedAt: Timestamp.now() }, { merge: true }),
+    ]);
+
+    // Initiate IntaSend STK Push — through the SOKONI Pay adapter (swappable gateway)
     let invoiceId = null;
     try {
-      const IntaSend = require('intasend-node');
-      /* intasend-node takes THREE POSITIONAL args:
-             IntaSend(publishable_key, secret_key, test_mode)
-         This was called as IntaSend(key, { testMode }) — so the secret landed in
-         the publishable slot and an OBJECT became secret_key. The client sends
-         `Authorization: Bearer ${secret_key}`, i.e. "Bearer [object Object]",
-         and IntaSend answered HTTP 500 on every STK push. test_mode was also
-         left undefined. Matches the working call in payment-orchestrator.js. */
-      const client = new IntaSend(
-        '',                                        /* publishable key — unused for collection */
-        INTASEND_KEY.value(),                      /* secret key */
-        process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
-      );
-
-      /* Use mpesaStkPush (→ /api/v1/payment/mpesa-stk-push/), the endpoint that
-         actually pushes the M-Pesa PIN prompt to the phone — the same one the
-         working subscription flow hits via initiateSTKPush.
-
-         The previous call, collection().charge(), posts to /api/v1/checkout/
-         (see node_modules/intasend-node/dist/collection.js): it mints a hosted-
-         checkout invoice AND blanks the secret key, so it returns 200 with an
-         invoice but never sends an STK. That is the exact divergence — the call
-         "succeeded" server-side while no prompt reached the phone. method and
-         currency are injected by the SDK; the checkout-only name/email/host
-         fields are not part of the STK push. Response still carries
-         invoice.invoice_id, so the invoiceId capture and the confirm/webhook/
-         sweep paths below are unchanged. */
-      const response = await client.collection().mpesaStkPush({
-        amount:       amt,
-        phone_number: normalizedPhone,
-        api_ref:      txId,
-        narrative:    'SOKONI wallet top-up',
-      });
-
-      invoiceId = response?.invoice?.invoice_id ?? response?.id ?? null;
+      const resp = await stkPromise;
+      _lap('stk_response');
+      if (!resp.success) {
+        const e = new Error(resp.error || 'IntaSend STK error');
+        e.gateway = resp.rawResponse;
+        throw e;
+      }
+      invoiceId = resp.invoiceId ?? null;
+      await writesPromise;                    // pending records must exist before we return
       await txRef.update({ invoiceId });
+      _lap('persisted');
     } catch (err) {
       // IntaSend failure — mark transaction failed and surface a clean error
-      await txRef.update({ status: 'failed' });
-      await walletRef.update({ pendingTopUp: null });
-      /* err.message was `undefined` for IntaSend transport errors, so the real
-         cause (HTTP 500 from a malformed Authorization header) never reached the
-         logs — only a generic "contact support". Log whatever the error actually
-         carries, without leaking the credential. */
+      await writesPromise.catch(() => {});    // let the concurrent writes settle first
+      await txRef.set({ status: 'failed' }, { merge: true }).catch(() => {});
+      await walletRef.set({ pendingTopUp: null }, { merge: true }).catch(() => {});
+      /* Log whatever the error actually carries (adapter surfaces the gateway body on
+         err.gateway), without leaking the credential. */
       console.error('[wallet] IntaSend STK push error:', {
         message: err && err.message,
         status:  err && (err.status || err.statusCode),
-        body:    (() => { try { return JSON.stringify(err).slice(0, 500); } catch (_) { return String(err); } })(),
+        body:    (() => { try { return JSON.stringify(err.gateway || err).slice(0, 500); } catch (_) { return String(err); } })(),
       });
       throw new HttpsError('unavailable', 'Unable to initiate M-Pesa prompt. Please try again or contact support.');
     }
@@ -880,7 +913,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
   const walletRef   = db.collection('wallets').doc(uid);
   const reqRef      = db.collection('payoutRequests').doc(reqId);
   const velocityRef = db.collection('payoutVelocity').doc(uid);
-  const today       = new Date().toISOString().slice(0, 10);
+  const today       = _eatDay();   // Africa/Nairobi day — resets at 00:00 EAT
 
   /* Atomically dedupe + check velocity + balance, reserve amount, create request */
   let deduplicated = false;
@@ -892,11 +925,14 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
     /* Already submitted with this key — return it without reserving again. */
     if (existingReq.exists) { deduplicated = true; return; }
 
-    /* FRD-1: velocity gate — max 3 payout requests per seller per calendar day */
+    /* FRD-1: velocity gate — max N payout requests per seller per EAT day. N is
+       config-driven (config/payouts.maxPayoutsPerDay, default 3) so ops can tune the
+       throttle without a deploy — the value is NOT a money-movement change. */
+    const maxPerDay = Number(cfg.maxPayoutsPerDay) || 3;
     const vel = velocitySnap.exists ? velocitySnap.data() : null;
     const todayCount = (vel && vel.date === today) ? (vel.count || 0) : 0;
-    if (todayCount >= 3) {
-      throw new HttpsError('resource-exhausted', 'Maximum 3 payout requests per day. Please try again tomorrow.');
+    if (todayCount >= maxPerDay) {
+      throw new HttpsError('resource-exhausted', `Maximum ${maxPerDay} payout requests per day. Please try again tomorrow.`);
     }
 
     const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
@@ -1037,7 +1073,14 @@ exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (
 
 // ─── 8. adminProcessPayout ─────────────────────────────────────────────────
 
-exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
+/* invoker:'public' — REQUIRED for a browser-called callable. Cloud Run authenticates
+   at the IAM layer BEFORE the function runs; a Firebase ID token is not a Google IAM
+   token, so without allUsers as invoker the request is rejected with an HTML 403 and
+   the Firebase SDK surfaces a bare "internal" (the code never runs). This function had
+   lost the binding (a redeploy alone does not restore it on an update), so the Pay
+   button failed. App Check + _requireAdmin remain the real auth — allUsers only lets
+   the request REACH the code, exactly like adminOsDispatch. */
+exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker: 'public', secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
 
@@ -1059,9 +1102,21 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
 
   // ── PAID (manual mark, or fallback) ────────────────────────────────────────
   if (status === 'paid') {
-    await _settlePayoutPaid(db, rid, { processedBy: request.auth.uid, detail: _san(note, 500) || 'Marked paid by admin' });
-    await _payoutMetric(db, 'paid');
-    return { success: true, status: 'paid' };
+    /* MANUAL settlement — the admin attests money was sent OUT-OF-BAND (not via the
+       gateway). Recorded as 'settled_manually' (distinct from gateway 'paid') with an
+       immutable attestation. Requires an external reference (e.g. the M-Pesa code) AND
+       an attestation note, so an unconfirmed payout can never be marked settled. */
+    const externalReference = _san(request.data.externalReference || request.data.mpesaCode || '', 120);
+    const attestation = _san(request.data.attestation || note || '', 500);
+    if (!externalReference || !attestation) {
+      throw new HttpsError('failed-precondition', 'Manual settlement requires externalReference (e.g. M-Pesa code) + attestation that funds were sent.');
+    }
+    await _settlePayoutPaid(db, rid, {
+      finalStatus: 'settled_manually', processedBy: request.auth.uid,
+      externalReference, attestation, detail: 'Settled manually — ref ' + externalReference,
+    });
+    await _payoutMetric(db, 'settledManually');
+    return { success: true, status: 'settled_manually', externalReference };
   }
 
   // ── REJECTED (refund reserved funds) — only pre-disbursement states ─────────
@@ -1110,7 +1165,10 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
   const res = await _disburseB2C(db, rid, { ...payout, id: rid });
   if (res.ok)    return { success: true, status: 'processing', intasendRef: res.intasendRef };
   if (res.retry) return { success: true, status: 'retry_scheduled', message: 'Transient provider error — automatic retry scheduled.' };
-  throw new HttpsError('internal', 'Payout failed: ' + (res.error || 'B2C error') + ' — funds returned to the seller for review.');
+  /* Structured gateway failure (NOT bare "internal") — the admin UI shows the real reason. */
+  throw new HttpsError('failed-precondition',
+    'PAYOUT_GATEWAY_FAILED — ' + (res.error || 'IntaSend B2C error') + ' · funds returned to the seller.',
+    { code: 'PAYOUT_GATEWAY_FAILED', gateway: 'IntaSend', reason: res.error || null });
 });
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────
@@ -1156,7 +1214,7 @@ exports.adminGetPendingPayouts = onCall({ cors: true, enforceAppCheck: true }, a
 
 // ─── 10. refundToWallet ────────────────────────────────────────────────────
 
-exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true, invoker: 'public' }, async (request) => {   /* invoker:'public' — same missing-binding fix as adminProcessPayout (was HTML 403) */
   _requireAuth(request);
   // Refunds must always be admin-initiated to prevent self-enrichment.
   // User-facing return/dispute flows route through the disputes system for approval.
@@ -1398,7 +1456,7 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
   const days = Math.min(Math.max(Number(request.data?.days) || 30, 1), 90);
   const ids  = [];
   for (let i = 0; i < days; i++) {
-    ids.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+    ids.push(_eatDay(new Date(Date.now() - i * 86400000)));   // match EAT metric write keys
   }
 
   const snaps = await db.getAll(...ids.map((d) => db.collection('payoutMetrics').doc(d)));
@@ -1531,40 +1589,119 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
     reqRef = q.docs[0].ref; snap = q.docs[0];
   }
 
-  const p  = snap.data();
-  const st = String(state || '').toUpperCase();
+  const p   = snap.data();
+  const raw = rawPayload || {};
+  /* IntaSend SEND-MONEY (B2C) reports the true progression in `status`
+     ("Confirming balance" → "Preview and approve" → "Sending payment" → "Processing
+     payment" → "Completed"), NOT `state` (a collection-only field). The old code read
+     `state` and DEFAULTED ABSENT TO "FAILED" — catastrophic: an in-flight transfer was
+     marked failed + refunded, then the money completed anyway (double spend, ref
+     UH36Q1AYSC). Classify from `status` + paid_amount/failed_amount; every non-terminal
+     step stays PROCESSING and NEVER touches money. */
+  const rawStatus = String(raw.status || raw.invoice?.state || state || '').trim();
+  const S         = rawStatus.toUpperCase();
+  const paidAmt   = Number(raw.paid_amount   != null ? raw.paid_amount   : (raw.invoice && raw.invoice.paid_amount))   || 0;
+  const failedAmt = Number(raw.failed_amount != null ? raw.failed_amount : (raw.invoice && raw.invoice.failed_amount)) || 0;
 
-  /* Audit: attach the raw (redacted) webhook payload to the payout record, so if
-     IntaSend changes field names/formats we can see exactly what arrived. */
   await reqRef.update({
     updatedAt: Timestamp.now(),
-    lastWebhookState: st,
-    webhookEvents: FieldValue.arrayUnion({ state: st, at: Timestamp.now(), payload: _redact(rawPayload) }),
+    lastWebhookState: rawStatus || S,
+    gatewayStatus:    rawStatus || p.gatewayStatus || null,
+    webhookEvents: FieldValue.arrayUnion({ state: rawStatus || S, at: Timestamp.now(), payload: _redact(raw) }),
   }).catch(() => {});
-  _plog('webhook_received', { ...p, id: reqRef.id }, { webhookState: st });
+  _plog('webhook_received', { ...p, id: reqRef.id }, { webhookState: rawStatus, paidAmt, failedAmt });
 
-  const COMPLETE = ['COMPLETE', 'COMPLETED', 'SUCCESS', 'PAID', 'SETTLED'];
-  const FAILED   = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'];
-  const REVERSED = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'];
+  /* STATE-TRANSITION GUARD — a settled payout is terminal. A later/duplicate webhook can
+     NEVER flip paid → failed/processing (forbidden: Paid→Failed). */
+  if (['paid', 'settled_manually'].includes(p.status)) {
+    _plog('webhook_after_paid', { ...p, id: reqRef.id }, { webhookState: rawStatus });
+    return true;
+  }
 
-  if (COMPLETE.includes(st)) {
-    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, detail: `IntaSend B2C confirmed (${st})` });
+  const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);
+  const explicitFail  = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'].includes(S);
+  const hasFailure    = failedAmt > 0 && paidAmt === 0;   // batch "Completed" but this transfer failed
+  const isComplete    = completedWord && !hasFailure;
+  const isReversed    = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'].includes(S);
+  const isFailed      = explicitFail || (completedWord && hasFailure);
+
+  if (isComplete) {
+    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, webhookReceivedAt: Timestamp.now(), detail: `IntaSend B2C completed (${rawStatus})` });
     _plog('paid', { ...p, id: reqRef.id, status: 'paid' });   /* metric+latency inside _settlePayoutPaid */
-  } else if (REVERSED.includes(st)) {
-    await _reversePayout(db, reqRef.id, `IntaSend reversed (${st})`);
+  } else if (isReversed) {
+    await _reversePayout(db, reqRef.id, `IntaSend reversed (${rawStatus})`);
     await _payoutMetric(db, 'reversed');
     _plog('reversed', { ...p, id: reqRef.id, status: 'reversed' });
-  } else if (FAILED.includes(st)) {
-    /* _refundPayout is a no-op if already paid/terminal — never double-pays. */
-    await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${st})` });
+  } else if (isFailed) {
+    /* _refundPayout is a no-op if already terminal — never double-pays. */
+    await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${rawStatus})` });
     await _payoutMetric(db, 'b2cErrors');
-    _plog('failed', { ...p, id: reqRef.id, status: 'failed' }, { webhookState: st });
+    _plog('failed', { ...p, id: reqRef.id, status: 'failed' }, { webhookState: rawStatus });
   } else {
+    /* IN-FLIGHT (Confirming balance / Preview and approve / Sending payment / Processing
+       payment / Pending): NEVER touch money — a terminal webhook will follow. */
     await reqRef.update({
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', `IntaSend update: ${st}`)),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', `Gateway: ${rawStatus}`)),
     }).catch(() => {});
+    _plog('webhook_inflight', { ...p, id: reqRef.id }, { status: rawStatus });
   }
   return true;
+};
+
+/**
+ * reconcileB2CPayout — bring a payout's DB record into agreement with the GATEWAY truth,
+ * through the settlement pipeline (never a hand-edit). Reads the stored webhookEvents to
+ * decide the true outcome. Corrects the class of bug where a premature/mis-read webhook
+ * marked a payout 'failed' (and refunded the seller) while the money actually COMPLETED —
+ * settling to 'paid' AND undoing the erroneous refund (the money did leave). Idempotent.
+ */
+exports.reconcileB2CPayout = async function (db, rid) {
+  const reqRef = db.collection('payoutRequests').doc(String(rid));
+  const snap = await reqRef.get();
+  if (!snap.exists) return { found: false };
+  const p = snap.data();
+  const events = Array.isArray(p.webhookEvents) ? p.webhookEvents : [];
+  /* Gateway truth: any event that COMPLETED with money actually paid. */
+  const completed = events.some((e) => {
+    const pl = e.payload || {};
+    /* the TRUE IntaSend status is in the payload (`status`), not e.state (which was the
+       mis-derived value from the very bug this reconciles). */
+    const s  = String(pl.status || pl.state || e.state || '').toUpperCase();
+    const failed = Number(pl.failed_amount) > 0 && Number(pl.paid_amount) === 0;
+    return (/COMPLETE/.test(s) || ['SUCCESS', 'PAID', 'SETTLED'].includes(s)) && !failed;
+  }) || /complete/i.test(String(p.gatewayStatus || ''));
+
+  if (['paid', 'settled_manually'].includes(p.status)) return { reconciled: false, status: p.status, note: 'already settled' };
+
+  if (completed) {
+    let result = null;
+    await db.runTransaction(async (t) => {
+      const s = await t.get(reqRef); const x = s.data();
+      if (['paid', 'settled_manually'].includes(x.status)) { result = { reconciled: false, note: 'already settled' }; return; }
+      const walletRef = db.collection('wallets').doc(x.sellerUid);
+      const txRef     = db.collection('walletTransactions').doc(`${x.sellerUid}_${rid}_payout`);
+      const txEx      = await t.get(txRef);
+      /* If it had been wrongly marked 'failed', the refund CREDITED balance + released the
+         hold. The money DID leave → debit that erroneous credit back. If still in-flight
+         (processing), the hold is intact → release it as a normal settle. */
+      if (x.status === 'failed') t.update(walletRef, { balance: FieldValue.increment(-x.amount) });
+      else                       t.update(walletRef, { pendingPayout: FieldValue.increment(-x.amount) });
+      if (!txEx.exists) t.set(txRef, {
+        uid: x.sellerUid, type: 'payout', amount: x.amount,
+        description: `Payout via MPESA — ref ${rid} (gateway-reconciled)`,
+        status: 'completed', settlementType: 'gateway', createdAt: Timestamp.now(),
+      });
+      t.update(reqRef, {
+        status: 'paid', paidAt: Timestamp.now(), confirmedAt: Timestamp.now(),
+        settlementMethod: 'gateway', reconciledAt: Timestamp.now(), reconciledFrom: x.status,
+        statusHistory: FieldValue.arrayUnion(_payoutEvent('paid', `Reconciled from gateway (money confirmed sent) — corrected a premature '${x.status}'`)),
+      });
+      result = { reconciled: true, from: x.status, to: 'paid' };
+    });
+    if (result && result.reconciled) _notifyPayout('paid', p, rid);
+    return result;
+  }
+  return { reconciled: false, status: p.status, gatewayCompleted: false };
 };
 
 // ─── 14. sweepEarningsToWallet — converge ecosystem earnings into ONE
@@ -1580,8 +1717,11 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
  * source is 0, so re-runs are no-ops) and doubles as the one-off migration for existing
  * stranded funds. Sub-shilling remainders stay in FinOS until they accrue to a shilling.
  *
- * Note: booking + provider-service earnings are already credited DIRECTLY to `balance`
- * at the webhook, so they are instant; this covers the FinOS-ledger flows.
+ * Note: provider-service booking earnings are credited to `balance` transactionally at
+ * booking completion (provider-ops.js `providerCompleteBooking` → providerPayouts marked
+ * `settled` + a `walletTransactions` row), so they do NOT flow through this FinOS sweep and
+ * are never `pending` for the mechanism-1 payout scheduler. This job covers only the
+ * FinOS-ledger flows (marketplace / food / rider) credited via `creditWalletTxn`.
  */
 exports.sweepEarningsToWallet = onSchedule(
   { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB' },

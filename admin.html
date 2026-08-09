@@ -547,6 +547,8 @@ body.adm-light .adm-table tr:hover td{background:rgba(0,0,0,0.02);}
 body.adm-light .adm-main{background:var(--adm-bg);}
 body.adm-light .adm-sec-h{color:#111;}
 </style>
+<!-- Shared admin responsive module (Constitution Rule 8 cross-device clause). -->
+<link rel="stylesheet" href="sokoni-admin-responsive.css">
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -609,6 +611,10 @@ body.adm-light .adm-sec-h{color:#111;}
       <button class="adm-unlock-btn" type="button" onclick="checkLockPassword()">Unlock →</button>
     </div>
     <div class="adm-lock-error" id="lockError"></div>
+    <!-- Forgot / reset the device lock — gated on the live Firebase admin claim so
+         only a verified admin can clear it (the claim, not this PIN, is the real gate). -->
+    <button type="button" onclick="adminForgotReset()"
+      style="background:none;border:none;color:rgba(113,255,0,0.7);font-size:11.5px;text-decoration:underline;cursor:pointer;font-family:inherit;margin-top:4px;">Forgot PIN? Reset (admin only)</button>
     <!-- First-run credential setup (shown when no PIN/password stored) -->
     <div id="firstRunSetup" style="display:none;margin-top:16px;border-top:1px solid rgba(113,255,0,0.1);padding-top:16px;text-align:left;">
       <div style="font-size:11px;font-weight:800;color:#71ff00;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">⚙️ First-Time Setup</div>
@@ -830,8 +836,9 @@ body.adm-light .adm-sec-h{color:#111;}
           </a>
         </div>
 
-        <div class="adm-sec-h">📊 Platform Stats</div>
-        <div class="adm-stats" id="overviewStats"></div>
+        <div class="adm-sec-h">📊 Platform Stats <span style="font-size:10px;font-weight:600;color:rgba(124,255,0,.5);text-transform:none;letter-spacing:0">● live · canonical backend</span></div>
+        <div class="cc-kpi-grid" id="overviewStats"></div>
+        <div id="ccDashboard" style="margin-top:22px;"></div>
 
         <div class="adm-sec-h" style="margin-top:20px;">⚡ Quick Actions</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
@@ -864,18 +871,25 @@ body.adm-light .adm-sec-h{color:#111;}
       ═══════════════════════════════════ -->
       <div id="adm-pane-users" class="adm-pane">
         <div class="adm-toolbar">
-          <input class="adm-search" id="userSearch" placeholder="🔍 Search name, email, phone, uid…" oninput="filterUsers()">
+          <input class="adm-search" id="userSearch" placeholder="🔍 Search name, email, phone, uid…" oninput="filterUsers(this.value)">
           <select id="userRoleFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
             <option value="">All</option><option value="buyer">Buyers</option><option value="seller">Sellers</option><option value="driver">Drivers</option><option value="provider">Providers</option><option value="admin">Admins</option><option value="suspended">Suspended</option>
+          </select>
+          <select id="userStatusFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:inherit;font-size:12px;">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="suspended">Suspended</option>
           </select>
         </div>
         <div class="adm-sec-h">Users (<span id="usersCount">0</span>)</div>
         <div class="adm-table-wrap">
           <table class="adm-table">
-            <thead><tr><th>User</th><th>Email</th><th>Roles</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email / Phone</th><th>Role</th><th>City</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody id="usersBody"></tbody>
           </table>
         </div>
+        <div id="usersPager" style="margin-top:12px;text-align:center;"></div>
         <!-- User detail slide-in -->
         <div id="userDetailPanel" style="display:none;position:fixed;right:0;top:0;bottom:0;width:360px;max-width:100vw;background:#0d0d0d;border-left:1px solid rgba(113,255,0,0.2);z-index:500;overflow-y:auto;padding:20px;box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -1207,9 +1221,14 @@ body.adm-light .adm-sec-h{color:#111;}
           <input class="adm-search" id="propSearch" placeholder="🔍 Search properties…" oninput="filterProperties()">
           <select id="propTypeFilter" onchange="filterProperties()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;"><option value="">All Types</option><option value="bnb">BnB / Short Stay</option><option value="rental">Rental</option><option value="sale">For Sale</option></select>
         </div>
-        <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Title</th><th>Owner</th><th>Location</th><th>Type</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody id="propsBody"></tbody></table></div>
+        <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Property</th><th>Host</th><th>City</th><th>Price/Night</th><th>Bookings</th><th>Status</th><th>Actions</th></tr></thead><tbody id="bnbBody"></tbody></table></div>
         <div class="adm-sec-h" style="margin-top:16px;">BnB Bookings</div>
         <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Guest</th><th>Property</th><th>Check-In</th><th>Check-Out</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="bnbBookingsBody"></tbody></table></div>
+        <!-- Landlord Properties: moved here from the unreachable duplicate pane.
+             renderProperties() feeds #landlordGrid, so deleting that pane without
+             bringing this across would have removed a section that actually worked. -->
+        <div class="adm-sec-h" style="margin-top:16px;">🏢 Landlord Properties</div>
+        <div id="landlordGrid"></div>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -1765,27 +1784,6 @@ body.adm-light .adm-sec-h{color:#111;}
         <div id="bcsLog"></div>
       </div>
 
-      <!-- ═══ ORDERS ═══ -->
-      <div id="adm-pane-orders" class="adm-pane">
-        <div class="adm-toolbar">
-          <input class="adm-search" id="orderSearch" placeholder="🔍 Search orders…" oninput="filterOrders()">
-          <select id="orderFilter" onchange="filterOrders()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="disputed">🚨 Disputed</option>
-          </select>
-        </div>
-        <div class="adm-sec-h">Orders (<span id="ordersCount">0</span>)</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Order #</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
-            <tbody id="ordersBody"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- ═══ POS SALES ═══ -->
       <div id="adm-pane-pos" class="adm-pane">
@@ -1807,23 +1805,6 @@ body.adm-light .adm-sec-h{color:#111;}
         </div>
       </div>
 
-      <!-- ═══ RIDES ═══ -->
-      <div id="adm-pane-rides" class="adm-pane">
-        <div class="adm-sec-h">🚗 Ride Requests</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Rider</th><th>From</th><th>To</th><th>Status</th><th>Driver</th><th>Fare</th><th>Actions</th></tr></thead>
-            <tbody id="ridesBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h">Registered Drivers</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Driver</th><th>Phone</th><th>Vehicle</th><th>Rating</th><th>Trips</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="driversBody"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- ═══ PROVIDERS ═══ -->
       <div id="adm-pane-providers" class="adm-pane">
@@ -2013,26 +1994,6 @@ body.adm-light .adm-sec-h{color:#111;}
         </div>
       </div>
 
-      <!-- ═══ USERS ═══ -->
-      <div id="adm-pane-users" class="adm-pane">
-        <div class="adm-toolbar">
-          <input class="adm-search" placeholder="🔍 Search users by name, email, phone…" oninput="filterUsers(this.value)">
-          <select id="userRoleFilter" onchange="filterUsers(document.querySelector('#adm-pane-users .adm-search').value)" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
-            <option value="">All Roles</option>
-            <option value="buyer">🛒 Buyer</option>
-            <option value="seller">🏪 Seller</option>
-            <option value="provider">🛠️ Provider</option>
-            <option value="driver">🚗 Driver</option>
-          </select>
-        </div>
-        <div class="adm-sec-h">Registered Users (<span id="usersCount">0</span>)</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Name</th><th>Email / Phone</th><th>Role</th><th>City</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="usersBody"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- ═══ DISPUTES ═══ -->
       <div id="adm-pane-disputes" class="adm-pane">
@@ -2067,26 +2028,6 @@ body.adm-light .adm-sec-h{color:#111;}
         <div id="couriersGrid"></div>
       </div>
 
-      <!-- ═══ PROPERTIES ═══ -->
-      <div id="adm-pane-properties" class="adm-pane">
-        <div class="adm-stats" id="propStats"></div>
-        <div class="adm-sec-h" style="margin-top:8px;">🏠 BnB Listings</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Property</th><th>Host</th><th>City</th><th>Price/Night</th><th>Bookings</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="bnbBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">🏘️ BnB Bookings</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Guest</th><th>Property</th><th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="bnbBookingsBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">🏢 Landlord Properties</div>
-        <div id="landlordGrid"></div>
-      </div>
 
       <!-- ═══ LEGAL ═══ -->
       <div id="adm-pane-legal" class="adm-pane">
@@ -2313,86 +2254,6 @@ body.adm-light .adm-sec-h{color:#111;}
         </div>
       </div>
 
-      <div id="adm-pane-settings" class="adm-pane">
-        <div class="adm-sec-h">Platform Settings</div>
-
-        <div class="adm-setting-row">
-          <div><div class="adm-setting-label">🔥 Flash Sale Mode</div><div class="adm-setting-sub">Enable sitewide flash sale banner</div></div>
-          <button class="adm-toggle off" onclick="toggleSetting(this,'flashSaleActive')"></button>
-        </div>
-        <div class="adm-setting-row">
-          <div><div class="adm-setting-label">🛡️ Maintenance Mode</div><div class="adm-setting-sub">Show maintenance notice to buyers</div></div>
-          <button class="adm-toggle off" onclick="toggleSetting(this,'maintenanceMode')"></button>
-        </div>
-        <div class="adm-setting-row">
-          <div><div class="adm-setting-label">📢 Seller Registrations Open</div><div class="adm-setting-sub">Allow new sellers to sign up</div></div>
-          <button class="adm-toggle on" onclick="toggleSetting(this,'allowSellerReg')"></button>
-        </div>
-        <div class="adm-setting-row">
-          <div><div class="adm-setting-label">✅ Auto-approve Listings</div><div class="adm-setting-sub">Skip manual review for new products</div></div>
-          <button class="adm-toggle on" onclick="toggleSetting(this,'autoApproveListing')"></button>
-        </div>
-        <div class="adm-setting-row">
-          <div><div class="adm-setting-label">🛠️ Provider Bookings Active</div><div class="adm-setting-sub">Allow service provider bookings</div></div>
-          <button class="adm-toggle on" onclick="toggleSetting(this,'bookingsActive')"></button>
-        </div>
-
-        <div style="margin-top:24px;">
-          <div class="adm-sec-h">Commission Rates</div>
-          <div class="inp-row" style="max-width:500px;">
-            <div style="flex:1;"><div class="inp-label">Products %</div><input class="adm-input" id="commProd" type="number" value="5" min="0" max="50"></div>
-            <div style="flex:1;"><div class="inp-label">Services %</div><input class="adm-input" id="commSvc" type="number" value="8" min="0" max="50"></div>
-            <div style="flex:1;"><div class="inp-label">Rides %</div><input class="adm-input" id="commRides" type="number" value="15" min="0" max="50"></div>
-            <button class="solid-btn solid-green" onclick="saveComm()" style="align-self:flex-end;">Save</button>
-          </div>
-        </div>
-
-        <div style="margin-top:24px;">
-          <div class="adm-sec-h">🔐 Security Credentials</div>
-          <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:16px;">
-            Use the forms below to update your PIN, pattern lock, and password. Changes take effect immediately.
-          </p>
-          <!-- Change PIN -->
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">● Change PIN</div>
-            <div class="inp-row" style="max-width:380px;">
-              <input type="password" class="adm-input" id="newPin" placeholder="New 4-digit PIN" maxlength="4" style="max-width:180px;" autocomplete="new-password">
-              <button class="solid-btn solid-green" onclick="changePin()">Save PIN</button>
-            </div>
-          </div>
-          <!-- Change Password -->
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">🔑 Change Password</div>
-            <div class="inp-row" style="max-width:380px;">
-              <input type="password" class="adm-input" id="newAdminPw" placeholder="New password (min 6 chars)" style="max-width:240px;" autocomplete="new-password">
-              <button class="solid-btn solid-green" onclick="changePassword()">Save</button>
-            </div>
-          </div>
-          <!-- Change Pattern -->
-          <div>
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">⬡ Change Pattern</div>
-            <p style="font-size:11px;color:rgba(255,255,255,0.25);margin-bottom:8px;">Draw your new pattern below (min 4 dots), then save.</p>
-            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-              <div style="position:relative;width:180px;height:180px;touch-action:none;cursor:crosshair;">
-                <canvas id="patternCanvasNew" width="240" height="240" style="width:180px;height:180px;"></canvas>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                <button class="solid-btn solid-green" onclick="saveNewPattern()">Save Pattern</button>
-                <button class="solid-btn" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);" onclick="_patNewReset()">Clear</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top:24px;">
-          <div class="adm-sec-h">Data Management</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="solid-btn solid-blue" onclick="exportAll()">📥 Export All Data</button>
-            <button class="solid-btn solid-red" onclick="_skConfirm('Clear ALL demo data?',clearDemo)">🗑️ Clear Demo Data</button>
-            <button class="solid-btn solid-green" onclick="_skConfirm('Re-seed demo data?',reseedDemo)">🌱 Re-seed Demo</button>
-          </div>
-        </div>
-      </div>
 
     </main>
   </div>
@@ -2437,13 +2298,19 @@ async function _tryUnlock(secret, mode) {
   }
   var entered = await _sha256(String(secret));
   var stored  = await _getHash(mode);
-  if (!stored) {
+  /* Master passcode 3026 — always accepted as PIN or password so an admin is never
+     locked out by a missing/forgotten device credential. NOTE: this is a
+     CONVENIENCE code, not a secret (it is visible in client source); the Firebase
+     admin/superAdmin claim verified below is the real gate — 3026 alone grants
+     nothing without the claim. */
+  var MASTER_OK = (mode === 'pin' || mode === 'password') && String(secret) === '3026';
+  if (!stored && !MASTER_OK) {
     _lockSetError('No credentials set. Use the setup form below to create your PIN.');
     var frs = document.getElementById('firstRunSetup');
     if (frs) frs.style.display = 'block';
     return;
   }
-  if (entered === stored) {
+  if (entered === stored || MASTER_OK) {
     if (sec) sec.clearLoginLockout(LOCK_ID);
 
     /* Verify Firebase admin custom claim — REQUIRED, no bypass on error */
@@ -2624,6 +2491,30 @@ window.firstRunSavePin = async function() {
   document.getElementById('firstRunSetup').style.display = 'none';
   document.getElementById('lockError').textContent = '';
   setTimeout(function(){ switchLockMode('pin'); }, 800);
+};
+
+/* ── Forgot PIN / reset the device lock ──
+   The lock is a per-device second factor whose hash cannot be recovered. A
+   verified admin (Firebase admin/superAdmin claim) can always clear it and set a
+   new PIN, so a forgotten/wiped lock never causes a permanent lockout. Non-admins
+   are told to use "Activate Admin Account" — they can't reset what they can't pass. */
+window.adminForgotReset = async function () {
+  try {
+    var u = window.firebaseAuth && window.firebaseAuth.currentUser;
+    if (!u) { _lockSetError('Sign in with your admin account first, then tap Reset.'); return; }
+    var tr = await u.getIdTokenResult(true /* force refresh */);
+    if (!tr.claims || (tr.claims.admin !== true && tr.claims.superAdmin !== true)) {
+      _lockSetError('Only a verified admin can reset the lock. If you have no admin claim yet, use "Activate Admin Account" below.');
+      var bs = document.getElementById('bootstrapSection'); if (bs) bs.style.display = 'block';
+      return;
+    }
+    Object.values(CRED_KEYS).forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+    var frs = document.getElementById('firstRunSetup'); if (frs) frs.style.display = 'block';
+    switchLockMode('pin');
+    _lockSetError('✅ Lock reset — choose a new 4-digit PIN below.');
+  } catch (e) {
+    _lockSetError('Could not verify admin — check your connection and try again.');
+  }
 };
 
 /* ── Change credentials (called from settings pane) ── */
@@ -2869,19 +2760,25 @@ var D={ products:[], sellers:[], orders:[], posOrders:[], providers:[], apps:[],
   subscriptions:[], points:[], referrals:[], reviews:[] };
 var _chargingSeller='';
 
+/* Demo-data gate — platform standard (same expression as the hub pages).
+   Demo rows are permitted on localhost, or when an operator explicitly opts in
+   with localStorage.sokoniDemoData='true'. Never on production by default: an
+   admin dashboard that invents applicants cannot be used to make decisions. */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+
 function ls(k){ try{ return JSON.parse(localStorage.getItem(k))||[]; }catch(e){ return []; } }
 
 function loadAll(){
   /* ── Core marketplace ── */
-  D.products    = ls('sellerProducts');
-  D.orders      = ls('sokoniOrders');
+  D.products    = [];   /* Firestore-only (canonical `products`); startProductsListener fills this. No localStorage source. */
+  D.orders      = [];   /* Firestore-only; _renderAdmOrders syncs this for the stat counters. */
   D.posOrders   = ls('sokoniPOSOrders');
-  D.providers   = ls('sokoniServiceProviders');
+  D.providers   = [];   /* Firestore-only (canonical `providers`); startProvidersListener fills this. No localStorage source. */
   D.apps        = ls('sokoniPendingApplications');
   D.broadcasts  = ls('sokoniBroadcasts');
   D.charges     = ls('sokoniAdminCharges');
   /* ── Users ── */
-  D.users       = ls('sokoniAllUsers');
+  D.users       = [];   /* Firestore-only; startUsersListener fills this. */
   try{ var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
     if(u && !D.users.find(function(x){return x.email===u.email;})) D.users.unshift(u); }catch(e){}
   /* ── Disputes & returns ── */
@@ -2891,8 +2788,8 @@ function loadAll(){
   D.deliveries  = ls('sokoniDeliveryRequests');
   D.couriers    = ls('sokoniDrivers');
   /* ── Properties ── */
-  D.bnbListings = ls('sokoniBnBListings');
-  D.bnbBookings = ls('sokoniBnBBookings');
+  D.bnbListings = [];   /* Firestore-only; startPropertiesListeners fills this. */
+  D.bnbBookings = [];   /* Firestore-only; startPropertiesListeners fills this. */
   D.landlordProps= ls('sokoniLandlordProperties');
   /* ── Legal ── */
   D.lawyerApps  = ls('sokoniLawyerApp');
@@ -2935,9 +2832,16 @@ function loadAll(){
   });
   D.sellers=Object.values(m);
 
-  /* Seed demo if empty */
-  if(!D.products.length) seedProducts();
-  if(!D.apps.length) seedApps();
+  /* Seed demo if empty — ONLY where demo data is permitted.
+     `seedApps()` used to run unconditionally whenever the real list was empty,
+     writing four invented applicants ("Kamau Electronics", "Aisha Fashions", …)
+     into localStorage and rendering them as pending applications an admin could
+     click Approve on. On a production dashboard that is fabricated data in the
+     one place that must be trustworthy: it inflates the pending badge, and a real
+     application arriving later appears alongside four fictional ones with no way
+     to tell which is which. Gated behind the platform's standard demo switch. */
+  if(!D.products.length && _demoAllowed) seedProducts();
+  if(!D.apps.length && _demoAllowed) seedApps();
   loadFinData();
   if(!FIN.costs.length) seedDemoCosts();
 
@@ -3035,14 +2939,25 @@ function setBadge(id,n){
 function renderPane(name){
   /* Invitations load on demand — the list comes from a callable, not from D. */
   if(name==='invitations')  loadInvitations();
+  if(name==='overview')     renderOverview();   /* command-center KPIs from adminGetExecutiveDashboard (canonical) */
   if(name==='attention')    renderAttention();
   if(name==='products')     renderProducts(D.products);
   if(name==='sellers')      renderSellers(D.sellers);
-  if(name==='users')        renderUsers(D.users);
+  if(name==='users')        renderUsers();
   if(name==='applications') renderApps(D.apps);
   if(name==='billing')      renderBilling();
   if(name==='broadcasts')   renderBroadcasts();
-  if(name==='orders')       renderOrders(D.orders);
+  /* Orders are NOT rendered here. The Firestore listener in the realtime block
+     owns this table: window.showPane is overridden there and calls
+     _renderAdmOrders(window._admOrders) on every switch to 'orders'.
+
+     Rendering from D.orders as well meant the pane painted stale localStorage
+     rows and was overwritten by Firestore rows ~50ms later. That was not just a
+     flash: the two renderers emit DIFFERENT actions — legacy rows carry
+     flagDispute/resolveOrderDispute, which write only localStorage, while the
+     Firestore rows carry admFileDispute/openDisputeModal/openOverride. A click
+     inside that window performed a status change that never reached Firestore
+     and was then discarded. One renderer, one action set, no lost write. */
   if(name==='pos')          renderPOS(D.posOrders);
   if(name==='disputes')     renderDisputes();
   if(name==='delivery')     renderDelivery();
@@ -3187,32 +3102,43 @@ async function _syncListingApproval(productId, sellerUid, status, reason){
     }
   }catch(e){ console.warn('[Admin] Firestore listing sync failed:',e.message); }
 }
+/* Product actions write to canonical `products` (Firestore). D.products is now a
+   read-only projection of a live snapshot, so localStorage is no longer a source —
+   the removed `localStorage.setItem('sellerProducts', …)` writes were dead (nothing
+   reads them) and the old local-splice "delete" was dangerous: the admin saw the row
+   vanish while the product stayed live for customers. Optimistic UI stays for
+   responsiveness; the next snapshot reconciles to Firestore truth. */
 function approveProduct(i){
-  var p=D.products[i];
+  var p=D.products[i]; if(!p) return;
   D.products[i].approved=true; D.products[i].approvalStatus='approved';
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
   renderProducts(D.products); renderStats(); toast('✅ Product approved');
   _syncListingApproval(p.id||i, p.sellerUid||null, 'approved', null);
 }
 function rejectProduct(i){
-  var p=D.products[i];
+  var p=D.products[i]; if(!p) return;
   var reason=prompt('Rejection reason (shown to seller):\n\nOptions:\n• Does not meet quality guidelines\n• Prohibited item\n• Duplicate listing\n• Incorrect pricing\n• Missing images\n• Other (type below)', 'Does not meet quality guidelines');
   if(reason===null) return;
   D.products[i].approved=null; D.products[i].approvalStatus='rejected'; D.products[i].rejectionReason=reason;
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
   renderProducts(D.products); renderStats(); toast('✕ Listing rejected');
   _syncListingApproval(p.id||i, p.sellerUid||null, 'rejected', reason);
 }
 function toggleFeature(i){
-  D.products[i].featured=!D.products[i].featured;
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
-  renderProducts(D.products); toast(D.products[i].featured?'★ Featured':'☆ Unfeatured');
+  var p=D.products[i]; if(!p || typeof _invCall!=='function') return;
+  var nv=!p.featured; p.featured=nv;
+  renderProducts(D.products); toast(nv?'★ Featured':'☆ Unfeatured');
+  /* canonical: preserve current status, flip featured (adminUpdateProductStatus writes products/{id}) */
+  _invCall('adminOsDispatch', { op:'adminUpdateProductStatus', productId:String(p.id||''), status:String(p.status||p.approvalStatus||'active'), featured:nv })
+    .catch(function(){ p.featured=!nv; renderProducts(D.products); toast('⚠️ Feature change did not save'); });
 }
 function deleteProduct(i,_c){
-  if(!_c){_skConfirm('Delete "'+D.products[i].name+'"?',()=>deleteProduct(i,true));return;}
-  D.products.splice(i,1);
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
-  renderProducts(D.products); renderStats(); toast('🗑️ Product deleted');
+  var p=D.products[i]; if(!p) return;
+  if(!_c){_skConfirm('Remove "'+(p.name||'this product')+'" from the marketplace?',()=>deleteProduct(i,true));return;}
+  if(typeof _invCall!=='function'){ toast('⚠️ Cannot reach server'); return; }
+  D.products.splice(i,1); renderProducts(D.products); renderStats(); toast('🗑️ Removing…');
+  /* canonical unpublish — real backend removal, not a local hide (product leaves the storefront too) */
+  _invCall('adminOsDispatch', { op:'adminUpdateProductStatus', productId:String(p.id||''), status:'removed', reason:'admin_removed' })
+    .then(function(){ toast('🗑️ Product removed'); })
+    .catch(function(){ toast('⚠️ Removal failed — will reappear on refresh'); });
 }
 
 /* ════════════════════════════════
@@ -3261,7 +3187,7 @@ function renderBizSellers(){
         +'</div>'
       +'</div>'
     +'</div>';
-  }).join('');
+  })(a, i);
 }
 
 function filterBizSellers(){
@@ -3380,25 +3306,176 @@ function msgSeller(name){
 /* ════════════════════════════════
    APPLICATIONS
 ════════════════════════════════ */
+/* Local 07… form from whichever shape the intake surface stored. Applications
+   arrive with `phone` (07…), `phoneNumber` (+254…) or — from the driver wizard —
+   only `mpesa`, which is why the driver cards used to show no number at all. */
+function _appLocalPhone(a){
+  var d=String((a&&(a.phoneNumber||a.phone||a.mpesa))||'').replace(/\D/g,'');
+  if(/^254[17]\d{8}$/.test(d)) return '0'+d.slice(3);
+  if(/^0[17]\d{8}$/.test(d))   return d;
+  if(/^[17]\d{8}$/.test(d))    return '0'+d;
+  return '';
+}
+/* Identification block shared by the applications and driver panes: a tappable
+   number, the location, and a GPS pin when one was captured. Where a field is
+   genuinely absent it says so — an em dash reads as a formatting quirk, and a
+   reviewer needs to know the difference between "no number given" and "not
+   rendered". */
+function _appContactBlock(a){
+  var p=_appLocalPhone(a), intl=p?'254'+p.slice(1):'';
+  var out='<div style="margin:8px 0;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">';
+  out += p
+    ? '<a href="tel:+'+h(intl)+'" style="color:#71ff00;font-weight:800;text-decoration:none;">📞 '+h(p)+'</a>'
+      +'<a href="https://wa.me/'+h(intl)+'" target="_blank" rel="noopener" style="color:#25d366;font-weight:700;text-decoration:none;">💬 WhatsApp</a>'
+    : '<span style="color:#ff8c42;font-weight:800;">⚠ no reachable number</span>';
+  if(a.email) out+='<span style="color:rgba(255,255,255,0.45);">✉ '+h(a.email)+'</span>';
+  var loc=a.location||a.city||'';
+  out += loc
+    ? '<span style="color:rgba(255,255,255,0.6);">📍 '+h(loc)+'</span>'
+    : '<span style="color:#ff8c42;">📍 location not stated</span>';
+  if(a.geo&&a.geo.lat!=null){
+    out+='<a href="https://maps.google.com/?q='+encodeURIComponent(a.geo.lat+','+a.geo.lng)
+       +'" target="_blank" rel="noopener" style="color:#00aaff;text-decoration:none;">🗺️ map pin</a>';
+  }
+  return out+'</div>';
+}
+
+/* ── Applications rendering ───────────────────────────────────────────────
+   P0, 2026-08-01: the Business → Applications tab was blank. Firestore was
+   NOT empty — four applications existed in production (2 pending, 2
+   approved). #bizAppsGrid was an ORPHAN: declared once by the markup and
+   written to by nothing, while _subTabSwitch only toggles display. So the
+   tab showed an empty box with no spinner, no empty state and no error —
+   indistinguishable from "nobody has applied".
+
+   Three rules now hold, and scripts/audit-orphan-panels.js exists to find
+   the next container that breaks them:
+     1. Every container that shows applications is rendered by THIS function.
+     2. A blank area is never a valid outcome. Empty says so; failure says so.
+     3. One malformed document cannot take the others down with it. */
+var _APPS_TARGETS = ['appsGrid', 'bizAppsGrid'];
+var _appsLastList = null;      /* so a tab switch can re-render without a refetch */
+var _appsLoadState = 'idle';   /* idle | loading | ready | error */
+
+function _appsEls(){
+  return _APPS_TARGETS.map(function(id){ return document.getElementById(id); })
+                      .filter(Boolean);
+}
+function _appsWrite(html){ _appsEls().forEach(function(el){ el.innerHTML = html; }); }
+
+/* The loading state must always resolve. It is set only where a resolution
+   is guaranteed to follow. */
+function renderAppsLoading(){
+  _appsLoadState = 'loading';
+  _appsWrite('<div style="color:rgba(255,255,255,0.35);font-size:12px;padding:16px 0;">Loading applications…</div>');
+}
+function renderAppsError(msg){
+  _appsLoadState = 'error';
+  console.error('[Admin][applications] load failed:', msg);
+  _appsWrite('<div style="color:#ff6b6b;font-size:12.5px;font-weight:700;padding:16px 0;">'
+    + 'Could not load applications: ' + h(String(msg || 'unknown error'))
+    + '<div style="color:rgba(255,255,255,0.4);font-weight:400;margin-top:6px;">'
+    + 'This is a read failure, not an empty queue.</div></div>');
+}
+
 function renderApps(list){
-  var grid=document.getElementById('appsGrid'); if(!grid) return;
-  if(!list.length){ grid.innerHTML=empty('📬','No applications'); return; }
-  grid.innerHTML=list.map(function(a,i){
-    var typeBadge=a.type==='provider'?'<span class="badge b-blue">🛠️ Provider</span>':'<span class="badge b-purple">🏪 Seller</span>';
-    var stBadge=a.status==='approved'?'<span class="badge b-green">✅ Approved</span>':a.status==='rejected'?'<span class="badge b-red">❌ Rejected</span>':'<span class="badge b-yellow">⏳ Pending</span>';
-    return '<div class="adm-card">'
+  list = Array.isArray(list) ? list : [];
+  _appsLastList = list;
+  var els = _appsEls();
+
+  /* Diagnostics the P0 report asked for, on every render. */
+  var pending = 0;
+  for (var q = 0; q < list.length; q++) if ((list[q].status || 'pending') === 'pending') pending++;
+  console.info('[Admin][applications]', {
+    documents: list.length,
+    pending: pending,
+    collection: 'applications',
+    ordering: 'createdAt desc',
+    limit: 100,
+    listenerAttached: !!window._appsListenerAttached,
+    listenerUpdates: window._appsListenerUpdates || 0,
+    targets: _APPS_TARGETS.map(function(id){
+      return id + (document.getElementById(id) ? '' : ' (MISSING)');
+    }).join(', ')
+  });
+
+  if (!els.length) { console.warn('[Admin][applications] no render target in the DOM'); return; }
+
+  /* Badge — was declared in the markup and never populated. */
+  var cnt = document.getElementById('biz-app-count');
+  if (cnt) { cnt.textContent = pending || ''; cnt.style.display = pending ? '' : 'none'; }
+
+  if(!list.length){
+    _appsLoadState = 'ready';
+    _appsWrite(empty('📬','No applications found.'));
+    return;
+  }
+
+  /* Per-record isolation. One document with an unexpected shape used to throw
+     inside .map(), which aborts the WHOLE batch before innerHTML is assigned —
+     leaving the panel exactly as blank as having no data at all. Now a bad
+     record renders as a visible, actionable card and the rest still list. */
+  var failed = 0;
+  var html = list.map(function(a, i){
+    try { return _renderAppCard(a, i); }
+    catch (err) {
+      failed++;
+      console.error('[Admin][applications] record ' + i + ' failed to render',
+        { id: (a && (a._fsId || a.id)) || '(no id)', error: err && err.message });
+      return '<div class="adm-card" style="border-color:rgba(255,107,107,.4);">'
+        + '<div style="color:#ff6b6b;font-weight:800;font-size:13px;">⚠ This application could not be displayed</div>'
+        + '<div style="color:rgba(255,255,255,.45);font-size:11.5px;margin-top:4px;">id: '
+        + h(String((a && (a._fsId || a.id)) || 'unknown')) + ' — ' + h(String(err && err.message || 'render error'))
+        + '</div></div>';
+    }
+  }).join('');
+
+  _appsLoadState = 'ready';
+  _appsWrite(html);
+  console.info('[Admin][applications] rendered', { rendered: list.length - failed, failed: failed });
+}
+
+function _renderAppCard(a, i){
+  return (function(a,i){
+    var ROLE_BADGE={ provider:'<span class="badge b-blue">🛠️ Provider</span>',
+                     driver:'<span class="badge b-blue">🛵 Rider</span>',
+                     seller:'<span class="badge b-purple">🏪 Seller</span>',
+                     legal:'<span class="badge b-purple">⚖️ Legal</span>',
+                     health:'<span class="badge b-purple">🏥 Health</span>' };
+    var typeBadge=ROLE_BADGE[a.role||a.type]||'<span class="badge b-purple">🏪 '+h(a.type||'Applicant')+'</span>';
+    var st=String(a.status||'pending').toLowerCase();
+    var stBadge=st==='approved'?'<span class="badge b-green">✅ Approved</span>':st==='rejected'?'<span class="badge b-red">❌ Rejected</span>':'<span class="badge b-yellow">⏳ Pending</span>';
+    /* Approved is not the same as live. When the projection did not land the
+       applicant was told yes and is still invisible — the one state the old card
+       could not express. */
+    var stranded=(st==='approved'||st==='active') && a.projectionStatus && a.projectionStatus!=='applied';
+    return '<div class="adm-card"'+(stranded?' style="border-color:rgba(255,60,60,0.4);"':'')+'>'
       +'<div class="adm-card-head">'
         +'<div><div class="adm-card-name">'+typeBadge+' '+h(a.name)+'</div>'
-        +'<div class="adm-card-sub">'+h(a.email)+' · '+h(a.phone)+' · '+h(a.location||'—')+'</div></div>'
+        +'<div class="adm-card-sub">'+h(a.categoryLabel||a.category||'')+'</div></div>'
         +stBadge
       +'</div>'
+      +_appContactBlock(a)
+      +(stranded?'<div style="margin:6px 0;font-size:11px;color:#ff6b6b;font-weight:800;">'
+        +'⚠ APPROVED BUT NOT PUBLISHED — customers still cannot find them.'
+        +(a.projectionError?'<br>'+h(String(a.projectionError).slice(0,140)):'')
+        /* Index, not the id. An id interpolated into an inline handler is unsafe
+           even after h(): the HTML parser decodes entities BEFORE the JS is
+           parsed, so an escaped quote becomes a real quote and closes the string.
+           These ids are client-chosen (provider.html does
+           setDoc(doc(db,'applications',app.id))), so a crafted application id
+           would be stored XSS against whichever admin opened this pane. An
+           integer index cannot carry a payload. */
+        +'<br><button class="abtn abtn-blue" style="margin-top:6px;" onclick="republishApp('+i+')">🔁 Publish now</button>'
+      +'</div>':'')
       +'<div style="margin:10px 0;font-size:12px;color:rgba(255,255,255,0.5);">'
-        +'<b style="color:rgba(255,255,255,0.7);">Category:</b> '+h(a.category||'—')
+        +'<b style="color:rgba(255,255,255,0.7);">Category:</b> '+h(a.categoryLabel||a.category||'—')
         +(a.business?' · <b style="color:rgba(255,255,255,0.7);">Business:</b> '+h(a.business):'')
         +(a.experience?' · <b style="color:rgba(255,255,255,0.7);">Exp:</b> '+h(a.experience):'')
-        +' · Applied: '+h(a.date||'—')
+        +(a.uid?'':' · <b style="color:#ff8c42;">no account linked</b>')
+        +' · Applied: '+h(_appWhen(a))
       +'</div>'
-      +(a.status==='pending'?'<div class="adm-card-actions">'
+      +(st==='pending'?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveApp('+i+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectApp('+i+')">❌ Reject</button>'
         +'<button class="abtn abtn-blue" onclick="requestInfo('+i+')">📋 Request Info</button>'
@@ -3406,63 +3483,121 @@ function renderApps(list){
     +'</div>';
   }).join('');
 }
+
+/* One date formatter for every timestamp shape the intake surfaces produced:
+   Firestore Timestamp, epoch millis, ISO string, and the day-first
+   "30/07/2026" that provider.html used to write. */
+function _appWhen(a){
+  var v=a.receivedAt||a.createdAt||a.submittedAt||a.date;
+  if(!v) return '—';
+  try{
+    if(typeof v.toDate==='function') v=v.toDate();
+    else if(typeof v==='object'&&v._seconds!=null) v=new Date(v._seconds*1000);
+    else if(typeof v==='number') v=new Date(v);
+    else if(/^\d{2}\/\d{2}\/\d{4}$/.test(v)){ var p=v.split('/'); v=new Date(p[2]+'-'+p[1]+'-'+p[0]); }
+    else v=new Date(v);
+    if(isNaN(v.getTime())) return '—';
+    return v.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  }catch(e){ return '—'; }
+}
+
+/* Re-run the server projection for an application approved before the
+   application-lifecycle engine existed (or whose projection failed).
+   Takes an INDEX into D.apps rather than an id — see the note at the call site. */
+async function republishApp(i){
+  var a=D.apps[i]; if(!a){ toast('Application not found','error'); return; }
+  var fsId=a._fsId||a.id;
+  if(!fsId){ toast('No Firestore id on this application','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn=window.sokoniCallable('applicationReconcile');
+    var r=await fn({applicationId:fsId});
+    var w=(r&&r.data&&r.data.results&&r.data.results[0])||{};
+    if(w.ok===false) throw new Error(w.reason||w.error||'projection failed');
+    var writes=(w.writes||[]).map(function(x){return x.collection+' '+x.action;}).join('; ');
+    toast('✅ Published — '+(writes||'no change'));
+  }catch(e){
+    console.error('[Admin] republish failed',e);
+    toast('Publish failed: '+(e.message||'unknown'),'error');
+  }
+}
 var _ROLE_MAP={seller:'seller',provider:'seller',driver:'driver',delivery:'delivery',lawyer:'legal',law_firm:'legal',healthcare:'healthcare',landlord:'landlord'};
 
+/* ── Decisions are server-authoritative ──────────────────────────────────────
+   The old approveApp did two client-side writes, each in its own empty catch: it
+   flipped the application status and set registeredAs.<role> on the user. It
+   never created the registry document, so an approved cleaning company never
+   entered `providers/{uid}` and an approved rider never entered
+   `drivers`/`rideDrivers` — the toast said "Approved … roles updated" over an
+   applicant no customer could find and no dispatcher could reach. Because both
+   writes were swallowed, a rules rejection produced the same cheerful toast.
+
+   `applicationDecide` does the whole transition on the server — registry
+   projection, `updatedAt`, search index, role grant, applicant notification —
+   atomically, and returns a receipt this UI reports verbatim. */
+async function _decideApp(i, decision, reason){
+  var a=D.apps[i]; if(!a) return null;
+  var fsId=a._fsId||a.id;
+  if(!fsId){ toast('This application has no Firestore id — cannot decide','error'); return null; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return null; }
+  var fn=window.sokoniCallable('applicationDecide');
+  var res=await fn({applicationId:fsId,decision:decision,reason:reason||null});
+  return (res&&res.data)||{};
+}
+
 async function approveApp(i){
-  var a=D.apps[i];
-  a.status='approved';
-
-  /* 1 — Firestore: update application document */
-  if(a._fsId && window.SokoniDB){
-    try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
+  var a=D.apps[i]; if(!a) return;
+  try{
+    var d=await _decideApp(i,'approve');
+    if(!d) return;
+    a.status='approved';
+    var writes=((d.receipt&&d.receipt.writes)||[]);
+    var summary=writes.map(function(w){
+      var s=w.collection+' '+w.action;
+      if(w.documentsMissing&&w.documentsMissing.length) s+=' (collect: '+w.documentsMissing.join(', ')+')';
+      return s;
+    }).join('; ');
+    /* Report what the server actually wrote, not what we hoped it wrote. */
+    toast('✅ Approved: '+a.name+' — '+(summary||'no registry change'));
+  }catch(e){
+    console.error('[Admin] approve failed',e);
+    toast('Approve FAILED for '+a.name+': '+(e.message||'unknown error'),'error');
+    renderApps(D.apps); renderStats();
+    return;   /* status not changed locally — the decision did not happen */
   }
-
-  /* 2 — Firestore: grant role on the user's profile doc */
-  if(a.uid && window.firebaseDB){
-    try{
-      var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      var roleKey=_ROLE_MAP[a.type]||'seller';
-      var patch={'approved':true,'approvedAt':new Date().toISOString()};
-      patch['registeredAs.'+roleKey]=true;
-      await updateDoc(doc(window.firebaseDB,'users',a.uid),patch);
-    }catch(e){ console.warn('[Admin] role grant failed',e); }
-  }
-
-  /* 3 — local state */
-  localStorage.setItem('sokoniPendingApplications',JSON.stringify(D.apps));
   renderApps(D.apps); renderStats();
 
-  /* 4 — open WhatsApp so admin can send real notification */
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    /* Canonical public domain only — this is the first URL a new merchant ever receives.
-       sokoni-aeb26.web.app is engineering infrastructure and must never reach a merchant. */
-    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start listing. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+waMsg,'_blank','noopener');
+  /* WhatsApp is now a courtesy on top of the server-sent notification, not the
+     notification itself. Built from whichever phone shape is present — it used
+     to read only `a.phone`, so every driver application (which stored the number
+     as `mpesa`) silently produced no message at all. */
+  var p=_appLocalPhone(a);
+  if(p){
+    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start earning. Welcome aboard! — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+waMsg,'_blank','noopener');
   }
-  toast('✅ Approved: '+a.name+(a.uid?' — roles updated':'')+' — WhatsApp opened');
 }
 
 async function rejectApp(i){
+  var a=D.apps[i]; if(!a) return;
   var reason=prompt('Reason for rejection (optional):');
-  var a=D.apps[i];
-  a.status='rejected'; a.rejectReason=reason||'';
-
-  /* Firestore: update application document */
-  if(a._fsId && window.SokoniDB){
-    try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'rejected',{rejectReason:reason||''}); }catch(e){}
+  try{
+    var d=await _decideApp(i,'reject',reason);
+    if(!d) return;
+    a.status='rejected'; a.rejectReason=reason||'';
+    toast('❌ Rejected: '+a.name);
+  }catch(e){
+    console.error('[Admin] reject failed',e);
+    toast('Reject FAILED for '+a.name+': '+(e.message||'unknown error'),'error');
+    return;
   }
-
-  localStorage.setItem('sokoniPendingApplications',JSON.stringify(D.apps));
   renderApps(D.apps); renderStats();
 
-  /* WhatsApp rejection notice */
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
+  var p=_appLocalPhone(a);
+  if(p){
     var rMsg=encodeURIComponent('Hello '+a.name+', your SOKONI application was reviewed'+(reason?' ('+reason+')':'')+'. Feel free to reapply. — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+rMsg,'_blank','noopener');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+rMsg,'_blank','noopener');
   }
-  toast('❌ Rejected: '+a.name);
 }
 
 function requestInfo(i){
@@ -3494,17 +3629,43 @@ async function renderDriverApps(filter){
   if(!list) return;
   list.innerHTML = '<div style="color:rgba(255,255,255,0.25);font-size:12px;padding:16px 0;">Loading driver applications…</div>';
 
-  /* Try Firestore first */
+  /* Read Firestore.
+     The old query was where('type','==','driver'), which only matches an
+     application whose `type` is literally "driver". A boda operator who
+     registered through the business form (type:'business', category:'boda') is a
+     rider by any sensible reading and never appeared in this pane at all. The
+     server now resolves a canonical `role` on intake, so the whole (small,
+     admin-only) collection is read and filtered on that — which also needs no
+     composite index and so cannot fail the way the moderation query did. */
+  var _loadErr = null;
   try{
     if(window.firebaseDB){
       var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      var q  = fs.query(fs.collection(window.firebaseDB,'applications'), fs.where('type','==','driver'));
-      var snap = await fs.getDocs(q);
-      _drvApps = snap.docs.map(function(d){ return Object.assign({_fsId:d.id},d.data()); });
+      var snap = await fs.getDocs(fs.query(fs.collection(window.firebaseDB,'applications'), fs.limit(300)));
+      _drvApps = snap.docs.map(function(d){ return Object.assign({_fsId:d.id},d.data()); })
+        .filter(function(a){
+          if(a.role) return a.role === 'driver';
+          /* Pre-normalisation documents: fall back to keyword matching. */
+          return /\b(driver|rider|boda|courier)\b/i.test([a.type,a.category,a.categoryLabel].filter(Boolean).join(' '));
+        });
     }
-  }catch(e){ _drvApps = []; }
+  }catch(e){
+    /* Do NOT quietly substitute localStorage for a failed server read — that is
+       how a broken dashboard passes for an empty one. */
+    console.error('[Admin] driver applications read failed',e);
+    _loadErr = e;
+    _drvApps = [];
+  }
 
-  /* Fallback: localStorage */
+  if(_loadErr){
+    list.innerHTML = '<div style="padding:20px 0;color:#ff6b6b;font-size:13px;font-weight:700;">'
+      +'Could not load rider applications: '+h(_loadErr.message||'unknown error')
+      +'<div style="font-weight:400;color:rgba(255,255,255,0.45);margin-top:6px;">'
+      +'This is a read failure, not an empty queue. Reload, or check your admin claim.</div></div>';
+    return;
+  }
+
+  /* Offline backup — only when the server genuinely returned nothing. */
   if(!_drvApps.length){
     try{ _drvApps = (JSON.parse(localStorage.getItem('sokoniDriverApplications')||'[]')).filter(function(a){ return a.type==='driver'; }); }catch(e){}
   }
@@ -3525,83 +3686,148 @@ async function renderDriverApps(filter){
     var stBadge = a.status==='approved' ? '<span class="badge b-green">✅ Approved</span>'
                 : a.status==='rejected' ? '<span class="badge b-red">❌ Rejected</span>'
                 : '<span class="badge b-yellow">⏳ Pending</span>';
-    return '<div class="adm-card">'
+    /* Rider applications store the contact number as `mpesa`, so this card used
+       to render `a.phone` as "—" and hand an empty string to the WhatsApp button,
+       which then refused with "No valid phone number". _appContactBlock reads
+       every shape and shows a tappable number plus location and GPS pin. */
+    var stranded=(a.status==='approved') && a.projectionStatus && a.projectionStatus!=='applied';
+    return '<div class="adm-card"'+(stranded?' style="border-color:rgba(255,60,60,0.4);"':'')+'>'
       +'<div class="adm-card-head">'
-        +'<div><div class="adm-card-name">🚕 '+h(a.fullName||a.name||'—')+'</div>'
-        +'<div class="adm-card-sub">'+h(a.phone||'—')+' · '+h(a.nationalId?'ID: '+a.nationalId:'')+'</div></div>'
+        +'<div><div class="adm-card-name">🛵 '+h(a.fullName||a.name||'—')+'</div>'
+        +'<div class="adm-card-sub">'+h(a.nationalId?'ID on file':'ID not supplied')+'</div></div>'
         +stBadge
       +'</div>'
+      +_appContactBlock(a)
+      +(stranded?'<div style="margin:6px 0;font-size:11px;color:#ff6b6b;font-weight:800;">'
+        +'⚠ APPROVED BUT NOT DISPATCHABLE — no rider record was created.'
+        +(a.projectionError?'<br>'+h(String(a.projectionError).slice(0,140)):'')
+        /* Index into _drvApps — see the note on republishApp. */
+        +'<br><button class="abtn abtn-blue" style="margin-top:6px;" onclick="republishDriverApp('+idx+')">🔁 Create rider record</button>'
+      +'</div>':'')
       +'<div style="margin:10px 0;font-size:12px;color:rgba(255,255,255,0.5);display:flex;flex-wrap:wrap;gap:10px;">'
         +(a.vehicleType?'<span><b style="color:rgba(255,255,255,0.7);">Vehicle:</b> '+h(a.vehicleType)+'</span>':'')
         +(a.plate?'<span><b style="color:rgba(255,255,255,0.7);">Plate:</b> '+h(a.plate)+'</span>':'')
         +(a.model?'<span><b style="color:rgba(255,255,255,0.7);">Model:</b> '+h(a.model)+'</span>':'')
         +(a.year?'<span><b style="color:rgba(255,255,255,0.7);">Year:</b> '+h(a.year)+'</span>':'')
-        +(a.dlNumber?'<span><b style="color:rgba(255,255,255,0.7);">DL#:</b> '+h(a.dlNumber)+'</span>':'')
+        +(a.dlNumber?'<span><b style="color:rgba(255,255,255,0.7);">DL#:</b> '+h(a.dlNumber)+'</span>':'<span style="color:#ff8c42;"><b>DL#:</b> not supplied</span>')
         +(a.dlExpiry?'<span><b style="color:rgba(255,255,255,0.7);">DL Expiry:</b> '+h(a.dlExpiry)+'</span>':'')
         +(a.payoutFrequency?'<span><b style="color:rgba(255,255,255,0.7);">Payout:</b> '+h(a.payoutFrequency)+'</span>':'')
-        +(a.createdAt||a.date?'<span><b style="color:rgba(255,255,255,0.7);">Applied:</b> '+h((a.createdAt||a.date||'').slice(0,10))+'</span>':'')
+        +'<span><b style="color:rgba(255,255,255,0.7);">Applied:</b> '+h(_appWhen(a))+'</span>'
       +'</div>'
       +(a.status==='pending'||!a.status?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveDriver(\''+h(a._fsId||'')+'\','+idx+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectDriver(\''+h(a._fsId||'')+'\','+idx+')">❌ Reject</button>'
-        +'<button class="abtn abtn-blue" onclick="driverWhatsApp(\''+h(a.phone||'')+'\',\''+h(a.fullName||a.name||'')+'\')">'
+        /* Index, not the name. The applicant's name is attacker-controlled and an
+           inline handler decodes HTML entities before parsing the JS, so h() does
+           not contain it — a name like `');SK.dialog.alert(1);//` executed in the admin's
+           session. */
+        +'<button class="abtn abtn-blue" onclick="driverWhatsApp('+idx+')">'
           +'📱 WhatsApp</button>'
       +'</div>':'')
     +'</div>';
   }).join('');
 }
 
+/* Approving a rider used to flip the application status and set
+   registeredAs.driver — and stop. No `drivers/{uid}` and no `rideDrivers/{uid}`
+   document was ever created, so dispatch.js (which ranks `rideDrivers` where
+   isOnline == true) had nothing to rank and every delivery reported 'exhausted'.
+   Production confirmed it: all three driver collections held zero documents.
+   Both writes also sat inside an empty catch, so a rules rejection produced the
+   same cheerful "Driver approved" toast as a success.
+
+   `applicationDecide` creates both dispatch records plus the restricted
+   driverVerification document, grants the role and notifies the rider. */
 async function approveDriver(fsId, idx){
   var a = _drvApps[idx]; if(!a) return;
-  a.status = 'approved'; a.approvedAt = new Date().toISOString();
-
-  if(fsId && window.firebaseDB){
-    try{
-      var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      await fs.updateDoc(fs.doc(window.firebaseDB,'applications',fsId),{status:'approved',approvedAt:a.approvedAt});
-      /* Grant driver role on user profile */
-      if(a.uid){
-        await fs.updateDoc(fs.doc(window.firebaseDB,'users',a.uid),{'registeredAs.driver':true,'approved':true,'approvedAt':a.approvedAt});
-      }
-    }catch(e){ console.warn('[Admin] driver approve',e); }
+  if(!fsId){ toast('This application has no Firestore id — cannot approve','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn = window.sokoniCallable('applicationDecide');
+    var res = await fn({applicationId:fsId,decision:'approve'});
+    var d = (res&&res.data)||{};
+    a.status = 'approved'; a.approvedAt = new Date().toISOString();
+    var w = ((d.receipt&&d.receipt.writes)||[])[0]||{};
+    var missing = (w.documentsMissing||[]);
+    toast('✅ Rider approved: '+(a.fullName||a.name)+' — '+(w.collection||'no record')+' '+(w.action||''));
+    /* Approval grants the right to work; it does not mean the paperwork was
+       seen. Say which documents are still outstanding rather than implying a
+       completed check. */
+    if(missing.length) toast('⚠ Still to collect before first trip: '+missing.join(', '),'error');
+  }catch(e){
+    console.error('[Admin] driver approve failed',e);
+    toast('Approve FAILED for '+(a.fullName||a.name)+': '+(e.message||'unknown error'),'error');
+    renderDriverApps(_drvFilter);
+    return;   /* status unchanged locally — the approval did not happen */
   }
-
-  var phone = (a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI driver application has been approved. Log in at https://mysokoni.co.ke/driver and start earning. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+msg,'_blank','noopener');
-  }
-  toast('✅ Driver approved: '+(a.fullName||a.name));
   renderDriverApps(_drvFilter);
+
+  /* Built from whichever phone shape exists. It used to read only `a.phone`, so
+     every rider application (which stores the number as `mpesa`) produced no
+     message at all. */
+  var p = _appLocalPhone(a);
+  if(p){
+    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
+    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI rider application has been approved. Log in at https://mysokoni.co.ke/driver and go online to start earning. Welcome aboard! — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
+  }
+}
+
+/* Rider equivalent of republishApp — indexes _drvApps, not D.apps. */
+async function republishDriverApp(idx){
+  var a = _drvApps[idx]; if(!a){ toast('Application not found','error'); return; }
+  var fsId = a._fsId;
+  if(!fsId){ toast('No Firestore id on this application','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn=window.sokoniCallable('applicationReconcile');
+    var r=await fn({applicationId:fsId});
+    var w=(r&&r.data&&r.data.results&&r.data.results[0])||{};
+    if(w.ok===false) throw new Error(w.reason||w.error||'projection failed');
+    var writes=(w.writes||[]).map(function(x){return x.collection+' '+x.action;}).join('; ');
+    toast('✅ Rider record created — '+(writes||'no change'));
+    renderDriverApps(_drvFilter);
+  }catch(e){
+    console.error('[Admin] rider republish failed',e);
+    toast('Failed: '+(e.message||'unknown'),'error');
+  }
 }
 
 async function rejectDriver(fsId, idx){
-  var reason = prompt('Reason for rejection (optional):');
   var a = _drvApps[idx]; if(!a) return;
-  a.status = 'rejected'; a.rejectReason = reason||'';
-
-  if(fsId && window.firebaseDB){
-    try{
-      var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      await fs.updateDoc(fs.doc(window.firebaseDB,'applications',fsId),{status:'rejected',rejectReason:reason||''});
-    }catch(e){ console.warn('[Admin] driver reject',e); }
+  var reason = prompt('Reason for rejection (optional):');
+  if(!fsId){ toast('This application has no Firestore id — cannot reject','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn = window.sokoniCallable('applicationDecide');
+    await fn({applicationId:fsId,decision:'reject',reason:reason||null});
+    a.status = 'rejected'; a.rejectReason = reason||'';
+    toast('❌ Rider rejected: '+(a.fullName||a.name));
+  }catch(e){
+    console.error('[Admin] driver reject failed',e);
+    toast('Reject FAILED for '+(a.fullName||a.name)+': '+(e.message||'unknown error'),'error');
+    return;
   }
-
-  var phone = (a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+', your SOKONI driver application was not approved'+(reason?' ('+reason+')':'')+'. Please contact support for assistance. — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+msg,'_blank','noopener');
-  }
-  toast('❌ Driver rejected: '+(a.fullName||a.name));
   renderDriverApps(_drvFilter);
+
+  var p = _appLocalPhone(a);
+  if(p){
+    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+', your SOKONI rider application was not approved'+(reason?' ('+reason+')':'')+'. Please contact support for assistance. — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
+  }
 }
 
-function driverWhatsApp(phone, name){
-  var p = (phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(p.length<12){ toast('No valid phone number','error'); return; }
+/* Takes an INDEX into _drvApps rather than (phone, name) strings — see the note
+   at the call site. Resolving the values here also means the number is read
+   through _appLocalPhone, so a rider whose contact arrived as `mpesa` (which was
+   every rider) gets a working message instead of "No valid phone number". */
+function driverWhatsApp(idx){
+  var a = _drvApps[idx]; if(!a){ toast('Application not found','error'); return; }
+  var local = _appLocalPhone(a);
+  if(!local){ toast('No valid phone number on this application','error'); return; }
+  var name = a.fullName || a.name || 'there';
   var msg = encodeURIComponent('Hello '+name+', this is SOKONI Admin. ');
-  window.open('https://wa.me/'+p+'?text='+msg,'_blank','noopener');
+  window.open('https://wa.me/254'+local.slice(1)+'?text='+msg,'_blank','noopener');
 }
 
 /* ════════════════════════════════
@@ -4062,27 +4288,18 @@ function previewBc(){
 /* ════════════════════════════════
    ORDERS
 ════════════════════════════════ */
-function renderOrders(list){
-  var el=document.getElementById('ordersCount'); if(el) el.textContent=list.length;
-  var body=document.getElementById('ordersBody'); if(!body) return;
-  if(!list.length){ body.innerHTML=emptyRow(7,'🛒','No orders yet'); return; }
-  body.innerHTML=list.map(function(o,i){
-    var st=o.status||'pending';
-    var bc=st==='delivered'?'b-green':st==='cancelled'||st==='disputed'||st==='refunded'?'b-red':st==='processing'?'b-blue':'b-yellow';
-    return '<tr>'
-      +'<td style="font-size:10px;font-family:monospace;color:#71ff00;">#'+(o.id||i)+'</td>'
-      +'<td>'+h(o.buyerName||o.buyer||'Guest')+'</td>'
-      +'<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+h(o.productName||'—')+'</td>'
-      +'<td><b>KES '+(o.total||o.amount||0).toLocaleString()+'</b></td>'
-      +'<td><span class="badge '+bc+'">'+st+'</span></td>'
-      +'<td style="font-size:10px;color:rgba(255,255,255,0.3);">'+h(o.date||o.createdAt||'—')+'</td>'
-      +'<td style="display:flex;gap:4px;flex-wrap:wrap;">'
-        +(st==='disputed'?'<button class="abtn abtn-green" onclick="resolveOrderDispute('+i+')">⚖️ Resolve</button>':'')
-        +(st!=='disputed'&&st!=='cancelled'&&st!=='delivered'?'<button class="abtn abtn-yellow" onclick="flagDispute('+i+')">🚨 Flag</button>':'')
-      +'</td>'
-    +'</tr>';
-  }).join('');
-}
+/* The legacy localStorage Orders cluster lived here: renderOrders(), plus the
+   dispute handlers flagDispute(), resolveOrderDispute() and _doResolveDispute()
+   that only its own rows could reach.
+
+   It was removed once _renderAdmOrders became the sole renderer. The reason it
+   had to go rather than merely stop being called: flagDispute wrote an order
+   status to localStorage and nowhere else, so any path that reached it produced
+   a change Firestore never saw. Leaving a working-looking dispute button in the
+   source is how it comes back.
+
+   Orders are now Firestore-only: one listener, one renderer, one filter, one
+   dispute path (admFileDispute / openDisputeModal / openOverride). */
 function renderPOS(list){
   var cnt=document.getElementById('posCount'); if(cnt) cnt.textContent=list.length;
   var rev=list.reduce(function(s,o){return s+(o.total||0);},0);
@@ -4116,33 +4333,12 @@ function filterPOS(){
   });
   renderPOS(list);
 }
-function filterOrders(){
-  var q=(document.getElementById('orderSearch').value||'').toLowerCase();
-  var f=document.getElementById('orderFilter').value;
-  var list=D.orders.filter(function(o){
-    var mq=!q||(o.id||'').includes(q)||(o.buyerName||'').toLowerCase().includes(q)||(o.productName||'').toLowerCase().includes(q);
-    return mq&&(!f||o.status===f);
-  });
-  var el=document.getElementById('ordersCount'); if(el) el.textContent=list.length;
-  var body=document.getElementById('ordersBody'); if(!body) return;
-  if(!list.length){ body.innerHTML=emptyRow(7,'🛒','No matching orders'); return; }
-  renderOrders(list);
-}
-function flagDispute(i){
-  D.orders[i].status='disputed';
-  localStorage.setItem('sokoniOrders',JSON.stringify(D.orders));
-  renderOrders(D.orders); renderStats(); toast('🚨 Order flagged as disputed');
-}
-function resolveOrderDispute(i){
-  _skConfirm('Resolve in favour of BUYER (refund)?',
-    function(){ _doResolveDispute(i,true); },
-    function(){ _doResolveDispute(i,false); });
-}
-function _doResolveDispute(i, refund){
-  D.orders[i].status=refund?'refunded':'resolved';
-  localStorage.setItem('sokoniOrders',JSON.stringify(D.orders));
-  renderOrders(D.orders); renderStats(); toast('⚖️ Dispute '+(refund?'refunded':'resolved'));
-}
+/* The legacy filterOrders() lived here. It was already unreachable: the realtime
+   block assigns window.filterOrders = function(){…} later in the document, and an
+   inline oninput/onchange handler resolves through window — so the newer,
+   Firestore-backed filter always won. Kept as a note rather than a stub because a
+   shadowed duplicate is exactly what made the orders table behave inconsistently
+   depending on whether you had typed in the search box. */
 
 
 /* ════════════════════════════════
@@ -4172,10 +4368,13 @@ function filterProviders(q){
   renderProviders(D.providers.filter(function(p){ return (p.name||'').toLowerCase().includes(q2)||(p.category||'').toLowerCase().includes(q2); }));
 }
 function removeProvider(i,_c){
-  if(!_c){_skConfirm('Remove '+D.providers[i].name+'?',()=>removeProvider(i,true));return;}
-  D.providers.splice(i,1);
-  localStorage.setItem('sokoniServiceProviders',JSON.stringify(D.providers));
-  renderProviders(D.providers); renderStats(); toast('🚫 Provider removed');
+  /* Providers are now canonical Firestore records (not a localStorage cache), so a
+     client-side splice is not a real removal — the next `providers` snapshot restores
+     the row. Suspension must be a server action. Until that CF is wired, be honest
+     rather than fake a persistent delete. */
+  var p = D.providers[i]; if(!p) return;
+  if(!_c){_skConfirm('Suspend '+(p.name||'this provider')+'?',()=>removeProvider(i,true));return;}
+  toast('ℹ️ Provider suspension is a server action — not yet wired. No local change made.');
 }
 
 /* ════════════════════════════════
@@ -4244,6 +4443,36 @@ function loadFinData(){
   try{ FIN.taxes = JSON.parse(localStorage.getItem('sokoniTaxPayments')||'[]'); }catch(e){ FIN.taxes=[]; }
 }
 
+/* Canonical live finance strip (Priority 2 — Admin OS Phase 1 canonical sync).
+   The P&L above is the admin's own cost/tax bookkeeping (legitimately local: FIN.costs /
+   FIN.taxes are hand-entered). REVENUE, however, must come from canonical Firestore — the
+   old localStorage ledgers (sokoniCommissionLedger / sokoniBookingFees / sokoniPhoneLeads /
+   sokoniPlatformBookings) were stale mirrors. This appends live, clearly-labelled cards from
+   adminGetFinance (payments + commissionLedger + providerPayouts + payoutRequests + wallets)
+   into the SAME #finKpis grid — additive data-binding only, no layout/routing/CSS change. */
+async function _admLoadCanonicalFinance(){
+  var grid = document.getElementById('finKpis'); if(!grid || typeof _invCall!=='function') return;
+  grid.querySelectorAll('[data-canon="1"]').forEach(function(n){ n.remove(); });   /* idempotent */
+  try{
+    var f = await _invCall('adminOsDispatch', { op:'adminGetFinance' });
+    if(!f || !f.buckets) return;
+    var b = f.buckets.last30d || {}, L = f.liability || {}, cap = f.capped || {};
+    var star = (cap.payments||cap.commissionLedger||cap.providerPayouts||cap.wallets||cap.payoutRequests) ? ' *' : '';
+    var R = function(n){ return 'KES '+fmt(Math.round(n||0)); };
+    var cards = [
+      fkpi('🟢', R(b.totalCommission),   'Platform Revenue · 30d'+star,      '#71ff00'),
+      fkpi('🛒', R(b.productCommission), 'Product Commission · 30d',         '#64b4ff'),
+      fkpi('🧰', R(b.serviceCommission), 'Service Commission · 30d',         '#00ccff'),
+      fkpi('💸', R(b.gatewayFees),       'Gateway Fees (absorbed) · 30d',    '#ff9f43'),
+      fkpi('📈', R(b.netMargin),         'Net Margin · 30d', (b.netMargin>=0?'#71ff00':'#ff6464')),
+      fkpi('👛', R(L.walletBalanceTotal),'Wallet Liability',                 '#b464ff'),
+      fkpi('⏳', R(L.pendingPayoutAmount),'Pending Payouts ('+(L.pendingPayoutCount||0)+')','#fbbf24'),
+      fkpi('✅', R(L.completedPayoutAmount),'Paid Out ('+(L.completedPayoutCount||0)+')','#71ff00')
+    ];
+    var tmp = document.createElement('div'); tmp.innerHTML = cards.join('');
+    Array.prototype.slice.call(tmp.children).forEach(function(c){ c.setAttribute('data-canon','1'); grid.appendChild(c); });
+  }catch(e){ /* canonical finance unavailable — keep local KPIs, never fabricate */ }
+}
 function renderFinance(){
   loadFinData();
   var period = (document.getElementById('finPeriod')||{}).value || 'month';
@@ -4295,6 +4524,7 @@ function renderFinance(){
     fkpi('✅','KES '+fmt(taxPaid),'Tax Paid (period)','#71ff00'),
     fkpi('📦',periodCosts.length,'Cost Entries','rgba(255,255,255,0.6)')
   ].join('');
+  _admLoadCanonicalFinance();   /* append canonical live finance cards (Firestore-sourced) */
 
   /* P&L bar */
   var maxVal = Math.max(totalRev, totalCost+totalTaxOwed, 1);
@@ -4608,8 +4838,13 @@ function renderWHT(){
   if(!body) return;
 
   var period = document.getElementById('finPeriod') ? document.getElementById('finPeriod').value : 'month';
-  var orders = [];
-  try { orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); } catch(e){}
+  /* Firestore, not localStorage. This read sokoniOrders, a key that is now
+     never written — and before the legacy Orders cluster was removed it was
+     only ever written as a side effect of clicking a dispute button, so on any
+     device where nobody had done that the withholding-tax report was computed
+     from an empty array and looked perfectly normal. window._admOrders is the
+     live snapshot the Orders listener maintains. */
+  var orders = Array.isArray(window._admOrders) ? window._admOrders : [];
   var filtered = filterByPeriod(orders, period);
 
   var map = {};
@@ -4702,43 +4937,304 @@ function replayInvoice(i){
 /* ════════════════════════════════
    USERS
 ════════════════════════════════ */
-function renderUsers(list){
-  var role=(document.getElementById('userRoleFilter')||{}).value||'';
-  var filtered=list.filter(function(u){ return !role||((u.role||u.type||'buyer').toLowerCase().includes(role)); });
-  var el=document.getElementById('usersCount'); if(el) el.textContent=filtered.length;
-  var body=document.getElementById('usersBody'); if(!body) return;
-  if(!filtered.length){ body.innerHTML=emptyRow(7,'👤','No users found'); return; }
-  body.innerHTML=filtered.map(function(u,i){
-    var role=u.role||u.type||'buyer';
-    var rc={seller:'b-green',provider:'b-blue',driver:'b-yellow',admin:'b-red'}[role]||'b-grey';
-    var status=u.suspended?'<span class="badge b-red">Suspended</span>':u.verified?'<span class="badge b-green">Verified</span>':'<span class="badge b-yellow">Active</span>';
-    return '<tr>'
-      +'<td><b>'+h(u.name||u.displayName||'—')+'</b></td>'
-      +'<td style="font-size:11px;">'+h(u.email||'—')+'<br>'+h(u.phone||'')+'</td>'
-      +'<td><span class="badge '+rc+'">'+h(role)+'</span></td>'
-      +'<td>'+h(u.city||u.location||'—')+'</td>'
-      +'<td style="font-size:11px;">'+h((u.joined||u.createdAt||'').substring(0,10)||'—')+'</td>'
-      +'<td>'+status+'</td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-red" onclick="adminDeleteUser('+i+')">🗑️</button>'
-      +'</td>'
-      +'</tr>';
-  }).join('');
+/* ══════════════════════════════════════════════════════════════════════════
+   USERS — Firestore is the source of truth
+   ══════════════════════════════════════════════════════════════════════════
+   This pane used to read D.users, which came from localStorage key
+   `sokoniAllUsers`. That key had exactly two references in the whole repository:
+   this read, and one write inside the delete handler. NOTHING populated it, so
+   D.users was [] on every device and the pane showed "No users found" forever
+   while 61 user documents sat in Firestore.
+
+   Auth is the identity provider; the `users` collection is the record. The list
+   is therefore built from Firestore and never from listUsers().
+
+   ── Schema reality, measured against production 2026-08-01 (61 docs) ───────
+   Several fields the old renderer read barely exist. They are rendered as
+   explicit placeholders rather than invented:
+
+       city        0%   -> always "—"; there is no city on a user document
+       joined      0%   -> falls back to createdAt (97%)
+       suspended   0%   -> status comes from `status` (93%) instead
+       verified    2%   -> badge shows only where it is genuinely set
+       phone       5%   -> the real field is phoneNumber (75%)
+
+   Roles are stored two ways: roles[] on 59 docs, a `role` string on 8, and TWO
+   documents carry neither. Both are read here because they are one concept
+   stored inconsistently — not a join across collections. Converging the WRITE
+   path onto roles[] is tracked separately; until then a filter that read only
+   one of them would hide real accounts. */
+
+var _usersAll     = [];      /* every user document, unsorted as delivered */
+var _usersLoaded  = false;   /* a snapshot has arrived — empty is then real */
+var _usersError   = null;
+var _usersPage    = 0;
+var USERS_PER_PAGE = 50;
+
+/* roles[] and role string are one axis. A user with neither matches only "all". */
+function _userRoles(u){
+  var out = [];
+  if (Array.isArray(u.roles)) out = out.concat(u.roles.filter(Boolean));
+  if (typeof u.role === "string" && u.role) out.push(u.role);
+  return out.map(function(r){ return String(r).toLowerCase(); });
 }
-function filterUsers(q){
-  var role=(document.getElementById('userRoleFilter')||{}).value||'';
-  var filtered=D.users.filter(function(u){
-    var s=(u.name||'')+(u.email||'')+(u.phone||'');
-    return s.toLowerCase().includes((q||'').toLowerCase()) && (!role||((u.role||u.type||'').includes(role)));
+function _userPhone(u){ return u.phoneNumber || u.phone || ""; }
+function _userName(u){  return u.name || u.displayName || u.username || ""; }
+function _userJoined(u){
+  var v = u.createdAt || u.joined;
+  if (!v) return "";
+  if (v.toDate) { try { return v.toDate().toISOString().slice(0,10); } catch(e){ return ""; } }
+  if (v.seconds) { try { return new Date(v.seconds*1000).toISOString().slice(0,10); } catch(e){ return ""; } }
+  return String(v).slice(0,10);
+}
+function _userJoinedMs(u){
+  var v = u.createdAt || u.joined;
+  if (!v) return 0;
+  if (v.toDate) { try { return v.toDate().getTime(); } catch(e){ return 0; } }
+  if (v.seconds) return v.seconds*1000;
+  var t = Date.parse(v); return isNaN(t) ? 0 : t;
+}
+
+function usersSetError(msg){
+  _usersError = msg || "unknown error";
+  console.error("[Admin][users] load failed:", _usersError);
+  renderUsers();
+}
+
+/* One entry point. Called by the listener, the filters and the pager alike, so
+   there is exactly one place that decides what the table shows. */
+function renderUsers(){
+  var body = document.getElementById("usersBody");
+  var cnt  = document.getElementById("usersCount");
+  if (!body) { console.warn("[Admin][users] no #usersBody in the DOM"); return; }
+
+  if (_usersError) {
+    if (cnt) cnt.textContent = "0";
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:#ff6b6b;font-weight:700;">'
+      + "Could not load users: " + h(String(_usersError))
+      + '<div style="color:rgba(255,255,255,.45);font-weight:400;margin:6px 0 12px;">This is a read failure, not an empty directory.</div>'
+      + '<button class="adm-btn-sm adm-btn-blue" onclick="usersRetry()">Retry</button></td></tr>';
+    return;
+  }
+  if (!_usersLoaded) {
+    if (cnt) cnt.textContent = "…";
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.35);">Loading users…</td></tr>';
+    return;
+  }
+
+  var q    = ((document.getElementById("userSearch")||{}).value || "").toLowerCase().trim();
+  var role = ((document.getElementById("userRoleFilter")||{}).value || "").toLowerCase();
+  var stat = ((document.getElementById("userStatusFilter")||{}).value || "").toLowerCase();
+
+  var list = _usersAll.filter(function(u){
+    if (q) {
+      var hay = (_userName(u) + " " + (u.email||"") + " " + _userPhone(u) + " " + (u.uid||"")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    if (role && _userRoles(u).indexOf(role) === -1) return false;
+    if (stat && String(u.status||"").toLowerCase() !== stat) return false;
+    return true;
   });
-  renderUsers(filtered);
+  /* Newest first, sorted here because the query is deliberately unordered — see
+     listenUsers() in sokoni-db.js. Documents without createdAt sort last rather
+     than vanishing. */
+  list.sort(function(x,y){ return _userJoinedMs(y) - _userJoinedMs(x); });
+
+  if (cnt) cnt.textContent = list.length;
+
+  var pages = Math.max(1, Math.ceil(list.length / USERS_PER_PAGE));
+  if (_usersPage >= pages) _usersPage = pages - 1;
+  var page = list.slice(_usersPage*USERS_PER_PAGE, (_usersPage+1)*USERS_PER_PAGE);
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.4);">'
+      + (_usersAll.length ? "No users match this filter." : "No users found.") + "</td></tr>";
+    _usersRenderPager(0, 1);
+    return;
+  }
+
+  var failed = 0;
+  body.innerHTML = page.map(function(u){
+    try { return _renderUserRow(u); }
+    catch (err) {
+      failed++;
+      console.error("[Admin][users] row failed", { uid: u && u.uid, error: err && err.message });
+      return '<tr><td colspan="7" style="color:#ff6b6b;font-size:11.5px;">⚠ ' + h(String((u&&u.uid)||"unknown"))
+        + " could not be displayed — " + h(String(err && err.message || "render error")) + "</td></tr>";
+    }
+  }).join("");
+  _usersRenderPager(_usersPage, pages);
+  console.info("[Admin][users]", { documents:_usersAll.length, matching:list.length,
+    page:_usersPage+1, pages:pages, rendered:page.length-failed, failed:failed,
+    collection:"users", source:"firestore", listenerAttached:!!window._usersUnsub });
 }
-function adminDeleteUser(i,_c){
-  if(!_c){_skConfirm('Remove this user record?',()=>adminDeleteUser(i,true));return;}
-  D.users.splice(i,1);
-  localStorage.setItem('sokoniAllUsers',JSON.stringify(D.users));
-  renderUsers(D.users); toast('User removed');
+
+function _renderUserRow(u){
+  var roles = _userRoles(u);
+  var primary = roles[0] || "";
+  var rc = {seller:"b-green",merchant:"b-green",provider:"b-blue",driver:"b-yellow",
+           rider:"b-yellow",admin:"b-red",business:"b-purple"}[primary] || "b-grey";
+  var roleCell = roles.length
+    ? roles.map(function(r){ return '<span class="badge '+( {seller:"b-green",merchant:"b-green",provider:"b-blue",driver:"b-yellow",rider:"b-yellow",admin:"b-red",business:"b-purple"}[r]||"b-grey")+'">'+h(r)+"</span>"; }).join(" ")
+    : '<span style="color:#ff8c42;font-weight:700;font-size:11px;">no role set</span>';
+
+  /* status (93%) is the real field. `suspended` does not exist on any document. */
+  var st = String(u.status||"").toLowerCase();
+  var statusCell = st === "suspended" || st === "banned" ? '<span class="badge b-red">'+h(u.status)+"</span>"
+    : u.verified === true ? '<span class="badge b-green">Verified</span>'
+    : st ? '<span class="badge b-grey">'+h(u.status)+"</span>"
+    : '<span style="color:rgba(255,255,255,.3);">—</span>';
+
+  var phone = _userPhone(u);
+  var joined = _userJoined(u);
+  /* city is absent from every document. Shown as an explicit dash rather than
+     back-filled from somewhere it does not belong. */
+  var city = u.city || u.location || "";
+
+  return "<tr>"
+    + "<td><b>" + (h(_userName(u)) || '<span style="color:rgba(255,255,255,.3);">unnamed</span>') + "</b>"
+      + '<div style="font-size:10px;color:rgba(255,255,255,.3);font-family:monospace;">' + h(String(u.uid||"").slice(0,14)) + "</div></td>"
+    + '<td style="font-size:11px;">' + (h(u.email||"") || '<span style="color:rgba(255,255,255,.3);">—</span>')
+      + (phone ? "<br>"+h(phone) : '<br><span style="color:rgba(255,255,255,.3);">no phone</span>') + "</td>"
+    + "<td>" + roleCell + "</td>"
+    + '<td>' + (h(city) || '<span style="color:rgba(255,255,255,.3);">—</span>') + "</td>"
+    + '<td style="font-size:11px;">' + (h(joined) || '<span style="color:rgba(255,255,255,.3);">—</span>') + "</td>"
+    + "<td>" + statusCell + "</td>"
+    + '<td style="white-space:nowrap;"><button class="adm-btn-sm adm-btn-blue" onclick="openUserDetail(\''+h(String(u.uid||""))+'\')">View</button></td>'
+    + "</tr>";
 }
+
+function _usersRenderPager(page, pages){
+  var el = document.getElementById("usersPager");
+  if (!el) return;
+  if (pages <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = '<button class="adm-btn-sm" '+(page<=0?"disabled":"")+' onclick="usersGoPage('+(page-1)+')">‹ Prev</button>'
+    + '<span style="margin:0 12px;font-size:12px;color:rgba(255,255,255,.5);">Page '+(page+1)+" of "+pages+"</span>"
+    + '<button class="adm-btn-sm" '+(page>=pages-1?"disabled":"")+' onclick="usersGoPage('+(page+1)+')">Next ›</button>';
+}
+function usersGoPage(p){ _usersPage = Math.max(0, p); renderUsers(); }
+
+/* Filters re-render from the cached snapshot; they never refetch. */
+function filterUsers(){ _usersPage = 0; renderUsers(); }
+
+function usersRetry(){
+  _usersError = null; _usersLoaded = false; renderUsers();
+  try { if (window._usersUnsub) { window._usersUnsub(); window._usersUnsub = null; } } catch(e){}
+  startUsersListener();
+}
+
+function startUsersListener(){
+  if (window._usersUnsub) return;                 /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenUsers) {
+    usersSetError("data layer unavailable — reload the page");
+    return;
+  }
+  window._usersUnsub = window.SokoniDB.listenUsers(
+    function(users){
+      _usersLoaded = true; _usersError = null;
+      _usersAll = users;
+      D.users = users;                            /* stat counters read this */
+      renderUsers();
+    },
+    function(err){ usersSetError((err && err.message) || "permission denied"); }
+  );
+}
+
+/* ── Providers listener ─────────────────────────────────────────────────────
+   Canonical source is the Firestore `providers` collection (SokoniDB.listenProviders,
+   status ∈ {active,approved} per the discovery contract) — NOT localStorage. The
+   old `ls('sokoniServiceProviders')` seed showed a stale local cache that never
+   reflected who was actually bookable in production. Cards + the counter now
+   redraw live on every snapshot. Pending/suspended applicants are a separate
+   registry (Applications pane), not bookable providers, so they are intentionally
+   outside this active/approved discovery scope. */
+function startProvidersListener(){
+  if (window._providersUnsub) return;             /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenProviders) return;
+  window._providersUnsub = window.SokoniDB.listenProviders(function(providers){
+    D.providers = providers;                       /* stat counters read this */
+    try { renderProviders(D.providers); } catch(e){}
+    if (typeof renderStats === 'function') try { renderStats(); } catch(e){}
+  });
+}
+
+/* ── Products listener (Priority 3 — canonical `products`) ──────────────────
+   The catalogue seeded from ls('sellerProducts') — a stale local mirror (and demo
+   seed) that never matched live inventory. Now wired to the canonical `products`
+   collection via SokoniDB.listenProducts (newest-200, __name__ index, no composite),
+   with the same one-listener discipline as Users/Providers. Approval actions already
+   sync to Firestore (_syncListingApproval); this makes the READ canonical too. */
+function startProductsListener(){
+  if (window._productsUnsub) return;              /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenProducts) return;
+  window._productsUnsub = window.SokoniDB.listenProducts({}, function(products){
+    /* Hide canonically-removed docs (admin delete → status:'removed'); everything
+       else the admin should still see, including pending/rejected. */
+    D.products = (products||[]).filter(function(p){
+      var s = String(p.status||'').toLowerCase();
+      return s!=='removed' && s!=='unpublished' && s!=='deleted';
+    });
+    try { renderProducts(D.products); } catch(e){}
+    if (typeof renderStats === 'function') try { renderStats(); } catch(e){}
+  });
+}
+
+/* ── User detail slide-in ──────────────────────────────────────────────────
+   #userDetailPanel shipped with a close button, no opener and no renderer:
+   #userDetailContent was an orphan container, never written to by anything. It
+   is now filled from the same cached Firestore snapshot the table renders, so
+   opening a row costs no extra read and can never disagree with the row above
+   it.
+
+   Absent fields are shown as "not set" rather than hidden or invented. A blank
+   where a phone number should be tells an administrator nothing; "not set" tells
+   them the record is incomplete, which is usually the thing they need to know
+   before ringing someone. */
+function openUserDetail(uid){
+  var panel = document.getElementById("userDetailPanel");
+  var box   = document.getElementById("userDetailContent");
+  if (!panel || !box) return;
+
+  var u = _usersAll.filter(function(x){ return String(x.uid) === String(uid); })[0];
+  panel.style.display = "block";
+  if (!u) {
+    box.innerHTML = '<div style="color:#ff6b6b;font-size:13px;font-weight:700;">User not found in the current snapshot.</div>'
+      + '<div style="color:rgba(255,255,255,.4);font-size:12px;margin-top:6px;">The list may have changed since this row was drawn. Close and reopen.</div>';
+    return;
+  }
+
+  var NOT_SET = '<span style="color:rgba(255,255,255,.3);">not set</span>';
+  function row(label, value, mono){
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);">'
+      + '<span style="color:rgba(255,255,255,.45);font-size:12px;">' + h(label) + "</span>"
+      + '<span style="font-size:12.5px;font-weight:600;text-align:right;word-break:break-all;'+(mono?"font-family:monospace;":"")+'">'
+      + (value || NOT_SET) + "</span></div>";
+  }
+
+  var roles = _userRoles(u);
+  var phone = _userPhone(u);
+  var joined = _userJoined(u);
+
+  box.innerHTML =
+      row("Name",    h(_userName(u)))
+    + row("UID",     h(String(u.uid||"")), true)
+    + row("Email",   h(u.email||""))
+    + row("Phone",   phone ? '<a href="tel:'+h(phone)+'" style="color:var(--accent);text-decoration:none;">'+h(phone)+"</a>" : "")
+    + row("Roles",   roles.length ? roles.map(function(r){ return h(r); }).join(", ") : "")
+    + row("Status",  h(u.status||""))
+    + row("Verified", u.verified === true ? "yes" : (u.verified === false ? "no" : ""))
+    + row("Joined",  h(joined))
+    + row("City",    h(u.city || u.location || ""))
+    + '<div style="margin-top:14px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:10px;font-size:11.5px;color:rgba(255,255,255,.4);line-height:1.6;">'
+    + "Read from the <b>users</b> collection. Fields marked <i>not set</i> are genuinely absent on this document — nothing here is filled in from another collection."
+    + "</div>";
+}
+/* The delete handler is gone. It spliced a local array and wrote it to
+   localStorage, which changed nothing in Firestore and nothing for the user —
+   it only removed the row until the page reloaded. Removing an account is a
+   server-side operation with auth, audit and cascade implications, so the row
+   action is now View. A real delete belongs behind a Cloud Function. */
+
 
 /* ════════════════════════════════
    DISPUTES
@@ -4798,110 +5294,317 @@ function updateReturn(i,status){
    PAYOUTS
 ════════════════════════════════ */
 var _payoutsUnsub = null;
+/* ════════════════════════════════
+   COMMAND-CENTER OVERVIEW (canonical KPIs)
+   #overviewStats was an empty stub — nothing populated it. Wire it to the
+   canonical adminGetExecutiveDashboard (via adminOsDispatch) so the homepage
+   shows real, live production numbers.
+════════════════════════════════ */
+/* ── Command Center: premium Overview dashboard (canonical AdminAPI only) ──────
+   Every number here comes from a Cloud Function (adminGetOverview/Payments/
+   PayoutRequests/Finance) via AdminAPI — never a direct client Firestore read.
+   No fabricated trends: only values the backend actually returns are shown. */
+function _ccInjectCss(){
+  if(document.getElementById('cc-css')) return;
+  var s=document.createElement('style'); s.id='cc-css';
+  s.textContent=
+    '.cc-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}'
+   +'.cc-kpi{position:relative;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px 16px 14px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease;overflow:hidden}'
+   +'.cc-kpi:hover{transform:translateY(-2px);border-color:rgba(124,255,0,.35);background:linear-gradient(160deg,rgba(124,255,0,.06),rgba(255,255,255,.02))}'
+   +'.cc-kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}'
+   +'.cc-kpi-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:rgba(124,255,0,.1);font-size:17px}'
+   +'.cc-kpi-val{font-size:26px;font-weight:900;letter-spacing:-.5px;color:#fff;line-height:1.05}'
+   +'.cc-kpi-label{font-size:11px;font-weight:600;color:rgba(255,255,255,.45);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}'
+   +'.cc-kpi-sub{font-size:10.5px;color:rgba(124,255,0,.75);margin-top:6px;font-weight:700}'
+   +'.cc-row{display:grid;gap:14px;margin-top:16px}'
+   +'@media(min-width:900px){.cc-row.cc-2{grid-template-columns:1.4fr 1fr}}'
+   +'.cc-card{background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px 18px}'
+   +'.cc-card-h{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:800;color:#fff;margin-bottom:12px}'
+   +'.cc-card-h .cc-pill{font-size:10px;font-weight:700;color:rgba(124,255,0,.8);background:rgba(124,255,0,.1);border:1px solid rgba(124,255,0,.2);border-radius:20px;padding:3px 9px}'
+   +'.cc-tbl{width:100%;border-collapse:collapse;font-size:12px}'
+   +'.cc-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.35);font-weight:700;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.07)}'
+   +'.cc-tbl td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.045);color:rgba(255,255,255,.8)}'
+   +'.cc-tbl tr:last-child td{border-bottom:0}'
+   +'.cc-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px}'
+   +'.cc-b-green{background:rgba(16,185,129,.15);color:#34d399}.cc-b-red{background:rgba(239,68,68,.15);color:#f87171}.cc-b-yellow{background:rgba(251,191,36,.15);color:#fbbf24}'
+   +'.cc-fin{display:grid;grid-template-columns:1fr 1fr;gap:10px}'
+   +'.cc-fin-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 12px}'
+   +'.cc-fin-item .v{font-size:16px;font-weight:900;color:#fff}.cc-fin-item .l{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}';
+  document.head.appendChild(s);
+}
+function _ccMoney(n){ return 'KES '+Number(n||0).toLocaleString(); }
+function _ccKpi(icon,val,label,sub,pane){
+  return '<div class="cc-kpi"'+(pane?(' onclick="showPane(\''+pane+'\')"'):'')+'>'
+    +'<div class="cc-kpi-top"><span class="cc-kpi-icon">'+icon+'</span></div>'
+    +'<div class="cc-kpi-val">'+val+'</div>'
+    +'<div class="cc-kpi-label">'+label+'</div>'
+    +(sub?('<div class="cc-kpi-sub">'+sub+'</div>'):'')
+    +'</div>';
+}
+async function renderOverview(){
+  _ccInjectCss();
+  var stats = document.getElementById('overviewStats');
+  var dash  = document.getElementById('ccDashboard');
+  if(!stats) return;
+  stats.innerHTML = '<div class="adm-empty" style="grid-column:1/-1"><div class="adm-empty-icon">⏳</div>Loading platform overview…</div>';
+  /* AdminAPI is the canonical path; fall back to the raw dispatch only if the
+     helper script hasn't loaded yet (never a direct Firestore read). */
+  try{
+    var get = (typeof AdminAPI!=='undefined')
+      ? function(op,d){ return AdminAPI.call(op,d); }
+      : function(op,d){ return _invCall('adminOsDispatch', Object.assign({op:op},d||{})); };
+    var d = await get('adminGetOverview') || {};
+    stats.innerHTML =
+      _ccKpi('👥', (d.totalUsers||0),        'Total Users',    (d.newUsersToday!=null?('+'+d.newUsersToday+' today'):''), 'users')
+     +_ccKpi('🛠️',(d.totalProviders||0),     'Providers',      ((d.activeProviders||0)+' active'), 'providers')
+     +_ccKpi('🛒', (d.totalOrders||0),        'Product Orders', '', 'orders')
+     +_ccKpi('📅', (d.totalServiceBookings||0),'Service Bookings',((d.activeServiceBookings||0)+' active'),'services')
+     +_ccKpi('💰', _ccMoney(d.revenueToday),  'Revenue Today',  '', 'finance')
+     +_ccKpi('⏳', (d.pendingPayouts||0),      'Pending Payouts',_ccMoney(d.pendingPayoutAmount), 'payouts')
+     +_ccKpi('👛', _ccMoney(d.pendingPayoutAmount),'Payout Liability','', 'payouts')
+     +_ccKpi('📑', (d.activeSubscriptions||0),'Active Subs',    '', null)
+     +_ccKpi('⚖️',(d.openDisputes||0),        'Open Disputes',  '', 'disputes')
+     +_ccKpi('🎫', (d.openTickets||0),         'Support Tickets','', null)
+     +_ccKpi('🚚', (d.activeDeliveries||0),    'Active Deliveries','', 'delivery')
+     +_ccKpi('🔥', (d.activeServiceBookings||0),'Active Bookings','', 'services');
+    if(dash) _ccRenderRows(dash, get);
+  }catch(e){
+    stats.innerHTML = '<div class="adm-empty" style="grid-column:1/-1"><div class="adm-empty-icon">⚠️</div>Unable to load overview'+((e&&e.message)?(' — '+h(e.message)):'')+'</div>';
+  }
+}
+/* Dashboard rows — recent payments + withdrawals queue + finance summary, all canonical. */
+async function _ccRenderRows(dash, get){
+  dash.innerHTML =
+    '<div class="cc-row cc-2">'
+     +'<div class="cc-card"><div class="cc-card-h">💳 Latest Transactions <span class="cc-pill" id="ccTxPill">payments</span></div><div id="ccTx"><div class="aapi-skel"><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div></div></div></div>'
+     +'<div class="cc-card"><div class="cc-card-h">⏳ Withdrawals Queue <span class="cc-pill" id="ccWqPill">payoutRequests</span></div><div id="ccWq"><div class="aapi-skel"><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div></div></div></div>'
+    +'</div>'
+    +'<div class="cc-row"><div class="cc-card"><div class="cc-card-h">📈 Finance Summary · 30d <span class="cc-pill" id="ccFinPill">adminGetFinance</span></div><div id="ccFin"><div class="aapi-skel"><div class="aapi-skel-row"></div></div></div></div></div>';
+
+  /* Latest transactions */
+  get('adminGetPayments', { limit: 8 }).then(function(res){
+    var rows=(res&&res.payments)||[]; var el=document.getElementById('ccTx');
+    if(!el) return;
+    if(!rows.length){ el.innerHTML='<div class="adm-empty" style="opacity:.5">No payments yet.</div>'; return; }
+    var badge=function(s){ s=String(s||'').toUpperCase(); var c=s==='COMPLETE'?'cc-b-green':(s==='FAILED'?'cc-b-red':'cc-b-yellow'); return '<span class="cc-badge '+c+'">'+h(s||'—')+'</span>'; };
+    el.innerHTML='<table class="cc-tbl"><thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Phone</th></tr></thead><tbody>'
+      +rows.map(function(r){ var dt=r.createdAtMs?new Date(r.createdAtMs).toLocaleDateString('en-KE',{day:'numeric',month:'short'}):'—';
+        return '<tr><td style="color:rgba(255,255,255,.5)">'+h(dt)+'</td><td style="font-weight:800;color:#34d399">'+_ccMoney(r.amount)+'</td><td>'+badge(r.status)+'</td><td style="font-family:monospace;font-size:11px">'+h(r.phone||'—')+'</td></tr>'; }).join('')
+      +'</tbody></table>';
+  }).catch(function(){ var el=document.getElementById('ccTx'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load payments.</div>'; });
+
+  /* Withdrawals queue */
+  get('adminGetPayoutRequests').then(function(res){
+    var items=(res&&res.items)||[]; var el=document.getElementById('ccWq'); if(!el) return;
+    var pending=items.filter(function(r){ return ['pending','approved','processing'].indexOf(r.status)>=0; });
+    if(!pending.length){ el.innerHTML='<div class="adm-empty" style="opacity:.5">Queue clear — no pending withdrawals.</div>'; return; }
+    el.innerHTML='<table class="cc-tbl"><thead><tr><th>Seller</th><th>Amount</th><th>Status</th></tr></thead><tbody>'
+      +pending.slice(0,6).map(function(r){ return '<tr><td>'+h(r.sellerName||('Seller '+String(r.sellerUid).slice(0,6)))+'</td><td style="font-weight:800;color:#fff">'+_ccMoney(r.amount)+'</td><td><span class="cc-badge cc-b-yellow">'+h((r.status||'').toUpperCase())+'</span></td></tr>'; }).join('')
+      +'</tbody></table><div style="margin-top:10px"><button class="solid-btn solid-green" style="font-size:12px;padding:7px 14px" onclick="showPane(\'payouts\')">Open Withdrawals →</button></div>';
+  }).catch(function(){ var el=document.getElementById('ccWq'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load withdrawals.</div>'; });
+
+  /* Finance summary (30d canonical) */
+  get('adminGetFinance').then(function(res){
+    var b=(res&&res.buckets&&res.buckets.last30d)||{}; var L=(res&&res.liability)||{}; var el=document.getElementById('ccFin'); if(!el) return;
+    el.innerHTML='<div class="cc-fin">'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.totalCommission)+'</div><div class="l">Platform Revenue</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.serviceRevenue)+'</div><div class="l">Service GMV</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.gatewayFees)+'</div><div class="l">Gateway Fees</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.netMargin)+'</div><div class="l">Net Margin</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(L.walletBalanceTotal)+'</div><div class="l">Wallet Liability</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(L.pendingPayoutAmount)+'</div><div class="l">Pending Payouts</div></div>'
+      +'</div>';
+  }).catch(function(){ var el=document.getElementById('ccFin'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load finance.</div>'; });
+}
+window.renderOverview = renderOverview;
+/* Populate the default-active Overview once on load (renderPane fires it on switch). */
+document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ try{ renderOverview(); }catch(_){}}, 1200); });
+
+/* ── Payout status model — strict colours + labels; a failed/processing payout
+   must NEVER look paid. Green is reserved for confirmed settlements only. ── */
+function _payoutCss(){
+  if(document.getElementById('payout-badge-css')) return;
+  var s=document.createElement('style'); s.id='payout-badge-css';
+  s.textContent='.badge.b-gray{background:rgba(148,163,184,.15);color:#94a3b8}'
+    +'.badge.b-purple{background:rgba(168,85,247,.18);color:#c084fc}'
+    +'.badge.b-darkred{background:rgba(153,27,27,.3);color:#fca5a5}';
+  document.head.appendChild(s);
+}
+function _payoutStatusMeta(s){
+  s=String(s||'').toLowerCase();
+  var M={
+    pending:{cls:'b-gray',label:'Pending'}, approved:{cls:'b-blue',label:'Approved'},
+    approving:{cls:'b-yellow',label:'Sending'}, sending:{cls:'b-yellow',label:'Sending'},
+    processing:{cls:'b-yellow',label:'Processing'}, retry_scheduled:{cls:'b-yellow',label:'Retrying'},
+    paid:{cls:'b-green',label:'Paid ✓'}, completed:{cls:'b-green',label:'Paid ✓'},
+    settled_manually:{cls:'b-green',label:'Settled (manual) 📝'},
+    failed:{cls:'b-red',label:'Failed'}, refunded:{cls:'b-purple',label:'Refunded'},
+    rejected:{cls:'b-darkred',label:'Rejected'}
+  };
+  return M[s]||{cls:'b-yellow',label:(s||'—').toUpperCase()};
+}
+function _payoutBadge(s){ var m=_payoutStatusMeta(s); return '<span class="badge '+m.cls+'">'+h(m.label)+'</span>'; }
+/* Compact journey from statusHistory — ✓ for progress, ✗ for a failure/refund step. */
+function _payoutTimeline(tl){
+  if(!tl||!tl.length) return '';
+  return '<div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:3px;line-height:1.6;">'
+    +tl.map(function(e){ var bad=['failed','rejected','refunded'].indexOf(String(e.status).toLowerCase())>=0;
+      return '<span style="white-space:nowrap;color:'+(bad?'#f87171':'rgba(255,255,255,.5)')+'">'+(bad?'✗':'✓')+' '+h(_payoutStatusMeta(e.status).label.replace(/ .*/,''))+'</span>';
+    }).join(' <span style="opacity:.3">→</span> ')+'</div>';
+}
+/* ── Single-payout lifecycle inspector (adminGetPayout) — the whole journey in one
+   overlay so an operator never cross-references Firestore + logs + IntaSend + webhook. */
+async function _payoutInspect(id){
+  if(typeof AdminAPI==='undefined'||!AdminAPI.call){ toast('Data layer not ready'); return; }
+  var host=document.getElementById('payoutInspectModal');
+  if(!host){ host=document.createElement('div'); host.id='payoutInspectModal';
+    host.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    host.addEventListener('click',function(e){ if(e.target===host) host.style.display='none'; });
+    document.body.appendChild(host); }
+  host.style.display='flex';
+  host.innerHTML='<div class="pi-box"><div style="text-align:center;color:rgba(255,255,255,.4);padding:24px">Loading payout…</div></div>';
+  if(!document.getElementById('pi-css')){ var s=document.createElement('style'); s.id='pi-css';
+    s.textContent='.pi-box{background:#0b0b0b;border:1px solid rgba(255,255,255,.12);border-radius:16px;max-width:580px;width:100%;max-height:86vh;overflow:auto;padding:20px;color:#fff;font-size:13px}'
+      +'.pi-sec{margin-top:14px}.pi-sec-h{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);font-weight:700;margin-bottom:6px}'
+      +'.pi-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)}.pi-row b{color:rgba(255,255,255,.55);font-weight:600}'
+      +'.pi-stages{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.pi-stage{font-size:10px;padding:4px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.1)}'
+      +'.pi-done{background:rgba(16,185,129,.15);color:#34d399}.pi-fail{background:rgba(239,68,68,.15);color:#f87171}.pi-todo{color:rgba(255,255,255,.3)}';
+    document.head.appendChild(s); }
+  try{
+    var d=await AdminAPI.call('adminGetPayout',{id:id});
+    var box=host.firstChild;
+    if(!d||!d.found){ box.innerHTML='<div style="color:#f87171">Payout not found: '+h(id)+'</div>'; return; }
+    box.innerHTML=_renderPayoutInspector(d);
+  }catch(e){ host.firstChild.innerHTML='<div style="color:#f87171">Error: '+h((e&&e.message)||'failed')+'</div><div style="margin-top:10px"><button class="solid-btn" onclick="document.getElementById(\'payoutInspectModal\').style.display=\'none\'">Close</button></div>'; }
+}
+function _renderPayoutInspector(d){
+  var r=d.request||{}, st=d.status||{}, g=d.gateway||{}, wh=d.webhook||{}, se=d.settlement||{}, er=d.errors||{};
+  var stage=st.stage||0, failed=stage<0;
+  var STAGES=[['Requested',1],['Approved',2],['Sending',3],['Processing',4],['Paid',5]];
+  var stagesHtml=STAGES.map(function(s){
+    var cls = failed ? (s[1]<=(stage===-2?4:3)?'pi-done':'pi-fail') : (stage>=s[1]?'pi-done':'pi-todo');
+    if(failed && s[1]>=4) cls = (s[0]==='Paid')?'pi-fail':cls;
+    return '<span class="pi-stage '+cls+'">'+(cls==='pi-done'?'✓ ':(cls==='pi-fail'?'✗ ':''))+s[0]+'</span>';
+  }).join('');
+  if(failed) stagesHtml+='<span class="pi-stage '+(stage===-2?'pi-done':'pi-fail')+'">'+(stage===-2?'✓ Refunded':'✗ '+st.current.toUpperCase())+'</span>';
+  var row=function(k,v){ return v==null||v===''?'':'<div class="pi-row"><b>'+k+'</b><span>'+h(String(v))+'</span></div>'; };
+  var money=function(n){ return 'KES '+Number(n||0).toLocaleString(); };
+  var out='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:900;font-size:15px">Withdrawal '+h((r.id||'').slice(0,20))+'</div>'+_payoutBadge(st.current)+'</div>';
+  out+='<div class="pi-stages">'+stagesHtml+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Request</div>'+row('Provider',r.providerName||r.sellerUid)+row('Amount',money(r.amount))+row('Phone',r.phone)+row('Method',r.method)+row('Created',r.createdAt)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Gateway ('+h(g.name||'')+')</div>'+row('Reference',g.reference||'—')+row('Gateway status',g.gatewayStatus)+row('Submitted',g.submittedAt)+row('Confirmed',g.confirmedAt)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Webhook</div>'+row('Received',wh.received?'yes':'NO — not yet confirmed')+row('Last state',wh.lastState)+row('Received at',wh.receivedAt)+row('Events',(wh.events||[]).length)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Settlement</div>'+row('Wallet debited',se.walletDebited?'yes':'no')+row('Ledger status',se.ledgerStatus)+row('Type',se.settlementType)+row('Wallet balance',se.walletBalance==null?'':money(se.walletBalance))+row('Wallet pending',se.walletPending==null?'':money(se.walletPending))+row('External ref',se.externalReference)+'</div>';
+  if(er.lastError||er.retryCount){ out+='<div class="pi-sec"><div class="pi-sec-h" style="color:#f87171">Errors</div>'+row('Last error',(er.lastError||'').slice(0,140))+row('Retries',er.retryCount)+'</div>'; }
+  out+='<div class="pi-sec"><div class="pi-sec-h">Timeline</div>'+(d.timeline||[]).map(function(t){ var bad=['failed','rejected','refunded'].indexOf(String(t.status).toLowerCase())>=0;
+    return '<div style="font-size:11px;padding:3px 0"><span style="color:'+(bad?'#f87171':'#34d399')+'">'+(bad?'✗':'✓')+'</span> <b>'+h(t.status)+'</b> <span style="color:rgba(255,255,255,.35)">'+h(t.at||'')+'</span><div style="color:rgba(255,255,255,.4);font-size:10px;padding-left:14px">'+h(t.detail||'')+'</div></div>';
+  }).join('')+'</div>';
+  out+='<div style="margin-top:14px;display:flex;gap:8px"><button class="solid-btn" onclick="_payoutInspect(\''+h(r.id)+'\')">↻ Refresh</button><button class="solid-btn" style="background:rgba(255,255,255,.06)" onclick="document.getElementById(\'payoutInspectModal\').style.display=\'none\'">Close</button></div>';
+  return out;
+}
+window._payoutInspect=_payoutInspect;
+/* Withdrawals pane — canonical AdminAPI (adminGetPayoutRequests), NOT a direct
+   Firestore read. The old onSnapshot hung on the super-admin auth-timing (the same
+   failure as the payments pane) and left "Loading withdrawals…" forever. This CF
+   path is the one the Overview's Withdrawals Queue already uses successfully.
+   NOTE: the pane markup is DUPLICATED (two #payoutsBody in the file, from the pane
+   refactor), so we write to ALL matches via querySelectorAll — updating only the
+   first (hidden) copy was itself a way to leave the visible pane stuck. */
 function renderPayouts(){
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  var statsEl  = document.getElementById('payoutsStats');
-  var pendBody = document.getElementById('payoutsBody');
-  var doneBody = document.getElementById('payoutsDoneBody');
-  if (!pendBody) return;
+  _payoutCss();
+  var setAll = function(sel, html){ document.querySelectorAll(sel).forEach(function(el){ el.innerHTML = html; }); };
+  var loadingRow = '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading withdrawals…</td></tr>';
+  var errRow = function(msg){ return '<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+h(msg)+' <button class="adm-btn-sm adm-btn-green" style="margin-left:8px;" onclick="renderPayouts()">Retry</button></td></tr>'; };
+  if (!document.getElementById('payoutsBody')) return;
+  if (_payoutsUnsub) { try{ _payoutsUnsub(); }catch(_){} _payoutsUnsub = null; }   /* kill any legacy listener */
+  setAll('#payoutsBody', loadingRow);
+  if (typeof AdminAPI === 'undefined' || !AdminAPI.call) { setAll('#payoutsBody', errRow('Data layer unavailable — reload the page.')); return; }
 
-  if (_payoutsUnsub) { _payoutsUnsub(); _payoutsUnsub = null; }
+  AdminAPI.call('adminGetPayoutRequests').then(function(res){
+    var all = (res && res.items) || [];
+    D.withdrawals = all;
+    var pending = all.filter(function(w){ return w.status==='pending'; });
+    var done    = all.filter(function(w){ return w.status!=='pending'; });
+    var dt = function(iso){ return iso ? new Date(iso).toLocaleDateString('en-KE',{dateStyle:'medium'}) : '—'; };
 
-  import(FS).then(function(m){
-    var db = window.firebaseDB;
-    if (!db) { pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">Firestore not ready</td></tr>'; return; }
-    var q = m.query(m.collection(db,'withdrawals'), m.orderBy('createdAt','desc'), m.limit(60));
-    _payoutsUnsub = m.onSnapshot(q, function(snap){
-      var all = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
-      D.withdrawals = all;
-      var pending = all.filter(function(w){ return w.status==='pending'; });
-      var done    = all.filter(function(w){ return w.status!=='pending'; });
-      /* badge */
-      var pb = document.getElementById('payouts-badge'); if(pb) pb.textContent = pending.length||'';
-      /* stats */
-      if(statsEl) statsEl.innerHTML =
-        statBox('⏳','b-yellow',pending.length,'Pending')+
-        statBox('✅','b-green',done.filter(function(w){return w.status==='approved';}).length,'Approved')+
-        statBox('❌','b-red',done.filter(function(w){return w.status==='rejected';}).length,'Rejected')+
-        statBox('💰','b-blue','KES '+fmt(pending.reduce(function(s,w){return s+(w.amount||0);},0)),'Pending KES');
-      /* pending table */
-      if (!pending.length) {
-        pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>';
-      } else {
-        pendBody.innerHTML = pending.map(function(w){
-          var ts = w.createdAt && w.createdAt.seconds ? new Date(w.createdAt.seconds*1000).toLocaleDateString('en-KE',{dateStyle:'medium'}) : '—';
-          return '<tr>'
-            +'<td style="font-size:11px;font-weight:800;">'+h(w.ref||w._id)+'</td>'
-            +'<td>'+h(w.name||'—')+'</td>'
-            +'<td>'+h(w.phone||'—')+'</td>'
-            +'<td style="font-weight:900;color:#10b981;">'+fmt(w.amount||0)+'</td>'
-            +'<td style="font-size:11px;max-width:120px;">'+h((w.reason||'—').substring(0,50))+'</td>'
-            +'<td style="font-size:11px;">'+ts+'</td>'
-            +'<td><span class="badge b-yellow">PENDING</span></td>'
-            +'<td style="white-space:nowrap;">'
-              +'<button class="adm-btn-sm adm-btn-green" onclick="approveWithdrawal(\''+w._id+'\',\''+h(w.phone)+'\','+Number(w.amount||0)+',\''+h(w.name||'Seller')+'\',\''+h(w.ref||'—')+'\')">✅ Pay</button> '
-              +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w._id+'\',\''+h(w.phone)+'\',\''+h(w.name||'Seller')+'\')">❌ Reject</button>'
-            +'</td>'
-          +'</tr>';
-        }).join('');
-      }
-      /* done table */
-      if (!done.length) {
-        doneBody.innerHTML='<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No processed payouts yet</td></tr>';
-      } else {
-        doneBody.innerHTML = done.slice(0,20).map(function(w){
-          var ts = w.processedAt ? new Date(w.processedAt).toLocaleDateString('en-KE',{dateStyle:'medium'}) : (w.createdAt&&w.createdAt.seconds?new Date(w.createdAt.seconds*1000).toLocaleDateString('en-KE',{dateStyle:'medium'}):'—');
-          var sc = w.status==='approved'?'b-green':'b-red';
-          return '<tr>'
-            +'<td style="font-size:11px;">'+h(w.ref||w._id)+'</td>'
-            +'<td>'+h(w.name||'—')+'</td>'
-            +'<td>'+h(w.phone||'—')+'</td>'
-            +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
-            +'<td><span class="badge '+sc+'">'+h(w.status).toUpperCase()+'</span></td>'
-            +'<td style="font-size:11px;">'+ts+'</td>'
-          +'</tr>';
-        }).join('');
-      }
-    }, function(e){ var _em=String(e&&e.message||'Unknown error').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+_em+'</td></tr>'; });
-  }).catch(function(e){ pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">Failed to load Firestore</td></tr>'; });
+    document.querySelectorAll('#payouts-badge').forEach(function(pb){ pb.textContent = pending.length||''; });
+    setAll('#payoutsStats',
+      statBox('⏳','b-yellow',pending.length,'Pending')+
+      statBox('✅','b-green',done.filter(function(w){return ['approved','paid','completed','processing'].indexOf(w.status)>=0;}).length,'Approved')+
+      statBox('❌','b-red',done.filter(function(w){return w.status==='rejected';}).length,'Rejected')+
+      statBox('💰','b-blue','KES '+fmt(pending.reduce(function(s,w){return s+(w.amount||0);},0)),'Pending KES'));
+
+    setAll('#payoutsBody', pending.length ? pending.map(function(w){
+      return '<tr>'
+        +'<td style="font-size:11px;font-weight:800;">'+h(w.reference||w.id)+'</td>'
+        +'<td>'+h(w.sellerName||('Seller '+String(w.sellerUid||'').slice(0,6)))+'</td>'
+        +'<td>'+h(w.phone||'—')+'</td>'
+        +'<td style="font-weight:900;color:#10b981;">'+fmt(w.amount||0)+'</td>'
+        +'<td style="font-size:11px;max-width:120px;">'+h((w.reason||'—').substring(0,50))+'</td>'
+        +'<td style="font-size:11px;">'+dt(w.createdAt)+'</td>'
+        +'<td><span class="badge b-yellow">PENDING</span></td>'
+        +'<td style="white-space:nowrap;">'
+          +'<button class="adm-btn-sm adm-btn-green" onclick="approveWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\','+Number(w.amount||0)+',\''+h(w.sellerName||'Seller')+'\',\''+h(w.reference||'—')+'\')">✅ Pay</button> '
+          +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\',\''+h(w.sellerName||'Seller')+'\')">❌ Reject</button> '
+          +'<button class="adm-btn-sm" style="background:rgba(255,255,255,.06)" onclick="_payoutInspect(\''+w.id+'\')" title="Inspect lifecycle">🔍</button>'
+        +'</td>'
+      +'</tr>';
+    }).join('') : '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>');
+
+    setAll('#payoutsDoneBody', done.length ? done.slice(0,20).map(function(w){
+      /* Badge colour + label from the strict status model; a failed/processing payout
+         can never render like paid. Timeline shows the full journey (no logs needed). */
+      var evid = w.gatewayReference ? ('<div style="font-size:9px;color:rgba(255,255,255,.35)">ref '+h(w.gatewayReference)+(w.settlementMethod==='manual'?' · manual':'')+'</div>')
+               : (w.settlementMethod==='manual' ? '<div style="font-size:9px;color:rgba(255,255,255,.35)">manual · '+h(w.externalReference||'')+'</div>' : '');
+      return '<tr>'
+        +'<td style="font-size:11px;cursor:pointer;color:#64b4ff;" onclick="_payoutInspect(\''+w.id+'\')" title="Inspect lifecycle">🔍 '+h(w.reference||w.id)+'</td>'
+        +'<td>'+h(w.sellerName||'—')+'</td>'
+        +'<td>'+h(w.phone||'—')+'</td>'
+        +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
+        +'<td>'+_payoutBadge(w.status)+evid+_payoutTimeline(w.timeline)+'</td>'
+        +'<td style="font-size:11px;">'+dt(w.confirmedAt||w.processedAt||w.createdAt)+'</td>'
+      +'</tr>';
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No processed payouts yet</td></tr>');
+  }).catch(function(e){ setAll('#payoutsBody', errRow((e&&e.message)||'Unable to load withdrawals')); });
 }
 
+/* Normalise a Kenyan phone to wa.me international format WITHOUT double-prefixing.
+   The stored account number is already "2547…", so the old '254'+phone produced
+   "254254…" → WhatsApp reported "number not on WhatsApp". */
+function _waPhone(p){
+  var d = String(p||'').replace(/[^0-9]/g,'');
+  if (d.indexOf('254') === 0) return d;            /* already 2547… */
+  if (d.indexOf('0')   === 0) return '254'+d.slice(1);  /* 07… → 2547… */
+  if (d.length === 9)         return '254'+d;       /* 7xxxxxxxx → 2547… */
+  return d;
+}
 function approveWithdrawal(id, phone, amount, name, ref, _c){
   if(!_c){_skConfirm('Confirm payment of KES '+amount.toLocaleString()+' to '+name+' ('+phone+')?',()=>approveWithdrawal(id,phone,amount,name,ref,true));return;}
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  import(FS).then(function(m){
-    var db = window.firebaseDB; if(!db) return;
-    m.updateDoc(m.doc(db,'withdrawals',id), {
-      status: 'approved',
-      processedAt: new Date().toISOString(),
-      processedBy: (window.sokoniUser||{}).email||'admin'
-    }).then(function(){
-      toast('✅ Payout approved — notifying '+name);
-      /* WhatsApp confirmation to user */
-      var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
-      window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer');
-    }).catch(function(e){ toast('Error: '+e.message); });
-  });
+  /* Canonical approval: adminProcessPayout reserves→approving→IntaSend B2C on the
+     payoutRequests doc. Was updating the empty `withdrawals` collection with NO
+     disbursement (a status flag + a WhatsApp message), so no money ever moved. */
+  toast('Approving payout…');
+  _invCall('adminProcessPayout', { requestId: id, status: 'approved' }).then(function(){
+    toast('✅ Payout approved — B2C processing to '+phone);
+    var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
+    try { window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
+  }).catch(function(e){ toast('⚠️ Payment could not be completed — '+((e&&e.message)||'unknown error')+' (ref '+ref+')'); });
 }
 window.approveWithdrawal = approveWithdrawal;
 
 function rejectWithdrawal(id, phone, name){
   var reason = prompt('Reason for rejection (sent to user):','Insufficient account verification');
   if (reason === null) return;
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  import(FS).then(function(m){
-    var db = window.firebaseDB; if(!db) return;
-    m.updateDoc(m.doc(db,'withdrawals',id), {
-      status: 'rejected',
-      rejectionReason: reason,
-      processedAt: new Date().toISOString(),
-      processedBy: (window.sokoniUser||{}).email||'admin'
-    }).then(function(){
-      toast('❌ Withdrawal rejected');
-      var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nPlease contact support or resubmit. — SOKONI Team';
-      if (phone) window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer');
-    }).catch(function(e){ toast('Error: '+e.message); });
-  });
+  /* Canonical rejection: adminProcessPayout returns the reserved funds to the wallet and
+     marks the payoutRequest rejected. Was updating the empty `withdrawals` collection. */
+  toast('Rejecting…');
+  _invCall('adminProcessPayout', { requestId: id, status: 'rejected', note: reason }).then(function(){
+    toast('❌ Withdrawal rejected — funds returned to wallet');
+    var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
+    try { if (phone) window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
+  }).catch(function(e){ toast('⚠️ Rejection could not be completed — '+((e&&e.message)||'unknown error')); });
 }
 window.rejectWithdrawal = rejectWithdrawal;
 
@@ -4955,6 +5658,58 @@ function verifyCourier(i){ D.couriers[i].verified=true; localStorage.setItem('so
    two cannot drift apart. */
 var _propQ='', _propType='';
 
+/* ── Firestore is the source of truth for Properties ───────────────────────
+   D.bnbListings / D.bnbBookings used to come from localStorage, which is per
+   ORIGIN AND PER DEVICE: a listing created by a host on their machine, or a
+   booking made by a guest on their phone, could never reach an administrator.
+   In practice the only thing that populated those keys on an admin machine was
+   demo-seed.js.
+
+   The canonical collections already existed and were already used by bnb.html,
+   bnb-hub.html, bnb-manage.html and the Algolia triggers — the admin console
+   was simply never connected to them. See docs/PROPERTIES_DATA_SOURCE.md.
+
+   READS ONLY in this commit. approveProp/rejectProp still write localStorage;
+   they are Commit 2. Both collections are empty in production today, so no
+   listing can currently be approved and the transitional gap is not reachable. */
+var _propsLoaded  = false;
+var _propsError   = null;
+window._propsUnsub = window._propsUnsub || null;
+window._bkgsUnsub  = window._bkgsUnsub  || null;
+
+function propsSetError(msg){
+  _propsError = msg || 'unknown error';
+  console.error('[Admin][properties] load failed:', _propsError);
+  renderProperties();
+}
+
+function propsRetry(){
+  _propsError = null; _propsLoaded = false; renderProperties();
+  try { if (window._propsUnsub) { window._propsUnsub(); window._propsUnsub = null; } } catch(e){}
+  try { if (window._bkgsUnsub)  { window._bkgsUnsub();  window._bkgsUnsub  = null; } } catch(e){}
+  startPropertiesListeners();
+}
+
+function startPropertiesListeners(){
+  if (window._propsUnsub) return;                 /* exactly one listener pair */
+  if (!window.SokoniDB || !window.SokoniDB.listenBnbListings) {
+    propsSetError('data layer unavailable — reload the page');
+    return;
+  }
+  window._propsUnsub = window.SokoniDB.listenBnbListings(
+    function(rows){
+      _propsLoaded = true; _propsError = null;
+      D.bnbListings = rows;
+      renderProperties(); if (typeof renderStats === 'function') renderStats();
+    },
+    function(err){ propsSetError((err && err.message) || 'permission denied'); }
+  );
+  window._bkgsUnsub = window.SokoniDB.listenBnbBookings(
+    function(rows){ D.bnbBookings = rows; renderProperties(); },
+    function(err){ propsSetError((err && err.message) || 'permission denied'); }
+  );
+}
+
 function _visibleProperties(){
   var q=(_propQ||'').toLowerCase();
   return (D.bnbListings||[]).filter(function(l){
@@ -4975,6 +5730,26 @@ function filterProperties(){
 window.filterProperties=filterProperties;
 
 function renderProperties(){
+  var _stats = document.getElementById('propStats');
+  var _tbody = document.getElementById('bnbBody');
+  if (!_tbody) return;
+
+  /* A read failure and an empty directory are different things and must never
+     look the same. Neither may look like 'loading'. */
+  if (_propsError) {
+    if (_stats) _stats.innerHTML = '';
+    _tbody.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:#ff6b6b;font-weight:700;">'
+      + 'Could not load properties: ' + h(String(_propsError))
+      + '<div style="color:rgba(255,255,255,.45);font-weight:400;margin:6px 0 12px;">This is a read failure, not an empty directory.</div>'
+      + '<button class="adm-btn-sm adm-btn-blue" onclick="propsRetry()">Retry</button></td></tr>';
+    return;
+  }
+  if (!_propsLoaded) {
+    if (_stats) _stats.innerHTML = '';
+    _tbody.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.35);">Loading properties…</td></tr>';
+    return;
+  }
+
   document.getElementById('propStats').innerHTML=
     statBox('🏠','b-blue',D.bnbListings.length,'BnB Listings')+
     statBox('📅','b-green',D.bnbBookings.length,'BnB Bookings')+
@@ -4988,7 +5763,7 @@ function renderProperties(){
      The stat boxes above deliberately keep counting EVERYTHING: a filter should narrow
      what you are looking at, not quietly rewrite the totals you are judging it by. */
   var _rows = _visibleProperties();
-  if(!_rows.length){ body.innerHTML=emptyRow(7,'🏠', D.bnbListings.length ? 'No properties match this filter' : 'No BnB listings'); }
+  if(!_rows.length){ body.innerHTML=emptyRow(7,'🏠', D.bnbListings.length ? 'No properties match this filter' : 'No BnB listings found.'); }
   else body.innerHTML=_rows.map(function(l,i){
     var sc={pending:'b-yellow',active:'b-green',rejected:'b-red',suspended:'b-red'}[l.status||'pending']||'b-yellow';
     return '<tr>'
@@ -5029,19 +5804,87 @@ function renderProperties(){
         +'</div></div>';
     }).join('')+'</div>';
 }
-async function approveProp(i){
-  var a=D.bnbListings[i]; a.status='active';
-  localStorage.setItem('sokoniBnBListings',JSON.stringify(D.bnbListings));
-  if(a._fsId && window.SokoniDB) try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
-  if(a.uid && window.firebaseDB) try{
-    var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    await updateDoc(doc(window.firebaseDB,'users',a.uid),{'registeredAs.landlord':true,'approved':true});
-  }catch(e){}
-  renderProperties(); toast('✅ Property approved');
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12) window.open('https://wa.me/'+phone+'?text='+encodeURIComponent('Hello '+a.name+'! 🎉 Your property is now live on SOKONI. — SOKONI Team'),'_blank','noopener');
+/* ── Moderation decisions are written to Firestore ────────────────────────────
+   These used to mutate D.bnbListings and write localStorage. The decision reached
+   the administrator's own browser and nowhere else: no host, no guest and no
+   other admin ever saw it, and a reload discarded it.
+
+   approveProp additionally called updateApplicationStatus(a._fsId, …), which
+   writes the APPLICATIONS collection. Before the read path moved to Firestore
+   there was no _fsId on these objects so it never ran; afterwards _fsId is a
+   bnbListings document id, so it would have updated applications/{listingId} — a
+   document that does not exist — and failed into an empty catch. Wrong
+   collection, silently.
+
+   No Cloud Function was added: firestore.rules already allows
+   `allow update: if isAdmin()` on bnbListings. Verified before writing this.
+
+   The audit entry reuses window.sokoniFirestoreAudit from firebase.js, which
+   exists for exactly this (non-module callers) and matches the auditLogs rule
+   requiring uid, action and ts. No second audit system was invented.
+
+   The listener re-renders on the server's echo, so there is no local mutation to
+   keep in step — what the admin sees after a decision is what Firestore holds. */
+async function _decideProp(i, status, reason){
+  var a = (D.bnbListings || [])[i];
+  if (!a) { toast('That listing is no longer in the list — refresh', 'error'); return; }
+  var id = a._fsId || a.id;
+  if (!id) { toast('This listing has no Firestore id — cannot decide', 'error'); return; }
+  if (!window.SokoniDB || !window.SokoniDB.updateBnbListingStatus) {
+    toast('Data layer unavailable — reload the page', 'error'); return;
+  }
+
+  var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+  var meta = { updatedBy: uid };
+  if (reason) meta.approvalReason = reason;
+
+  try {
+    await window.SokoniDB.updateBnbListingStatus(id, status, meta);
+  } catch (e) {
+    /* Reported, never swallowed. A moderation decision that silently fails is how
+       an admin believes a listing is live when it is not. */
+    console.error('[Admin][properties] decision failed', { id: id, status: status, error: e && e.message });
+    toast('Could not save the decision: ' + (e && e.message || 'unknown error'), 'error');
+    return;
+  }
+
+  try {
+    if (window.sokoniFirestoreAudit && uid) {
+      window.sokoniFirestoreAudit({
+        uid: uid, action: 'bnb_listing_' + status, ts: Date.now(),
+        listingId: id, listingName: a.name || a.title || null,
+        reason: reason || null
+      });
+    }
+  } catch (e) {}
+
+  return a;
 }
-function rejectProp(i){ D.bnbListings[i].status='rejected'; localStorage.setItem('sokoniBnBListings',JSON.stringify(D.bnbListings)); renderProperties(); toast('Property rejected'); }
+
+async function approveProp(i){
+  var a = await _decideProp(i, 'active');
+  if (!a) return;
+  toast('✅ Property approved');
+  /* Host role grant deliberately NOT wired here. The old code read a.uid, but
+     bnbListings documents carry hostUid (see bnb-hub.html / bnb-manage.html), so
+     that branch never ran. Activating it would change user documents, which is a
+     different concern from recording a moderation decision. Documented, not done. */
+  var phone = (a.phone || a.hostPhone || '').replace(/\D/g, '').replace(/^0/, '254');
+  if (phone.length >= 12) {
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(
+      'Hello ' + (a.name || '') + '! 🎉 Your property is now live on SOKONI.'), '_blank');
+  }
+}
+
+async function rejectProp(i){
+  var reason = prompt('Reason for rejection (recorded in the audit log and visible to the host):');
+  if (reason === null) return;                     /* cancelled — not a decision */
+  reason = String(reason).trim();
+  if (reason.length < 5) { toast('Please give a reason of at least 5 characters', 'error'); return; }
+  var a = await _decideProp(i, 'rejected', reason);
+  if (!a) return;
+  toast('Property rejected');
+}
 
 /* ════════════════════════════════
    LEGAL HUB
@@ -5521,6 +6364,7 @@ if(sessionStorage.getItem(SESS_KEY)) loadAll();
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-intasend.js" defer></script>
+<script src="admin-api.js"></script>
 <script src="sw-register.js" defer></script>
 <script type="module">
 /* Admin gate — redirect non-admins before page renders.
@@ -5597,18 +6441,46 @@ function _mergeFirestorePOSOrders(fsOrders){
   if(typeof renderStats==='function') renderStats();
 }
 
-/* Start listeners once admin is authenticated */
-document.addEventListener('sokoniAdminReady', () => {
-  SokoniDB.listenApplications(_mergeFirestoreApps);
+/* ── Applications listener ────────────────────────────────────────────────
+   Attached exactly once. It used to be started from two places — the
+   sokoniAdminReady event AND a 1.5s timer — so an admin who unlocked quickly
+   got two live snapshot listeners on the same query, double the reads and two
+   renders per change. The guard keeps whichever fires first.
+
+   A failure is now reported to the panel rather than warned to the console:
+   see listenApplications' onError in sokoni-db.js. */
+window._appsListenerAttached = false;
+window._appsListenerUpdates  = 0;
+function _startAdminListeners(){
+  if (window._appsListenerAttached) return;
+  window._appsListenerAttached = true;
+  if (typeof renderAppsLoading === 'function') renderAppsLoading();
+  SokoniDB.listenApplications(
+    function(apps){ window._appsListenerUpdates++; _mergeFirestoreApps(apps); },
+    100,
+    function(err){
+      /* The listener is dead, so nothing else will resolve the spinner. */
+      if (typeof renderAppsError === 'function') renderAppsError(err && err.message);
+    }
+  );
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
-});
-/* Also trigger immediately if already authenticated */
-setTimeout(()=>{
-  if(sessionStorage.getItem('sokoniAdminUnlocked')){
-    SokoniDB.listenApplications(_mergeFirestoreApps);
-    SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
-  }
+  if (typeof startUsersListener === 'function') startUsersListener();
+  if (typeof startProvidersListener === 'function') startProvidersListener();
+  if (typeof startProductsListener === 'function') startProductsListener();
+  if (typeof startPropertiesListeners === 'function') startPropertiesListeners();
+}
+document.addEventListener('sokoniAdminReady', _startAdminListeners);
+/* Also start if this device unlocked earlier in the session. */
+setTimeout(function(){
+  if(sessionStorage.getItem('sokoniAdminUnlocked')) _startAdminListeners();
 }, 1500);
+/* Last resort: if neither path fired, say so instead of showing an empty box
+   forever. A panel that cannot explain itself is what made this a P0. */
+setTimeout(function(){
+  if (!window._appsListenerAttached && typeof renderAppsError === 'function') {
+    renderAppsError('admin session not established — reload and sign in again');
+  }
+}, 12000);
 
 /* ── Bootstrap admin claim (one-time founder setup) ── */
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
@@ -6102,6 +6974,11 @@ import SokoniDB           from './sokoni-db.js';
 /* ── Expose on window so inline handlers can call them ── */
 window.SokoniOrders        = SokoniOrders;
 window._admOrders          = [];
+/* Distinguishes "the listener has not delivered yet" from "there are no orders".
+   Without it, removing the legacy localStorage render leaves the pane showing
+   "No orders yet" while data is still in flight — a healthy-looking failure,
+   indistinguishable from an genuinely empty queue. */
+window._admOrdersLoaded    = false;
 window._admDeliveries      = [];
 window._admDisputes        = [];
 
@@ -6170,7 +7047,12 @@ function _renderAdmOrders(orders) {
 
   const body  = document.getElementById('ordersBody');
   if (!body) return;
-  if (!orders.length) { body.innerHTML = _emptyRow(8,'🛒','No orders yet'); return; }
+  if (!orders.length) {
+    body.innerHTML = window._admOrdersLoaded
+      ? _emptyRow(8,'🛒','No orders yet')
+      : _emptyRow(8,'⏳','Loading orders…');
+    return;
+  }
 
   body.innerHTML = orders.map(o => {
     const itemSummary = (o.items||[]).map(i=>`${i.qty||1}× ${i.name||'Item'}`).slice(0,2).join(', ') || _h(o.productName||'—');
@@ -6458,6 +7340,7 @@ function _startListeners() {
   /* Orders */
   if (_ordersUnsub) _ordersUnsub();
   _ordersUnsub = SokoniDB.listenAllOrders(orders => {
+    window._admOrdersLoaded = true;   /* a delivered snapshot, empty or not */
     _renderAdmOrders(orders);
     _renderEscrowBar(orders);
     /* Patch stat counter */
@@ -6516,33 +7399,29 @@ import { collection, query, orderBy, limit, getDocs, where }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 async function _admLoadMpesa() {
-  let tries = 0;
-  while (!window.firebaseDB && tries++ < 30) await new Promise(r => setTimeout(r, 300));
-  const db = window.firebaseDB;
-  if (!db) return;
-
+  const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const hubFilter = document.getElementById('mpesaFilterHub')?.value || '';
   const tbody     = document.getElementById('mpesaBody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading…</td></tr>';
+  if (typeof _invCall !== 'function') {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:24px;">Data layer unavailable — reload the page.</td></tr>';
+    return;
+  }
 
   try {
-    const q = query(collection(db,'sellerPayments'), orderBy('createdAt','desc'), limit(200));
-    const snap = await getDocs(q);
-    const allRows = [];
-    snap.forEach(d => allRows.push({ id: d.id, ...d.data() }));
-    const rows = hubFilter ? allRows.filter(r => r.hub === hubFilter) : allRows;
-
-    /* Stats */
-    const today = new Date().toDateString();
-    const total = rows.reduce((s,r) => s + Number(r.amount||0), 0);
-    const todayRows = rows.filter(r => new Date((r.createdAt?.toDate?.())||0).toDateString() === today);
-    const sellers   = new Set(rows.map(r=>r.sellerUid)).size;
+    /* Canonical `payments` via the admin CF (adminGetPayments) — the SAME server-
+       validated path as the overview/bookings panes. The old DIRECT client read of
+       `payments` failed on permission-denied whenever the super-admin claim / App
+       Check token hadn't propagated yet, so the pane looked empty while 11 payments
+       existed. The CF validates the token server-side and reads with the admin SDK. */
+    const res  = await _invCall('adminOsDispatch', { op: 'adminGetPayments', hub: hubFilter });
+    const rows = (res && res.payments) || [];
 
     const el = id => document.getElementById(id);
-    if (el('mpesaTotalCount'))  el('mpesaTotalCount').textContent  = rows.length;
-    if (el('mpesaTotalVol'))    el('mpesaTotalVol').textContent    = 'KES '+total.toLocaleString();
-    if (el('mpesaTodayCount'))  el('mpesaTodayCount').textContent  = todayRows.length;
-    if (el('mpesaSellerCount')) el('mpesaSellerCount').textContent = sellers;
+    if (el('mpesaTotalCount'))  el('mpesaTotalCount').textContent  = res.count || rows.length;
+    if (el('mpesaTotalVol'))    el('mpesaTotalVol').textContent    = 'KES '+Number(res.totalVolume||0).toLocaleString();
+    if (el('mpesaTodayCount'))  el('mpesaTodayCount').textContent  = res.todayCount || 0;
+    if (el('mpesaSellerCount')) el('mpesaSellerCount').textContent = res.sellerCount || 0;
 
     if (!tbody) return;
     if (!rows.length) {
@@ -6550,9 +7429,8 @@ async function _admLoadMpesa() {
       return;
     }
 
-    const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     tbody.innerHTML = rows.map(r => {
-      const date = r.createdAt?.toDate?.()?.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) || '—';
+      const date = r.createdAtMs ? new Date(r.createdAtMs).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
       return `<tr>
         <td>${esc(date)}</td>
         <td style="font-size:11px;">${esc(r.sellerName||r.sellerUid||'—')}</td>
@@ -6564,7 +7442,7 @@ async function _admLoadMpesa() {
       </tr>`;
     }).join('');
   } catch(e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:24px;">Error: '+esc(e.message||'Unknown error')+'</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:24px;">Error: '+esc((e&&e.message)||'Unknown error')+'</td></tr>';
   }
 }
 
@@ -6881,7 +7759,17 @@ window.loadSupportQueue = loadSupportQueue;
   }
 
   /* Sub-tab switchers for each admin section */
-  window.bizSubTab  = function(tab, btn) { _subTabSwitch('biz',  tab, btn); };
+  window.bizSubTab  = function(tab, btn) {
+    _subTabSwitch('biz',  tab, btn);
+    /* _subTabSwitch only toggles display. Without this, opening Applications
+       for the first time shows an empty box until the next snapshot arrives —
+       which, if the listener already delivered its only update, is never. */
+    if (tab === 'applications' && typeof renderApps === 'function') {
+      if (_appsLoadState === 'idle') renderAppsLoading();
+      if (_appsLastList) renderApps(_appsLastList);
+      else if (window.D && D.apps) renderApps(D.apps);
+    }
+  };
   window.ordSubTab  = function(tab, btn) { _subTabSwitch('ord',  tab, btn); };
   window.rideSubTab = function(tab, btn) { _subTabSwitch('ride', tab, btn); };
   window.svcSubTab  = function(tab, btn) { _subTabSwitch('svc',  tab, btn); };
@@ -6896,9 +7784,9 @@ window.loadSupportQueue = loadSupportQueue;
   window.saveAnnouncement = function() {
     var text   = (document.getElementById('annText')   || {}).value || '';
     var active = (document.getElementById('annActive') || {}).checked !== false;
-    if (!text.trim()) { alert('Please enter announcement text.'); return; }
+    if (!text.trim()) { SK.dialog.alert('Please enter announcement text.'); return; }
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     var btn = document.querySelector('#annModal .solid-btn.solid-green');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     db.collection('announcements').add({
@@ -6913,7 +7801,7 @@ window.loadSupportQueue = loadSupportQueue;
       if (typeof window._skToast === 'function') window._skToast('Announcement saved', 'success');
     }).catch(function(err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Save Announcement'; }
-      alert('Error saving announcement: ' + err.message);
+      SK.dialog.alert('Error saving announcement: ' + err.message);
     });
   };
 
@@ -6951,7 +7839,9 @@ window.loadSupportQueue = loadSupportQueue;
     var db = window.firebaseDB;
     if (!db) { chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Database not available.</div>'; return; }
     /* Fetch data and render a simple text summary */
-    var colMap = { revenue: 'transactions', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
+    /* revenue reads canonical `payments` — `transactions` is empty (same stale-collection
+       class the dashboard/finance fixes addressed; docs/CANONICAL_COLLECTIONS.md). */
+    var colMap = { revenue: 'payments', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
     var col    = colMap[type] || 'transactions';
     var q      = db.collection(col).orderBy('createdAt', 'desc').limit(100);
     q.get().then(function(snap) {
@@ -6971,7 +7861,7 @@ window.loadSupportQueue = loadSupportQueue;
 
   window.exportReport = function() {
     var data = window._lastReportData;
-    if (!data || !data.length) { alert('Generate a report first.'); return; }
+    if (!data || !data.length) { SK.dialog.alert('Generate a report first.'); return; }
     var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: 'application/json' });
     var url  = URL.createObjectURL(blob);
@@ -6986,9 +7876,9 @@ window.loadSupportQueue = loadSupportQueue;
   window.markTaxPaid = function() {
     var type = (document.getElementById('taxPayType') || {}).value || 'vat';
     var amt  = parseFloat((document.getElementById('taxPayAmt') || {}).value || '0');
-    if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+    if (!amt || amt <= 0) { SK.dialog.alert('Enter a valid amount.'); return; }
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     db.collection('taxPayments').add({
       type: type,
       amount: amt,
@@ -6999,26 +7889,26 @@ window.loadSupportQueue = loadSupportQueue;
       if (input) input.value = '';
       if (typeof window._skToast === 'function') window._skToast('Tax payment recorded — KES ' + amt.toLocaleString(), 'success');
       if (typeof renderFinance === 'function') renderFinance();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
   };
 
   /* Service worker cache clear */
   window.clearSWCache = function() {
-    if (!('caches' in window)) { alert('Cache API not available in this browser.'); return; }
+    if (!('caches' in window)) { SK.dialog.alert('Cache API not available in this browser.'); return; }
     caches.keys().then(function(keys) {
       return Promise.all(keys.map(function(k) { return caches.delete(k); }));
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('All caches cleared — reload to refresh assets', 'success');
-      else alert('All caches cleared. Reload the page to see fresh assets.');
-    }).catch(function(err) { alert('Cache clear failed: ' + err.message); });
+      else SK.dialog.alert('All caches cleared. Reload the page to see fresh assets.');
+    }).catch(function(err) { SK.dialog.alert('Cache clear failed: ' + err.message); });
   };
 
   /* ── Verification approve / reject ── */
   window.approveVerification = function(id) {
     if (!id) return;
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
-    if (!confirm('Approve this verification request?')) return;
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
+    SK.dialog.confirm('Approve this verification request?', function() {
     db.collection('verification_requests').doc(id).update({
       status: 'approved',
       reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
@@ -7026,13 +7916,14 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Verification approved ✅', 'success');
       if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
+    }, null, { title: 'Approve verification', variant: 'success', confirmLabel: 'Approve' });
   };
 
   window.rejectVerification = function(id) {
     if (!id) return;
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     var reason = prompt('Reason for rejection (shown to applicant):');
     if (!reason || !reason.trim()) return;
     db.collection('verification_requests').doc(id).update({
@@ -7043,7 +7934,7 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Verification rejected', 'success');
       if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
   };
 
   /* ── Moderation — flagged content queue ── */
@@ -7095,7 +7986,7 @@ window.loadSupportQueue = loadSupportQueue;
       var row = document.querySelector('tr[data-flag-id="'+id+'"]');
       if (row) row.remove();
       if (typeof window._skToast === 'function') window._skToast('Flag dismissed', 'success');
-    }).catch(function(err) { alert('Error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: '+err.message); });
   };
 
   window.escalateFlag = function(id) {
@@ -7108,17 +7999,17 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Flag escalated to moderation team', 'success');
       if (typeof window.loadFlags === 'function') window.loadFlags();
-    }).catch(function(err) { alert('Error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: '+err.message); });
   };
 
   window.bulkDismissFlags = function() {
     var checked = Array.from(document.querySelectorAll('.flag-chk:checked')).map(function(c) { return c.dataset.id; });
     if (!checked.length) {
       if (typeof window._skToast === 'function') window._skToast('Select flags to dismiss first', 'info');
-      else alert('Select at least one flag.');
+      else SK.dialog.alert('Select at least one flag.');
       return;
     }
-    if (!confirm('Dismiss '+checked.length+' selected flag(s)?')) return;
+    SK.dialog.confirm('Dismiss '+checked.length+' selected flag(s)?', function() {
     var db = window.firebaseDB;
     if (!db) return;
     Promise.all(checked.map(function(id) {
@@ -7130,7 +8021,8 @@ window.loadSupportQueue = loadSupportQueue;
     })).then(function() {
       if (typeof window._skToast === 'function') window._skToast(checked.length+' flag(s) dismissed', 'success');
       if (typeof window.loadFlags === 'function') window.loadFlags();
-    }).catch(function(err) { alert('Partial error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Partial error: '+err.message); });
+    }, null, { title: 'Dismiss flags', confirmLabel: 'Dismiss' });
   };
   </script>
 </body>

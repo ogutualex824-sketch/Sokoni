@@ -6,6 +6,26 @@
    signup.html can call them directly.
 ================================================================ */
 
+/* Cross-account safety: when a DIFFERENT account signs in on this device, purge the
+   previous owner's cached listings / orders / store / provider profile so they can
+   never surface on the new account (the seller-products cross-account leak). Same-user
+   re-login keeps the cache. The new user's own data re-hydrates from Firestore. Called
+   at every login site BEFORE the new sokoniUser is written. */
+function _sokoniPurgeOwnerCachesOnSwitch(newUid) {
+  try {
+    var prev = JSON.parse(localStorage.getItem("sokoniUser") || "null");
+    if (!prev || !prev.uid || !newUid || prev.uid === newUid) return;
+    ["sellerProducts", "sellerOrders", "sellerDrafts", "sokoniProducts", "sokoniOrders",
+     "sokoniProviderProfile", "msStoreSettings", "sokoniAds"].forEach(function (k) {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    /* uid-namespaced OwnerCache keys belonging to the previous owner */
+    Object.keys(localStorage).forEach(function (k) {
+      if (/^(products|orders|drafts):/.test(k)) { try { localStorage.removeItem(k); } catch (e) {} }
+    });
+  } catch (e) {}
+}
+
 /* ── Global diagnostic net — captures any uncaught exception / rejected promise
    that escapes a catch block so the root cause is never silently swallowed ── */
 window.onerror = function(msg, src, line, col, err) {
@@ -309,6 +329,7 @@ async function loginUser(){
 
         /* ── Sync to localStorage for backward-compat with all other pages ── */
         console.log('[AUTH STEP 5] Writing session to localStorage — sokoniAuthReady will fire from firebase.js');
+        _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
         localStorage.setItem("loggedIn", "true");
         localStorage.removeItem("sokoniCreds"); /* clear legacy SHA-256 creds */
@@ -531,9 +552,13 @@ async function _doSignup(name, email, password){
         const { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
-        const { doc, setDoc, serverTimestamp } = await import(
+        const { doc, setDoc, collection, addDoc, serverTimestamp } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
         );
+        /* Must-fix #2 — the privacy-policy version the user is consenting to at signup.
+           Bump this when the notice materially changes; existing users are then re-prompted and a
+           NEW consentRecords row is appended, so historical vs renewed consent stays distinguishable. */
+        const POLICY_VERSION = '2026-06';
 
         /* Create Firebase Auth account */
         const cred = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
@@ -560,10 +585,23 @@ async function _doSignup(name, email, password){
         /* Persist to Firestore users collection (the authoritative source) */
         await setDoc(doc(window.firebaseDB, 'users', cred.user.uid), {
             ...profile,
+            /* Latest-consent snapshot on the profile for quick reads / re-consent detection. */
+            consent: { policyVersion: POLICY_VERSION, source: 'signup', privacy: true, terms: true, consentedAt: serverTimestamp() },
             createdAt: serverTimestamp()
         });
 
+        /* Durable, append-only consent record (Must-fix #2) — the auditable lawful-basis proof
+           the ODPC audit found missing. One row per consent event (uid + timestamp + policy version
+           + source), never mutated, so a future audit can distinguish original from renewed consent. */
+        try {
+            await addDoc(collection(window.firebaseDB, 'consentRecords'), {
+                uid: cred.user.uid, source: 'signup', policyVersion: POLICY_VERSION,
+                privacy: true, terms: true, consentedAt: serverTimestamp(),
+            });
+        } catch (_) { /* consent snapshot already on the profile; audit row is best-effort */ }
+
         /* Sync to localStorage for backward-compat */
+        _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
         localStorage.setItem("loggedIn", "true");
         localStorage.removeItem("sokoniCreds");
@@ -671,6 +709,7 @@ async function completeRoleSelection(){
     if(cb("roleLandlordCb"))   user.registeredAs.landlord     = true;
     if(cb("roleLegalCb"))      user.registeredAs.legal        = true;
 
+    _sokoniPurgeOwnerCachesOnSwitch(user && user.uid);
     localStorage.setItem("sokoniUser", JSON.stringify(user));
 
     /* Also persist roles to Firestore when a Firebase session is active */
@@ -1398,144 +1437,7 @@ function _handleProviderLinkError(err, providerLabel) {
     _resetGoogleBtn();
 }
 
-async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
-    /* Do NOT gate on navigator.onLine — it is unreliable on iOS Safari and installed
-       PWAs (frequently reports false even with working internet). Firebase surfaces
-       auth/network-request-failed if genuinely offline, which maps to a clear message. */
-    if (!window.firebaseAuth) {
-        showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
-        return;
-    }
-
-    document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = true; });
-    const gBtn = document.getElementById('googleSignInBtn');
-    if (gBtn) gBtn.disabled = true;
-    showAuthMsg('Connecting to ' + providerLabel + '…', '');
-
-    try {
-        const {
-            FacebookAuthProvider,
-            signInWithPopup,
-            signInWithRedirect,
-            setPersistence,
-            browserLocalPersistence,
-            browserSessionPersistence,
-        } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
-
-        const remember = document.getElementById('rememberMe')?.checked ?? true;
-        await setPersistence(window.firebaseAuth,
-            remember ? browserLocalPersistence : browserSessionPersistence
-        ).catch(function() {});
-
-        const provider = new FacebookAuthProvider();
-        if (configureFn) configureFn(provider);
-
-        try {
-            if (_isPopupSupported()) {
-                const result = await signInWithPopup(window.firebaseAuth, provider);
-                await _handleOAuthResult(result, providerLabel);
-            } else {
-                /* Flag BEFORE redirect: sw-register.js skips reload on controllerchange;
-                   firebase.js does not suppress getRedirectResult() errors on return. */
-                try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
-                await signInWithRedirect(window.firebaseAuth, provider);
-            }
-        } catch (err) {
-            /* ITP / browser-security errors produce auth/internal-error, auth/cors-unsupported,
-               or auth/web-storage-unsupported from the popup attempt on Safari.
-               Fall back to redirect — same logic as signInWithGoogle() for symmetry. */
-            const _isItpError = (
-                err.code === 'auth/internal-error' ||
-                err.code === 'auth/cors-unsupported' ||
-                err.code === 'auth/web-storage-unsupported'
-            );
-            if (err.code === 'auth/popup-blocked' || _isItpError) {
-                if (_isItpError) {
-                    console.info('[SOKONI Auth] ' + providerLabel + ' popup ITP/security error — falling back to redirect', { code: err.code });
-                } else {
-                    console.info('[SOKONI Auth] ' + providerLabel + ' popup blocked — falling back to redirect');
-                }
-                try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
-                await signInWithRedirect(window.firebaseAuth, provider);
-            } else if (err.code === 'auth/account-exists-with-different-credential') {
-                _handleProviderLinkError(err, providerLabel);
-            } else if (err.code === 'auth/popup-closed-by-user' ||
-                       err.code === 'auth/cancelled-popup-request') {
-                showAuthMsg('', '');
-                document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
-                if (gBtn) { gBtn.disabled = false; _googleBtnLabel(gBtn, 'Continue with Google'); }
-            } else {
-                throw err;
-            }
-        }
-    } catch (err) {
-        document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
-        if (gBtn) { gBtn.disabled = false; _googleBtnLabel(gBtn, 'Continue with Google'); }
-        /* ── Structured OAuth diagnostics ────────────────────────────────────
-           This branch previously produced only the mapped string. For
-           auth/internal-error that string is "An unexpected error occurred.
-           Please try again." — which tells the user nothing and, more
-           importantly, left no record at all. A production Facebook failure was
-           reported with no server-side trace of the provider or the error code.
-
-           _googleAuthErr is also provider-blind despite serving Facebook here
-           (its messages name Google), so a Facebook failure could surface Google
-           wording. Provider substitution below fixes the copy without touching
-           the flow or the mapping itself — this is a working auth path and the
-           directive is explicit that it must not be redesigned to compensate for
-           a provider-side outage.
-
-           Note on interpretation: auth/internal-error is Firebase's generic
-           wrapper and does NOT by itself indicate a SOKONI defect. Observed on
-           this build, Google and Facebook return it identically from a headless
-           browser that cannot complete a popup flow. Read it alongside the
-           provider's own error page, not on its own. */
-        const code = (err && err.code) || 'unknown';
-        let msg = _googleAuthErr(code) || (providerLabel + ' sign-in failed. Please try again.');
-        /* The mapper's copy is Google-worded; make it match the provider used. */
-        if (providerLabel && providerLabel !== 'Google') {
-            msg = msg.replace(/\bGoogle\b/g, providerLabel);
-        }
-
-        console.error('[auth] OAuth failure', {
-            provider: providerLabel, code,
-            message:  (err && err.message) || null,
-            /* Meta/Google return provider detail here when they supply one. */
-            customData: (err && err.customData) ? JSON.stringify(err.customData).slice(0, 300) : null,
-            authDomain: (window.firebaseApp && window.firebaseApp.options && window.firebaseApp.options.authDomain) || null,
-            online: navigator.onLine,
-        });
-
-        /* Report to errorLog via logClientDiagnostic so an auth failure is
-           visible in the monitor instead of dying in a user's console.
-           Fire-and-forget: a diagnostics failure must never be shown on top of a
-           sign-in failure. Unauthenticated callers are rejected by the CF, which
-           is expected here — the console line above remains the fallback. */
-        try {
-            import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js')
-              .then(function (m) {
-                  var fn = m.httpsCallable(m.getFunctions(window.firebaseApp, 'us-central1'), 'logClientDiagnostic');
-                  return fn({
-                      severity: 'error', code: code, message: (err && err.message) || 'oauth failure',
-                      surface: 'auth-' + String(providerLabel).toLowerCase(),
-                      appVersion: 'auth-1.0', userAgent: navigator.userAgent,
-                      viewport: innerWidth + 'x' + innerHeight, online: navigator.onLine,
-                      url: location.pathname,
-                      context: { provider: providerLabel, authDomain: (window.firebaseApp && window.firebaseApp.options || {}).authDomain },
-                  });
-              }).catch(function () {});
-        } catch (_) {}
-
-        if (msg) showAuthMsg(msg, 'error');
-    }
-}
-
-function signInWithFacebook() {
-    _signInWithOAuth('facebook', 'Facebook', function(p) {
-        p.addScope('email');
-        p.addScope('public_profile');
-    });
-}
+/* Facebook login removed 2026-07-28 — platform uses Google + Phone only. */
 
 /* ══════════════════════════════════════════════════════════════
    PHONE OTP AUTHENTICATION

@@ -272,19 +272,40 @@
   <!-- ══════════════════════════════════════════
        DASHBOARD — shown after login
   ══════════════════════════════════════════ -->
+  <!-- Temporary on-device diagnostics — append ?diag=1 to the URL to reveal. Proves which BUILD
+       the browser actually loaded + the auth/rider-lookup state, so "stale cache" vs "code bug"
+       is unambiguous. Remove after verification. -->
+  <div id="driverDiag" style="display:none;position:fixed;top:8px;left:8px;right:8px;z-index:99999;background:#000;color:#71ff00;font:11px/1.5 monospace;padding:10px 12px;border:1px solid #71ff00;border-radius:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
+  <!-- Always-visible build badge — if you can see this, the device loaded the NEW build. If it's
+       absent, you're on a stale cached build. -->
+  <div id="driverBuild" style="position:fixed;bottom:4px;right:6px;z-index:99998;font:9px/1.3 monospace;color:rgba(113,255,0,.6);background:rgba(0,0,0,.45);padding:2px 6px;border-radius:6px;pointer-events:none;">build…</div>
+
   <div id="driverDashboard">
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-      <div>
-        <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
-        <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+        <div id="driverAvatar" style="display:none;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);color:#04120a;font-weight:900;font-size:20px;align-items:center;justify-content:center;flex:0 0 auto;background-size:cover;background-position:center;"></div>
+        <div style="min-width:0;">
+          <div id="driverSignedChip" style="display:none;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:2px;">🟢 Signed in</div>
+          <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
+          <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🟢 Go Online</button>
+        <button type="button" id="driverLoginBtn" onclick="driverAuthToggle()" style="display:none;padding:10px 18px;background:rgba(113,255,0,0.14);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🔑 Driver Login</button>
         <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
-        <button type="button" onclick="logoutDriver()" style="padding:10px 14px;background:rgba(255,61,61,0.1);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Logout</button>
+        <button type="button" onclick="exitDriverWorkspace()" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">← Exit Hub</button>
       </div>
     </div>
+
+    <!-- ── ONE authoritative shift control ──
+         Go Online / Go Offline is the SINGLE switch for online state + GPS tracking + delivery-job
+         availability. It replaces the separate "Shift Management" card, which duplicated this and
+         could drift out of sync (two controls writing the same field independently). -->
+    <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="width:100%;padding:16px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:900;font-size:16px;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🟢 Go Online</button>
+
+    <!-- Apply-to-Driver — shown only when signed in but not yet a registered driver. -->
+    <button type="button" id="applyDriverTopBtn" onclick="_gotoApply()" style="display:none;width:100%;padding:12px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#04120a;font-weight:900;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🛵 Apply to Become a Driver</button>
 
     <!-- Stats row -->
     <div class="driver-stat-row" id="driverStats"></div>
@@ -355,23 +376,14 @@
     <!-- Available deliveries -->
     <div class="section-heading" id="deliveriesHeader">📦 Available Deliveries</div>
     <div id="availableDeliveries"></div>
+    <!-- Gap 1 — Claimable Now: orders that auto-dispatch couldn't assign (no rider found) sit at
+         'confirmed'; any online rider can claim them. First claim wins (atomic riderClaim). -->
+    <div class="section-heading" id="claimableHeader" style="display:none">🙋 Claimable Now — no rider assigned yet</div>
+    <div id="claimableOrders"></div>
 
-    <!-- ── Shift Control ── -->
-    <div class="section-heading">🟢 Shift Management</div>
-    <div id="shiftControl" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;margin-bottom:16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-        <div>
-          <div style="font-size:15px;font-weight:800;color:white;" id="shiftStatusLabel">Status: Offline</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;" id="shiftDuration">Shift not started</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" id="btnGoOnline" onclick="shiftGoOnline()" style="padding:10px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Go Online</button>
-          <button type="button" id="btnBreak" onclick="shiftBreak()" style="padding:10px 16px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.2);color:#ff8c00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Take Break</button>
-          <button type="button" id="btnEndShift" onclick="shiftEnd()" style="padding:10px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.18);color:#ff6b6b;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">End Shift</button>
-        </div>
-      </div>
-      <div id="shiftStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;"></div>
-    </div>
+    <!-- Shift Management card REMOVED — the single "Go Online / Go Offline" button above is now the
+         one authoritative shift control (online state + GPS + job availability). Shift duration/stats
+         are derived from that online state, not a separate toggle that could drift. -->
 
     <!-- ── Batch Delivery / Route ── -->
     <div class="section-heading">🗺️ Multi-Stop Route</div>
@@ -488,7 +500,7 @@
     <div class="section-heading">🛵 Join / Switch Account</div>
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       <button type="button" class="dc-accept-btn" style="flex:1;" onclick="document.getElementById('applySection').style.display=document.getElementById('applySection').style.display==='none'?'block':'none'">📋 Apply to Drive</button>
-      <button type="button" class="dc-update-btn" onclick="document.getElementById('loginSection').style.display=document.getElementById('loginSection').style.display==='none'?'block':'none'">🔑 Driver Login</button>
+      <!-- Driver PIN login retired — the hub uses your one signed-in SOKONI account + driver role (identity refactor). -->
     </div>
 
     <!-- Login form -->
@@ -779,6 +791,13 @@ function chargingCost(km){ return runningCostForTrip("ebike", km); }
 function _drvToast(msg,isErr){var t=document.getElementById('_drvToastEl');if(!t){t=document.createElement('div');t.id='_drvToastEl';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,.92);border:1px solid rgba(113,255,0,.3);color:#71ff00;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;transition:opacity .3s;pointer-events:none;';document.body.appendChild(t);}if(isErr){t.style.borderColor='rgba(255,80,80,.4)';t.style.color='#ff8080';}else{t.style.borderColor='rgba(113,255,0,.3)';t.style.color='#71ff00';}t.textContent=msg;t.style.opacity='1';clearTimeout(t._to);t._to=setTimeout(()=>{t.style.opacity='0';},3200);}
 
 /* ── Registration toggle ── */
+/* window.toast was never defined on this page — ~18 rider actions called window.toast?.() (silent
+   no-ops giving no feedback), and TWO called it unguarded (_drvCompleteDelivery lines ~2231/2273),
+   which THREW: the "Mark Delivered" success threw AFTER the delivered write, so the completed card
+   stayed stuck. Alias to the real helper. Call convention on this page: 2nd arg === false means an
+   ERROR (red); otherwise success (green). */
+window.toast = window.toast || function(msg, arg){ try { _drvToast(String(msg), arg === false); } catch(_){} };
+
 function showDriverLogin(){ document.getElementById("driverLoginForm").style.display="block"; document.getElementById("driverRegForm").style.display="none"; }
 function showDriverRegForm(){ document.getElementById("driverRegForm").style.display="block"; document.getElementById("driverLoginForm").style.display="none"; }
 
@@ -846,6 +865,10 @@ window.previewDocPhoto = previewDocPhoto;
 /* ── Registration ── */
 function registerDriver(){
   const _regMsg = (m)=>{ var el=document.getElementById('regMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
+  /* One submission at a time: rapid re-clicks previously created duplicate driver
+     applications for the same uid, and a later reject of a duplicate could suspend an
+     already-approved rider. This lock allows only one in-flight submission per attempt. */
+  if(window.__driverRegBusy){ _regMsg('Submitting… please wait a moment.'); return; }
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_reg', 3, 3600000)){
     _regMsg('Too many registration attempts. Please wait 1 hour.'); return;
   }
@@ -861,8 +884,13 @@ function registerDriver(){
   const idPhotoFile = document.getElementById("drIdPhoto")?.files[0];
   const dlPhotoFile = document.getElementById("drDlPhoto")?.files[0];
   if(!name||!phone||!idNum||!vehicle||!pin){ _regMsg("Please fill all required fields."); return; }
-  if(!idPhotoFile){ _regMsg("Please upload a photo of your National ID."); return; }
-  if(!dlPhotoFile){ _regMsg("Please upload a photo of your Driving Licence."); return; }
+  /* RC gate exception (TEMPORARY — remove after v1.0.0): one owner test account may
+     onboard without ID/DL photos to prove the rider dispatch path before the live gate.
+     Every other rider still must upload both — the standard flow is unchanged. */
+  var _cu = (typeof firebase!=='undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+  var _photoExempt = !!_cu && (_cu.uid==='D5Ql2EYr95bt79IpcGTmOMTK0P83' || (_cu.email||'').toLowerCase()==='alexochieng3030@gmail.com');
+  if(!idPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your National ID."); return; }
+  if(!dlPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your Driving Licence."); return; }
 
   const cargoTonne = document.getElementById("drCargoTonne")?.value || "";
   const cargoType  = document.getElementById("drCargoType")?.value  || "";
@@ -870,11 +898,13 @@ function registerDriver(){
 
   /* Read both photos as base64 then save */
   const readFile = (file) => new Promise(res=>{
+    if(!file){ res(''); return; }   /* photo-exempt onboarding: no file → empty string, no crash */
     const r = new FileReader();
     r.onload = e => res(e.target.result);
     r.readAsDataURL(file);
   });
 
+  window.__driverRegBusy = true;   /* lock now that validation passed — one application per attempt */
   Promise.all([readFile(idPhotoFile), readFile(dlPhotoFile)]).then(([idPhoto, dlPhoto])=>{
     const driver = { id:"DRV"+Date.now(), name, phone, idNum, vehicle, plate, zone, pin, cargoTonne, cargoType, logbook, idPhoto, dlPhoto, status:"pending", deliveries:[], earnings:0, weeklyEarnings:0, rating:5.0, tripsCompleted:0, createdAt:new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}) };
     let drivers = [];
@@ -916,52 +946,175 @@ function registerDriver(){
     document.body.prepend(banner);
     setTimeout(function(){banner.remove();},6000);
     loginDriverWith(phone, pin);
-  });
+  }).catch(function(){ window.__driverRegBusy=false; _regMsg('Could not submit — please try again.'); });
 }
 
 /* ── Login ── */
-function loginDriver(){
-  const _lgMsg = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 5, 60000)){
-    _lgMsg("Too many login attempts. Wait 1 minute.");
-    return;
+function loginDriver(ev){
+  console.log('[driver] Login clicked');
+  const btn = (ev && ev.target) || (typeof event!=='undefined' && event && event.target)
+            || document.querySelector('button[onclick^="loginDriver"]');
+  const _lgMsg = (m, ok)=>{ var el=document.getElementById('loginMsg'); if(el){ el.style.color = ok ? '#71ff00' : '#ff8080'; el.textContent=m; if(!ok) setTimeout(()=>{ if(el.textContent===m) el.textContent=''; },7000); } };
+  const _busy  = (b)=>{ if(btn){ btn.disabled=b; btn.textContent = b ? 'Logging in…' : 'Login →'; } };
+  try {
+    /* Rate limit raised 5→12/min so debugging a login doesn't lock you out. */
+    if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 12, 60000)){
+      _lgMsg("Too many login attempts. Wait 1 minute."); return;
+    }
+    const phone = (document.getElementById("driverLoginPhone")||{}).value ? document.getElementById("driverLoginPhone").value.trim() : '';
+    const pin   = (document.getElementById("driverLoginPin")||{}).value ? document.getElementById("driverLoginPin").value.trim() : '';
+    if(!phone || !pin){ _lgMsg("Enter your phone number and PIN."); return; }
+    _busy(true);
+    _lgMsg('Signing you in…', true);
+    /* Never silent: loading clears and any error shows, always. */
+    Promise.resolve(loginDriverWith(phone, pin))
+      .catch(e => { console.error('[driver] login error', e); _lgMsg('Login failed: ' + ((e && e.message) || e)); })
+      .finally(() => _busy(false));
+  } catch(e){
+    console.error('[driver] login sync error', e);
+    _lgMsg('Login error: ' + ((e && e.message) || e)); _busy(false);
   }
-  const phone = document.getElementById("driverLoginPhone").value.trim();
-  const pin   = document.getElementById("driverLoginPin").value.trim();
-  loginDriverWith(phone, pin);
+}
+/* Belt-and-suspenders: expose to global scope in case this block is ever wrapped/moduled. */
+window.loginDriver = loginDriver;
+
+/* Wait up to maxMs for a signed-in user. Uses window.firebaseAuth (the MODULAR Auth
+   instance firebase.js guarantees) — polls currentUser since the modular instance has no
+   .onAuthStateChanged method. Falls back to the compat shim if present. */
+function _waitForFirebaseUser(maxMs){
+  return new Promise(resolve => {
+    let a = window.firebaseAuth || null;
+    try { if (!a && typeof firebase !== 'undefined' && firebase.auth) a = firebase.auth(); } catch(_){}
+    if (!a) return resolve(null);
+    if (a.currentUser) return resolve(a.currentUser);
+    let done = false;
+    const finish = u => { if(done) return; done = true; clearInterval(iv); resolve(u || a.currentUser || null); };
+    try { if (typeof a.onAuthStateChanged === 'function') a.onAuthStateChanged(u => finish(u)); } catch(_){}
+    const iv = setInterval(() => { if (a.currentUser) finish(a.currentUser); }, 250);
+    setTimeout(() => finish(null), maxMs || 6000);
+  });
 }
 
-function loginDriverWith(phone, pin){
+/* Reject a hung Firestore read instead of leaving the button on "Signing you in…" forever
+   (a broken compat shim or App-Check stall would otherwise never resolve). */
+function _withTimeout(p, ms, label){
+  return Promise.race([ p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout:'+label)), ms)) ]);
+}
+
+async function loginDriverWith(phone, pin){
+  const _lm = (m, ok)=>{ var el=document.getElementById('loginMsg'); if(el){ el.style.color = ok ? '#71ff00' : '#ff8080'; el.textContent=m; if(!ok) setTimeout(()=>{ if(el.textContent===m) el.textContent=''; },8000); } };
+  const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
+  const _finish = (d)=>{
+    currentDriver = d;
+    try{ sessionStorage.setItem("sokoniDriverSession", d.id); }catch(_){}
+    /* Hide the login panel + clear its message/button so it never LOOKS stuck after success. */
+    var ls=document.getElementById("loginSection"); if(ls) ls.style.display="none";
+    var lm=document.getElementById("loginMsg"); if(lm) lm.textContent="";
+    var lb=document.querySelector('button[onclick^="loginDriver"]'); if(lb){ lb.disabled=false; lb.textContent="Login →"; }
+    showDriverDashboard();
+  };
+
+  /* 1) localStorage (fast path on a returning device). */
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
-  const driver = drivers.find(d => d.phone === phone && d.pin === pin);
-  if(!driver){ var _lm=document.getElementById('loginMsg'); if(_lm){_lm.textContent='Driver not found or wrong PIN. Apply first.'; setTimeout(()=>{_lm.textContent='';},4000);} return; }
-  currentDriver = driver;
-  sessionStorage.setItem("sokoniDriverSession", driver.id);
-  showDriverDashboard();
+  let driver = drivers.find(d => _norm(d.phone) === _norm(phone) && String(d.pin) === String(pin));
+  if (driver) { _finish(driver); return; }
+
+  /* 2) Need a signed-in session to read the rider record (rules require auth). */
+  const _cu = await _waitForFirebaseUser(6000);
+  if(!_cu){
+    console.warn('[driver] login: no Firebase auth session on this page');
+    _lm('Not signed in on this device. Open the app, sign in, then reload /driver.'); return;
+  }
+
+  /* 3) Read rideDrivers via the MODULAR SDK (window.firebaseDB — guaranteed by firebase.js),
+     with hard timeouts so it can never hang. Self-diagnosing on failure. */
+  _lm('Checking your account…', true);
+  const db = window.firebaseDB;
+  if(!db){ _lm('Database not ready — wait 3 seconds and tap Login again.'); return; }
+  let diag = '';
+  try {
+    const { doc, getDoc, collection, query, where, limit, getDocs } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    /* A: the signed-in user's OWN rider record, phone must match (format-agnostic: last 9 digits). */
+    const own = await _withTimeout(getDoc(doc(db,'rideDrivers',_cu.uid)), 8000, 'own');
+    if (own.exists()) {
+      const rd = own.data()||{};
+      if (_norm(rd.phone) === _norm(phone)) driver = { id: own.id, ...rd, pin: rd.pin||pin };
+      else diag = 'phone-mismatch (record '+_norm(rd.phone)+' ≠ entered '+_norm(phone)+')';
+    } else diag = 'no rider record for account '+_cu.uid.slice(0,6);
+    /* B: any rider whose phone matches, validate PIN. */
+    if (!driver) {
+      const qs = await _withTimeout(getDocs(query(collection(db,'rideDrivers'), where('phone','==',phone), limit(5))), 8000, 'query');
+      if (qs.empty) diag += ' | no rider with phone '+phone;
+      qs.forEach(s => { const rd=s.data()||{}; if(!driver){ if(String(rd.pin||'')===String(pin)) driver={id:s.id,...rd}; else diag='wrong PIN for '+phone; } });
+    }
+    if (driver) { drivers.push(driver); try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){} }
+  } catch(e){
+    console.warn('[driver] login fallback error:', e.code, e.message);
+    if (String(e.message||'').startsWith('timeout')) { _lm('Timed out reading your account (network/App-Check). Check connection and retry.'); return; }
+    _lm('Login check failed: '+(e.code||e.message)); return;
+  }
+  if(!driver){ console.warn('[driver] login failed —', diag); _lm('Could not log in — '+diag); return; }
+  _finish(driver);
 }
 
-function logoutDriver(){
+/* Leave the Delivery Hub WITHOUT signing out — Rider Role Convergence Rule 5.
+ *
+ * This used to call sokoniSignOut() and redirect to login.html, so stepping out
+ * of the Hub destroyed the whole account session: the user had to log in again
+ * and lost their cart, wallet context, notifications and messages. That is what
+ * made Delivery Hub read as a SECOND IDENTITY rather than a workspace.
+ *
+ * Rider is a ROLE on one account. Leaving the workspace ends the SHIFT, not the
+ * session — go offline, stop GPS, drop the driver-workspace key, and return to
+ * the marketplace still authenticated.
+ *
+ * A real sign-out remains available where it belongs: the Profile page. */
+function exitDriverWorkspace(){
   sessionStorage.removeItem("sokoniDriverSession");
-  /* Stop GPS tracking before signing out */
+  /* Stop GPS before leaving: a rider who has left the workspace is not on shift,
+     and continuing to broadcast their location would be both wrong and a privacy
+     problem. */
   if(window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
-  if(window.sokoniSignOut){
-    window.sokoniSignOut().finally(()=>{ window.location.href="login.html"; });
-  } else {
-    localStorage.removeItem("loggedIn");
-    localStorage.removeItem("sokoniUser");
-    window.location.href = "login.html";
-  }
+  try { if(typeof setOnlineState === 'function') setOnlineState(false); } catch(e){}
+  window.location.href = "index.html";
 }
+/* Back-compat: older markup may still reference the previous name. It no longer
+   signs out — the behaviour change is the point of the fix. */
+window.logoutDriver = exitDriverWorkspace;
+window.exitDriverWorkspace = exitDriverWorkspace;
 
 /* ── Online toggle ── */
 function toggleOnline(){
   isOnline = !isOnline;
-  const btn = document.getElementById("driverOnlineBtn");
-  btn.textContent = isOnline ? "🟢 Online — Taking Orders" : "🔴 Go Offline";
-  btn.style.background = isOnline ? "rgba(113,255,0,0.18)" : "rgba(255,61,61,0.1)";
-  btn.style.borderColor = isOnline ? "rgba(113,255,0,0.4)" : "rgba(255,61,61,0.25)";
-  btn.style.color = isOnline ? "#71ff00" : "#ff6b6b";
+  window.isOnline = isOnline;   /* the module/wrapper layer reads window.isOnline — keep in sync (was undefined there) */
+  /* Reliable dispatch sync: dispatch.js filters rideDrivers where isOnline==true. Write it
+     here in the base handler — always runs, correct scope, no dependency on the DeliveryHub
+     module or the _uid() helper — so the rider is actually discoverable. */
+  try {
+    var _ru = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+    if(_ru && firebase.firestore){
+      firebase.firestore().collection('rideDrivers').doc(_ru).update({
+        isOnline: isOnline,
+        status: isOnline ? 'active' : 'offline',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function(){});
+      /* Derive the shift/identity state from the ONE online switch (single source of truth) —
+         mirror to users/{uid}.driverProfile so `shiftStatus` is never an independent, drift-prone
+         toggle. Additive (arrayUnion) so a multi-role account keeps every role. */
+      firebase.firestore().collection('users').doc(_ru).set({
+        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        isDriver: true, isRider: true,
+        driverProfile: {
+          shiftStatus: isOnline ? 'online' : 'offline',
+          lastShiftAt: firebase.firestore.FieldValue.serverTimestamp()
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(function(){});
+    }
+  } catch(e){}
+  _syncOnlineButtons();
   if(isOnline){
     if(window.SokoniDB?.startGPSTracking && currentDriver){
       window.SokoniDB.startGPSTracking(currentDriver.id);
@@ -972,12 +1125,40 @@ function toggleOnline(){
   renderDeliveries();
 }
 
+/* Keep EVERY online toggle in sync — both the top-row button and the dashboard button reflect the
+   one `isOnline` state. Previously btnGoOnline called shiftGoOnline() (undefined) → did nothing and
+   the two buttons diverged. */
+function _syncOnlineButtons(){
+  var online = !!isOnline;
+  [{id:'driverOnlineBtn', on:'🟢 Online — Taking Orders'},
+   {id:'btnGoOnline',     on:'🟢 Online'}].forEach(function(b){
+    var el=document.getElementById(b.id); if(!el) return;
+    el.textContent      = online ? b.on : '🔴 Go Offline';
+    el.style.background  = online ? 'rgba(113,255,0,0.18)' : 'rgba(255,61,61,0.1)';
+    el.style.borderColor = online ? 'rgba(113,255,0,0.4)'  : 'rgba(255,61,61,0.25)';
+    el.style.color       = online ? '#71ff00'              : '#ff6b6b';
+  });
+}
+window.toggleOnline = toggleOnline;
+/* Back-compat: the dashboard button called shiftGoOnline() which never existed — route it to the
+   single canonical toggle so both buttons drive the same state. */
+window.shiftGoOnline = toggleOnline;
+function shiftGoOnline(){ return toggleOnline(); }
+
 /* ── Dashboard ── */
 function showDriverDashboard(){
   if(!currentDriver) return;
   const _gate = document.getElementById("driverGate");
   if(_gate) _gate.style.display="none";
   document.getElementById("driverDashboard").style.display="block";
+  /* Reflect the rider's ACTUAL online state so both Go-Online buttons match the record on load. */
+  isOnline = !!(currentDriver.isOnline || currentDriver.online || String(currentDriver.status||'').toLowerCase()==='active' || String(currentDriver.status||'').toLowerCase()==='online');
+  window.isOnline = isOnline;
+  try{ _syncOnlineButtons(); }catch(_){}
+  /* Identity model: the one signed-in SOKONI account = driver mode. No login/logout button;
+     leave via "← Exit Hub" (stays signed in). Go Online drives the shift. */
+  var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="";
+  var _lb=document.getElementById("driverLoginBtn"); if(_lb) _lb.style.display="none";
 
   const v = currentDriver.vehicle;
   const isEbike   = v === "ebike";
@@ -997,12 +1178,29 @@ function showDriverDashboard(){
     pickup:"Pickup 🛻", canter:"Canter 🚛", lorry:"Lorry 🚚"
   }[v] || v;
 
+  /* ── Signed-in identity card — avatar + "Signed in" chip + name so the hub never reads as guest ── */
+  const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const _firstName = String(currentDriver.name||'Rider').trim().split(/\s+/)[0] || 'Rider';
+  const _rating = Number(currentDriver.rating||5.0);
+  const _av = document.getElementById("driverAvatar");
+  if(_av){
+    _av.style.display="flex";
+    const ph = currentDriver.photo || currentDriver.avatar || currentDriver.photoURL || "";
+    if(/^https?:\/\/[^'")\s]+$/.test(ph)){ _av.style.backgroundImage="url('"+ph+"')"; _av.textContent=""; }
+    else { _av.style.backgroundImage=""; _av.textContent=_riderInitials(currentDriver.name); }
+  }
+  const _chip=document.getElementById("driverSignedChip"); if(_chip) _chip.style.display="";
+
   document.getElementById("driverGreet").innerHTML =
-    `Welcome, ${currentDriver.name}! ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
+    `Hello ${_esc(_firstName)} 👋 ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
   const capacityStr = currentDriver.cargoTonne ? ` · ${currentDriver.cargoTonne}t capacity` : "";
   const cargoTypeStr = currentDriver.cargoType ? ` · ${currentDriver.cargoType}` : "";
-  document.getElementById("driverZone").textContent =
-    `Zone: ${currentDriver.zone||"All"}${capacityStr}${cargoTypeStr} · ${currentDriver.status==="approved"?"✅ Verified":"⏳ Pending Review"}`;
+  /* Verified if explicitly approved OR in a working state — toggleOnline writes status
+     'active'/'offline', so keying only on 'approved' left verified riders stuck on "Pending". */
+  const _verified = currentDriver.approved === true
+    || ["approved","active","online","verified"].includes(String(currentDriver.status||"").toLowerCase());
+  document.getElementById("driverZone").innerHTML =
+    `<strong style="color:${_verified?'#71ff00':'#fbbf24'}">${_verified?"✅ Verified Rider":"⏳ Pending Review"}</strong> · 📍 ${_esc(currentDriver.zone||"All")}${capacityStr}${cargoTypeStr} · ⭐ ${_rating.toFixed(1)}`;
 
   /* Show AI fuel tracker for petrol/diesel vehicles */
   const fuelPanel = document.getElementById("fuelPricePanel");
@@ -1302,15 +1500,20 @@ function renderDeliveries(){
   const avEl = document.getElementById("availableDeliveries");
   const myEl = document.getElementById("myDeliveries");
   const veh  = currentDriver && currentDriver.vehicle;
+  /* Available Deliveries is an ONLINE-only surface — hide the whole section header when offline so
+     the hub stays clean; a rider only sees the job pool after going online. */
+  /* The endpoint loader (#availDispatch) renders its own "🛵 Available Deliveries" heading, so hide
+     this legacy one to avoid a duplicate. */
+  const _hdr = document.getElementById("deliveriesHeader");
+  if(_hdr) _hdr.style.display = "none";
 
-  let orders = [];
-  try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
   const myDeliveries = (currentDriver && currentDriver.deliveries) || [];
-  const myOrderIds = new Set(myDeliveries.map(d=>d.orderId));
-  /* Filter orders by cargo capacity match */
-  const filtered = isOnline
-    ? orders.filter(o => ["processing","shipped"].includes(o.status) && !myOrderIds.has(o.id) && vehicleCanHandleOrder(veh, o))
-    : [];
+  /* Available deliveries are owned by the ENDPOINT loader (#availDispatch → /api/available-deliveries
+     → packageRequests awaiting_rider — the real dispatch queue). The legacy localStorage path read
+     BUYER orders (sokoniOrders), never the rider jobs, so nothing ever showed. Retired: keep this
+     empty and trigger the endpoint refresh below. */
+  const filtered = [];
+  if(isOnline && window._refreshAvailDeliveries){ try{ window._refreshAvailDeliveries(); }catch(_){} }
 
   const CARGO_ICON = { parcel:"📦", medium:"🛋️", large:"🧱", freight:"🏗️" };
   const CARGO_NAME = { parcel:"Parcel", medium:"Bulk Goods", large:"Large Cargo", freight:"Freight" };
@@ -1342,7 +1545,9 @@ function renderDeliveries(){
         <button type="button" class="dc-decline-btn" onclick="this.closest('.delivery-card').remove()">Decline</button>
       </div>
     </div>`;
-  }).join("") : `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">${isOnline?`No ${CARGO_NAME[CARGO_CAPACITY[veh]]||"matching"} deliveries right now. Check back soon.`:"Go online to see available deliveries."}</div>`;
+  }).join("") : (isOnline
+    ? ``   /* the endpoint loader (#availDispatch) renders the live packageRequests jobs above */
+    : `<div style="color:rgba(255,255,255,0.4);font-size:13px;padding:20px 14px;text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">😴 You're offline.<br><span style="color:rgba(255,255,255,0.3)">Go online to start receiving delivery requests.</span></div>`);
 
   const statusMap = { picked:"📦 Picked Up", transit:"🛵 In Transit", arrived:"🏠 Arrived", delivered:"✅ Delivered" };
   myEl.innerHTML = myDeliveries.length ? myDeliveries.map(d=>`
@@ -1545,35 +1750,215 @@ window.generateReferral = generateReferral;
 window.acceptDelivery = acceptDelivery;
 window.updateDeliveryStatus = updateDeliveryStatus;
 
-/* Auto-login or create a demo session so dashboard is always visible */
+/* ════════════════════════════════════════════════════════════════════════
+   IDENTITY REFACTOR — no separate driver PIN login. The driver hub uses the ONE
+   signed-in SOKONI account + driver role (rideDrivers/{uid}). "Login gates only,
+   keep step-up": one account session unlocks driver mode; sensitive actions
+   (proof-of-delivery PIN, payouts) keep their own confirmation.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Account gate shown when we can't auto-enter: sign-in (not signed in) or apply
+   (signed in but not a registered driver). The old phone+PIN form is retired. */
+function _showDriverAccountGate(mode, detail){
+  currentDriver = null;
+  var ob=document.getElementById("driverOnlineBtn"); if(ob) ob.style.display="none";
+  var lb=document.getElementById("driverLoginBtn");
+  var ls=document.getElementById("loginSection");  if(ls) ls.style.display="none";  /* PIN form retired */
+  var g=document.getElementById("driverGreet");
+  var z=document.getElementById("driverZone");
+  var apply=document.getElementById("applySection");
+  var topApply=document.getElementById("applyDriverTopBtn");
+  var av=document.getElementById("driverAvatar"), chip=document.getElementById("driverSignedChip");
+  if(topApply) topApply.style.display = (mode==='apply') ? "" : "none";
+  if(mode==='apply'){
+    if(lb) lb.style.display="none";
+    /* Signed in, not yet a rider — SHOW the account identity so it never reads as a guest. */
+    var acct=_signedInAccount();
+    if(av){ av.style.display="flex"; if(/^https?:\/\/[^'")\s]+$/.test(acct.photo)){ av.style.backgroundImage="url('"+acct.photo+"')"; av.textContent=""; } else { av.style.backgroundImage=""; av.textContent=_riderInitials(acct.name); } }
+    if(chip) chip.style.display="";
+    if(g) g.textContent="Hello "+(String(acct.name||'there').split(/\s+/)[0])+" 👋";
+    if(z) z.textContent=detail||"You're signed in — become a rider to start delivering.";
+    if(apply){ apply.style.display="block"; }
+  } else if(mode==='loading'){
+    if(lb) lb.style.display="none";
+    if(av) av.style.display="none"; if(chip) chip.style.display="none";
+    if(g) g.textContent="Loading your driver profile…";
+    if(z) z.textContent=detail||"One moment.";
+  } else { /* signin — genuine guest */
+    if(lb){ lb.style.display=""; lb.textContent="🔑 Sign In"; }
+    if(av) av.style.display="none"; if(chip) chip.style.display="none";
+    if(g) g.textContent="🔑 Sign in to drive";
+    if(z) z.textContent=detail||"Use your SOKONI account — one login for everything.";
+  }
+}
+
+/* Top button (only shown as "Sign In" on the sign-in gate) → account sign-in, not a driver PIN. */
+function driverAuthToggle(){
+  /* auth.js (login handler) reads `redirect`/`next`, NOT `return` — sending `return` was ignored,
+     so after sign-in the rider landed on Home instead of back in the Delivery Hub. */
+  location.href = '/login.html?redirect=' + encodeURIComponent('/driver');
+}
+window.driverAuthToggle = driverAuthToggle;
+
+/* Reveal + scroll to the driver application form (from the top "Apply to Become a Driver" button). */
+function _gotoApply(){
+  var a=document.getElementById('applySection');
+  if(a){ a.style.display='block'; try{ a.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }
+}
+window._gotoApply = _gotoApply;
+
+/* Build marker embedded in THIS file — if the device shows an older value (or no diag panel at
+   all when ?diag=1), the browser is running a stale cached build, not this deploy. */
+var _DRIVER_BUILD = 'RIDER-UI-v2 · v331+ · 2026-08-06';
+/* Always-visible build badge — proves on-device which build loaded, regardless of login state. */
+(function _paintBuildBadge(){
+  try{
+    var b=document.getElementById('driverBuild'); if(b) b.textContent=_DRIVER_BUILD;
+    fetch('/version.json?cb='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(v){
+      if(!b) return;
+      b.textContent=_DRIVER_BUILD+' · srv '+(v.cacheVersion||'?');
+    }).catch(function(){});
+  }catch(_){}
+})();
+async function _runDriverDiag(){
+  try{
+    if(new URLSearchParams(location.search).get('diag')!=='1') return;
+    var el=document.getElementById('driverDiag'); if(!el) return;
+    el.style.display='block';
+    var L=[];
+    L.push('BUILD (this page): '+_DRIVER_BUILD);
+    try{ var v=await fetch('/version.json?cb='+Date.now(),{cache:'no-store'}).then(r=>r.json()); L.push('BUILD (server now): '+v.cacheVersion+' · '+v.commitShort); }catch(_){ L.push('BUILD (server): fetch failed'); }
+    try{ var reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration(); L.push('SW: '+(reg?('reg; active='+(reg.active?reg.active.state:'no')+(reg.waiting?' · UPDATE WAITING':'')):'none')); }catch(_){ L.push('SW: n/a'); }
+    var user=(window.firebaseAuth&&window.firebaseAuth.currentUser)||null;
+    L.push('AUTH: '+(user?'Signed In ✓':'NOT signed in ✗'));
+    L.push('UID: '+(user?user.uid:'—'));
+    L.push('REDIRECT RESULT: '+(_redirectDiag||'(not run yet)'));
+    if(user){
+      var prof=await _fetchRiderProfile(user);
+      if(prof && prof.signedIn){
+        var ex=prof.rider && prof.rider.exists;
+        L.push('ENDPOINT: HTTP 200 · matchedBy='+(prof.matchedBy||'?'));
+        L.push('RIDER PROFILE: '+(ex?('Found ✓ · status='+prof.rider.status+' · approved='+prof.rider.approved+' · id='+String(prof.rider.id).slice(0,10)):'✗ NOT FOUND'));
+        L.push('ROLES: '+JSON.stringify(prof.roles||[]));
+        L.push('VIEW: '+(ex?'DASHBOARD (identity card)':'APPLY gate'));
+      } else {
+        L.push('ENDPOINT: unreachable/failed → falling back to direct Firestore (App-Check-gated)');
+      }
+    }
+    L.push('currentDriver: '+(currentDriver?('set ('+(currentDriver.name||'?')+')'):'null'));
+    el.textContent=L.join('\n');
+  }catch(_){}
+}
+window._runDriverDiag=_runDriverDiag;
+
+/* Avatar initials from a name (fallback when there's no photo). */
+function _riderInitials(name){
+  var p=String(name||'R').trim().split(/\s+/).filter(Boolean);
+  return ((p[0]||'R').charAt(0)+(p.length>1?p[p.length-1].charAt(0):'')).toUpperCase();
+}
+/* The signed-in account identity (name/photo) — used to show a non-rider they ARE signed in. */
+function _signedInAccount(){
+  try{ var u=(window.firebaseAuth&&window.firebaseAuth.currentUser)||null; if(u) return {name:u.displayName||u.email||'You',photo:u.photoURL||''}; }catch(_){}
+  try{ var s=JSON.parse(localStorage.getItem('sokoniUser')||'null'); if(s) return {name:s.name||s.displayName||s.email||'You',photo:s.photoURL||s.avatar||''}; }catch(_){}
+  return {name:'You',photo:''};
+}
+
+/* Identity-based entry: signed-in account → its rideDrivers/{uid} record → dashboard (no PIN).
+   Signed in but no rider record → apply. Not signed in → account sign-in. */
+/* App-Check-INDEPENDENT rider lookup — verifies the Firebase ID token server-side (App Check does
+   NOT gate token minting), so it works on iOS Safari where the direct Firestore read 403s. */
+async function _fetchRiderProfile(user){
+  try{
+    const tok = await user.getIdToken();
+    console.log('[rider] AUTH UID', user.uid, '· email', user.email||'(none)');
+    const r = await fetch('/api/rider-profile', { headers: { Authorization: 'Bearer '+tok }, cache:'no-store' });
+    console.log('[rider] /api/rider-profile HTTP', r.status);
+    if(!r.ok){ console.warn('[rider] endpoint not ok'); return null; }
+    const j = await r.json();
+    console.log('[rider] PROFILE', j);
+    return j;
+  }catch(e){ console.warn('[rider] fetchRiderProfile error', e && e.message); return null; }
+}
+
+let _redirectFinalized = false, _redirectDiag = '';
+/* Finalise a pending Google-redirect sign-in. On mobile Safari the browser returns to /driver
+   but the session is NOT live until getRedirectResult() runs — without this the page sees no user
+   and shows the guest gate even though Google authenticated the rider. Idempotent + best-effort;
+   records the outcome for the on-screen diagnostics. */
+async function _finalizeRedirect(){
+  if (_redirectFinalized) return;
+  _redirectFinalized = true;
+  try{
+    for (let i=0;i<50 && !window.firebaseAuth;i++){ await new Promise(r=>setTimeout(r,150)); }
+    if (!window.firebaseAuth) { _redirectDiag = 'no firebaseAuth'; return; }
+    const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const res = await m.getRedirectResult(window.firebaseAuth).catch(function(e){ _redirectDiag = 'error ' + (e && e.code); console.warn('[rider] getRedirectResult:', e && e.code); return null; });
+    if (res && res.user) { _redirectDiag = 'finalized uid ' + res.user.uid.slice(0,10); console.log('[rider] redirect sign-in finalized:', res.user.uid); }
+    else if (!_redirectDiag) _redirectDiag = window.firebaseAuth.currentUser ? ('already signed-in ' + window.firebaseAuth.currentUser.uid.slice(0,10)) : 'no pending redirect / no session';
+  }catch(e){ _redirectDiag = 'exception ' + (e && e.message); }
+}
+
+async function _enterDriverIdentity(){
+  await _finalizeRedirect();   /* complete any pending Google-redirect sign-in FIRST */
+  /* More patient on iOS (App Check + session restore can take ~10s). */
+  const user = await _waitForFirebaseUser(12000);
+  if (!user) { if (!currentDriver) _showDriverAccountGate('signin', 'No signed-in session detected — tap Sign In. [redirect: '+(_redirectDiag||'—')+']'); return; }
+  const _u10 = String(user.uid).slice(0,10);
+
+  /* PRIMARY: App-Check-independent endpoint (works on iOS where the direct Firestore read 403s). */
+  try {
+    const prof = await _fetchRiderProfile(user);
+    if (prof && prof.signedIn) {
+      if (prof.rider && prof.rider.exists) {
+        currentDriver = { id: prof.rider.id || user.uid, ...prof.rider };
+        try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
+        showDriverDashboard();
+      } else if (!currentDriver) {
+        /* On-screen reason (no console needed): signed in, but no rider on this account. */
+        _showDriverAccountGate('apply', 'Signed in ✓ (uid '+_u10+'…) — no rider record found for this account. Apply below, or sign in with the account that has your rider profile.');
+      }
+      return;   /* authoritative answer without App Check */
+    }
+    _showDriverAccountGate('loading', 'Signed in (uid '+_u10+'…) — checking rider profile…');
+  } catch(_){}
+
+  /* Fallback only if the endpoint was unreachable. */
+  const db = window.firebaseDB;
+  if (!db) { if (!currentDriver) _showDriverAccountGate('loading', 'Starting up — one moment.'); setTimeout(_enterDriverIdentity, 1500); return; }
+  try {
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await _withTimeout(getDoc(doc(db, 'rideDrivers', user.uid)), 8000, 'own');
+    if (snap.exists()) {
+      const rd = snap.data() || {};
+      currentDriver = { id: snap.id, ...rd };
+      try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
+      showDriverDashboard();
+    } else if (!currentDriver) {
+      _showDriverAccountGate('apply', 'Signed in ✓ (uid '+_u10+'…) — no rider record found. Apply below.');
+    }
+  } catch(e){
+    console.warn('[driver] identity entry error:', e && e.message);
+    if (!currentDriver) _showDriverAccountGate('signin', 'Signed in (uid '+_u10+'…) but rider lookup failed: '+((e&&e.message)||'error'));
+  }
+}
+window._enterDriverIdentity = _enterDriverIdentity;
+
+/* Require a REAL driver login — no demo dashboard. The DRV-DEMO phantom used to let the
+   dashboard + "Go Online" show with no real driver, so shift management ran against a fake
+   record. Now: a valid saved session opens the dashboard; otherwise the top action is
+   "Driver Login", Go Online is hidden, and the login panel opens. */
 (function(){
+  /* Fast-path: a saved session for this device paints the dashboard instantly. */
   const savedId = sessionStorage.getItem("sokoniDriverSession");
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
-
-  if(savedId){
-    currentDriver = drivers.find(d=>d.id===savedId);
-  }
-
-  if(!currentDriver){
-    /* Use first registered driver, or create a demo profile */
-    currentDriver = drivers[0] || {
-      id:"DRV-DEMO",
-      name:"Sokoni Rider",
-      phone:"",
-      vehicle:"motorcycle",
-      zone:"nairobi-cbd",
-      status:"approved",
-      earnings:0,
-      weeklyEarnings:0,
-      tripsCompleted:0,
-      rating:5.0,
-      deliveries:[],
-      isDemo:true
-    };
-  }
-
-  showDriverDashboard();
+  const found = savedId ? drivers.find(d => d.id === savedId) : null;
+  if(found && !found.isDemo){ currentDriver = found; showDriverDashboard(); }
+  /* Authoritative: resolve from the signed-in SOKONI account (identity refactor — no PIN).
+     Enhances/updates the record, or gates to sign-in / apply when appropriate. */
+  try { _enterDriverIdentity(); } catch(_){ }
+  /* On-device diagnostics (?diag=1). Run a few times as auth + firebase resolve. */
+  try { _runDriverDiag(); setTimeout(_runDriverDiag, 1800); setTimeout(_runDriverDiag, 4000); } catch(_){ }
 })();
 </script>
 <script src="sokoni-commission-rates.js"></script>
@@ -1743,6 +2128,14 @@ function _showDrvDelivery(req) {
 
   const activeStatus = { driver_accepted:'heading to seller', driver_at_seller:'at seller', in_transit:'in transit' };
   if (activeStatus[req.status]) {
+    /* Navigate destination: heading to the SELLER until picked up, then to the BUYER.
+       Prefer live coords; fall back to the saved address (Google geocodes it). */
+    const _dc = req.deliveryCoords || {}, _pc = req.pickupCoords || {};
+    const _navRaw = (req.status === 'in_transit')
+      ? (_dc.lat != null ? _dc.lat + ',' + _dc.lng : (req.deliveryAddress || ''))
+      : (_pc.lat != null ? _pc.lat + ',' + _pc.lng : (req.pickupAddress || ''));
+    const _navDest = encodeURIComponent(_navRaw);
+    const _buyerPhone = req.buyerPhone || req.customerPhone || '';
     el.style.cssText = 'background:rgba(0,170,255,0.07);border:2px solid rgba(0,170,255,0.3);border-radius:16px;padding:16px;margin-bottom:16px;';
     el.innerHTML = `
       <div style="font-size:12px;font-weight:900;color:#00aaff;margin-bottom:8px;">${icon} ACTIVE DELIVERY · ${req.deliveryRef||req.ref}</div>
@@ -1752,6 +2145,14 @@ function _showDrvDelivery(req) {
         ${req.sellerName?'<br>🏪 Seller: '+req.sellerName:''}
         ${req.buyerName ?'<br>👤 Buyer: '+req.buyerName:''}
         ${req.proofPin  ?'<br>🔑 Delivery PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:3px;">'+req.proofPin+'</strong>':''}
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <button onclick="window._drvNavigate('${_navDest}')" style="flex:1 1 110px;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
+        ${_buyerPhone?`<button onclick="location.href='tel:${_buyerPhone}'" title="Call buyer" style="padding:11px 13px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📞</button>`:''}
+        ${_buyerPhone?`<button onclick="window._drvChat('${_buyerPhone}')" title="Chat buyer (WhatsApp)" style="padding:11px 13px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">💬</button>`:''}
+        <button onclick="window._drvReportIssue('${req.deliveryRef||req.ref}')" title="Report a problem" style="padding:11px 13px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">🚨</button>
+        <button onclick="document.getElementById('drvProofInput_${req.deliveryRef||req.ref}').click()" title="Upload delivery photo" style="padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📷</button>
+        <input id="drvProofInput_${req.deliveryRef||req.ref}" type="file" accept="image/*" capture="environment" style="display:none;" onchange="window._drvUploadProof(this,'${req.deliveryRef||req.ref}')">
       </div>
       ${_deliveryActionBtns(req)}`;
   } else {
@@ -1775,6 +2176,76 @@ function _showDrvDelivery(req) {
   el.style.display = 'block';
   if (navigator.vibrate) navigator.vibrate([100,50,100]);
 }
+
+/* Open turn-by-turn navigation to the destination (already URL-encoded — coords
+   "lat,lng" or a plain address). Google Maps universal directions URL: opens the
+   Google Maps app on Android, Google/Apple Maps or web on iOS, and web on desktop. */
+window._drvNavigate = function (encodedDest) {
+  if (!encodedDest) { try { window.toast('No destination location yet', false); } catch (_) {} return; }
+  try { window.open('https://www.google.com/maps/dir/?api=1&destination=' + encodedDest + '&travelmode=driving', '_blank'); }
+  catch (_) { location.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodedDest; }
+};
+
+/* Fire-and-forget shadow-gate call — records the server-verified would-decision for the
+   delivery stage. Never gates the UI; releases no money. */
+function _drvDeliveryShadow(dRef, pin, lat, lng) {
+  try {
+    if (window.firebase && firebase.functions) {
+      firebase.functions().httpsCallable('deliveryVerifyShadow')({
+        deliveryRef: dRef, pin: pin || '', stage: 'delivery', lat: lat, lng: lng, method: 'pin'
+      }).catch(function () {});
+    }
+  } catch (_) {}
+}
+
+/* Chat buyer via WhatsApp (practical for riders; in-app chat can replace this later). */
+window._drvChat = function (phone) {
+  var p = String(phone || '').replace(/\D/g, '');
+  if (!p) { try { window.toast('No buyer phone on file', false); } catch (_) {} return; }
+  if (p.charAt(0) === '0') p = '254' + p.slice(1);
+  else if (p.slice(0, 3) !== '254') p = '254' + p;
+  window.open('https://wa.me/' + p, '_blank');
+};
+
+/* Report a delivery problem — non-destructive: flags the delivery (never changes its
+   status, so the order isn't lost) for support review. */
+window._drvReportIssue = async function (dRef) {
+  var reason = window.prompt('Report a delivery problem — describe the issue\n(e.g. customer unavailable, wrong address, can’t reach buyer):', '');
+  if (reason == null) return;
+  reason = reason.trim();
+  if (!reason) return;
+  try {
+    await SokoniDB.updatePackageRequest(dRef, {
+      deliveryIssue:      reason,
+      deliveryIssueAt:    new Date().toISOString(),
+      deliveryIssueRider: (window.currentDriver && window.currentDriver.id) || null,
+    });
+    window.toast('🚨 Issue reported — support will review.');
+  } catch (e) { window.toast('Could not report: ' + (e && e.message || e), false); }
+};
+
+/* Upload a delivery proof photo to Storage (deliveryProofs/) and attach the URL.
+   driver.html loads the modular SDK and no storage module, so import it on demand.
+   NEVER stores base64 in Firestore (only the download URL). */
+window._drvUploadProof = async function (input, dRef) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  try {
+    window.toast('Uploading photo…');
+    var appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    var stMod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+    var storage = stMod.getStorage(appMod.getApp());
+    var uid = (window.currentDriver && window.currentDriver.id) ||
+              ((window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : 'rider');
+    var path = 'deliveryProofs/' + dRef + '_' + uid + '_' + Date.now() + '.jpg';
+    var r = stMod.ref(storage, path);
+    await stMod.uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
+    var url = await stMod.getDownloadURL(r);
+    await SokoniDB.updatePackageRequest(dRef, { proofPhotoUrl: url, proofPhotoAt: new Date().toISOString() });
+    window.toast('📷 Proof photo attached.');
+  } catch (e) { console.warn('[_drvUploadProof]', e); window.toast('Upload failed: ' + (e && e.message || e), false); }
+  finally { try { input.value = ''; } catch (_) {} }
+};
 
 function _deliveryActionBtns(req) {
   const dRef = req.deliveryRef || req.ref;
@@ -1846,6 +2317,20 @@ window._drvCompleteDelivery = async function(dRef) {
     unsub();
     if (!data) return;
 
+    /* SHADOW (two-PIN Phase 2): record what a SERVER-verified delivery gate WOULD decide
+       — PIN via HMAC + buyer geofence — in parallel with the existing client flow. Strictly
+       fire-and-forget: it NEVER blocks completion and releases NO money. */
+    try {
+      var _pinS = (inputEl && inputEl.value || '').trim();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (p) { _drvDeliveryShadow(dRef, _pinS, p.coords.latitude, p.coords.longitude); },
+          function ()  { _drvDeliveryShadow(dRef, _pinS, null, null); },
+          { timeout: 4000, maximumAge: 30000 }
+        );
+      } else { _drvDeliveryShadow(dRef, _pinS, null, null); }
+    } catch (_) {}
+
     /* PIN verification (if PIN was set at creation) */
     if (data.proofPin) {
       const entered = (inputEl?.value || '').trim();
@@ -1864,9 +2349,16 @@ window._drvCompleteDelivery = async function(dRef) {
       proofNote:'Delivered — PIN verified', payoutDue:true,
     }).catch(e => console.warn(e.message));
 
-    /* Update linked order */
+    /* Update linked order — Gap 4: go through the CANONICAL transition (validated, timeline-
+       projected, audited) instead of a raw status write. Falls back to the raw update only if
+       SokoniOrders isn't loaded, so the legacy card never regresses. */
     if (data.orderId) {
-      await SokoniDB.updateOrder(data.orderId, {
+      var _rDrvUid = (typeof _drvUid === 'function' ? _drvUid() : null);
+      var _routed = false;
+      if (window.SokoniOrders && window.SokoniOrders.riderDelivered) {
+        try { var _r = await window.SokoniOrders.riderDelivered(data.orderId, _rDrvUid, { note: 'Delivered — PIN verified' }); _routed = !!(_r && _r.ok); } catch(_) { _routed = false; }
+      }
+      if (!_routed) await SokoniDB.updateOrder(data.orderId, {
         status:'delivered', deliveryStatus:'delivered', deliveredAt:now,
       }).catch(()=>{});
     }
@@ -2487,6 +2979,16 @@ window.toggleOnline = async function() {
     await DeliveryHub.toggleRiderOnline(uid, false).catch(() => {});
     _stopHub();
   }
+  /* Dispatch (dispatch.js) filters rideDrivers where isOnline==true, but the top
+     toggle previously only wrote DeliveryHub/`online`, never `rideDrivers.isOnline`
+     — so a rider looked online yet was never discoverable. Keep that field in sync
+     here (rules allow the owner to update their own doc; we touch only isOnline). */
+  try {
+    await firebase.firestore().collection('rideDrivers').doc(uid).update({
+      isOnline: !!window.isOnline,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {}
 };
 
 /* ── Init: restore hub if driver was already online when page loaded ── */
@@ -2566,15 +3068,15 @@ window.toggleOnline = async function() {
       _setRiderOnline(false, true);
     };
 
-    window.shiftEnd = function () {
-      if (!confirm('End your shift? You will go offline.')) return;
+    window.shiftEnd = async function () {
+      if (!(await SK.dialog.confirm('End your shift? You will go offline.', null, null, { title: 'End shift', confirmLabel: 'End shift' }))) return;
       _shiftStatus = 'offline';
       _updateShiftStatus();
       _setRiderOnline(false, false);
       if (_shiftTimer) { clearInterval(_shiftTimer); _shiftTimer = null; }
       var duration = _shiftStart ? Math.round((Date.now() - _shiftStart) / 60000) : 0;
       setTimeout(function () {
-        alert('Shift ended. Duration: ' + duration + ' min. Deliveries: ' + _shiftDeliveries + '. Earnings: KES ' + _shiftEarnings.toLocaleString() + '.');
+        SK.dialog.alert('Shift ended. Duration: ' + duration + ' min. Deliveries: ' + _shiftDeliveries + '. Earnings: KES ' + _shiftEarnings.toLocaleString() + '.');
         _shiftStart = null; _shiftDeliveries = 0; _shiftEarnings = 0;
       }, 300);
     };
@@ -2586,6 +3088,20 @@ window.toggleOnline = async function() {
         status:   onBreak ? 'break' : (online ? 'active' : 'offline'),
         updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
       }).catch(function () {});
+      /* Canonical unified identity — an authenticated account acting as a driver is
+         registered in users/{uid}.roles[] (THE single source per CANONICAL_DATA_MODEL),
+         not localStorage. Additive (arrayUnion, never destructive), so a multi-role
+         account (buyer+driver) keeps every role. Vehicle stays in the dispatch layer
+         (rideDrivers/dispatch) per ADR-012 — only driver IDENTITY/shift lives here. */
+      firebase.firestore().collection('users').doc(_riderUid).set({
+        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        isDriver: true, isRider: true,
+        driverProfile: {
+          shiftStatus: onBreak ? 'break' : (online ? 'online' : 'offline'),
+          lastShiftAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(function () {});
     }
 
     function _updateShiftStatus() {
@@ -2778,7 +3294,7 @@ window.toggleOnline = async function() {
           _shiftDeliveries++;
           _renderBatchRoute(deliveryRef);
         })
-        .catch(function (e) { alert('Error: ' + e.message); });
+        .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
     };
 
     window._declineDispatch = function (deliveryRef) {
@@ -2786,7 +3302,7 @@ window.toggleOnline = async function() {
       if (banner && banner._timer) clearInterval(banner._timer);
       firebase.functions().httpsCallable('respondToDispatch')({ deliveryRef, accept: false })
         .then(function () { if (banner) banner.remove(); })
-        .catch(function (e) { alert('Error: ' + e.message); });
+        .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
     };
 
     /* ── Batch route rendering ── */
@@ -2838,6 +3354,126 @@ window.toggleOnline = async function() {
   <script type="module" src="sokoni-gps-manager.js"></script>
   <script type="module" src="sokoni-tracking.js"></script>
   <script type="module" src="sokoni-tracking-manager.js"></script>
+
+  <!-- Gap 1 — Rider fallback claim. Subscribes to confirmed-but-unassigned orders and lets any
+       online rider claim one (atomic first-claim-wins via SokoniOrders.riderClaim). Not a second
+       dispatch system: a claim writes the same assignedDriverUid + rider_assigned the auto-assigner
+       does, so the order re-enters the one canonical flow and shows in "My Active Deliveries". -->
+  <script>
+  (function(){
+    var _claimUnsub = null;
+    function _riderUid(){
+      try { if (window.firebase && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser.uid; } catch(_){}
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser.uid;
+      try { return JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid || null; } catch(_){ return null; }
+    }
+    function _render(orders){
+      var wrap = document.getElementById('claimableOrders');
+      var hdr  = document.getElementById('claimableHeader');
+      if(!wrap) return;
+      var claimable = (orders||[]).filter(function(o){ return o.status==='confirmed' && !o.assignedDriverUid; });
+      if(!window.isOnline || !claimable.length){ wrap.innerHTML=''; if(hdr) hdr.style.display='none'; return; }
+      if(hdr) hdr.style.display='';
+      wrap.innerHTML = claimable.slice(0,15).map(function(o){
+        var id = String(o._fsId || o.id || '');
+        var addr = String(o.deliveryAddress||'—').slice(0,60);
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(113,255,0,0.25);border-radius:12px;margin-bottom:8px;">'
+          + '<div style="min-width:0"><div style="font-size:13px;font-weight:800;color:#fff">Order '+id.slice(0,10)+'</div>'
+          + '<div style="font-size:11px;color:rgba(255,255,255,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#128205; '+addr+'</div></div>'
+          + '<button data-claim="'+id+'" style="padding:9px 16px;background:#71ff00;color:#04120a;border:none;border-radius:10px;font-weight:800;font-size:12px;cursor:pointer">Claim</button>'
+          + '</div>';
+      }).join('');
+      wrap.querySelectorAll('button[data-claim]').forEach(function(b){
+        b.onclick = async function(){
+          var id = b.getAttribute('data-claim'); b.disabled=true; b.textContent='Claiming…';
+          try {
+            var uid = _riderUid();
+            if(!uid){ b.disabled=false; b.textContent='Claim'; SK.dialog.alert('Please sign in to claim.'); return; }
+            if(!window.SokoniOrders || !window.SokoniOrders.riderClaim){ b.disabled=false; b.textContent='Claim'; return; }
+            var res = await window.SokoniOrders.riderClaim(id, uid);
+            if(res && res.ok){ b.textContent='✓ Claimed'; }   /* order moves to My Active Deliveries */
+            else { b.disabled=false; b.textContent='Claim'; SK.dialog.alert((res&&res.error)||'Could not claim this delivery.'); }
+          } catch(e){ b.disabled=false; b.textContent='Claim'; SK.dialog.alert('Claim failed. Please try again.'); }
+        };
+      });
+    }
+    function _start(){
+      if(!(window.SokoniDB && window.SokoniDB.listenPendingRiderOrders)){ setTimeout(_start, 600); return; }
+      if(_claimUnsub) return;
+      try { _claimUnsub = window.SokoniDB.listenPendingRiderOrders(_render); } catch(_){}
+    }
+    if(document.readyState!=='loading') _start(); else document.addEventListener('DOMContentLoaded', _start);
+  })();
+  </script>
+  <!-- Available Deliveries — dispatch-ready jobs (merchant tapped "Ready for Dispatch").
+       App-Check-independent fetch of /api/available-deliveries; Accept via claimAvailableDelivery
+       (Admin-SDK claim, since riders can't read/write unassigned packageRequests client-side). -->
+  <script>
+  (function(){
+    var POLL = 20000, _timer = null;
+    function _riderUid(){
+      try { if (window.firebase && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser.uid; } catch(_){}
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser.uid;
+      try { return (JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).uid || null; } catch(_){ return null; }
+    }
+    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _container(){
+      var el = document.getElementById('availDispatch'); if (el) return el;
+      var anchor = document.getElementById('availableDeliveries') || document.querySelector('#driverDashboard');
+      if (!anchor || !anchor.parentNode) return null;
+      el = document.createElement('div'); el.id = 'availDispatch'; el.style.cssText = 'margin:12px 0;';
+      anchor.parentNode.insertBefore(el, anchor);
+      return el;
+    }
+    function _render(list){
+      var el = _container(); if (!el) return;
+      if (!window.isOnline) { el.innerHTML = ''; return; }
+      if (!list.length) { el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div><div style="color:rgba(255,255,255,0.3);font-size:13px;padding:10px 0;">No deliveries right now — check back soon.</div>'; return; }
+      el.innerHTML = '<div class="section-heading">🛵 Available Deliveries ('+list.length+')</div>' + list.map(function(d){
+        var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.88);
+        return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
+          + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryAddress||'—').slice(0,40))+'</div></div>'
+          + '<div><div class="dc-fee">KES '+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
+          + '<div class="dc-info">📦 '+((d.items||[]).length)+' item(s) · 📞 '+_esc(d.buyerPhone||'')+'</div>'
+          + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept — Earn KES '+net+'</button></div></div>';
+      }).join('');
+      el.querySelectorAll('button[data-del]').forEach(function(b){
+        b.onclick = async function(){
+          var id = b.getAttribute('data-del'); var _orig = b.textContent;
+          b.disabled = true; b.textContent = 'Accepting…';
+          try {
+            if (!_riderUid()) { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Please sign in first.'); return; }
+            var fn = firebase.functions().httpsCallable('claimAvailableDelivery');
+            var res = await fn({ deliveryRef: id });
+            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; SK.dialog.alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
+            else { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Could not accept — please try again.'); }
+          } catch(e){
+            /* Full diagnostics to console; friendly, code-aware message to the rider. */
+            console.error('[Accept delivery] failed:', e);
+            console.error('[Accept delivery] code:', e && e.code, '| message:', e && e.message, '| details:', e && e.details);
+            b.disabled=false; b.textContent=_orig;
+            var code = (e && e.code) || '';
+            var msg = (code === 'permission-denied') ? (e.message || 'Your rider account is not approved yet.')
+                    : (code === 'failed-precondition') ? (e.message || 'This delivery was just taken.')
+                    : (code === 'unauthenticated') ? 'Please sign in again.'
+                    : (code === 'internal') ? 'Server is starting up — please tap Accept again in a moment.'
+                    : (e && e.message) || 'Unable to accept delivery. Please try again.';
+            SK.dialog.alert(msg);
+          }
+        };
+      });
+    }
+    async function _poll(){
+      if (!window.isOnline) { var el = document.getElementById('availDispatch'); if (el) el.innerHTML = ''; return; }
+      try { var r = await fetch('/api/available-deliveries?cb='+Date.now(), { cache:'no-store' }); var j = r.ok ? await r.json() : null; if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries); } catch(_){}
+    }
+    function _start(){ _poll(); if (_timer) clearInterval(_timer); _timer = setInterval(_poll, POLL); }
+    /* Exposed so going online refreshes the job list IMMEDIATELY (no 20s wait). */
+    window._refreshAvailDeliveries = _poll;
+    if (document.readyState !== 'loading') setTimeout(_start, 800); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(_start, 800); });
+  })();
+  </script>
+  <script src="/sokoni-delivery-engine.js"></script>
 </body>
 </html>
 

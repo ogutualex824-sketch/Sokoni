@@ -152,21 +152,34 @@ window.SokoniSellerProducts = (() => {
     }));
     const canonical = Array.from(byId.values());
 
-    const local = readCache();
+    const rawLocal = readCache();
 
-    /* Refuse the one destructive case. If Firestore returns nothing but the
-       cache holds products, that is far more likely a rules denial, an offline
-       read or a wrong-account session than a merchant who deleted everything —
-       and overwriting the cache would erase the only copy of unsynced work.
-       Doing nothing is the safe failure here. */
-    if (canonical.length === 0 && local.length > 0) {
-      return fail('empty-canonical-nonempty-cache', new Error(
-        'Firestore returned 0 products but the local cache holds ' + local.length +
-        '. Cache left untouched — this is more likely a permission or account ' +
-        'problem than an empty catalogue.'), { localCount: local.length });
+    /* CROSS-ACCOUNT SAFETY. `sellerProducts` is a single un-namespaced key, so on a
+       shared device it can still hold a PREVIOUS account's products (the reported
+       "another seller's vapes on a provider account" leak). Keep only products
+       owned by the live uid BEFORE any preserve/merge/sync decision — foreign
+       entries must never render, survive, or be pushed to this account. Upload
+       stamps both `sellerUid` and `uid` (seller.js), so an unstamped cache entry is
+       treated as not-owned and dropped rather than risk leaking it. */
+    const local = rawLocal.filter((p) => String(p.sellerUid || p.uid || '') === String(uid));
+    const foreignPurged = rawLocal.length - local.length;
+
+    /* Refuse the one genuinely destructive case — but ONLY for the live user's own
+       unsynced work. If Firestore returns nothing yet the live uid has cached
+       products, that is likely a rules denial / offline read, so keep them (and
+       purge any foreign portion). If nothing is owned, the cache is either empty or
+       purely foreign — clear it and show the honest empty state. */
+    if (canonical.length === 0) {
+      if (foreignPurged > 0) writeCache(local);           /* drop foreign entries */
+      if (local.length > 0) {
+        return fail('empty-canonical-nonempty-cache', new Error(
+          'Firestore returned 0 products; ' + local.length + ' unsynced own product(s) ' +
+          'preserved, ' + foreignPurged + ' foreign entr(ies) purged.'), { localCount: local.length });
+      }
+      if (rawLocal.length > 0) writeCache([]);             /* purge foreign-only cache */
     }
 
-    const { merged, stats } = merge(canonical, local);
+    const { merged, stats } = merge(canonical, local);     /* merge OWNED local only */
     const mode = writeCache(merged);
 
     const result = {

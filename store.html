@@ -626,8 +626,8 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
         : "";
       return `<a class="st-product-card" href="product.html?id=${p.id}">
         ${window.renderProductImage
-          ? renderProductImage({ src: p.image, alt: p.name, wrap: false })
-          : `<img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async">`}
+          ? renderProductImage({ product: p, alt: p.name, wrap: false })
+          : `<img src="${(window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
         <div class="st-product-info">
           <div class="st-product-name">${p.name}</div>
           <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
@@ -910,7 +910,7 @@ function stRenderCollections(prods) {
           + '</div>'
           + '<div class="st-collection-grid">'
           + items.map(function(p) {
-              var img  = p.image || "assets/default-product.png";
+              var img  = (window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png";
               var name = (p.name || "").replace(/</g, "&lt;");
               return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
                 + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
@@ -1043,7 +1043,7 @@ async function _stLoadFirestore(uid) {
       }
       if (!(sd.logo || sd.logoUrl)) {
         var dlw = document.getElementById("stLogoWrap");
-        var dimg = pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
+        var dimg = (window.pickProductImage ? pickProductImage(pd) : null) || pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
         if (dlw && dimg && !dlw.querySelector("img")) {
           dlw.innerHTML = '<img src="' + dimg + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
         }

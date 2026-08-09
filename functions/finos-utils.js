@@ -778,25 +778,47 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
   const isSandbox = process.env.INTASEND_SANDBOX === 'true';
   const base      = isSandbox ? 'https://sandbox.intasend.com' : 'https://payment.intasend.com';
 
-  const res = await fetch(`${base}/api/v1/payment/mpesa-b2c/initiate/`, {
+  /* CORRECT IntaSend Send-Money (B2C) contract — verified against the official
+     intasend-node SDK (payouts.js + requests.js) AND by probing the live API.
+     The two earlier endpoints (/payment/mpesa-b2c/initiate/ and /send-money/mpesa/)
+     BOTH return HTML 404 — neither exists. index.js's "Token" auth was also wrong.
+       · endpoint:  /api/v1/send-money/initiate/   (send-money/mpesa/ does NOT exist)
+       · auth:      Bearer <secret_key>
+       · provider:  MPESA-B2C
+       · body:      { provider, currency, requires_approval:'NO', transactions:[…] }
+     requires_approval:'NO' auto-approves so this stays single-step; if the account
+     mandates approval, IntaSend returns a JSON error and we add a /approve/ call. */
+  const account = String(phone).replace(/\D/g, '').replace(/^0/, '254');
+  const amt = Math.round(Number(amountKES));
+  const maskP = account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2);
+  /* Contract log — NO secret. Proves exactly what was sent to the gateway. */
+  console.log('[intasendB2C] contract', JSON.stringify({
+    endpoint: `${base}/api/v1/send-money/initiate/`, method: 'POST', auth: 'Bearer',
+    provider: 'MPESA-B2C', currency: 'KES', amount: amt, account: maskP, env: isSandbox ? 'sandbox' : 'live',
+  }));
+  const res = await fetch(`${base}/api/v1/send-money/initiate/`, {
     method:  'POST',
     headers: { 'Authorization': `Bearer ${privKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      currency:  'KES',
-      provider:  'M-PESA',
-      amount:    String(amountKES),
-      phone_number: String(phone).replace(/\D/g, '').replace(/^0/, '254'),
-      name:      remarks   || 'SOKONI Payout',
-      account:   reference || 'payout',
-      narrative: remarks   || 'SOKONI earnings payout',
+      provider: 'MPESA-B2C',
+      currency: 'KES',
+      requires_approval: 'NO',
+      transactions: [{ name: remarks || 'SOKONI Payout', account, amount: amt, narrative: remarks || 'SOKONI earnings payout' }],
     }),
   });
 
+  const bodyText = await res.text().catch(() => '');
+  let parsed = null; try { parsed = JSON.parse(bodyText); } catch (_) {}
+  console.log('[intasendB2C] response', JSON.stringify({ http: res.status, ok: res.ok, body: parsed || String(bodyText).slice(0, 200) }));
   if (!res.ok) {
-    const err = await res.text().catch(() => 'Unknown error');
-    throw new Error(`IntaSend B2C failed (${res.status}): ${err}`);
+    /* Structured, machine-readable gateway error — surfaced up as PAYOUT_GATEWAY_FAILED. */
+    const gwCode = parsed && (parsed.errors?.[0]?.code || parsed.code || parsed.error_code) || `HTTP_${res.status}`;
+    const gwMsg  = parsed && (parsed.errors?.[0]?.detail || parsed.detail || parsed.message) || String(bodyText).slice(0, 160);
+    const e = new Error(`IntaSend B2C failed (${res.status}): [${gwCode}] ${gwMsg}`);
+    e.gateway = { name: 'IntaSend', http: res.status, code: gwCode, message: gwMsg };
+    throw e;
   }
-  return await res.json();
+  return parsed || {};
 }
 
 module.exports = {

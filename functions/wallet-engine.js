@@ -25,8 +25,12 @@
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const { defineSecret } = require('firebase-functions/params');
+const sokoniAt = require('./sokoni-at');   // Africa's Talking SMS (claimable-transfer invites)
+const { checkRateLimit } = require('./redis-rate-limiter');   // throttle name-lookup (anti-enumeration)
 const crypto = require('crypto');
 
 // ─── Secrets ──────────────────────────────────────────────────────────────────
@@ -43,6 +47,7 @@ const MIN_DEPOSIT      = 1;        // KES — minimum savings deposit
 const PIN_MAX_ATTEMPTS = 5;        // attempts before freeze
 const PIN_WINDOW_MS    = 3_600_000; // 1 hour
 const IDEMPOTENCY_WINDOW_MS = 5_000; // 5 seconds
+const CLAIMABLE_EXPIRY_DAYS = 7;     // unclaimed send-to-anyone auto-refunds after this
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -112,6 +117,50 @@ async function _findUserByPhone(db, normalizedPhone) {
   for (const [field, val] of attempts) {
     const snap = await db.collection('users').where(field, '==', val).limit(1).get();
     if (!snap.empty) return snap.docs[0];
+  }
+  return null;
+}
+
+/**
+ * Resolve a recipient by phone across BOTH sources of truth: the Firestore `users`
+ * collection (fast, indexed) AND Firebase Auth (authoritative for phone signups). A
+ * user who signed up by phone but whose users/{uid} doc has no phoneNumber field is
+ * invisible to the Firestore query alone — the exact "Recipient not found on SOKONI"
+ * failure for a VALID user. On an Auth hit we backfill users/{uid}.phoneNumber so the
+ * next lookup resolves from Firestore in one read; the caller's _ensureWallet creates
+ * the wallet doc if the valid user never initialised one.
+ * @returns {{ uid: string, data: object, source: 'firestore'|'auth' } | null}
+ */
+async function _resolveRecipientByPhone(db, normalizedPhone) {
+  if (!normalizedPhone) return null;
+  const fsDoc = await _findUserByPhone(db, normalizedPhone);
+  if (fsDoc) return { uid: fsDoc.id, data: fsDoc.data() || {}, source: 'firestore' };
+
+  /* Firebase Auth fallback — the authoritative phone→uid map (E.164 "+254…"). */
+  const e164 = `+${normalizedPhone}`;
+  try {
+    const authUser = await getAuth().getUserByPhoneNumber(e164);
+    if (authUser && authUser.uid) {
+      const userRef = db.collection('users').doc(authUser.uid);
+      const snap    = await userRef.get();
+      const data    = snap.exists ? (snap.data() || {}) : {};
+      /* Backfill the canonical phone (merge — never clobbers other identity fields). */
+      await userRef.set({
+        phoneNumber: e164,
+        displayName: data.displayName || authUser.displayName || null,
+        updatedAt:   Timestamp.now(),
+      }, { merge: true }).catch(() => {});
+      return {
+        uid:    authUser.uid,
+        data:   { ...data, displayName: data.displayName || authUser.displayName || null },
+        source: 'auth',
+      };
+    }
+  } catch (e) {
+    /* auth/user-not-found is the normal "not a SOKONI number" case — not an error. */
+    if (e && e.code && e.code !== 'auth/user-not-found') {
+      console.error(TAG, '_resolveRecipientByPhone auth lookup error:', e.code || e.message);
+    }
   }
   return null;
 }
@@ -386,7 +435,7 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
  *        which lets phone-less users receive). `toUid` takes precedence.
  * @returns {{ success: boolean, recipientName?: string, newBalance?: number, txId?: string, error?: string }}
  */
-exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
+exports.walletV2Send = onCall(_optsWithSecrets(...sokoniAt.secrets), async (request) => {
   const senderUid = _requireAuth(request);
   const db        = _db();
 
@@ -410,20 +459,26 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
     await _assertNotFrozen(db, senderUid);
     await _assertPinOk(db, senderUid, pin);   // authorize the send (no-op if no PIN set)
 
-    // ── Recipient lookup: by uid (QR) or by phone (tolerant of stored formats) ──
-    let recipientDoc;
+    // ── Recipient lookup: by uid (QR) or by phone (Firestore + Firebase Auth) ──
+    let recipientUid, recipientData, resolveSource;
     if (wantsUid) {
       const snap = await db.collection('users').doc(toUid.trim()).get();
-      recipientDoc = snap.exists ? snap : null;
+      if (!snap.exists) {
+        console.warn(TAG, 'send USER_NOT_FOUND', JSON.stringify({ rawPhone: phone || null, toUid: toUid.trim(), matchedUid: null, source: 'uid' }));
+        return { success: false, error: 'USER_NOT_FOUND' };
+      }
+      recipientUid = snap.id; recipientData = snap.data() || {}; resolveSource = 'uid';
     } else {
-      recipientDoc = await _findUserByPhone(db, normalizedPhone);
+      const resolved = await _resolveRecipientByPhone(db, normalizedPhone);
+      if (!resolved) {
+        /* Recipient is not (yet) on SOKONI → send-to-anyone: escrow the money as a
+           CLAIMABLE transfer + SMS invite. They claim it by registering that number;
+           if unclaimed in CLAIMABLE_EXPIRY_DAYS it auto-refunds to the sender. */
+        console.log(TAG, 'send → claimable (unregistered)', JSON.stringify({ rawPhone: phone || null, normalizedPhone }));
+        return await _sendClaimable(db, { senderUid, normalizedPhone, amount: safeAmount, note: safeNote });
+      }
+      recipientUid = resolved.uid; recipientData = resolved.data; resolveSource = resolved.source;
     }
-    if (!recipientDoc) {
-      return { success: false, error: 'USER_NOT_FOUND' };
-    }
-
-    const recipientUid  = recipientDoc.id;
-    const recipientData = recipientDoc.data();
 
     if (recipientUid === senderUid) {
       throw new HttpsError('invalid-argument', 'Cannot send money to yourself');
@@ -432,6 +487,10 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
     const recipientName = _san(
       recipientData.displayName || recipientData.name || 'SOKONI User', 60
     );
+    console.log(TAG, 'send recipient resolved', JSON.stringify({
+      rawPhone: phone || null, normalizedPhone: normalizedPhone || null,
+      matchedUid: recipientUid, source: resolveSource,
+    }));
 
     // ── Idempotency check — dedupe within 5-second window ───────────────────
     const windowStart  = Timestamp.fromMillis(Date.now() - IDEMPOTENCY_WINDOW_MS);
@@ -530,6 +589,10 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
       });
     });
 
+    console.log(TAG, 'send completed', JSON.stringify({
+      txOutId, txInId, senderUid, recipientUid, walletId: recipientUid,
+      amount: safeAmount, newSenderBalance,
+    }));
     return {
       success:       true,
       recipientName,
@@ -541,6 +604,193 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
     console.error(TAG, 'walletV2Send error:', err);
     throw new HttpsError('internal', 'Transfer failed. Please try again.');
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2·resolve. walletV2ResolveRecipient — READ-ONLY name lookup for the send screen,
+//   so the user sees who they're paying (M-Pesa-style) BEFORE confirming. Moves no
+//   money. Rate-limited to prevent phone→name enumeration. Returns only a display
+//   name (never a uid). Unregistered valid numbers are `registered:false, canReceive:
+//   true` → the client shows "not on SOKONI yet — they'll get an SMS to claim".
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.walletV2ResolveRecipient = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  await checkRateLimit(request, 'wallet_lookup', { maxRequests: 40, windowSeconds: 60 });
+  const db  = _db();
+  const normalizedPhone = _normalizePhone((request.data || {}).phone);
+  if (!normalizedPhone) return { valid: false };
+
+  const resolved = await _resolveRecipientByPhone(db, normalizedPhone);
+  if (!resolved) {
+    // Valid number, not on SOKONI → can still receive via a claimable transfer.
+    return { valid: true, registered: false, canReceive: true, phone: `+${normalizedPhone}` };
+  }
+  if (resolved.uid === uid) return { valid: true, registered: true, self: true, phone: `+${normalizedPhone}` };
+  const name = _san(resolved.data.displayName || resolved.data.name || 'SOKONI User', 60);
+  return { valid: true, registered: true, name, phone: `+${normalizedPhone}` };
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2a. Claimable Transfers — "send to anyone" (M-Pesa-style). Sending to a number
+//     not yet on SOKONI escrows the money (debits sender now), SMS-invites the
+//     recipient, and credits them when they register that number. Unclaimed sends
+//     auto-refund the sender after CLAIMABLE_EXPIRY_DAYS. Money is never lost:
+//     every claimable ends exactly once as claimed (recipient credited) or expired
+//     (sender refunded), guarded by the pending→terminal status transition.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function _maskPhone(p) { const s = String(p || ''); return s.length < 7 ? s : `${s.slice(0, 7)}****${s.slice(-2)}`; }
+
+/**
+ * Escrow a send to an unregistered phone as a pending claimable transfer.
+ * Debits the sender inside a transaction and records the escrow doc + a
+ * `pending_claim` ledger row. Idempotent within the 5s window (same
+ * sender+phone+amount returns the existing claimable). Best-effort SMS invite.
+ */
+async function _sendClaimable(db, { senderUid, normalizedPhone, amount, note }) {
+  const e164 = `+${normalizedPhone}`;
+  await _ensureWallet(db, senderUid);
+  const senderWalletRef = db.collection('wallets').doc(senderUid);
+
+  const dupeKey     = _sha256(`claim_${senderUid}_${normalizedPhone}_${amount}`);
+  const windowStart = Timestamp.fromMillis(Date.now() - IDEMPOTENCY_WINDOW_MS);
+  const dup = await db.collection('claimableTransfers')
+    .where('idempotencyKey', '==', dupeKey).where('createdAt', '>=', windowStart).limit(1).get();
+  if (!dup.empty) {
+    return { success: true, claimable: true, recipientName: _maskPhone(e164),
+             txId: dup.docs[0].id, deduplicated: true, message: `Invite already sent to ${_maskPhone(e164)}.` };
+  }
+
+  // Resolve a friendly sender name for the SMS (best-effort).
+  let senderName = 'A SOKONI user';
+  try { const su = await db.collection('users').doc(senderUid).get(); if (su.exists) senderName = _san(su.data().displayName || su.data().name || senderName, 40); } catch (_) {}
+
+  const claimId  = _genId('clm');
+  const outTxId  = _genId('snd');
+  const expiresAt = Timestamp.fromMillis(Date.now() + CLAIMABLE_EXPIRY_DAYS * 86_400_000);
+  let newSenderBalance;
+
+  await db.runTransaction(async (t) => {
+    const sSnap = await t.get(senderWalletRef);
+    const bal   = sSnap.data()?.balance ?? 0;
+    if (bal < amount) throw new HttpsError('failed-precondition', 'Insufficient balance');
+    const now = Timestamp.now();
+    newSenderBalance = bal - amount;
+    // Debit sender (escrow held in the claimable doc until claimed or refunded)
+    t.update(senderWalletRef, {
+      balance: newSenderBalance, dailySpent: FieldValue.increment(amount),
+      monthlySpent: FieldValue.increment(amount), updatedAt: now,
+    });
+    t.set(db.collection('claimableTransfers').doc(claimId), {
+      id: claimId, senderUid, recipientPhone: e164, normalizedPhone, amount,
+      note: note || null, status: 'pending', idempotencyKey: dupeKey, outLedgerTxId: outTxId,
+      createdAt: now, expiresAt, claimedByUid: null, claimedAt: null, refundedAt: null,
+    });
+    t.set(db.collection('walletTransactions').doc(outTxId), {
+      txId: outTxId, uid: senderUid, type: 'send', direction: 'out', amount,
+      balanceAfter: newSenderBalance, note: note || null, category: 'transfer',
+      status: 'pending_claim', claimableId: claimId, toPhone: e164,
+      idempotencyKey: dupeKey, createdAt: now,
+    });
+  });
+
+  // SMS invite — money is already safely escrowed, so never let SMS failure break the send.
+  try {
+    await sokoniAt.atSendSMSWithRetry(e164,
+      `${senderName} sent you KSh ${amount} on SOKONI. Download the app and sign in with this number to claim it: https://mysokoni.co.ke/wallet (expires in ${CLAIMABLE_EXPIRY_DAYS} days)`);
+  } catch (e) { console.error(TAG, 'claimable SMS failed (money still escrowed):', e && e.message); }
+
+  console.log(TAG, 'claimable created', JSON.stringify({ claimId, senderUid, normalizedPhone, amount, outTxId }));
+  return {
+    success: true, claimable: true, recipientName: _maskPhone(e164),
+    newBalance: newSenderBalance, txId: claimId,
+    message: `KSh ${amount} is on its way to ${_maskPhone(e164)}. They'll get an SMS to claim it — if unclaimed in ${CLAIMABLE_EXPIRY_DAYS} days it returns to your wallet.`,
+  };
+}
+
+/**
+ * Credit every pending claimable transfer addressed to `normalizedPhone` into `uid`'s
+ * wallet, exactly once (pending→claimed guard). Shared by the claim callable and the
+ * phone-save path so money lands the moment a recipient owns that verified number.
+ */
+async function _claimForPhone(db, uid, normalizedPhone) {
+  if (!normalizedPhone) return { claimed: 0, amount: 0 };
+  const pend = await db.collection('claimableTransfers')
+    .where('normalizedPhone', '==', normalizedPhone).where('status', '==', 'pending').limit(25).get();
+  if (pend.empty) return { claimed: 0, amount: 0 };
+  await _ensureWallet(db, uid);
+  const walletRef = db.collection('wallets').doc(uid);
+  let claimed = 0, total = 0;
+  for (const d of pend.docs) {
+    await db.runTransaction(async (t) => {
+      const cs = await t.get(d.ref);
+      if (!cs.exists || cs.data().status !== 'pending') return;   // already terminal — idempotent
+      const c  = cs.data();
+      const ws = await t.get(walletRef);
+      const bal = ws.data()?.balance ?? 0;
+      const now = Timestamp.now();
+      const inTxId = _genId('rcv');
+      t.update(walletRef, { balance: bal + c.amount, updatedAt: now });
+      t.update(d.ref, { status: 'claimed', claimedByUid: uid, claimedAt: now });
+      t.set(db.collection('walletTransactions').doc(inTxId), {
+        txId: inTxId, uid, counterpartyUid: c.senderUid, type: 'receive', direction: 'in',
+        amount: c.amount, balanceAfter: bal + c.amount, note: c.note || null, category: 'transfer',
+        status: 'completed', claimableId: c.id, idempotencyKey: `claimed_${c.id}`, createdAt: now,
+      });
+      claimed++; total += c.amount;
+    });
+  }
+  if (claimed) console.log(TAG, 'claimed pending transfers', JSON.stringify({ uid, normalizedPhone, claimed, total }));
+  return { claimed, amount: total };
+}
+
+/**
+ * walletV2ClaimPending — claim any money sent to the caller's VERIFIED phone before
+ * they registered. Safe to call on every wallet load (no-op when nothing is pending).
+ */
+exports.walletV2ClaimPending = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  const db  = _db();
+  let phone = null;
+  try { const au = await getAuth().getUser(uid); phone = au.phoneNumber; } catch (_) {}
+  if (!phone) { const us = await db.collection('users').doc(uid).get(); phone = us.exists ? (us.data().phoneNumber || null) : null; }
+  const norm = _normalizePhone(phone);
+  if (!norm) return { success: true, claimed: 0, amount: 0 };
+  const res = await _claimForPhone(db, uid, norm);
+  return { success: true, ...res };
+});
+
+/**
+ * sweepExpiredClaimables — refund the sender for any claimable that expired unclaimed.
+ * Exactly once (pending→expired guard). Runs on a schedule.
+ */
+exports.sweepExpiredClaimables = onSchedule({ schedule: 'every 6 hours', timeZone: 'Africa/Nairobi' }, async () => {
+  const db  = _db();
+  const now = Timestamp.now();
+  const due = await db.collection('claimableTransfers')
+    .where('status', '==', 'pending').where('expiresAt', '<', now).limit(100).get();
+  let refunded = 0, total = 0;
+  for (const d of due.docs) {
+    await db.runTransaction(async (t) => {
+      const cs = await t.get(d.ref);
+      if (!cs.exists || cs.data().status !== 'pending') return;   // idempotent
+      const c  = cs.data();
+      const senderWalletRef = db.collection('wallets').doc(c.senderUid);
+      const sws = await t.get(senderWalletRef);
+      const bal = sws.data()?.balance ?? 0;
+      const nowT = Timestamp.now();
+      const rTxId = _genId('rfnd');
+      t.update(senderWalletRef, { balance: bal + c.amount, updatedAt: nowT });
+      t.update(d.ref, { status: 'expired', refundedAt: nowT });
+      t.set(db.collection('walletTransactions').doc(rTxId), {
+        txId: rTxId, uid: c.senderUid, type: 'refund', direction: 'in', amount: c.amount,
+        balanceAfter: bal + c.amount, category: 'transfer', status: 'completed',
+        claimableId: c.id, note: 'Unclaimed transfer returned to your wallet', createdAt: nowT,
+      });
+      refunded++; total += c.amount;
+    });
+  }
+  console.log(TAG, 'sweepExpiredClaimables', JSON.stringify({ due: due.size, refunded, total }));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -576,7 +826,13 @@ exports.walletV2SavePhone = onCall(BASE_OPTS, async (request) => {
     phoneVerifiedAt: Timestamp.now(),
   }, { merge: true });
 
-  return { success: true, phone: e164 };
+  /* Claim-on-register: the moment this user proves they own the number, credit any
+     money others sent to it while they were unregistered (exactly-once). */
+  let claimed = { claimed: 0, amount: 0 };
+  try { claimed = await _claimForPhone(db, uid, normalized); }
+  catch (e) { console.error(TAG, 'walletV2SavePhone claim error:', e && e.message); }
+
+  return { success: true, phone: e164, claimed: claimed.claimed, claimedAmount: claimed.amount };
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

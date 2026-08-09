@@ -36,44 +36,59 @@ const SPos = (function () {
      BOOT
   ═══════════════════════════════════════════════════════════ */
   async function boot() {
+    /* PosDB.init() never throws now (it degrades gracefully). Each boot step is independently
+       guarded so a single failure (e.g. an old/partial POS cache) can NEVER blank the shell or
+       block Inventory/Cashier. In degraded mode the app still launches and renders from canonical
+       Firestore; a small non-blocking status says the local cache is unavailable. */
+    await PosDB.init().catch(() => {});
+    try { if (PosDB.isDegraded && PosDB.isDegraded()) window._posDbDegraded = true; } catch (_) {}
+    try { state.settings = await PosDB.settings.getAll(); } catch (_) { state.settings = state.settings || {}; }
+    try { await PosDB.categories.seedDefaults(); } catch (_) {}
+
+    const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
+    /* The first-run setup wizard must NOT block the app when the POS is embedded in the merchant
+       shell — embedded → launch straight to the requested panel; setup stays an explicit module. */
+    const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
     try {
-      await PosDB.init();
-      state.settings = await PosDB.settings.getAll();
-
-      /* Seed defaults if first run */
-      await PosDB.categories.seedDefaults();
-
-      const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
-      if (isSetup) {
+      if (isSetup || embedded) {
         await launchApp();
+        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }
       } else {
-        document.getElementById('pos-wizard').style.display = 'flex';
+        var _wz = document.getElementById('pos-wizard'); if (_wz) _wz.style.display = 'flex';
       }
+    } catch (e) {
+      /* Even if launchApp partially failed, reveal the app (never a blank/red page) so the
+         requested Cashier/Inventory module still renders from canonical data. */
+      console.warn('[SmartPOS] launch degraded:', e && e.message);
+      try { document.getElementById('pos-app').classList.remove('hidden'); } catch (_) {}
+      try { var _wz2 = document.getElementById('pos-wizard'); if (_wz2) _wz2.style.display = 'none'; } catch (_) {}
+    }
 
-      /* Init barcode scanner (hardware interceptor always on) */
-      await PosBarcode.init();
-      PosBarcode.setCallback(handleBarcodeGlobal);
+    if (window._posDbDegraded) _showPosDbDegradedStatus();
 
-      /* Clock */
-      setInterval(updateClock, 1000);
-      updateClock();
-
-      /* Online/offline watcher */
+    /* Remaining boot steps — each isolated; none may abort the render. */
+    try { await PosBarcode.init(); PosBarcode.setCallback(handleBarcodeGlobal); } catch (_) {}
+    try { setInterval(updateClock, 1000); updateClock(); } catch (_) {}
+    try {
       window.addEventListener('online',  () => updateOnlineStatus(true));
       window.addEventListener('offline', () => updateOnlineStatus(false));
       updateOnlineStatus(navigator.onLine);
+    } catch (_) {}
+    try { setInterval(() => sync.run(true), 120000); } catch (_) {}
+  }
 
-      /* Background sync every 2 min */
-      setInterval(() => sync.run(true), 120000);
-
-    } catch (e) {
-      console.error('[SmartPOS] Boot error:', e);
-      const _errDiv = document.createElement('div');
-      _errDiv.style.cssText = 'color:red;padding:40px;font-family:monospace';
-      _errDiv.textContent = 'SmartPOS boot error: ' + (e.message || 'Unknown error');
-      document.body.innerHTML = '';
-      document.body.appendChild(_errDiv);
-    }
+  /* Small, non-blocking banner — NOT a full-page red error. The app stays usable; Inventory/
+     Cashier render from canonical Firestore. */
+  function _showPosDbDegradedStatus() {
+    try {
+      if (document.getElementById('posdb-degraded')) return;
+      var b = document.createElement('div');
+      b.id = 'posdb-degraded';
+      b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom,0));z-index:99998;background:rgba(30,20,0,.92);border:1px solid rgba(255,180,0,.45);color:#ffd24a;font:600 12px/1.3 system-ui;padding:8px 14px;border-radius:10px;max-width:92vw;text-align:center';
+      b.textContent = '⚠ POS local storage unavailable — showing live catalogue. Sales still work.';
+      (document.body || document.documentElement).appendChild(b);
+      setTimeout(function () { try { b.style.transition = 'opacity .4s'; b.style.opacity = '0'; setTimeout(function () { b.remove(); }, 450); } catch (_) {} }, 6000);
+    } catch (_) {}
   }
 
   async function launchApp() {
@@ -90,6 +105,45 @@ const SPos = (function () {
 
     /* Load products */
     await products.reload();
+
+    /* Sync the merchant's CANONICAL products into the POS. The POS store was fed only by the
+       separate `posProducts` collection, so a shop whose products live in the canonical
+       `products` collection (marketplace / seller dashboard) showed a BLANK POS. Non-blocking;
+       re-render once seeded. */
+    _seedCatalogueFromCanonical().then(n => { if (n > 0) products.reload(); }).catch(() => {});
+
+    /* Live path: a product created / edited / DELETED in the seller dashboard emits on the shared
+       bus (SokoniSync.productChanged → SokoniEventBus 'Product.Changed', same-origin cross-iframe).
+       Reflect it onto the POS screen without a reload. IMPORTANT: SokoniSync.productChanged emits
+       the bus event 'Product.Changed' (via _SYNC_EVENTS), so we must listen on THAT name — the
+       earlier 'productChanged' subscription never connected. A delete carries {deleted:true,
+       productId}: remove that id from PosDB immediately so the refresh can't resurrect it (#10). */
+    try {
+      let _invT = null, _pendingDel = null;
+      const applyChange = (payload, isDelete) => {
+        const del = (isDelete || (payload && payload.deleted)) ? String((payload && (payload.productId || payload.id)) || payload || '') : null;
+        if (del) _pendingDel = del;
+        clearTimeout(_invT);
+        _invT = setTimeout(async () => {
+          const delId = _pendingDel; _pendingDel = null;
+          if (delId) { try { await PosDB.products.delete(delId); } catch (_) {} }   /* targeted, before refresh */
+          const n = await refreshInventoryFromCanonical({ force: true }).catch(() => 0);
+          if (!delId && n <= 0) return;
+          products.reload();
+          const t = state.invTab;
+          if (t && document.getElementById('inv-body')) {
+            if (t === 'products') inv.renderProducts(); else if (t === 'low-stock') inv.renderLowStock(); else if (t === 'expiry') inv.renderExpiry();
+          }
+        }, 400);
+      };
+      const EB = window.SokoniEventBus;
+      if (EB && typeof EB.on === 'function') {
+        ['Product.Changed', 'Stock.Changed', 'product:changed', 'stock:changed'].forEach(ev => { try { EB.on(ev, e => applyChange(e && e.payload ? e.payload : e, false)); } catch (_) {} });
+        ['Product.Deleted', 'product:deleted'].forEach(ev => { try { EB.on(ev, e => applyChange(e && e.payload ? e.payload : e, true)); } catch (_) {} });
+      } else if (window.SokoniSync && typeof SokoniSync.on === 'function') {   /* facade fallback (maps keys → bus names) */
+        ['ProductChanged', 'StockChanged'].forEach(k => { try { SokoniSync.on(k, p => applyChange(p, false)); } catch (_) {} });
+      }
+    } catch (_) {}
 
     /* Load category chips */
     await ui.loadCategories();
@@ -125,14 +179,29 @@ const SPos = (function () {
       PosOmni.startSync(state.settings.bizPin);
     }
 
-    /* Open PIN modal to login cashier */
+    /* Cashier login. Restore a still-valid session first so POS does NOT re-prompt for the
+       PIN on every reload/navigation (the session lived only in memory before, so each page
+       load reset it). The PIN still gates the FIRST login and switching cashiers; the
+       separate manager-PIN still gates refunds/voids/discounts. Only prompt if nothing valid
+       was restored. */
     const cashiers = await PosDB.cashiers.getAll();
     if (cashiers.length > 0) {
-      cashier.showSwitchDialog();
+      const restored = await cashier.restoreSession(cashiers);
+      if (!restored) cashier.showSwitchDialog();
     }
 
     /* Load settings into settings panel */
     settings.loadIntoForm();
+
+    /* Bind POS to the signed-in SOKONI account: reflect the owner in the header
+       pill (instead of a dead "Login"), seed a blank business profile from their
+       account so receipts/branding match, and prefill the settings form. All
+       non-destructive and offline-safe. */
+    try {
+      profile.reflectInHeader();
+      await profile.seedBusinessDefaults();
+      profile.syncBusinessProfile({ persist: false });
+    } catch (e) { console.warn('[SmartPOS] profile bind skipped:', e && e.message); }
 
     /* Check pending sync */
     sync.run(true);
@@ -151,6 +220,9 @@ const SPos = (function () {
 
     /* Boot terminal management */
     if (window.PosTerminals) await PosTerminals.init();
+
+    /* Wire the navigation service: URL-hash deep-linking + Back/Forward. */
+    nav.init();
 
     state.ready = true;
     if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings });
@@ -343,12 +415,24 @@ const SPos = (function () {
      UI
   ═══════════════════════════════════════════════════════════ */
   const ui = {
-    switchTab(tab) {
+    switchTab(tab, opts) {
+      opts = opts || {};
+      if (!tab) return;
+      const prev = state.currentTab;
+      /* No-op guard: re-selecting the active view does no work — prevents redundant
+         re-renders, listener churn and history spam on repeated switching. */
+      if (prev === tab && !opts.force) return;
+      /* Tear down the view being left. One-shot IndexedDB readers register nothing;
+         any future view that opens a live listener MUST SPos.nav.registerTeardown()
+         its unsub here so repeated switching can never accumulate listeners. */
+      if (prev && prev !== tab) nav._runTeardown(prev);
       state.currentTab = tab;
       document.querySelectorAll('.pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       document.querySelectorAll('.pos-panel').forEach(p => p.classList.remove('active'));
       document.getElementById(`panel-${tab}`)?.classList.add('active');
 
+      if (tab === 'orders')    orders.render();
+      if (tab === 'more')      more.render();
       if (tab === 'inventory') inv.showTab(state.invTab);
       if (tab === 'customers') customers.loadTable();
       if (tab === 'settings')  { settings.loadIntoForm(); _bootSettingsPanels(); }
@@ -367,7 +451,13 @@ const SPos = (function () {
       if (tab === 'audit' && window.PosAudit) {
         PosAudit.renderHub('audit-hub-body');
       }
+      /* Deep-link + predictable Back/Forward. pushState (not location.hash=) so this
+         never re-enters via hashchange; popstate restores the view on Back/Forward. */
+      if (!opts.fromHistory) {
+        try { const h = '#' + tab; if (location.hash !== h) history.pushState({ tab }, '', h); } catch (_) {}
+      }
       if (window.PosPlugins) PosPlugins.emit('tab:switch', { tab });
+      nav._analytics(tab, prev);
     },
 
     async loadCategories() {
@@ -423,6 +513,178 @@ const SPos = (function () {
       document.getElementById('pos-pay-overlay')?.classList.remove('open');
     },
   };
+
+  /* Pull the merchant's CANONICAL products (the `products` collection — same source as the
+     marketplace / seller dashboard) into the POS IndexedDB via the App-Check-free
+     /api/catalogue endpoint (works on any device). Additive + idempotent (upsert by id);
+     canonical stock stays authoritative (posCompleteCheckout writes products.stock). This is
+     the inventory single-source fix: the POS now shows the shop's real catalogue. */
+  /* Reflect canonical `products` onto the POS inventory screen (PosDB). Re-runnable:
+     called once at boot AND live on inventory-tab open + productChanged, so a seller's
+     dashboard edit reaches the screen without a POS reload. The offline-safe merge lives
+     in PosInvSync (pure, unit-tested) — a dashboard edit reflects, an unsynced offline
+     POS sale is preserved. Records the last run for the in-POS sync indicator. */
+  window._posInvSyncStats = null;
+  let _lastInvSyncAt = 0;
+  async function refreshInventoryFromCanonical (opts) {
+    /* Throttle passive refreshes (tab re-render) to one network pull per 5s; an explicit
+       "Sync now" or a productChanged event passes {force:true} to bypass it. */
+    if (!(opts && opts.force) && (Date.now() - _lastInvSyncAt) < 5000) return 0;
+    _lastInvSyncAt = Date.now();
+    try {
+      let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      const uid = (u && (u.uid || u.id)) || window.currentUser?.uid
+               || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+               || localStorage.getItem('sokoni_merchant_id');
+      if (!uid) return 0;
+      const CAP = 300;   /* catalogue CF hard cap; a full result set is < CAP */
+      const r = await fetch('/api/catalogue?sellerUid=' + encodeURIComponent(uid) + '&limit=' + CAP + '&cb=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return 0;
+      const j = await r.json();
+      const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
+      if (!Array.isArray(list)) return 0;
+      /* Stash the canonical (active) list so Inventory can render it DIRECTLY when the local POS
+         cache is degraded/empty — canonical Firestore is the authority, IndexedDB is only a cache. */
+      try {
+        const V = window.SokoniProductVisibility;
+        window._posCanonicalProducts = (V ? V.activeOnly(list) : list).map(p => ({
+          id: String(p.id || p._id || p.productId || ''), name: p.name || p.title || 'Product',
+          price: Number(p.price || p.sellingPrice || 0), cost: Number(p.cost || p.costPrice || 0) || 0,
+          stock: (p.stock != null ? Number(p.stock) : null), category: p.category || 'general',
+          barcode: p.barcode || '', sku: p.sku || '', unit: p.unit || 'pc',
+        }));
+      } catch (_) {}
+      if (!window.PosInvSync) return _additiveInsertNew(list);   /* module absent — safe additive fallback */
+      const locals = await PosDB.products.getAll().catch(() => []);   /* read ONCE, before any loop */
+      const { writes, stats, orphans } = window.PosInvSync.mergeCatalogue(list, locals);
+      for (const rec of writes) { await PosDB.products.upsertCanonical(rec).catch(() => {}); }
+      /* Remove canonical-sourced rows that vanished from the catalogue (archived/deleted
+         upstream) so a delete on another device disappears here too. CAP-SAFE: only when we
+         retrieved the FULL set (< CAP) — a truncated catalogue must never mass-delete real
+         products; same-device deletes are handled precisely by the productDeleted event. */
+      let removed = 0;
+      if (orphans.length && list.length < CAP) {
+        for (const id of orphans) { try { await PosDB.products.delete(id); removed++; } catch (_) {} }
+      }
+      stats.removed = removed;
+      window._posInvSyncStats = Object.assign({ at: Date.now(), orphans: orphans, truncated: list.length >= CAP }, stats);
+      return stats.inserted + stats.updated + removed;
+    } catch (_) { return 0; }
+  }
+  /* Fallback when PosInvSync isn't loaded: insert NEW canonical products only, never touch
+     an existing local row (no clobber). Uses .get() per id — never a full-store getAll in a loop. */
+  async function _additiveInsertNew (list) {
+    let n = 0;
+    for (const p of list) {
+      const id = String(p.id || p._id || p.productId || ''); if (!id) continue;
+      const existing = await PosDB.products.get(id).catch(() => null);
+      if (existing) continue;
+      await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {});
+      n++;
+    }
+    return n;
+  }
+  /* Back-compat alias — existing boot call site (and any others) keep working. */
+  async function _seedCatalogueFromCanonical () { return refreshInventoryFromCanonical(); }
+
+  /* Push a POS stock change to the CANONICAL products.stock so in-store sales/edits reflect on
+     the marketplace + seller dashboard (interim inventory convergence). Proper transaction —
+     read → floor at 0 → write stock + inventoryVersion + updatedAt together (the inventory
+     guardrail) — best-effort + online-only, never blocks the sale. Full convergence (routing
+     the terminal through posCompleteCheckout) is planned separately. */
+  window._posSyncCanonicalStock = async function (id, delta, reason) {
+    try {
+      if (!id || !delta || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      const m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const ref = m.doc(window.firebaseDB, 'products', String(id));
+      await m.runTransaction(window.firebaseDB, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;                        /* not a canonical product — skip */
+        const next = Math.max(0, Number(snap.data().stock || 0) + Number(delta));   /* floored at zero */
+        tx.update(ref, {
+          stock: next,
+          inventoryVersion: m.increment(1),
+          lastStockSource: 'pos:' + (reason || 'adjust'),
+          updatedAt: m.serverTimestamp(),
+        });
+      });
+    } catch (_) { /* best-effort — local IndexedDB stock stays authoritative for the session */ }
+  };
+
+  /* Checkout-convergence SHADOW (Phase 1) — dry-run the canonical posCompleteCheckout and store a
+     structured comparison of what it WOULD produce vs this legacy sale. Feature-flagged
+     (window.POS_CHECKOUT_SHADOW), fire-and-forget, side-effect-free (dryRun). Evidence only. */
+  async function _posCheckoutShadow (txn) {
+    try {
+      if (!window.firebaseApp || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      const merchantId = (u && (u.uid || u.id)) || window.currentUser?.uid || localStorage.getItem('sokoni_merchant_id');
+      if (!merchantId) return;
+      const items = (txn.items || []).map(i => ({ productId: i.id, qty: i.qty, unitPrice: i.price }));
+      if (!items.length) return;
+      const payload = {
+        dryRun: true,
+        idempotencyKey: txn.idempotencyKey || txn.id,
+        merchantId,
+        branchId: (state.settings && state.settings.branchId) || 'default',
+        shiftId:  txn.shiftId || undefined,
+        items,
+        payments: [{ method: txn.paymentMethod || 'cash', amount: Number(txn.total || 0) }],
+        subtotal: Number(txn.subtotal || 0),
+        discountTotal: Number(txn.discountAmount || 0),
+        taxTotal: Number(txn.taxAmount || 0),
+        grandTotal: Number(txn.total || 0),
+        metadata: { source: 'pos.js', localTxnId: txn.id, shadow: true },
+      };
+      const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const _shadowT0 = Date.now();
+      const res = (await fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), 'posCompleteCheckout')(payload)).data || {};
+      const shadowMs = Date.now() - _shadowT0;
+
+      const expected = {
+        items: items.map(i => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })),
+        subtotal: Number(txn.subtotal || 0), discount: Number(txn.discountAmount || 0),
+        tax: Number(txn.taxAmount || 0), total: Number(txn.total || 0),
+        stockDelta: items.map(i => ({ productId: i.productId, delta: -Number(i.qty || 0) })),
+      };
+      const canonical = {
+        orderId: res.saleId || null,                 /* dry-run creates no order — expected null */
+        items: res.items || [], subtotal: Number(res.serverSubtotal || 0), total: Number(res.grandTotal || 0),
+        stockDelta: (res.stockDeltas || []).map(s => ({ productId: s.productId, delta: Number(s.delta || 0) })),
+      };
+      const differences = [];
+      if (Math.abs(expected.subtotal - canonical.subtotal) > 1) differences.push({ field: 'subtotal', expected: expected.subtotal, canonical: canonical.subtotal });
+      if (Math.abs(expected.total    - canonical.total)    > 1) differences.push({ field: 'total',    expected: expected.total,    canonical: canonical.total });
+      const cmap = {}; canonical.stockDelta.forEach(s => { cmap[s.productId] = s.delta; });
+      expected.stockDelta.forEach(e => {
+        if (cmap[e.productId] == null)          differences.push({ field: 'stockDelta', productId: e.productId, expected: e.delta, canonical: null });
+        else if (cmap[e.productId] !== e.delta) differences.push({ field: 'stockDelta', productId: e.productId, expected: e.delta, canonical: cmap[e.productId] });
+      });
+      if (Array.isArray(res.differences)) res.differences.forEach(d => differences.push({ field: 'canonical', ...d }));
+
+      const record = {
+        txnId: txn.id,
+        shadowRunId: (window.PosIdempotency && PosIdempotency.generateTxnId) ? PosIdempotency.generateTxnId() : ('shadow_' + txn.id),
+        idempotencyKey: payload.idempotencyKey, at: Date.now(), merchantId,
+        expected, canonical,
+        comparison: differences.length === 0 ? 'PASS' : 'FAIL',
+        differences,
+        /* Timing evidence (does NOT gate correctness): canonical dry-run round-trip vs the legacy
+           local commit, to surface any latency surprises before cutover. */
+        timing: { shadowMs, legacyMs: (typeof txn._legacyMs === 'number' ? txn._legacyMs : null),
+                  diffMs: (typeof txn._legacyMs === 'number' ? shadowMs - txn._legacyMs : null) },
+      };
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      await m.setDoc(m.doc(window.firebaseDB, 'posCheckoutShadow', String(txn.id)), record).catch(() => {});
+    } catch (e) {
+      /* A shadow FAILURE is itself evidence — record it; never surface to the cashier. */
+      try {
+        const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        await m.setDoc(m.doc(window.firebaseDB, 'posCheckoutShadow', String(txn.id)),
+          { txnId: txn.id, at: Date.now(), comparison: 'ERROR', error: String((e && e.message) || e).slice(0, 200) }).catch(() => {});
+      } catch (_) {}
+    }
+  }
 
   /* ═══════════════════════════════════════════════════════════
      PRODUCTS
@@ -869,6 +1131,7 @@ const SPos = (function () {
 
       const txn = {
         id:             txnId,
+        idempotencyKey: txnId,   /* stable per-sale key — reused by the shadow (Phase 1) and, later, canonical settlement */
         items:          state.cartItems.map(i => ({ ...i })),
         subtotal:       sub,
         discountAmount: disc,
@@ -913,6 +1176,7 @@ const SPos = (function () {
 
       /* ── Saga: atomic multi-step write with compensating txns ─ */
       const stockSnapshot = [];  // for rollback
+      const _legacyT0 = Date.now();   /* legacy local-commit timing (for the shadow comparison) */
       try {
         /* Step 1: Save transaction record */
         await PosDB.transactions.save(txn);
@@ -934,6 +1198,8 @@ const SPos = (function () {
         const pts = Math.floor(total / 100) * (state.settings.loyaltyRate || 1);
         await PosDB.customers.recordPurchase(state.currentCustomer.id, total, pts);
       }
+
+      txn._legacyMs = Date.now() - _legacyT0;   /* local commit duration — recorded in the shadow comparison */
 
         /* Step 3: Queue for cloud sync */
         await PosDB.syncQueue.add('transaction', txn);
@@ -1002,11 +1268,18 @@ const SPos = (function () {
       const receiptRecord = { transactionId: txn.id, receiptNo: txn.receiptNo, data: receiptData, ts: Date.now() };
       await PosDB.receipts.save(receiptRecord).catch(() => {});
 
-      /* Print receipt — use SokoniPrint (enhanced: logo + QR) if available */
+      /* Print receipt — route through the single public print API (PosPrintService),
+         which owns transport selection, queue, telemetry and the legacy fallback.
+         Fire-and-forget: a print failure must never interrupt order completion. */
       if (state.settings.autoPrint || payInfo.method === 'card') {
-        if (window.SokoniPrint) {
+        if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
+          PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
+            .catch(() => { /* service already falls back internally; last-ditch guard below */
+              if (window.SokoniPrint) SokoniPrint.print('receipt', receiptData).catch(() => window.PosPrinter && PosPrinter.printBrowser(receiptData));
+            });
+        } else if (window.SokoniPrint) {
           SokoniPrint.print('receipt', receiptData).catch(() => PosPrinter.printBrowser(receiptData));
-        } else {
+        } else if (window.PosPrinter) {
           PosPrinter.print(receiptData).catch(() => {});
         }
       }
@@ -1030,6 +1303,15 @@ const SPos = (function () {
       /* Show success overlay — always wire up buttons */
       _showSuccessOverlay(receiptData);
       if (window.PosBoss) PosBoss.showSuccess(receiptData, state.settings);
+
+      /* Checkout-convergence SHADOW (Phase 1): fire-and-forget, feature-flagged, dry-run only.
+         Runs the CANONICAL posCompleteCheckout in dry-run and records a structured comparison
+         (posCheckoutShadow/{txnId}) of what it WOULD have produced vs this legacy sale. Never
+         affects the sale, inventory, the cashier, or anything customer-visible — evidence only. */
+      if (window.POS_CHECKOUT_SHADOW === true ||
+          (function () { try { return localStorage.getItem('POS_CHECKOUT_SHADOW') === '1'; } catch (_) { return false; } })()) {
+        try { _posCheckoutShadow(txn); } catch (_) {}   /* per-terminal flag; default OFF → zero behaviour change */
+      }
 
       /* Emit plugin hooks */
       if (window.PosPlugins) {
@@ -1394,15 +1676,50 @@ const SPos = (function () {
       inv.renderProductTable(results);
     },
 
+    /* Pull the latest canonical products onto the screen, then re-render whatever
+       inventory sub-tab is showing. Live path from a dashboard edit → POS screen. */
+    async refreshFromCanonical() {
+      try { await refreshInventoryFromCanonical({ force: true }); } catch (_) {}
+      const t = state.invTab || 'products';
+      if (t === 'products')       await inv.renderProducts();
+      else if (t === 'low-stock') await inv.renderLowStock();
+      else if (t === 'expiry')    await inv.renderExpiry();
+    },
+
     async renderProducts() {
-      const all = await PosDB.products.getAll();
-      inv.renderProductTable(all);
+      /* Reflect canonical BEFORE reading PosDB so a dashboard edit shows without a reload.
+         Non-blocking of correctness: the merge is offline-safe (unsynced local sales kept). */
+      try { await refreshInventoryFromCanonical(); } catch (_) {}
+      let all = await PosDB.products.getAll().catch(() => []);
+      /* Degraded/empty local cache → render the canonical active products directly, so Inventory
+         is NEVER blank because of an IndexedDB problem it doesn't actually need. */
+      if ((!all || !all.length) && Array.isArray(window._posCanonicalProducts) && window._posCanonicalProducts.length) {
+        all = window._posCanonicalProducts;
+      }
+      inv.renderProductTable(all || []);
+    },
+
+    /* Compact canonical-sync status — proves the source→screen boundary at a glance
+       (found in catalogue → new/updated on this device → last sync). No fabricated data:
+       reads the real last-run stats from window._posInvSyncStats. */
+    _syncStatusBar() {
+      const s = window._posInvSyncStats;
+      if (!s) return '';
+      const when = s.at ? new Date(s.at).toLocaleTimeString() : '';
+      const orph = s.orphans && s.orphans.length ? ` · <span style="color:#ffb400">${s.orphans.length} not in catalogue</span>` : '';
+      return `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-size:12px;color:#9aa">
+        <span>📡 Catalogue: <strong style="color:#e8e8e8">${s.canonical}</strong></span>
+        <span>＋${s.inserted} new · ↻${s.updated} updated${s.removed ? ' · 🗑' + s.removed + ' removed' : ''}</span>
+        <span title="local stock kept for unsynced sales">🔒 ${s.stockKeptLocal || 0} kept local</span>${orph}
+        <span style="margin-left:auto">${when}</span>
+        <button class="row-btn" onclick="SPos.inv.refreshFromCanonical()">↻ Sync now</button>
+      </div>`;
     },
 
     renderProductTable(list) {
       const body = document.getElementById('inv-body');
-      if (!list.length) { body.innerHTML = '<div class="pos-empty" style="padding:60px"><div class="empty-icon">📦</div><p>No products yet. Click + Add Product to start.</p></div>'; return; }
-      body.innerHTML = `<table class="data-table">
+      if (!list.length) { body.innerHTML = inv._syncStatusBar() + '<div class="pos-empty" style="padding:60px"><div class="empty-icon">📦</div><p>No products yet. Click + Add Product to start, or tap “↻ Sync now”.</p></div>'; return; }
+      body.innerHTML = inv._syncStatusBar() + `<table class="data-table">
         <thead><tr><th>Name</th><th>Barcode</th><th>Category</th><th class="td-right">Price</th><th class="td-right">Cost</th><th class="td-right">Stock</th><th>Unit</th><th>Expiry</th><th>Actions</th></tr></thead>
         <tbody>${list.map(p => {
           const stk = p.stock || 0;
@@ -1896,10 +2213,57 @@ const SPos = (function () {
   const cashier = {
     _pinBuffer: '',
 
+    /* Cashier login session — persisted so POS does not re-prompt for the PIN on every
+       reload/navigation. Stores identity ONLY (never the PIN/hash). Sliding TTL: an active
+       cashier stays logged in; after this idle window POS re-prompts. This is operator
+       identity (SOKONI "Auth" layer) — NOT money authorization; refunds/voids/discounts keep
+       their own independent manager-PIN gate, which is never persisted here. */
+    _SESSION_KEY: 'sokoni_pos_cashier_session',
+    _SESSION_TTL_MS: 14 * 60 * 60 * 1000,   /* 14h — one long workday */
+
+    _persistSession(c) {
+      try {
+        localStorage.setItem(cashier._SESSION_KEY, JSON.stringify({
+          id: c.id, name: c.name, role: c.role || 'cashier', at: Date.now(),
+        }));
+      } catch (_) {}
+    },
+    _clearSession() { try { localStorage.removeItem(cashier._SESSION_KEY); } catch (_) {} },
+
+    /* Restore a still-valid cashier session on boot so we skip the PIN. Returns true only if
+       the session exists, is within the TTL, AND the cashier still exists and is active
+       locally. Slides the TTL on success and silently restores an open shift. */
+    async restoreSession(cashiers) {
+      let s;
+      try { s = JSON.parse(localStorage.getItem(cashier._SESSION_KEY) || 'null'); } catch (_) { s = null; }
+      if (!s || !s.id || !s.at) return false;
+      if (Date.now() - s.at > cashier._SESSION_TTL_MS) { cashier._clearSession(); return false; }
+      const roster = cashiers || await PosDB.cashiers.getAll();
+      const c = roster.find(x => x.id === s.id && x.active !== false);
+      if (!c) { cashier._clearSession(); return false; }
+      state.currentCashier = c;
+      cashier._persistSession(c);                 /* slide the idle window */
+      _setVal('cashier-avatar', c.name ? c.name[0].toUpperCase() : '?');
+      _setVal('cashier-name-hdr', c.name || 'Cashier');
+      try {
+        const existingShift = await PosDB.shifts.getCurrent(c.id);
+        if (existingShift) { state.currentShift = existingShift; shift.updateBadge(); }
+      } catch (_) {}
+      return true;
+    },
+
+    /* Explicit sign-out: clear the persisted session and re-show the PIN. */
+    logout() {
+      cashier._clearSession();
+      state.currentCashier = null;
+      cashier.showSwitchDialog();
+    },
+
     showSwitchDialog() {
       cashier._pinBuffer = '';
       cashier.updatePinDots();
       document.getElementById('pin-error').textContent = '';
+      try { profile.fillPinModal(); } catch (_) {}
       modal.open('pin-modal');
     },
 
@@ -1935,6 +2299,7 @@ const SPos = (function () {
       if (c) {
         if (window.PosHealth) await PosHealth.recordPinAttempt('all', true);
         state.currentCashier = c;
+        cashier._persistSession(c);
         _setVal('cashier-avatar', c.name ? c.name[0].toUpperCase() : '?');
         _setVal('cashier-name-hdr', c.name || 'Cashier');
         modal.close('pin-modal');
@@ -2101,10 +2466,17 @@ const SPos = (function () {
       _setVal('suc-mpesa-ref', receiptData.mpesaRef || '');
     }
 
-    /* Wire Print button */
+    /* Wire Print button — order-centric: the tap ensures the printer is connected (silent →
+       chooser) THEN prints, so the cashier never sees a reconnect screen after a sale. */
     const printBtn = document.getElementById('suc-print-btn');
     if (printBtn) {
-      printBtn.onclick = () => { PosPrinter.print(receiptData).catch(() => {}); };
+      printBtn.onclick = () => {
+        if (window.PosPrintService && typeof PosPrintService.smartPrint === 'function') {
+          PosPrintService.smartPrint(receiptData, { fromSuccess: true }).catch(() => { try { PosPrinter.print(receiptData); } catch (_) {} });
+        } else {
+          PosPrinter.print(receiptData).catch(() => {});
+        }
+      };
     }
 
     /* Wire WhatsApp button */
@@ -2136,12 +2508,355 @@ const SPos = (function () {
     if (typeof _p7SetReceiptData === 'function') _p7SetReceiptData(receiptData);
 
     el.classList.add('open');
-    setTimeout(() => el.classList.remove('open'), 8000);
+    const autoClose = setTimeout(() => el.classList.remove('open'), 8000);
+
+    /* Robust close: a single canonical closer used by the ✕/"Tap to close" button AND by
+       tapping the backdrop (outside the modal). Guarantees an escape even if the modal is
+       taller than the screen. Idempotent; clears the auto-close timer. */
+    const closeSuccess = () => { clearTimeout(autoClose); el.classList.remove('open'); };
+    el.onclick = (e) => { if (e.target === el) closeSuccess(); };   /* backdrop tap */
+    const closeBtn = el.querySelector('.suc-close-btn');
+    if (closeBtn) closeBtn.onclick = closeSuccess;
   }
 
   /* ═══════════════════════════════════════════════════════════
      SALES HISTORY & REPRINT
   ═══════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+     MORE — merchant control center (R1.1). Surfaces every module so the
+     merchant never has to "leave the POS". In-shell modules route through
+     SPos.ui.switchTab (no reload — printer, cart, listeners preserved).
+     Management pages navigate SAME-TAB (never a new window/PWA — single
+     instance), and the printer silently auto-reconnects on return.
+  ═══════════════════════════════════════════════════════════════════ */
+  const more = {
+    _stylesInjected: false,
+    _injectStyles() {
+      if (more._stylesInjected) return;
+      more._stylesInjected = true;
+      const css = `
+        .more-wrap{padding:14px 14px 100px;max-width:860px;margin:0 auto}
+        .more-group{margin-bottom:20px}
+        .more-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3);margin:0 4px 10px}
+        .more-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
+        .more-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;text-align:center;transition:transform .12s ease,border-color .12s ease,background .12s ease;color:var(--txt);text-decoration:none}
+        .more-card:hover{transform:translateY(-2px);border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.05)}
+        .more-card:active{transform:translateY(0)}
+        .more-ico{font-size:24px;line-height:1}
+        .more-lbl{font-size:11.5px;font-weight:700;line-height:1.25}
+        .more-card .more-ext{position:absolute}
+        .more-card.ext .more-lbl::after{content:' ↗';color:var(--txt3);font-size:10px}`;
+      const s = document.createElement('style'); s.id = 'more-styles'; s.textContent = css;
+      document.head.appendChild(s);
+    },
+
+    /* Each item: [icon, label, kind, target]
+       kind 'tab'    → in-shell SPos.ui.switchTab (no reload)
+       kind 'nav'    → same-tab navigation to a management page (single instance)
+       kind 'action' → an in-POS overlay (printer menu / device hub) */
+    /* Every entry routes to a VERIFIED destination — in-shell tab, an existing page, or a
+       seller-dashboard section deep-link (seller.html#<data-sdtab>; the dashboard reads
+       location.hash). No dead links. */
+    _groups: [
+      ['Operations', [
+        ['🛒', 'Checkout', 'tab', 'pos'],
+        ['🧾', 'Orders', 'tab', 'orders'],
+        ['🚚', 'Dispatch', 'nav', 'dispatch.html'],
+        ['📦', 'Inventory', 'tab', 'inventory'],
+        ['👥', 'Customers', 'tab', 'customers'],
+        ['🔧', 'Repairs', 'tab', 'repair'],
+      ]],
+      ['Business', [
+        ['🏪', 'Shop Dashboard', 'nav', 'seller.html'],
+        ['💰', 'Finance', 'tab', 'finance'],
+        ['📊', 'Reports', 'tab', 'reports'],
+        ['📈', 'Analytics', 'nav', 'analytics.html'],
+        ['👨‍🔧', 'Employees', 'nav', 'seller.html#team'],
+        ['🎁', 'Promotions', 'nav', 'seller.html#flash'],
+        ['⭐', 'Loyalty', 'nav', 'loyalty.html'],
+        ['📣', 'Marketing', 'nav', 'seller.html#market'],
+        ['🧾', 'Tax / KRA', 'nav', 'seller.html#kra'],
+      ]],
+      ['Orders & Money', [
+        ['🧾', 'Receipts', 'tab', 'orders'],
+        ['🔄', 'Refunds', 'tab', 'orders'],
+        ['⚖️', 'Disputes', 'nav', 'seller.html#disputes'],
+      ]],
+      ['Communications', [
+        ['💬', 'Messages', 'nav', 'seller.html#inbox'],
+        ['🔔', 'Notifications', 'nav', 'notifications.html'],
+      ]],
+      ['System', [
+        ['🖨️', 'Printer', 'action', 'printer'],
+        ['🔌', 'Devices', 'action', 'devices'],
+        ['☁️', 'Sync & Data', 'tab', 'settings'],
+        ['📡', 'BOS Hub', 'tab', 'bos'],
+        ['📋', 'Audit', 'tab', 'audit'],
+        ['⚙️', 'POS Settings', 'tab', 'settings'],
+        ['⛶', 'Full Screen', 'action', 'fullscreen'],
+      ]],
+    ],
+
+    render() {
+      more._injectStyles();
+      const body = document.getElementById('more-body');
+      if (!body) return;
+      body.innerHTML = '<div class="more-wrap">' + more._groups.map(([title, items]) => `
+        <div class="more-group">
+          <div class="more-group-title">${title}</div>
+          <div class="more-grid">${items.map(([ico, lbl, kind, target]) =>
+            `<div class="more-card ${kind === 'nav' ? 'ext' : ''}" role="button" tabindex="0"
+                 onclick="SPos.more.go('${kind}','${target}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SPos.more.go('${kind}','${target}')}">
+               <span class="more-ico">${ico}</span><span class="more-lbl">${_esc(lbl)}</span>
+             </div>`).join('')}</div>
+        </div>`).join('') + '</div>';
+    },
+
+    go(kind, target) {
+      if (kind === 'tab') { ui.switchTab(target); return; }
+      if (kind === 'nav') { window.location.href = target; return; }   /* same tab — single instance */
+      if (kind === 'action') {
+        if (target === 'printer') { if (window.openPrinterMenu) window.openPrinterMenu(); return; }
+        if (target === 'devices') { try { SPos.deviceHub && SPos.deviceHub.showPanel && SPos.deviceHub.showPanel(); } catch (_) {} return; }
+        if (target === 'fullscreen') { try { window.posToggleFullscreen && window.posToggleFullscreen(); } catch (_) {} return; }
+      }
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════
+     ORDERS HUB (R1.1 Phase 1) — one place for every completed transaction.
+     Phase 1: live In-Store POS sales (canonical PosDB.transactions) with
+     reprint / refund / details, plus scaffolded channel tabs. Online /
+     Delivery / Pickup marketplace orders wire in Phase 2. No fabricated
+     metrics — unknown online figures render as "—", never 0.
+  ═══════════════════════════════════════════════════════════════════ */
+  const orders = {
+    _filter: 'all',
+    _inStore: [],
+    _stylesInjected: false,
+
+    _injectStyles() {
+      if (orders._stylesInjected) return;
+      orders._stylesInjected = true;
+      const css = `
+        .ord-wrap{padding:12px 14px 90px;max-width:820px;margin:0 auto}
+        .ord-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+        .ord-summary-wide{grid-template-columns:repeat(auto-fill,minmax(94px,1fr))}
+        .ord-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center}
+        .ord-stat-n{font-size:19px;font-weight:900;color:#71ff00;line-height:1.1}
+        .ord-stat-l{font-size:10.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+        .ord-tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;scrollbar-width:none}
+        .ord-tabs::-webkit-scrollbar{display:none}
+        .ord-tab{flex:0 0 auto;background:var(--card);border:1px solid var(--border);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+        .ord-tab.active{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:#71ff00}
+        .ord-list{display:flex;flex-direction:column;gap:10px}
+        .ord-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+        .ord-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+        .ord-card-id{font-weight:800;font-size:14px}
+        .ord-card-sub{font-size:11.5px;color:var(--txt2);margin-top:2px}
+        .ord-card-amt{font-weight:900;font-size:15px}
+        .ord-card-when{font-size:10.5px;color:var(--txt3);margin-top:2px;white-space:nowrap}
+        .ord-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+        .ord-card-actions{display:flex;gap:6px;flex-wrap:wrap}
+        .ord-badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px}
+        .ord-ok{background:rgba(113,255,0,.13);color:#71ff00}
+        .ord-warn{background:rgba(255,180,0,.14);color:#ffb400}
+        .ord-bad{background:rgba(255,80,80,.14);color:#ff6464}
+        .ord-det-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}
+        .ord-det-card{background:var(--bg2,#0d0d0d);border:1px solid var(--border);border-radius:16px;width:100%;max-width:400px;max-height:86vh;overflow:auto}
+        .ord-det-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2,#0d0d0d)}
+        .ord-det-head button{background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer}
+        .ord-det-body{padding:14px 16px}
+        .ord-det-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:4px 0;color:var(--txt)}
+        .ord-det-row span:first-child{color:var(--txt2)}
+        .ord-det-total{font-weight:900;font-size:15px;border-top:1px solid var(--border);margin-top:6px;padding-top:9px}
+        .ord-det-body hr{border:none;border-top:1px solid var(--border);margin:9px 0}
+        .ord-det-foot{padding:12px 16px;border-top:1px solid var(--border)}`;
+      const s = document.createElement('style'); s.id = 'ord-styles'; s.textContent = css;
+      document.head.appendChild(s);
+    },
+
+    _range: 'today',
+
+    async render() {
+      orders._injectStyles();
+      const body = document.getElementById('orders-body');
+      if (!body) return;
+      body.innerHTML = '<div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders…</p></div>';
+      /* Load by the selected range. Past orders were invisible because this was hardcoded to
+         TODAY only — now Today / Week / Month / All. "All" reads the full store so historical
+         sales always appear. */
+      let txns = [];
+      try {
+        if (orders._range === 'all') {
+          txns = await PosDB.transactions.getAll();
+        } else {
+          const now = new Date();
+          const to  = now.getTime();
+          let from;
+          if (orders._range === 'week')       { const d = new Date(now); d.setDate(d.getDate() - 6); from = d.setHours(0,0,0,0); }
+          else if (orders._range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 29); from = d.setHours(0,0,0,0); }
+          else                                { from = new Date(now).setHours(0,0,0,0); }   /* today */
+          txns = await PosDB.transactions.getByDateRange(from, to);
+        }
+      } catch (_) { txns = []; }
+      /* Accept every finalised sale. Status vocabulary varies (completed/complete/paid/done/
+         delivered/finished) — normalise so historical rows aren't dropped by a strict match. */
+      const DONE = /^(completed|complete|paid|done|finished|delivered|closed|success|fulfilled)$/i;
+      orders._inStore = (txns || [])
+        .filter(t => DONE.test(String(t.status || '')) || t.refunded || t.voided || t.completedAt)
+        .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0));
+      /* Low-stock count from canonical inventory (one read, no listener — perf-safe). */
+      let lowStock = null;
+      try {
+        const prods = await PosDB.products.getAll();
+        lowStock = (prods || []).filter(p => {
+          const s = Number(p.stock != null ? p.stock : (p.quantity || 0));
+          const thr = Number(p.lowStockThreshold != null ? p.lowStockThreshold : (p.reorderLevel != null ? p.reorderLevel : 5));
+          return p.trackStock !== false && s <= thr;
+        }).length;
+      } catch (_) { lowStock = null; }
+      orders._lowStock = lowStock;
+      orders._paint();
+    },
+
+    _paint() {
+      const body = document.getElementById('orders-body');
+      if (!body) return;
+      body.innerHTML = `<div class="ord-wrap">${orders._summary()}${orders._rangeHtml()}${orders._tabsHtml()}<div id="ord-list" class="ord-list"></div></div>`;
+      orders._paintList();
+    },
+
+    _rangeHtml() {
+      const R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+      return `<div class="ord-tabs" style="margin-bottom:4px">${R.map(([k, l]) =>
+        `<button class="ord-tab ${orders._range === k ? 'active' : ''}" onclick="SPos.orders.setRange('${k}')">${l}</button>`).join('')}</div>`;
+    },
+
+    setRange(r) { orders._range = r; orders.render(); },
+
+    _summary() {
+      const sold = orders._inStore.filter(t => !t.voided);
+      const revenue = sold.reduce((s, t) => s + Number(t.total || 0), 0);
+      const refunds = orders._inStore.filter(t => t.refunded && !t.voided).length;
+      const low = orders._lowStock;
+      /* Live device/connectivity chips — read once (no listener). Online-only metrics
+         (Online Orders, Awaiting Rider, Ready Pickup) render "—" until Phase 2 wires the
+         marketplace feed — never a fabricated 0. */
+      let printerOn = false;
+      try { printerOn = !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected)); } catch (_) {}
+      const online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
+      const dash = (val, label, accent) =>
+        `<div class="ord-stat"><div class="ord-stat-n"${accent ? ` style="color:${accent}"` : ''}>${val}</div><div class="ord-stat-l">${label}</div></div>`;
+      return `<div class="ord-summary ord-summary-wide">
+        ${dash('KES ' + _fmt(revenue), 'Revenue Today')}
+        ${dash(String(sold.length), 'Walk-in Sales')}
+        ${dash('<span style="color:var(--txt3)">—</span>', 'Online Orders')}
+        ${dash(low == null ? '<span style="color:var(--txt3)">—</span>' : String(low), 'Low Stock', low ? '#ffb400' : null)}
+        ${dash(String(refunds), 'Refunds Today', refunds ? '#ffb400' : null)}
+        ${dash(printerOn ? '🟢' : '⚪', 'Printer', printerOn ? '#71ff00' : null)}
+        ${dash(online ? '🟢' : '🔴', 'Sync', online ? '#71ff00' : '#ff6464')}
+      </div>`;
+    },
+
+    _tabsHtml() {
+      const T = [['all', '🟢 All'], ['online', '🛒 Online'], ['instore', '🏪 In-Store'],
+                 ['delivery', '🚚 Delivery'], ['pickup', '📦 Pickup'], ['cancelled', '❌ Cancelled'], ['refunded', '↩ Refunded']];
+      return `<div class="ord-tabs">${T.map(([k, l]) =>
+        `<button class="ord-tab ${orders._filter === k ? 'active' : ''}" onclick="SPos.orders.setFilter('${k}')">${l}</button>`).join('')}</div>`;
+    },
+
+    setFilter(f) { orders._filter = f; orders._paint(); },
+
+    _paintList() {
+      const list = document.getElementById('ord-list');
+      if (!list) return;
+      const f = orders._filter;
+      if (f === 'online' || f === 'delivery' || f === 'pickup') { list.innerHTML = orders._placeholder(f); return; }
+      let rows = orders._inStore;
+      if (f === 'instore')   rows = rows.filter(t => !t.voided && !t.refunded);
+      if (f === 'cancelled') rows = rows.filter(t => t.voided);
+      if (f === 'refunded')  rows = rows.filter(t => t.refunded && !t.voided);
+      if (!rows.length) { list.innerHTML = '<div class="pos-empty" style="padding:34px 20px"><div class="empty-icon">🧾</div><p>No orders in this view yet</p></div>'; return; }
+      list.innerHTML = rows.map(orders._card).join('');
+    },
+
+    _placeholder(kind) {
+      const label = kind === 'online' ? 'Online marketplace orders' : kind === 'delivery' ? 'Delivery orders' : 'Pickup orders';
+      return `<div class="pos-empty" style="padding:38px 20px">
+        <div class="empty-icon">🛰️</div>
+        <p style="margin-bottom:6px"><strong>${label}</strong></p>
+        <p style="font-size:12.5px;color:var(--txt2);max-width:330px;margin:0 auto;line-height:1.55">Live marketplace orders (accept, prepare, ready-for-rider, chat buyer) arrive here in the next update. Your in-store sales are live now under the <strong>In-Store</strong> tab.</p>
+      </div>`;
+    },
+
+    _card(t) {
+      const when = new Date(t.completedAt || t.timestamp || Date.now())
+        .toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+      const status = t.voided ? '<span class="ord-badge ord-bad">Voided</span>'
+        : t.refunded ? '<span class="ord-badge ord-warn">Refunded</span>'
+        : '<span class="ord-badge ord-ok">Completed</span>';
+      const method = (t.paymentMethod || 'cash').toUpperCase();
+      const n = (t.items || []).length;
+      const idLabel = t.receiptNo || ('POS-' + String(t.id || '').slice(-6));
+      return `<div class="ord-card">
+        <div class="ord-card-top">
+          <div>
+            <div class="ord-card-id">Sale #${_esc(idLabel)}</div>
+            <div class="ord-card-sub">${_esc(t.customerName || 'Walk-in Customer')} · ${_esc(method)} · ${n} item${n === 1 ? '' : 's'}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="ord-card-amt">KES ${_fmt(t.total)}</div>
+            <div class="ord-card-when">${when}</div>
+          </div>
+        </div>
+        <div class="ord-card-foot">
+          ${status}
+          <div class="ord-card-actions">
+            <button class="row-btn" onclick="SPos.sales.reprint('${t.id}')">🖨 Print</button>
+            ${!t.refunded && !t.voided ? `<button class="row-btn" onclick="SPos.sales.refundDialog('${t.id}')">Refund</button>` : ''}
+            <button class="row-btn" onclick="SPos.orders.details('${t.id}')">Details</button>
+          </div>
+        </div>
+      </div>`;
+    },
+
+    async details(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Order not found', 'error'); return; }
+      const items = (t.items || []).map(i => {
+        const qty = i.qty || 1;
+        const line = (i.unitPrice != null ? i.unitPrice : (i.price || 0)) * qty;
+        return `<div class="ord-det-row"><span>${_esc(i.name || i.productName || 'Item')} ×${qty}</span><span>KES ${_fmt(line)}</span></div>`;
+      }).join('') || '<div class="ord-det-row"><span>No line items recorded</span><span></span></div>';
+      const payState = t.voided ? 'Voided' : t.refunded ? 'Refunded' : 'Paid';
+      const ov = document.createElement('div');
+      ov.className = 'ord-det-overlay';
+      ov.onclick = e => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div class="ord-det-card">
+        <div class="ord-det-head"><strong>Sale #${_esc(t.receiptNo || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
+        <div class="ord-det-body">
+          <div class="ord-det-row"><span>Customer</span><span>${_esc(t.customerName || 'Walk-in')}</span></div>
+          <div class="ord-det-row"><span>Cashier</span><span>${_esc(t.cashierName || '-')}</span></div>
+          <div class="ord-det-row"><span>Date</span><span>${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}</span></div>
+          <hr>
+          ${items}
+          <hr>
+          <div class="ord-det-row"><span>Subtotal</span><span>KES ${_fmt(t.subtotal != null ? t.subtotal : t.total)}</span></div>
+          ${t.discount ? `<div class="ord-det-row"><span>Discount</span><span>-KES ${_fmt(t.discount)}</span></div>` : ''}
+          ${t.tax ? `<div class="ord-det-row"><span>Tax</span><span>KES ${_fmt(t.tax)}</span></div>` : ''}
+          <div class="ord-det-row ord-det-total"><span>Total</span><span>KES ${_fmt(t.total)}</span></div>
+          <div class="ord-det-row"><span>Payment</span><span>${_esc((t.paymentMethod || 'cash').toUpperCase())} · ${payState}</span></div>
+        </div>
+        <div class="ord-det-foot">
+          <button class="modal-btn modal-btn-primary" style="width:100%" onclick="SPos.sales.reprint('${t.id}')">🖨 Print receipt</button>
+        </div>
+      </div>`;
+      document.body.appendChild(ov);
+    },
+  };
+
   const sales = {
     async showHistory() {
       const body = document.getElementById('reports-body');
@@ -2191,7 +2906,14 @@ const SPos = (function () {
         taxRate:         state.settings.taxRate || 16,
         paperWidth:      parseInt(state.settings.paperWidth) || 32,
       };
-      PosPrinter.print(data).catch(() => {});
+      /* Order-centric print: ensure the printer is connected (silent → chooser) THEN print,
+         so the merchant taps once and never sees a reconnect screen. Falls back to the legacy
+         browser print if the smart path is unavailable. */
+      if (window.PosPrintService && typeof PosPrintService.smartPrint === 'function') {
+        PosPrintService.smartPrint(data, { reprint: true }).catch(() => { try { PosPrinter.print(data); } catch (_) {} });
+      } else {
+        PosPrinter.print(data).catch(() => {});
+      }
       if (window.PosAudit) PosAudit.log('receipt_reprint', { receiptNo: t.receiptNo });
     },
 
@@ -2456,6 +3178,117 @@ const SPos = (function () {
       PosPrinter.setPaperWidth(parseInt(val));
       state.settings.paperWidth = val;
       await PosDB.settings.set('paperWidth', val);
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     SOKONI PROFILE — bind this POS device to the signed-in account
+     POS is offline-first, so localStorage.sokoniUser is the primary read (the
+     same identity every other page uses); Firestore users/{uid} enriches it
+     (phone / business name / KRA PIN) when online. This makes the header account
+     pill reflect the real owner and gives the Business Profile a one-tap sync,
+     instead of a dead "Login" pill and a blank, manually-retyped business form.
+  ═══════════════════════════════════════════════════════════ */
+  const profile = {
+    get() {
+      let u = null;
+      try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      return (u && typeof u === 'object') ? u : null;
+    },
+    displayName() {
+      const u = profile.get();
+      if (!u) return null;
+      return u.name || u.displayName || u.businessName || u.shopName ||
+             (u.email ? String(u.email).split('@')[0] : null) || null;
+    },
+    businessName() {
+      const u = profile.get() || {};
+      return u.businessName || u.shopName || u.name || '';
+    },
+    phone() {
+      const u = profile.get() || {};
+      return u.phoneNumber || u.phone || '';
+    },
+    /* Open the canonical SOKONI profile (same page the rest of the app uses). */
+    open() { window.open('profile.html', '_self'); },
+
+    /* Reflect WHO is signed in on the header pill when no cashier has logged in,
+       so the account surface shows the owner instead of a dead "Login". An
+       explicit cashier login always wins. */
+    reflectInHeader() {
+      if (state.currentCashier) return;
+      const name = profile.displayName();
+      if (!name) return;
+      _setVal('cashier-avatar', name[0].toUpperCase());
+      _setVal('cashier-name-hdr', name);
+    },
+
+    /* Populate the account strip inside the cashier PIN modal. */
+    fillPinModal() {
+      const box = document.getElementById('pin-acct');
+      if (!box) return;
+      const name = profile.displayName();
+      const u = profile.get();
+      if (!u || !name) { box.style.display = 'none'; return; }
+      _setVal('pin-acct-name', name);
+      _setVal('pin-acct-sub', profile.phone() || u.email || '');
+      box.style.display = '';
+    },
+
+    /* Seed blank business settings from the account so receipts/header/branding
+       match the owner's profile without manual entry. Non-destructive: only
+       fills empties, then persists so the change survives reload. */
+    async seedBusinessDefaults() {
+      const u = profile.get();
+      if (!u) return;
+      const want = { bizName: profile.businessName(), bizPhone: profile.phone() };
+      let changed = false;
+      for (const k in want) {
+        if (want[k] && !String(state.settings[k] || '').trim()) {
+          state.settings[k] = want[k];
+          try { await PosDB.settings.set(k, want[k]); } catch (_) {}
+          changed = true;
+        }
+      }
+      if (changed) _setVal('hdr-biz-name', state.settings.bizName || 'SOKONI SmartPOS');
+    },
+
+    /* Prefill the BUSINESS PROFILE settings form from the SOKONI account.
+       Never overwrites values the merchant already typed unless force:true.
+       force+persist (the "Sync from my profile" button) also saves. Returns the
+       number of fields filled. */
+    async syncBusinessProfile(opts) {
+      opts = opts || {};
+      const u = profile.get();
+      if (!u) { if (opts.interactive) toast('Sign in to sync your profile', 'info'); return 0; }
+
+      let doc = {};
+      try {
+        if (navigator.onLine && u.uid && window.firebase && firebase.firestore) {
+          const snap = await firebase.firestore().collection('users').doc(String(u.uid)).get();
+          if (snap && snap.exists) doc = snap.data() || {};
+        }
+      } catch (_) { /* offline / rules — localStorage alone is enough */ }
+
+      const src = Object.assign({}, u, doc);
+      const map = {
+        's-biz-name':    src.businessName || src.shopName || src.name || '',
+        's-biz-phone':   src.phoneNumber  || src.phone    || '',
+        's-biz-address': src.address      || src.location || '',
+        's-biz-pin':     src.kraPin       || src.kra_pin  || '',
+      };
+      let filled = 0;
+      Object.keys(map).forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el || !map[id]) return;
+        if (opts.force || !String(el.value || '').trim()) { el.value = map[id]; filled++; }
+      });
+      if (filled && opts.persist === true) { try { await settings.save(); } catch (_) {} }
+      if (opts.interactive) {
+        toast(filled ? ('Synced ' + filled + ' field' + (filled === 1 ? '' : 's') + ' from your profile')
+                     : 'Business profile already matches your account', filled ? 'success' : 'info');
+      }
+      return filled;
     },
   };
 
@@ -2965,11 +3798,50 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      PUBLIC API
   ═══════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════
+     NAVIGATION SERVICE — the single path for all in-shell POS navigation.
+     ui.switchTab() is the router; `nav` owns view lifecycle: teardown of the
+     view being left, URL-hash deep-linking, Back/Forward, and a nav analytics
+     event. Every future POS surface should be a lazily-loaded panel reached via
+     this service — never a new window/tab.
+  ═══════════════════════════════════════════════════════════ */
+  const nav = {
+    KNOWN: ['pos', 'orders', 'more', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
+    _teardowns: {},
+    /* A panel that opens a live listener registers its unsub here so leaving the
+       panel releases it — the structural guarantee against listener/memory growth. */
+    registerTeardown(tab, fn) {
+      if (typeof fn !== 'function') return;
+      (this._teardowns[tab] = this._teardowns[tab] || []).push(fn);
+    },
+    _runTeardown(tab) {
+      const fns = this._teardowns[tab];
+      if (!fns || !fns.length) return;
+      this._teardowns[tab] = [];
+      fns.forEach(fn => { try { fn(); } catch (_) {} });
+    },
+    _analytics(tab, from) {
+      try { if (window.SokoniAnalytics && typeof SokoniAnalytics.track === 'function') SokoniAnalytics.track('pos_nav', { tab, from }); } catch (_) {}
+    },
+    /* Semantic alias for switchTab — the single navigate entry-point. */
+    go(tab) { ui.switchTab(tab); },
+    init() {
+      /* Back/Forward: restore the view named in the URL, without pushing a new entry. */
+      window.addEventListener('popstate', () => {
+        const t = (location.hash || '').replace(/^#/, '') || 'pos';
+        if (nav.KNOWN.includes(t)) ui.switchTab(t, { fromHistory: true });
+      });
+      /* Deep-link on boot: honour an incoming #view (Phase-4 standalone→shell redirects rely on this). */
+      const boot = (location.hash || '').replace(/^#/, '');
+      if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });
+    },
+  };
+
   return {
-    state, wizard, ui, products, cart, payment, mpesa,
+    state, wizard, ui, nav, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
-    settings, sync, data, modal, printerSetup, bos,
-    sales, po, cats, split,
+    settings, profile, sync, data, modal, printerSetup, bos,
+    sales, orders, more, po, cats, split,
     toast, printer: PosPrinter, openAIPricing,
     boot,
     /* Debounced helpers for HTML oninput handlers */

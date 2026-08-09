@@ -890,7 +890,7 @@ async function resolveIssue(id) {
 }
 
 async function deleteIssue(id) {
-  if (!confirm('Delete this issue permanently?')) return;
+  if (!(await SK.dialog.confirm('Delete this issue permanently?', null, null, { title: 'Delete issue', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await db.collection('uatIssues').doc(id).delete();
     toast('Issue deleted', 'ok');
@@ -1072,7 +1072,7 @@ function exportReport() {
 }
 
 async function markComplete() {
-  if (!confirm('Record this UAT cycle as complete? Cannot be undone.')) return;
+  if (!(await SK.dialog.confirm('Record this UAT cycle as complete? Cannot be undone.', null, null, { title: 'Complete UAT cycle', confirmLabel: 'Complete' }))) return;
   try {
     const passed = scenarios.filter(s => s.status === 'PASS').length;
     const failed = scenarios.filter(s => s.status === 'FAIL').length;

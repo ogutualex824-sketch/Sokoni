@@ -385,7 +385,7 @@ async function saveRegister() {
 }
 
 async function deleteReg(regId) {
-  if (!confirm(`Delete register "${regId}"? This cannot be undone.`)) return;
+  if (!(await SK.dialog.confirm(`Delete register "${regId}"? This cannot be undone.`, null, null, { title: 'Delete register', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await _posDispatch('mtRegisterDelete', { merchantId: _merchantId, registerId: regId });
     _toast('Register deleted');

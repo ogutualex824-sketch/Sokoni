@@ -108,14 +108,43 @@ const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'
     el.style.animation='_skOut .28s ease forwards';
     setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},270);
   }
-  window._sokoniToast = function(msg, type, ms){
-    type = type||'success'; ms = ms||3000;
+  /* Normalise the type — some helpers pass booleans (true = error, e.g. showToast(msg,!ok))
+     or the short 'warn'. Maps onto the 4 canonical types. */
+  function _normType(t){
+    if (t === true) return 'error';
+    if (t === false || t == null) return 'success';
+    t = String(t).toLowerCase();
+    if (t === 'warn') return 'warning';
+    return (t === 'success' || t === 'error' || t === 'warning' || t === 'info') ? t : 'success';
+  }
+  /* Original inline renderer — kept ONLY as the fallback for before SokoniUI has loaded. */
+  function _rawToast(msg, type, ms){
     var el=document.createElement('div');
     el.style.cssText='background:'+(BG[type]||BG.success)+';border:1px solid '+(BD[type]||BD.success)+';border-radius:12px;padding:12px 16px;color:#fff;font-size:13px;font-family:inherit;font-weight:700;line-height:1.4;box-shadow:0 4px 24px rgba(0,0,0,0.55);animation:_skIn .3s ease;pointer-events:all;cursor:pointer;';
     el.innerHTML='<span style="margin-right:6px">'+(IC[type]||'📢')+'</span>'+String(msg).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     el.onclick=function(){_dismiss(el);};
     _getBox().appendChild(el);
     el._tid=setTimeout(function(){_dismiss(el);},ms);
+  }
+  /* CANONICAL toast entry (Slice A) — delegates to the design-system renderer SokoniUI.toast so
+     every showToast / showNotification / _sokoniToast / SK.toast call renders through ONE engine
+     (ARIA, queue, 4-toast cap, tokens). Zero API change; falls back to the inline renderer only
+     before SokoniUI has loaded. */
+  window._sokoniToast = function(msg, type, ms){
+    var nt = _normType(type);
+    /* Lightweight telemetry — free now that one renderer sees every toast. */
+    try {
+      var M = (window._skToastMetrics = window._skToastMetrics || { total: 0, byType: {} });
+      M.total++; M.byType[nt] = (M.byType[nt] || 0) + 1;
+      window.dispatchEvent(new CustomEvent('sk:toast', { detail: { type: nt, duration: (ms || null), at: Date.now() } }));
+    } catch(_) {}
+    try {
+      if (window.SokoniUI && typeof SokoniUI.toast === 'function') {
+        SokoniUI.toast(msg, nt, (ms != null ? { duration: ms } : {}));
+        return;
+      }
+    } catch(_) {}
+    _rawToast(msg, nt, ms || 3000);   /* SokoniUI not ready yet → inline fallback */
   };
 })();
 
@@ -230,14 +259,38 @@ function _renderCatalogueError(container) {
 
 /* Bounded, not indefinite: a spinner that never resolves is the loading-state
    equivalent of a silent failure. */
+/* App-Check-independent catalogue fallback. Client Firestore reads are gated by App
+   Check, whose reCAPTCHA v3 token 403s intermittently on iOS Safari (ITP) and took the
+   homepage grid down. This public server endpoint (Admin SDK, no App Check) fills the
+   grid regardless; the live Firestore listener still layers real-time updates on top
+   when its token is valid. Whichever source answers first wins — _homeMergeFirestore is
+   idempotent (sets __sokoniCatalogueRead + clears the watchdog). */
+function _fetchCatalogueFallback() {
+    try {
+        fetch('/api/catalogue?limit=200', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (j && j.ok && Array.isArray(j.products) && j.products.length && !window.__sokoniCatalogueRead) {
+                    _catalogueTelemetry('http-fallback-ok', { count: j.products.length });
+                    if (typeof window._homeMergeFirestore === 'function') window._homeMergeFirestore(j.products);
+                }
+            })
+            .catch(function () {});
+    } catch (e) {}
+}
+
 function _armCatalogueWatchdog(container, ms) {
     if (_catalogueWatchdog) clearTimeout(_catalogueWatchdog);
+    /* 20s (was 12s): the listener waits up to 12s for the App Check token, then the hardened
+       retry does up to 5 attempts with backoff + a forced token refresh. 12s fired while
+       those retries were still in flight, showing the error over a load that was about to
+       succeed. Still bounded — a genuine outage surfaces, just not prematurely. */
     _catalogueWatchdog = setTimeout(function () {
         if (window.__sokoniCatalogueRead) return;              /* a read landed; nothing to do */
         if (Array.isArray(products) && products.length > 0) return;
-        _catalogueTelemetry('load-failed', { timeoutMs: ms || 12000 });
+        _catalogueTelemetry('load-failed', { timeoutMs: ms || 20000 });
         _renderCatalogueError(container);
-    }, ms || 12000);
+    }, ms || 20000);
 }
 
 /* Hardcoded fallback — shown whenever localStorage has no products.
@@ -391,12 +444,13 @@ function loadProducts(){
     if(products.length === 0){
         _renderCatalogueLoading(container);
         _armCatalogueWatchdog(container);
+        _fetchCatalogueFallback();      /* App-Check-independent server feed */
         return;
     }
 
     /* Update trending count badge */
     const trendCountEl = document.getElementById("pTrendCount");
-    if(trendCountEl) trendCountEl.textContent = products.length + "+ products";
+    if(trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
     /* DISPLAY — home page shows up to 20 trending cards */
     displayProducts(products.slice(0, 20));
@@ -705,7 +759,11 @@ function buildProductCard(product, size = "normal"){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
     const kebs     = kebsBadge(product);
-    const img      = product.image
+    /* pick() resolves the canonical field first (prefers imageStorageUrls[0] — a
+       product can have image:'' with the real URL only there after base64-strip),
+       then the legacy chain as a fallback for anything it doesn't cover. */
+    const img      = (window.pickProductImage && pickProductImage(product))
+                   || product.image
                    || product.imageUrl
                    || product.imageURL
                    || (Array.isArray(product.images) && product.images[0] && (product.images[0].url || product.images[0]))
@@ -813,6 +871,7 @@ function buildProductCard(product, size = "normal"){
             <span class="pcard-ov-price">KES ${price}</span>
             ${rating ? `<span class="pcard-ov-stars">${ratingStarsHtml(rating.avg)} <span class="pcard-ov-rcount">${rating.count}</span></span>` : ''}
         </div>
+        ${product.sellerName ? `<span class="pcard-ov-seller">🏪 ${_escHtml(String(product.sellerName).slice(0, 24))}</span>` : ''}
     </div>`;
 
     const _soldCnt  = Number(product.soldCount  || 0);
@@ -1577,11 +1636,80 @@ function displayFeaturedShops(){
         </div>`;
 }
 
+/* ── Deferred construction (Sprint 2, Experiment 1) ──────────────────────────
+   Measured 2026-08-01: this grid builds 1196 DOM nodes in a single call at
+   ~10.7s, and the section sits 6522px down a 12903px page — roughly 7.6
+   viewports below the fold. In a session where the user does not scroll, all
+   1196 nodes are constructed and never seen; 97.1% of the homepage's total DOM
+   falls into that category.
+
+   Building fewer nodes during the load window means less style and layout work
+   for any subsequent reader to flush — the mechanism that made `_measure` look
+   expensive without being its cause.
+
+   Behaviour is preserved exactly: the same markup, the same delegated listener,
+   the same 20 newest products. Only the TIMING changes.
+
+     • A zero-height sentinel holds the section's place in the flow, because a
+       `display:none` section has no box for IntersectionObserver to watch.
+     • `rootMargin` builds one viewport early, so a scrolling user never meets an
+       empty gap.
+     • An idle fallback builds it anyway after the page settles, so in-page
+       search, anchors and non-scrolling sessions still get the content.
+     • No IntersectionObserver (very old Safari) → build immediately, exactly as
+       before.
+
+   CLS risk is low by construction: the section is already `display:none` until
+   built, and at 6522px both it and everything it displaces are off-screen, so
+   the reveal produces no visible shift either way. */
 function displayNewArrivals(){
     const section = document.getElementById("newArrivalsSection");
     const grid    = document.getElementById("newArrivalsGrid");
     if(!grid || !section) return;
+    if(section.dataset.skDeferState) return;   /* already built or scheduled */
 
+    function _buildNewArrivals(){
+        if(section.dataset.skDeferState === 'built') return;
+        section.dataset.skDeferState = 'built';
+        _renderNewArrivals(section, grid);
+    }
+
+    if(!('IntersectionObserver' in window) || !section.parentNode){
+        section.dataset.skDeferState = 'built';
+        _renderNewArrivals(section, grid);
+        return;
+    }
+
+    section.dataset.skDeferState = 'pending';
+
+    const sentinel = document.createElement('div');
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.cssText = 'height:1px;width:100%;pointer-events:none;';
+    section.parentNode.insertBefore(sentinel, section);
+
+    const io = new IntersectionObserver(function(entries){
+        if(!entries.some(e => e.isIntersecting)) return;
+        io.disconnect();
+        if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
+        _buildNewArrivals();
+    }, { rootMargin: '800px 0px' });
+    io.observe(sentinel);
+
+    /* Idle fallback — a session that never scrolls still gets the content, just
+       outside the load window. requestIdleCallback is absent on older Safari,
+       which is a large share of the traffic this helps, so the timeout is
+       load-bearing rather than decorative. */
+    const idle = function(){
+        if(section.dataset.skDeferState === 'built') return;
+        io.disconnect();
+        if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
+        _buildNewArrivals();
+    };
+    if(typeof requestIdleCallback === 'function') requestIdleCallback(idle, { timeout: 8000 });
+    else setTimeout(idle, 6000);
+}
+
+function _renderNewArrivals(section, grid){
     const newest = [...products].sort((a,b) => {
         const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
         const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
@@ -1617,7 +1745,7 @@ function displayRecommendedProducts(){
                   style="display:inline-flex;align-items:center;gap:7px;padding:11px 24px;
                          background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);
                          border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">
-                 ✨ See All ${products.length}+ Products →
+                 ✨ See All ${window.__sokoniProductCount || products.length}+ Products →
                </a>
              </div>` : "");
 
@@ -1625,7 +1753,7 @@ function displayRecommendedProducts(){
     const statsSection = document.getElementById("marketplaceStats");
     if(statsSection) statsSection.style.display = "flex";
     const countEl = document.getElementById("statProductCount");
-    if(countEl) countEl.textContent = Math.max(products.length, 500) + "+";
+    if(countEl) countEl.textContent = Math.max(window.__sokoniProductCount || products.length, 500) + "+";
     const sellerEl = document.getElementById("statSellerCount");
     if(sellerEl){
         const sellers = new Set(products.map(p=>p.sellerEmail||p.sellerName)).size;
@@ -3062,12 +3190,22 @@ function loadStoriesSection(){
     try { saved = JSON.parse(localStorage.getItem("sokoniStories")) || []; } catch(e){}
     const realActive = saved.filter(s => s.expiresAt > now);
 
-    /* Merge: real stories first, then demo premium ones (no duplicates by id) */
+    /* Demo premium stories are dev-only — real users must never be shown
+       fabricated "premium seller" promos (Kaspa Prints, TechNairobi, …). Gate
+       behind the same _demoAllowed opt-in used for FALLBACK_PRODUCTS. */
+    const _demoAllowed = (function () {
+        try { if (localStorage.getItem('sokoniDemoData') === 'true') return true; } catch (e) {}
+        return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    })();
+
+    /* Merge: real stories first, then demo premium ones ONLY in dev (no dup ids) */
     const realIds = new Set(realActive.map(s=>s.id));
-    const combined = [...realActive, ...DEMO_PREMIUM_STORIES.filter(d => !realIds.has(d.id))];
+    const combined = [...realActive, ...(_demoAllowed ? DEMO_PREMIUM_STORIES.filter(d => !realIds.has(d.id)) : [])];
     _activeStories = combined;
 
-    /* Always show the stories section */
+    /* Honest empty state: with no real stories (and no dev demo), hide the ring
+       entirely rather than showing fabricated promos. */
+    if(!combined.length){ if(section) section.style.display = "none"; return; }
     if(section) section.style.display = "block";
 
     /* Logged-in user check */
@@ -4238,12 +4376,55 @@ window._homeMergeFirestore = function (fsProducts) {
     );
     products = [...fsProducts, ...localOnly];
 
-    try { localStorage.setItem("sellerProducts", JSON.stringify(products)); } catch (e) {}
+    /* Warm-start cache only — persist a bounded slice, never the whole catalogue.
+       This ran on EVERY snapshot and serialized the entire products array (some
+       docs still hold base64 image blobs), a repeated multi-MB main-thread
+       allocation and a localStorage-quota bomb that fed the mobile renderer OOM.
+       The first ~60 newest give an instant warm paint; the live listener refills
+       the rest. Bounded query (sokoni-db.js) already caps `products`, this caps
+       what we write. */
+    /* Strip base64 image blobs from the warm-cache slice: renderProductImage
+       rejects data: URIs to a placeholder anyway (sokoni-image.js), so keeping
+       them costs megabytes of localStorage (→ QuotaExceededError, warm cache
+       silently lost) for zero visual gain. Storage/HTTP URLs are small strings
+       and kept. This keeps the payload comfortably below quota. */
+    try {
+        var _isData = function (v) { return typeof v === 'string' && v.slice(0, 5) === 'data:'; };
+        var _warm = products.slice(0, 60).map(function (p) {
+            if (!p || typeof p !== 'object') return p;
+            var hasBlob = _isData(p.image) || (Array.isArray(p.images) && p.images.some(_isData));
+            if (!hasBlob) return p;
+            var c = Object.assign({}, p);
+            if (_isData(c.image)) delete c.image;
+            if (Array.isArray(c.images)) c.images = c.images.filter(function (u) { return !_isData(u); });
+            return c;
+        });
+        localStorage.setItem("sellerProducts", JSON.stringify(_warm));
+    } catch (e) {}
 
     const trendCountEl = document.getElementById("pTrendCount");
-    if (trendCountEl) trendCountEl.textContent = products.length + "+ products";
+    if (trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
     displayProducts(products.slice(0, 20));
     if (typeof displayNewArrivals === "function") displayNewArrivals();
     if (typeof displayRecommendedProducts === "function") displayRecommendedProducts();
+
+    /* Home listener is bounded to 200, so products.length under-reports the real
+       catalogue. Fetch the true total ONCE (cheap server count aggregate, no docs
+       read), at idle so it never blocks paint, then correct the visible labels.
+       Fail-safe: on any error the labels keep the in-memory fallback. */
+    if (!window.__sokoniProductCountFetched && window.SokoniDB && typeof SokoniDB.countProducts === "function") {
+        window.__sokoniProductCountFetched = true;
+        var _schedule = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
+        _schedule(function () {
+            SokoniDB.countProducts().then(function (n) {
+                if (!n || n < 1) return;
+                window.__sokoniProductCount = n;
+                var t1 = document.getElementById("pTrendCount");
+                if (t1) t1.textContent = n + "+ products";
+                var t2 = document.getElementById("statProductCount");
+                if (t2) t2.textContent = Math.max(n, 500) + "+";
+            }).catch(function () {});
+        });
+    }
 };

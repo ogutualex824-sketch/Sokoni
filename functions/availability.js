@@ -10,6 +10,7 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const rc = require("./reservation-core");   /* canonical overlap + active-status set (matches the booking gate) */
 
 const db = admin.firestore();
 
@@ -54,6 +55,30 @@ function _mins(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
+
+/** Pure bookability decision for ONE candidate slot — the single place that decides
+ *  whether a generated slot is offerable, so displayed availability and the booking
+ *  gate (_prepareSlot) can never drift. Returns null when bookable, else the blocking
+ *  reason. Precedence is most-definitive-first: an already-taken slot reads as `booked`
+ *  even if it is also in the past. `bookedStartTimes` is the legacy reserveSlot set;
+ *  `activeBookings` are canonical providerBookings (incl. pending HOLDS) checked by
+ *  true buffered interval overlap. */
+function computeSlotReason(o) {
+  const startMins = o.startMins, endMins = o.endMins;
+  const isBooked =
+    (o.bookedStartTimes && o.bookedStartTimes.has(o.startT)) ||
+    (o.activeBookings || []).some((b) =>
+      rc.pairOverlaps(o.slotStartMs, o.slotEndMs, Number(b.startTs), Number(b.endTs), o.bufMs, o.bufMs));
+  if (isBooked) return "booked";
+  if (o.slotStartMs < o.nowMs) return "past";                                   /* unconditional now-floor */
+  const onBreak = (o.breaks || []).some((b) =>
+    b && b.start && b.end && startMins < _mins(b.end) && endMins > _mins(b.start));
+  if (onBreak) return "break";
+  if (o.slotStartMs < o.earliestBookableMs && !o.allowSameDay) return "too_soon";
+  if (o.slotStartMs > o.horizonMs) return "beyond_horizon";
+  return null;
+}
+exports._computeSlotReason = computeSlotReason;   /* pure — unit-tested in test-availability-slots.js */
 
 /**
  * Return current Nairobi time context.
@@ -222,32 +247,23 @@ function _clamp(v, min, max, def) {
   return Math.max(min, Math.min(max, n));
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   CF 1 — setProviderAvailability
-   Save the provider's complete availability configuration.
-   Writes to providerAvailability/{uid} and denormalises into availabilityStatus/{uid}.
-══════════════════════════════════════════════════════════════════════════ */
-exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const uid = request.auth.uid;
-  const d = request.data;
-
-  // Allow admins to configure any provider
-  const targetUid = request.auth.token?.admin && d.providerId ? d.providerId : uid;
-
-  /* Validate modes */
+/* ── CANONICAL availability normalization pipeline ───────────────────────────
+   THE single normalization/validation implementation for provider availability.
+   Every persisted availability configuration passes through here before storage —
+   the rich editor (setProviderAvailability) directly, and the onboarding wizard
+   via an input adapter (D2b) — so there is ONE canonical schema and ONE validator
+   regardless of which UI produced the input. Governance invariant (D2):
+   "Every persisted availability configuration reaches this pipeline before storage."
+   Pure of I/O; the caller writes the returned config + status doc. */
+function normalizeAvailabilityConfig(d, targetUid) {
+  d = d || {};
   const modes = (Array.isArray(d.modes) ? d.modes : [d.mode]).filter((m) => VALID_MODES.has(m));
   if (modes.length === 0) {
     throw new HttpsError("invalid-argument", "At least one valid availability mode is required.");
   }
-
-  /* Validate hubType */
-  const hubType = VALID_HUB_TYPES.has(d.hubType) ? d.hubType : "general";
-
-  /* Parse & sanitise schedule */
+  const hubType  = VALID_HUB_TYPES.has(d.hubType) ? d.hubType : "general";
   const schedule = _sanitiseSchedule(d.schedule);
 
-  /* Appointment settings */
   const appt = {
     enabled:         Boolean(d.appt?.enabled),
     durationMins:    _clamp(d.appt?.durationMins,  5,  480, 30),
@@ -259,20 +275,20 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     allowAfterHours: Boolean(d.appt?.allowAfterHours),
   };
 
-  /* Capacity */
+  /* Capacity — accept the canonical `maxSimultaneous` OR the legacy client key
+     `maxSim` (fixes the round-trip bug where the editor saved one and read the other). */
+  const _maxSim = d.cap?.maxSimultaneous != null ? d.cap.maxSimultaneous : d.cap?.maxSim;
   const cap = {
     maxPerDay:       d.cap?.maxPerDay  != null ? _clamp(d.cap.maxPerDay,  1, 9999, null) : null,
     maxPerWeek:      d.cap?.maxPerWeek != null ? _clamp(d.cap.maxPerWeek, 1, 9999, null) : null,
-    maxSimultaneous: d.cap?.maxSim     != null ? _clamp(d.cap.maxSim,     1,  100, null) : null,
+    maxSimultaneous: _maxSim != null ? _clamp(_maxSim, 1, 100, null) : null,
     todayCount:      0,
     todayDate:       _nairobiNow().date,
   };
 
-  /* Vacation */
   const vacationActive = Boolean(d.vacation?.active);
   const now = _nairobiNow();
-
-  const config = {
+  return {
     uid:                targetUid,
     hubType,
     businessName:       String(d.businessName || "").slice(0, 120),
@@ -300,6 +316,24 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+}
+exports.normalizeAvailabilityConfig = normalizeAvailabilityConfig;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 1 — setProviderAvailability
+   Save the provider's complete availability configuration.
+   Writes to providerAvailability/{uid} and denormalises into availabilityStatus/{uid}.
+══════════════════════════════════════════════════════════════════════════ */
+exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid = request.auth.uid;
+  const d = request.data;
+
+  // Allow admins to configure any provider
+  const targetUid = request.auth.token?.admin && d.providerId ? d.providerId : uid;
+
+  /* ONE canonical normalization pipeline (shared with the onboarding adapter, D2b). */
+  const config = normalizeAvailabilityConfig(d, targetUid);
 
   const batch = db.batch();
   const configRef = db.collection("providerAvailability").doc(targetUid);
@@ -310,6 +344,16 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     { merge: false },
   );
   await batch.commit();
+
+  /* Availability-convergence telemetry (D2): count canonical-pipeline saves so the
+     deprecated blind-merge writer's retirement can be gated on observed usage
+     (mirrors the settlement monitor's approach). Best-effort — never fails a save. */
+  try {
+    await db.collection("systemHealth").doc("availabilityConvergence").set(
+      { canonicalWrites: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true });
+  } catch (_) { /* metric must not break the save */ }
 
   return { success: true, isOpen: _computeIsOpen(config) };
 });
@@ -362,21 +406,74 @@ exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (req
    that allow range queries on the document ID itself.
 ══════════════════════════════════════════════════════════════════════════ */
 exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlots = async (request) => {
-  const { providerId, startDate, days = 7 } = request.data;
+  const { providerId, startDate, days = 7, serviceId } = request.data;
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
 
-  const configSnap = await db.collection("providerAvailability").doc(providerId).get();
-  if (!configSnap.exists) {
-    throw new HttpsError("not-found", "Provider has not configured availability.");
+  /* Slot duration MUST match what booking validation (_prepareSlot) will use, or a displayed slot can
+     be rejected as "outside working hours". When a serviceId is given, generate slots at the SERVICE's
+     duration (the same value bookingCreateService validates against) — one availability authority. */
+  let _serviceDur = 0;
+  if (serviceId) {
+    try {
+      const svcSnap = await db.collection("providerServices").doc(String(serviceId)).get();
+      if (svcSnap.exists) {
+        const svc = svcSnap.data();
+        _serviceDur = Math.max(0, Math.round(Number((svc.pricing && svc.pricing.durationMins) || svc.durationMins) || 0));
+      }
+    } catch (e) { console.warn("[getAvailabilitySlots] service duration lookup failed", { serviceId, message: e && e.message }); }
   }
-  const cfg = configSnap.data();
 
-  // Enforce minNoticeHours — earliest bookable time
+  /* ── Canonical availability, with convergence fallback so an approved provider is NEVER
+     permanently unbookable. A default (Mon–Fri 09:00–17:00, appointments enabled) is applied —
+     and PERSISTED once — when the doc is missing or effectively unconfigured (empty schedule /
+     appointments not enabled). This is the one availability authority; no parallel source. ── */
+  const DEFAULT_SCHEDULE = {
+    monday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    tuesday:   { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    wednesday: { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    thursday:  { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    friday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    saturday:  { closed: true, periods: [], breaks: [] },
+    sunday:    { closed: true, periods: [], breaks: [] },
+  };
+  const DEFAULT_APPT = { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, minNoticeHours: 1, allowSameDay: false, maxDaysAhead: 30 };
+
+  const configSnap = await db.collection("providerAvailability").doc(providerId).get();
+  let cfg = configSnap.exists ? configSnap.data() : {};
+  const _anyOpen = cfg.schedule && Object.keys(cfg.schedule).some(function (k) {
+    return cfg.schedule[k] && !cfg.schedule[k].closed && (cfg.schedule[k].periods || []).length > 0;
+  });
+  const _apptOk = cfg.appt && cfg.appt.enabled === true && Number(cfg.appt.durationMins) > 0;
+  const _unconfigured = !configSnap.exists || !_anyOpen || !_apptOk;
+  if (_unconfigured) {
+    if (!_anyOpen) cfg.schedule = DEFAULT_SCHEDULE;
+    cfg.appt = Object.assign({}, DEFAULT_APPT, cfg.appt || {});
+    if (cfg.appt.enabled == null) cfg.appt.enabled = true;
+    if (!(Number(cfg.appt.durationMins) > 0)) cfg.appt.durationMins = DEFAULT_APPT.durationMins;
+    /* One-time backfill so the manager shows it + the config is canonical. Non-fatal on failure. */
+    try {
+      await db.collection("providerAvailability").doc(providerId).set({
+        schedule: cfg.schedule, appt: cfg.appt, modes: cfg.modes || ["fixed_hours"], uid: providerId,
+        autoConfiguredAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      console.info("[getAvailabilitySlots] auto-configured default availability", { providerId, existed: configSnap.exists });
+    } catch (e) { console.warn("[getAvailabilitySlots] default backfill failed", { providerId, code: e && e.code, message: e && e.message }); }
+  }
+
+  // Booking-window bounds (all authoritative, all enforced per slot below):
+  //  · nowMs        — wall clock; a slot in the past is NEVER bookable (independent of allowSameDay).
+  //  · minNoticeMs  — lead time; earliestBookable = now + notice (same-day still governs whether today is allowed).
+  //  · horizonMs    — max advance; a slot beyond now + maxDaysAhead is not bookable.
+  //  · bufMs        — provider buffer/travel, applied to booking-overlap exactly as the booking gate does.
+  const nowMs = Date.now();
   const minNoticeMs = (cfg.appt?.minNoticeHours || 1) * 3_600_000;
-  const earliestBookable = new Date(Date.now() + minNoticeMs);
+  const earliestBookableMs = nowMs + minNoticeMs;
+  const maxAheadDays = Math.max(1, Number(cfg.appt?.maxDaysAhead) || 30);
+  const horizonMs = nowMs + maxAheadDays * 86_400_000;
+  const bufMs = ((cfg.appt?.bufferMins || 0) + (cfg.appt?.travelMins || 0)) * 60_000;
 
   const safeStart = startDate || _nairobiNow().date;
-  const numDays   = Math.max(1, Math.min(30, Number(days) || 7));
+  const numDays   = Math.max(1, Math.min(30, maxAheadDays, Number(days) || 7));
 
   const DOW_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const results = [];
@@ -392,20 +489,25 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
       .collection("overrides").doc(dateStr).get();
 
     let periods  = [];
+    let breaks   = [];
     let dayClosed = false;
 
     if (overSnap.exists) {
       const ov = overSnap.data();
       dayClosed = Boolean(ov.closed);
       periods   = dayClosed ? [] : (ov.periods || []);
+      breaks    = dayClosed ? [] : (ov.breaks  || []);
     } else {
       const day = cfg.schedule?.[dow];
       dayClosed = !day || day.closed;
       periods   = dayClosed ? [] : (day.periods || []);
+      breaks    = dayClosed ? [] : (day.breaks  || []);
     }
 
-    if (dayClosed || !cfg.appt?.enabled || periods.length === 0) {
-      results.push({ date: dateStr, available: false, closedReason: dayClosed ? "closed" : "no_slots", slots: [] });
+    const _rej = dayClosed ? "closed" : (!cfg.appt?.enabled ? "appointments_disabled" : (periods.length === 0 ? "no_periods" : null));
+    if (_rej) {
+      console.info("[getAvailabilitySlots] day unavailable", { providerId, date: dateStr, dow, reason: _rej });
+      results.push({ date: dateStr, available: false, closedReason: _rej, slots: [] });
       continue;
     }
 
@@ -425,8 +527,29 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
         .map((d) => d.data().startTime),
     );
 
+    /* Canonical service-booking holds. bookingCreateService (the path the customer UI
+       uses) writes providerBookings + slotLocks, NOT the legacy `bookings` sub-collection
+       read above (that is reserveSlot's store). Read the ACTIVE providerBookings for this
+       date — status pending is a live pre-payment HOLD, so it hides the slot too — and
+       union by true interval overlap (same buffer as the booking gate) so DISPLAYED
+       availability matches BOOKABLE availability regardless of which path reserved it.
+       Reuses the providerId+date+status index bookingCreateService already runs. */
+    let activeBookings = [];
+    try {
+      const pbSnap = await db.collection("providerBookings")
+        .where("providerId", "==", providerId)
+        .where("date", "==", dateStr)
+        .where("status", "in", rc.ACTIVE_STATUSES)
+        .get();
+      activeBookings = pbSnap.docs
+        .map((d) => d.data())
+        .filter((b) => Number(b.startTs) > 0 && Number(b.endTs) > 0);
+    } catch (e) {
+      console.warn("[getAvailabilitySlots] providerBookings read failed", { providerId, date: dateStr, message: e && e.message });
+    }
+
     /* ── Generate slots ── */
-    const dur  = cfg.appt.durationMins;
+    const dur  = _serviceDur > 0 ? _serviceDur : cfg.appt.durationMins;   /* service duration when known → matches _prepareSlot */
     const buf  = cfg.appt.bufferMins + cfg.appt.travelMins;
     const step = dur + buf;
     const daySlots = [];
@@ -439,22 +562,39 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
         const mm  = String(cur % 60).padStart(2, "0");
         const startT = `${hh}:${mm}`;
         const endC   = cur + dur;
-        const endT   = `${String(Math.floor(endC / 60)).padStart(2, "0")}:${String(endC % 60).padStart(2, "0")}`;
+        const endMm  = endC % 60;
+        const endT   = `${String(Math.floor(endC / 60)).padStart(2, "0")}:${String(endMm).padStart(2, "0")}`;
 
-        // Enforce minimum notice
-        const slotDatetime = new Date(`${dateStr}T${startT}:00+03:00`);
-        const tooSoon      = slotDatetime < earliestBookable && !cfg.appt.allowSameDay;
+        const slotStartMs = new Date(`${dateStr}T${startT}:00+03:00`).getTime();
+        const slotEndMs   = new Date(`${dateStr}T${endT}:00+03:00`).getTime();
+
+        /* One authoritative bookability decision (pure, unit-tested) so DISPLAYED and
+           BOOKABLE availability can never disagree. */
+        const reason = computeSlotReason({
+          startT, startMins: cur, endMins: endC, slotStartMs, slotEndMs,
+          nowMs, earliestBookableMs, horizonMs, allowSameDay: cfg.appt.allowSameDay,
+          breaks, activeBookings, bufMs, bookedStartTimes: bookedTimes,
+        });
+        const bookable = reason === null;
 
         daySlots.push({
           startTime: startT,
           endTime:   endT,
-          available: !bookedTimes.has(startT) && !tooSoon,
-          booked:    bookedTimes.has(startT),
+          status:    bookable ? "available" : "blocked",   /* self-describing for client/admin/debug tools */
+          bookable,
+          reason,                                           /* null when bookable; else why it is blocked */
+          available: bookable,                              /* back-compat: existing client filters on this */
+          booked:    reason === "booked",
         });
         cur += step;
       }
     }
 
+    const _availCount = daySlots.filter((s) => s.available).length;
+    if (!_availCount && daySlots.length) {
+      const _booked = daySlots.filter((s) => s.booked).length;
+      console.info("[getAvailabilitySlots] day generated but no open slots", { providerId, date: dateStr, total: daySlots.length, booked: _booked, tooSoon: daySlots.length - _booked });
+    }
     results.push({
       date:      dateStr,
       available: daySlots.some((s) => s.available),

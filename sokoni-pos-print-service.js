@@ -311,9 +311,13 @@ class PrintQueue {
     this._save(q);
   }
 
+  /* Retention: drop only OLD, finished jobs (done/failed). Unfinished work
+     (pending) is NEVER auto-removed — a queued receipt must not silently vanish. */
   purgeOld (daysOld = 7) {
     const cutoff = Date.now() - daysOld * 86400000;
-    const q = this._load().filter(j => new Date(j.queuedAt).getTime() > cutoff);
+    const q = this._load().filter(j =>
+      j.status === 'pending' ||                                 /* keep all unfinished */
+      new Date(j.queuedAt).getTime() > cutoff);                 /* keep recent finished */
     this._save(q);
   }
 }
@@ -427,26 +431,12 @@ class PrintHealth {
   stop () { clearInterval(this._timer); this._timer = null; }
 
   async _check () {
-    const pm  = window.PrinterManager;
-    const sp  = window.SokoniPrinter;
-    const was = this._status;
-
-    const connected = !!(pm?.connected || sp?.connected);
-    const queueLen  = pm ? pm.getQueue()?.length || 0 : 0;
-
-    this._status = connected ? 'connected' : 'disconnected';
-    const health = {
-      connected,
-      status:        this._status,
-      transport:     pm?._activeTransport || 'none',
-      profile:       pm?.profile,
-      queueLength:   queueLen,
-      lastPrint:     this._lastPrint,
-      errorRate:     pm?.stats?.get?.()?.errors ?? 0,
-    };
-
-    _updateHeaderWidget(health);
-    if (was !== this._status) this._listeners.forEach(fn => { try { fn(health); } catch(_) {} });
+    /* Not a competing status calc: nudge the ONE canonical state to reconcile with the
+       transport truth (safety net for any BLE/transport event that was missed), then let
+       the state machine's subscribers (chip + status text) re-render. */
+    try { _printerState.reconcile(); } catch (_) {}
+    this._status = _printerState.get();   /* mirror for back-compat getStatus() */
+    try { _updateHeaderWidget(); } catch (_) {}
   }
 
   on (fn)      { this._listeners.push(fn); return this; }
@@ -454,6 +444,110 @@ class PrintHealth {
   getStatus () { return this._status; }
   markPrinted (id) { this._lastPrint = { id, at: new Date().toISOString() }; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CANONICAL PRINTER STATE — the SINGLE source of truth for printer state.
+   Event-driven (no polling): derived from PrinterManager transport events, the
+   printReceipt lifecycle, and browser online/offline. Every status surface
+   (the header light, diagnostics, future settings) subscribes HERE — there is no
+   other status calculation. Emits only on change.
+═══════════════════════════════════════════════════════════════════ */
+const PRINTER_STATES = {
+  disconnected: { icon: '○',   text: 'No printer' },
+  searching:    { icon: '🔍',  text: 'Searching…' },
+  connecting:   { icon: '…',   text: 'Connecting…' },
+  connected:    { icon: '✅',  text: 'Connected' },
+  printing:     { icon: '🖨️',  text: 'Printing…' },
+  retrying:     { icon: '↻',   text: 'Reconnecting…' },
+  offline:      { icon: '📴',  text: 'Offline — queued' },
+};
+
+/* When embedded in the Merchant Shell, the shell broadcasts its printer state down here so
+   every POS status surface mirrors the ONE shell-owned connection. */
+let _shellPrinterState = null;
+if (typeof window !== 'undefined') {
+  window.__sokoniApplyShellPrinter = function (st) {
+    _shellPrinterState = st || null;
+    try { _printerState.reconcile(); } catch (_) {}
+  };
+}
+
+class PrinterStateMachine {
+  constructor () { this._state = 'disconnected'; this._meta = {}; this._subs = []; this._wired = false; }
+
+  get ()   { return this._state; }
+  meta ()  { const d = PRINTER_STATES[this._state] || PRINTER_STATES.disconnected; return { state: this._state, icon: d.icon, text: d.text, ...this._meta }; }
+
+  /* subscribe returns an unsubscribe fn and fires once with the current state. */
+  subscribe (fn) {
+    if (typeof fn !== 'function') return () => {};
+    this._subs.push(fn);
+    try { fn(this.meta()); } catch (_) {}
+    return () => { this._subs = this._subs.filter(f => f !== fn); };
+  }
+
+  set (stateKey, meta) {
+    const next = PRINTER_STATES[stateKey] ? stateKey : 'disconnected';
+    const changed = next !== this._state || (meta && meta.name && meta.name !== this._meta.name);
+    this._state = next;
+    this._meta  = meta || {};
+    if (changed) { const m = this.meta(); this._subs.forEach(fn => { try { fn(m); } catch (_) {} }); }
+  }
+
+  /* Resting state from the transport truth — used on wire + as a reconciliation nudge. */
+  reconcile () {
+    /* In the Merchant Shell the SHELL owns the printer; this POS is a client. Mirror the shell's
+       broadcast state instead of the (intentionally disconnected) local engine, so the POS
+       Settings/header/peripheral status all show the ONE real connection. */
+    if (_shellPrinterState) {
+      if (this._state !== 'printing') this.set(_shellPrinterState.connected ? 'connected' : 'disconnected', { name: _shellPrinterState.name });
+      return;
+    }
+    const pm = window.PrinterManager, sp = window.SokoniPrinter;
+    const connected = !!(pm && pm.connected) || !!(sp && sp.connected);
+    if (connected) { if (this._state !== 'printing') this.set('connected', { name: (pm && pm.profile && pm.profile.model) || undefined }); return; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.set('offline'); return; }
+    if (this._state !== 'retrying') this.set('disconnected');
+  }
+
+  /* Attach to printer transport events + browser connectivity. Idempotent.
+     Subscribes to BOTH the engine (window.SokoniPrinter — where connect() actually fires
+     'connected') AND the PrinterManager wrapper. Earlier this only wired PrinterManager;
+     since the in-POS dropdown connects via SokoniPrinter, the wrapper never forwarded the
+     event and the header chip stayed grey ("doesn't turn connected") even on success. */
+  wire () {
+    if (this._wired) return; this._wired = true;
+    const sources = [window.SokoniPrinter, window.PrinterManager].filter(
+      (p, i, a) => p && typeof p.on === 'function' && a.indexOf(p) === i
+    );
+    for (const pm of sources) {
+      pm.on('connected',         d  => this.set('connected', { name: d && (d.name || d.model) }));
+      pm.on('disconnected',      () => this.reconcile());
+      pm.on('printed',           () => { if (this._state === 'printing') this.set('connected', this._meta); });
+      pm.on('error',             () => { if (this._state !== 'retrying') this.reconcile(); });
+      pm.on('p58e:connected',        d  => this.set('connected', { name: d && d.name }));
+      pm.on('p58e:disconnected',     () => this.reconcile());
+      pm.on('p58e:reconnecting',     () => this.set('retrying'));
+      pm.on('p58e:reconnect_failed', () => this.set('disconnected'));
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online',  () => this.reconcile());
+      window.addEventListener('offline', () => this.set('offline'));
+    }
+    this.reconcile();
+  }
+
+  /* Fed by the printReceipt lifecycle so the light reflects an in-progress print/retry. */
+  onPrintLifecycle (state) {
+    if (state === 'sending' || state === 'printing')       this.set('printing');
+    else if (state === 'retry')                            this.set('retrying');
+    else if (state === 'queued_offline')                   this.set('offline');
+    else if (state === 'success' || state === 'fallback_success' || state === 'skipped') this.reconcile();
+  }
+}
+
+/* Module singleton — the one instance everything shares. */
+const _printerState = new PrinterStateMachine();
 
 /* ═══════════════════════════════════════════════════════════════════
    TILL PRINTER CONFIG  (per-register settings, persistent)
@@ -559,21 +653,295 @@ function _updateHeaderWidget (health) {
     chip = document.createElement('button');
     chip.id        = 'pps-printer-chip';
     chip.className = 'pos-header-btn';
-    chip.title     = 'Printer status — click to open setup';
+    chip.title     = 'Printer';
     chip.style.cssText = 'position:relative;font-size:13px;line-height:1;display:flex;align-items:center;gap:3px;';
-    chip.onclick   = () => window.open('pos-printer-setup.html', '_blank', 'width=560,height=900');
+    /* Opens the in-POS printer dropdown — connect / status / reconnect / forget / test /
+       advanced — all inside the POS. NEVER navigates to a separate page (that broke the
+       checkout flow); "Advanced options" is the only route to the full setup page. */
+    chip.onclick = (e) => { try { e.stopPropagation(); } catch (_) {} (window.openPrinterMenu ? window.openPrinterMenu(chip) : _ppsTogglePrinterMenu(chip)); };
     /* Insert before the first button (notifications bell) */
     const firstBtn = target.querySelector('button');
     if (firstBtn) target.insertBefore(chip, firstBtn);
     else target.appendChild(chip);
   }
 
-  const dot   = health.connected ? '🟢' : '⚪';
-  const queue = health.queueLength > 0 ? ` (${health.queueLength})` : '';
+  /* Render from the ONE canonical state (arg ignored — kept for call-site compat). */
+  const m  = _printerState.meta();
+  const pm = window.PrinterManager;
+  const qn = pm ? (pm.getQueue()?.length || 0) : 0;
+  const connected = m.state === 'connected' || m.state === 'printing';
+  const dot   = connected ? '🟢' : (m.state === 'retrying' ? '🟡' : (m.state === 'offline' ? '📴' : '⚪'));
+  const queue = qn > 0 ? ` (${qn})` : '';
   chip.innerHTML = dot + ' 🖨️' + queue;
-  chip.title = health.connected
-    ? `Printer connected${health.transport ? ' via ' + health.transport : ''}${queue ? ' — ' + health.queueLength + ' queued' : ''}`
-    : 'Printer not connected — click to set up';
+  chip.title = (m.name || m.text)
+    + (connected && pm && pm._activeTransport ? ' via ' + pm._activeTransport : '')
+    + (queue ? ' — ' + qn + ' queued' : '');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IN-POS PRINTER DROPDOWN  — connect/status/reconnect/forget/test/advanced,
+   all inside the POS (never a separate page). Earbuds-style: pair once → it
+   auto-reconnects every future POS open. Hides the BLE/COM/Serial/USB
+   complexity — those live under "Advanced options" (pos-printer-setup.html).
+═══════════════════════════════════════════════════════════════════ */
+function _ppsEsc (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+function _ppsBtn (id, label, kind) {
+  const styles = {
+    primary: 'flex:1;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;',
+    ghost:   'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);color:#fff;',
+    danger:  'background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;',
+  };
+  return '<button id="' + id + '" style="' + (styles[kind] || styles.ghost) +
+    'padding:11px 13px;border-radius:10px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit;">' + label + '</button>';
+}
+
+function _ppsLastPrinter () {
+  try { return (JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || null; } catch (_) { return null; }
+}
+
+function _ppsCloseMenu () {
+  const p = document.getElementById('pps-printer-menu');
+  if (p) { p.remove(); document.removeEventListener('pointerdown', _ppsMenuOutside, true); }
+}
+function _ppsMenuOutside (e) {
+  const panel = document.getElementById('pps-printer-menu');
+  const chip  = document.getElementById('pps-printer-chip');
+  if (panel && !panel.contains(e.target) && !(chip && chip.contains(e.target))) _ppsCloseMenu();
+}
+
+function _ppsTogglePrinterMenu (anchor) {
+  if (document.getElementById('pps-printer-menu')) { _ppsCloseMenu(); return; }
+  const panel = document.createElement('div');
+  panel.id = 'pps-printer-menu';
+  panel.style.cssText = [
+    'position:fixed', 'z-index:100000', 'width:270px', 'background:#0d0d0d',
+    'border:1px solid rgba(113,255,0,0.18)', 'border-radius:14px',
+    'box-shadow:0 14px 46px rgba(0,0,0,0.65)', 'padding:14px', 'font-family:inherit', 'color:#fff',
+  ].join(';');
+  document.body.appendChild(panel);
+  /* Anchor to the element's rect when one is given (POS header chip). When opened from a
+     button with no meaningful rect (Settings row, off-screen), or no anchor at all, centre
+     the panel so it never renders off the viewport. */
+  const r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+  if (r && r.width && r.height) {
+    panel.style.top  = (r.bottom + 8) + 'px';
+    panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 282)) + 'px';
+  } else {
+    panel.style.top  = '50%';
+    panel.style.left = '50%';
+    panel.style.transform = 'translate(-50%,-50%)';
+  }
+  _ppsRenderMenu(panel);
+  setTimeout(() => document.addEventListener('pointerdown', _ppsMenuOutside, true), 0);
+}
+
+/* Canonical IN-PAGE printer opener — every ordinary printer button (POS header, Settings)
+   calls this to open the dropdown in place; NOTHING navigates to another page. Only the
+   dropdown's own "Advanced options" opens the full setup page (firmware/USB/serial). */
+if (typeof window !== 'undefined') {
+  window.openPrinterMenu = function (anchor) {
+    /* In the Merchant Shell, the shell owns the ONE printer engine and the connect gesture must
+       happen in the shell document — so route every POS printer entry to the shell's Devices
+       module instead of opening a local dropdown that would connect a SECOND engine. */
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __sokoniGoModule: 'devices' }, location.origin);
+        return;
+      }
+    } catch (_) {}
+    try { _ppsTogglePrinterMenu(anchor || document.getElementById('pps-printer-chip') || null); }
+    catch (_) {}
+  };
+}
+
+function _ppsRenderMenu (panel, override) {
+  const pm        = window.SokoniPrinter || window.PrinterManager;
+  const connected = !!(pm && pm.connected);
+  const hasBt     = !!navigator.bluetooth;
+  const last      = _ppsLastPrinter();
+  const lastName  = last && (last.name || last.type) || null;
+  const remember  = localStorage.getItem('pps_remember') !== '0';
+
+  const head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+    '<div style="font-weight:900;font-size:13px;">🖨️ Printer</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<button id="pps-diag" title="Diagnostics" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:14px;cursor:pointer;line-height:1;">🩺</button>' +
+      '<button id="pps-menu-x" title="Close" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:16px;cursor:pointer;line-height:1;">✕</button>' +
+    '</div></div>';
+
+  let body;
+  if (override) {
+    body = override;
+  } else if (connected) {
+    const st = (pm.getStatus && pm.getStatus()) || {};
+    const name = st.name || lastName || 'Printer';
+    body = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">●</span> <strong>Connected</strong></div>' +
+      '<div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px;">' + _ppsEsc(name) + '</div>' +
+      '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-test', '🧪 Test print', 'ghost') + _ppsBtn('pps-forget', 'Forget', 'danger') + '</div>';
+  } else if (!hasBt) {
+    body = '<div style="font-size:12.5px;color:rgba(255,255,255,.75);line-height:1.55;margin-bottom:12px;">Bluetooth pairing needs <strong>Chrome on Android or desktop</strong>. Receipts still print as a shareable page in this browser.</div>' +
+      _ppsBtn('pps-advanced', 'Advanced options', 'ghost');
+  } else if (lastName) {
+    /* REMEMBERED but disconnected — the day-to-day case. Lead with one prominent Reconnect
+       that tries silently and, only if the browser needs a gesture, opens the chooser. The
+       cashier NEVER has to open Advanced Settings to get printing back. */
+    body = '<div style="font-size:11.5px;color:rgba(255,255,255,.5);margin-bottom:3px;">Saved printer</div>' +
+      '<div style="font-size:13.5px;font-weight:800;color:#71ff00;margin-bottom:13px;">' + _ppsEsc(lastName) + '</div>' +
+      '<div style="display:flex;">' + _ppsBtn('pps-reconnect', '↻ Reconnect ' + _ppsEsc(lastName), 'primary') + '</div>' +
+      '<div style="font-size:11px;color:rgba(255,255,255,.4);margin:11px 0 12px;line-height:1.5;">Reconnects silently when your browser allows it; otherwise a quick chooser opens — pick ' + _ppsEsc(lastName) + ' once and you’re back.</div>' +
+      '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-forget', 'Forget', 'danger') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>';
+  } else {
+    body = '<div style="font-size:12.5px;color:rgba(255,255,255,.65);margin-bottom:12px;">No printer connected</div>' +
+      '<div style="display:flex;">' + _ppsBtn('pps-connect', '🔗 Connect Printer', 'primary') + '</div>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.6);margin:13px 0;cursor:pointer;"><input id="pps-remember" type="checkbox" ' + (remember ? 'checked' : '') + '> Remember this printer</label>' +
+      '<div style="display:flex;">' + _ppsBtn('pps-advanced', 'Advanced options', 'ghost') + '</div>';
+  }
+  panel.innerHTML = head + body;
+
+  /* On open, if a printer is remembered but not yet connected, kick a SILENT reconnect right
+     away and reflect it — so the dropdown usually shows 🟢 without any tap. Only if that
+     silent attempt fails does the cashier ever need the Reconnect button. */
+  if (!override && !connected && lastName && !panel._autoTried) {
+    panel._autoTried = true;
+    if (pm && typeof pm.autoReconnect === 'function') {
+      Promise.resolve(pm.autoReconnect()).then(ok => {
+        if ((pm.connected || ok) && document.body.contains(panel)) _ppsRenderMenu(panel);
+      }).catch(() => {});
+    }
+  }
+  _ppsWireMenu(panel);
+}
+
+function _ppsWireMenu (panel) {
+  const pm = window.SokoniPrinter || window.PrinterManager;
+  const q = id => panel.querySelector('#' + id);
+  const spin = txt => '<div style="font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;">⏳ ' + txt + '</div>';
+  if (q('pps-menu-x'))   q('pps-menu-x').onclick   = _ppsCloseMenu;
+  if (q('pps-remember')) q('pps-remember').onchange = e => localStorage.setItem('pps_remember', e.target.checked ? '1' : '0');
+  if (q('pps-advanced')) q('pps-advanced').onclick = () => { _ppsCloseMenu(); try { (window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html'); } catch (_) {} };
+  if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
+  if (q('pps-forget'))   q('pps-forget').onclick   = () => {
+    _ppsRenderMenu(panel, spin('Forgetting printer…'));
+    /* ATOMIC Forget across ALL three printer engines + every store. Each engine keeps its OWN
+       remembered-device record, so clearing only one left the printer "remembered" by another
+       (e.g. paired on the setup page via P58EPrinter → p58e_paired_device survived a dropdown
+       Forget → it kept trying to auto-reconnect). Revoke the browser grant, disconnect every
+       engine, wipe every key, and reset state to Not Connected. Next connect shows the chooser. */
+    const jobs = [];
+    try { if (window.SokoniPrinter && window.SokoniPrinter.forget) jobs.push(Promise.resolve(window.SokoniPrinter.forget()).catch(() => {})); } catch (_) {}
+    try { if (window.P58EPrinter && window.P58EPrinter.forget)     jobs.push(Promise.resolve(window.P58EPrinter.forget()).catch(() => {})); } catch (_) {}
+    try { if (window.PrinterManager && window.PrinterManager.disconnect) jobs.push(Promise.resolve(window.PrinterManager.disconnect()).catch(() => {})); } catch (_) {}
+    if (!jobs.length && pm && pm.disconnect) jobs.push(Promise.resolve(pm.disconnect()).catch(() => {}));
+    Promise.all(jobs).catch(() => {}).finally(() => {
+      ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print', 'p58e_paired_device', 'pps_remember']
+        .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+      try { _printerState.set('disconnected'); } catch (_) {}
+      _ppsRenderMenu(panel);
+    });
+  };
+  if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
+    const connectedBody = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Back online — printing is ready.</div>';
+    _ppsRenderMenu(panel, spin('Reconnecting to your printer…'));
+    /* Step 1: try SILENT reconnect (getDevices — no chooser, no gesture needed). When the
+       browser retained the grant this just works. It also returns FAST (false) when there is
+       no granted device to re-link, which keeps this click's user-gesture valid for step 2. */
+    Promise.resolve(pm && pm.autoReconnect && pm.autoReconnect())
+      .then(ok => {
+        if (pm.connected || ok) { _ppsRenderMenu(panel, connectedBody); setTimeout(_ppsCloseMenu, 1600); return; }
+        /* Step 2: silent path could not re-link (browser dropped the grant / needs a gesture).
+           We are still inside the click handler, so open the chooser — one pick and we're back.
+           This is the founder's "one-click reconnect straight from the POS" fallback; the
+           cashier never has to open Advanced Settings. */
+        return Promise.resolve(pm.discoverBy('bluetooth'))
+          .then(list => { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
+          .then(() => { _ppsRenderMenu(panel, connectedBody); setTimeout(_ppsCloseMenu, 1600); });
+      })
+      .catch(e => _ppsRenderMenu(panel, _ppsErrBody(e, true)));
+  };
+  if (q('pps-connect')) q('pps-connect').onclick = () => {
+    _ppsRenderMenu(panel, spin('Opening Bluetooth chooser…'));
+    Promise.resolve(pm && pm.discoverBy && pm.discoverBy('bluetooth'))
+      .then(list => { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
+      .then(() => { _ppsRenderMenu(panel, '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Saved — reconnects automatically next time.</div>'); setTimeout(_ppsCloseMenu, 1600); })
+      .catch(e => _ppsRenderMenu(panel, _ppsErrBody(e, false)));
+  };
+  const de = q('pps-details-toggle');
+  if (de) de.onclick = () => { const d = q('pps-details'); if (d) d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
+  if (q('pps-diag')) q('pps-diag').onclick = () => _ppsRunDiagnostics(panel);
+}
+
+/* 🩺 Live diagnostics — runs a real reconnect attempt and dumps the instrumented step trace
+   plus the running build version, Web-Bluetooth support and the saved printer, so a failure can
+   be diagnosed from the ACTUAL execution path in production (not a vague "couldn't connect").
+   Copyable so the founder can paste it back. */
+async function _ppsRunDiagnostics (panel) {
+  const pm = window.SokoniPrinter || window.PrinterManager;
+  _ppsRenderMenu(panel, '<div style="font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;">⏳ Running diagnostics…</div>');
+  let build = {};
+  try { build = (window.sokoniBuildInfo ? await window.sokoniBuildInfo() : {}) || {}; } catch (_) {}
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice || null; } catch (_) {}
+  try { pm && pm.clearTrace && pm.clearTrace(); } catch (_) {}
+  /* Trigger a live silent reconnect so the trace captures getDevices()/match/GATT for THIS device. */
+  try { if (pm && !pm.connected && pm.autoReconnect) await pm.autoReconnect(); } catch (_) {}
+  const trace = (pm && pm.getTrace) ? pm.getTrace() : (window.__skPrinterTrace || []);
+  const steps = trace.map(e => '• ' + e.step + (e.data ? ' — ' + JSON.stringify(e.data) : '')).join('\n');
+  const report =
+    'BUILD: ' + (build.runningCache || build.deployedCache || 'unknown') +
+      (build.stale ? '  ⚠️ STALE — tap Update Now in Settings' : (build.runningCache ? '  ✓ current' : '')) + '\n' +
+    'Web Bluetooth: ' + (navigator.bluetooth ? 'yes' : 'NO (needs Chrome/Edge on Android or desktop)') + '\n' +
+    'getDevices API: ' + (navigator.bluetooth && navigator.bluetooth.getDevices ? 'yes' : 'NO') + '\n' +
+    'Connected now: ' + (pm && pm.connected ? 'yes' : 'no') + '\n' +
+    'Saved printer: ' + (saved ? (saved.name || saved.id || 'unnamed') : 'none') + '\n\n' +
+    'RECONNECT TRACE:\n' + (steps || '(no steps captured)');
+  const body =
+    '<div style="font-weight:800;font-size:12px;margin-bottom:8px;">🩺 Printer Diagnostics</div>' +
+    '<pre style="white-space:pre-wrap;word-break:break-word;font-size:10.5px;line-height:1.5;color:rgba(255,255,255,.75);background:rgba(255,255,255,.04);padding:9px 10px;border-radius:8px;max-height:240px;overflow:auto;margin:0 0 10px;">' + _ppsEsc(report) + '</pre>' +
+    '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-diag-copy', '📋 Copy', 'primary') + _ppsBtn('pps-diag-back', 'Back', 'ghost') + '</div>';
+  _ppsRenderMenu(panel, body);
+  const q = id => panel.querySelector('#' + id);
+  if (q('pps-diag-copy')) q('pps-diag-copy').onclick = () => {
+    const btn = q('pps-diag-copy');
+    try { navigator.clipboard.writeText(report).then(() => { btn.textContent = '✓ Copied'; }, () => {}); } catch (_) {}
+  };
+  if (q('pps-diag-back')) q('pps-diag-back').onclick = () => _ppsRenderMenu(panel);
+}
+
+/* Turn a connect/reconnect exception into an ACTIONABLE message + a collapsible Details view
+   with the raw error (the founder asked for meaningful errors, never a swallowed generic one).
+   `remembered` picks reconnect-flavoured copy over first-connect copy. */
+function _ppsErrClassify (e) {
+  const raw = ((e && (e.detail || e.message)) || (e && e.original && e.original.message) || String(e || '')).toLowerCase();
+  if (raw.includes('no-device') || raw.includes('no device') || raw.includes('cancel') || raw.includes('notfound'))
+    return 'No printer selected — the Bluetooth chooser was dismissed.';
+  if (raw.includes('web bluetooth') || raw.includes('bluetooth is not available') || raw.includes('not supported'))
+    return 'This browser can’t pair Bluetooth printers. Use Chrome/Edge on Android or desktop (iPhone/Safari can’t).';
+  if (raw.includes('no writable') || raw.includes('no print service'))
+    return 'That device isn’t an ESC/POS printer (no writable print service). Pick your P58E / 58mm printer.';
+  if (raw.includes('saved printer') || raw.includes('getdevices') || raw.includes('unavailable'))
+    return 'Saved printer unavailable — it’s likely turned off or out of range. Power it on, then Reconnect.';
+  if (raw.includes('gatt') || raw.includes('out of range') || raw.includes('powered'))
+    return 'Bluetooth connection failed — make sure the printer is on, charged, and not paired to another device.';
+  if (raw.includes('permission') || raw.includes('security') || raw.includes('notallowed'))
+    return 'Bluetooth permission is required. Tap Allow when the browser asks.';
+  return 'Couldn’t connect. Make sure the printer is on and in range, then try again.';
+}
+function _ppsErrBody (e, remembered) {
+  const msg = _ppsErrClassify(e);
+  const raw = (e && (e.detail || e.message)) || (e && e.original && e.original.message) || String(e || 'Unknown error');
+  const name = (e && (e.name || (e.original && e.original.name))) || '';
+  const retryLabel = remembered ? '↻ Reconnect' : '🔗 Try again';
+  const retryId    = remembered ? 'pps-reconnect' : 'pps-connect';
+  /* Show the RAW error INLINE (not hidden behind a Details tap) so a screenshot of a failed
+     reconnect reveals the true cause — the classified sentence alone isn't enough to diagnose. */
+  const rawLine = (raw && raw !== 'no-device')
+    ? '<div style="font-size:10.5px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.04);padding:7px 9px;border-radius:8px;margin-bottom:9px;white-space:pre-wrap;word-break:break-word;">⚠ ' + _ppsEsc((name ? name + ': ' : '') + raw) + '</div>'
+    : '';
+  return '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:9px;line-height:1.5;">' + _ppsEsc(msg) + '</div>' +
+    rawLine +
+    '<div style="display:flex;gap:8px;">' + _ppsBtn(retryId, retryLabel, 'primary') + _ppsBtn('pps-forget', 'Forget', 'ghost') + '</div>' +
+    '<div style="font-size:10.5px;color:rgba(255,255,255,.4);margin-top:9px;">Tap 🩺 above for the full connection trace.</div>';
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -615,14 +983,105 @@ class PosPrintService {
 
     /* Auto-drain queue when printer reconnects */
     this._wireReconnect();
-    /* Start health monitor */
+    /* Canonical printer-state machine — attach to PrinterManager transport events, and
+       drive the header chip reactively from that one state (re-render on every change). */
+    _printerState.wire();
+    _printerState.subscribe(() => { try { _updateHeaderWidget(); } catch (_) {} });
+    /* Health monitor now only RECONCILES the one state + gathers queue metrics (no competing calc). */
     this.health.start(30000);
+    /* Crash recovery: resume any receipts left pending by a previous crash/reload/power loss
+       once a printer becomes available. (reconnect/focus handlers also cover this — this makes
+       recovery explicit for the "already-connected at startup" case that fires no event.) */
+    this._recoverOnStartup();
+    /* Zero-config printer auto-connect: reconnect to the previously-paired printer on every
+       POS open — no reconfiguration, like earbuds. */
+    this._autoConnectPrinter();
+  }
+
+  /* Reconnect to the last-paired printer automatically whenever the POS loads, with NO
+     configuration step. Uses PrinterManager.autoReconnect() — Bluetooth reconnect via
+     navigator.bluetooth.getDevices() needs no user gesture on Chrome 85+ (also network/
+     browser). Returns false (no-op) when nothing was ever paired, so it's safe everywhere.
+     Retries quietly in the background without blocking selling, and also fires on the first
+     user interaction for browsers that gate a GATT connect behind a gesture. */
+  _autoConnectPrinter () {
+    /* In the Merchant Shell, the SHELL owns the printer connection (one manager). This POS is a
+       hosted module and must NOT open a second connection to the same device — the shell
+       auto-reconnects and this POS routes its prints up to the shell. */
+    if (typeof window !== 'undefined' && window.parent !== window) return;
+    /* Use the ENGINE (SokoniPrinter) — it has the flat connect/autoReconnect API.
+       window.PrinterManager is a thin wrapper without autoReconnect. */
+    const pm = window.SokoniPrinter || window.PrinterManager;
+    if (!pm || typeof pm.autoReconnect !== 'function') return;
+
+    /* A printer is "remembered" once it has been paired — the engine persists its identity
+       in spp_profile.lastDevice. Chrome retains the Bluetooth permission for that device, so
+       autoReconnect() → navigator.bluetooth.getDevices() re-links WITHOUT a chooser or a user
+       gesture. That is what makes the P58E behave like a paired accessory across navigations:
+       every page load silently re-establishes the GATT link the previous document dropped. */
+    const remembered = () => {
+      try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice); }
+      catch (_) { return false; }
+    };
+
+    let inFlight = false;
+    const attempt = () => {
+      if (pm.connected || inFlight || !remembered()) return;
+      inFlight = true;
+      try {
+        Promise.resolve(pm.autoReconnect())
+          .catch(() => {})
+          .finally(() => { inFlight = false; });
+      } catch (_) { inFlight = false; }
+    };
+
+    attempt();                                             /* immediately on boot */
+
+    /* PERSISTENT heartbeat — never gives up. While disconnected but remembered, quietly retry;
+       while connected, this is a cheap no-op. This is the "every few seconds: connected? no →
+       silent reconnect" loop, and it also recovers a genuine mid-shift drop with no cashier
+       action. Backs off from 6s to 20s so a powered-off printer doesn't churn Bluetooth. */
+    let tick = 0;
+    const beat = () => {
+      tick++;
+      if (!pm.connected) attempt();
+      const next = tick < 8 ? 6000 : 20000;               /* fast for ~48s, then relaxed */
+      this._hbTimer = setTimeout(beat, next);
+    };
+    this._hbTimer = setTimeout(beat, 6000);
+
+    /* Some browsers gate a GATT connect behind a user gesture / tab focus — piggy-back those. */
+    const onWake = () => { if (!pm.connected) attempt(); };
+    try {
+      window.addEventListener('pointerdown', onWake, { passive: true });
+      window.addEventListener('focus', onWake);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) onWake(); });
+    } catch (_) {}
+  }
+
+  /* Poll briefly on boot: if there are pending jobs and a printer is (or becomes) connected,
+     drain them. Bounded — reconnect/focus handlers cover anything after this window. */
+  _recoverOnStartup () {
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (this.queue.getLength() === 0) { clearInterval(iv); return; }
+      if (_pm()?.connected || _eng()?.connected) { clearInterval(iv); this.drainQueue(); }
+      else if (tries > 20) { clearInterval(iv); }      /* ~30s; later reconnect/focus still recovers */
+    }, 1500);
   }
 
   /* ── Event system ───────────────────────────────────────────── */
   on   (ev, fn) { (this._listeners[ev] = this._listeners[ev] || []).push(fn); return this; }
   off  (ev, fn) { if (this._listeners[ev]) this._listeners[ev] = this._listeners[ev].filter(f => f !== fn); }
   _emit (ev, d) { (this._listeners[ev] || []).forEach(fn => { try { fn(d); } catch(_) {} }); }
+
+  /* ── Canonical printer state (Phase 2 — the SINGLE status source) ──
+     Every status surface subscribes here; nothing else computes printer state. */
+  onState (fn) { return _printerState.subscribe(fn); }   /* returns unsubscribe; fires once with current */
+  getState ()  { return _printerState.get(); }
+  stateMeta () { return _printerState.meta(); }
+  get state () { return _printerState; }
 
   _wireReconnect () {
     const drain = () => this.drainQueue();
@@ -726,6 +1185,24 @@ class PosPrintService {
       this._draining = false;
     }
     _updateHeaderWidget({ connected: true, queueLength: this.queue.getLength() });
+    /* Bounded retry backoff for jobs that failed transiently but aren't exhausted. */
+    this._scheduleBackoff();
+  }
+
+  /* Reschedule a drain for still-pending, not-yet-exhausted jobs on a bounded ramp
+     (immediate → 2s → 5s → 10s by attempt), then stop and wait for reconnect/focus —
+     never an unbounded retry loop. markFail flips a job to 'failed' at maxAttempts, so
+     it drops out of "retryable" and the backoff naturally ends. */
+  _scheduleBackoff () {
+    if (this._backoffTimer) return;
+    const retryable = this.queue.getPending().filter(j => (j.attempts || 0) < (j.maxAttempts || 3));
+    if (!retryable.length) return;                    /* nothing retryable → wait for reconnect */
+    const minAttempts = Math.min(...retryable.map(j => j.attempts || 0));
+    const delay = [0, 2000, 5000, 10000][Math.min(minAttempts, 3)] || 10000;
+    this._backoffTimer = setTimeout(() => {
+      this._backoffTimer = null;
+      if (_pm()?.connected || _eng()?.connected) this.drainQueue();
+    }, delay);
   }
 
   /* ── Build production receipt bytes ────────────────────────── */
@@ -788,7 +1265,9 @@ class PosPrintService {
   /* ── PUBLIC: Print after sale (primary checkout integration) ─ */
   async printAfterSale (receipt, context = {}) {
     const s = this.settings.get();
-    if (!s.autoAfterSale) return { skipped: true };
+    /* `force` lets printReceipt() — where the caller has already decided to print —
+       bypass the auto-after-sale preference without changing that preference. */
+    if (!s.autoAfterSale && !context.force) return { skipped: true };
 
     /* iOS / Safari: Web Bluetooth / Serial / USB not available — route to HTML receipt */
     if (window.SokoniIOSPrint) {
@@ -831,6 +1310,127 @@ class PosPrintService {
     }
 
     return result;
+  }
+
+  /* ── PUBLIC: the ONE receipt entry point for the sale flow ─────
+     Everything that prints a sale receipt calls this — nothing else may touch a
+     transport directly. It gives every receipt a stable Job ID, drives an explicit
+     lifecycle (queued → preparing → sending → success | offline-queued, or
+     retry → fallback → completed), emits one telemetry event, and keeps the
+     pre-consolidation legacy chain as an AUTOMATIC fallback until on-hardware parity
+     is proven. It never throws — a failed receipt must never interrupt order completion.
+     The Job ID is derived from the receipt number, so a retry can never duplicate a
+     sale (printing is already decoupled from settlement, which happened before this). */
+  async printReceipt (order = {}, context = {}) {
+    /* Inside the Merchant Shell, route the receipt UP to the shell-owned printer (single host)
+       instead of printing from this hosted module. */
+    if (typeof window !== 'undefined' && window.parent !== window && !context.__fromShell) {
+      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
+      return { jobId: 'shell:' + (order.receiptNo || order.receiptNumber || Date.now()), status: 'routed_to_shell' };
+    }
+    const jobId = 'rcpt_' + String(order.receiptNo || order.receiptNumber || order.id || order.transactionId || Date.now());
+    const _now  = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const t0    = _now();
+    const dur   = () => Math.round(_now() - t0);
+    const pm    = _pm();
+    const emit  = (state, extra) => {
+      try { this._emit('lifecycle', { jobId, state, at: Date.now(), ...(extra || {}) }); } catch (_) {}
+      try { _printerState.onPrintLifecycle(state); } catch (_) {}   /* feed the one canonical state */
+    };
+
+    emit('queued', { receiptId: order.receiptNo || order.receiptNumber || null });
+
+    /* If neither the enterprise transport service nor the iOS HTML path is present,
+       there is no drain path for the offline queue — go straight to the legacy chain. */
+    const enterpriseAvailable = !!pm || !!window.SokoniIOSPrint;
+    if (!enterpriseAvailable) {
+      emit('fallback', { reason: 'no PrinterManager/iOS path' });
+      const ok = await this._legacyFallback(order);
+      const status = ok ? 'fallback_success' : 'failed';
+      emit(status);
+      this._telemetry({ jobId, transport: 'legacy', printer: null, durationMs: dur(), retries: 1, status, fallback: true });
+      return { jobId, status, fallback: true };
+    }
+
+    try {
+      emit('preparing');
+      emit('sending', { transport: pm ? pm._activeTransport : 'ios/browser' });
+      const result = await this.printAfterSale(order, { ...context, force: true, jobId });
+      const state  = result && result.skipped ? 'skipped'
+                   : result && result.queued  ? 'queued_offline'   /* success of the enterprise path — will drain on reconnect */
+                   :                             'success';
+      emit(state, { transport: pm ? pm._activeTransport : 'ios/browser' });
+      this._telemetry({
+        jobId,
+        transport: (pm && pm._activeTransport) || (result && result.queued ? 'queue' : 'ios/browser'),
+        printer:   (pm && pm.profile && pm.profile.model) || null,
+        durationMs: dur(), retries: 0, status: state,
+      });
+      return { jobId, ...result };
+    } catch (err) {
+      /* Enterprise path failed hard — fall back to the legacy chain (kept until parity proven). */
+      emit('retry', { error: err && err.message });
+      const ok = await this._legacyFallback(order);
+      const status = ok ? 'fallback_success' : 'failed';
+      emit(status);
+      this._telemetry({ jobId, transport: 'legacy', printer: null, durationMs: dur(), retries: 1, status, fallback: true });
+      return { jobId, status, fallback: true };
+    }
+  }
+
+  /* ORDER-CENTRIC PRINT — the merchant taps "Print", never "connect a printer".
+     Ensures a live connection, THEN prints the job automatically (no second tap, no reconnect
+     screen). Flow: connected? → print · else silent reconnect (getDevices) → print · else, since
+     this runs inside the Print click (a user gesture), open the Bluetooth chooser → connect →
+     print. Only genuinely-blocked cases (printer off / no Web Bluetooth) fall through to
+     printReceipt's own queue / browser-share fallback, so a receipt is never lost.
+     Call this from EVERY Print action (order card, checkout, refund, dispatch note). */
+  async smartPrint (order = {}, context = {}) {
+    /* In the shell, hand off to the shell-owned printer immediately — no local connect. */
+    if (typeof window !== 'undefined' && window.parent !== window) {
+      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
+      return { status: 'routed_to_shell' };
+    }
+    const eng = window.SokoniPrinter || window.PrinterManager;
+    const isUp = () => !!(eng && eng.connected);
+
+    if (!isUp()) {
+      /* 1) Silent reconnect — no chooser, no gesture (getDevices). Fast when there's nothing to
+         re-link, which preserves the click's gesture for step 2. */
+      try { if (eng && eng.autoReconnect) await eng.autoReconnect(); } catch (_) {}
+    }
+    if (!isUp()) {
+      /* 2) Interactive connect — we're inside the Print gesture, so the chooser is allowed.
+         Cancel / no-Web-Bluetooth / connect-failure all fall through to printReceipt below,
+         which queues or browser-prints so nothing is lost. */
+      try {
+        if (eng && eng.discoverBy) {
+          const list = await eng.discoverBy('bluetooth');
+          if (list && list[0]) await eng.connect(list[0]);
+        }
+      } catch (_) { /* fall through — printReceipt handles the offline/legacy path */ }
+    }
+    /* 3) Print the job — resumes automatically whether we just connected or fell back. */
+    return this.printReceipt(order, context);
+  }
+
+  /* The pre-consolidation print chain, preserved verbatim (SokoniPrint → PosPrinter.printBrowser
+     → PosPrinter.print) so behaviour on fallback is identical to before this migration. */
+  async _legacyFallback (order) {
+    try { if (window.SokoniPrint) { await SokoniPrint.print('receipt', order); return true; } } catch (_) {
+      try { if (window.PosPrinter) { await PosPrinter.printBrowser(order); return true; } } catch (_) {}
+    }
+    try { if (window.PosPrinter && !window.SokoniPrint) { await PosPrinter.print(order); return true; } } catch (_) {}
+    return false;
+  }
+
+  /* One lightweight telemetry event per print — Transport / Printer / Duration / Retries / Status.
+     Rides the existing emitter (+ optional analytics + a console breadcrumb); durable storage
+     stays in history/metrics so this adds no new persistence. */
+  _telemetry (evt) {
+    try { this._emit('telemetry', evt); } catch (_) {}
+    try { if (window.SokoniAnalytics && typeof SokoniAnalytics.track === 'function') SokoniAnalytics.track('pos_receipt_print', evt); } catch (_) {}
+    try { console.info('[PosPrintService] receipt', evt.status, '·', evt.transport, '·', evt.durationMs + 'ms', '· retries', evt.retries); } catch (_) {}
   }
 
   /* ── Cash drawer ───────────────────────────────────────────── */
@@ -1154,6 +1754,88 @@ class PosPrintService {
         posPrintService:  true,
       },
     };
+  }
+
+  /* Concise, human health line for a status widget / support view, e.g.
+     "Connected · Queue: 1 pending · Last print: 2m ago · Success 99.6%". */
+  getHealthSummary () {
+    const st = _printerState.meta();
+    const qn = this.queue.getLength();
+    const lp = this.health && this.health._lastPrint;
+    let lastStr = '—';
+    if (lp && lp.at) {
+      const s = Math.max(0, Math.round((Date.now() - new Date(lp.at).getTime()) / 1000));
+      lastStr = s < 60 ? s + 's ago' : s < 3600 ? Math.round(s/60) + 'm ago'
+              : s < 86400 ? Math.round(s/3600) + 'h ago' : Math.round(s/86400) + 'd ago';
+    }
+    const m = (this.metrics && this.metrics.summary) ? this.metrics.summary() : {};
+    let rate = null;
+    const total = Number(m.total || m.count || 0), ok = Number(m.success || m.printed || m.ok || 0);
+    if (total > 0) rate = (Math.round((ok / total) * 1000) / 10) + '%';
+    return {
+      state: st.state, label: st.text, printer: st.name || null,
+      queuePending: qn, lastPrint: lastStr, successRate: rate,
+      text: (st.name || st.text) + ' · Queue: ' + qn + ' pending · Last print: ' + lastStr
+            + (rate ? ' · Success ' + rate : ''),
+    };
+  }
+
+  /* Structured queue snapshot for a diagnostics panel: [{status, receipt, time, attempts, lastError}]. */
+  getQueueDiagnostics () {
+    return this.queue.getAll().slice(-25).reverse().map(j => ({
+      jobId:     j.jobId,
+      receipt:   j.receiptId || j.receiptNumber || '—',
+      status:    j.status,                                  /* pending | done | failed */
+      attempts:  j.attempts || 0,
+      maxAttempts: j.maxAttempts || 3,
+      queuedAt:  j.queuedAt,
+      lastError: j.lastError || null,
+    }));
+  }
+
+  /* Lightweight queue diagnostics PANEL — a bottom sheet showing the health summary +
+     a Status/Job/Time table (printed / waiting / retrying / failed). Self-contained
+     (builds its own DOM + inline styles); callable from anywhere, e.g. the printer chip. */
+  showQueueDiagnostics () {
+    const self = this, ID = 'pps-diag-modal';
+    const ex = document.getElementById(ID); if (ex) ex.remove();
+    const ov = document.createElement('div'); ov.id = ID;
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,0.72);display:flex;align-items:flex-end;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);';
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'width:100%;max-width:560px;max-height:82vh;overflow:auto;background:#0c0c0c;border:1px solid rgba(255,255,255,0.1);border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));';
+    const fmtTime = iso => { try { return new Date(iso).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return '—'; } };
+    const pill = j => {
+      if (j.status === 'done')   return '<span style="color:#22c55e;font-weight:800;white-space:nowrap;">&#x2705; Printed</span>';
+      if (j.status === 'failed') return '<span style="color:#ff5050;font-weight:800;white-space:nowrap;">&#x274C; Failed</span>';
+      if ((j.attempts || 0) > 0) return '<span style="color:#ff9800;font-weight:800;white-space:nowrap;">&#x21BB; Retrying</span>';
+      return '<span style="color:#ffb020;font-weight:800;white-space:nowrap;">&#x23F3; Waiting</span>';
+    };
+    function render () {
+      const h = self.getHealthSummary(), jobs = self.getQueueDiagnostics();
+      const rows = jobs.length ? jobs.map(j =>
+        '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
+          '<td style="padding:8px 6px;">' + pill(j) + (j.attempts > 0 ? ' <span style="color:rgba(255,255,255,0.3);font-size:10px;">(' + j.attempts + '/' + j.maxAttempts + ')</span>' : '') + '</td>' +
+          '<td style="padding:8px 6px;color:rgba(255,255,255,0.85);">Receipt ' + _esc(String(j.receipt)) + (j.lastError ? '<div style="color:#ff6b6b;font-size:10px;">' + _esc(String(j.lastError).slice(0, 60)) + '</div>' : '') + '</td>' +
+          '<td style="padding:8px 6px;color:rgba(255,255,255,0.4);white-space:nowrap;">' + fmtTime(j.queuedAt) + '</td></tr>'
+      ).join('') : '<tr><td colspan="3" style="padding:26px;text-align:center;color:rgba(255,255,255,0.3);">No print jobs yet</td></tr>';
+      sheet.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+          '<div style="font-size:15px;font-weight:900;color:#fff;">&#x1F5A8;&#xFE0F; Printer Queue</div>' +
+          '<button id="pps-diag-x" aria-label="Close" style="background:rgba(255,255,255,0.08);border:none;color:#fff;width:32px;height:32px;border-radius:9px;font-size:15px;cursor:pointer;">&#x2715;</button></div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.65);background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;margin-bottom:12px;">' + _esc(h.text) + '</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:rgba(255,255,255,0.4);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">' +
+          '<th style="text-align:left;padding:0 6px 6px;">Status</th><th style="text-align:left;padding:0 6px 6px;">Job</th><th style="text-align:left;padding:0 6px 6px;">Time</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div style="display:flex;gap:8px;margin-top:14px;">' +
+          '<button id="pps-diag-refresh" style="flex:1;padding:11px;border-radius:11px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;cursor:pointer;font-family:inherit;">&#x21BB; Refresh</button>' +
+          '<button id="pps-diag-setup" style="flex:1;padding:11px;border-radius:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);font-weight:800;cursor:pointer;font-family:inherit;">&#x2699;&#xFE0F; Printer Setup</button></div>';
+      sheet.querySelector('#pps-diag-x').onclick = () => ov.remove();
+      sheet.querySelector('#pps-diag-refresh').onclick = render;
+      sheet.querySelector('#pps-diag-setup').onclick = () => { try { (window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html'); } catch (_) {} };
+    }
+    render();
+    ov.appendChild(sheet);
+    document.body.appendChild(ov);
   }
 }
 

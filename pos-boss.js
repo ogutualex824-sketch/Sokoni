@@ -398,13 +398,23 @@ const PosBoss = (() => {
       waBtn.onclick = () => whatsapp.send(txn, bizSettings, phone);
     }
 
-    /* Print button */
+    /* Print button — order-centric: smartPrint ensures the printer is connected (silent →
+       chooser) THEN prints, so the cashier taps once and never sees a reconnect screen. Falls
+       back to printReceipt / legacy chain if smartPrint is unavailable. Fire-and-forget. */
     const pBtn = document.getElementById('suc-print-btn');
     if (pBtn) pBtn.onclick = () => {
       const d = { ...txn, ...bizSettings };
-      if (window.SokoniPrint) {
+      if (window.PosPrintService && typeof PosPrintService.smartPrint === 'function') {
+        PosPrintService.smartPrint(d, {}).catch(() => {
+          if (window.SokoniPrint) SokoniPrint.print('receipt', d).catch(() => window.PosPrinter && PosPrinter.printBrowser(d));
+        });
+      } else if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
+        PosPrintService.printReceipt(d, {}).catch(() => {
+          if (window.SokoniPrint) SokoniPrint.print('receipt', d).catch(() => window.PosPrinter && PosPrinter.printBrowser(d));
+        });
+      } else if (window.SokoniPrint) {
         SokoniPrint.print('receipt', d).catch(() => PosPrinter.printBrowser(d));
-      } else {
+      } else if (window.PosPrinter) {
         PosPrinter.print(d).catch(() => PosPrinter.printBrowser(d));
       }
     };

@@ -92,6 +92,15 @@ jobs:
       - name: Run pre-deploy check script
         run: node scripts/pre-deploy-check.js
 
+      # Publication Contract v1.0 — every publishable entity (products, providers,
+      # businesses, future types) must pass the shared create→index→discover→
+      # rename→archive lifecycle. Spec: docs/PUBLICATION_CONTRACT.md. A PR that
+      # regresses any publication path (search-terms, an index* trigger, a
+      # directory/search read) fails here. An entity is "Certified under vX" only
+      # when this passes green.
+      - name: Publication Contract acceptance suite
+        run: node scripts/test-publication-contract.js
+
   # ─────────────────────────────────────────────────────────────
   # 2. DEPENDENCY AUDIT  — blocks on HIGH/CRITICAL vulnerabilities
   # ─────────────────────────────────────────────────────────────

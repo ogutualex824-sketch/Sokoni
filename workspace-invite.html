@@ -336,7 +336,7 @@ window.doAccept = async function() {
 
 /* ── Decline ──────────────────────────────────────────────── */
 window.doDecline = async function() {
-  if (!confirm('Decline this invitation? The employer will be notified.')) return;
+  if (!(await SK.dialog.confirm('Decline this invitation? The employer will be notified.', null, null, { title: 'Decline invitation', variant: 'danger', confirmLabel: 'Decline' }))) return;
   const dec = document.getElementById('btnDecline');
   const acc = document.getElementById('btnAccept');
   if (dec) { dec.disabled = true; dec.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
@@ -349,7 +349,7 @@ window.doDecline = async function() {
   } catch (e) {
     if (dec) { dec.disabled = false; dec.innerHTML = '<i class="fas fa-times"></i> Decline'; }
     if (acc) acc.disabled = false;
-    alert(e.message || 'Failed to decline. Please try again.');
+    SK.dialog.alert(e.message || 'Failed to decline. Please try again.');
   }
 };
 

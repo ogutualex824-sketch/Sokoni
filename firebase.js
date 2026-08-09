@@ -19,7 +19,6 @@ import {
   updateProfile,
   sendEmailVerification,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   getRedirectResult,
   linkWithCredential,
   linkWithPhoneNumber,
@@ -53,19 +52,22 @@ const firebaseConfig = {
      client, or Google returns "Access blocked: This app's request is invalid" and
      no sign-in can start.
 
-     REVERTED 2026-07-25 from "mysokoni.co.ke" back to "auth.mysokoni.co.ke".
-     The apex was tried to make the auth helper iframe same-origin (to dodge
-     cross-origin storage partitioning of getRedirectResult), but
-     https://mysokoni.co.ke/__/auth/handler is NOT a registered redirect URI on the
-     OAuth client, so Google blocked EVERY sign-in on every device. Verified against
-     Google's live OAuth page:
-         mysokoni.co.ke        -> ACCESS BLOCKED (invalid request)
-         auth.mysokoni.co.ke   -> account picker (works)
-         sokoni-aeb26.firebaseapp.com -> account picker (works)
-     The apex can only be used once it is added to the OAuth client's Authorized
-     redirect URIs in Google Cloud Console — until then this MUST stay on the
-     registered subdomain. */
-  authDomain:        "auth.mysokoni.co.ke",
+     2026-07-27: moved to the APEX "mysokoni.co.ke" — the SAME origin the app is
+     served from. This is the fix for Google sign-in silently failing on PHONES:
+     Firebase runs the OAuth helper in a hidden iframe of authDomain; when that was
+     the subdomain "auth.mysokoni.co.ke" it was CROSS-ORIGIN inside mysokoni.co.ke,
+     so mobile browsers (Safari ITP / Chrome storage partitioning) blocked the
+     iframe's storage → getRedirectResult() returned empty → the user bounced back
+     to login with no error. Same-origin authDomain removes the iframe partition so
+     the redirect flow completes on mobile. Desktop popup was unaffected either way.
+
+     PREREQUISITE (done 2026-07-27): https://mysokoni.co.ke/__/auth/handler is now a
+     registered Authorized redirect URI on the OAuth client. The earlier apex attempt
+     (2026-07-25) was reverted ONLY because that URI was missing then → "Access
+     blocked" on every device. With it registered, the apex works on all devices.
+     If sign-in ever "Access blocked"s again, that URI was removed — re-add it or
+     revert this to "auth.mysokoni.co.ke" (also still registered). */
+  authDomain:        "mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
   messagingSenderId: "24799054989",
@@ -164,6 +166,46 @@ window.__sokoniAppCheckReady = _appCheck
       setTimeout(() => settle('timeout'), 12000);
     })
   : Promise.resolve('disabled');
+
+/* Force a fresh App Check token exchange (re-runs reCAPTCHA v3). Consumers call this on a
+   permission-denied/403 read — App Check 403s intermittently on this project (esp. iOS Safari
+   under ITP) and a forced refresh usually yields a valid token so the retried read succeeds.
+   Resolves true/false, never rejects, so callers can always chain a retry. */
+window.__sokoniRefreshAppCheckToken = function () {
+  try {
+    return _appCheck
+      ? getAppCheckToken(_appCheck, true).then(() => true).catch(() => false)
+      : Promise.resolve(true);
+  } catch (_) { return Promise.resolve(false); }
+};
+
+window.__sokoniAuthReady = false;
+window.__sokoniAuthReadyDetail = null;
+let _sokoniAuthReadyResolve = null;
+function _resetSokoniAuthReadyPromise() {
+  window.__sokoniAuthReadyPromise = new Promise(function (resolve) {
+    _sokoniAuthReadyResolve = resolve;
+  });
+}
+_resetSokoniAuthReadyPromise();
+window.waitForSokoniAuthReady = function (cb) {
+  const done = function (detail) {
+    try { if (typeof cb === 'function') cb(detail); } catch (e) { console.error('[Firebase] auth ready callback threw:', e); }
+    return detail;
+  };
+  if (window.__sokoniAuthReady) return Promise.resolve(done(window.__sokoniAuthReadyDetail));
+  return window.__sokoniAuthReadyPromise.then(done);
+};
+
+function _publishSokoniAuthReady(detail) {
+  window.__sokoniAuthReady = true;
+  window.__sokoniAuthReadyDetail = detail || null;
+  if (_sokoniAuthReadyResolve) {
+    _sokoniAuthReadyResolve(detail);
+    _sokoniAuthReadyResolve = null;
+  }
+  document.dispatchEvent(new CustomEvent('sokoniAuthReady', { detail: detail }));
+}
 
 if (_appCheck) {
   getAppCheckToken(_appCheck, false)
@@ -291,7 +333,6 @@ window.firebaseSDK = {
   updateProfile,
   sendEmailVerification: () => auth.currentUser ? sendEmailVerification(auth.currentUser) : Promise.reject(new Error('No user')),
   GoogleAuthProvider,
-  FacebookAuthProvider,
   RecaptchaVerifier,
 };
 
@@ -396,7 +437,7 @@ if (!window.firebase) {
         sendEmailVerification:            (u)      => sendEmailVerification(u||auth.currentUser),
       };
     },
-    { GoogleAuthProvider, FacebookAuthProvider, RecaptchaVerifier }
+    { GoogleAuthProvider, RecaptchaVerifier }
   );
 
   /* ── Firestore function: callable + direct-access + static helpers ─── */
@@ -541,7 +582,6 @@ const _sokoniUserSeen = new Promise((resolve) => { _sokoniUserSeenResolve = reso
         const pid = err.customData?._tokenResponse?.providerId || "";
         try {
           if (pid === "google.com")         err._pendingCred = GoogleAuthProvider.credentialFromError(err);
-          else if (pid === "facebook.com")  err._pendingCred = FacebookAuthProvider.credentialFromError(err);
         } catch (_) {}
       }
       window.dispatchEvent(new CustomEvent("sokoniGoogleRedirectError", { detail: err }));
@@ -648,24 +688,19 @@ onAuthStateChanged(auth, async (user) => {
 
         /* Notify all modules that auth state is confirmed with real profile data.
            shared-header.js, auth.js, and realtime modules all listen for this. */
-        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
-          detail: {
-            uid:   user.uid,
-            roles: existing.roles || ["buyer"],
-            role:  existing.role  || (existing.roles && existing.roles[0]) || "buyer",
-          }
-        }));
+        const authReadyDetail = {
+          uid:   user.uid,
+          roles: existing.roles || ["buyer"],
+          role:  existing.role  || (existing.roles && existing.roles[0]) || "buyer",
+        };
+        _publishSokoniAuthReady(authReadyDetail);
 
-        if (isGoogle) {
-          const safeUpdates = { lastLogin: serverTimestamp() };
-          if (!existing.photoURL && user.photoURL) {
-            safeUpdates.photoURL = user.photoURL;
-          }
-          /* Record that this account now has google as a provider */
-          if (!existing.providers || !existing.providers.includes("google")) {
-            safeUpdates.providers = [...(existing.providers || ["password"]), "google"];
-          }
-          setDoc(doc(db, "users", user.uid), safeUpdates, { merge: true }).catch(() => {});
+        /* Preserve the existing profile while updating any safe fields for
+           Google users only if they are missing from the canonical Firestore doc. */
+        const profileUpdates = {};
+        if (isGoogle && !existing.photoURL && user.photoURL) profileUpdates.photoURL = user.photoURL;
+        if (Object.keys(profileUpdates).length) {
+          setDoc(doc(db, "users", user.uid), profileUpdates, { merge: true }).catch(() => {});
         }
       } else {
         /* ── New user ──────────────────────────────────────────────
@@ -753,9 +788,7 @@ onAuthStateChanged(auth, async (user) => {
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
 
         /* Notify all modules that auth state is confirmed — new user path */
-        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
-          detail: { uid: user.uid, roles: ["buyer"], role: "buyer" }
-        }));
+        _publishSokoniAuthReady({ uid: user.uid, roles: ["buyer"], role: "buyer" });
 
         /* ── First-login initialisation: wallet + notification prefs ──
            These are fire-and-forget; failure is non-fatal.            */
@@ -804,32 +837,26 @@ onAuthStateChanged(auth, async (user) => {
         const _c = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
         if (_c.roles && _c.roles.length) { _roles = _c.roles; _role = _c.roles[0]; }
       } catch (_) {}
-      document.dispatchEvent(new CustomEvent('sokoniAuthReady', {
-        detail: { uid: user.uid, roles: _roles, role: _role }
-      }));
+      const fallback = {
+        uid: user.uid,
+        email: user.email || null,
+        phoneNumber: user.phoneNumber || null,
+        name: user.displayName || (user.email || '').split('@')[0] || 'User',
+        provider: providerId || 'password',
+        emailVerified: user.emailVerified,
+        accountStatus: 'active',
+        registeredAs: { user: true },
+        roles: _roles,
+        role: _role,
+      };
+      localStorage.setItem('sokoniUser', JSON.stringify(fallback));
+      _publishSokoniAuthReady({ uid: user.uid, roles: _roles, role: _role });
     }
-
-    /* ── SokoniSync: restore cross-device data on every login ── */
-    _initSokoniSync(db, user.uid);
-
-    /* ── Start idle session timeout ── */
-    if (window._sokoniStartIdleTimer) window._sokoniStartIdleTimer();
-
-    /* ── Update lastSeen + sync any cached FCM token (fire-and-forget) ── */
-    try {
-      const { doc, setDoc, serverTimestamp } = await import(
-        "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
-      );
-      const updates = { lastSeen: serverTimestamp() };
-      const cachedFcmToken = localStorage.getItem("sokoni_fcm_token");
-      if (cachedFcmToken) {
-        updates.fcmToken = cachedFcmToken;
-        updates.fcmUpdatedAt = serverTimestamp();
-      }
-      setDoc(doc(db, "users", user.uid), updates, { merge: true }).catch(() => {});
-    } catch (_) {}
-
   } else {
+    window.__sokoniAuthReady = false;
+    window.__sokoniAuthReadyDetail = null;
+    _resetSokoniAuthReadyPromise();
+
     /* Stop idle timeout when signed out */
     if (window._sokoniStopIdleTimer) window._sokoniStopIdleTimer();
 
@@ -897,7 +924,13 @@ const _SOKONI_LS_KEYS = [
 /* Non-user infrastructure keys that MUST survive sign-out — everything else in
    local/session storage is treated as user data and wiped. Matched case-insensitively
    as a substring of the key name. */
-const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware/i;
+/* Also preserve the admin LOCK-SCREEN credential hashes (sokoniAdminPinHash /
+   PatternHash / PwHash). They are a per-DEVICE second factor the admin sets
+   themselves, not user session data — wiping them on sign-out silently locked
+   admins out ("No credentials set") and forced a re-setup every time. The
+   authoritative admin gate is the Firebase claim, not this hash, so keeping the
+   hash is safe. */
+const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sokoniadmin(pin|pattern|pw)hash/i;
 
 async function sokoniSignOut() {
   /* 1. Stop any registered Firestore listeners so no post-signout snapshot can fire

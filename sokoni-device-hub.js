@@ -277,6 +277,20 @@
     },
   };
 
+  /* Stable identity for a Web-Serial port. USB ports key by vendor:product; Bluetooth-COM
+     ports expose no VID/PID, so we assign a per-object id and remember it in a WeakMap keyed by
+     the live SerialPort — getPorts() returns the same object for the same grant within a
+     session, so the id stays stable across re-scans (dedup) yet differs for separate grants. */
+  const _serialObjIds = new WeakMap();
+  let _serialSeq = 0;
+  function _serialPortId(port, info) {
+    if (info && info.usbVendorId != null && info.usbProductId != null)
+      return `serial:${info.usbVendorId}:${info.usbProductId}`;
+    let id = _serialObjIds.get(port);
+    if (!id) { id = 'serial:com:' + (++_serialSeq); _serialObjIds.set(port, id); }
+    return id;
+  }
+
   const SerialAdapter = {
     available() { return !!navigator.serial; },
 
@@ -298,6 +312,12 @@
       const info = p.getInfo ? p.getInfo() : {};
       const hint = USB_VID_MAP[info.usbVendorId] || {};
       return new DeviceProfile({
+        /* STABLE id so re-discovery does not register the same port again. genId() would mint a
+           fresh id every scan, defeating the registry's has(id) dedup → duplicate "Serial Port"
+           chips. Prefer USB vendor:product; for a Bluetooth-COM port (no VID/PID) fall back to a
+           per-object id kept in a WeakMap, so the SAME granted port always maps to the SAME id
+           while two genuinely-separate grants stay distinct. */
+        id:        _serialPortId(p, info),
         type:      hint.type || TYPE.UNKNOWN,
         transport: TRANSPORT.SERIAL,
         name:      `Serial Port (${info.usbVendorId ? '0x'+info.usbVendorId.toString(16) : 'COM'})`,
@@ -559,7 +579,25 @@
 
     /* ── Registry ──────────────────────────────────────────── */
 
-    getDevices()              { return [...this._registry.values()]; }
+    /* Canonical device list — deduped by physical-identity signature so the UI shows ONE chip
+       per device even if the registry (or persisted store from before the stable-id fix) holds
+       duplicates. Keeps the "best" instance for each signature: prefer a live/native and a
+       connected one so actions still work. Every consumer (panel render, health, counts) goes
+       through here, so nothing re-introduces duplicates downstream. */
+    getDevices() {
+      const best = new Map();
+      for (const p of this._registry.values()) {
+        const cfg = p.config || {};
+        const sig = [p.transport, cfg.usbVendorId ?? '', cfg.usbProductId ?? '',
+                     cfg.macAddress || cfg.address || cfg.endpoint || '', p.name || ''].join('|');
+        const prev = best.get(sig);
+        if (!prev) { best.set(sig, p); continue; }
+        const better = (!!p.nativeDevice && !prev.nativeDevice) ||
+                       (p.status === STATE.CONNECTED && prev.status !== STATE.CONNECTED);
+        if (better) best.set(sig, p);
+      }
+      return [...best.values()];
+    }
     getDevice(id)             { return this._registry.get(id) || null; }
     getDevicesByType(type)    { return this.getDevices().filter(d => d.type === type); }
     getConnectedDevices()     { return this.getDevices().filter(d => d.status === STATE.CONNECTED); }

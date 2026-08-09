@@ -9,7 +9,7 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Printer Management — SOKONI SmartPOS</title>
+<title>Advanced Printer Settings — SOKONI SmartPOS</title>
 <style>
 :root {
   --bg:    #07070f;
@@ -177,8 +177,23 @@ input:checked+.slider:before{transform:translateX(18px)}
 
 <div class="pos-header">
   <span class="pos-header-icon">&#128424;</span>
-  <h1>Printer Management</h1>
+  <h1>Advanced Printer Settings</h1>
   <a href="pos.html" class="back-link">&#8592; Back to POS</a>
+  <script>
+    /* Canonical return flow — every printer button routes here via openPrinterSetup()
+       with a ?return= path. Repoint "Back" to the caller; updateStatusBar() auto-returns
+       once a connection succeeds here. */
+    (function () {
+      try {
+        var ret = new URLSearchParams(location.search).get('return');
+        if (ret) {
+          window._ppsReturnUrl = ret;
+          var bl = document.querySelector('.back-link');
+          if (bl) { bl.setAttribute('href', ret); bl.innerHTML = '&#8592; Back'; }
+        }
+      } catch (_) {}
+    })();
+  </script>
 </div>
 
 <div class="status-bar">
@@ -1003,10 +1018,22 @@ const PLATFORM = (function () {
            hasBT, hasSerial, hasUSB, supportsBT, supportsSerial, supportsUSB, os, browser };
 }());
 
-/* ── Friendly error messages ── */
+/* ── Friendly error messages ──
+   Unwrap PrinterManager's friendly wrapper first: it replaces the real exception with a
+   generic "…unexpected error." title and stashes the true cause in .detail / .original.
+   Classifying only .message would surface that dead-end title and mask the root cause twice,
+   so fold the underlying message into what we test and what we ultimately show. */
 function _friendlyError (e) {
-  const raw = (e?.message || String(e) || '').toLowerCase();
-  if (!raw || raw === 'undefined') return 'No printer selected. Click a transport tile and choose your printer.';
+  const under  = e && (e.original || e.cause);
+  const detail = (e && e.detail) || (under && under.message) || '';
+  const raw = ((e?.message || '') + ' ' + detail).toLowerCase();
+  if (!raw.trim() || raw.trim() === 'undefined') return 'No printer selected. Click a transport tile and choose your printer.';
+  if (raw.includes('web bluetooth') || raw.includes('bluetooth is not available') || raw.includes('navigator.bluetooth'))
+    return 'This browser does not support Bluetooth printing. Use Chrome or Edge on Android or desktop (iPhone/Safari cannot pair BLE printers).';
+  if (raw.includes('no writable') || raw.includes('no print service'))
+    return 'Connected, but this device is not an ESC/POS printer (no writable print service). Confirm it is a P58E / 58mm thermal printer and powered on.';
+  if (raw.includes('getdevices') || raw.includes('saved printer') || raw.includes('no remembered'))
+    return 'Saved printer is unavailable — it may be turned off or out of range. Power it on and tap Reconnect.';
   if (raw.includes('user cancel') || raw.includes('no device selected by user') || raw.includes('chosen by user'))
     return 'Selection cancelled. Click the transport tile again to retry.';
   if (raw.includes('permission') || raw.includes('security') || raw.includes('blocked'))
@@ -1029,7 +1056,8 @@ function _friendlyError (e) {
     return 'Printer disconnected unexpectedly. Check battery / USB cable and reconnect.';
   if (raw.includes('not supported') || raw.includes('undefined is not'))
     return 'This browser does not support this transport. Use Chrome or Edge on desktop.';
-  return e?.message || 'Connection failed. Verify the printer is on and in range, then retry.';
+  /* Last resort: show the REAL underlying message (never the generic wrapper title). */
+  return detail || e?.message || 'Connection failed. Verify the printer is on and in range, then retry.';
 }
 
 /* ── Last-transport persistence ── */
@@ -1165,6 +1193,15 @@ function updateStatusBar () {
   const badge  = document.getElementById('transportBadge');
   const discBtn= document.getElementById('btnDisconnect');
   const ok = PrinterManager.connected;
+  /* Auto-return: if we arrived with ?return= and a connection JUST succeeded here,
+     replace back to the caller (POS/seller) — no manual Back needed. Only on the
+     transition to connected, so arriving already-connected (to do advanced work)
+     does not bounce you out. */
+  if (ok && !window._ppsPrevConnected && window._ppsReturnUrl) {
+    if (text) text.textContent = '✓ Connected — returning…';
+    setTimeout(function () { try { window.location.replace(window._ppsReturnUrl); } catch (_) { window.location.href = window._ppsReturnUrl; } }, 1100);
+  }
+  window._ppsPrevConnected = ok;
   dot.className = 'status-dot ' + (ok ? 'connected' : 'disconnected');
   text.textContent = ok
     ? 'Connected: ' + (_connectedDevice?.name || 'Printer')
@@ -1706,9 +1743,16 @@ function renderP58EPanel () {
   document.getElementById('p58eDrawer').checked      = !!s.drawerEnabled;
   document.getElementById('p58ePaperWidth').value    = PrinterManager.getConfig().paperWidth || '58mm';
 
-  /* Pair / forget buttons */
-  const paired  = PrinterManager.p58e.paired;
-  const connected = PrinterManager.p58e.isConnected;
+  /* Pair / forget buttons — reflect the UNIFIED engine (PrinterManager → SokoniPrinter), not
+     the separate P58E engine, so this panel agrees with the chip / Devices / Cashier. */
+  const connected = PrinterManager.connected;
+  let paired = connected;
+  try {
+    paired = paired
+      || !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice)
+      || !!localStorage.getItem('p58e_paired_device')
+      || !!(PrinterManager.p58e && PrinterManager.p58e.paired);
+  } catch (_) {}
 
   document.getElementById('btnForgetP58E').style.display    = paired     ? '' : 'none';
   document.getElementById('btnReconnectP58E').style.display = (paired && !connected) ? '' : 'none';
@@ -1741,8 +1785,10 @@ function renderP58EPanel () {
 }
 
 async function pairP58E () {
+  /* btn may be absent when invoked from reconnectP58E() (saved-printer card) — guard all uses. */
   const btn = document.getElementById('btnPairP58E');
-  btn.disabled = true;
+  const setBtn = (t) => { if (btn) btn.textContent = t; };
+  if (btn) btn.disabled = true;
   try {
     /* Search → detect → connect, and only fall back to the picker if the
        printer is not already known to this browser.
@@ -1756,7 +1802,7 @@ async function pairP58E () {
        The picker cannot be skipped for a printer this browser has never seen:
        Web Bluetooth requires a user gesture and a human choice for first
        permission, by design. That is the one step no code can remove. */
-    btn.textContent = 'Searching for printer…';
+    setBtn('Searching for printer…');
 
     /* BOUNDED. autoConnect() calls navigator.bluetooth.getDevices() and then a
        GATT connect, and either can hang indefinitely on some Android builds —
@@ -1769,29 +1815,35 @@ async function pairP58E () {
        actually works, so it gets 3 seconds and then we move on regardless. A
        late resolution is ignored: `settled` guards against the picker and a
        slow auto-connect both driving the UI. */
+    /* ONE ENGINE. Pair through PrinterManager → SokoniPrinter — the SAME engine the shell,
+       Devices page, Cashier and every print path use. The old button connected the separate
+       P58EPrinter, whose connection nothing else could see and which cannot print real receipts
+       (only a test), so the Wizard "worked" while the chip/Devices/Cashier stayed disconnected.
+       Silent reconnect first (getDevices, bounded 3s), then the chooser. */
     let settled = false;
     const restored = await Promise.race([
-      PrinterManager.p58e.autoConnect().then(r => { settled = true; return r; })
-                                       .catch(() => { settled = true; return false; }),
+      PrinterManager.autoReconnect().then(r => { settled = true; return r; })
+                                    .catch(() => { settled = true; return false; }),
       new Promise(res => setTimeout(() => res(false), 3000)),
     ]);
-    if (!settled) _dbg('autoConnect timed out after 3s — falling through to picker');
+    if (!settled) _dbg('autoReconnect timed out after 3s — falling through to picker');
 
-    if (restored) {
-      const known = PrinterManager.p58e.info;
-      toast('Connected to ' + (known?.name || 'P58E') + ' — no pairing needed');
-      _connectedDevice = { name: known?.name, type: 'bluetooth' };
+    if (restored || PrinterManager.connected) {
+      toast('Printer reconnected — no pairing needed');
+      _connectedDevice = { name: 'Printer', type: 'bluetooth' };
       updateStatusBar();
       renderP58EPanel();
       renderChecklist();
       return;
     }
 
-    btn.textContent = 'Opening picker…';
-    const info = await PrinterManager.p58e.requestAndPair();
-    if (info) {
-      toast('Connected to ' + info.name);
-      _connectedDevice = { name: info.name, type: 'bluetooth' };
+    setBtn('Opening picker…');
+    const devices = await PrinterManager.discoverBy('bluetooth');
+    if (devices && devices[0]) {
+      await PrinterManager.connect(devices[0]);
+      const nm = devices[0].name || 'printer';
+      toast('Connected to ' + nm);
+      _connectedDevice = { name: nm, type: 'bluetooth' };
       updateStatusBar();
       renderP58EPanel();
       renderChecklist();
@@ -1814,7 +1866,7 @@ async function pairP58E () {
       toast('Pairing failed: ' + msg, 5000);
     }
   } finally {
-    btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer';
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer'; }
   }
 }
 
@@ -1823,10 +1875,14 @@ async function pairAnyP58E () {
   const btn = document.getElementById('btnPairAnyP58E');
   btn.disabled = true; btn.textContent = 'Opening full list…';
   try {
-    const info = await PrinterManager.p58e.requestAndPairAny();
+    /* Unified engine — SokoniPrinter.discoverBy already shows ALL nearby devices
+       (acceptAllDevices), so this is just the same picker via the one engine. */
+    const devices = await PrinterManager.discoverBy('bluetooth');
+    const info = (devices && devices[0]) ? devices[0] : null;
     if (info) {
-      toast('Connected to ' + info.name);
-      _connectedDevice = { name: info.name, type: 'bluetooth' };
+      await PrinterManager.connect(info);
+      toast('Connected to ' + (info.name || 'printer'));
+      _connectedDevice = { name: info.name || 'printer', type: 'bluetooth' };
       btn.style.display = 'none';
       updateStatusBar(); renderP58EPanel(); renderChecklist();
     } else {
@@ -1841,27 +1897,24 @@ async function pairAnyP58E () {
 
 async function reconnectP58E () {
   const btn = document.getElementById('btnReconnectP58E');
-  btn.disabled = true; btn.textContent = 'Reconnecting…';
+  if (btn) { btn.disabled = true; btn.textContent = 'Reconnecting…'; }
   try {
-    const ok = await PrinterManager.p58e.autoConnect();
-    if (ok) {
-      toast('Reconnected to ' + PrinterManager.p58e.info?.name);
-      _connectedDevice = { name: PrinterManager.p58e.info?.name, type: 'bluetooth' };
-      updateStatusBar();
-      renderP58EPanel();
-    } else {
-      toast('Could not auto-reconnect. Make sure the printer is on, then try Pair.', 5000);
-    }
-  } catch(e) {
-    toast('Reconnect failed: ' + e.message, 5000);
+    /* Delegate to pairP58E(): it tries a SILENT reconnect (getDevices, bounded 3s) and — the
+       piece this button was missing — falls through to the Bluetooth chooser when the browser
+       can't re-link silently. reconnectP58E() used to call autoConnect() alone, so an empty
+       getDevices() dead-ended at "Could not auto-reconnect" with no way forward. This IS a user
+       gesture, so the chooser is allowed. */
+    await pairP58E();
   } finally {
-    btn.disabled = false; btn.innerHTML = '&#8635; Reconnect';
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Reconnect'; }
   }
 }
 
 async function forgetP58E () {
-  if (!confirm('Remove saved printer? You will need to pair again next time.')) return;
-  PrinterManager.p58e.forget();
+  if (!(await SK.dialog.confirm('Remove saved printer? You will need to pair again next time.', null, null, { title: 'Remove printer', variant: 'danger', confirmLabel: 'Remove' }))) return;
+  /* Unified Forget — clears BOTH engines + all keys, so the printer is truly forgotten and
+     nothing keeps auto-reconnecting it. */
+  try { await PrinterManager.forget(); } catch (_) { try { PrinterManager.p58e.forget(); } catch (__) {} }
   _connectedDevice = null;
   updateStatusBar();
   renderP58EPanel();
@@ -2400,17 +2453,17 @@ function _renderDriverStatus () {
   ).join('');
 }
 
-function _resetStats () {
+async function _resetStats () {
   if (!window.PrinterManager) return;
-  if (!confirm('Reset all print statistics? This cannot be undone.')) return;
+  if (!(await SK.dialog.confirm('Reset all print statistics? This cannot be undone.', null, null, { title: 'Reset statistics', variant: 'danger', confirmLabel: 'Reset' }))) return;
   PrinterManager.stats.reset();
   _renderInfoStats();
   toast('Statistics reset');
 }
 
-function _clearDrawerLog () {
+async function _clearDrawerLog () {
   if (!window.PrinterManager) return;
-  if (!confirm('Clear the cash drawer event log?')) return;
+  if (!(await SK.dialog.confirm('Clear the cash drawer event log?', null, null, { title: 'Clear drawer log', confirmLabel: 'Clear' }))) return;
   PrinterManager.drawer.clear();
   _renderDrawerLog();
   toast('Drawer log cleared');

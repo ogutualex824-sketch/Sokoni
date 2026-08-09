@@ -743,7 +743,7 @@ window.SAApp = {
   },
 
   async revokeRole(uid, email) {
-    if (!confirm(`Revoke admin/moderator role from ${email}?`)) return;
+    if (!(await SK.dialog.confirm(`Revoke admin/moderator role from ${email}?`, null, null, { title: 'Revoke role', variant: 'danger', confirmLabel: 'Revoke' }))) return;
     try {
       const setRoleFn = httpsCallable(fns, 'setUserRole');
       await setRoleFn({ email, role: 'buyer' });
@@ -752,7 +752,7 @@ window.SAApp = {
   },
 
   async suspendUser(uid) {
-    if (!confirm('Suspend this user?')) return;
+    if (!(await SK.dialog.confirm('Suspend this user?', null, null, { title: 'Suspend user', variant: 'danger', confirmLabel: 'Suspend' }))) return;
     try {
       await updateDoc(doc(db,'users',uid), { suspended: true, suspendedAt: serverTimestamp(), suspendedBy: this._user?.uid });
       this.toast('User suspended'); this.loadUsers();

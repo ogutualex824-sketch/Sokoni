@@ -6,7 +6,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-  <script src="auth-guard.js"></script>
+  <script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>SOKONI — Organization Structure</title>
@@ -608,7 +609,7 @@ window.osSaveDept = async function() {
 };
 
 window.osArchiveDept = async function(deptId, name) {
-  if (!confirm(`Archive department "${name}"? Teams within it will not be deleted.`)) return;
+  if (!(await SK.dialog.confirm(`Archive department "${name}"? Teams within it will not be deleted.`, null, null, { title: 'Archive department', confirmLabel: 'Archive' }))) return;
   try {
     await _archiveDept({ businessId: _bid, deptId });
     await _loadDepts();
@@ -932,7 +933,7 @@ window.osRoleSave = async function() {
   const desc   = document.getElementById('roleDescInput').value.trim();
   const perms  = [...document.querySelectorAll('input[name="rolePerm"]:checked')].map(el => el.value);
 
-  if (!name) { alert('Role name is required.'); return; }
+  if (!name) { SK.dialog.alert('Role name is required.'); return; }
 
   try {
     if (roleId) {
@@ -948,7 +949,7 @@ window.osRoleSave = async function() {
 };
 
 window.osRoleDelete = async function(roleId, name) {
-  if (!confirm(`Delete custom role "${name}"? This cannot be undone.`)) return;
+  if (!(await SK.dialog.confirm(`Delete custom role "${name}"? This cannot be undone.`, null, null, { title: 'Delete role', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await _deleteRole({ businessId: _bid, roleId });
     _rolesLoaded = false;

@@ -21,7 +21,7 @@ import { db } from './firebase.js';
 import {
   doc, collection, setDoc, updateDoc, addDoc,
   onSnapshot, query, where, orderBy, limit,
-  serverTimestamp, arrayUnion, increment, getDoc,
+  serverTimestamp, arrayUnion, increment, getDoc, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ── UID helper ── */
@@ -68,7 +68,10 @@ export const STATUS_META = {
 /* Legal transitions: from → [allowed tos] */
 const TRANSITIONS = {
   pending_payment:       ['paid', 'cancelled'],
-  paid:                  ['awaiting_confirmation', 'refunded', 'cancelled'],
+  /* paid → confirmed is legal (Gap 2): the IntaSend webhook creates orders at 'paid' directly
+     (no 'awaiting_confirmation' hop), so a seller tapping Confirm on a paid order must be able to
+     reach 'confirmed' → dispatch. The checkout 'awaiting_confirmation' path still works below. */
+  paid:                  ['awaiting_confirmation', 'confirmed', 'refunded', 'cancelled'],
   awaiting_confirmation: ['confirmed', 'cancelled', 'refunded'],
   confirmed:             ['rider_assigned', 'cancelled'],
   rider_assigned:        ['rider_en_route', 'confirmed', 'cancelled'],
@@ -359,6 +362,29 @@ const SokoniOrders = {
        set on the doc, never inside the arrayUnion history entry. */
     (serverStampFields || []).forEach(function (f) { patch[f] = serverTimestamp(); });
 
+    /* Gap 3 — project the canonical status onto the BUYER timeline (track.html reads
+       orders.timelineStage + orders.timeline[]). ONE progression: the timeline is DERIVED
+       from status, not a second independent model — so every status change keeps the
+       buyer's live map in sync (previously the rider lane advanced status but never the
+       timeline, stalling track.html). Stage keys/indices match notify.js ORDER_TIMELINE. */
+    const _STAGE = {
+      paid:                 ['paid',      'Payment Confirmed', 1],
+      awaiting_confirmation:['paid',      'Payment Confirmed', 1],
+      confirmed:            ['accepted',  'Seller Accepted',   2],
+      rider_assigned:       ['assigned',  'Rider Assigned',    5],
+      rider_en_route:       ['assigned',  'Rider Assigned',    5],
+      picked_up:            ['picked_up', 'Picked Up',         6],
+      in_transit:           ['halfway',   'On The Way',        7],
+      delivered:            ['delivered', 'Delivered',         9],
+      completed:            ['completed', 'Completed',        10],
+    };
+    const _stg = _STAGE[toStatus];
+    if (_stg && (order.timelineIndex == null || _stg[2] >= order.timelineIndex)) {   /* never regress */
+      patch.timelineStage = _stg[0];
+      patch.timelineIndex = _stg[2];
+      patch.timeline      = arrayUnion({ key: _stg[0], label: _stg[1], at: now });
+    }
+
     await updateDoc(doc(db, 'orders', orderId), patch);
     await _writeEvent(orderId, fromStatus, toStatus, actor, meta || {});
 
@@ -366,25 +392,11 @@ const SokoniOrders = {
     const updatedOrder = { ...order, ...patch, id: orderId };
     await _dispatchNotifications(toStatus, updatedOrder);
 
-    /* SokoniPay commission on completion */
-    if (toStatus === ORDER_STATUS.COMPLETED && window.SokoniPay?.saveCommission) {
-      SokoniPay.saveCommission({
-        ref:          orderId,
-        orderId,
-        providerName:  order.sellerName  || 'Seller',
-        sellerName:    order.sellerName  || 'Seller',
-        category:     'marketplace_' + (order.category || 'general'),
-        commissionPct: order.commissionPct || 12,
-        sokoniCut:     order.commissionAmt || 0,
-        deliveryComm:  order.deliveryComm  || 0,
-        orderTotal:    order.orderTotal    || 0,
-        sellerNet:     order.sellerNet     || 0,
-        driverNet:     order.driverNet     || 0,
-        status:        'completed',
-        note:          `Marketplace order delivered: ${orderId}`,
-        createdAt:     Date.now(),
-      }).catch(() => {});
-    }
+    /* Gap 5 — commission is recorded EXACTLY ONCE by the canonical server settlement
+       (order-settlement.js settleOrder, fired by onOrderStatusChange on 'completed', using the
+       real calculateCommission engine). The old client-side SokoniPay.saveCommission here
+       double-logged it — and with a HARDCODED 12% that ignored the engine — so it is removed.
+       settleOrder is the single commission authority. */
 
     return { ok: true, fromStatus, toStatus };
   },
@@ -423,6 +435,36 @@ const SokoniOrders = {
   /* ── riderAccept(orderId, driverUid) ── */
   async riderAccept(orderId, driverUid) {
     return this.transitionOrder(orderId, ORDER_STATUS.RIDER_EN_ROUTE, driverUid, {}, ['acceptedAt']);
+  },
+
+  /* ── riderClaim(orderId, driverUid) ── Gap 1: fallback when auto-dispatch found no
+     eligible rider and the order is sitting at 'confirmed'. ATOMIC first-claim-wins: a
+     transaction re-reads the order and assigns it ONLY if still confirmed + unassigned, so
+     concurrent claims see assignedDriverUid already set and lose. This is NOT a second
+     dispatch system — it writes the SAME assignedDriverUid + 'rider_assigned' state the
+     auto-assigner writes (index.js:2968), re-entering the one canonical assignment flow.
+     (transitionOrder is read-then-write and can't guarantee first-claim-wins — hence the txn.) */
+  async riderClaim(orderId, driverUid) {
+    if (!driverUid) return { ok: false, error: 'Sign in to claim a delivery.' };
+    const ref = doc(db, 'orders', String(orderId));
+    try {
+      await runTransaction(db, async (txn) => {
+        const s = await txn.get(ref);
+        if (!s.exists()) throw new Error('Order not found.');
+        const o = s.data();
+        if (o.assignedDriverUid) throw new Error('Just claimed by another rider.');
+        if (o.status !== ORDER_STATUS.CONFIRMED) throw new Error('This delivery is no longer available.');
+        txn.update(ref, {
+          status:            ORDER_STATUS.RIDER_ASSIGNED,
+          assignedDriverUid: driverUid,
+          claimedByRider:    true,
+          riderAssignedAt:   serverTimestamp(),
+          updatedAt:         serverTimestamp(),
+          statusHistory:     arrayUnion({ status: ORDER_STATUS.RIDER_ASSIGNED, at: new Date().toISOString(), by: driverUid, claimed: true }),
+        });
+      });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message || 'Could not claim this delivery.' }; }
   },
 
   /* ── riderReject(orderId, driverUid) ──
@@ -539,12 +581,14 @@ const SokoniOrders = {
     let q = query(
       collection(db, 'orders'),
       where('sellerUid', '==', sellerUid),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     if (statusFilter) q = query(collection(db, 'orders'),
       where('sellerUid', '==', sellerUid),
       where('status', '==', statusFilter),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -627,8 +671,8 @@ const SokoniOrders = {
   },
 
   listenDisputes(callback, statusFilter) {
-    let q = query(collection(db, 'disputes'), orderBy('createdAt', 'desc'));
-    if (statusFilter) q = query(collection(db, 'disputes'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
+    let q = query(collection(db, 'disputes'), orderBy('createdAt', 'desc'), limit(200));
+    if (statusFilter) q = query(collection(db, 'disputes'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'), limit(200));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => console.warn('[SokoniOrders] disputes:', err.message)

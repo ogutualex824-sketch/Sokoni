@@ -1,0 +1,343 @@
+/* ════════════════════════════════════════════════════════════════════════
+   SokoniReconcile — commerce data-convergence status + idempotent reconciliation.
+
+   The canonical records are unchanged and remain the source of truth:
+     products/{id}                          ← ONE product source
+     tenants/{uid}/inventory_products/{id}  ← inventory mirror (linked by sourceProductId)
+     posProducts/{id}                       ← POS mirror (same id)
+     orders/{id} + PosDB.transactions + deliveries → OrderService.UnifiedOrderView
+
+   This module does NOT introduce a new source. It (1) MEASURES drift between the
+   canonical products and their caches, and between order sources and the unified
+   view, and (2) offers an IDEMPOTENT reconcile that rebuilds a stale/missing cache
+   FROM the canonical — never the other way round. Running reconcile twice changes
+   nothing the second time.
+
+   The comparison logic is pure (no I/O) so it is unit-tested deterministically; the
+   live reads/writes wrap it.
+   ════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+
+  function _num (n) { return Number(n || 0); }
+  /* Fields whose divergence between canonical and a cache counts as a mismatch. */
+  function _prodKey (p) { return (p.name || '') + '|' + _num(p.price != null ? p.price : p.sellingPrice) + '|' + _num(p.stock != null ? p.stock : p.stockLevel); }
+
+  /* ── PURE: product convergence ────────────────────────────────────────────
+     canonical: [{id,name,price,stock,...}]  (products/{id})
+     posMirror: [{id,...}]                    (posProducts/{id}, same id)
+     invMirror: [{sourceProductId|id,...}]    (inventory_products, linked)
+     Returns counts + the ids that are missing/mismatched per cache. */
+  function productConvergence (canonical, posMirror, invMirror) {
+    canonical = canonical || []; posMirror = posMirror || []; invMirror = invMirror || [];
+    var posById = {}; posMirror.forEach(function (p) { posById[p.id] = p; });
+    var invById = {}; invMirror.forEach(function (p) { invById[p.sourceProductId || p.id] = p; });
+    var missing = [], mismatched = [];
+    canonical.forEach(function (c) {
+      var pos = posById[c.id], inv = invById[c.id];
+      if (!pos) missing.push({ id: c.id, cache: 'pos' });
+      else if (_prodKey(pos) !== _prodKey(c)) mismatched.push({ id: c.id, cache: 'pos' });
+      if (!inv) missing.push({ id: c.id, cache: 'inventory' });
+      else if (_prodKey(inv) !== _prodKey(c)) mismatched.push({ id: c.id, cache: 'inventory' });
+    });
+    /* Orphan cache rows (present in a mirror but not canonical) are surfaced too. */
+    var canonIds = {}; canonical.forEach(function (c) { canonIds[c.id] = 1; });
+    var orphans = [];
+    posMirror.forEach(function (p) { if (!canonIds[p.id]) orphans.push({ id: p.id, cache: 'pos' }); });
+    invMirror.forEach(function (p) { var k = p.sourceProductId || p.id; if (!canonIds[k]) orphans.push({ id: k, cache: 'inventory' }); });
+    return {
+      canonical: canonical.length, posCache: posMirror.length, inventory: invMirror.length,
+      missing: missing.length, mismatched: mismatched.length, orphans: orphans.length,
+      ok: missing.length === 0 && mismatched.length === 0 && orphans.length === 0,
+      _missing: missing, _mismatched: mismatched, _orphans: orphans
+    };
+  }
+
+  /* ── PURE: order convergence ──────────────────────────────────────────────
+     Reconciles order sources into ONE identity. marketplace/pos are order-bearing;
+     deliveries attach to an order by orderId. Duplicates = same identity twice;
+     orphans = a delivery whose order is unknown. */
+  function orderConvergence (marketplace, pos, deliveries) {
+    marketplace = marketplace || []; pos = pos || []; deliveries = deliveries || [];
+    var identity = {}; var dupes = 0;
+    function add (o, src) {
+      var id = String(o.id || o.orderId || o.canonicalId || '');
+      if (!id) return;
+      var key = src + ':' + id;             /* an order is one identity per source */
+      if (identity[key]) dupes++; else identity[key] = 1;
+    }
+    marketplace.forEach(function (o) { add(o, 'online'); });
+    pos.forEach(function (o) { add(o, 'pos'); });
+    var orderIds = {};
+    marketplace.forEach(function (o) { orderIds[String(o.id || o.orderId || '')] = 1; });
+    pos.forEach(function (o) { orderIds[String(o.id || o.orderId || '')] = 1; });
+    var orphans = 0;
+    deliveries.forEach(function (d) { var oid = String(d.orderId || d.order || ''); if (oid && !orderIds[oid]) orphans++; });
+    return {
+      marketplace: marketplace.length, pos: pos.length, deliveries: deliveries.length,
+      unified: Object.keys(identity).length, duplicates: dupes, orphans: orphans,
+      ok: dupes === 0 && orphans === 0
+    };
+  }
+
+  /* ── Live reads (auth-gated; wrap the pure logic) ── */
+  function _uid () { try { return (root.firebaseAuth && root.firebaseAuth.currentUser && root.firebaseAuth.currentUser.uid) || null; } catch (_) { return null; } }
+  async function _fs () { return await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'); }
+
+  async function status () {
+    var uid = _uid();
+    var out = { products: null, orders: null, at: null };
+    if (!uid || !root.firebaseDB) return out;
+    try {
+      var m = await _fs();
+      var db = root.firebaseDB;
+      /* ACTIVE canonical products only — archived/hidden are excluded from the catalogue and
+         the POS/inventory mirrors, so counting them here would falsely report "missing" caches
+         and inflate the canonical count. Uses the ONE canonical predicate (SokoniProductVisibility),
+         with an inline mirror as a fallback if the module isn't loaded. */
+      var _V = root.SokoniProductVisibility;
+      var _isActive = _V ? _V.isActiveProduct : function (p) {
+        var _H = { deleted:1, removed:1, hidden:1, draft:1, archived:1, banned:1, suspended:1, paused:1, inactive:1, rejected:1 };
+        return !_H[String(p.status || '').toLowerCase()] && p.isVisible !== false && p.isDeleted !== true && p.deleted !== true;
+      };
+      var canon = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs
+        .map(function (d) { return Object.assign({ id: d.id }, d.data()); })
+        .filter(_isActive);
+      var pos = [];
+      try { pos = (await m.getDocs(m.query(m.collection(db, 'posProducts'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); } catch (_) { pos = []; }
+      var inv = [];
+      try { inv = (await m.getDocs(m.query(m.collection(db, 'tenants', uid, 'inventory_products'), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); } catch (_) { inv = []; }
+      out.products = productConvergence(canon, pos, inv);
+      /* Orders: reuse OrderService's unified view; report source counts + dupes/orphans. */
+      if (root.SokoniOrderService && root.SokoniOrderService.query) {
+        var rows = await root.SokoniOrderService.query({ range: 'all', tab: 'all' });
+        var mk = rows.filter(function (r) { return r.source !== 'pos'; });
+        var pz = rows.filter(function (r) { return r.source === 'pos'; });
+        out.orders = orderConvergence(mk, pz, []);
+      }
+      out.at = null;   /* stamped by caller */
+    } catch (_) {}
+    return out;
+  }
+
+  /* ── Idempotent reconciliation ────────────────────────────────────────────
+     Rebuild the POS/inventory CACHES from the canonical products/{id}. Direction is
+     one-way (canonical → cache), MERGE-writes only the compared fields, and only for
+     rows that are missing or mismatched — so a second run writes nothing. NEVER touches
+     products/{id} or any order. Returns {written, alreadyOk}. Auth + Firestore required. */
+  async function reconcile () {
+    var uid = _uid();
+    if (!uid || !root.firebaseDB) throw new Error('Not signed in');
+    var m = await _fs();
+    var db = root.firebaseDB;
+    var canon = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    var pos = [], inv = [];
+    try { pos = (await m.getDocs(m.query(m.collection(db, 'posProducts'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); } catch (_) {}
+    try { inv = (await m.getDocs(m.query(m.collection(db, 'tenants', uid, 'inventory_products'), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); } catch (_) {}
+    var conv = productConvergence(canon, pos, inv);
+    var canonById = {}; canon.forEach(function (c) { canonById[c.id] = c; });
+    var toFix = {};
+    conv._missing.concat(conv._mismatched).forEach(function (x) { toFix[x.id + ':' + x.cache] = x; });
+    var written = 0;
+    for (var k in toFix) {
+      var x = toFix[k], c = canonById[x.id]; if (!c) continue;
+      try {
+        if (x.cache === 'pos') {
+          await m.setDoc(m.doc(db, 'posProducts', c.id),
+            { name: c.name, price: _num(c.price), stock: _num(c.stock), sellerUid: uid, sourceProductId: c.id, updatedAt: m.serverTimestamp() }, { merge: true });
+        } else {
+          await m.setDoc(m.doc(db, 'tenants', uid, 'inventory_products', c.id),
+            { name: c.name, sellingPrice: _num(c.price), stockLevel: _num(c.stock), sourceProductId: c.id, tenantId: uid, updatedAt: m.serverTimestamp() }, { merge: true });
+        }
+        written++;
+      } catch (_) {}
+    }
+    /* Announce so live modules re-read (idempotent recompute). */
+    try { if (root.SokoniSync) root.SokoniSync.productChanged({ type: 'RECONCILED', source: 'Reconcile', sellerUid: uid, metadata: { written: written }, timestamp: Date.now() }); } catch (_) {}
+    return { written: written, alreadyOk: (conv.missing + conv.mismatched) === 0 };
+  }
+
+  /* ── PURE: branch isolation check ─────────────────────────────────────────
+     Given records (products / transactions / orders — anything with a branchId) and the
+     ACTIVE branch, report how many belong to the active branch, to OTHER branches (=
+     leakage if any surface shows them while scoped), and how many are untagged (legacy,
+     pending backfill). leakage=true means Shop A would see Shop B's data → a failure. */
+  function branchIsolation (records, activeBranch) {
+    records = records || [];
+    var active = 0, other = 0, untagged = 0, byBranch = {};
+    records.forEach(function (r) {
+      var b = r.branchId != null ? r.branchId : null;
+      if (b == null) { untagged++; return; }
+      byBranch[b] = (byBranch[b] || 0) + 1;
+      if (activeBranch && b === activeBranch) active++;
+      else if (activeBranch) other++;
+    });
+    return {
+      total: records.length, active: active, other: other, untagged: untagged,
+      branches: Object.keys(byBranch).length, byBranch: byBranch,
+      leakage: activeBranch ? other > 0 : false,
+      ok: activeBranch ? other === 0 : true
+    };
+  }
+
+  /* ── PURE: backfill branch decision ───────────────────────────────────────
+     Decide which branch an UNTAGGED historical record belongs to, WITHOUT ever
+     blind-assigning (which would put Shop B's sales into Shop A). Priority:
+       1. already tagged            → keep, never overwrite
+       2. an existing branch/shop ref on the record (branchId/shopId/branch) → use it
+       3. seller has exactly ONE shop → assign that shop (unambiguous)
+       4. multiple shops, genuinely ambiguous → seller's PRIMARY branch + audit flag
+     ctx = { shops:[{id,isMain}], primaryBranchId }. Returns {branchId, reason, audit}. */
+  function determineBranch (record, ctx) {
+    record = record || {}; ctx = ctx || {};
+    if (record.branchId) return { branchId: record.branchId, reason: 'already-tagged', audit: false };
+    var raw = record.raw || record;
+    var ref = raw.branchId || raw.shopId || raw.branch || null;
+    if (ref) return { branchId: String(ref), reason: 'existing-ref', audit: false };
+    var shops = ctx.shops || [];
+    if (shops.length === 1) return { branchId: shops[0].id, reason: 'single-shop', audit: false };
+    if (shops.length > 1) {
+      var primary = ctx.primaryBranchId || (shops.filter(function (s) { return s.isMain; })[0] || {}).id || shops[0].id;
+      return { branchId: primary, reason: 'ambiguous-primary', audit: true };   /* audited, not silent */
+    }
+    return { branchId: null, reason: 'no-shops', audit: false };
+  }
+
+  /* Tally a backfill plan (pure). Separates records we can SAFELY assign from AMBIGUOUS
+     ones needing review. opts.financial=true (orders / POS transactions) → an ambiguous
+     record is NEVER auto-assigned to a primary branch (that would silently move money);
+     it goes to ambiguousReview for a human decision. Products (non-financial) may go to
+     the primary branch with an audit record. */
+  function backfillPlan (records, ctx, opts) {
+    opts = opts || {};
+    var t = { alreadyTagged: 0, assignable: 0, ambiguousReview: 0, skipped: 0, failed: 0, plan: [], review: [] };
+    (records || []).forEach(function (r) {
+      try {
+        var d = determineBranch(r, ctx);
+        if (d.reason === 'already-tagged') { t.alreadyTagged++; return; }
+        if (!d.branchId) { t.skipped++; return; }
+        if (d.audit) {                                   /* ambiguous (multi-shop, no ref) */
+          if (opts.financial) { t.ambiguousReview++; t.review.push({ id: r.id, suggested: d.branchId, reason: d.reason }); return; }
+          t.assignable++; t.plan.push({ id: r.id, branchId: d.branchId, reason: d.reason, audit: true }); return;
+        }
+        t.assignable++; t.plan.push({ id: r.id, branchId: d.branchId, reason: d.reason, audit: false });   /* safe: ref / single-shop */
+      } catch (_) { t.failed++; }
+    });
+    return t;
+  }
+
+  /* Read the seller's shops (branches) as determineBranch context. */
+  async function _sellerShops (uid) {
+    try {
+      var m = await _fs();
+      var snap = await m.getDoc(m.doc(root.firebaseDB, 'sellers', uid));
+      var branches = (snap.exists() && Array.isArray(snap.data().branches)) ? snap.data().branches : [];
+      var shops = branches.map(function (b) { return { id: b.id, isMain: !!b.isMain }; });
+      if (!shops.length) shops = [{ id: 'main', isMain: true }];   /* default single main */
+      var primary = (shops.filter(function (s) { return s.isMain; })[0] || shops[0]).id;
+      return { shops: shops, primaryBranchId: primary };
+    } catch (_) { return { shops: [{ id: 'main', isMain: true }], primaryBranchId: 'main' }; }
+  }
+
+  /* Deterministic, dependency-free id of a reviewed plan (djb2). The confirmed write
+     recomputes it and refuses to run unless it matches the approved id — so a write can
+     ONLY apply the exact plan a human reviewed, never a plan the data drifted into. */
+  function _hash (str) { var h = 5381; for (var i = 0; i < str.length; i++) { h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; } return h.toString(36); }
+  function previewId (result) {
+    var parts = [];
+    ['products', 'transactions', 'orders'].forEach(function (k) {
+      var p = result[k]; if (!p || !p.plan) return;
+      p.plan.forEach(function (x) { parts.push(k + ':' + x.id + '>' + x.branchId); });
+    });
+    parts.sort();
+    return 'bp_' + _hash(parts.join('|')) + '_' + parts.length;
+  }
+  function reconcileSummary (result) {
+    var s = { safeToAssign: 0, alreadyCorrect: 0, needsReview: 0, skipped: 0, failed: 0 };
+    ['products', 'transactions', 'orders'].forEach(function (k) {
+      var p = result[k]; if (!p) return;
+      s.safeToAssign += p.assignable || 0; s.alreadyCorrect += p.alreadyTagged || 0;
+      s.needsReview += p.ambiguousReview || 0; s.skipped += p.skipped || 0; s.failed += p.failed || 0;
+    });
+    return s;
+  }
+
+  /* Idempotent branch backfill. DRY-RUN by default: computes the plan and writes NOTHING.
+     A confirmed write ({dryRun:false, approvePreviewId}) requires the approved preview id to
+     match the freshly-recomputed plan; it writes ONLY safely-assignable records, never an
+     existing branchId (no overwrite), never an ambiguous financial record; writes an audit
+     doc per mutation; returns before/after counts; then auto-runs cache reconciliation. */
+  async function backfill (opts) {
+    opts = opts || {};
+    var dryRun = opts.dryRun !== false;                 /* default TRUE — never write unless told */
+    var uid = _uid();
+    var result = { dryRun: dryRun, previewId: null, summary: null, products: null, transactions: null, orders: null };
+    if (!uid || !root.firebaseDB) return result;
+    var ctx = await _sellerShops(uid);
+    var m = await _fs();
+    var db = root.firebaseDB;
+
+    /* Compute the plan (reads only). */
+    try {
+      var prods = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(2000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      result.products = backfillPlan(prods, ctx, { financial: false });
+    } catch (_) {}
+    try {
+      if (root.SokoniOrderService && root.SokoniOrderService.query) {
+        var rows = await root.SokoniOrderService.query({ range: 'all', tab: 'all' });
+        result.transactions = backfillPlan(rows.filter(function (r) { return r.source === 'pos'; }).map(function (r) { return { id: r.canonicalId, branchId: r.branchId, raw: r.raw }; }), ctx, { financial: true });
+        result.orders = backfillPlan(rows.filter(function (r) { return r.source !== 'pos'; }).map(function (r) { return { id: r.canonicalId, branchId: r.branchId, raw: r.raw }; }), ctx, { financial: true });
+      }
+    } catch (_) {}
+    result.previewId = previewId(result);
+    result.summary = reconcileSummary(result);
+
+    if (dryRun) return result;                          /* preview only — nothing written */
+
+    /* ── Confirmed write — gated on the reviewed plan ── */
+    if (opts.approvePreviewId !== result.previewId) {
+      result.rejected = 'preview-mismatch';             /* data changed since review → re-review */
+      return result;
+    }
+    var before = { products: (result.products && result.products.assignable) || 0 };
+    var written = 0, failed = 0;
+    /* Only PRODUCTS are auto-written (non-financial). Financial assignable are safe (ref/
+       single-shop) but we still gate financial writes behind ref/single-shop only — the
+       plan already excluded ambiguous financial. Products first; financial only where safe. */
+    async function apply (kind, coll, plan) {
+      for (var i = 0; i < plan.plan.length; i++) {
+        var p = plan.plan[i];
+        try {
+          await m.updateDoc(m.doc(db, coll, String(p.id)), { branchId: p.branchId, branchBackfilledAt: m.serverTimestamp() });
+          await m.addDoc(m.collection(db, 'branchMigrationAudit'), {
+            sellerUid: uid, previewId: result.previewId, kind: kind, recordId: String(p.id),
+            branchId: p.branchId, reason: p.reason, at: m.serverTimestamp()
+          }).catch(function () {});
+          written++;
+        } catch (_) { failed++; }
+      }
+    }
+    if (result.products) await apply('products', 'products', result.products);
+    /* NB: POS transactions live in IndexedDB, not Firestore — they are re-tagged at their
+       own persist point going forward; the historical financial write is intentionally not
+       done blindly here. Marketplace-order financial writes are left for L4-verified server
+       migration. This keeps money records untouched unless provably safe. */
+    result.written = written; result.failedWrites = failed;
+    result.after = { productsAssignableRemaining: before.products - written };
+    try { result.postReconcile = await reconcile(); } catch (_) {}
+    return result;
+  }
+
+  root.SokoniReconcile = {
+    productConvergence: productConvergence,
+    orderConvergence: orderConvergence,
+    branchIsolation: branchIsolation,
+    determineBranch: determineBranch,
+    backfillPlan: backfillPlan,
+    previewId: previewId,
+    reconcileSummary: reconcileSummary,
+    status: status,
+    reconcile: reconcile,
+    backfill: backfill
+  };
+})(typeof window !== 'undefined' ? window : this);

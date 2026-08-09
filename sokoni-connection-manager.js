@@ -29,7 +29,7 @@
     'use strict';
 
     var BRIDGE_URL = 'http://localhost:9101';
-    var PROXY_CF   = 'https://us-central1-sokoni-app.cloudfunctions.net/posPrint';
+    var PROXY_CF   = 'https://us-central1-sokoni-aeb26.cloudfunctions.net/posPrint';
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

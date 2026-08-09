@@ -20,6 +20,16 @@ function _getAnthropicClient() {
   return _anthropicInstance;
 }
 const db = admin.firestore();
+const { writeAudit: _writeAudit } = require('./pos-audit');
+/* Canonical analytics — ONE aggregate every dashboard reads; fed only from exactly-once events. */
+const { bumpAnalytics: _bumpAnalytics, claimPaidCount: _claimPaidCount, grossShillings: _grossShillings, bumpOrderDimensions: _bumpDims, bumpDeliveryHour: _bumpDelHour } = require('./analytics-aggregator');
+/* Analytics reconciliation (R1.x Phase 5) — canonical truth vs live aggregate; the parity gate. */
+const { computeReconciliation: _reconcileAnalytics, backfillAnalytics: _backfillAnalytics } = require('./analytics-reconcile');
+/* Analytics rollup (R1.x Phase 3) + BI (Phase 4) — period buckets + derived ratios. */
+const { rollupGlobal: _rollupAnalytics, computeBI: _computeBI, computeTopLists: _computeTopLists } = require('./analytics-rollup');
+/* Analytics monitoring (R1.x Phase 6) — health/integrity checks → analytics/health + alerts;
+   cutover readiness gate (Milestone B prep) → analytics/cutover_readiness. */
+const { runHealthChecks: _analyticsHealth, computeCutoverReadiness: _cutoverReadiness } = require('./analytics-monitor');
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
 const INTASEND_PRIVATE_KEY       = defineSecret("INTASEND_PRIVATE_KEY");
@@ -43,6 +53,7 @@ const logger              = require("firebase-functions/logger");
    relying on a const declared 4,000 lines below the code that uses it. */
 const _brands             = require("./brands");            /* consumer brands; Bravilex stays the legal entity */
 const _ageVerify          = require("./age-verification");  /* server-side age gate */
+const _avail              = require("./availability-enforce"); /* pure shop/product availability gating (tested) */
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -259,6 +270,12 @@ exports.grantAdminClaim = onCall(
     );
 
     await db.collection("auditLogs").add({ action: "grantAdminClaim", targetUid, grantedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
+    _writeAudit(db, {
+      action: 'role.change', actorUid: request.auth.uid, actorRole: 'superAdmin',
+      objectType: 'user', objectId: targetUid,
+      before: { admin: !!existClaims.admin }, after: { admin: true },
+      metadata: { grant: 'admin' },
+    });
     return { success: true, uid: targetUid, message: "Admin claim granted. User must sign out and back in." };
   }
 );
@@ -281,6 +298,7 @@ exports.revokeAdminClaim = onCall(
 
     /* Preserve other claims — only delete admin key */
     const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
+    const _wasAdmin = !!existClaims.admin;
     delete existClaims.admin;
     await admin.auth().setCustomUserClaims(targetUid, existClaims);
     await admin.auth().revokeRefreshTokens(targetUid);
@@ -290,6 +308,12 @@ exports.revokeAdminClaim = onCall(
     );
 
     await db.collection("auditLogs").add({ action: "revokeAdminClaim", targetUid, revokedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
+    _writeAudit(db, {
+      action: 'role.change', actorUid: request.auth.uid, actorRole: 'superAdmin',
+      objectType: 'user', objectId: targetUid,
+      before: { admin: _wasAdmin }, after: { admin: false },
+      metadata: { revoke: 'admin' },
+    });
     return { success: true, uid: targetUid };
   }
 );
@@ -754,15 +778,29 @@ async function executeTool(name, input) {
       }
 
       case "get_etims_submissions": {
-        let q = db.collection("etims_submissions").orderBy("submittedAt", "desc").limit(input.limit || 20);
-        if (input.status && input.status !== "all") q = q.where("status", "==", input.status);
-        const snap = await q.get();
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        /* B7: read the CANONICAL server invoicing collection (etimsInvoices) that the
+           deployed CFs actually write — NOT the legacy client-path etims_submissions,
+           which the server never populates (admin/AI were seeing a disconnected set).
+           Filter by status in memory to avoid a new composite index. */
+        const snap = await db.collection("etimsInvoices").orderBy("createdAt", "desc").limit(Math.min(input.limit || 20, 100)).get();
+        let list = snap.docs.map(d => {
+          const x = d.data();
+          return {
+            id: d.id, invoiceNumber: x.invoiceNumber || null, status: x.status || null,
+            sellerUid: x.sellerUid || null, orderId: x.orderId || null,
+            amount: x.totAmt ?? x.total ?? null,
+            kraReceiptNumber: x.kraReceiptNumber || x.receiptNumber || null,
+            createdAt: x.createdAt || null,
+          };
+        });
+        if (input.status && input.status !== "all") list = list.filter(s => s.status === input.status);
         return {
-          total:    snap.size,
+          total:    list.length,
           accepted: list.filter(s => s.status === "accepted").length,
-          rejected: list.filter(s => s.status === "rejected").length,
+          pending:  list.filter(s => s.status === "pending_submission").length,
+          failed:   list.filter(s => s.status === "failed").length,
           submissions: list,
+          _source: "etimsInvoices (canonical server invoicing)",
         };
       }
 
@@ -2202,13 +2240,14 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-    const { cartItems, deliveryFee, promoCode, redeemLoyalty } = request.data || {};
+    const { cartItems, deliveryFee, promoCode, redeemLoyalty, fulfillmentType } = request.data || {};
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
     }
     if (cartItems.length > 50) {
       throw new HttpsError("invalid-argument", "Cart too large (max 50 items).");
     }
+    const _fulfil = (String(fulfillmentType || "delivery") === "pickup") ? "pickup" : "delivery";
 
     const productIds = [...new Set(
       cartItems.map(i => String(i.productId || i.id || "")).filter(Boolean)
@@ -2226,17 +2265,49 @@ exports.createCheckoutSession = onCall(
       snap.forEach(doc => { priceMap[doc.id] = doc.data(); });
     }
 
+    /* ── Shop availability (Layer 4 authority) ─────────────────────────────────
+       Read the canonical shop-state for every distinct seller in the cart. ABSENT
+       fields default to open, so un-migrated shops behave exactly as before. This
+       is the SERVER gate: a closed shop / disabled channel cannot get a checkout
+       session, so no new order can be created for it — regardless of stale client
+       state. Existing orders are never touched (this is creation-only). */
+    const cartSellerUids = [...new Set(
+      productIds.map(pid => priceMap[pid] && priceMap[pid].sellerUid).filter(Boolean)
+    )];
+    const shopState = {};
+    try {
+      for (let si = 0; si < cartSellerUids.length; si += 10) {
+        const chunk = cartSellerUids.slice(si, si + 10);
+        const ssnap = await db.collection("shops")
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+        ssnap.forEach(doc => { shopState[doc.id] = doc.data() || {}; });
+      }
+    } catch (e) {
+      /* Fail OPEN: availability is a merchant convenience, not a security control. If the
+         shop-state read fails, default every shop to open (_avail.normalizeShop does this on
+         an empty/undefined entry) rather than block legitimate checkouts. */
+      console.warn("[createCheckoutSession] shop-state read failed, defaulting open:", e && e.message);
+    }
+
     /* Build session items using server prices — any item not in the catalogue is skipped.
        Also validates stock availability: out-of-stock items are rejected so the session
        cannot be used to purchase items that are unavailable. */
     const sessionItems = [];
     let serverSubtotal = 0;
     const outOfStockItems = [];
+    const unavailableItems = [];   /* product hidden/archived, or its shop closed/online-off */
     const adjustedItems   = [];
     for (const item of cartItems) {
       const pid  = String(item.productId || item.id || "");
       const prod = priceMap[pid];
       if (!prod) continue;
+
+      /* Availability (canonical): product hidden/archived, or its shop closed/online-off
+         → cannot be added to a NEW checkout. Pure, unit-tested decision. */
+      if (!_avail.itemAvailability(prod, shopState[prod.sellerUid]).available) {
+        unavailableItems.push(prod.name || pid);
+        continue;
+      }
 
       /* Out-of-stock check: outOfStock flag OR stock field present and zero */
       const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
@@ -2272,6 +2343,18 @@ exports.createCheckoutSession = onCall(
       });
     }
 
+    /* Availability rejection — a closed shop / unavailable product cannot be ordered.
+       If every purchasable item was dropped for unavailability, the session is refused
+       outright; a partial cart proceeds with only the available items. */
+    if (unavailableItems.length > 0 && sessionItems.length === 0) {
+      throw new HttpsError("failed-precondition",
+        `Currently unavailable: ${unavailableItems.slice(0, 3).join(", ")}. The shop may be closed or these items paused.`
+      );
+    }
+    if (unavailableItems.length > 0) {
+      console.warn("[createCheckoutSession] Skipped unavailable items:", unavailableItems);
+    }
+
     if (outOfStockItems.length > 0 && sessionItems.length === 0) {
       throw new HttpsError("failed-precondition",
         `All items in your cart are out of stock: ${outOfStockItems.slice(0, 3).join(", ")}`
@@ -2283,6 +2366,20 @@ exports.createCheckoutSession = onCall(
     }
     if (sessionItems.length === 0) {
       throw new HttpsError("not-found", "None of the cart items were found in the product catalogue.");
+    }
+
+    /* Fulfillment-channel enforcement: the chosen method must be enabled by every
+       seller remaining in the cart. Defaults are on, so this only blocks a shop that
+       has explicitly turned the channel off. */
+    const _fulfilSellers = [...new Set(sessionItems.map(i => i.sellerUid).filter(Boolean))];
+    for (const sUid of _fulfilSellers) {
+      const _f = _avail.fulfillmentAllowed(_fulfil, shopState[sUid]);
+      if (!_f.ok && _f.reason === "delivery-off") {
+        throw new HttpsError("failed-precondition", "Delivery is currently unavailable for this shop. Please choose pickup or try again later.");
+      }
+      if (!_f.ok && _f.reason === "pickup-off") {
+        throw new HttpsError("failed-precondition", "Pickup is currently unavailable for this shop. Please choose delivery or try again later.");
+      }
     }
 
     /* Cap delivery fee at KES 5,000 to prevent inflated totals */
@@ -2472,8 +2569,13 @@ exports.verifyIntasendPayment = onRequest(
     const {
       invoiceId, trackingId, amount, phone, orderItems,
       deliveryName, deliveryAddress,
+      pickupCoords, deliveryCoords, /* Blocker B2 — geo for rider dispatch (pickup=shop, dropoff=buyer) */
       sessionId, /* preferred: server-side checkout session ID */
     } = req.body;
+    /* Normalize coords → flat lat/lng the dispatch engine reads (_autoAssignRider: after.pickupLat/pickupLng). */
+    const _num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const _pLat = pickupCoords && _num(pickupCoords.lat), _pLng = pickupCoords && _num(pickupCoords.lng);
+    const _dLat = deliveryCoords && _num(deliveryCoords.lat), _dLng = deliveryCoords && _num(deliveryCoords.lng);
 
     if (!invoiceId && !trackingId) {
       res.status(400).json({ verified: false, error: "invoiceId or trackingId required" });
@@ -2643,6 +2745,19 @@ exports.verifyIntasendPayment = onRequest(
         buyerPhone:      phone,
         buyerName:       deliveryName || "Customer",
         deliveryAddress: deliveryAddress || "",
+        /* Blocker B2 — pickup (shop) + dropoff (buyer) geo so rider dispatch can route.
+           `_autoAssignRider` reads pickupLat/pickupLng; the delivered fee-split + rider ETA need both.
+           Null-safe: a missing seller shop-geo leaves pickup null (seller-onboarding NEEDS-DATA). */
+        pickupLat:       _pLat || null,
+        pickupLng:       _pLng || null,
+        dropoffLat:      _dLat || null,
+        dropoffLng:      _dLng || null,
+        deliveryCoords:  (_dLat != null && _dLng != null) ? { lat: _dLat, lng: _dLng } : null,
+        /* Carry the server-clamped delivery fee from the session onto the order (was dropped).
+           Fixes TWO things: the `delivered` fee-split (onOrderStatusChange read `after.deliveryFee`
+           → previously 0), AND settlement gross (order-settlement `_grossCents` = total − deliveryFee,
+           previously over-settled the seller by the delivery amount). Server-authoritative. */
+        deliveryFee:     Number((sessionDoc && sessionDoc.deliveryFee) || 0),
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
         items:           resolvedItems,
@@ -2651,6 +2766,10 @@ exports.verifyIntasendPayment = onRequest(
         paymentMethod:   "mpesa",
         sessionId:       sessionId || null,
         escrow:          { held: confirmedAmount, released: 0, refunded: 0 },
+        /* Product Settlement Convergence — funds are HELD by SOKONI at payment; released
+           to the seller's wallet ONLY at fulfillment (settleOrder). State machine:
+           UNSETTLED→HELD→ELIGIBLE_FOR_SETTLEMENT→SETTLING→SETTLED (REFUNDED if refunded first). */
+        settlementStatus: "HELD",
         statusHistory:   [{ status: "paid", at: Date.now(), by: "intasend-webhook" }],
         createdAt:       admin.firestore.FieldValue.serverTimestamp(),
       };
@@ -2844,8 +2963,11 @@ exports.onOrderStatusChange = onDocumentUpdated(
       );
     }
 
-    /* ── Delivery platform fee on order completion ── */
-    if (toStatus === "delivered" && after.sellerUid) {
+    /* ── Delivery fee split + rider payout on delivery ──
+       Fires exactly on the transition INTO `delivered` (the `before` guard makes a
+       re-emitted update — same status again — a no-op, so the deliveryFees record and the
+       rider credit are written once). */
+    if (toStatus === "delivered" && before.status !== "delivered" && after.sellerUid) {
       const deliveryFee = Number(after.deliveryFee || 0);
       /* Delivery-fee split — priced by the ONE Commission Engine (category: hub).
          The rate was already correct (it came from the single config), but the calculation
@@ -2863,17 +2985,111 @@ exports.onOrderStatusChange = onDocumentUpdated(
       }) : null;
       const platformFee = _delComm ? _delComm.commissionCents / 100 : 0;
       const riderFee    = Math.round((deliveryFee - platformFee) * 100) / 100;
+      const riderUid    = after.assignedDriverUid || after.riderId || null;
+
+      /* ── Rider payout — credit the ONE canonical withdrawable wallet (shillings),
+         exactly-once. The delivery fee is NOT escrowed (unlike the seller's product
+         earnings, which settle at `completed`): the rider did the job, so they are paid
+         on proof-of-delivery. Mirrors settleOrder's seller-credit pattern —
+         deterministic walletTransactions id (`{rider}_{order}_delivery`) is the
+         exactly-once guard against a re-fired trigger or a manual re-transition.
+         Was previously MISSING: onOrderStatusChange only wrote a `pending` deliveryFees
+         record, and its sole consumer is a read-only admin report — so riders were never
+         actually credited. Best-effort: a wallet hiccup never blocks the status write. */
+      const riderShillings = Math.max(0, Math.round(riderFee));
+      let riderCredited = false;
+      if (riderUid && riderShillings > 0) {
+        try {
+          riderCredited = await db.runTransaction(async (t) => {
+            const txnRef = db.collection("walletTransactions").doc(`${riderUid}_${orderId}_delivery`);
+            const ex = await t.get(txnRef);
+            if (ex.exists) return false; /* already credited — replay no-op */
+            t.set(db.collection("wallets").doc(riderUid), {
+              balance:   admin.firestore.FieldValue.increment(riderShillings),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            t.set(txnRef, {
+              uid:        riderUid,
+              type:       "delivery_earning",
+              amount:     riderShillings,
+              currency:   "KES",
+              orderId,
+              sourceType: "delivery",
+              sourceId:   orderId,
+              deliveryRef: after.deliveryRef || null,
+              createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return true;
+          });
+        } catch (e) {
+          console.error("[onOrderStatusChange] rider payout failed (recoverable):", e.message);
+        }
+      }
+
       db.collection("deliveryFees").add({
         orderId,
         sellerUid:      after.sellerUid,
-        riderUid:       after.assignedDriverUid || null,
+        riderUid:       riderUid,
         platformFeeKES: platformFee,
         riderFeeKES:    riderFee,
         totalFeeKES:    deliveryFee,
         grossOrderKES:  Number(after.orderTotal || 0),
-        status:         "pending",
+        status:         riderCredited ? "credited" : (riderUid ? "pending" : "no-rider"),
+        creditedAt:     riderCredited ? admin.firestore.FieldValue.serverTimestamp() : null,
         createdAt:      admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
+
+      /* Canonical analytics — one completed delivery + rider earnings (rider credited exactly
+         once above, so this counts once) + peak-delivery-hour bucket (Phase 4b). */
+      if (riderCredited) {
+        _bumpAnalytics(db, { shopId: after.sellerUid, branchId: after.branchId || null, incr: { deliveries: 1, riderEarningsShillings: riderShillings } });
+        _bumpDelHour(db).catch(() => {});
+      }
+    }
+
+    /* ── Product Settlement Convergence — settle the seller ONCE on fulfillment ──
+       `completed` = customer confirmed OR the auto-confirm sweep. Reuses the canonical
+       settlement engine, credits the seller's withdrawable wallets.balance, writes the
+       settlement/wallet/ledger records. Exactly-once (guarded on settlementStatus);
+       best-effort so a settlement hiccup never blocks the status write. */
+    if (toStatus === "completed" && before.status !== "completed" && after.sellerUid) {
+      try {
+        const _settle = await require("./order-settlement").settleOrder(db, admin, orderId);
+        /* Canonical analytics — settled order + platform revenue (= the CANONICAL commission from
+           the settlement engine, NOT a hardcoded dashboard %) + seller earnings, exactly once
+           (settleOrder returns 'settled' only on the first settlement of this order). */
+        if (_settle && _settle.outcome === "settled") {
+          _bumpAnalytics(db, { shopId: after.sellerUid, branchId: after.branchId || null, incr: {
+            settledOrders:            1,
+            gmvSettledShillings:      _grossShillings(after),
+            platformRevenueShillings: Math.round((_settle.commissionCents || 0) / 100),
+            sellerEarningsShillings:  _settle.netShillings || 0,
+          }});
+        }
+      } catch (e) { console.error("[onOrderStatusChange] order settlement failed (recoverable):", e.message); }
+    }
+
+    /* ── Canonical analytics: a pending→paid transition counts the order + GMV. Marker-guarded
+       (claimPaidCount) so the created-at-paid path in onNewOrderCreated can't also count it. ── */
+    if (toStatus === "paid" && before.status !== "paid") {
+      _claimPaidCount(db, orderId).then((d) => {
+        if (d) {
+          _bumpAnalytics(db, { shopId: d.sellerUid || d.sellerId || null, branchId: d.branchId || null, incr: { paidOrders: 1, gmvShillings: _grossShillings(d) } });
+          _bumpDims(db, d).catch(() => {});   /* Phase 4b dimensional fan-out (exactly-once with the count) */
+        }
+      }).catch(() => {});
+    }
+
+    /* ── Canonical analytics (R1.x Phase 2): cancellation — count it, and reverse the paid-order +
+       GMV only if this order had actually been counted as paid (marker set), so a cancel-after-paid
+       leaves gross figures honest. Exactly-once via the before-status transition guard. ── */
+    if (toStatus === "cancelled" && before.status !== "cancelled") {
+      const _cIncr = { cancellations: 1 };
+      if (after._apPaidCounted === true) {
+        _cIncr.paidOrders   = -1;
+        _cIncr.gmvShillings  = -_grossShillings(after);
+      }
+      _bumpAnalytics(db, { shopId: after.sellerUid || after.sellerId || null, branchId: after.branchId || null, incr: _cIncr });
     }
   }
 );
@@ -3033,6 +3249,16 @@ exports.onNewOrderCreated = onDocumentCreated(
       console.warn("[onNewOrderCreated] No sellerUid on order", orderId);
       return;
     }
+
+    /* ── Canonical analytics: count this PAID order + GMV exactly once. The marker guard in
+       claimPaidCount makes this safe even though an order can reach 'paid' via creation-at-paid
+       (here) OR a later pending→paid transition (onOrderStatusChange) — only the first wins. */
+    _claimPaidCount(db, orderId).then((d) => {
+      if (d) {
+        _bumpAnalytics(db, { shopId: sellerUid, branchId: d.branchId || null, incr: { paidOrders: 1, gmvShillings: _grossShillings(d) } });
+        _bumpDims(db, d).catch(() => {});   /* Phase 4b dimensional fan-out (exactly-once with the count) */
+      }
+    }).catch(() => {});
 
     const tasks = [];
 
@@ -3263,11 +3489,68 @@ exports.darajaSTKPush = onCall(
         pricedItems.push({ productId: pid, qty, unitPrice: unit });
       }
 
-      /* Delivery is the one client-influenced input we accept, because it
-         depends on a destination the server cannot infer here. It is bounded
-         so it can never be used to inflate a charge arbitrarily. */
+      /* ── Delivery pricing is the SERVER's, not the client's ─────────────────
+         This previously accepted request.data.deliveryFee and merely clamped it
+         to 0..5000. A bounded lie is still a lie: within that range the client
+         chose what delivery cost, and the only defence was that it could not be
+         arbitrarily large.
+
+         Now the server recomputes from the merchant's own configuration using
+         the shared delivery engine — the same module the client uses, so the two
+         cannot drift — and a mismatch is REJECTED rather than absorbed.
+
+         Where a merchant has no deliveryConfig yet, the server has nothing to
+         recompute FROM. Rather than silently trusting the client in that case,
+         the legacy clamp still applies and the gap is logged, so unconfigured
+         merchants are visible and migratable instead of invisible. */
       const clientDelivery = Math.round(Number(request.data.deliveryFee) || 0);
-      const deliveryFee = Math.min(Math.max(clientDelivery, 0), 5000);
+      let deliveryFee;
+
+      const _sellerSnap = await db.collection('sellers').doc(String(sellerUid)).get().catch(() => null);
+      const _delCfg = _sellerSnap && _sellerSnap.exists ? _sellerSnap.data().deliveryConfig : null;
+
+      if (_delCfg && _delCfg.enabled !== undefined) {
+        const _engine = require('./shared/delivery-engine.js');
+        const _calc = _engine.calculateDelivery(_delCfg, {
+          subtotal:   serverSubtotal,
+          distanceKm: request.data.distanceKm,
+          zone:       request.data.deliveryZone,
+        });
+        deliveryFee = _calc.fee;
+
+        if (clientDelivery !== deliveryFee) {
+          await db.collection('auditLogs').add({
+            type: 'delivery_fee_mismatch',
+            severity: clientDelivery < deliveryFee ? 'high' : 'low',
+            callerUid: request.auth.uid,
+            merchantId: sellerUid, orderId: orderId || null,
+            clientFee: clientDelivery, serverFee: deliveryFee,
+            deliveryMode: _delCfg.mode || null, reason: _calc.reason,
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+
+          /* Rejected, with the authoritative figure returned so the client can
+             refresh and retry honestly. Silently substituting the server figure
+             would charge a total the customer never saw. */
+          throw new HttpsError('failed-precondition',
+            'Delivery fee is out of date. Please refresh your cart.',
+            { serverDeliveryFee: deliveryFee, clientDeliveryFee: clientDelivery,
+              deliverable: _calc.deliverable, reason: _calc.reason });
+        }
+      } else {
+        deliveryFee = Math.min(Math.max(clientDelivery, 0), 5000);
+        if (clientDelivery > 0) {
+          await db.collection('auditLogs').add({
+            type: 'delivery_fee_unverified',
+            severity: 'low',
+            callerUid: request.auth.uid,
+            merchantId: sellerUid, orderId: orderId || null,
+            clientFee: clientDelivery, serverFee: null,
+            note: 'merchant has no deliveryConfig; legacy clamp applied',
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+        }
+      }
 
       authoritativeAmount = Math.round(serverSubtotal + deliveryFee);
       pricingSource = "server_recomputed";
@@ -3444,6 +3727,194 @@ exports.darajaSTKPush = onCall(
     return { success: true, checkoutId, message: stkData.CustomerMessage || "STK push sent" };
   }
 );
+
+/* ── Shared marketplace payment finaliser ──────────────────────────────────
+   A confirmed product payment must mark its order paid AND decrement stock in
+   ONE transaction, so a verified payment and its inventory movement can never
+   diverge. Extracted here so any collection path (IntaSend webhook today,
+   Daraja callback if it is ever revived) finalises a product order IDENTICALLY
+   and cannot drift.
+
+   Idempotent by construction: the order's `inventoryApplied` flag is read
+   inside the transaction, so a retried/duplicate webhook converges instead of
+   deducting stock twice. All reads precede all writes (Firestore requirement),
+   and stock is floored at zero with `oversoldAlerts` recorded for any shortfall
+   — the payment already happened, so an oversell is flagged, never rejected.
+
+   The order document is expected to already exist (the client writes it as
+   pending_payment BEFORE initiating the STK). If it is absent — the browser
+   died mid-checkout, or the webhook beat the client write — the fact is
+   recorded in orphanPayments for reconciliation rather than lost.
+
+   NOTE ON SETTLEMENT: the money settlement (seller wallet credit) is the
+   CALLER's concern. The IntaSend webhook credits the seller wallet directly and
+   passes settlementStatus:"settled" so no settlement sweep double-credits; a
+   queue-based caller would pass "queued". This function never moves money and
+   never writes a wallet — it owns the ORDER and INVENTORY only. */
+async function _finalizeMarketplacePayment(db, admin, opts) {
+  const {
+    checkoutId, sellerUid, callerUid, orderId, hub, amount, phone,
+    mpesaCode, sellerName, description, items, buyerName, address, fulfillmentType,
+    paymentMethod, pathLabel,
+    settlementStatus = "queued",
+    writeSellerPayment = true,
+  } = opts || {};
+  const ts = admin.firestore.FieldValue.serverTimestamp();
+
+  /* Idempotent seller payment record — one per checkout id (deterministic). Kept
+     optional because the IntaSend path already records the sale via
+     commissionLedger + walletTransactions; only the Daraja path needs this. */
+  if (writeSellerPayment) {
+    await db.collection("sellerPayments").doc(String(checkoutId)).set({
+      checkoutId, sellerUid: sellerUid || null, callerUid: callerUid || null,
+      orderId: orderId || null, hub: hub || "marketplace",
+      amount: amount || 0, phone: phone || null, mpesaCode: mpesaCode || null,
+      sellerName: sellerName || null, description: description || null,
+      status: "completed", paymentMethod: paymentMethod || null, createdAt: ts,
+    }, { merge: true }).catch(() => {});
+  }
+
+  if (!orderId) return { finalised: false, reason: "no_order_id" };
+
+  const orderRef = db.collection("orders").doc(String(orderId));
+  let result = { finalised: false };
+  try {
+    await db.runTransaction(async (txn) => {
+      const orderSnap = await txn.get(orderRef);
+      const exists = orderSnap.exists;
+      const o = exists ? orderSnap.data() : null;
+
+      /* Idempotency: a retried webhook must not decrement stock twice. */
+      if (exists && o.inventoryApplied === true) { result = { finalised: true, reason: "already_applied" }; return; }
+
+      /* Prefer the server-linked line items (meta.items) over anything the client
+         wrote onto the order. When the client could not write the order at all
+         (Firestore rules on the create), meta.items is the only source. */
+      const lines = Array.isArray(items) && items.length
+        ? items
+        : (exists && Array.isArray(o.items) ? o.items : []);
+
+      /* All reads before any write. */
+      const stockReads = [];
+      for (const line of lines) {
+        const pid = line && (line.productId || line.id);
+        const qty = Math.floor(Number(line && line.qty) || 0);
+        if (!pid || qty < 1) continue;
+        const pRef  = db.collection("products").doc(String(pid));
+        const pSnap = await txn.get(pRef);
+        stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
+      }
+
+      const paidFields = {
+        status:           "paid",
+        paymentStatus:    "paid",
+        paymentVerified:  true,
+        paymentMethod:    paymentMethod || null,
+        mpesaCode:        mpesaCode  || null,
+        paidAmount:       amount     || null,
+        paidPhone:        phone      || null,
+        paidAt:           ts,
+        inventoryApplied: true,
+        settlementStatus: settlementStatus,
+        updatedAt:        ts,
+      };
+
+      if (exists) {
+        txn.update(orderRef, paidFields);
+      } else {
+        /* Server-authoritative order creation. The buyer-side write is best-effort
+           (client Firestore rules can reject the pre-payment create); the money is
+           real and confirmed, so the order MUST exist. Admin SDK bypasses rules. */
+        txn.set(orderRef, {
+          id:              orderId,
+          uid:             callerUid || null,
+          buyerUid:        callerUid || null,
+          buyerName:       buyerName || null,
+          buyerPhone:      phone     || null,
+          sellerUid:       sellerUid || null,
+          sellerName:      sellerName || null,
+          items:           lines,
+          deliveryAddress: address || null,
+          address:         address || null,
+          hub:             hub || "marketplace",
+          fulfillmentType: fulfillmentType || "delivery",
+          amount:          amount || 0,
+          total:           amount || 0,
+          orderTotal:      amount || 0,
+          currency:        "KES",
+          source:          "webhook_created",
+          createdAt:       ts,
+          ...paidFields,
+        }, { merge: true });
+      }
+
+      /* Priced line items (name + unit price) captured here from the product docs
+         we already read, so the caller can build a receipt without re-reading. */
+      const _priced = [];
+      for (const { ref, pid, qty, snap } of stockReads) {
+        const pdata = snap.exists ? snap.data() : {};
+        const cur = snap.exists ? pdata.stock : null;
+        const priorVer = Number(pdata.inventoryVersion) || 0;
+        let dec = qty;
+        if (typeof cur === "number" && cur < qty) {
+          dec = Math.max(0, cur);
+          txn.set(db.collection("oversoldAlerts").doc(), {
+            orderId:   orderId || checkoutId || null,
+            productId: pid, requested: qty, available: cur,
+            path:      pathLabel || "marketplace", createdAt: ts,
+          });
+        }
+        /* Stock + sold + version in ONE atomic write. `sold` was never persisted on
+           the marketplace path (client-only, in a JS array), so best-selling sorts
+           and revenue analytics undercounted every sale. Inside the inventoryApplied
+           guard, so a webhook retry cannot double-count. */
+        const _newStock = (typeof cur === "number") ? Math.max(0, cur - dec) : null;
+        const _stockUpd = {
+          stock:            admin.firestore.FieldValue.increment(-dec),
+          sold:             admin.firestore.FieldValue.increment(dec),
+          updatedAt:        ts,
+          inventoryVersion: admin.firestore.FieldValue.increment(1),
+          /* Order/source attribution for the canonical inventoryMovements audit trail —
+             the `indexProductUpdate` trigger records the movement from ONE place and reads
+             these (only when this write changed them, so a later POS sale can't inherit them). */
+          lastSaleOrderId:  orderId || null,
+          lastStockSource:  pathLabel || "marketplace",
+        };
+        /* Sold out → flag unavailable so it stops being buyable (product page /
+           checkout guard on outOfStock). Restock clears it via the seller editor. */
+        if (_newStock === 0) _stockUpd.outOfStock = true;
+        txn.update(ref, _stockUpd);
+        /* Inventory movement is now recorded centrally by the indexProductUpdate trigger
+           (keyed `${pid}_v${version}`, exactly-once) rather than written here — one audit
+           path for ALL stock-mutating flows, not just this one. */
+        _priced.push({
+          productId: pid,
+          name:      pdata.name || "Item",
+          qty:       dec,
+          unitPrice: Number(pdata.price) || 0,
+          lineTotal: (Number(pdata.price) || 0) * dec,
+        });
+        console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} sold+${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
+      }
+      result = {
+        finalised: true,
+        created:   !exists,
+        pricedItems: _priced,
+        subtotal:  _priced.reduce((s, i) => s + i.lineTotal, 0),
+      };
+    });
+  } catch (e) {
+    console.error(`[_finalizeMarketplacePayment] order/inventory txn failed for ${orderId}: ${e.message}`);
+    db.collection("auditLogs").add({
+      type: "order_finalisation_failed", severity: "critical",
+      checkoutId, orderId, sellerUid: sellerUid || null,
+      amount: amount || null, mpesaCode: mpesaCode || null,
+      path: pathLabel || null, error: e.message, ts,
+    }).catch(() => {});
+    result = { finalised: false, reason: "txn_failed", error: e.message };
+  }
+  return result;
+}
 
 /* Safaricom published IP ranges for STK Push callbacks */
 const SAFARICOM_CALLBACK_IPS = new Set([
@@ -3761,6 +4232,31 @@ exports.verifyPaymentStatus = onCall(
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
     const { checkoutId, orderId } = request.data;
+
+    /* IntaSend payments live in `payments/{ref}` (Admin-SDK-written). The buyer's
+       browser cannot read them directly — the payments read rule keys on buyerId
+       while initiateSTKPush writes uid — so the checkout confirms via THIS authed
+       call instead of a denied Firestore listener. Authorised for the buyer
+       (payments.uid), the seller (meta.sellerUid), or an admin. */
+    if (request.data.ref) {
+      const ref = String(request.data.ref);
+      const snap = await db.collection("payments").doc(ref).get();
+      if (!snap.exists) return { status: "PENDING" };
+      const d = snap.data();
+      const uid = request.auth.uid;
+      const _sellerUid = (d.meta && d.meta.sellerUid) || null;
+      if (d.uid !== uid && _sellerUid !== uid) {
+        const userRecord = await admin.auth().getUser(uid).catch(() => null);
+        if (!userRecord?.customClaims?.admin) {
+          throw new HttpsError("permission-denied", "Access denied.");
+        }
+      }
+      return {
+        status:          d.status || "PENDING",
+        confirmedAmount: d.confirmedAmount || d.amount || null,
+        mpesaCode:       d.mpesaCode || null,
+      };
+    }
 
     if (checkoutId) {
       const snap = await db.collection("posPayments").doc(checkoutId).get();
@@ -4763,6 +5259,35 @@ exports.aggregatePlatformMetrics = onSchedule(
       openDisputes:     openDisputesSnap.data().count,
     };
 
+    /* Settlement convergence (Phase C observability) — completed bookings must
+       converge with settled payouts and booking wallet credits. Best-effort:
+       must never fail the platform-metrics run. Writes a dedicated health doc a
+       dashboard can read, and WARN-logs any anomaly so it surfaces immediately. */
+    try {
+      const { computeSettlementConvergence } = require('./settlement-monitor');
+      const settlement = await computeSettlementConvergence(db);
+      metrics.settlementConvergence = settlement;
+      await db.collection('systemHealth').doc('settlementConvergence').set(
+        { ...settlement, updatedAt: now }, { merge: true });
+      if (!settlement.healthy) {
+        console.warn('[settlement-monitor] SETTLEMENT CONVERGENCE ANOMALY:', settlement.anomalies.join(' | '), settlement);
+      } else {
+        console.log('[settlement-monitor] convergent', {
+          completed: settlement.completedBookings, settled: settlement.settledPayouts,
+          walletTx: settlement.bookingWalletTransactions, legacyPending: settlement.legacyPendingPayouts });
+      }
+    } catch (e) { console.error('[settlement-monitor] failed (non-fatal):', e && e.message); }
+
+    /* Booking convergence (WS4a — Phase F evidence). Cumulative + today's per-day
+       adoption of canonical vs legacy service-booking creation. Best-effort. */
+    try {
+      const { computeBookingConvergence } = require('./booking-convergence');
+      const booking = await computeBookingConvergence(db);
+      metrics.bookingConvergence = booking;
+      const pct = booking.canonicalShare == null ? 'n/a' : (booking.canonicalShare * 100).toFixed(1) + '%';
+      console.log('[booking-convergence]', { canonicalShare: pct, canonicalTotal: booking.canonicalTotal, legacyTotal: booking.legacyTotal, today: booking.today });
+    } catch (e) { console.error('[booking-convergence] failed (non-fatal):', e && e.message); }
+
     await db.collection("platformMetrics").doc(date).set(metrics, { merge: true });
     console.log("[metrics] Aggregated platform metrics for", date, metrics);
   }
@@ -5006,9 +5531,17 @@ exports.onDeliveryStatusChange = onDocumentUpdated(
 
 const PLATFORM_ROLES = ["moderator","support","driverCoordinator","financeReviewer","contentManager"];
 const SHOP_ROLES     = ["cashier","manager","inventory","support"];
+/* One invitation engine for every entry point — see functions/invitations-core.js. */
+const invitationsCore = require("./invitations-core");
 
 /* ── Create platform-staff invite (admin only) ─────────────────────── */
-exports.invitePlatformEmployee = onCall({}, async (request) => {
+/* `secrets` is REQUIRED here, not decorative: this handler now sends the
+   password-setup email inline, and a function can only read a secret it declares.
+   Without it every send fails with "SENDGRID_API_KEY not set" and silently
+   degrades to the 2-minute queue — which still delivers, but throws away the
+   immediate confirmation this whole change exists to provide. */
+exports.invitePlatformEmployee = onCall(
+  { secrets: require('./email-service').EMAIL_SECRETS }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const c = request.auth.token;
   if (!c.admin && !c.superAdmin)
@@ -5019,63 +5552,48 @@ exports.invitePlatformEmployee = onCall({}, async (request) => {
   if (!email || !role)              throw new HttpsError("invalid-argument", "email and role are required.");
   if (!PLATFORM_ROLES.includes(role)) throw new HttpsError("invalid-argument", "Invalid role: " + role);
 
-  const token = require("crypto").randomUUID();
-  await db.collection("platformInvites").doc(token).set({
-    token,
-    email,
-    role,
-    invitedBy: request.auth.uid,
-    status: "pending",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 86400000))
+  /* Delegated to invitations-core — the ONE invitation path.
+     This handler used to write a `platformInvites` token document and return it,
+     and do nothing else: no Auth account, no email, no way for the invitee to
+     learn the link existed. Combined with an ops script that created accounts
+     with a discarded random password, that produced ochisaac@gmail.com — an
+     `admin` account that had never signed in and never could, because the only
+     mail it ever received was a bare welcome with no password-setup link.
+
+     createInvitation() will not report success unless the invitee can actually
+     sign in, and it refuses outright if the role contradicts a claim the account
+     already holds. */
+  const res = await invitationsCore.createInvitation({
+    email, role, invitedBy: request.auth.uid, name: request.data.name || '',
   });
-  return { token };
+  return {
+    token: res.token, inviteId: res.inviteId, uid: res.uid,
+    acceptUrl: res.acceptUrl,
+    authAccountCreated: res.authAccountCreated,
+    setupMailQueueId: res.setupMailQueueId,
+    signInReady: res.signInReady,
+  };
 });
 
 /* ── Accept platform invite (called after the new user creates account) */
 exports.acceptPlatformInvite = onCall({}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-  const token = (request.data.token || "").trim();
-  if (!token) throw new HttpsError("invalid-argument", "Token required.");
+  /* Delegated to invitations-core — the ONE acceptance flow.
+     It resolves the token against the canonical `invitations` collection AND the
+     legacy `platformInvites` collection, so links already in circulation keep
+     working while new invitations are written in one place.
 
-  const ref  = db.collection("platformInvites").doc(token);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "Invalid invite link.");
-
-  const data = snap.data();
-  if (data.status !== "pending")
-    throw new HttpsError("failed-precondition", "Invite already used or revoked.");
-  if (data.expiresAt.toDate() < new Date())
-    throw new HttpsError("deadline-exceeded", "Invite expired. Ask admin for a new one.");
-  if (data.email !== request.auth.token.email)
-    throw new HttpsError("permission-denied", "This invite was sent to " + data.email + ". Sign in with that email.");
-
-  const prev = (await admin.auth().getUser(request.auth.uid)).customClaims || {};
-  await admin.auth().setCustomUserClaims(request.auth.uid, {
-    ...prev,
-    [data.role]: true,
-    platformEmployee: true,
-    platformRole: data.role
-  });
-
-  await db.collection("platformEmployees").doc(request.auth.uid).set({
+     The material addition over the previous inline version is the role-consistency
+     gate: this used to spread `{[data.role]: true}` over the existing claims
+     unconditionally, so a `moderator` invite landing on an account that already
+     held `admin` produced an account carrying BOTH — privileges nobody decided to
+     grant. A contradiction is now refused and reported for a human to resolve. */
+  return invitationsCore.acceptInvitation({
+    token: request.data.token,
     uid: request.auth.uid,
-    email: data.email,
-    displayName: request.auth.token.name || "",
-    role: data.role,
-    invitedBy: data.invitedBy,
-    active: true,
-    joinedAt: admin.firestore.FieldValue.serverTimestamp()
+    callerEmail: request.auth.token.email,
   });
-
-  await ref.update({
-    status: "accepted",
-    acceptedByUid: request.auth.uid,
-    acceptedAt: admin.firestore.FieldValue.serverTimestamp()
-  });
-
-  return { success: true, role: data.role };
 });
 
 /* ── Revoke a platform invite ──────────────────────────────────────── */
@@ -5351,6 +5869,65 @@ exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (reque
    - Maximum payload: 64 KB (typical full receipt < 4 KB).
    - Print job stored in Firestore for audit and retry.
 ══════════════════════════════════════════════════════════════════ */
+/* ── Rider profile (App-Check-INDEPENDENT) ─────────────────────────────────
+   Firestore has App Check enforced, and on iOS Safari the App Check token often 403s, so the
+   client's direct rideDrivers read fails and the Rider Hub falls back to the guest gate even for
+   an approved rider. This endpoint verifies the Firebase ID token (which App Check does NOT gate)
+   with the Admin SDK and returns the rider record + roles — so rider recognition works regardless
+   of App Check. Reads only the CALLER's own rideDrivers/{uid} + users/{uid}. */
+exports.riderProfile = onRequest(
+  {
+    timeoutSeconds: 20,
+    memory:         "256MiB",
+    cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
+    invoker:        "public",
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin",  req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST");
+      res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) { res.status(401).json({ ok: false, signedIn: false, error: "Bearer token required" }); return; }
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(authHeader.replace("Bearer ", "").slice(0, 4096)); }
+    catch (_) { res.status(401).json({ ok: false, signedIn: false, error: "Invalid or expired token" }); return; }
+    const uid = decoded.uid;
+    try {
+      let rd = await db.collection("rideDrivers").doc(uid).get();
+      let riderId = uid, matchedBy = "uid";
+      /* Account-split resilience: the rider record may live on the caller's OTHER account (e.g. the
+         rider registered on the Google account but signed in with the phone account). If there's no
+         rideDrivers/{uid}, fall back to the caller's OWN verified phone — same person, safe. */
+      if (!rd.exists) {
+        const phone = decoded.phone_number || null;
+        if (phone) {
+          const q = await db.collection("rideDrivers").where("phoneNumber", "==", phone).limit(1).get();
+          if (!q.empty) { rd = q.docs[0]; riderId = q.docs[0].id; matchedBy = "phone"; }
+        }
+      }
+      const u = await db.collection("users").doc(uid).get();
+      const r = rd.exists ? (rd.data() || {}) : null;
+      res.json({
+        ok: true, signedIn: true, uid, matchedBy,
+        rider: r ? {
+          id: riderId, exists: true, status: r.status || null, approved: r.approved === true,
+          isOnline: r.isOnline === true || r.online === true, online: r.online === true,
+          name: r.name || null, email: r.email || decoded.email || null,
+          zone: r.zone || null, rating: r.rating || null,
+          vehicle: r.vehicle || r.vehicleType || null, cargoTonne: r.cargoTonne || null, cargoType: r.cargoType || null,
+          photo: r.photo || r.avatar || r.photoURL || null,
+        } : { exists: false },
+        roles: (u.exists && u.data().roles) || [],
+      });
+    } catch (e) { res.status(500).json({ ok: false, signedIn: true, uid, error: e.message }); }
+  }
+);
+
 exports.posPrint = onRequest(
   {
     timeoutSeconds: 30,
@@ -5904,6 +6481,12 @@ async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
   return true;
 }
 
+/* Phase E: service-booking payments are HELD, not credited — the provider is credited
+   only by Phase C settlement at completion (contract invariant 1). Shared helper lives
+   in booking-payment-sweep.js (unit-tested); called at the top of BOTH IntaSend
+   COMPLETE handlers, returning true when it handled the payment so the caller returns. */
+const { holdServiceBookingPayment: _holdServiceBookingPayment } = require('./booking-payment-sweep');
+
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
   { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
@@ -5947,8 +6530,23 @@ exports.intasendWebhook = onRequest(
     const state      = String(invoice.state    || req.body?.state    || "FAILED").toUpperCase();
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
+    const trackingId = req.body?.tracking_id || invoice.tracking_id || req.body?.file_id || invoice.file_id || null;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
+    /* Log the full payload before any guard (B2C field-name visibility). */
+    try { const _rb = { ...(req.body || {}) }; delete _rb.challenge; delete _rb.signature; delete _rb.secret;
+      console.log("[intasendWebhook] raw payload:", JSON.stringify(_rb).slice(0, 4000)); } catch (_) {}
+
+    /* Seller B2C payouts ("pout_…") — settle FIRST, by ANY identifier (api_ref OR
+       tracking_id/file_id). The docs disagreed on which webhook IntaSend hits, so BOTH
+       webhooks now settle B2C — whichever URL is registered, a confirmation reconciles. */
+    try {
+      for (const r of [apiRef, checkoutId, trackingId].filter(Boolean)) {
+        if (await wallet.finalizeB2CPayoutFromWebhook(db, r, state, req.body)) { res.status(200).send("OK"); return; }
+      }
+    } catch (e) { console.error("[intasendWebhook] B2C payout finalize error:", e.message); }
+
+    /* Below (top-up + collection/payment) is keyed on api_ref. */
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
     /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
@@ -5997,8 +6595,23 @@ exports.intasendWebhook = onRequest(
       return;
     }
 
+    /* Terminal NON-payment for a service booking → release the held slot immediately
+       instead of waiting for the expiry sweep. Keyed off the RAW state, since fsStatus
+       collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
+       for non-booking intents, so product/wallet failures fall through unchanged. */
+    if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
+      const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
+      if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
+        res.status(200).send("OK"); return;
+      }
+    }
+
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
+      /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
+         the provider is credited only by Phase C settlement at completion. Handled in
+         isolation via the server-minted intent; skips all commission/credit/creation. */
+      if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
       const category = payData.meta?.category || "default";
       /* Commission MUST be calculated by finos-utils — single source of truth for all rates */
       let sokoniCut = 0, commissionPct = 0;
@@ -6325,6 +6938,131 @@ exports.recordMetric = onRequest(
 
     await writes.commit();
     res.status(200).send("OK");
+  }
+);
+
+/* ══════════════════════════════════════════════════════════════════
+   PUBLIC CATALOGUE — App-Check-independent product feed.
+   The catalogue is public (products rule = `allow read: if true`), but App Check is
+   ENFORCED on client Firestore reads and its reCAPTCHA v3 token exchange 403s
+   intermittently (esp. iOS Safari/ITP), which took the homepage grid down entirely.
+   This server-side endpoint reads via the Admin SDK (no App Check), so the public
+   catalogue always loads; the live Firestore listener still layers real-time updates
+   on top when its token is valid. In-memory sort (ids are Date.now() timestamps) so
+   no composite index is required. Base64 image blobs are stripped to keep the payload
+   light — the client renders Storage URLs and falls back gracefully (sokoni-image.js).
+══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   AVAILABLE DELIVERIES — App-Check-independent feed of dispatch-ready jobs.
+   A rider can't read UNASSIGNED packageRequests under the client rules, so this
+   Admin-SDK endpoint lists deliveries the merchant marked "Ready for Dispatch"
+   (status awaiting_rider, no rider yet). Decoupled from printing entirely.
+══════════════════════════════════════════════════════════════════ */
+exports.availableDeliveries = onRequest(
+  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
+  async (req, res) => {
+    try {
+      const snap = await db.collection("packageRequests").where("status", "==", "awaiting_rider").limit(80).get();
+      const deliveries = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .filter((o) => !o.assignedRiderId && !o.riderId && !o.assignedDriverId && !o.assignedDriverUid)
+        .map((o) => ({
+          id: o.id, orderId: o.orderId, sellerName: o.sellerName,
+          pickupAddress: o.pickupAddress, deliveryAddress: o.deliveryAddress,
+          buyerName: o.buyerName, buyerPhone: o.buyerPhone,
+          items: o.items || [], orderTotal: o.orderTotal, deliveryFee: o.deliveryFee,
+          driverNet: o.driverNet, proofPin: o.proofPin,
+        }));
+      res.set("Cache-Control", "no-cache, must-revalidate");
+      res.status(200).json({ ok: true, count: deliveries.length, deliveries });
+    } catch (e) {
+      console.error("[availableDeliveries] failed:", e.message);
+      res.status(500).json({ ok: false, error: "unavailable" });
+    }
+  }
+);
+
+/* Rider accepts an available delivery — atomic first-claim-wins (Admin SDK bypasses the
+   packageRequests write rule that would otherwise block a not-yet-assigned rider). */
+exports.claimAvailableDelivery = onCall(
+  { region: "us-central1", timeoutSeconds: 30, memory: "256MiB", invoker: "public" },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in to accept a delivery.");
+    const { deliveryRef } = request.data || {};
+    if (!deliveryRef) throw new HttpsError("invalid-argument", "deliveryRef required.");
+    const ref = db.collection("packageRequests").doc(String(deliveryRef));
+    let out;
+    await db.runTransaction(async (t) => {
+      const s = await t.get(ref);
+      if (!s.exists) throw new HttpsError("not-found", "Delivery not found.");
+      const d = s.data();
+      if (d.assignedRiderId || d.riderId || d.assignedDriverId) throw new HttpsError("failed-precondition", "Just taken by another rider.");
+      if (d.status !== "awaiting_rider") throw new HttpsError("failed-precondition", "Delivery no longer available.");
+      const riderDoc = await t.get(db.collection("rideDrivers").doc(uid));
+      const rider = riderDoc.exists ? (riderDoc.data() || {}) : {};
+      /* SECURITY (backend-enforced — never trust the UI): only an APPROVED, non-suspended rider
+         may accept a job. Without this, any signed-in user could claim a delivery by calling the
+         function directly. */
+      const _st = String(rider.status || "").toLowerCase();
+      const _approved = rider.approved === true || ["approved", "active", "online", "verified"].includes(_st);
+      const _blocked  = ["suspended", "rejected", "banned", "deactivated"].includes(_st);
+      if (!riderDoc.exists || !_approved || _blocked) {
+        throw new HttpsError("permission-denied", "Your rider account is not approved to accept deliveries.");
+      }
+      const nowTs = admin.firestore.FieldValue.serverTimestamp();
+      t.update(ref, {
+        status: "driver_accepted", assignedRiderId: uid, riderId: uid,
+        assignedDriverId: uid, assignedDriverUid: uid,
+        riderName: rider.name || "Rider", riderPhone: rider.phone || "",
+        riderAcceptedAt: nowTs, updatedAt: nowTs,
+      });
+      if (d.orderId) t.set(db.collection("orders").doc(String(d.orderId)),
+        { status: "rider_assigned", assignedDriverUid: uid, riderAssignedAt: nowTs, updatedAt: nowTs }, { merge: true });
+      out = { ok: true, deliveryRef, orderId: d.orderId, proofPin: d.proofPin };
+    });
+    return out;
+  }
+);
+
+exports.catalogue = onRequest(
+  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
+  async (req, res) => {
+    try {
+      const cap       = Math.min(Number(req.query.limit) || 200, 300);
+      const category  = (req.query.category  || "").toString().trim().toLowerCase();
+      const sellerUid = (req.query.sellerUid || "").toString().trim();
+      /* Match the client listener: NO status filter. Most legacy products have no `status`
+         field at all (absent = visible per the commerce lifecycle) — filtering on
+         status=='active' wrongly hid 92 of 103 real, previously-visible products. Return
+         everything EXCEPT the explicitly-hidden states. */
+      const snap = await db.collection("products").limit(500).get();
+      const _isData = (v) => typeof v === "string" && v.slice(0, 5) === "data:";
+      const HIDDEN = new Set(["deleted", "removed", "hidden", "draft", "archived", "banned", "suspended", "paused", "inactive", "rejected"]);
+      let products = snap.docs.map((d) => {
+        const v = d.data() || {};
+        delete v._syncedAt;
+        /* Strip heavy base64 image blobs — client uses Storage URLs / placeholder. */
+        if (_isData(v.image)) delete v.image;
+        if (Array.isArray(v.images)) v.images = v.images.filter((u) => !_isData(u));
+        return { id: d.id, ...v };
+      }).filter((p) => {
+        const st = String(p.status || "").toLowerCase();
+        if (HIDDEN.has(st)) return false;
+        if (p.isDeleted === true || p.deleted === true) return false;
+        if (p.visible === false || p.isVisible === false) return false;
+        if (sellerUid && String(p.sellerUid || "") !== sellerUid && String(p.uid || "") !== sellerUid) return false;
+        if (category && String(p.category || "").toLowerCase() !== category) return false;
+        return true;
+      });
+      /* Newest first — product ids are Date.now() timestamps. */
+      products.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      products = products.slice(0, cap);
+      res.set("Cache-Control", "public, max-age=60, s-maxage=120");
+      res.status(200).json({ ok: true, count: products.length, products });
+    } catch (e) {
+      console.error("[catalogue] failed:", e.message);
+      res.status(500).json({ ok: false, error: "catalogue_unavailable" });
+    }
   }
 );
 
@@ -6827,8 +7565,10 @@ exports.webhookIntasend = onRequest(
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
-
-    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+    /* B2C send-money identifies the transfer by tracking_id/file_id, NOT api_ref. The
+       api_ref guard is DEFERRED to after B2C settlement (below), else B2C confirmations
+       are dropped and the payout sticks at 'processing'. */
+    const trackingId = req.body?.tracking_id || invoice.tracking_id || req.body?.file_id || invoice.file_id || null;
 
     /* First-rollout observability: log the ENTIRE webhook payload (challenge/secret
        stripped) before parsing, so if IntaSend's B2C field names/format differ we can
@@ -6844,18 +7584,22 @@ exports.webhookIntasend = onRequest(
        payload on the payout for audit. No-op for non-payout events, so top-up/payment
        handling below is unaffected. */
     try {
-      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state, req.body)) {
-        res.status(200).send("OK");
-        return;
-      }
-      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state, req.body)) {
-        res.status(200).send("OK");
-        return;
+      /* Try EVERY identifier IntaSend may send for a send-money confirmation:
+         api_ref (== our reqId), invoice.id/invoice_id, tracking_id/file_id. */
+      for (const r of [apiRef, checkoutId, trackingId].filter(Boolean)) {
+        if (await wallet.finalizeB2CPayoutFromWebhook(db, r, state, req.body)) {
+          res.status(200).send("OK");
+          return;
+        }
       }
     } catch (e) {
       console.error("[webhookIntasend] B2C payout finalize error:", e.message);
       /* fall through — don't block other webhook handling */
     }
+
+    /* Everything below (wallet top-up + collection/payment) is keyed on api_ref. A B2C
+       confirmation (no api_ref) has already been handled and returned above. */
+    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
     /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
        the shared idempotent claim before the payments path below. */
@@ -6894,8 +7638,23 @@ exports.webhookIntasend = onRequest(
       return;
     }
 
+    /* Terminal NON-payment for a service booking → release the held slot immediately
+       instead of waiting for the expiry sweep. Keyed off the RAW state, since fsStatus
+       collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
+       for non-booking intents, so product/wallet failures fall through unchanged. */
+    if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
+      const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
+      if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
+        res.status(200).send("OK"); return;
+      }
+    }
+
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
+      /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
+         the provider is credited only by Phase C settlement at completion. Handled in
+         isolation via the server-minted intent; skips all commission/credit/creation. */
+      if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {
@@ -6967,9 +7726,15 @@ exports.webhookIntasend = onRequest(
           category === "subscription" || payData.meta?.category === "subscription";
         /* For a service booking the earner is the PROVIDER (meta.providerId), not the
            paying customer (payData.uid). Scoped to bookings so marketplace/POS flows,
-           where uid already means the seller, are unaffected. */
+           where uid already means the seller, are unaffected.
+
+           For a BUYER-INITIATED marketplace checkout the earner is neither: payData.uid
+           is the BUYER, and the seller to credit is carried in meta.sellerUid (set by the
+           checkout when it calls initiateSTKPush). POS and other flows where uid already
+           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged. */
         const _isBooking = payData.meta?.type === "booking";
-        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId : payData.uid;
+        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId
+                         : (payData.meta?.sellerUid || payData.uid);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
@@ -7046,6 +7811,201 @@ exports.webhookIntasend = onRequest(
         }).catch(() => {});
       }
 
+      /* ── Marketplace product order finalisation ──────────────────────────────
+         The seller wallet credit above settles the MONEY; this ships the ORDER.
+         A confirmed product payment must mark its order paid and decrement stock
+         atomically — previously nothing on the IntaSend path did either, so a paid
+         order stayed pending_payment and inventory never moved. Guarded to
+         buyer-initiated product checkouts, which carry meta.orderId; bookings,
+         subscriptions and wallet top-ups carry no orderId (or a different category)
+         and skip this untouched. settlementStatus:"settled" because the wallet was
+         already credited above — a settlement sweep must not double-credit.
+         Idempotent via the order's inventoryApplied flag; never fails the webhook. */
+      try {
+        const _pm  = payData.meta || {};
+        const _cat = String(_pm.category || "").toLowerCase();
+        const _isProductPay = !!_pm.orderId
+          && _pm.type !== "booking"
+          && !["subscription", "wallet_topup", "topup"].includes(_cat);
+        if (_isProductPay) {
+          const _fin = await _finalizeMarketplacePayment(db, admin, {
+            checkoutId:    apiRef,
+            sellerUid:     _pm.sellerUid || null,
+            callerUid:     payData.uid  || null,
+            orderId:       _pm.orderId,
+            hub:           _pm.hub || "marketplace",
+            amount,
+            phone:         payData.phone || null,
+            mpesaCode:     checkoutId    || null,
+            sellerName:    _pm.sellerName || _pm.providerName || null,
+            description:   _pm.serviceDesc || "SOKONI Order",
+            items:         Array.isArray(_pm.items) ? _pm.items : null,
+            buyerName:     _pm.buyerName || null,
+            address:       _pm.address || _pm.deliveryAddress || null,
+            fulfillmentType: _pm.fulfillmentType || "delivery",
+            paymentMethod: "mpesa_intasend",
+            pathLabel:     "intasend",
+            settlementStatus:   "settled",
+            writeSellerPayment: false,
+          });
+
+          /* Server-priced line items from the finaliser (name + unit price), falling
+             back to the client-supplied {productId,qty} for unmetered products. */
+          const _lines = (_fin && Array.isArray(_fin.pricedItems) && _fin.pricedItems.length)
+            ? _fin.pricedItems
+            : (Array.isArray(_pm.items) ? _pm.items.map(i => ({
+                productId: i.productId, name: i.name || "Item",
+                qty: i.qty || 1, unitPrice: 0, lineTotal: 0,
+              })) : []);
+          const _subtotal = (_fin && typeof _fin.subtotal === "number") ? _fin.subtotal : amount;
+          const _delivery = Math.max(0, Math.round(amount - _subtotal));
+          const _dateStr  = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
+
+          /* ── (1) Digital receipt — posReceipts/{apiRef}, deterministic + idempotent.
+             ADR-009 canonical field is `receiptNumber`. create() so a webhook replay
+             is a no-op (ALREADY_EXISTS) rather than a second receipt. */
+          try {
+            await db.collection("posReceipts").doc(apiRef).create({
+              receiptNumber:  apiRef,
+              orderId:        _pm.orderId,
+              saleId:         _pm.orderId,
+              merchantId:     _pm.sellerUid || null,
+              merchantName:   _pm.sellerName || "SOKONI",
+              items:          _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty, unitPrice: i.unitPrice })),
+              customer:       { id: payData.uid || null, name: _pm.buyerName || "", phone: payData.phone || "", email: "" },
+              subtotal:       _subtotal,
+              deliveryFee:    _delivery,
+              tax:            0,
+              discount:       0,
+              total:          amount,
+              /* Fulfillment on the receipt — pickup (collect at shop) vs delivery
+                 (rider + address). Rider/ETA are assigned later; the receipt shows
+                 what's known at payment time. */
+              fulfillmentType: _pm.fulfillmentType || "delivery",
+              deliveryAddress: (_pm.fulfillmentType === "pickup") ? null : (_pm.address || _pm.deliveryAddress || null),
+              pickupLocation:  (_pm.fulfillmentType === "pickup") ? (_pm.sellerName || "Shop") : null,
+              paymentMethod:  "M-PESA",
+              paymentRef:     checkoutId || apiRef,
+              mpesaCode:      checkoutId || null,
+              gatewayRef:     checkoutId || null,
+              orderStatus:    "paid",
+              status:         "valid",
+              date:           _dateStr,
+              createdAt:      admin.firestore.FieldValue.serverTimestamp(),
+              source:         "webhookIntasend",
+            });
+            /* Stamp the order so My Orders can deep-link and a reprint reuses THIS
+               receipt instead of minting a new one. */
+            await db.collection("orders").doc(_pm.orderId).set({
+              receiptNumber: apiRef,
+              receiptGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          } catch (rErr) {
+            if (rErr && rErr.code !== 6 /* ALREADY_EXISTS */) {
+              console.error("[webhookIntasend] receipt write failed:", rErr.message);
+            }
+          }
+
+          /* ── (2) POS new-paid-order signal — write the cashier's clickAndCollect
+             doc DIRECTLY (deterministic id apiRef). NOT via createClickAndCollect,
+             which decrements a SEPARATE seller-scoped stock store the buyer never
+             touched (would double-deduct). Cashier UI listens on
+             sellers/{sellerId}/clickAndCollect where status==pending. */
+          if (_pm.sellerUid) {
+            try {
+              await db.collection("sellers").doc(_pm.sellerUid)
+                .collection("clickAndCollect").doc(apiRef).set({
+                  orderId:       _pm.orderId,
+                  sellerId:      _pm.sellerUid,
+                  customerId:    payData.uid || null,
+                  customerName:  _pm.buyerName || "",
+                  customerPhone: payData.phone || "",
+                  customerEmail: "",
+                  items:         _lines.map(i => ({ productId: i.productId, name: i.name, price: i.unitPrice, qty: i.qty, lineTotal: i.lineTotal })),
+                  subtotal:      _subtotal,
+                  total:         amount,
+                  paymentMethod: "M-PESA",
+                  paymentStatus: "paid",
+                  receiptNumber: apiRef,
+                  /* pickup → in-store collection (Ready for Pickup); delivery → rider
+                     (Awaiting Rider). Drives the POS status label + rider path. */
+                  fulfillmentType: _pm.fulfillmentType || "delivery",
+                  notes:         "", pickupTime: null,
+                  status:        "pending",
+                  createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+                  readyAt: null, collectedAt: null, cancelledAt: null,
+                  source:        "webhookIntasend",
+                }, { merge: true });
+            } catch (posErr) {
+              console.error("[webhookIntasend] POS signal failed:", posErr.message);
+            }
+          }
+
+          /* ── (2b) Delivery dispatch — for DELIVERY orders, create a packageRequests
+             doc so it appears in riders' "Available Deliveries" to accept + track.
+             Pickup collects in-store and needs no rider. Minimal server-side record
+             (no client OSRM/pricing); rider payout = 80% of the delivery fee.
+             Deterministic id (DEL+ref) → idempotent. */
+          if ((_pm.fulfillmentType || "delivery") !== "pickup" && _pm.sellerUid) {
+            try {
+              const _delRef = "DEL" + apiRef;
+              const _delDoc = db.collection("packageRequests").doc(_delRef);
+              const _exists = await _delDoc.get();
+              if (!_exists.exists) {
+                const _pin = String(Math.floor(1000 + Math.random() * 9000));
+                await _delDoc.set({
+                  ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
+                  buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
+                  sellerName: _pm.sellerName || "SOKONI", sellerUid: _pm.sellerUid, sellerPhone: "",
+                  pickupAddress:   _pm.sellerName || "Shop", pickupCoords: null,
+                  deliveryAddress: _pm.address || _pm.deliveryAddress || "", deliveryCoords: null,
+                  items:      _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty })),
+                  orderTotal: amount, deliveryFee: _delivery,
+                  driverNet:  Math.round(_delivery * 0.8), commissionPct: 5,
+                  vehicleType: "moto", speed: "same_day", category: "general",
+                  status: "order_placed", proofPin: _pin,
+                  timeline: [{ status: "order_placed", at: new Date().toISOString(), by: "system" }],
+                  source: "webhookIntasend",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                await db.collection("orders").doc(_pm.orderId).set({ deliveryRef: _delRef }, { merge: true });
+              }
+            } catch (dErr) {
+              console.error("[webhookIntasend] delivery dispatch failed:", dErr.message);
+            }
+          }
+
+          /* ── (3) Notifications — buyer + seller, idempotent via dedupeKey. ── */
+          try {
+            const { notify } = require("./notify");
+            if (payData.uid) {
+              notify({
+                uid: payData.uid, type: "payment_success",
+                title: "Payment received ✅",
+                body: `Your order ${_pm.orderId} is paid — KES ${amount}. Receipt ${apiRef}.`,
+                dedupeKey: `order_paid_${apiRef}`,
+                data: { orderId: _pm.orderId, receiptNumber: apiRef },
+              }).catch(() => {});
+            }
+            if (_pm.sellerUid) {
+              notify({
+                uid: _pm.sellerUid, type: "order_placed",
+                title: "New paid order 🔔",
+                body: `New paid order ${_pm.orderId} — KES ${amount}. Ready to prepare.`,
+                dedupeKey: `order_new_${apiRef}`,
+                data: { orderId: _pm.orderId, receiptNumber: apiRef },
+              }).catch(() => {});
+            }
+          } catch (nErr) {
+            console.error("[webhookIntasend] notify failed:", nErr.message);
+          }
+        }
+      } catch (finErr) {
+        /* Never fail the webhook — payment + wallet credit already stand. */
+        console.error("[webhookIntasend] product order finalisation failed (recoverable):",
+          { ref: apiRef, err: finErr && finErr.message });
+      }
+
       /* ── Service bookings: create the booking + notify both parties ──────────
          bookNow only collects payment; the booking itself MUST be created here,
          server-side, because the customer's payment wizard may be closed before
@@ -7091,6 +8051,9 @@ exports.webhookIntasend = onRequest(
               data: { ref: apiRef, customerUid: payData.uid || "" },
             }).catch(() => {});
             console.log(`[webhookIntasend] booking created + notified: ${apiRef}`);
+            /* Convergence telemetry (WS4a) — a NEW legacy top-level `bookings`
+               create. Best-effort: never affects the webhook/payment. */
+            try { require("./booking-convergence").bumpBookingConvergence(db, "legacy"); } catch (e) { /* ignore */ }
           }
         }
       } catch (bErr) {
@@ -7618,6 +8581,38 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     serverTs: ts,
   });
 
+  /* Product Settlement Convergence — keep the order's settlement state honest on refund:
+     if the order was ALREADY SETTLED, reverse it (debit seller, reverse ledger); otherwise mark
+     it REFUNDED so a pending settlement becomes a no-op. Best-effort + exactly-once; the refund
+     record above stands regardless. */
+  if (orderId) {
+    try {
+      const _ref = await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason, refundRef });
+      /* Canonical analytics (R1.x Phase 2) — count the refund once and keep the reconcilable
+         fields in parity. handleOrderRefund returns a first-time outcome ('reversed' after a
+         settled order, 'marked-refunded' before settlement) exactly once (replays return
+         'already-*'), so this counts once. When the settlement was REVERSED its doc flips to
+         status:'reversed' — excluded from reconciliation's `status==settled` truth — so we
+         reverse the settled revenue/seller-earnings/settledOrders to match. */
+      if (_ref && (_ref.outcome === "reversed" || _ref.outcome === "marked-refunded")) {
+        try {
+          const _oSnap = await db.doc(`orders/${orderId}`).get();
+          const _o = _oSnap.exists ? (_oSnap.data() || {}) : {};
+          const _incr = { refunds: 1, refundAmountShillings: Math.round(Number(refundAmt) || _grossShillings(_o)) };
+          if (_ref.outcome === "reversed") {
+            const _sSnap = await db.doc(`settlements/${orderId}`).get();
+            const _s = _sSnap.exists ? (_sSnap.data() || {}) : {};
+            _incr.settledOrders            = -1;
+            _incr.platformRevenueShillings = -Math.round((Number(_s.commissionCents) || 0) / 100);
+            _incr.sellerEarningsShillings  = -(Number(_s.netShillingsCredited) || Number(_ref.netShillings) || 0);
+          }
+          _bumpAnalytics(db, { shopId: _o.sellerUid || _o.sellerId || null, branchId: _o.branchId || null, incr: _incr });
+        } catch (_) {}
+      }
+    }
+    catch (e) { console.error("[initiateRefund] settlement-state update failed (recoverable):", e.message); }
+  }
+
   if (escrowRef && escrow) {
     /* Transactional: assert the escrow has not already been refunded, so two
        concurrent calls cannot both pass the ceiling check above and both write a
@@ -7951,6 +8946,67 @@ exports.indexProductCreate = onDocumentCreated("products/{productId}", async (ev
 exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (event) => {
   if (!event.data || !event.data.after) return;
   const after = event.data.after.data() || {};
+  const _before = (event.data.before && event.data.before.data()) || {};
+
+  /* Audit price changes (canonical schema). A trigger observes the write, so the actor is
+     after.updatedBy (set by the client on product edits). Runs BEFORE the search-terms early
+     return so a price-only edit is still recorded. Fire-and-forget. */
+  try {
+    const _pb = Number(_before.price), _pa = Number(after.price);
+    if (isFinite(_pb) && isFinite(_pa) && _pb !== _pa) {
+      _writeAudit(db, {
+        action:     'product.price_change',
+        actorUid:   after.updatedBy || after.sellerUid || after.uid || null,
+        branchId:   after.branchId || 'default',
+        objectType: 'product',
+        objectId:   event.params.productId,
+        before:     { price: _pb },
+        after:      { price: _pa },
+        delta:      _pa - _pb,
+        reason:     after.priceChangeReason || null,
+        metadata:   { name: after.name || null, sellerUid: after.sellerUid || after.uid || null },
+      });
+    }
+  } catch (_) {}
+
+  /* ── Inventory movement / audit trail (single source) ──
+     Record EVERY stock change to `inventoryMovements` from ONE place, so all stock-mutating
+     paths (order settlement, POS checkout/refund, B2B, click-and-collect, manual edits) get a
+     uniform, complete history without each site writing its own record. Deterministic id
+     `${pid}_v${version}` → exactly-once per authoritative change (every canonical deduction
+     bumps inventoryVersion); the trigger's own searchableTerms write-back below never changes
+     stock, so this block no-ops on that re-fire. Fire-and-forget: an audit hiccup never blocks
+     the write. Order/source attribution is trusted ONLY when THIS write set it (compared vs
+     `before`), so a later POS sale can't inherit a stale orderId. */
+  try {
+    const _sb = Number(_before.stock ?? _before.stockQty ?? _before.quantity);
+    const _sa = Number(after.stock   ?? after.stockQty   ?? after.quantity);
+    if (Number.isFinite(_sa) && _sb !== _sa) {
+      const _ver     = Number(after.inventoryVersion)   || 0;
+      const _prevVer = Number(_before.inventoryVersion) || 0;
+      const _movId   = _ver !== _prevVer
+        ? `${event.params.productId}_v${_ver}`
+        : `${event.params.productId}_s${_sa}_p${Number.isFinite(_sb) ? _sb : "x"}`;
+      const _delta   = _sa - (Number.isFinite(_sb) ? _sb : 0);
+      const _freshOrderId = (after.lastSaleOrderId && after.lastSaleOrderId !== _before.lastSaleOrderId)
+        ? after.lastSaleOrderId : null;
+      const _freshSource  = (after.lastStockSource && after.lastStockSource !== _before.lastStockSource)
+        ? after.lastStockSource : (_delta < 0 ? "deduction" : "restock");
+      db.collection("inventoryMovements").doc(_movId).set({
+        productId:        event.params.productId,
+        sellerUid:        after.sellerUid || after.uid || null,
+        type:             _delta < 0 ? "deduction" : "restock",
+        qty:              Math.abs(_delta),
+        delta:            _delta,
+        priorStock:       Number.isFinite(_sb) ? _sb : null,
+        newStock:         _sa,
+        inventoryVersion: _ver,
+        orderId:          _freshOrderId,
+        source:           _freshSource,
+        at:               admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
+    }
+  } catch (_) {}
 
   /* Guard: write only when the generated index actually differs from what is
      stored. This replaced a fixed TEXT_FIELDS list compared with !==, which was
@@ -8009,9 +9065,77 @@ exports.indexProviderUpdate = onDocumentUpdated("providers/{providerId}", async 
   }).catch(() => {});
 });
 
+/* ── BUSINESSES (Publication Contract v1.0, release 1) ────────────────────────
+   Businesses/{uid} is the canonical shop directory doc. These give it the same
+   searchableTerms/nameLower the store search now reads (sokoni-firestore-search.js
+   points its 'businesses' spec here). _buildSearchTerms already reads name/
+   businessName/category/city/description (provider fields it shares). Same shape +
+   idempotency guard as the product/provider indexers. */
+exports.indexBusinessCreate = onDocumentCreated("businesses/{bizId}", async (event) => {
+  if (!event.data) return;
+  const doc = event.data.data();
+  if (!doc) return;
+  if (doc.searchableTerms && doc.searchableTerms.length) return;
+  await event.data.ref.update({
+    searchableTerms: _buildSearchTerms(doc),
+    nameLower: (doc.name || doc.businessName || "").toLowerCase(),
+  }).catch(() => {});
+});
+
+exports.indexBusinessUpdate = onDocumentUpdated("businesses/{bizId}", async (event) => {
+  if (!event.data || !event.data.after) return;
+  const after = event.data.after.data() || {};
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || after.businessName || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+  await event.data.after.ref.update({
+    searchableTerms: nextTerms,
+    nameLower: nextName,
+  }).catch(() => {});
+});
+
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OBSERVABILITY & HEALTH ENDPOINTS
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* R1.x PHASE 5 — Analytics reconciliation (parity gate). Daily: compare canonical truth
+   (settlements / deliveryFees / orders) vs analytics/global; flag drift to reconciliationAlerts.
+   Admin callable for on-demand reconcile + explicit backfill. */
+exports.scheduledAnalyticsReconcile = onSchedule(
+  { schedule: "30 2 * * *", timeZone: "UTC", timeoutSeconds: 300 },  /* 05:30 EAT daily */
+  async () => {
+    /* Roll daily buckets into periods (Phase 3), compute BI ratios (Phase 4), then reconcile. */
+    try { await _rollupAnalytics(db); } catch (e) { console.error("[analytics-rollup] failed:", e.message); }
+    try { await _computeBI(db); } catch (e) { console.error("[analytics-bi] failed:", e.message); }
+    try { await _computeTopLists(db); } catch (e) { console.error("[analytics-toplists] failed:", e.message); }
+    const r = await _reconcileAnalytics(db);
+    console.log("[analytics-reconcile]", JSON.stringify({ ok: r.ok, mismatches: r.mismatches, maxDriftPct: r.maxDriftPct, capped: r.capped }));
+    try { const h = await _analyticsHealth(db); console.log("[analytics-health]", JSON.stringify({ ok: h.ok, issues: h.issues.map(i => i.type) })); }
+    catch (e) { console.error("[analytics-health] failed:", e.message); }
+    try { const g = await _cutoverReadiness(db); console.log("[cutover-readiness]", JSON.stringify({ ready: g.overallReady, failing: g.failing })); }
+    catch (e) { console.error("[cutover-readiness] failed:", e.message); }
+  }
+);
+
+exports.adminReconcileAnalytics = onCall(
+  { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 120, invoker: "public" },
+  async (request) => {
+    if (!request.auth || request.auth.token.admin !== true)
+      throw new HttpsError("permission-denied", "Admin only.");
+    const d = request.data || {};
+    if (d.backfill === true) return { backfilled: true, ...(await _backfillAnalytics(db)) };
+    if (d.rollup === true)   return { rolledUp: true, ...(await _rollupAnalytics(db)) };
+    if (d.bi === true)       return { bi: await _computeBI(db) };
+    if (d.health === true)   return { health: await _analyticsHealth(db) };
+    if (d.toplists === true) return { topLists: await _computeTopLists(db) };
+    if (d.readiness === true) return { readiness: await _cutoverReadiness(db) };
+    return await _reconcileAnalytics(db);
+  }
+);
 
 exports.platformHealth = onRequest(
   { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], invoker: "public" },
@@ -8108,6 +9232,15 @@ exports.expireOldEscrows = onSchedule(
     });
     await batch.commit().catch(() => {});
     console.log("[Maintenance] Expired " + snap.size + " old escrows");
+
+    /* Product Settlement Convergence — auto-confirm delivered orders past the policy
+       window (config: _systemConfig/settlement.autoConfirmDays, default 3) → marks them
+       `completed`, which fires onOrderStatusChange → settleOrder. Folded into THIS existing
+       scheduler (no new Cloud Run service). Best-effort. */
+    try {
+      const n = await require("./order-settlement").autoConfirmDeliveredOrders(db, admin);
+      if (n) console.log("[Maintenance] auto-confirmed " + n + " delivered order(s)");
+    } catch (e) { console.error("[Maintenance] auto-confirm sweep failed:", e && e.message); }
   }
 );
 
@@ -8285,6 +9418,11 @@ exports.sendInvoiceEmail = onCall(
 ═══════════════════════════════════════════════════════════ */
 const emailTriggers = require("./email-triggers");
 Object.assign(exports, emailTriggers);
+
+/* POS retail mirror — canonical cross-device posRetailSales from each posTransactions write
+   (idempotent, no stock/payment side effects). Closes the "POS sale invisible cross-device" gap. */
+const posRetailMirror = require("./pos-retail-mirror");
+Object.assign(exports, posRetailMirror);
 
 /* ═══════════════════════════════════════════════════════
    DMARC REPORT PROCESSOR
@@ -8902,6 +10040,8 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;
+/* Returnable units (bottle lifecycle) — one primitive for every subtype move. */
+exports.inventoryTransferSubtype     = inventoryEngine.inventoryTransferSubtype;
 exports.inventoryReleaseReservation  = inventoryEngine.inventoryReleaseReservation;
 exports.inventoryTransferStock       = inventoryEngine.inventoryTransferStock;
 exports.inventoryReceivePO           = inventoryEngine.inventoryReceivePO;
@@ -9640,6 +10780,7 @@ exports.processScheduledDeliveries = onSchedule(
 const etims = require("./etims");
 
 exports.etimsRegisterSeller    = etims.etimsRegisterSeller;
+exports.etimsInvoiceLifecycle  = etims.etimsInvoiceLifecycle;   // credit/debit/cancel/amend/reversal
 exports.etimsGetProfile        = etims.etimsGetProfile;
 exports.etimsUpdateProfile     = etims.etimsUpdateProfile;
 exports.etimsValidatePin       = etims.etimsValidatePin;
@@ -9675,6 +10816,7 @@ exports.hubGetDocuments     = hubEtims.hubGetDocuments;
 exports.hubOnOrderCompleted = hubEtims.hubOnOrderCompleted;
 exports.hubGenerateInvoice  = hubEtims.hubGenerateInvoice;
 exports.hubResubmitInvoice  = hubEtims.hubResubmitInvoice;
+exports.hubProcessQueue     = hubEtims.hubProcessQueue;   // B4: scheduled retry-queue drain
 exports.hubGetAuditTrail    = hubEtims.hubGetAuditTrail;
 exports.hubGetStats         = hubEtims.hubGetStats;
 exports.hubAdminGetAllStats = hubEtims.hubAdminGetAllStats;
@@ -9933,6 +11075,7 @@ exports.posCompleteCheckout    = posZF.posCompleteCheckout;
 exports.posValidateCoupon      = posZF.posValidateCoupon;
 exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;
+exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
@@ -9944,6 +11087,12 @@ exports.submitDataRightsRequest        = fbDeletion.submitDataRightsRequest;
 exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
 exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;
 exports.deleteMyAccount                = fbDeletion.deleteMyAccount;
+
+/* Account status — server-enforced deactivation / reactivation */
+const accountStatus = require('./account-status');
+exports.accountDeactivate              = accountStatus.accountDeactivate;
+exports.accountReactivate              = accountStatus.accountReactivate;
+exports.adminSetAccountActive          = accountStatus.adminSetAccountActive;
 
 /* ── Payment Trust — receipts, verification, security monitoring ─── */
 const payTrust = require('./payment-trust');
@@ -10104,6 +11253,10 @@ exports.navAssignTrip             = navigation.navAssignTrip;
 exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
 exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;
 exports.processDriverEarning      = navigation.processDriverEarning;
+/* Secure Delivery Authorization — Phase 0 (shadow / instrumentation only; no payout change) */
+const _deliveryPin = require("./delivery-pin");
+exports.deliveryPinOnAccept       = _deliveryPin.deliveryPinOnAccept;
+exports.deliveryVerifyShadow      = _deliveryPin.deliveryVerifyShadow;
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;
@@ -10147,6 +11300,9 @@ exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 const walletEngine = require('./wallet-engine');
 exports.walletV2Dashboard       = walletEngine.walletV2Dashboard;
 exports.walletV2Send            = walletEngine.walletV2Send;
+exports.walletV2ResolveRecipient = walletEngine.walletV2ResolveRecipient;
+exports.walletV2ClaimPending    = walletEngine.walletV2ClaimPending;
+exports.sweepExpiredClaimables  = walletEngine.sweepExpiredClaimables;
 exports.walletV2SavePhone       = walletEngine.walletV2SavePhone;
 exports.walletV2Request         = walletEngine.walletV2Request;
 exports.walletV2GetRequests     = walletEngine.walletV2GetRequests;
@@ -11146,8 +12302,8 @@ exports.cancelAccountDeletion     = _acctMgr.cancelAccountDeletion;
    fired. A user's GDPR Art.20 / Kenya DPA §26 request was queued and then
    processed by nothing. The data-export version also enforces App Check, which
    this one did not, so restoring it also closes that gap.
-   (account-manager.js still defines the function; it is simply no longer the
-   deployed entry point. Left in place — removing it is unrelated cleanup.) */
+   (The account-manager.js duplicate has now been REMOVED — single-source
+   reconciliation, 2026-07-28 — so ./data-export is the only definition.) */
 exports.revokeAllSessions         = _acctMgr.revokeAllSessions;
 exports.finaliseExpiredDeletions  = _acctMgr.finaliseExpiredDeletions;
 
@@ -11286,3 +12442,61 @@ exports.getPrescriptions         = _health.getPrescriptions;
 exports.searchHealthProviders    = _health.searchHealthProviders;
 exports.rateHealthProvider       = _health.rateHealthProvider;
 exports.getHealthDashboard       = _health.getHealthDashboard;
+
+/* ── Application Lifecycle ─────────────────────────────────────────────────────
+   The convergence point between `applications` (the request) and the canonical
+   registries that make an approved applicant discoverable and dispatchable.
+   Approval previously flipped a status field and stopped there, so an approved
+   cleaning company never reached `providers/{uid}` and an approved rider never
+   reached `drivers`/`rideDrivers` — both invisible, one undispatchable.
+
+   `applicationLifecycle` is a Firestore trigger; deploy it by that exact name
+   or the projection never runs. See functions/application-lifecycle.js. */
+/* ── Invitation onboarding audit ──────────────────────────────────────────────
+   Finds accounts that CANNOT sign in: a password provider, never a successful
+   sign-in, and no password-setup mail on record. That combination is invisible in
+   the Firebase console — the account looks healthy and is simply unusable — which
+   is how ochisaac@gmail.com sat stranded from 2026-07-21 to 2026-08-01. Also
+   reports invitations whose role contradicts a claim the account already holds. */
+exports.auditInviteOnboarding = onCall(
+  { region: 'us-central1', maxInstances: 3, enforceAppCheck: true, timeoutSeconds: 300 },
+  async (req) => {
+    const t = req.auth?.token || {};
+    if (!t.admin && !t.superAdmin) {
+      throw new HttpsError('permission-denied', 'Administrator access required.');
+    }
+    return require('./invitations-core').auditOnboarding();
+  }
+);
+
+/* Re-send a password-setup link to an invitee who never received one. Separate
+   from resendInvitation because the remedy for a stranded account is the LINK,
+   not another invitation record. */
+exports.resendPasswordSetup = onCall(
+  { region: 'us-central1', maxInstances: 5, enforceAppCheck: true,
+    secrets: require('./email-service').EMAIL_SECRETS },
+  async (req) => {
+    const t = req.auth?.token || {};
+    if (!t.admin && !t.superAdmin) {
+      throw new HttpsError('permission-denied', 'Administrator access required.');
+    }
+    const core = require('./invitations-core');
+    const email = String(req.data?.email || '').toLowerCase().trim();
+    if (!email) throw new HttpsError('invalid-argument', '"email" is required.');
+    const user = await admin.auth().getUserByEmail(email);
+    const claims = user.customClaims || {};
+    const role = core.CLAIM_RANK.slice().reverse().find(r => claims[r] === true) || 'admin';
+    const meta = core.CLAIM_ROLES[role] || { label: role, dest: '/' };
+    const res = await core.sendPasswordSetupMail({
+      email, name: user.displayName || '', roleLabel: meta.label, dest: meta.dest,
+      reason: 'manual_resend',
+    });
+    return { ok: true, email, uid: user.uid, role, queueId: res.queueId };
+  }
+);
+
+const _appLife = require('./application-lifecycle');
+exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: applications/{appId}
+exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
+exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
+exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read

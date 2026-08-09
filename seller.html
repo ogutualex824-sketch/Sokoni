@@ -10,6 +10,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="sokoni-auth-state.js"></script>
+  <script src="sokoni-identity-guard.js"></script>
+  <script src="sokoni-owner-cache.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
 
@@ -44,6 +46,8 @@
 <script src="sokoni-branch.js"></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-drawers.css">
+  <!-- Premium layer — loaded LAST so it wins the cascade (additive polish only) -->
+  <link rel="stylesheet" href="sokoni-seller-premium.css">
 <style>
 /* Variant-chip styles are NOT here — sokoni-product-schema.js injects them, so
    the renderer and its appearance travel together and a second page adopting
@@ -185,7 +189,8 @@
       <li class="nav-item" onclick="showDashPage('store',this)">🏪 My Store</li>
       <li class="nav-item" onclick="showDashPage('team',this)">👥 Team & Verify</li>
       <li class="nav-item" onclick="showDashPage('disputes',this)">⚖️ Disputes</li>
-      <li class="nav-item" onclick="showDashPage('pos',this)" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.16);border-radius:10px;">🏷️ POS / Cashier</li>
+      <li class="nav-item" onclick="showDashPage('pos',this)" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.16);border-radius:10px;">💰 Cashier</li>
+      <li class="nav-item" onclick="window.location.href='pos.html'" style="margin-top:6px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:10px;">🛒 POS — Full Screen</li>
     </ul>
 
 
@@ -205,7 +210,7 @@
       <span class="topbar-sub" id="sellerDate">Manage your products, track orders & earnings</span>
     </div>
     <div class="topbar-right">
-      <a href="minishop-admin.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#00bcd4;text-decoration:none;padding:6px 14px;background:rgba(0,188,212,0.08);border:1px solid rgba(0,188,212,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage your MiniShop storefront">🏪 My MiniShop</a>
+      <a href="minishop-admin.html" onclick="return sokoniShellNav(event,'shop')" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#00bcd4;text-decoration:none;padding:6px 14px;background:rgba(0,188,212,0.08);border:1px solid rgba(0,188,212,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage your MiniShop storefront">🏪 My MiniShop</a>
       <a href="merchant-success.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#7c4dff;text-decoration:none;padding:6px 14px;background:rgba(124,77,255,0.08);border:1px solid rgba(124,77,255,0.3);border-radius:999px;letter-spacing:.04em;" title="Grow your business with AI coaching & analytics">📊 Grow</a> <a href="qr-center.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#f59e0b;text-decoration:none;padding:6px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage QR codes for your store">&#128241; QR</a>
     </div>
   </div>
@@ -1055,195 +1060,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
    <!-- ORDERS -->
 
-<section class="orders-section" id="orders-section" data-sdtab="orders">
 
-    <div class="orders-header">
-
-        <h2>📦 Recent Orders</h2>
-
-    </div>
-
-
-
-    <div class="orders-grid">
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1021
-
-                </h3>
-
-
-
-                <span class="delivered-status">
-
-                    Delivered
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Nike Air Max
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Brian
-
-            </p>
-
-
-
-            <h4>
-
-                KES 10,500
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                View Details
-
-            </button>
-
-        </div>
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1022
-
-                </h3>
-
-
-
-                <span class="pending-status">
-
-                    Pending
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Custom Hoodie
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Kevin
-
-            </p>
-
-
-
-            <h4>
-
-                KES 2,500
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                Update Status
-
-            </button>
-
-        </div>
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1023
-
-                </h3>
-
-
-
-                <span class="shipping-status">
-
-                    Shipping
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Sokoni Cap
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Alex
-
-            </p>
-
-
-
-            <h4>
-
-                KES 1,000
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                Track Order
-
-            </button>
-
-        </div>
-
-    </div>
-
-</section>
 
     <!-- PRODUCTS -->
 
@@ -1365,22 +1182,16 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       </div>
       <div id="activeBoostedProducts" style="margin-top:18px;"></div>
 
-      <!-- Feature Shop on Home Page -->
+      <!-- Featured Shop Placement — curated by Sokoni (admin-awarded via featuredShops/{uid}); NOT self-serve.
+           The old self-serve button only wrote per-device localStorage and falsely claimed platform-wide
+           placement. Disabled until a real seller-facing promotion backend is wired. -->
       <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;">
-        <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">🏠 Feature My Shop on Home Page</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">Your store card appears in the Featured Shops section on the Sokoni home page — seen by all visitors.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <select id="shopFeatureDuration" class="flash-select" style="flex:1;min-width:140px;">
-            <option value="24">Featured for 24 hours</option>
-            <option value="48">Featured for 48 hours</option>
-            <option value="72">Featured for 72 hours</option>
-            <option value="168">Featured for 1 week</option>
-          </select>
-          <div style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:8px 14px;font-size:12px;color:#71ff00;font-weight:800;white-space:nowrap;">FREE during Beta</div>
+        <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">🏠 Featured Shop Placement</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;line-height:1.7;">Featured placement on the Sokoni home page is <strong>curated by the Sokoni team</strong> and awarded to high-performing, verified shops. Keep your ratings strong, your orders flowing and your verification complete to be considered — there's nothing to buy.</div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,255,255,0.55);display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;">✨</span>
+          <span>Chosen shops appear on the home page automatically — no action needed here.</span>
         </div>
-        <button type="button" class="boost-go-btn" style="margin-top:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;" onclick="featureShopOnHome()">
-          🏠 Feature My Shop
-        </button>
         <div id="featuredShopStatus" style="margin-top:10px;font-size:12px;"></div>
       </div>
     </section>
@@ -2725,7 +2536,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           localStorage.setItem('sokoniStore',JSON.stringify(storeData));
         }catch(e){}
 
-        /* ── Firestore: persist seller store to sellers/{uid} ── */
+        /* ── Firestore: persist to sellers/{uid} (storefront fallback) AND
+           businesses/{uid} (the collection the business DIRECTORY reads).
+           The marketplace shop used to write ONLY sellers/, so a launched shop
+           never appeared in the business directory — the "buyers can find you"
+           message below was false. businesses/{uid} is owner-writable per the
+           rules (uid == auth.uid, no admin fields; status:'active' + createdAt
+           are allowed), and createdAt is set once so the directory's
+           orderBy('createdAt') can't silently drop it. ── */
         (function(){
           try{
             var FS='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -2736,7 +2554,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               var payload=Object.assign({},storeData,{uid:uid,updatedAt:m.serverTimestamp()});
               /* Strip blob images from Firestore document to stay under 1MB limit */
               delete payload.bannerSrc; delete payload.logoSrc;
-              m.setDoc(m.doc(db,'sellers',uid),payload,{merge:true}).catch(function(){});
+              m.setDoc(m.doc(db,'sellers',uid),payload,{merge:true}).catch(function(e){console.warn('[shop] sellers write:',e&&e.message);});
+              /* Business directory listing — complete + rules-compliant. getDoc first
+                 so createdAt is written once (on first launch) and preserved on edits. */
+              m.getDoc(m.doc(db,'businesses',uid)).then(function(snap){
+                var created=(snap.exists()&&snap.data().createdAt)?snap.data().createdAt:m.serverTimestamp();
+                var biz={
+                  uid:uid, ownerId:uid,
+                  name:storeData.name, businessName:storeData.name,
+                  category:storeData.category||'', description:storeData.about||'',
+                  tagline:storeData.tagline||'', city:storeData.city||'',
+                  address:storeData.address||'', phone:storeData.phone||'',
+                  email:storeData.email||'', shopType:storeData.shopType||'online',
+                  status:'active', createdAt:created, updatedAt:m.serverTimestamp()
+                };
+                return m.setDoc(m.doc(db,'businesses',uid),biz,{merge:true});
+              }).catch(function(e){console.warn('[shop] businesses write:',e&&e.message);});
               /* Also mark user as seller in their Firestore user doc */
               m.updateDoc(m.doc(db,'users',uid),{'registeredAs.seller':true,storeName:storeData.name}).catch(function(){});
             }).catch(function(){});
@@ -3177,14 +3010,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <a href="inventory.html" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;margin-right:12px;">
           📦 Inventory
         </a>
-        <a href="pos.html" target="_blank" rel="noopener" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;">
-          ⛶ Open full screen
+        <a href="pos.html" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;">
+          ⛶ Open full POS
         </a>
       </div>
       <iframe id="posIframe"
         title="SOKONI POS"
         style="width:100%;height:calc(100vh - 136px);border:none;display:block;background:#0a0a0a;"
-        allow="clipboard-write; payment">
+        allow="clipboard-write; payment; bluetooth; usb; serial; camera">
       </iframe>
     </section>
 
@@ -3627,7 +3460,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
 <style>
 /* Live panel — only on wide screens ≥1280px */
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   #sellerLivePanel {
     position: fixed;
     top: 68px; /* below 68px navbar */
@@ -3648,9 +3481,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
   /* Push main content left so panel doesn't overlap */
   .main-content { margin-right: 220px !important; }
+
+  /* Closeable on desktop too (like the phone): the X hides it, main content
+     reclaims the space, and a small tab reopens it. State persists. */
+  body.slp-closed #sellerLivePanel { display: none !important; }
+  body.slp-closed .main-content    { margin-right: 0 !important; }
+  #slpTrigger { display: none; }               /* panel is always visible when open */
+  body.slp-closed #slpTrigger {
+    display: flex !important; position: fixed; top: 78px; right: 12px; z-index: 101;
+    align-items: center; gap: 6px; padding: 8px 12px; border-radius: 20px;
+    background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.35);
+    color: #71ff00; font-weight: 800; font-size: 12px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
 }
 /* On tablets/phones: panel is a right-side drawer (mobile.css handles the full logic) */
-@media (max-width: 1279px) {
+@media (max-width: 1023px) {
   /* mobile.css overrides display:none and makes it a translateX drawer */
 }
 
@@ -3741,18 +3587,30 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
   updateClock();
   setInterval(updateClock, 1000);
 
-  /* ── Today stats (from localStorage) ── */
+  /* ── Today stats — HONEST + owner-scoped ──────────────────────────────────
+     Was: read the global sellerProducts/sellerOrders cache (cross-account leak)
+     and, when empty, FABRICATE views/orders/revenue/rating with Math.random().
+     Invented business metrics erode trust — a merchant could act on numbers that
+     were never real. Now: read this uid's OWN cache via OwnerCache, and show real
+     zeros / "—" when there is no data. */
   function updateStats() {
-    var products = [];
-    try { products = JSON.parse(localStorage.getItem('sellerProducts'))||[]; } catch(e){}
-    var orders = [];
-    try { orders = JSON.parse(localStorage.getItem('sellerOrders'))||[]; } catch(e){}
+    /* Owner-safe read of the (still-global) cache: filter to the live uid so
+       another account's products/orders never feed these numbers. Switches to
+       OwnerCache namespaces in the atomic migration pass. */
+    var uid = (window.firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.uid) || null;
+    var _own = function(key){
+      var arr = []; try { arr = JSON.parse(localStorage.getItem(key)) || []; } catch(e){}
+      return uid ? arr.filter(function(p){ return String((p&&(p.sellerUid||p.uid))||'') === String(uid); }) : [];
+    };
+    var products = _own('sellerProducts');
+    var orders   = _own('sellerOrders');
 
-    var totalViews = products.reduce(function(s,p){ return s+(p.views||0); },0) || Math.floor(Math.random()*120+40);
-    var todayOrders = orders.length || Math.floor(Math.random()*8+1);
-    var revenue = orders.reduce(function(s,o){ return s+(o.total||o.price||0); },0);
-    if(!revenue) revenue = Math.floor(Math.random()*12000+3000);
-    var rating = 4.7 + (Math.random()*0.2).toFixed(1)*1;
+    var totalViews  = products.reduce(function(s,p){ return s+(Number(p.views)||0); },0);
+    var todayOrders = orders.length;
+    var revenue     = orders.reduce(function(s,o){ return s+(Number(o.total||o.price)||0); },0);
+    /* Rating has no source in this widget — show a neutral placeholder, not a fake. */
+    var ratings     = products.map(function(p){ return Number(p.rating)||0; }).filter(function(r){ return r>0; });
+    var rating      = ratings.length ? (ratings.reduce(function(a,b){return a+b;},0)/ratings.length) : null;
 
     var ve = document.getElementById('slpViews');
     var oe = document.getElementById('slpOrders');
@@ -3761,7 +3619,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     if(ve) ve.textContent = totalViews.toLocaleString();
     if(oe) oe.textContent = todayOrders;
     if(re) re.textContent = 'KES '+(revenue/1000).toFixed(1)+'K';
-    if(ra) ra.textContent = rating.toFixed(1)+'★';
+    if(ra) ra.textContent = rating!=null ? rating.toFixed(1)+'★' : '—';
   }
   setTimeout(updateStats, 300);
 
@@ -3894,10 +3752,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     window.scrollTo(0, _slpScrollY);
   }
 
+  /* Restore the desktop live-panel closed state on load (persisted across reloads). */
+  try { if (localStorage.getItem('sellerLiveClosed') === '1') document.body.classList.add('slp-closed'); } catch (_) {}
+
   function openLivePanel() {
     var panel    = document.getElementById('sellerLivePanel');
     var backdrop = document.getElementById('slpBackdrop');
     if (!panel) return;
+    /* Reopen the desktop sidebar (clears the persistent-closed state). */
+    document.body.classList.remove('slp-closed');
+    try { localStorage.removeItem('sellerLiveClosed'); } catch (_) {}
+    /* Desktop: the panel is an always-on fixed sidebar — just un-collapsing it is enough.
+       Skip the mobile-drawer machinery (backdrop dim + body scroll-lock), which would wrongly
+       dim and lock the whole desktop. */
+    try {
+      if (window.matchMedia && window.matchMedia('(min-width:1024px)').matches) return;
+    } catch (_) {}
     panel.classList.add('slp-active');
     panel.setAttribute('aria-hidden', 'false');
     if (backdrop) backdrop.classList.add('slp-active');
@@ -3932,6 +3802,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     if (backdrop) backdrop.classList.remove('slp-active');
     document.body.classList.remove('slp-panel-open');
     _slpUnlock();
+    /* Desktop: the X hides the always-on sidebar and persists it closed (mobile uses
+       the slp-active drawer, so scope this to wide screens only). */
+    try {
+      if (window.matchMedia && window.matchMedia('(min-width:1024px)').matches) {
+        document.body.classList.add('slp-closed');
+        localStorage.setItem('sellerLiveClosed', '1');
+      }
+    } catch (_) {}
   }
 
   /* ESC key to close Live Panel */
@@ -3973,10 +3851,10 @@ window.mobilePhotoZoneUpdate = mobilePhotoZoneUpdate;
 if(typeof window.showDashPage !== 'function') {
   (function(){
     var PAGES = {
-      overview:  ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','ads-section','buyer-orders-section'],
+      overview:  ['upload-section','seller-stats','analytics-section','products-section','flash-section','ads-section','buyer-orders-section'],
       products:  ['upload-section','products-section','inventory-section','bulk-upload-section','ai-desc-section'],
       analytics: ['seller-stats','analytics-section','sales-analytics-section','customer-analytics-section','delivery-performance-section','seller-ratings-section','profit-section'],
-      orders:    ['orders-section','buyer-orders-section','returns-section','offers-section'],
+      orders:    ['buyer-orders-section','returns-section','offers-section'],
       customers: ['customers-section'],
       receipts:  ['receipts-section'],
       messages:  ['seller-dms','qa-section'],
@@ -3990,7 +3868,7 @@ if(typeof window.showDashPage !== 'function') {
       pos:       ['pos-section'],
       flash:     ['flash-section'],
     };
-    var ALL = ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
+    var ALL = ['upload-section','seller-stats','analytics-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
     window.showDashPage = function(page, navEl) {
       var show = PAGES[page] || PAGES.overview;
       ALL.forEach(function(id){
@@ -4189,12 +4067,12 @@ function submitDisputeResponse(btn) {
       .catch(function(e) {
         btn.disabled = false;
         btn.textContent = 'Send Response';
-        alert(e.message || 'Failed to submit response. Please try again.');
+        SK.dialog.alert(e.message || 'Failed to submit response. Please try again.');
       });
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Send Response';
-    alert('Firebase not ready. Please refresh the page.');
+    SK.dialog.alert('Firebase not ready. Please refresh the page.');
   }
 }
 
@@ -4239,6 +4117,8 @@ class="notification-container"
        validation. Loaded before seller.js (defer preserves order) so the write path
        uses the same policies as the Algolia pipeline and repair scripts. -->
   <script src="sokoni-product-validator.js" defer></script>
+  <!-- Canonical "active product" predicate — archived excluded from active count/catalogue. -->
+  <script src="sokoni-product-visibility.js" defer></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts
@@ -4582,7 +4462,7 @@ class="notification-container"
 #sdm-close-btn:active { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.25); color: #ff6464; }
 
 /* Live Panel drawer header — shown only on phones/tablets */
-@media (max-width: 1279px) {
+@media (max-width: 1023px) {
   .slp-drawer-header {
     display: flex;
     align-items: center;
@@ -4646,9 +4526,45 @@ class="notification-container"
     flex: 1;
   }
 }
-@media (min-width: 1280px) {
-  /* On desktop: hide the new header, show old slp-header */
-  .slp-drawer-header { display: none !important; }
+@media (min-width: 1024px) {
+  /* P0 FIX: the desktop Live Dashboard previously had NO close button — this block hid the
+     panel header (which holds the ✕) to "show an old slp-header" that no longer exists in the
+     markup. The panel is a fixed right column on desktop, so render the header + a visible ✕
+     here (the mobile header styles live under max-width:1279px and don't apply). The ✕ / back
+     both call closeLivePanel() → body.slp-closed collapses the panel and reveals #slpTrigger. */
+  #slpDrawerHeader.slp-drawer-header {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 10px 0 12px;
+    background: rgba(8,8,8,0.99);
+    border-bottom: 1px solid rgba(113,255,0,0.12);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex-shrink: 0;
+  }
+  .slp-drawer-back { display: none !important; }          /* no mobile back arrow on desktop */
+  .slp-drawer-title {
+    flex: 1;
+    font-size: 12px; font-weight: 800; color: #71ff00;
+    letter-spacing: .06em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .slp-drawer-close {
+    display: inline-flex !important;
+    align-items: center; justify-content: center;
+    width: 30px; height: 30px; min-width: 30px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.75);
+    font-size: 14px; line-height: 1; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .slp-drawer-close:hover { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.35); color: #ff6464; }
   #slpCloseBtn { display: none !important; }
 }
 
@@ -4928,7 +4844,7 @@ class="notification-container"
   var TABS = {
     home:     ['home','seller-stats'],
     products: ['products','upload-section','products-section'],
-    orders:   ['orders','orders-section','buyer-orders-section'],
+    orders:   ['orders','buyer-orders-section'],
     analyse:  ['analyse','analytics-section','customer-analytics-section','sales-analytics-section'],
     market:   ['market','ads-section','marketing-section'],
     kra:      ['kra','tax-section'],
@@ -5306,10 +5222,8 @@ window.deleteSellerAccount=deleteSellerAccount;
       else if(t.type==='out') withdrawn += t.amount;
       else if(t.type==='pending') pending += t.amount;
     });
-    /* Add demo data if empty */
-    if(!earned && !txs.length){
-      earned = 28400; withdrawn = 5000; pending = 3200;
-    }
+    /* Fabricated demo balance REMOVED — never show money that isn't real. An empty wallet reads 0;
+       the real balance + withdrawals live on the CF-backed seller-wallet.html. */
     var balance = earned - withdrawn;
 
     var wb = document.getElementById('walletBalance');
@@ -5357,7 +5271,7 @@ window.deleteSellerAccount=deleteSellerAccount;
       return '<tr>'
         +'<td style="color:rgba(255,255,255,0.5);white-space:nowrap;">'+t.date+'</td>'
         +'<td>'+t.desc+'</td>'
-        +'<td><span style="background:rgba('+( t.type==='in'?'113,255,0':'t.type==="out"?255+",68,68":"255,170,0"')+',0.12);color:'+clr+';padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">'+typeLabel+'</span></td>'
+        +'<td><span style="background:rgba('+( t.type==='in'?'113,255,0':(t.type==='out'?'255,68,68':'255,170,0') )+',0.12);color:'+clr+';padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">'+typeLabel+'</span></td>'
         +'<td style="color:'+clr+';font-weight:800;">'+sign+' KES '+t.amount.toLocaleString()+'</td>'
         +'<td style="color:rgba(255,255,255,0.6);">KES '+(t.runBal||0).toLocaleString()+'</td>'
         +'</tr>';
@@ -5373,37 +5287,11 @@ window.deleteSellerAccount=deleteSellerAccount;
     renderWalletTx(window._walletTxs||[], f);
   };
 
-  window.openWithdrawModal = function(){
-    var m = document.getElementById('withdrawModal');
-    if(m){ m.style.display='flex'; }
-    var avail = document.getElementById('withdrawAvailLabel');
-    if(avail) avail.textContent = 'Available: KES '+(window._walletBalance||0).toLocaleString();
-  };
-
-  window.confirmWithdraw = function(){
-    var phone = (document.getElementById('withdrawPhone')||{}).value||'';
-    var amt = Number((document.getElementById('withdrawAmt')||{}).value)||0;
-    if(!phone.match(/^0[17]\d{8}$/)){ (window._skToast||alert)('Enter a valid Safaricom/Airtel number (07... or 01...)'); return; }
-    if(amt < 100){ (window._skToast||alert)('Minimum withdrawal is KES 100'); return; }
-    if(amt > (window._walletBalance||0)){ (window._skToast||alert)('Amount exceeds available balance'); return; }
-
-    /* Record withdrawal */
-    var txs = window._walletTxs||[];
-    txs.unshift({
-      date: new Date().toISOString().slice(0,10),
-      desc: 'M-Pesa withdrawal to '+phone,
-      type: 'out',
-      amount: amt,
-      src: 'withdrawal',
-      ref: 'WD'+(Date.now())
-    });
-    saveWalletTx(txs);
-    window._walletBalance = (window._walletBalance||0) - amt;
-
-    document.getElementById('withdrawModal').style.display='none';
-    (window._skToast||alert)('✅ Withdrawal of KES '+amt.toLocaleString()+' initiated to '+phone+'\nFunds arrive in 5 minutes.');
-    loadWallet();
-  };
+  /* Withdrawals go to the CF-backed wallet page (requestWithdrawal → payoutRequests, gated IntaSend
+     B2C, success only after M-Pesa settles). The old in-page modal faked the send (localStorage
+     decrement + "Funds arrive in 5 minutes") with NO backend — removed. */
+  window.openWithdrawModal = function(){ window.location.href = 'seller-wallet.html'; };
+  window.confirmWithdraw   = function(){ window.location.href = 'seller-wallet.html'; };
 
   document.addEventListener('DOMContentLoaded', loadWallet);
   window.loadWallet = loadWallet;
@@ -5478,7 +5366,9 @@ window.deleteSellerAccount=deleteSellerAccount;
 
   function loadCustomers(){
     var orders = getOrders();
-    var custs = orders.length ? buildCustomers(orders) : DEMO_CUSTOMERS;
+    /* A seller must see only their OWN real customers — never fabricated ones.
+       No real orders → honest empty state (handled by the render below). */
+    var custs = orders.length ? buildCustomers(orders) : [];
 
     var thisMonth = new Date().toISOString().slice(0,7);
     var repeat = custs.filter(function(c){ return c.orders>=2; }).length;
@@ -5527,7 +5417,8 @@ window.deleteSellerAccount=deleteSellerAccount;
 
   function loadReceipts(){
     var orders = getOrders();
-    var list = orders.length ? orders.slice(0,20) : DEMO_ORDERS;
+    /* Real receipts only — never show fabricated DEMO_ORDERS to a seller. */
+    var list = orders.length ? orders.slice(0,20) : [];
     window._receiptOrders = list;
     renderReceiptTable(list);
   }
@@ -6795,6 +6686,165 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="sokoni-drawer.js"></script>
 <script src="sokoni-merchant-diag.js" defer></script>
+<script>
+/* ── Merchant Shell bridge ── lets merchant.html deep-switch dashboard sections with
+   no reload when the Seller Dashboard runs inside the shell. No-op standalone. */
+(function () {
+  if (window.parent === window) return;
+  /* Print via the shell-owned printer (single host). Any Seller print button can call
+     window.SokoniShellPrint(receipt) and it routes up to the shell → POS printer host, so the
+     Seller never needs its own printer connection. */
+  window.SokoniShellPrint = function (receipt) {
+    try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: receipt }, location.origin); } catch (_) {}
+  };
+
+  /* LIVE marketplace-order feed → shell OrderService. Reuses the SELLER's own authenticated
+     query (orders where sellerUid == uid) via onSnapshot, and pushes the rows UP to the shell on
+     every change — so the native Orders module shows online orders live (New→Accepted→…→
+     Delivered) with no /merchant reload, and no second order model. */
+  (async function () {
+    try {
+      var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var _unsub = null, _gotSnap = false, _pollT = null;
+      function _uid () { try { return (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null; } catch (_) { return null; } }
+      function _push (rows) { try { window.parent.postMessage({ __sokoniOrders: true, orders: rows }, location.origin); } catch (_) {} }
+      function _rowsFrom (snap) { var rows = []; snap.forEach(function (d) { var o = d.data() || {}; o.id = d.id; rows.push(o); }); return rows; }
+      /* Poll fallback — iOS App Check can silently block onSnapshot, leaving the shell with
+         NO marketplace orders (analytics showing 0 despite real orders). A getDocs poll keeps
+         the feed alive. Same watchdog pattern used elsewhere in the platform. */
+      function _poll () {
+        var db = window.firebaseDB, uid = _uid(); if (!db || !uid) return;
+        m.getDocs(m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(500)))
+          .then(function (snap) { _push(_rowsFrom(snap)); }).catch(function () {});
+      }
+      function _startPoll () { if (_pollT) return; _poll(); _pollT = setInterval(_poll, 15000); }
+      function _start () {
+        var db = window.firebaseDB, uid = _uid();
+        if (!db || !uid || _unsub) return !!_unsub;
+        try {
+          var q = m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(500));
+          _unsub = m.onSnapshot(q, function (snap) {
+            _gotSnap = true; if (_pollT) { clearInterval(_pollT); _pollT = null; }   /* real-time won — stop polling */
+            _push(_rowsFrom(snap));
+          }, function () { _startPoll(); });                 /* onSnapshot errored → poll */
+          /* If onSnapshot silently never delivers within 8s, poll anyway. */
+          setTimeout(function () { if (!_gotSnap) _startPoll(); }, 8000);
+          return true;
+        } catch (_) { _startPoll(); return true; }
+      }
+      /* Authoritative POS-sales feed → shell OrderService. posRetailSales (written by
+         posCompleteCheckout, merchantId == seller uid) is the CROSS-DEVICE source of truth for
+         POS sales — the IndexedDB record is only a local cache. Without this, POS sales are
+         invisible to Merchant Analytics on any device that didn't ring them up. */
+      var _posUnsub = null, _posGot = false, _posPollT = null;
+      function _posPush (sales) { try { window.parent.postMessage({ __sokoniPosSales: true, sales: sales }, location.origin); } catch (_) {} }
+      function _posPoll () {
+        var db = window.firebaseDB, uid = _uid(); if (!db || !uid) return;
+        m.getDocs(m.query(m.collection(db, 'posRetailSales'), m.where('merchantId', '==', uid), m.limit(500)))
+          .then(function (snap) { _posPush(_rowsFrom(snap)); }).catch(function () {});
+      }
+      function _posStartPoll () { if (_posPollT) return; _posPoll(); _posPollT = setInterval(_posPoll, 15000); }
+      function _posStart () {
+        var db = window.firebaseDB, uid = _uid();
+        if (!db || !uid || _posUnsub) return !!_posUnsub;
+        try {
+          var pq = m.query(m.collection(db, 'posRetailSales'), m.where('merchantId', '==', uid), m.limit(500));
+          _posUnsub = m.onSnapshot(pq, function (snap) {
+            _posGot = true; if (_posPollT) { clearInterval(_posPollT); _posPollT = null; }
+            _posPush(_rowsFrom(snap));
+          }, function () { _posStartPoll(); });
+          setTimeout(function () { if (!_posGot) _posStartPoll(); }, 8000);
+          return true;
+        } catch (_) { _posStartPoll(); return true; }
+      }
+      if (!_start() || !_posStart()) {
+        if (window.firebaseAuth && window.firebaseAuth.onAuthStateChanged) window.firebaseAuth.onAuthStateChanged(function () { _start(); _posStart(); });
+        else { var t = setInterval(function () { var a = _start(), b = _posStart(); if (a && b) clearInterval(t); }, 1500); }
+      }
+    } catch (_) {}
+  })();
+  /* Embedded in the Merchant Shell: hide the Seller's OWN sidebar + top navbar (the shell
+     provides navigation) so the content fills the panel and there is no redundant double
+     sidebar. Scoped to embedded mode only — standalone seller.html is untouched. */
+  try {
+    var st = document.createElement('style');
+    /* Hide only the Seller's own sidebar and reclaim its left margin — the shell provides
+       navigation. Deliberately conservative: nothing else is touched, so no section breaks. */
+    st.textContent = 'body.sk-embedded .sidebar{display:none !important}' +
+      'body.sk-embedded .main-content{margin-left:0 !important}';
+    document.head.appendChild(st);
+    document.body.classList.add('sk-embedded');
+  } catch (_) {}
+  /* Shell-aware navigation: when embedded in the Merchant Shell, topbar links that would
+     otherwise load a whole new document (e.g. "My MiniShop") instead route to the shell
+     module in-place — no iframe escape, no reload, no new page. Standalone seller.html
+     keeps its normal href. */
+  window.sokoniShellNav = function (ev, moduleId) {
+    if (window.parent !== window) {
+      try { ev.preventDefault(); } catch (_) {}
+      try { window.parent.postMessage({ __sokoniGoModule: moduleId }, location.origin); } catch (_) {}
+      return false;
+    }
+    return true;
+  };
+  /* Retry until the dashboard router is ready — the shell's message can arrive before
+     seller.js finishes booting, which would drop the section switch. */
+  var want = null, applying = false;
+  function apply (sec) {
+    want = sec || 'overview';
+    if (applying) return; applying = true;
+    var tries = 0;
+    (function attempt () {
+      if (!want) { applying = false; return; }
+      if (typeof showDashPage === 'function') { try { showDashPage(want); } catch (_) {} want = null; applying = false; return; }
+      if (++tries > 120) { applying = false; return; }
+      setTimeout(attempt, 100);
+    })();
+  }
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    if (d.__sokoniShell && d.action === 'showSection') apply(d.section || 'overview');
+  });
+})();
+</script>
+<script>
+/* ── Premium skeleton loaders (progressive enhancement) ───────────────────────
+   Wraps the existing KPI elements so they SHIMMER while loading and animate the
+   value in the moment real data lands — no abrupt flash, no fabricated "0".
+   Purely additive: it never writes business numbers, only reacts to the app's own
+   updates. A placeholder ("0", "KES 0", "—", empty) shows skeleton; the first real
+   value clears it. A 7s safety net clears skeleton even if a value never arrives so
+   nothing shimmers forever. */
+(function () {
+  var IDS = ['totalProducts','totalRevenue','totalOrders','commissionAmount','netEarnings',
+             'skpi_today','skpi_week','skpi_month','skpi_total'];
+  var PLACEHOLDER = /^\s*(|-|—|0|KES\s*0|0\.00|KES\s*0\.00)\s*$/i;
+  function isPlaceholder(el){ return PLACEHOLDER.test(el.textContent || ''); }
+  function start(){
+    IDS.forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (isPlaceholder(el)) el.classList.add('sk-skeleton');
+      var settled = false;
+      var settle = function(){
+        if (settled) return; settled = true;
+        el.classList.remove('sk-skeleton');
+        el.classList.add('sk-value-in');
+        try { obs.disconnect(); } catch(_){}
+      };
+      var obs = new MutationObserver(function(){
+        if (!isPlaceholder(el)) settle();
+      });
+      try { obs.observe(el, { childList:true, characterData:true, subtree:true }); } catch(_){}
+      /* Safety net: never shimmer forever. */
+      setTimeout(function(){ el.classList.remove('sk-skeleton'); try{obs.disconnect();}catch(_){}; }, 7000);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+</script>
 </body>
 
 </html>

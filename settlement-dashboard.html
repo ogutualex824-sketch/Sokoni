@@ -167,7 +167,7 @@
       .then(function(res){
         renderContext(res[0].data); renderDashboard(res[1].data);
       })
-      .catch(function(e){ console.error(e); alert('Load failed: '+(e.message||e)); })
+      .catch(function(e){ console.error(e); SK.dialog.alert('Load failed: '+(e.message||e)); })
       .finally(function(){ b.textContent='Refresh'; b.disabled=false; });
   };
 

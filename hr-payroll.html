@@ -1183,12 +1183,12 @@
     }).join('');
   }
 
-  function runPayroll() {
+  async function runPayroll() {
     const mid    = getMid();
     if (!mid) return;
     const period = document.getElementById('payrollPeriod').value;
     if (!period) { showToast('Select a payroll period first.', 'warning'); return; }
-    if (!confirm('Run payroll for ' + period + '?\n\nThis will calculate PAYE, NHIF, NSSF and Housing Levy deductions for all active staff.')) return;
+    if (!(await SK.dialog.confirm('Run payroll for ' + period + '? This will calculate PAYE, NHIF, NSSF and Housing Levy deductions for all active staff.', null, null, { title: 'Run payroll', confirmLabel: 'Run payroll' }))) return;
 
     showToast('Running payroll for ' + period + '…', 'info');
     callCF('runPayroll', { merchantId: mid, period: period })
@@ -1257,9 +1257,9 @@
       });
   }
 
-  function approvePayroll() {
+  async function approvePayroll() {
     if (!state.currentPayrollRunId) return;
-    if (!confirm('Approve this payroll run? This action cannot be undone.')) return;
+    if (!(await SK.dialog.confirm('Approve this payroll run? This action cannot be undone.', null, null, { title: 'Approve payroll', variant: 'danger', confirmLabel: 'Approve' }))) return;
     setLoadingBtn('approvePayrollBtn', true);
     callCF('approvePayrollRun', { merchantId: state.merchantId, runId: state.currentPayrollRunId })
       .then(function () {
@@ -1444,10 +1444,10 @@
     }).join('');
   }
 
-  function handleLeave(leaveId, approved) {
+  async function handleLeave(leaveId, approved) {
     if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
     const word = approved ? 'approve' : 'reject';
-    if (!confirm('Are you sure you want to ' + word + ' this leave request?')) return;
+    if (!(await SK.dialog.confirm('Are you sure you want to ' + word + ' this leave request?', null, null, { title: 'Leave request', confirmLabel: 'Confirm' }))) return;
 
     callCF('approveLeave', { merchantId: state.merchantId, leaveId: leaveId, approved: approved })
       .then(function () {

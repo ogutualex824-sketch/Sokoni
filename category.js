@@ -139,8 +139,10 @@ let allProducts = [];
 try { allProducts = JSON.parse(localStorage.getItem("sellerProducts")) || []; }
 catch(e) { allProducts = []; }
 
-/* If sellers haven't added products yet, show the demo catalogue */
-if(allProducts.length === 0) allProducts = DEMO_PRODUCTS;
+/* Demo catalogue is dev-only — real users must see an honest empty state, not
+   25 fabricated products. (Firestore merge later fills real listings.) */
+var _catDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+if(allProducts.length === 0 && _catDemoAllowed) allProducts = DEMO_PRODUCTS;
 
 let filtered = category === "all"
     ? allProducts
@@ -307,7 +309,7 @@ function renderProducts(list){
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap">
-                <img src="${p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.src='assets/default-product.png'">
+                <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">
                 ${cShopRing}
             </div>
             <div class="product-body">
@@ -542,9 +544,9 @@ async function buyNowCat(id){
         }
     }
 
-    const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
-    cartData.push(product);
-    localStorage.setItem("cart", JSON.stringify(cartData));
+    /* Buy Now = express-checkout THIS item only — REPLACE the cart, don't append to
+       stale/accumulated entries (appending charged the whole cart instead of 1 unit). */
+    localStorage.setItem("cart", JSON.stringify([product]));
     window.location.href = "checkout.html";
 }
 

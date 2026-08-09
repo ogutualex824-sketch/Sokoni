@@ -427,6 +427,22 @@ auth.onAuthStateChanged(async user => {
 });
 
 // ── Load returns by role ───────────────────────────────────────
+// Terminal ERROR state — the page must NEVER stay on "Loading…" forever. Write a retry row into
+// whichever table body is active, mirroring the empty states. Retry re-runs the load.
+function _returnsError(msg) {
+  const ids = { buyer: ['buyer-tbody'], seller: ['seller-all-tbody', 'seller-pending-list'], admin: ['admin-tbody'] };
+  (ids[userRole] || ['buyer-tbody', 'seller-all-tbody', 'admin-tbody']).forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    if (el.tagName === 'TBODY') {
+      el.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:26px;">' +
+        esc(msg || "Couldn't load returns") + ' &nbsp;<button class="btn btn-outline btn-sm" onclick="loadReturns()">Retry</button></td></tr>';
+    } else {
+      el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">' + esc(msg || "Couldn't load returns") +
+        ' <button class="btn btn-outline btn-sm" onclick="loadReturns()">Retry</button></div>';
+    }
+  });
+}
+
 async function loadReturns() {
   const uid = currentUser.uid;
   try {
@@ -435,7 +451,12 @@ async function loadReturns() {
     if (userRole === 'seller') q = q.where('sellerId', '==', uid).orderBy('submittedAt', 'desc').limit(100);
     if (userRole === 'admin')  q = q.orderBy('submittedAt', 'desc').limit(200);
 
-    const snap = await q.get();
+    // Bounded timeout — a never-settling query (missing index / App Check / offline) must still
+    // reach a terminal state instead of an infinite "Loading…".
+    const snap = await Promise.race([
+      q.get(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
+    ]);
     allReturns = [];
     snap.forEach(doc => allReturns.push({ id: doc.id, ...doc.data() }));
 
@@ -445,6 +466,7 @@ async function loadReturns() {
   } catch (e) {
     console.error('loadReturns:', e);
     toast('Failed to load returns data', 'err');
+    _returnsError(e && e.message === 'timeout' ? "Returns took too long to load" : "Couldn't load returns");
   }
 }
 
@@ -611,7 +633,7 @@ async function submitReturn() {
 
 // ── Approve return ─────────────────────────────────────────────
 async function approveReturn(returnId, force = false) {
-  if (!confirm('Approve this return and trigger refund?')) return;
+  if (!(await SK.dialog.confirm('Approve this return and trigger refund?', null, null, { title: 'Approve return', variant: 'danger', confirmLabel: 'Approve & refund' }))) return;
   try {
     const processReturn = fns.httpsCallable('processReturn');
     await processReturn({ returnId, action: 'approve', force });

@@ -65,10 +65,24 @@
     const db = _getDb();
     if (!db || !product || !product.id) return;
     try {
-      const { doc, setDoc, serverTimestamp } = await import(FS_URL);
+      const { doc, setDoc, getDoc, serverTimestamp } = await import(FS_URL);
+      const ref = doc(db, 'products', String(product.id));
       const payload = _trimPayload(product);
       payload._syncedAt = serverTimestamp();
-      await setDoc(doc(db, 'products', String(product.id)), payload, { merge: true });
+      /* Firestore is AUTHORITATIVE for money / inventory / ownership. A stale local
+         cache must NOT overwrite those on an EXISTING product — this sync was
+         reverting server-set values (observed: price 100 -> cached 2000; sellerUid).
+         For an existing doc, sync only descriptive fields; write everything on first
+         create. Legitimate price/stock/owner edits go through the server edit path. */
+      try {
+        const _snap = await getDoc(ref);
+        if (_snap.exists()) {
+          delete payload.price; delete payload.costPrice; delete payload.deliveryCost;
+          delete payload.stock; delete payload.outOfStock; delete payload.sold;
+          delete payload.sellerUid;
+        }
+      } catch(_) {}
+      await setDoc(ref, payload, { merge: true });
       /* Drop the warm search cache for products, or the seller searches for the
          item they just listed and is served the pre-write scan (up to 10 min
          in-session / 30 min from localStorage) — which reads as "search is
@@ -79,15 +93,21 @@
     }
   }
 
-  /* ── Delete one product from Firestore ─────────────────────── */
+  /* ── Retire one product (canonical SOFT delete) ─────────────────
+     Was a hard deleteDoc, which raced the soft-archive in seller.js deleteProduct() and
+     DESTROYED the archived record (and its sales/order history) that the lifecycle contract
+     preserves. The canonical semantics are archive (status:'archived', isVisible:false) so
+     history survives and the item can be relisted. seller.js now owns that write + the
+     SokoniSync propagation; this wrapper must NOT hard-delete. Kept as a safety net that
+     archives (idempotent) only if some caller reaches here without seller.js having run. */
   async function _deleteProduct(productId) {
     const db = _getDb();
     if (!db || !productId) return;
     try {
-      const { doc, deleteDoc } = await import(FS_URL);
-      await deleteDoc(doc(db, 'products', String(productId)));
+      const { doc, updateDoc, serverTimestamp } = await import(FS_URL);
+      await updateDoc(doc(db, 'products', String(productId)), { status: 'archived', isVisible: false, archivedAt: serverTimestamp(), updatedAt: serverTimestamp() });
     } catch(e) {
-      console.warn('[SellerWiring] delete failed:', e.message);
+      console.warn('[SellerWiring] retire failed:', e.message);
     }
   }
 

@@ -316,8 +316,63 @@
     _db = null; _uid = null; _pending = {}; _retryCount = {};
   }
 
-  /* ── Expose globally ────────────────────────────────────────── */
-  window.SokoniSync = { init, pull, pushAll, clear };
+  /* ── Domain change-propagation facade (MERGED — extends this engine, does not
+     replace it) ──────────────────────────────────────────────────
+     The cross-device localStorage↔Firestore sync above is unchanged. These add the
+     merchant domain vocabulary (Product/Stock/Availability/Shop/Order/Payment/Refund/
+     Customer Changed) on the existing window.SokoniEventBus, so one canonical change
+     reaches every module (POS, Shop, Orders, Inventory, Analytics, Dashboard) via the
+     bus's same-origin BroadcastChannel — instead of pages manually refreshing each other. */
+  const _SYNC_EVENTS = {
+    ProductChanged: 'Product.Changed', StockChanged: 'Stock.Changed',
+    AvailabilityChanged: 'Availability.Changed', ShopChanged: 'Shop.Changed',
+    OrderChanged: 'Order.Changed', PaymentChanged: 'Payment.Changed',
+    RefundChanged: 'Refund.Changed', CustomerChanged: 'Customer.Changed'
+  };
+  function _syncEmit(name, payload, opts) {
+    const busName = _SYNC_EVENTS[name] || name;
+    payload = payload || {}; opts = opts || {};
+    const bus = window.SokoniEventBus;
+    if (bus && typeof bus.emit === 'function') {
+      try { bus.emit(busName, payload, { source: opts.source || 'sokoni-sync', broadcast: opts.broadcast !== false }); } catch (_) {}
+      return true;
+    }
+    try { window.dispatchEvent(new CustomEvent('sokoni:sync', { detail: { event: name, payload } })); } catch (_) {}
+    return true;
+  }
+  function _syncOn(name, handler) {
+    const busName = _SYNC_EVENTS[name] || name;
+    const bus = window.SokoniEventBus;
+    if (bus && typeof bus.on === 'function') {
+      return bus.on(busName, function (evt) { try { handler(evt.payload, evt); } catch (_) {} });
+    }
+    const domFn = function (e) { if (e.detail && (e.detail.event === name)) { try { handler(e.detail.payload, e.detail); } catch (_) {} } };
+    window.addEventListener('sokoni:sync', domFn);
+    return function () { window.removeEventListener('sokoni:sync', domFn); };
+  }
+  function _syncOnAny(handler) {
+    const offs = Object.keys(_SYNC_EVENTS).map(function (name) {
+      return _syncOn(name, function (payload, evt) { try { handler(name, payload, evt); } catch (_) {} });
+    });
+    return function () { offs.forEach(function (f) { try { f(); } catch (_) {} }); };
+  }
+
+  /* ── Expose globally (cross-device engine + domain-event facade on ONE object) ── */
+  window.SokoniSync = {
+    /* cross-device sync engine (unchanged contract firebase.js depends on) */
+    init, pull, pushAll, clear,
+    /* domain change-propagation facade */
+    EVENTS: _SYNC_EVENTS,
+    emit: _syncEmit, on: _syncOn, onAny: _syncOnAny,
+    productChanged:      function (p, o) { return _syncEmit('ProductChanged', p, o); },
+    stockChanged:        function (p, o) { return _syncEmit('StockChanged', p, o); },
+    availabilityChanged: function (p, o) { return _syncEmit('AvailabilityChanged', p, o); },
+    shopChanged:         function (p, o) { return _syncEmit('ShopChanged', p, o); },
+    orderChanged:        function (p, o) { return _syncEmit('OrderChanged', p, o); },
+    paymentChanged:      function (p, o) { return _syncEmit('PaymentChanged', p, o); },
+    refundChanged:       function (p, o) { return _syncEmit('RefundChanged', p, o); },
+    customerChanged:     function (p, o) { return _syncEmit('CustomerChanged', p, o); }
+  };
 
   /* ── Pick up any pending init queued by firebase.js ─────────── */
   if (window._sokoniSyncPending) {

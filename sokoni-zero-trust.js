@@ -733,6 +733,15 @@
         }, context)
       };
 
+      /* evaluateAccessRequest sets enforceAppCheck:true. Calling it before the reCAPTCHA
+         App-Check token is ready — a fresh session, or checkout firing right after load —
+         makes the CF reject at the infra layer, and the financial-op fail-safe below then
+         blocks checkout with "Access Denied". Wait for the app's App-Check ready signal so
+         a legitimate buyer isn't denied for a token-timing race. */
+      if (window.__sokoniAppCheckReady && typeof window.__sokoniAppCheckReady.then === 'function') {
+        try { await window.__sokoniAppCheckReady; } catch (_) {}
+      }
+
       var decision;
       try {
         var result = await _callable('evaluateAccessRequest')(payload);

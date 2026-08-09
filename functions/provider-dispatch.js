@@ -13,6 +13,7 @@ const _OPTS = {
   enforceAppCheck: true,
   timeoutSeconds:  120,
   memory:          '512MiB',
+  minInstances:    1,     /* keep one warm — the provider dashboard's hot path (no cold start on load) */
 };
 
 let _mod;
@@ -22,7 +23,10 @@ function _h() {
   if (!_mod) {
     _mod = Object.assign({},
       require('./provider-onboarding')._h,
-      require('./provider-ops')._h);
+      require('./provider-ops')._h,
+      require('./booking-service')._h,             /* Phase B: authoritative service create */
+      require('./booking-availability-guard')._h,  /* read-only availability-vs-booking impact check */
+      require('./booking-resolution')._h);         /* Slice 2: affected-booking resolution engine */
   }
   return _mod;
 }
@@ -36,6 +40,10 @@ const ROUTES = [
   'providerGetProfile',
   'providerUpdateProfile',
   'providerDashboard',
+  'providerGetHealth',
+  'providerServiceMetrics',
+  'providerGetCustomers',
+  'providerSaveCustomerNote',
   'providerGetBookings',
   'providerUpdateAvailability',
   'providerUpdatePricing',
@@ -51,6 +59,13 @@ const ROUTES = [
   'providerConfirmBooking',
   'providerDeclineBooking',
   'providerCompleteBooking',
+  // D1 — booking lifecycle (docs/BOOKING_LIFECYCLE_CONTRACT.md v1.0)
+  'providerStartBooking',
+  'providerCancelBooking',
+  'providerMarkNoShow',
+  'providerRescheduleBooking',
+  'providerContactCustomer',
+  'providerSaveBookingNote',
   'providerGetEarnings',
   'providerRequestPayout',
   'providerGetReviews',
@@ -60,6 +75,31 @@ const ROUTES = [
   'providerAddService',
   'providerListServices',
   'providerRemoveService',
+  'providerUpdateService',
+  'providerToggleService',
+  'providerDuplicateService',
+  'providerUpdateServicePricing',
+  'bookingPreviewPrice',
+  // booking-service (Phase B) — authoritative service-appointment create
+  'bookingCreateService',
+  // booking-service (hold lifecycle) — proactive pre-payment hold release on abandon/fail
+  'bookingReleaseHold',
+  // booking-service (WS3) — authoritative customer review, gated on a completed booking
+  'bookingSubmitReview',
+  // booking-availability-guard — read-only impact pre-check before an availability change
+  'providerCheckAvailabilityImpact',
+  // booking-resolution (Slice 2 step 1) — raise affected bookings into ACTION_REQUIRED + queue read
+  'providerRaiseAffectedBookings',
+  'providerListAffectedBookings',
+  // booking-resolution (Slice 2 step 2) — negotiation state machine (reschedule via canonical engine)
+  'providerProposeReschedule',
+  'customerRespondToProposal',
+  'customerProposeTime',
+  'providerRespondToCustomerProposal',
+  'bookingGetTimeline',
+  'customerListAffectedBookings',
+  // booking-resolution (Slice 2 step 3) — canonical refund terminal (reuses _disburseHeldFunds)
+  'customerRequestRefund',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');

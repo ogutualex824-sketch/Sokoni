@@ -482,7 +482,7 @@
 
     IntaSendTerminalDriver.prototype._requestPayment = async function (data) {
         // Calls the SOKONI Cloud Function which wraps IntaSend SDK
-        var resp = await fetch('https://us-central1-sokoni-app.cloudfunctions.net/initiatePayment', {
+        var resp = await fetch('https://us-central1-sokoni-aeb26.cloudfunctions.net/initiatePayment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -498,7 +498,7 @@
     };
 
     IntaSendTerminalDriver.prototype._queryStatus = async function (invoiceId) {
-        var resp = await fetch('https://us-central1-sokoni-app.cloudfunctions.net/getPaymentStatus?invoiceId=' + encodeURIComponent(invoiceId));
+        var resp = await fetch('https://us-central1-sokoni-aeb26.cloudfunctions.net/getPaymentStatus?invoiceId=' + encodeURIComponent(invoiceId));
         if (!resp.ok) throw new Error('Status query failed: ' + resp.status);
         return resp.json();
     };

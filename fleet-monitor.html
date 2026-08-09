@@ -6,7 +6,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
-<script src="shared-header.js"></script>
+  <script src="shared-header.js"></script>
+  <script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Fleet Monitor — SOKONI Admin</title>
@@ -398,7 +399,7 @@ function _resolveAlert(eventId, btn){
   _cf('navResolveFleetEvent')({ eventId: eventId, note: note }).then(function(){
     _refresh();
     _closeDetail();
-  }).catch(function(e){ alert('Error: '+e.message); if(btn) btn.disabled = false; });
+  }).catch(function(e){ SK.dialog.alert('Error: '+e.message); if(btn) btn.disabled = false; });
 }
 
 /* ── Tab switch ── */

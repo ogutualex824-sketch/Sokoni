@@ -83,6 +83,13 @@ const TYPES = {
   payment_success:      { priority: 'commerce',  category: 'payments', smsTemplate: 'payment_success' },
   payment_failed:       { priority: 'commerce',  category: 'payments', smsTemplate: 'payment_failed' },
   refund_processed:     { priority: 'commerce',  category: 'payments', smsTemplate: 'refund_processed' },
+  /* Service bookings. Previously UNregistered — notify() threw "Unknown notification type"
+     and the fire-and-forget .catch() swallowed it, so a provider was never pinged when a
+     booking was paid. category 'orders' (existing routing); SMS off (no templates yet). */
+  booking_new:          { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  booking_paid:         { priority: 'commerce',  category: 'orders',   smsTemplate: null },
+  booking_refund:       { priority: 'commerce',  category: 'payments', smsTemplate: null },
+  booking_released:     { priority: 'commerce',  category: 'orders',   smsTemplate: null },
   wallet_credit:        { priority: 'commerce',  category: 'wallet',   smsTemplate: 'wallet_credit' },
   order_placed:         { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_placed' },
   order_accepted:       { priority: 'commerce',  category: 'orders',   smsTemplate: 'order_accepted' },
@@ -325,7 +332,7 @@ async function sendPush(uid, payload) {
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
-async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data }) {
+async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data, awaitDelivery = true }) {
   const t = TYPES[type];
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -398,6 +405,12 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
     }
   }
 
+  /* DELIVERY channels (push / SMS / email). The durable IN-APP record above is the
+     source of truth the dashboard/feed reads; delivery is best-effort on top. Wrapped so
+     a caller that must not block on a slow external send (a payment webhook) can pass
+     awaitDelivery:false and return as soon as the durable record exists, with delivery
+     continuing in the background. Default awaitDelivery:true preserves every existing caller. */
+  const runDelivery = async () => {
   /* PUSH */
   let pushOk = false;
   if (ch.push) {
@@ -481,6 +494,15 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
     quiet,
     completedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  };   /* end runDelivery */
+
+  if (awaitDelivery) {
+    await runDelivery();
+  } else {
+    /* Durable in-app record is already written; deliver in the background so the caller
+       (e.g. a payment webhook) isn't blocked on a slow FCM push. */
+    runDelivery().catch((err) => logger.error('[notify] background delivery failed', { error: err.message, key }));
+  }
 
   return { ok: true, ...result };
 }
@@ -651,12 +673,17 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
   const st  = ORDER_TIMELINE[idx];
   const who = uid || order.uid || order.buyerId;
 
-  await ref.update({
+  /* Blocker A fix — the 'accepted' milestone (Seller Accepted) also sets order.status to
+     'confirmed', which is what onOrderStatusChange watches to fire rider auto-assignment.
+     Previously advanceOrder moved only the timeline, so a paid order never became 'confirmed'
+     and dispatch never triggered. Guarded on status==='paid' so we never regress a later status. */
+  const _statusPatch = (st.key === 'accepted' && order.status === 'paid') ? { status: 'confirmed', confirmedAt: admin.firestore.FieldValue.serverTimestamp() } : {};
+  await ref.update(Object.assign({
     timelineStage: st.key,
     timelineIndex: idx,
     timeline: admin.firestore.FieldValue.arrayUnion({ key: st.key, label: st.label, at: Date.now() }),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }, _statusPatch));
 
   let notified = null;
   if (st.type && who) {

@@ -100,7 +100,7 @@ window.PosCustomers = (() => {
       tier:           'bronze',    /* bronze|silver|gold|platinum */
       tags:           data.tags || [],
       preferredPayment: data.preferredPayment || '',
-      marketingOptIn: data.marketingOptIn !== false,
+      marketingOptIn: data.marketingOptIn === true,   /* opt-in by default (KDPA/ODPC): consent only when explicitly captured */
       joinedAt:       Date.now(),
       updatedAt:      Date.now(),
       syncedAt:       null,

@@ -826,7 +826,7 @@ window.CRMPortal = (() => {
   }
 
   async function doConvertLead(leadId, name) {
-    if (!confirm(`Convert "${name}" to a customer?`)) return;
+    if (!(await SK.dialog.confirm(`Convert "${name}" to a customer?`, null, null, { title: 'Convert lead', confirmLabel: 'Convert' }))) return;
     try {
       await CF.convertLead({ leadId, notes: 'Converted via CRM portal' });
       toast('Lead converted successfully');

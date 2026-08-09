@@ -31,13 +31,16 @@ function _shouldSkip(data, collection) {
   if (data._noIndex === true) return true;
   if (data.status === 'draft' || data.status === 'deleted') return true;
   if (collection === 'users' && (data.private === true || data.status === 'banned')) return true;
+  /* Bookable services: a paused (active:false) or removed service must not appear in search.
+     Toggling active/removedAt fires the update trigger, which then deletes it from the index. */
+  if (collection === 'providerServices' && (data.active === false || data.removedAt)) return true;
   return false;
 }
 
-function _shouldSkipAfterUpdate(before, after) {
+function _shouldSkipAfterUpdate(before, after, collection) {
   /* If the document transitioned INTO a skip state, delete from index */
-  const nowSkip    = _shouldSkip(after);
-  const wasSkip    = _shouldSkip(before);
+  const nowSkip    = _shouldSkip(after, collection);
+  const wasSkip    = _shouldSkip(before, collection);
   if (nowSkip && !wasSkip) return 'delete';  // remove from index
   if (nowSkip && wasSkip)  return 'ignore';  // never was indexed
   return 'update';
@@ -69,7 +72,7 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
         const before = event.data?.before?.data() || {};
         const after  = event.data?.after?.data()  || {};
         const docId  = event.params.docId;
-        const action = _shouldSkipAfterUpdate(before, after);
+        const action = _shouldSkipAfterUpdate(before, after, col);
 
         if (action === 'ignore') return;
         if (action === 'delete') {
@@ -109,6 +112,11 @@ const triggers = {
   ..._makeTriggers('providers'),
   ..._makeTriggers('providerProfiles'),
   ..._makeTriggers('services'),
+  /* providerServices = the BOOKABLE services a provider creates (providerAddService).
+     The app writes here, but it was never registered — so no service ("DJ Set", a
+     mechanic's "Brake Service", etc.) ever reached search. Paused/removed ones are
+     filtered by _shouldSkip. Indexed into sokoni_services alongside provider profiles. */
+  ..._makeTriggers('providerServices'),
   ..._makeTriggers('events'),
   ..._makeTriggers('properties'),
   ..._makeTriggers('cars'),

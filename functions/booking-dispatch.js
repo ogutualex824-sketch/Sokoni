@@ -34,6 +34,7 @@ const _OPTS = {
   enforceAppCheck: true,
   timeoutSeconds:  120,
   memory:          '512MiB',
+  minInstances:    1,     /* keep one warm — availability/booking is a hot, latency-sensitive path (no cold start) */
   maxInstances:    80,
 };
 

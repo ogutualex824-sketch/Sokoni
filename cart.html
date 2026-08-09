@@ -6,6 +6,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
+<script type="module" src="sokoni-init.js"></script>
 <script src="auth-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -142,6 +143,27 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .bnav-emoji{font-size:20px;line-height:1.2;}
 .bnav-item:hover,.bnav-item.active{color:#71ff00;}
 .bnav-item.active .bnav-emoji{filter:drop-shadow(0 0 6px rgba(113,255,0,0.5));}
+/* ── Mobile persistent checkout bar — total + Checkout always reachable with one thumb.
+   Only shows on mobile (≤820px, where the side summary collapses below the item list);
+   docks above the bottom-nav, respects the safe area. Hidden when the cart is empty. ── */
+.cart-mobile-bar{display:none;}
+@media(max-width:820px){
+  .cart-mobile-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));
+    z-index:60;padding:9px 14px;background:rgba(8,8,8,0.98);
+    border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(16px);
+  }
+  .cart-mobile-bar.cmb-hidden{display:none;}
+  .cmb-total{display:flex;flex-direction:column;line-height:1.15;flex-shrink:0;}
+  .cmb-label{font-size:10px;color:rgba(255,255,255,0.45);font-weight:700;}
+  #cartBarTotal{font-size:18px;font-weight:900;color:#71ff00;letter-spacing:-0.3px;}
+  .cmb-checkout{flex:1;max-width:220px;text-align:center;padding:13px;border-radius:12px;
+    background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:15px;
+    text-decoration:none;box-shadow:0 2px 12px rgba(113,255,0,0.28);}
+  /* Reserve space so the last cart item isn't hidden behind the bar + nav */
+  body{padding-bottom:calc(124px + env(safe-area-inset-bottom,0px)) !important;}
+}
 </style>
 </head>
 <body>
@@ -201,6 +223,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
 <div id="notificationContainer"></div>
 
+<!-- Mobile persistent checkout bar (mirrors the order-summary total) -->
+<div id="cartMobileBar" class="cart-mobile-bar cmb-hidden" role="region" aria-label="Cart total and checkout">
+  <div class="cmb-total"><span class="cmb-label">Total</span><span id="cartBarTotal">KES 0</span></div>
+  <a href="checkout.html" class="cmb-checkout">Checkout →</a>
+</div>
+
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
@@ -211,6 +239,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 
 <!-- cart.js handles all rendering — no override -->
 <script src="cart.js"></script>
+<script>
+/* Keep the mobile checkout bar's total in sync with the order summary (single source),
+   and hide the bar when the cart is empty. Decoupled via observer — no cart.js edits. */
+(function(){
+  var s=document.getElementById('summaryTotal'), t=document.getElementById('cartBarTotal'), bar=document.getElementById('cartMobileBar');
+  if(!s||!t||!bar) return;
+  function sync(){
+    var txt=(s.textContent||'KES 0').trim(); t.textContent=txt;
+    var n=parseInt(((txt.match(/[\d,]+/)||['0'])[0]).replace(/,/g,''),10)||0;
+    bar.classList.toggle('cmb-hidden', n<=0);
+  }
+  sync();
+  try{ new MutationObserver(sync).observe(s,{childList:true,characterData:true,subtree:true}); }catch(_){ }
+})();
+</script>
 <script>
 /* _esc comes from cart.js (loaded above). Re-declaring it here as a `const`
    collided with cart.js's `function _esc` in the same global scope — a hard
@@ -302,6 +345,7 @@ function _applyPromoToSummary(pct,code){
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
+<script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script src="sokoni-social.js" defer></script>
 <script defer src="kass-widget.js"></script>

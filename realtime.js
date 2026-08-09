@@ -103,8 +103,18 @@
       return (b.uploadedAt || 0) - (a.uploadedAt || 0);
     });
 
-    /* Cache for offline / product.html lookups */
-    try { localStorage.setItem('sokoniProducts', JSON.stringify(all)); } catch(e) {}
+    /* Cache for offline / product.html lookups — strip base64 image blobs first (they inflate the
+       payload ~4KB→200KB each and blow the ~5MB localStorage origin cap; the renderer falls back to
+       Storage URL / placeholder). Prevents the documented mobile-OOM / quota bomb. */
+    try {
+      const _slim = all.map(function(p){
+        const q = Object.assign({}, p);
+        if (typeof q.image === 'string' && q.image.slice(0,5) === 'data:') delete q.image;
+        if (Array.isArray(q.images)) q.images = q.images.filter(function(u){ return typeof u === 'string' && u.slice(0,5) !== 'data:'; });
+        return q;
+      });
+      localStorage.setItem('sokoniProducts', JSON.stringify(_slim));
+    } catch(e) {}
 
     if (typeof window.displayProducts === 'function') {
       window.displayProducts(all.slice(0, 24));
@@ -123,12 +133,16 @@
   async function _listenProducts() {
     const db = _getDb(); if (!db) return;
     try {
-      const { collection, onSnapshot, query, where } = await import(FS_URL);
-      let q = collection(db, 'products');
+      const { collection, onSnapshot, query, where, orderBy, limit, documentId } = await import(FS_URL);
+      /* BOUNDED (was an unbounded onSnapshot over the ENTIRE products collection — a duplicate of
+         the OOM anti-pattern the canonical SokoniDB.listenProducts already fixed with newest-200).
+         Cap at 200, newest first (product ids are Date.now-style, so documentId desc = newest). */
+      let q = query(collection(db, 'products'), orderBy(documentId(), 'desc'), limit(200));
       if (_isCategory) {
         const cat = new URLSearchParams(location.search).get('cat')
                  || new URLSearchParams(location.search).get('category');
-        if (cat) q = query(q, where('category', '==', cat));
+        /* Category page: equality filter + cap (no orderBy → no composite index needed). */
+        if (cat) q = query(collection(db, 'products'), where('category', '==', cat), limit(200));
       }
       _track(onSnapshot(q,
         snap => _renderProducts(

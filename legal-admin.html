@@ -233,10 +233,10 @@ $('pv-go').addEventListener('click', (e) => run(e.target, 'pv-out', async () => 
 }));
 
 /* ── Publish / schedule / rollback ── */
-$('vr-publish').addEventListener('click', (e) => {
+$('vr-publish').addEventListener('click', async (e) => {
   const id = $('vr-id').value.trim(), v = $('vr-ver').value.trim();
   if (!id || !v) return show('vr-out', 'Agreement ID and version are required.');
-  if (!confirm('Publish "' + id + '" v' + v + ' NOW?\n\nEvery user of the affected roles will be asked to re-accept before using the feature. No account is deactivated.')) return;
+  if (!(await SK.dialog.confirm('Publish "' + id + '" v' + v + ' NOW? Every user of the affected roles will be asked to re-accept before using the feature. No account is deactivated.', null, null, { title: 'Publish version', confirmLabel: 'Publish' }))) return;
   run(e.target, 'vr-out', () => LEGAL('legalPublishAgreement', { agreementId: id, version: v }));
 });
 
@@ -247,10 +247,10 @@ $('vr-schedule').addEventListener('click', (e) => {
   run(e.target, 'vr-out', () => LEGAL('legalScheduleVersion', { agreementId: id, version: v, effectiveFrom: when }));
 });
 
-$('vr-rollback').addEventListener('click', (e) => {
+$('vr-rollback').addEventListener('click', async (e) => {
   const id = $('vr-id').value.trim(), v = $('vr-ver').value.trim();
   if (!id || !v) return show('vr-out', 'Agreement ID and the version to roll back TO are required.');
-  if (!confirm('Roll "' + id + '" back to v' + v + '?\n\nOnly a version that was actually published can be restored. Any pending schedule is cancelled. History is not deleted.')) return;
+  if (!(await SK.dialog.confirm('Roll "' + id + '" back to v' + v + '? Only a version that was actually published can be restored. Any pending schedule is cancelled. History is not deleted.', null, null, { title: 'Roll back version', variant: 'danger', confirmLabel: 'Roll back' }))) return;
   run(e.target, 'vr-out', () => LEGAL('legalRollbackVersion', { agreementId: id, version: v }));
 });
 
@@ -352,20 +352,20 @@ function fillApprove(id) {
 }
 
 /* ── Approve / reject provider ── */
-$('apr-approve').addEventListener('click', (e) => {
+$('apr-approve').addEventListener('click', async (e) => {
   const id = $('apr-id').value.trim();
   const reason = $('apr-reason').value.trim();
   if (!id) return show('apr-out', 'Provider UID is required.');
-  if (!confirm('Approve provider ' + id + '?\n\nThis will set their status to ACTIVE and make them visible to clients.')) return;
+  if (!(await SK.dialog.confirm('Approve provider ' + id + '? This will set their status to ACTIVE and make them visible to clients.', null, null, { title: 'Approve provider', variant: 'success', confirmLabel: 'Approve' }))) return;
   run(e.target, 'apr-out', () => APPROVE_PROVIDER({ providerId: id, action: 'approve', reason: reason || undefined }));
 });
 
-$('apr-reject').addEventListener('click', (e) => {
+$('apr-reject').addEventListener('click', async (e) => {
   const id = $('apr-id').value.trim();
   const reason = $('apr-reason').value.trim();
   if (!id) return show('apr-out', 'Provider UID is required.');
   if (!reason) return show('apr-out', 'A reason is required when rejecting a provider.');
-  if (!confirm('Reject provider ' + id + '?\n\nThey will be notified. This action can be undone by approving them later.')) return;
+  if (!(await SK.dialog.confirm('Reject provider ' + id + '? They will be notified. This action can be undone by approving them later.', null, null, { title: 'Reject provider', variant: 'danger', confirmLabel: 'Reject' }))) return;
   run(e.target, 'apr-out', () => APPROVE_PROVIDER({ providerId: id, action: 'reject', reason }));
 });
 

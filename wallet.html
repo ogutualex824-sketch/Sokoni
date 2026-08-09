@@ -1,11 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" data-no-header="true" style="background:#050505">
+<html lang="en" data-no-header="true" data-require-auth="true" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
+  <!-- Synchronous guest gate (data-require-auth) — redirects a signed-out visitor
+       to login before the wallet shell paints; the async onAuthStateChanged gate
+       in sokoni-wallet-v2.js remains as the live-session backstop. -->
+  <script src="auth-guard.js"></script>
   <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -889,13 +893,36 @@ body{
   #wal-nav{max-width:520px;left:50%;transform:translateX(-50%)}
   #wal-top{max-width:520px;left:50%;transform:translateX(-50%)}
 }
+
+/* ─── UI SPRINT: stable balance card (#9) ─── */
+/* Reserve the balance line height so it never jumps from "—" to the value. */
+.bal-amount{min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px}
+#balTier{min-height:22px}
+.bal-hero{contain:layout}
+
+/* ─── UI SPRINT: responsive + accessibility (#15, #16) ─── */
+/* Safe-area insets so the header/nav clear the notch and home indicator. */
+#wal-top{padding-top:env(safe-area-inset-top)}
+#wal-nav{padding-bottom:env(safe-area-inset-bottom)}
+/* No horizontal scroll; long refs/notes wrap instead of overflowing. */
+html,body{overflow-x:hidden}
+.tx-name,.tx-desc{overflow:hidden;text-overflow:ellipsis}
+/* Minimum 44×44 touch targets for interactive controls. */
+.wn-btn{min-height:48px}
+.tx-item{min-height:48px}
+button,.btn,.ovl-close{min-height:44px}
+.ovl-close{min-width:44px;display:inline-flex;align-items:center;justify-content:center}
+/* Visible keyboard focus for accessibility (was invisible). */
+a:focus-visible,button:focus-visible,input:focus-visible,.tx-item:focus-visible,.wn-btn:focus-visible{
+  outline:2px solid var(--g);outline-offset:2px;border-radius:8px
+}
   </style>
 </head>
 <body>
 
 <!-- ═══ TOP BAR ═══ -->
 <header id="wal-top">
-  <a href="/" style="color:var(--sub);font-size:18px;text-decoration:none;padding:4px;flex-shrink:0">
+  <a href="profile.html" aria-label="Back to Profile" title="Back to Profile" onclick="if(history.length>1&&/profile/.test(document.referrer)){history.back();return false;}" style="color:var(--sub);font-size:18px;text-decoration:none;padding:8px;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
     <i class="fas fa-arrow-left"></i>
   </a>
   <a href="/" style="flex:1;display:flex;align-items:center;text-decoration:none;min-width:0">
@@ -1935,6 +1962,7 @@ body{
 <!-- ═══ SCRIPTS ═══ -->
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-auth-state.js"></script>
+<script src="sokoni-identity-guard.js"></script>
 <script src="sokoni-user-bootstrap.js" defer></script>
 <script src="sokoni-payment-trust.js"></script>
 <script src="sokoni-wallet-v2.js"></script>
@@ -1951,6 +1979,21 @@ document.addEventListener('DOMContentLoaded', function () {
       SokoniWalletV2.init();
     });
   }
+  /* Loading watchdog — if the wallet engine never initialises (offline / blocked
+     script), convert the stuck "—" balance into a recoverable retry instead of a
+     silent hang. Fires only when the engine is truly absent AND nothing rendered. */
+  setTimeout(function () {
+    var bal = document.getElementById('balVal');
+    if (typeof SokoniWalletV2 === 'undefined' && bal && bal.textContent.trim() === '—'
+        && !document.getElementById('walletRetryBar')) {
+      var b = document.createElement('div');
+      b.id = 'walletRetryBar';
+      b.setAttribute('role', 'alert');
+      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:78px;z-index:9999;margin:0 auto;max-width:420px;background:var(--sur,#141414);border:1px solid var(--bor,rgba(255,255,255,.12));border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt,#fff);box-shadow:0 8px 32px rgba(0,0,0,.5)';
+      b.innerHTML = '<span style="flex:1">Couldn’t load your wallet. Check your connection.</span><button onclick="location.reload()" style="background:var(--g,#71ff00);color:#000;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Try again</button>';
+      document.body.appendChild(b);
+    }
+  }, 9000);
 });
 
 /* Phone search debounce */

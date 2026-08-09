@@ -6,6 +6,17 @@
 <title>Pricing, Earnings & Fees — SOKONI</title>
 <meta name="description" content="Every SOKONI fee in one place: subscriptions, sales commissions, withdrawal fees, delivery rates, advertising and a live earnings calculator. No hidden charges.">
 <link rel="icon" href="assets/favicon.png">
+<!-- Firebase — so the subscription section renders LIVE plans from subGetPlans
+     (the same canonical source plans.html uses), instead of hardcoded figures that
+     drift. Public read of pricing; no login required to view. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<!-- Home header (injects #sk-top-nav) so the earnings page matches the home page. -->
+<script src="shared-header.js" defer></script>
 <style>
   :root{
     --bg:#050505; --surface:#0f0f0f; --surface2:#161616; --border:rgba(255,255,255,.09);
@@ -21,7 +32,7 @@
   .wrap{max-width:900px;margin:0 auto;padding:0 16px}
 
   /* ── Hero ── */
-  .hero{padding:34px 0 22px;text-align:center}
+  .hero{padding:calc(var(--sk-header-h,64px) + 20px) 0 22px;text-align:center}
   .hero h1{font-size:30px;font-weight:900;letter-spacing:-.5px;margin-bottom:10px}
   .hero h1 .g{color:var(--accent)}
   .hero p{color:var(--sub);font-size:15px;max-width:560px;margin:0 auto 16px}
@@ -30,8 +41,24 @@
     padding:7px 14px;border-radius:999px}
 
   /* ── Sticky section nav ── */
-  .secnav{position:sticky;top:0;z-index:20;background:rgba(5,5,5,.92);backdrop-filter:blur(10px);
+  /* sk-sub-nav = exempt from shared-header's "hide stray body>nav" rule; sticks
+     just below the injected #sk-top-nav home header instead of under it. */
+  .secnav{position:sticky;top:var(--sk-header-h,64px);z-index:20;background:rgba(5,5,5,.92);backdrop-filter:blur(10px);
     -webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border);margin-bottom:8px}
+  /* Bottom-nav clearance so the last content isn't hidden. */
+  body{padding-bottom:calc(66px + env(safe-area-inset-bottom,0px))}
+  /* Home bottom-nav styles (earnings links no external CSS, so copied inline). */
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:stretch;
+    background:rgba(5,5,5,0.98);backdrop-filter:blur(40px) saturate(160%);-webkit-backdrop-filter:blur(40px) saturate(160%);
+    border-top:1px solid rgba(255,255,255,0.06);box-shadow:0 -12px 40px rgba(0,0,0,0.5);
+    padding-bottom:env(safe-area-inset-bottom,0px);min-height:66px}
+  .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    color:rgba(255,255,255,0.34);text-decoration:none;font-size:10px;font-weight:700;letter-spacing:.3px;
+    min-height:66px;padding:8px 4px 10px;-webkit-tap-highlight-color:transparent;transition:color .2s ease}
+  .bnav-item:hover{color:#71ff00}
+  .bnav-item:active{transform:scale(.9)}
+  .bnav-emoji{font-size:22px;line-height:1;display:block}
+  .bnav-item span{color:inherit}
   .secnav-inner{display:flex;gap:6px;overflow-x:auto;padding:11px 16px;max-width:900px;margin:0 auto;
     scrollbar-width:none}
   .secnav-inner::-webkit-scrollbar{display:none}
@@ -68,6 +95,22 @@
   tr:last-child td{border-bottom:none}
   td.rate{font-weight:800;color:var(--accent);white-space:nowrap}
   td.confirming{color:var(--amber);font-weight:600}
+
+  /* ── Live subscription plans (grouped by business type) ── */
+  .sub-loading{color:var(--sub);font-size:13.5px;padding:18px;text-align:center;border:1px dashed var(--border);border-radius:var(--radius)}
+  .sub-hub{margin-bottom:16px}
+  .sub-hub-h{display:flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800;margin-bottom:8px}
+  .sub-hub-h .pill{font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-dim);
+    border:1px solid rgba(113,255,0,.25);padding:2px 9px;border-radius:999px}
+  td .free{color:var(--accent);font-weight:800}
+  td .cs{color:var(--amber);font-weight:700}
+  td .permo{font-size:11px;color:var(--dim);font-weight:500}
+  .plan-trial{display:block;font-size:10.5px;color:var(--accent);font-weight:600;margin-top:3px}
+  .feat-chips{display:flex;flex-wrap:wrap;gap:5px;max-width:340px}
+  .feat-chip{font-size:10.5px;font-weight:600;color:var(--sub);background:var(--surface2);
+    border:1px solid var(--border);padding:2px 8px;border-radius:999px;white-space:nowrap}
+  td.feat{vertical-align:top}
+  td .noincl{font-size:11.5px;color:var(--dim)}
   .tbl-note{font-size:12px;color:var(--dim);margin-top:9px;display:flex;gap:6px;align-items:flex-start}
 
   .note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
@@ -128,7 +171,7 @@
   <p>One honest place for everything it costs to earn on SOKONI — subscriptions, sales commission, withdrawals, delivery and advertising. Work out exactly what you keep before you sell.</p>
 </div>
 
-<nav class="secnav">
+<nav class="secnav sk-sub-nav">
   <div class="secnav-inner">
     <a href="#subscriptions">Subscriptions</a>
     <a href="#commissions">Commissions</a>
@@ -153,20 +196,12 @@
          toggle. Hardcoding figures here drifted (an earlier version copied a
          second, disagreeing catalogue and showed the wrong Enterprise price).
          The Plans page is the single source; this section summarises and links. -->
-    <div class="cards">
-      <div class="card" style="grid-column:1/-1">
-        <div class="card-tag">Free to start · plans by business type</div>
-        <p style="color:var(--sub);font-size:13.5px;margin:9px 0 3px">Subscriptions are tailored to what you run — <strong style="color:#fff">Seller, Service Provider, Restaurant, Hotel, Property, Driver</strong> and more — each with a free tier plus monthly and annual paid plans (annual saves roughly two months).</p>
-        <ul>
-          <li>A free tier on every hub — never pay just to start</li>
-          <li>Monthly or annual billing; change or cancel anytime</li>
-          <li>Live, current prices per business type on the Plans page</li>
-          <li>Sales commission is separate — see the next section</li>
-        </ul>
-      </div>
-    </div>
-    <div class="note">Prices differ by business type and are served live from SOKONI's subscription engine, so the <strong>Plans</strong> page always shows the correct current figure with a monthly/annual toggle. That page is the single source for subscription pricing — this hub links to it rather than repeat numbers that could fall out of sync.</div>
-    <a class="cta" href="plans.html">See live plans &amp; pricing for your business →</a>
+    <!-- LIVE plans, grouped by business type, rendered from subGetPlans (canonical).
+         Prices are never hardcoded here, so they cannot drift; a plan missing a
+         price for a cycle shows "Contact Sales", never "KES NaN". -->
+    <div id="subPlansLive" class="sub-live"><div class="sub-loading">Loading live plans for every business type…</div></div>
+    <div class="note">Every figure above is served live from SOKONI's subscription engine — the same source as the <strong>Plans</strong> page — so it is always the current price and can never fall out of sync. Sales commission is charged separately (next section).</div>
+    <a class="cta" href="plans.html">Open the Plans page to compare features &amp; subscribe →</a>
   </section>
 
   <!-- ── COMMISSIONS (data-driven from SokoniCommission) ── -->
@@ -419,8 +454,89 @@
       '<div class="calc-row total"><span class="k">You keep (before withdrawal)</span><span class="v">'+kes(net)+'</span></div>';
   }
 
+  /* ── LIVE subscription plans, grouped by business type (canonical: subGetPlans) ── */
+  var HUB_LABELS = {
+    seller:'Sellers 🛍️', service_provider:'Service Providers 🛠️', restaurant:'Restaurants 🍽️',
+    hotel:'Hotels 🏨', pharmacy:'Pharmacies 💊', driver:'Drivers 🛵',
+    property_agent:'Property 🏠', car_dealer:'Car Dealers 🚗', freelancer:'Freelancers 💼',
+    recruiter:'Recruiters 🧑‍💼', buyer:'Buyers 🛒', enterprise:'Enterprise 🏢'
+  };
+  function _e(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+  function _priceCell(cents){
+    var n = Number(cents);
+    if(!Number.isFinite(n)) return '<span class="cs">Contact Sales</span>';   /* never "KES NaN" */
+    if(n === 0)            return '<span class="free">Free</span>';
+    return 'KES ' + Math.round(n/100).toLocaleString('en-KE');
+  }
+  /* Humanize a plan's numeric value: -1 / very large / "unlimited" → "Unlimited". */
+  function _fnum(v){
+    if(v===-1 || v==='unlimited' || (typeof v==='number' && v>=999999)) return 'Unlimited';
+    if(v==null) return null;
+    return Number(v).toLocaleString('en-KE');
+  }
+  /* Turn subGetPlans' features{} into readable "Includes" chips — the whole point
+     of pulling live plans is that what each tier INCLUDES stays canonical, not just
+     its price. Ordered most-compelling first; only present keys render. */
+  function _featChips(f){
+    if(!f || typeof f!=='object') return '<span class="noincl">Core marketplace access</span>';
+    var out=[];
+    if(f.listings_limit!=null)        out.push(_fnum(f.listings_limit)+' listings');
+    if(f.photos_per_listing!=null)    out.push(_fnum(f.photos_per_listing)+' photos/listing');
+    if(f.featured_listings)           out.push(_fnum(f.featured_listings)+' featured');
+    if(f.commission_discount_pct)     out.push(f.commission_discount_pct+'% commission off');
+    if(f.analytics)                   out.push('Analytics');
+    if(f.ai_assistant)                out.push('AI assistant');
+    if(f.bulk_import)                 out.push('Bulk import');
+    if(f.priority_support)            out.push('Priority support');
+    if(f.api_access)                  out.push('API access');
+    if(f.team_members)                out.push(_fnum(f.team_members)+' team seats');
+    if(f.storage_gb)                  out.push(_fnum(f.storage_gb)+'GB storage');
+    if(f.badge_verified)              out.push('Verified badge');
+    if(!out.length) return '<span class="noincl">Core marketplace access</span>';
+    return '<div class="feat-chips">'+out.map(function(t){return '<span class="feat-chip">'+_e(t)+'</span>';}).join('')+'</div>';
+  }
+  async function renderSubPlans(){
+    var host = document.getElementById('subPlansLive');
+    if(!host) return;
+    try{
+      if(!window.firebase || !firebase.functions) throw new Error('firebase-unavailable');
+      if(!firebase.apps.length) firebase.initializeApp(window.SOKONI_CONFIG || {});
+      var fns = firebase.app().functions('us-central1');
+      var res = await fns.httpsCallable('subGetPlans')({});
+      var plans = res && res.data ? (Array.isArray(res.data) ? res.data : (res.data.plans || [])) : [];
+      if(!plans.length) throw new Error('empty');
+      var byHub = {}, order = [];
+      plans.forEach(function(p){ var h = p.hubType || 'other'; if(!byHub[h]){ byHub[h]=[]; order.push(h); } byHub[h].push(p); });
+      host.innerHTML = order.map(function(h){
+        var rows = byHub[h].map(function(p){
+          /* subGetPlans / sub-billing.js store price as NESTED price:{monthly,annual}
+             in KES cents (not flat priceMonthly/priceAnnual). Read the nested field;
+             fall back to a flat field only if a custom plan uses one. */
+          var moC = (p.price && p.price.monthly != null) ? p.price.monthly : p.priceMonthly;
+          var yrC = (p.price && p.price.annual  != null) ? p.price.annual  : p.priceAnnual;
+          var mo = Number(moC), yr = Number(yrC);
+          var moPer = (Number.isFinite(mo) && mo>0) ? ' <span class="permo">/mo</span>' : '';
+          var yrPer = (Number.isFinite(yr) && yr>0) ? ' <span class="permo">/yr</span>' : '';
+          var trialD = p.trial && Number(p.trial.days) > 0 ? Number(p.trial.days) : 0;
+          var trial  = trialD ? '<span class="plan-trial">✓ '+trialD+'-day free trial</span>' : '';
+          return '<tr><td>'+_e(p.name || p.id || 'Plan')+trial+'</td>'+
+                 '<td class="rate">'+_priceCell(moC)+moPer+'</td>'+
+                 '<td class="rate">'+_priceCell(yrC)+yrPer+'</td>'+
+                 '<td class="feat">'+_featChips(p.features)+'</td></tr>';
+        }).join('');
+        var n = byHub[h].length;
+        return '<div class="sub-hub"><div class="sub-hub-h">'+_e(HUB_LABELS[h]||h)+' <span class="pill">'+n+' plan'+(n===1?'':'s')+'</span></div>'+
+               '<div class="tbl-wrap"><table><thead><tr><th>Plan</th><th>Monthly</th><th>Annual</th><th>Includes</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      }).join('');
+    }catch(e){
+      /* Never a broken/blank section — degrade to the summary + Plans link. */
+      host.innerHTML = '<div class="sub-loading">Subscriptions are free to start on every hub, with monthly &amp; annual paid tiers per business type (annual saves ~2 months). Open the <a href="plans.html" style="color:var(--accent);font-weight:700">Plans page</a> for the current live price and a monthly/annual toggle for your business.</div>';
+    }
+  }
+
   function init(){
     renderCommission();
+    renderSubPlans();
     renderDelivery();
     buildCatOptions();
     document.getElementById('minComm').textContent = kes(MIN_COMMISSION_KES);
@@ -437,6 +553,15 @@
      worker takes control. Without this, the page renders whatever the active (and
      possibly stale) worker holds and never triggers an update — the cause of
      "earn page still loading old version". Matches index.html. -->
+<!-- Home bottom navigation (identical to index.html) -->
+<nav class="bottom-nav" role="navigation" aria-label="Main navigation">
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
 <script src="sw-register.js" defer></script>
 </body>
 </html>

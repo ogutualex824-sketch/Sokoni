@@ -195,10 +195,22 @@ exports.submitDataRightsRequest = onCall(
   async (request) => {
     const { name, email, phone, type, details } = request.data;
 
-    const VALID_TYPES = [
-      'delete_account', 'export_data', 'rectify_data',
-      'restrict_processing', 'withdraw_consent', 'facebook_deletion',
-    ];
+    /* Must-fix #3 — the data-deletion.html form sends KDPA-standard right names
+       (deletion/access/rectification/restriction/portability/objection) that did NOT
+       match the backend enum, so EVERY request failed invalid-argument. Normalize both
+       the UI names AND the pre-existing backend values to one canonical set; unknown → reject.
+       We store the canonical `type` AND the caller's original `requestedRight` for the record. */
+    const TYPE_ALIASES = {
+      deletion:            'delete_account',     delete_account:      'delete_account',
+      facebook_deletion:   'facebook_deletion',
+      access:              'export_data',        export_data:         'export_data',
+      portability:         'export_data',
+      rectification:       'rectify_data',       rectify_data:        'rectify_data',
+      restriction:         'restrict_processing', restrict_processing: 'restrict_processing',
+      objection:           'object_processing',  object_processing:   'object_processing',
+      withdraw_consent:    'withdraw_consent',
+    };
+    const canonicalType = TYPE_ALIASES[type];
 
     if (!name || typeof name !== 'string' || name.length > 120) {
       throw new HttpsError('invalid-argument', 'Valid name required');
@@ -206,7 +218,7 @@ exports.submitDataRightsRequest = onCall(
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError('invalid-argument', 'Valid email required');
     }
-    if (!VALID_TYPES.includes(type)) {
+    if (!canonicalType) {
       throw new HttpsError('invalid-argument', 'Invalid request type');
     }
 
@@ -214,7 +226,8 @@ exports.submitDataRightsRequest = onCall(
       name:       name.trim(),
       email:      email.trim().toLowerCase(),
       phone:      phone ? phone.trim().slice(0, 20) : null,
-      type,
+      type:           canonicalType,   /* normalized */
+      requestedRight: type,            /* the exact right the user selected in the UI */
       details:    details ? details.trim().slice(0, 1000) : null,
       status:     'received',
       uid:        request.auth?.uid || null,
@@ -257,54 +270,43 @@ exports.deleteMyAccount = onCall(
 
     const uid = request.auth.uid;
 
-    /* Prevent double-deletion */
-    const existing = await db.collection('accountDeletions')
-      .where('uid', '==', uid)
-      .where('status', 'in', ['pending', 'processing'])
-      .limit(1)
-      .get();
-    if (!existing.empty) {
+    /* Single deletion authority. This schedules erasure on the SAME fields the working purge
+       worker (account-manager.js finaliseExpiredDeletions) queries — status:'pending_deletion'
+       + deletionScheduledAt — instead of the old orphaned accountDeletions queue (which had no
+       consumer, so the account was disabled but never actually erased). */
+    const uDoc = await db.collection('users').doc(uid).get();
+    if (uDoc.exists && uDoc.data().status === 'pending_deletion') {
       throw new HttpsError('already-exists', 'A deletion request is already pending for this account');
     }
 
-    /* Disable Firebase Auth account immediately — user cannot sign in */
-    await admin.auth().updateUser(uid, { disabled: true });
+    const graceMs     = 30 * 24 * 60 * 60 * 1000;
+    const scheduledAt = admin.firestore.Timestamp.fromMillis(Date.now() + graceMs);
 
-    /* Soft-delete the Firestore user document */
+    /* Immediate lockout — disable Auth + revoke tokens. PII is KEPT during the 30-day grace so
+       the user can cancel and restore; the worker performs the full spec-driven purge (delete
+       personal + anonymize statutorily-retained + Storage + auth.deleteUser) at expiry. */
+    await admin.auth().updateUser(uid, { disabled: true });
+    try { await admin.auth().revokeRefreshTokens(uid); } catch (_) {}
+
     await db.collection('users').doc(uid).set({
-      accountStatus:      'deleted',
-      deletedAt:          admin.firestore.FieldValue.serverTimestamp(),
-      deletionReason:     reason ? String(reason).slice(0, 200) : null,
-      purgeAfter:         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      /* Anonymise PII immediately */
-      name:       'Deleted User',
-      email:      null,
-      phoneNumber:null,
-      photoURL:   '',
-      displayName:'',
+      status:              'pending_deletion',          /* the field finaliseExpiredDeletions queries */
+      deletionScheduledAt: scheduledAt,
+      deletionRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+      deletionReason:      reason ? String(reason).slice(0, 200) : null,
+      disabled:            true,
     }, { merge: true });
 
-    /* Record deletion job */
-    const deletionRef = await db.collection('accountDeletions').add({
-      uid,
-      status:     'pending',
-      reason:     reason ? String(reason).slice(0, 200) : null,
-      requestedAt:admin.firestore.FieldValue.serverTimestamp(),
-      purgeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
+    await db.collection('auditLog').add({
+      action: 'account_deletion_scheduled', uid,
+      ts: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
 
-    /* Clean up auth-session tokens — invalidate all existing tokens */
-    try {
-      await admin.auth().revokeRefreshTokens(uid);
-    } catch (_) {}
-
-    console.info('[deleteMyAccount] Queued deletion for uid:', uid.slice(0, 8) + '…');
+    console.info('[deleteMyAccount] Scheduled erasure for uid:', uid.slice(0, 8) + '…');
 
     return {
-      success:        true,
-      deletionId:     deletionRef.id,
-      purgeAfter:     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      message:        'Your account has been deactivated and is scheduled for permanent deletion within 30 days.',
+      success:    true,
+      purgeAfter: new Date(Date.now() + graceMs).toISOString(),
+      message:    'Your account has been deactivated and is scheduled for permanent erasure in 30 days. Sign in before then to cancel.',
     };
   }
 );
