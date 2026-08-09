@@ -83,10 +83,38 @@ const AUTH_PAGE = /\/(login|signup|register|reset-password)(\.html)?(\?|#|$)/i;
   });
   /* Per-frame error bridge — page.on('pageerror') carries no frame, so it would blame the
      shell for a module's error. Same reason as the acceptance gate. */
+  /* Seed the SHELL SESSION FLAG only.
+     Without it the run is genuinely unauthenticated, and the shell then does exactly what it
+     should: a module reports authRequired, the shell finds no session of its own, and it sends
+     the whole tab to login. Correct behaviour — but it ends the smoke test at /login and proves
+     nothing about routing. auth-guard treats localStorage.loggedIn as authoritative for the
+     session (see its 2026-07-26 note on the profile<->login loop), so seeding it lets the shell
+     and every route be exercised on production.
+
+     This grants UI session state and NOTHING else: Firestore rules and App Check still govern
+     every read, there is no Firebase user, and no module can show real merchant data. Data-level
+     behaviour must be verified by signing in on a real device. */
   await ctx.addInitScript(() => {
+    try {
+      localStorage.setItem('loggedIn', 'true');
+      localStorage.setItem('sokoniUser', JSON.stringify({
+        uid: 'smoke-probe', name: 'Smoke Probe', roles: ['seller', 'merchant'], role: 'seller',
+      }));
+    } catch (e) {}
     window.__skErrors = [];
     const push = (k, m, s) => { try { window.__skErrors.push({ k, m: String(m || '').slice(0, 200), doc: location.pathname, src: s || '' }); } catch (_) {} };
-    window.addEventListener('error', (e) => push('error', e.message, e.filename), true);
+    /* Capture phase also fires for FAILED RESOURCE LOADS (img/script/link), which carry no
+       message and are not script errors. Recording them as page errors produced a bare
+       "/seller: " with nothing after it — an alarm with no content. Separate them and keep
+       the failing URL, so a genuinely broken asset is still visible instead of hidden. */
+    window.addEventListener('error', (e) => {
+      const el = e.target;
+      if (el && el !== window && (el.src || el.href)) {
+        push('resource', 'failed to load: ' + (el.src || el.href), el.src || el.href);
+        return;
+      }
+      push('error', e.message, e.filename);
+    }, true);
     window.addEventListener('unhandledrejection', (e) => push('rejection', e.reason && e.reason.message || e.reason, ''));
   });
   const page = await ctx.newPage();
@@ -238,7 +266,9 @@ const AUTH_PAGE = /\/(login|signup|register|reset-password)(\.html)?(\?|#|$)/i;
   for (const f of page.frames()) {
     try { (await f.evaluate(() => (window.__skErrors || []).splice(0))).forEach((e) => errs.push(e)); } catch (_) {}
   }
-  const real = errs.filter((e) => !ENV_NOISE.test(e.m) && !ENV_NOISE.test(e.src || ''));
+  const resourceErrs = errs.filter((e) => e.k === 'resource');
+  const real = errs.filter((e) => e.k !== 'resource' && !ENV_NOISE.test(e.m) && !ENV_NOISE.test(e.src || ''));
+  if (resourceErrs.length) note(resourceErrs.length + ' resource load failure(s) — expected headless (App Check / auth-gated assets)', resourceErrs[0].m);
   ck('no real page errors', real.length === 0,
      real.slice(0, 2).map((e) => (e.doc || '?') + ': ' + e.m).join(' | ') || (errs.length + ' env-noise only'));
 
