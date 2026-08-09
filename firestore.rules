@@ -3940,6 +3940,34 @@ service cloud.firestore {
       allow read:  if isAuthed() && resource.data.sellerUid == request.auth.uid || isAdmin();
     }
 
+    /* ── Returns ───────────────────────────────────────────────────────────────
+       This collection had NO rule at all, so it was default-denied: every read
+       failed with permission-denied, and returns.html surfaced that to merchants
+       as "Failed to load returns" — including for shops that simply had none.
+
+       Ownership mirrors the document written by functions/returns-engine.js:
+         buyerId  — the customer who filed the return
+         sellerId — the merchant the return is against
+       Exactly the two parties, plus admin. Deliberately NOT `isAuthed()`, which
+       would expose every shop's return history (customer names, order ids,
+       refund amounts) to any signed-in account.
+
+       Reads cover both get and list: returns.html queries
+         where('buyerId','==',uid)  / where('sellerId','==',uid), orderBy submittedAt desc
+       so every document a merchant can match is one they own. The unfiltered admin
+       query is allowed by isAdmin() alone.
+
+       All writes go through the returns-engine Cloud Functions (Admin SDK), which
+       own idempotency, ownership checks and the status state machine — so a client
+       must never write here directly. */
+    match /returns/{returnId} {
+      allow read: if isAdmin() || (isAuthed() && (
+                       resource.data.buyerId  == request.auth.uid ||
+                       resource.data.sellerId == request.auth.uid
+                     ));
+      allow write: if false;
+    }
+
     // ── Wallet Engine 2.0 — new collections ───────────────────────────────────
 
     match /wallets/{walletUid}/savings/{vaultId} {

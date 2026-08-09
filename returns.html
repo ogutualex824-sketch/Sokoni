@@ -1,6 +1,8 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
+<!-- In-shell boundary: suppress chrome that competes with the merchant shell. Must be first. -->
+<script src="sokoni-inshell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -407,7 +409,14 @@ function toast(msg, type = 'ok') {
 
 // ── Auth guard + role detection ────────────────────────────────
 auth.onAuthStateChanged(async user => {
-  if (!user) { window.location.href = '/login.html'; return; }
+  /* In-shell, navigating to login renders a full login screen INSIDE the merchant panel
+     under the previous module's title. The shell owns auth; standalone behaviour is unchanged. */
+  if (!user) {
+    if (window.SokoniInShell) { SokoniInShell.requireAuth(user, { redirect: 'returns', onBlocked: function () {
+      _returnsError('Session not ready — reopen SOKONI Merchant to continue');
+    } }); return; }
+    window.location.href = '/login.html'; return;
+  }
   currentUser = user;
 
   const token = await user.getIdTokenResult(true);
@@ -444,7 +453,25 @@ function _returnsError(msg) {
 }
 
 async function loadReturns() {
+  /* Auth is a PRECONDITION, not a query failure. Reading currentUser.uid here used to throw a
+     TypeError when the session had not settled, and that TypeError landed in the same catch as a
+     real Firestore error — so "not signed in yet" was reported to the merchant as
+     "Failed to load returns". Classify it separately. */
+  if (!currentUser || !currentUser.uid) {
+    _returnsError('Session not ready — sign in to view returns');
+    return;
+  }
   const uid = currentUser.uid;
+
+  /* ── STATE BOUNDARY ────────────────────────────────────────────────────────────
+     Exactly one of LOADING → EMPTY | READY | ERROR, and the classification happens
+     HERE rather than being inferred downstream.
+
+     The try wraps ONLY the query. Rendering used to sit inside it, so any exception
+     while drawing a row was reported to the merchant as "failed to load" — a render
+     bug wearing a network error's clothes. An empty result set is a SUCCESSFUL query
+     and must reach EMPTY, never ERROR. */
+  let snap;
   try {
     let q = db.collection('returns');
     if (userRole === 'buyer')  q = q.where('buyerId',  '==', uid).orderBy('submittedAt', 'desc').limit(50);
@@ -453,28 +480,37 @@ async function loadReturns() {
 
     // Bounded timeout — a never-settling query (missing index / App Check / offline) must still
     // reach a terminal state instead of an infinite "Loading…".
-    const snap = await Promise.race([
+    snap = await Promise.race([
       q.get(),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
     ]);
-    allReturns = [];
-    snap.forEach(doc => allReturns.push({ id: doc.id, ...doc.data() }));
-
-    if (userRole === 'buyer')  renderBuyerTable();
-    if (userRole === 'seller') renderSellerView();
-    if (userRole === 'admin')  renderAdminTable();
   } catch (e) {
+    /* ERROR — a genuine query/permission/network/timeout failure. Only this path. */
     console.error('loadReturns:', e);
-    toast('Failed to load returns data', 'err');
-    _returnsError(e && e.message === 'timeout' ? "Returns took too long to load" : "Couldn't load returns");
+    const code = (e && (e.code || e.message)) || '';
+    const msg = e && e.message === 'timeout' ? 'Returns took too long to load'
+      : /permission-denied/i.test(code)      ? "You don't have access to returns for this shop"
+      : /failed-precondition|index/i.test(code) ? 'Returns needs a database index that is still building'
+      : 'Unable to load returns';
+    toast(msg, 'err');
+    _returnsError(msg);
+    return;
   }
+
+  /* SUCCESS — zero rows is a valid, successful answer. */
+  allReturns = [];
+  snap.forEach(doc => allReturns.push({ id: doc.id, ...doc.data() }));
+
+  if (userRole === 'buyer')  renderBuyerTable();
+  if (userRole === 'seller') renderSellerView();
+  if (userRole === 'admin')  renderAdminTable();
 }
 
 // ── BUYER: table ───────────────────────────────────────────────
 function renderBuyerTable() {
   const tbody = document.getElementById('buyer-tbody');
   if (!allReturns.length) {
-    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No return requests yet</td></tr>';
+    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No returns yet</td></tr>';
     return;
   }
   tbody.innerHTML = allReturns.map(r => `<tr onclick="showDetail('${esc(r.id)}')">
@@ -501,7 +537,7 @@ function renderSellerView() {
   // All returns table
   const tbody = document.getElementById('seller-all-tbody');
   if (!allReturns.length) {
-    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No returns found</td></tr>';
+    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No returns yet</td></tr>';
     return;
   }
   tbody.innerHTML = allReturns.map(r => `<tr onclick="showDetail('${esc(r.id)}')">
