@@ -51,6 +51,38 @@ else
   echo "     firebase functions:list > .fnlist.txt && node scripts/deployment-integrity.js .fnlist.txt --ci"
 fi
 
+# ── Merchant Batch 1 gates ──────────────────────────────────────────────────
+run "Merchant route contract (static)"        node scripts/test-merchant-routes.js
+run "Returns UI terminal states"              node scripts/test-returns-states.js
+
+# Returns SECURITY rules. The `returns` collection was default-denied in production
+# until 2026-08-09; this suite is what proves the replacement rule scopes reads to the
+# buyer, the seller and admin — and nobody else. It ALSO checks the composite indexes
+# structurally, because the emulator does not enforce them: every query would pass with
+# zero indexes declared while production fails with FAILED_PRECONDITION.
+#
+# HARD PREREQUISITE: the Firestore emulator requires JDK 21+. firebase-tools refuses to
+# start on Java < 21. If Java is missing or too old this gate FAILS — it must never
+# degrade to a silent skip, because an unexecuted security suite reads exactly like a
+# passing one. Provision JDK 21 in CI (e.g. actions/setup-java with java-version: 21).
+JAVA_OK=0
+if command -v java >/dev/null 2>&1; then
+  JAVA_MAJOR="$(java -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+  case "$JAVA_MAJOR" in ''|*[!0-9]*) JAVA_MAJOR=0 ;; esac
+  [ "$JAVA_MAJOR" -ge 21 ] && JAVA_OK=1
+fi
+if [ "$JAVA_OK" -eq 1 ]; then
+  run "Returns security rules + indexes (emulator)" \
+      npx firebase emulators:exec --only firestore --project sokoni-returns-rules-test \
+        "node scripts/test-returns-rules.js"
+else
+  echo ""
+  echo "❌ FAIL — Returns security rules: JDK 21+ required, found '${JAVA_MAJOR:-none}'."
+  echo "   The Firestore emulator cannot start, so the returns authorization suite"
+  echo "   did NOT run. This is a release prerequisite, not an optional extra."
+  FAIL=1
+fi
+
 echo ""
 echo "══════════════════════════════════════════════════════════"
 if [ "$FAIL" -ne 0 ]; then

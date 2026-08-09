@@ -54,6 +54,11 @@ const INVENTORY_PATHS = [
   /^functions\/index\.js$/,     /* re-exports the inventory Cloud Functions */
   /^firestore\.rules$/,
   /^firestore\.indexes\.json$/,
+  /* The client Firestore provider. pos-inventory.js reads canonical stock through this
+     shim's query/snapshot wrappers, so a change here can break inventory sync without
+     touching any path named "inventory" — which is exactly how a dropped docChanges()
+     silently killed the POS stock listeners while this gate skipped itself. */
+  /^firebase\.js$/,
 ];
 
 /** Files changed between what is LIVE and what is about to ship.

@@ -47,7 +47,13 @@
     "audit:storage": "node scripts/audit-admin-localstorage.js",
     "regression:admin": "node scripts/admin-os-regression.js --live",
     "test:templates": "node scripts/test-merchant-templates.js",
-    "verify:receipts": "node scripts/verify-receipt-naming.js"
+    "verify:receipts": "node scripts/verify-receipt-naming.js",
+    "test:merchant-routes": "node scripts/test-merchant-routes.js",
+    "test:merchant-route-gate": "node scripts/test-merchant-route-gate.js",
+    "gate:merchant-routes": "node scripts/test-merchant-routes.js && node scripts/test-merchant-visual-gate.js",
+    "test:rules:returns": "firebase emulators:exec --only firestore --project sokoni-returns-rules-test \"node scripts/test-returns-rules.js\"",
+    "test:merchant-visual-gate": "node scripts/test-merchant-visual-gate.js",
+    "test:returns-states": "node scripts/test-returns-states.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",
