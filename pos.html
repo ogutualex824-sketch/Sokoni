@@ -1,8 +1,15 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
-<!-- In-shell boundary: suppress chrome that competes with the merchant shell. Must be first. -->
-<script src="sokoni-inshell.js"></script>
+<!-- In-shell boundary. The CLASS must land before first paint, or a module flashes its own
+     bottom bar / consent modal inside the merchant panel before they are suppressed. An
+     inline snippet does that with NO network request — strictly faster than a blocking
+     external script, which is what perf-guard rightly refused (posBlockingScripts 5 > 4).
+     pos.html needs ONLY this flag: its one competing element (.pos-quick-nav) is suppressed by
+     rules in its own stylesheet below, its consent modal is guarded at source in security.js,
+     and it calls no SokoniInShell API. So the shared module is deliberately NOT loaded here —
+     that keeps the POS boot path at its previous script count instead of adding to it. -->
+<script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
   <!-- P0 crash instrumentation. Diagnostic only, additive, removable in one line.
        MUST be first: it installs breadcrumbs before anything can crash. -->
   <script src="pos-crash-breadcrumbs.js"></script>
@@ -1284,6 +1291,15 @@
 @media(max-width:400px){.terminal-type-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* ══ SmartPOS 4.0 UX Enhancements ══════════════════════════════════ */
+
+/* Inside the merchant shell the SHELL owns navigation. This strip is position:fixed;
+   bottom:0, so within the panel iframe it pinned directly above the merchant bottom nav —
+   two stacked navigation bars on every phone, burying the charge bar. Declared here, in the
+   document that owns the element, so it is suppressed at FIRST PAINT: sokoni-inshell.js is
+   deferred (perf-guard blocks a new blocking script), and waiting for it would flash the
+   double bar. The .sk-in-shell flag is set by the inline snippet in <head>. */
+.sk-in-shell .pos-quick-nav { display: none !important; }
+.sk-in-shell #pos-app { padding-bottom: 0 !important; }
 
 /* ── Quick nav strip (mobile / tablet, hidden on desktop ≥901px) ── */
 .pos-quick-nav {
