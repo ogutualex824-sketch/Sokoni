@@ -11,6 +11,18 @@
     --bg:#050505; --panel:#0a0a0a; --card:#0d0d0d; --line:rgba(255,255,255,.08);
     --txt:#fff; --txt2:rgba(255,255,255,.55); --txt3:rgba(255,255,255,.35); --acc:#71ff00;
     --rail:224px; --rail-collapsed:64px; --top:56px;
+    /* ── Mobile shell geometry contract (v496) ──────────────────────────────
+       ONE definition of the fixed chrome, so no module has to guess. The page
+       is rendered with viewport-fit=cover, so both insets are real on iPhone.
+         --safe-top    status bar / notch
+         --safe-bot    home indicator
+         --top-h       header incl. its safe inset (what content must clear)
+         --bnav-h      bottom nav incl. its safe inset (what content must clear)
+       --bnav-h must match .mbnav's box: 1px border + 6px + 52px item + 6px. */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+    --top-h: calc(var(--top) + var(--safe-top));
+    --bnav-h: calc(65px + var(--safe-bot));
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
@@ -18,6 +30,11 @@
 
   .mshell{display:grid;grid-template-columns:var(--rail) 1fr;grid-template-rows:100vh;
     transition:grid-template-columns .22s cubic-bezier(.2,.7,.3,1)}
+  /* iOS Safari's 100vh is the LARGE viewport (as if the toolbar were retracted), so with
+     body{overflow:hidden} the bottom of the shell is pushed permanently off-screen while the
+     toolbar is showing. dvh tracks the visible viewport. Declared second = progressive
+     enhancement; browsers without dvh keep the 100vh line above. */
+  @supports (height:100dvh){ .mshell{grid-template-rows:100dvh} }
   .mshell.collapsed{grid-template-columns:var(--rail-collapsed) 1fr}
 
   /* ── Sidebar ── */
@@ -60,12 +77,19 @@
 
   /* ── Main ── */
   .mmain{display:flex;flex-direction:column;min-width:0;min-height:0;grid-column:2;grid-row:1}
-  .mtop{height:var(--top);flex:0 0 var(--top);display:flex;align-items:center;gap:12px;
-    padding:0 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+  /* The header owns the top safe inset: it grows by the notch and pads its controls down out
+     of it, so the burger / title / MiniShop / ⌘K are never under the iOS status bar. This is
+     the ONE header in the shell — hosted modules must not create competing fixed headers. */
+  .mtop{height:var(--top-h);flex:0 0 var(--top-h);display:flex;align-items:center;gap:12px;
+    padding:var(--safe-top) 14px 0;border-bottom:1px solid var(--line);background:var(--panel)}
   .mtop .burger{background:none;border:1px solid var(--line);color:var(--txt2);width:34px;height:34px;
     border-radius:9px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
   .mtop .burger:hover{color:var(--txt);border-color:rgba(113,255,0,.4)}
-  .mtitle{font-weight:800;font-size:15px}
+  /* The title must never wrap: "POS / Cashier" broke onto a second line at 375px, growing the
+     header and shoving the whole shell down. It is a flex child, so it also needs min-width:0
+     before ellipsis can apply. It yields space to the action buttons rather than pushing them. */
+  .mtitle{font-weight:800;font-size:15px;min-width:0;flex:0 1 auto;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .mtop .spacer{flex:1}
   .mtop .tchip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--txt2);
     padding:6px 11px;border:1px solid var(--line);border-radius:20px}
@@ -301,15 +325,27 @@
     :root{--rail:200px}
     .mshell{grid-template-columns:0 1fr}
     .mshell.mobile-open{grid-template-columns:var(--rail) 1fr}
+    /* The drawer is a fixed overlay ABOVE the bottom nav (z 50 > 48) and owns both safe
+       insets itself, so the brand button clears the notch and the status chips clear the
+       home indicator. .mnav already scrolls (flex:1;overflow-y:auto) — with the insets
+       accounted for, every sidebar row stays reachable however long the list grows. */
     .mrail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);z-index:50;
-      transform:translateX(-100%);transition:transform .22s}
+      transform:translateX(-100%);transition:transform .22s;
+      padding-top:var(--safe-top);padding-bottom:var(--safe-bot)}
     .mshell.mobile-open .mrail{transform:translateX(0);box-shadow:0 0 40px rgba(0,0,0,.6)}
     .mshell.mobile-open .mscrim{opacity:1;pointer-events:auto}
-    /* leave room so fixed bottom-nav never covers content or the last action */
-    .mcontent{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+    /* ── Bottom-nav clearance ────────────────────────────────────────────────
+       This padding MUST live on .mmain, not on .mcontent. Every module panel is
+       `.mpanel{position:absolute;inset:0}`, and an absolutely-positioned box resolves
+       inset:0 against its containing block's PADDING box — so padding on .mcontent (the
+       positioned ancestor) was a complete no-op and left 65px of every module, native and
+       iframe alike, buried under the fixed bottom nav (POS charge bar, form submit buttons,
+       last list row). Padding .mmain instead shortens the flex content box, so .mcontent
+       (flex:1) genuinely ends above the nav and inset:0 lands where it should. */
+    .mmain{padding-bottom:var(--bnav-h)}
     .mbnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:48;
       background:linear-gradient(180deg,#0b0b0b,#070707);border-top:1px solid var(--line);
-      padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));}
+      padding:6px 4px calc(6px + var(--safe-bot));}
     .mbnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
       background:none;border:0;color:var(--txt2);font-family:inherit;cursor:pointer;
       padding:6px 2px;min-height:52px;border-radius:12px;transition:color .15s,background .15s}
@@ -393,6 +429,18 @@
 <!-- SokoniBranch — the canonical shop/branch switcher (reused, not rebuilt). The header
      brand button is its entry point; the active shop drives SokoniShell.activeShopId. -->
 <script src="sokoni-branch.js"></script>
+<!-- AUTH GUARD — the shell owns authentication for every module it hosts.
+     merchant.html previously loaded NO guard while seller.html loaded one, so the only
+     component enforcing a session was a hosted module — and its location.replace() swapped
+     the CONTENT PANEL for a login form instead of navigating the tab. Guarding here fixes
+     that inversion: an unauthenticated visitor goes to the real login flow before any module
+     mounts, and hosted modules escalate to this frame rather than replacing themselves. -->
+<script src="auth-guard.js"></script>
+<!-- MERCHANT ROUTE CONTRACT (Phase 2A) — the ONE registry of merchant destinations.
+     The sidebar, the mobile drawer, the bottom nav and the ⌘K palette are all
+     projections of this file; none of them may hold a private list. Must load
+     BEFORE the shell script, which reads it at definition time. -->
+<script src="sokoni-merchant-routes.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -409,68 +457,27 @@
      instead of its own floating toast. Must be set before sw-register.js runs (it's deferred). */
   window.__sokoniShellHandlesUpdate = true;
 
-  /* Module registry. kind:
-       'native' — rendered by a JS function into the panel (instant, no reload)
-       'pos'    — the single persistent POS app panel; `tab` deep-switches its tab
-       'seller' — the single persistent Seller Dashboard panel; `sec` deep-switches its section */
-  /* MODULE REGISTRY — the union of the old Seller Dashboard + the Merchant OS. One destination
-     per button. kind: native | pos (Checkout app) | seller (Seller app section) | page (its own
-     page). Only genuinely-POS surfaces load the POS bundle. Seller `sec` keys MUST match
-     seller.js DASH_PAGES exactly; page `src` must be a real file. No dead links. */
-  /* v456 Navigation Convergence — the sidebar is the CANONICAL router. Every destination is a
-     direct entry that opens ITS module in the main content (kind: native | pos | seller | page).
-     No entry uses location.href / a new document — page-kind modules load in a persistent in-shell
-     panel (created once, never navigated). The founder's 20 canonical destinations are all here;
-     the remaining entries (Promotions, Messages, Stories, Riders, Receipts, Audit, Store Setup)
-     are preserved so no feature is lost. */
-  var MODULES = [
-    { id:'dashboard',    label:'Dashboard',    icon:'🏠', kind:'native' },
-    { id:'availability', label:'Availability', icon:'🟢', kind:'native' },
+  /* ── ROUTING (Phase 2A/2C) ──────────────────────────────────────────────────────
+     The shell no longer declares its own module list. sokoni-merchant-routes.js is the
+     single source of navigation; everything below is a PROJECTION of it. To add or
+     retarget a destination, edit the contract — there is nowhere else to edit.
 
-    { head:'Commerce' },
-    { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
-    { id:'orders',    label:'Orders',    icon:'🧾', kind:'native' },
-    { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
-    { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
-    { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
-    { id:'shop',      label:'Shop',      icon:'🏪', kind:'seller', sec:'overview' },
+     kind: native (shell-rendered panel) | pos (persistent POS panel, `tab`)
+           seller (persistent Seller panel, `sec`) | page (own persistent panel, `src`)
 
-    { head:'Business' },
-    { id:'reports',   label:'Reports',   icon:'📊', kind:'native' },
-    { id:'finance',   label:'Finance',   icon:'💰', kind:'native' },
-    { id:'analytics', label:'Analytics', icon:'📈', kind:'native' },
-    { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
-    { id:'promotions',label:'Promotions',icon:'🎁', kind:'seller', sec:'flash' },
-
-    { head:'Fulfilment' },
-    { id:'fulfilment',label:'Fulfilment',icon:'🚚', kind:'page',   src:'seller-fulfilment.html' },
-    { id:'deliveries',label:'Deliveries',icon:'🛵', kind:'page',   src:'dispatch.html' },
-    { id:'returns',   label:'Returns',   icon:'↩️', kind:'page',   src:'returns.html' },
-    { id:'riders',    label:'Riders',    icon:'🏍️', kind:'page',   src:'driver.html' },
-    { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
-
-    { head:'Engage' },
-    { id:'messages',  label:'Messages',  icon:'💬', kind:'seller', sec:'messages' },
-    { id:'stories',   label:'Stories',   icon:'📸', kind:'seller', sec:'stories' },
-
-    { head:'Team & Ops' },
-    { id:'team',      label:'Staff',     icon:'👨‍🔧', kind:'seller', sec:'team' },
-    { id:'disputes',  label:'Disputes',  icon:'⚖️', kind:'seller', sec:'disputes' },
-    { id:'verification', label:'Verification', icon:'✅', kind:'page', src:'verification.html' },
-    { id:'audit',     label:'Audit Log', icon:'🛡️', kind:'pos',    tab:'audit' },
-
-    { head:'System' },
-    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'native' },
-    { id:'pos-setup', label:'POS Setup', icon:'🖨️', kind:'page',   src:'pos-printer-setup.html' },
-    { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos',    tab:'settings' },
-    { id:'store',     label:'Store Setup', icon:'🏬', kind:'seller', sec:'store' },
-  ];
+     Legacy field note: contract rows use `name`; this shell historically read `label`.
+     We normalise once here rather than sprinkle `m.name || m.label` through the file. */
+  var CONTRACT = window.SokoniMerchantRoutes;
+  if (!CONTRACT) throw new Error('[merchant] route contract missing — sokoni-merchant-routes.js failed to load');
+  /* Sidebar rows = contract order: primary tier, then a MORE divider, then the rest.
+     Every row carries its canonical route id; nothing here invents a destination. */
+  var MODULES = CONTRACT.primary().concat([{ head: 'More' }], CONTRACT.more())
+    .map(function (r) { return r.head ? r : Object.assign({}, r, { label: r.name }); });
   var byId = {};
   MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
-  /* My MiniShop is a header destination (not a sidebar row) that opens IN-SHELL as a page panel.
-     Its src is resolved from the canonical claimed-shop record at click time (window.__miniShopUrl):
-     claimed → the public storefront /shop/<handle>; unclaimed → the claim flow. */
-  byId['minishop'] = { id: 'minishop', label: 'My MiniShop', kind: 'page', src: 'minishop-admin.html', dynamic: true };
+  /* My MiniShop is ALSO a header destination. It is a normal contract route (tier: more),
+     so it is already in byId — its src is resolved from the canonical claimed-shop record
+     at click time (window.__miniShopUrl): claimed → /shop/<handle>; unclaimed → claim flow. */
 
   var shell   = document.getElementById('mshell');
   var navEl   = document.getElementById('mnav');
@@ -492,13 +499,10 @@
     navEl.appendChild(el);
   });
 
-  /* ── Mobile bottom nav — the primary destinations, one tap away (phone only) ── */
-  var BOTTOM_NAV = [
-    { id:'dashboard', icon:'🏠', label:'Home' },
-    { id:'orders',    icon:'🧾', label:'Orders' },
-    { id:'cashier',   icon:'💳', label:'Sell' },
-    { id:'__more',    icon:'☰',  label:'More' }   /* opens the full drawer */
-  ];
+  /* ── Mobile bottom nav — projected from the contract (phone only). Exactly four
+        entries; '__more' opens the full drawer. Plan is deliberately NOT here: it is a
+        primary sidebar destination and must not crowd the four-up bar. ── */
+  var BOTTOM_NAV = CONTRACT.BOTTOM_NAV;
   var bnavEl = document.getElementById('mbnav');
   BOTTOM_NAV.forEach(function (b) {
     var el = document.createElement('button');
@@ -620,7 +624,18 @@
   /* ── Router ── */
   var _lastModule = 'dashboard';
   function go (id) {
-    var m = byId[id]; if (!m) { id = 'dashboard'; m = byId.dashboard; }
+    /* Resolve through the contract: canonical id, or a legacy alias (#finance -> revenue).
+       An id that resolves to NOTHING is a contract violation, not a navigation event — a
+       silent fall-back to Dashboard is exactly what let broken buttons look like they
+       worked. Fail loudly, stay put, and leave the current module untouched. */
+    var rid = CONTRACT.resolve(id);
+    if (!rid) {
+      console.error('[merchant] unknown route "' + id + '" — not in sokoni-merchant-routes.js. Navigation refused.');
+      try { window.dispatchEvent(new CustomEvent('sokoni:route-error', { detail: { id: id } })); } catch (_) {}
+      return;
+    }
+    id = rid;
+    var m = byId[id];
     if (current && current !== 'devices' && current !== id) _lastModule = current;  /* for Devices "Done" */
     current = id;
     setActive(id);
@@ -642,7 +657,68 @@
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
-    else if (id === 'reports' || id === 'finance' || id === 'analytics') renderAnalytics(id);
+    else if (id === 'settings') renderSettingsHub();
+    else if (id === 'reports' || id === 'revenue' || id === 'analytics') renderAnalytics(id);
+    /* A contract route flagged status:'planned' has no renderer yet. Say so plainly —
+       an empty panel would be exactly the "button silently fails" defect. Never invent
+       figures to fill the space (CLAUDE.md: UI Data Integrity). */
+    else if (byId[id] && byId[id].status === 'planned') renderPlanned(id);
+    else console.error('[merchant] native route "' + id + '" has no renderer');
+  }
+
+  /* A hosted module refused to render for a role reason. Replace the panel's loading skeleton
+     with an honest explanation rather than leaving a blank frame or a foreign page. */
+  function showModuleBlocked (page, reason) {
+    var panel = content.querySelector('.mpanel.show'); if (!panel) return;
+    panel.classList.add('loaded');
+    var box = panel.querySelector('.sk-blocked') || document.createElement('div');
+    box.className = 'sk-blocked';
+    box.style.cssText = 'position:absolute;inset:0;z-index:3;display:flex;align-items:center;' +
+      'justify-content:center;padding:28px;background:var(--bg);text-align:center';
+    box.innerHTML = '<div style="max-width:420px">' +
+      '<div style="font-size:30px;margin-bottom:12px">🔒</div>' +
+      '<div style="font-weight:800;font-size:15px;margin-bottom:8px">This section needs extra access</div>' +
+      '<div style="color:var(--txt2);font-size:13px;line-height:1.5">Your account is signed in, but it does not ' +
+      'currently have permission for ' + _ordEsc(String(page || 'this module')) + '.' +
+      '<br><span style="color:var(--txt3);font-size:11.5px">' + _ordEsc(String(reason || '')) + '</span></div>' +
+      '<button class="dbtn" style="margin-top:18px" onclick="window.__mgo(\'dashboard\')">Back to Dashboard</button>' +
+      '</div>';
+    if (!box.parentNode) panel.appendChild(box);
+  }
+
+  /* Honest terminal state for a registered-but-unbuilt destination. */
+  function renderPlanned (id) {
+    var host = document.getElementById('native-' + id); if (!host) return;
+    var m = byId[id] || {};
+    host.innerHTML = '<div class="dwrap"><div class="an-wrap">' +
+      '<div class="an-head"><div class="an-title">' + (m.icon || '') + ' ' + _ordEsc(m.label || id) + '</div></div>' +
+      '<div class="an-empty" style="padding:28px 0">This screen is not built yet.<br>' +
+      '<span style="color:var(--txt3);font-size:12px">It is a registered route, so nothing here is broken — ' +
+      'the module simply has not shipped. No figures are shown rather than estimated ones.</span></div>' +
+      '</div></div>';
+  }
+
+  /* ── Settings hub — one front door. Pure navigation into existing canonical routes;
+        it computes nothing and stores nothing, so it cannot drift from its targets. ── */
+  function renderSettingsHub () {
+    var host = document.getElementById('native-settings'); if (!host) return;
+    var links = (byId.settings && byId.settings.links) || [];
+    host.innerHTML = '<div class="dwrap">' +
+      '<div class="dsec-t">Settings</div>' +
+      '<div class="dgrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));overflow:visible;margin:0 0 22px">' +
+      links.map(function (lid, i) {
+        var r = byId[lid]; if (!r) return '';
+        return '<button class="dcard" data-goto="' + i + '" style="text-align:left;cursor:pointer;' +
+          'font-family:inherit;color:inherit;border:1px solid var(--line)">' +
+          '<div style="font-size:22px;line-height:1">' + (r.icon || '') + '</div>' +
+          '<div class="l" style="margin-top:8px;font-size:13px;text-transform:none;letter-spacing:0;' +
+          'color:var(--txt);font-weight:800">' + _ordEsc(r.label || r.name) + '</div></button>';
+      }).join('') + '</div></div>';
+    /* Index-based dispatch — never interpolate an id into an inline handler string
+       (feedback_inline_handler_xss: h()/esc() does not protect a JS string context). */
+    Array.prototype.forEach.call(host.querySelectorAll('[data-goto]'), function (b) {
+      b.onclick = function () { go(links[parseInt(b.dataset.goto, 10)]); };
+    });
   }
 
   /* ── Native Reports / Finance / Analytics — ALL read the ONE AnalyticsEngine.compute(),
@@ -651,7 +727,7 @@
      the same OrderService) and KASS's historical orders actually show — a 'today' default read
      as "Analytics is empty" while Orders held 9. Reports/Finance stay periodic (their purpose),
      each with a range selector. */
-  var _anRange = { reports: 'week', finance: 'month', analytics: 'all' };
+  var _anRange = { reports: 'week', revenue: 'month', analytics: 'all' };
   function _anFmt (n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
   function renderAnalytics (view) {
     var host = document.getElementById('native-' + view);
@@ -665,7 +741,7 @@
         '<div class="an-trace" id="an-trace-' + view + '">ⓘ source: OrderService → AnalyticsEngine.compute() → this screen</div>' +
       '</div>';
     }
-    document.getElementById('an-title-' + view).textContent = { reports: '📊 Reports', finance: '💰 Finance', analytics: '📈 Analytics' }[view];
+    document.getElementById('an-title-' + view).textContent = { reports: '📊 Reports', revenue: '💰 Revenue', analytics: '📈 Analytics' }[view];
     var R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
     document.getElementById('an-range-' + view).innerHTML = R.map(function (r) {
       return '<button class="ord2-chip ' + (_anRange[view] === r[0] ? 'active' : '') + '" onclick="__anRange(\'' + view + '\',\'' + r[0] + '\')">' + r[1] + '</button>';
@@ -673,13 +749,13 @@
     _anLoad(view);
   }
   window.__anRange = function (view, r) { _anRange[view] = r; renderAnalytics(view); };
-  window.__anRefresh = function () { ['reports', 'finance', 'analytics'].forEach(function (v) { if (current === v) _anLoad(v); }); };
+  window.__anRefresh = function () { ['reports', 'revenue', 'analytics'].forEach(function (v) { if (current === v) _anLoad(v); }); };
 
   function _anLoad (view) {
     var body = document.getElementById('an-body-' + view); if (!body || !window.SokoniAnalyticsEngine) return;
     Promise.resolve(SokoniAnalyticsEngine.compute({ range: _anRange[view] })).then(function (a) {
       if (!a || current !== view) return;
-      body.innerHTML = (view === 'finance') ? _anFinance(a) : (view === 'reports') ? _anReports(a) : _anAnalytics(a);
+      body.innerHTML = (view === 'revenue') ? _anFinance(a) : (view === 'reports') ? _anReports(a) : _anAnalytics(a);
     }).catch(function () {});
   }
   function _anStat (v, l, accent) { return '<div class="an-stat"><div class="an-stat-n"' + (accent ? ' style="color:' + accent + '"' : '') + '>' + v + '</div><div class="an-stat-l">' + l + '</div></div>'; }
@@ -1374,6 +1450,41 @@
     if (e.origin !== location.origin) return;
     var d = e.data || {};
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
+
+    /* A hosted module refused to render (auth-guard / sokoni-permissions). It deliberately did
+       NOT navigate its own panel — the shell owns that decision. Two distinct outcomes:
+
+         authRequired  — no usable session. The shell's own auth-guard is the authority; if it
+                         has not already bounced us, the session is genuinely gone, so send the
+                         WHOLE TAB to the real login flow, preserving where we were.
+         accessBlocked — signed in, but lacking the role for that module. Stay put and say so;
+                         bouncing an authenticated merchant to login would be the exact loop
+                         that broke profile↔login before. */
+    if (d.__sokoniModule && d.action === 'authRequired') {
+      /* A module could not see a user. That is NOT automatically a dead session: a module's
+         Firebase auth can lag the shell's, or App Check can block the read that materialises
+         it, while the shell's session is perfectly valid. Bouncing the tab on the module's
+         word alone would throw an authenticated merchant out mid-shift — and re-create the
+         profile<->login loop from the other direction.
+
+         So the SHELL's own session is the authority. Only when the shell also has no session
+         do we escalate to the real login flow; otherwise we keep the merchant where they are
+         and let the module show its own honest in-panel state. */
+      var _shellSession = false;
+      try { _shellSession = localStorage.getItem('loggedIn') === 'true'; } catch (_) {}
+      if (_shellSession) {
+        console.warn('[merchant] module "' + (d.page || '?') + '" sees no user, but the shell session is valid — staying put.');
+        return;
+      }
+      console.warn('[merchant] module "' + (d.page || '?') + '" reports no session and the shell has none — escalating to login.');
+      location.replace('login.html?next=' + encodeURIComponent('/merchant' + (location.hash || '')));
+      return;
+    }
+    if (d.__sokoniModule && d.action === 'accessBlocked') {
+      console.warn('[merchant] module "' + (d.page || '?') + '" blocked: ' + (d.reason || 'unknown'));
+      showModuleBlocked(d.page, d.reason);
+      return;
+    }
     if (d.__sokoniSync) { _applySync((d.__sokoniSync.pending) || 0); return; }  /* a module reports real pending-write count → truthful sync chip */
     if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
     if (d.__sokoniGoModule && byId[d.__sokoniGoModule]) { go(d.__sokoniGoModule); return; }  /* a module asked to route in-shell (e.g. Advanced → Devices) */
@@ -1567,7 +1678,15 @@
        same tab, no window.open, no full-page leave, shell panel transition not a splash).
        Claimed → storefront /shop/<handle>; unclaimed → claim flow. Resolves first if needed so
        the panel loads the right src immediately. */
-    function _go () { try { (window.__mgo || (window.SokoniShell && SokoniShell.go))('minishop'); } catch (_) { location.href = _mshop.url || 'minishop-admin.html'; } }
+    function _go () {
+      var router = window.__mgo || (window.SokoniShell && window.SokoniShell.go);
+      /* No location.href fallback: leaving /merchant is a contract violation, and the old
+         escape hatch turned a router bug into a full-page navigation that silently dropped
+         the merchant out of the shell. If the router is genuinely missing the shell is
+         broken — say so, and stay put. */
+      if (!router) { console.error('[merchant] MiniShop: router unavailable — staying in shell'); return; }
+      try { router('minishop'); } catch (e) { console.error('[merchant] MiniShop navigation failed', e); }
+    }
     window.__openMiniShop = function () {
       if (_mshop.resolved) { _go(); return; }
       _resolve().then(function () { _paint(); _go(); });
@@ -1578,12 +1697,22 @@
   })();
 
   window.__mgo = go;
-  window.addEventListener('hashchange', function () { var id = location.hash.replace('#', ''); if (byId[id] && id !== current) go(id); });
+  /* Hash is the route. Resolve through the contract (not byId) so a LEGACY alias in the
+     URL — a bookmark on #finance, an old deep link on #team — still lands on its canonical
+     module. Gating on byId alone silently ignored every alias, because aliases are not
+     route keys. An id that resolves to nothing is left to go() to refuse loudly. */
+  window.addEventListener('hashchange', function () {
+    var raw = location.hash.replace('#', '');
+    if (!raw) return;
+    var id = CONTRACT.resolve(raw);
+    if (id && id !== current) go(id);
+    else if (!id) console.error('[merchant] unknown route in URL hash: "' + raw + '"');
+  });
 
   /* Boot */
   paintStatus();
-  var boot = location.hash.replace('#', '');
-  go(byId[boot] ? boot : 'dashboard');
+  var boot = CONTRACT.resolve(location.hash.replace('#', ''));
+  go(boot || 'dashboard');
 
   /* (Printer auto-reconnect on app open is now owned by the shell's own engine above — no need
      to warm the POS host for the printer.) */

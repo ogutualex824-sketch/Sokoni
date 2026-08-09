@@ -60,9 +60,38 @@
      an actually-signed-in user to login when the auth state has not been
      materialized yet. */
   var _redirectTimer = null;
+  /* Am I a module hosted inside the SOKONI app shell (same-origin iframe)?
+     Computed inline rather than via SokoniInShell so this guard keeps working on pages that
+     do not load the boundary helper — an auth guard must never depend on another script. */
+  function _hostedInShell() {
+      try {
+          if (!window.parent || window.parent === window) return false;
+          /* Same-origin read; throws for a cross-origin parent, which is NOT our shell. */
+          var pp = (window.parent.location.pathname || '').toLowerCase();
+          return /(^|\/)merchant(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
+      } catch (e) { return false; }
+  }
+
   function _doRedirect() {
       if (window.__sokoniAuthReady) return;
       _logRedirect();
+
+      /* HOSTED MODULE: replacing location here navigates the PANEL, not the tab — the merchant
+         ends up staring at a login form embedded inside their dashboard, under the previous
+         module's title. That is how Products "opened login.html".
+
+         This does NOT weaken the guard. Authentication is still enforced, just at the frame that
+         owns it: the shell loads this same auth-guard at the top level, so an unauthenticated
+         visitor is sent to the real login flow before any module mounts. Here we only refuse to
+         render and tell the shell why. Data remains protected by Firestore rules regardless. */
+      if (_hostedInShell()) {
+          try {
+              window.parent.postMessage({ __sokoniModule: true, action: 'authRequired',
+                                          page: path, next: next }, window.location.origin);
+          } catch (e) {}
+          return;
+      }
+
       try { location.replace(target); } catch (e) { location.href = target; }
   }
   function _cancelRedirect() {

@@ -626,6 +626,12 @@ const SokoniSecurity = (() => {
        consent prompt, it is attrition. */
     if(!window.SokoniConsent.decided()){
       const _showBanner = function(){
+        /* Consent belongs to the TOP-LEVEL document. security.js is loaded per page, so a page
+           hosted inside the merchant shell was rendering its OWN Privacy & Cookies modal inside
+           the content panel — on an iPhone it covered the entire SmartPOS till, Charge bar and
+           all. The shell (or whatever top-level page embeds this one) asks for consent once;
+           an embedded module must never ask again. Standalone pages are unaffected. */
+        try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
         if(document.getElementById("_sokoniPrivacyBanner")) return;
         const b = document.createElement("div");
         b.id = "_sokoniPrivacyBanner";

@@ -433,9 +433,39 @@
     const page = window.location.pathname.split("/").pop() || "index.html";
     const guard = GUARDED_ROUTES[page];
     if (!guard) return true;
-    if (!isLoggedIn()) { window.location.href = `login.html?next=${encodeURIComponent(window.location.href)}`; return false; }
-    if (!hasRole(guard.role)) { window.location.href = guard.redirect; return false; }
+
+    /* Hosted inside the merchant shell, a redirect here navigates the PANEL, not the tab —
+       so seller.html briefly missing its role rendered profile.html (and an unauthenticated
+       moment rendered login.html) INSIDE the merchant OS, under the previous module's title.
+       That looks exactly like "the button opened the wrong page".
+
+       The shell owns access control: it refuses a route before mounting it, using each route's
+       declared role in sokoni-merchant-routes.js. So in-shell we report upward and let the
+       shell decide, rather than silently replacing the module with another page. Standalone
+       pages keep the original redirect behaviour unchanged. */
+    const inShell = (window.SokoniInShell && window.SokoniInShell.inShell) === true;
+
+    if (!isLoggedIn()) {
+      if (inShell) { _reportGuardToShell(page, 'unauthenticated'); return false; }
+      window.location.href = `login.html?next=${encodeURIComponent(window.location.href)}`;
+      return false;
+    }
+    if (!hasRole(guard.role)) {
+      if (inShell) { _reportGuardToShell(page, 'missing-role:' + guard.role); return false; }
+      window.location.href = guard.redirect;
+      return false;
+    }
     return true;
+  }
+
+  /* Tell the host shell why this module refused to run, so it can show one honest message
+     instead of the merchant seeing an unrelated page appear inside their dashboard. */
+  function _reportGuardToShell(page, reason) {
+    console.warn(`[sokoni-permissions] in-shell guard: ${page} blocked (${reason}) — not redirecting the panel.`);
+    try {
+      window.parent.postMessage({ __sokoniModule: true, action: 'accessBlocked', page, reason },
+                                window.location.origin);
+    } catch (_) {}
   }
 
   /* ══════════════════════════════════════════════════════════════
