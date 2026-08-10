@@ -152,14 +152,20 @@
     var clean = {};
     SHOP_KEYS.forEach(function (k) { if (k in (patch || {})) clean[k] = !!patch[k]; });
     if (!Object.keys(clean).length) return clean;
-    /* Refuse rather than invent. Writing to shops/{uid} when this seller owns no shop is what
-       created phantom documents; a toggle with nothing to toggle is an error, not a new shop. */
-    var shopId = await ownedShopId(uid);
-    if (!shopId) throw new Error('No shop found for your account — availability has nothing to apply to.');
-    var m = await _fs();
-    clean.updatedAt = m.serverTimestamp();
-    await m.setDoc(m.doc(root.firebaseDB, 'shops', String(shopId)), clean, { merge: true });
-    try { if (root.SokoniSync) root.SokoniSync.shopChanged({ uid: uid, shopId: shopId, patch: clean }); } catch (_) {}
+    /* THROUGH THE SERVER, BECAUSE THE CLIENT CANNOT DO THIS.
+       A direct write here fails whatever document it targets: the rules authorise /shops/{uid}
+       by document id (so a shop with its own id is unwritable), forbid client creates, and do
+       not list acceptingOrders / online / delivery / pickup among the permitted keys at all.
+       setShopAvailability asserts shops/{shopId}.sellerUid === auth.uid and writes the same
+       canonical document the storefront reads, so the sidebar, KassShop management and the
+       public storefront cannot disagree. */
+    if (root.__sokoniAppCheckReady) { try { await root.__sokoniAppCheckReady; } catch (_) {} }
+    if (typeof root.sokoniCallable !== 'function') throw new Error('SOKONI is still loading — try again in a moment.');
+    var res = await root.sokoniCallable('setShopAvailability')({ availability: clean });
+    var d = res && res.data;
+    if (!d || d.success !== true) throw new Error('Availability was not saved.');
+    _shopIdCache = { uid: uid, id: d.shopId || null };
+    try { if (root.SokoniSync) root.SokoniSync.shopChanged({ uid: uid, shopId: d.shopId, patch: clean }); } catch (_) {}
     return clean;
   }
 

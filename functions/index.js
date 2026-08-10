@@ -11145,6 +11145,17 @@ exports.aiGenerateMinishopContent  = minishop.aiGenerateMinishopContent;
 exports.followShop                 = minishop.followShop;
 exports.getMyMinishop              = minishop.getMyMinishop;
 
+/* ── KassShop — the canonical seller/shop boundary ──────────────────────────
+   firestore.rules authorises /shops/{uid} by DOCUMENT ID, so a client can only write
+   shops/{its-own-uid}, can never create a shop, and cannot write the availability fields at
+   all. Ownership is enforced here instead — shops/{shopId}.sellerUid === auth.uid — so Shop
+   Setup, the sidebar and the public storefront all read and write ONE shop. */
+const kasshop = require('./kasshop');
+exports.getShopProfile             = kasshop.getShopProfile;
+exports.saveShopProfile            = kasshop.saveShopProfile;
+exports.setShopAvailability        = kasshop.setShopAvailability;
+exports.getShopAvailability        = kasshop.getShopAvailability;
+
 /* ── MiniShop Campaign Engine v1.0 ──────────────────────────────────────── */
 const minishopCampaigns = require('./minishop-campaigns');
 exports.createMinishopCampaign  = minishopCampaigns.createMinishopCampaign;

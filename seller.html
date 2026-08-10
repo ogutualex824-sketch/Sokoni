@@ -2574,6 +2574,53 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           savedAt:Date.now(),live:true
         };
 
+        /* ── CANONICAL WRITE FIRST ───────────────────────────────────────────────
+           This wrote localStorage, sellers/{uid} and businesses/{uid}, announced "Your shop is
+           live!", and never touched shops/{shopId} — the document the KassShop storefront
+           actually reads. The success message was true of the cache and false of the shop.
+
+           saveShopProfile is the authority: it asserts shops/{shopId}.sellerUid === auth.uid,
+           creates the shop on first setup, and updates it thereafter. It is AWAITED, and the
+           success banner is only shown once it resolves. A failure says so and changes nothing
+           else — the seller must never be told their shop is live when it is not. */
+        (async function(){
+          swSetState('saving');
+          try{
+            if(window.__sokoniAppCheckReady){ try{ await window.__sokoniAppCheckReady; }catch(_){} }
+            for(var i=0;i<80 && typeof window.sokoniCallable!=='function';i++){
+              await new Promise(function(r){ setTimeout(r,100); });
+            }
+            if(typeof window.sokoniCallable!=='function') throw new Error('SOKONI did not finish loading');
+            var res=await window.sokoniCallable('saveShopProfile')({ profile: {
+              name:storeData.name, tagline:storeData.tagline, about:storeData.about,
+              category:storeData.category, shopType:storeData.shopType,
+              city:storeData.city, address:storeData.address, mapsLink:storeData.mapsLink,
+              phone:storeData.phone, email:storeData.email, website:storeData.website,
+              instagram:storeData.instagram, tiktok:storeData.tiktok, facebook:storeData.facebook,
+              twitter:storeData.twitter, youtube:storeData.youtube, linkedin:storeData.linkedin,
+              themeColor:storeData.themeColor, delMethod:storeData.delMethod, delTime:storeData.delTime,
+              returnPolicy:storeData.returnPolicy, returnText:storeData.returnText,
+              packagingNote:storeData.packagingNote, freeDelivery:storeData.freeDelivery,
+              zones:storeData.zones
+            }});
+            var d=res&&res.data;
+            if(!d||d.success!==true||!d.shopId) throw new Error('Save did not complete');
+            window.__kasShopId=d.shopId;
+            swSetState('saved');
+            var okBtn=document.getElementById('swSaveBtn');
+            if(okBtn){okBtn.textContent='✅ Shop Saved!';okBtn.style.background='linear-gradient(135deg,#00c878,#00a860)';}
+            var okMsg=document.getElementById('swSaveMsg');
+            if(okMsg){okMsg.innerHTML='🎉 <strong style="color:#71ff00;">Saved to your KassShop.</strong> Buyers see these details on your storefront.';okMsg.style.color='#71ff00';}
+          }catch(e){
+            console.error('[shop] saveShopProfile failed:', e&&(e.code||e.message));
+            swSetState('error',(e&&(e.message||e.code))||'save failed');
+            var badBtn=document.getElementById('swSaveBtn');
+            if(badBtn){badBtn.textContent='🚀 Launch My Shop';badBtn.style.background='';}
+            var badMsg=document.getElementById('swSaveMsg');
+            if(badMsg){badMsg.textContent='⚠️ Your shop was NOT saved — '+((e&&(e.message||e.code))||'please try again.');badMsg.style.color='#ff6b6b';}
+          }
+        })();
+
         try{
           /* Merge into sokoniUser so ministore.html can read it */
           const u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');
@@ -2632,10 +2679,13 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           }catch(e){}
         })();
 
-        /* Animate success */
+        /* NO SUCCESS HERE. This claimed "Your shop is live!" synchronously, before any write
+           had been attempted — so a permission failure, an offline device or a rejected payload
+           all still produced a celebration. The canonical save above owns the outcome and paints
+           it when it actually knows. Until then, say what is happening and nothing more. */
         const btn=document.getElementById('swSaveBtn');
-        if(btn){btn.textContent='✅ Shop Launched!';btn.style.background='linear-gradient(135deg,#00c878,#00a860)';}
-        if(msgEl){msgEl.innerHTML='🎉 <strong style="color:#71ff00;">Your shop is live!</strong> Buyers can now find you on SOKONI.';msgEl.style.color='#71ff00';}
+        if(btn){btn.textContent='Saving…';}
+        if(msgEl){msgEl.textContent='Saving your shop…';msgEl.style.color='rgba(255,255,255,0.6)';}
 
         /* Show visit link */
         const visitLink=document.getElementById('visitMiniStoreLink');
@@ -2656,10 +2706,100 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       window.swSaveStore=swSaveStore;
 
       /* LOAD SAVED DATA */
+      /* ── KASSSHOP STATE BANNER ───────────────────────────────────────────────
+         A slow Firestore read used to be indistinguishable from "you have no shop": the form
+         simply sat there empty. Loading, empty, saved and error are now four DIFFERENT visible
+         states, because a seller who cannot tell them apart re-enters their whole shop. */
+      function swSetState(state, detail){
+        var host=document.getElementById('swStateBanner');
+        if(!host){
+          var sec=document.getElementById('ministore-section'); if(!sec) return;
+          host=document.createElement('div'); host.id='swStateBanner';
+          host.style.cssText='margin:0;padding:11px 28px;font-size:12px;font-weight:700;'
+            +'border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:8px;';
+          sec.insertBefore(host, sec.firstChild);
+        }
+        var MAP={
+          loading:{t:'Loading your KassShop…',c:'rgba(255,255,255,0.55)',b:'rgba(255,255,255,0.03)'},
+          loaded: {t:'KassShop loaded',c:'#71ff00',b:'rgba(113,255,0,0.06)'},
+          empty:  {t:'No KassShop yet — fill this in and save to create it.',c:'rgba(255,255,255,0.6)',b:'rgba(255,255,255,0.03)'},
+          saving: {t:'Saving…',c:'rgba(255,255,255,0.6)',b:'rgba(255,255,255,0.03)'},
+          saved:  {t:'Saved to your KassShop',c:'#71ff00',b:'rgba(113,255,0,0.08)'},
+          error:  {t:'Could not load your KassShop',c:'#ff6b6b',b:'rgba(255,107,107,0.07)'}
+        };
+        var s=MAP[state]||MAP.loading;
+        host.style.background=s.b; host.style.color=s.c;
+        host.textContent=s.t+(detail?' — '+detail:'');
+        host.dataset.state=state;
+        if(state==='loaded'||state==='saved'){ setTimeout(function(){ if(host.dataset.state===state) host.style.display='none'; },4000); }
+        else host.style.display='flex';
+      }
+      window.swSetState=swSetState;
+
+      /* ── LOAD THE CANONICAL SHOP ─────────────────────────────────────────────
+         This read localStorage.sokoniStore and nothing else, so a new device, a cleared cache
+         or a different account opened an EMPTY Shop Setup — the "blank after reload" problem —
+         and whatever was typed went to sellers/{uid} + businesses/{uid}, never to the shop the
+         storefront actually reads. Three records drifting apart.
+
+         The authority is now shops/{shopId} where sellerUid is the authenticated uid, read
+         through getShopProfile (ownership is asserted server-side; the rules do not permit the
+         client to read-modify-write that document itself). localStorage remains ONLY as an
+         instant first paint, and is overwritten the moment the canonical answer arrives. */
+      async function swLoadCanonical(){
+        swSetState('loading');
+        try{
+          if(window.__sokoniAppCheckReady){ try{ await window.__sokoniAppCheckReady; }catch(_){} }
+          for(var i=0;i<80 && typeof window.sokoniCallable!=='function';i++){
+            await new Promise(function(r){ setTimeout(r,100); });
+          }
+          if(typeof window.sokoniCallable!=='function') throw new Error('SOKONI did not finish loading');
+          var res=await window.sokoniCallable('getShopProfile')({});
+          var d=res&&res.data;
+          if(!d) throw new Error('empty response');
+          if(!d.exists){ swSetState('empty'); return; }
+          window.__kasShopId=d.shopId;
+          window.__kasShopHandle=d.handle||null;
+          swApply(d.profile||{}, d.availability||{});
+          swSetState('loaded');
+        }catch(e){
+          /* An error is NOT an empty shop. Say so, and leave whatever the cache painted alone
+             rather than blanking fields the seller may be about to save over. */
+          console.warn('[shop] canonical load failed:', e&&(e.code||e.message));
+          swSetState('error', (e&&(e.code||e.message))||'unknown');
+        }
+      }
+      window.swLoadCanonical=swLoadCanonical;
+
+      function swApply(p, avail){
+        const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null&&val!=='')el.value=val;};
+        set('swStoreName',p.name||p.storeName);set('swTagline',p.tagline);set('swAbout',p.about||p.description);
+        set('swCity',p.city);set('swAddress',p.address);set('swMapsLink',p.mapsLink);
+        set('swPhone',p.phone);set('swEmail',p.email);set('swWebsite',p.website);
+        set('swInstagram',p.instagram);set('swTikTok',p.tiktok);set('swFacebook',p.facebook);
+        set('swTwitter',p.twitter);set('swYoutube',p.youtube);set('swLinkedin',p.linkedin);
+        set('swReturnText',p.returnText);set('swPackagingNote',p.packagingNote);
+        set('swFreeDelivery',p.freeDelivery);set('swDelTime',p.delTime);
+        if(p.shopType){const h=document.getElementById('swShopType');if(h)h.value=p.shopType;
+          const phys=document.getElementById('swPhysicalSection');
+          if(phys)phys.style.display=(p.shopType==='hybrid'||p.shopType==='physical')?'block':'none';}
+        if(p.themeColor)swData.themeColor=p.themeColor;
+        if(p.category)swData.category=p.category;
+        var img=document.getElementById('swBannerImg'),hint=document.getElementById('swBannerHint');
+        var banner=p.banner||p.bannerUrl;
+        if(banner&&img){swData.bannerSrc=banner;img.src=banner;img.style.display='block';if(hint)hint.style.display='none';}
+        var logo=p.logo||p.logoUrl,limg=document.getElementById('swLogoImg'),lem=document.getElementById('swLogoEmoji');
+        if(logo&&limg){swData.logoSrc=logo;limg.src=logo;limg.style.display='block';if(lem)lem.style.display='none';}
+        try{ if(avail) window.__kasShopAvailability=avail; }catch(_){ }
+        try{ swUpdatePreview(); }catch(_){ }
+      }
+      window.swApply=swApply;
+
       (function swLoadSaved(){
+        /* Cache-first paint only — never authority. swLoadCanonical() overwrites it. */
         try{
           const saved=JSON.parse(localStorage.getItem('sokoniStore')||'null');
-          if(!saved)return;
+          if(!saved){ swLoadCanonical(); return; }
           const set=(id,val)=>{const el=document.getElementById(id);if(el&&val)el.value=val;};
           set('swStoreName',saved.name);set('swTagline',saved.tagline);set('swAbout',saved.about);
           set('swKraPin',saved.kraPin);set('swSbpNumber',saved.sbpNumber);set('swBrsNumber',saved.brsNumber);
@@ -2683,6 +2823,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           if(saved.live){const visitLink=document.getElementById('visitMiniStoreLink');if(visitLink)visitLink.style.display='inline-block';}
           swUpdatePreview();
         }catch(e){}
+        /* Whatever the cache painted, ask the canonical shop and let it win. */
+        swLoadCanonical();
       })();
 
       /* Init */

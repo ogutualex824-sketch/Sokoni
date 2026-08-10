@@ -55,6 +55,7 @@
     "test:claim:persistence": "node scripts/test-minishop-claim-persistence.js",
     "test:claim:write": "node scripts/test-minishop-claim-write.js",
     "test:claim:firestore": "firebase emulators:exec --only firestore --project sokoni-claim-write-test \"node scripts/test-minishop-claim-firestore.js\"",
+    "test:kasshop": "firebase emulators:exec --only firestore --project sokoni-kasshop-test \"node scripts/test-kasshop-boundary.js\"",
     "test:merchant-visual-gate": "node scripts/test-merchant-visual-gate.js",
     "test:returns-states": "node scripts/test-returns-states.js",
     "test:seller-cached-user": "node scripts/test-seller-cached-user.js",
