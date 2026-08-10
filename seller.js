@@ -5427,6 +5427,28 @@ function showDashPage(page, navEl) {
     el.style.display = active ? "" : "none";
   });
 
+  /* THIRD mechanism — the mobile shell (seller.html "SDM" mode).
+     The note above says "drive both", but there are three. On a phone,
+     body.sdm-mobile-mode applies:
+
+         section[data-sdtab]            { display: none  !important; }
+         section[data-sdtab].sdm-visible{ display: block !important; }
+
+     Those !important rules beat the inline display this function just set, so on mobile the
+     canonical router was overruled by a stylesheet and the screen never changed. That is the
+     root cause of "Merchant → Products opens the Home/Dashboard page" on a phone: the shell
+     posted showSection('products'), showDashPage ran correctly, and nothing moved — the SDM
+     layer was still showing its home screen.
+
+     showSections() resolves each entry via [data-sdtab] and then by element id, so passing the
+     canonical DASH_PAGES section ids reveals exactly the same set this function just chose.
+     One router, three rendering mechanisms, one answer. */
+  if (document.body && document.body.classList.contains("sdm-mobile-mode")
+      && typeof window.__sdmShowSections === "function") {
+    try { window.__sdmShowSections(sections); }
+    catch (e) { console.warn("[seller] SDM mobile layer refused the section switch:", e && e.message); }
+  }
+
   /* The POS iframe is loaded on first open, not on page load — pos.html is a heavy app and
      eagerly loading it would cost every seller who never opens the till. */
   if (page === "pos") {

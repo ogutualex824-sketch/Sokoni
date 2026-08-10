@@ -4902,6 +4902,15 @@ class="notification-container"
     });
   }
 
+  /* Exposed so the CANONICAL router (seller.js showDashPage) can drive this layer too.
+     On a phone body.sdm-mobile-mode applies `display:none !important` to every
+     section[data-sdtab] and reveals only `.sdm-visible` — those !important rules beat the
+     inline styles showDashPage sets, so the canonical router was being silently overruled.
+     That is why "Merchant → Products" showed the seller home page on mobile: the shell asked
+     for products, showDashPage obeyed, and this stylesheet ignored it.
+     One router, both rendering mechanisms. */
+  window.__sdmShowSections = showSections;
+
   function updateTabUI(name){
     document.querySelectorAll('.sdm-tab').forEach(function(btn){
       btn.classList.remove('active');

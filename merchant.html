@@ -607,9 +607,54 @@
   }
 
   /* ── postMessage deep-switch into the persistent apps ── */
+  /* ── Verified deep-switch ────────────────────────────────────────────────────
+     The POS and Seller panels are PERSISTENT and SHARED by several routes, and the Seller
+     panel is pre-created at 'overview' when the Dashboard loads its feed. A single
+     fire-and-forget postMessage therefore loses races it cannot detect: if the hosted app has
+     not finished booting, or is mid-reset, the message is dropped and the merchant is left
+     looking at whatever the panel showed before.
+
+     That is exactly the reported "Products opens the Home/Dashboard page" — Products posts
+     showSection('products'), the message lands before seller.js is ready, seller.js then
+     resets to overview, and overview IS the seller home page. The previous fix re-asserted on
+     the iframe's `load` event, which never fires again once the panel is already loaded — so
+     it only helped the very first navigation.
+
+     Delivery is now VERIFIED: post, then confirm from the hosted document that the requested
+     state actually applied, and re-post until it does (bounded). `verify` reads the iframe's
+     own DOM, so it is proof rather than optimism. Cheap when it works first time. */
+  function _deepSwitch (frameId, msg, verify, label) {
+    var tries = 0, MAX = 25;           /* ~5s at 200ms — longer than any observed boot */
+    function attempt () {
+      var f = document.getElementById(frameId);
+      if (!f || !f.contentWindow) return;
+      try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+      tries++;
+      setTimeout(function () {
+        var applied = false;
+        try { applied = verify(f); } catch (_) { applied = false; }   /* not readable yet */
+        if (applied || tries >= MAX) {
+          if (!applied && tries >= MAX) {
+            console.error('[merchant] deep-switch to "' + label + '" was never confirmed by the module ' +
+                          'after ' + tries + ' attempts — the panel may be showing the wrong section.');
+          }
+          return;
+        }
+        attempt();
+      }, 200);
+    }
+    attempt();
+  }
+
   function posSwitch (tab) {
-    var f = document.getElementById('mfx-pos');
-    try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'switchTab', tab: tab }, location.origin); } catch (_) {}
+    /* Confirmed when the POS marks that tab active. pos.html renders tabs with
+       data-tab + aria-selected, so this reads the app's own state, not our expectation. */
+    _deepSwitch('mfx-pos', { __sokoniShell: true, action: 'switchTab', tab: tab }, function (f) {
+      var d = f.contentDocument; if (!d) return false;
+      var el = d.querySelector('[data-tab="' + tab + '"]');
+      if (!el) return false;
+      return el.getAttribute('aria-selected') === 'true' || /\bactive\b/.test(el.className || '');
+    }, 'pos:' + tab);
   }
   function posAction (act) {
     var f = document.getElementById('mfx-pos');
@@ -617,8 +662,45 @@
     try { setTimeout(function () { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: act }, location.origin); }, 250); } catch (_) {}
   }
   function sellerSwitch (sec) {
-    var f = document.getElementById('mfx-seller');
-    try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'showSection', section: sec }, location.origin); } catch (_) {}
+    /* Confirmed by reading seller.html's OWN section visibility. seller.js's showDashPage
+       reveals the sections listed in DASH_PAGES[sec] and hides the rest, so if the first
+       section for this page is visible the switch genuinely landed. Verifying the sidebar's
+       active class instead would only prove we asked, not that the body changed. */
+    /* show: a section that belongs to THIS page and is NOT in overview.
+       hide: a section overview shows but this page does not.
+       Both are required, because several pages overlap overview — verifying only
+       'upload-section' for products would report success while overview was on screen,
+       which is precisely the bug being fixed. Pages whose sections are a subset of
+       overview's (flash) rely on the hide half to tell them apart. Ids verified present
+       in seller.html; sets taken from seller.js DASH_PAGES. */
+    var MARK = {
+      products:  { show: 'bulk-upload-section', hide: 'seller-stats' },
+      receipts:  { show: 'receipts-section',    hide: 'seller-stats' },
+      team:      { show: 'team-section',        hide: 'seller-stats' },
+      messages:  { show: 'seller-dms',          hide: 'seller-stats' },
+      marketing: { show: 'marketing-section',   hide: 'seller-stats' },
+      stories:   { show: 'stories-section',     hide: 'seller-stats' },
+      disputes:  { show: 'disputes-section',    hide: 'seller-stats' },
+      customers: { show: 'customers-section',   hide: 'seller-stats' },
+      store:     { show: 'store-section',       hide: 'seller-stats' },
+      tax:       { show: 'tax-section',         hide: 'seller-stats' },
+      flash:     { show: 'flash-section',       hide: 'seller-stats' },
+      overview:  { show: 'seller-stats',        hide: null }
+    };
+    _deepSwitch('mfx-seller', { __sokoniShell: true, action: 'showSection', section: sec }, function (f) {
+      var d = f.contentDocument; if (!d) return false;
+      var mk = MARK[sec];
+      if (!mk) return true;                       /* unknown key — nothing to verify against */
+      var vis = function (id) {
+        var el = d.getElementById(id); if (!el) return null;
+        var cs = d.defaultView.getComputedStyle(el);
+        return !!cs && cs.display !== 'none' && cs.visibility !== 'hidden';
+      };
+      var shown = vis(mk.show);
+      if (shown !== true) return false;
+      if (!mk.hide) return true;
+      return vis(mk.hide) === false;
+    }, 'seller:' + sec);
   }
 
   /* ── Router ── */
