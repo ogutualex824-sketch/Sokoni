@@ -230,16 +230,7 @@
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
-    { id:'pos-settings', name:'POS Settings', icon:'⚙️', tier:'more',
-      kind:'pos', tab:'settings',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
-      mobile:true, desktop:true, activeKey:'pos-settings',
-      note:'Device/receipt/till config. Was wired to the top-level "Settings" button before Phase 2.' },
 
-    { id:'audit', name:'Audit Log', icon:'🛡️', tier:'more',
-      kind:'pos', tab:'audit',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'audit' }
   ];
 
   /* THE canonical sidebar order. Declared explicitly rather than inferred from position in
@@ -258,6 +249,12 @@
   var ALIASES = {
     cashier:     'pos',       /* merged: Cashier was this same app at its checkout tab */
     inventory:   'pos',       /* merged: Inventory is a TAB inside POS, not a second app */
+    /* Audit Log and POS Settings are POS TABS, not sidebar destinations. They were removed as
+       rows once POS became the single in-shop surface — two sidebar entries that opened the same
+       app at a different tab is exactly what the merge existed to end. Kept as aliases so any
+       existing link or bookmark still lands somewhere real instead of failing loudly. */
+    audit:         'pos',
+    'pos-settings':'pos',
     finance:     'revenue',      /* native Finance surface is now the Revenue destination */
     team:        'staff',
     promotions:  'flash-sale',

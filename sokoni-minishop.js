@@ -286,8 +286,39 @@ window.SokoniMiniShop = (() => {
       if (grid) grid.innerHTML = items.map(_productCard).join('');
       if (seeAllId) {
         const seeAll = document.getElementById(seeAllId);
-        if (seeAll) seeAll.hidden = false;
+        if (seeAll) {
+          seeAll.hidden = false;
+          /* These were revealed but never given an href, so they kept the markup's `href="#"`
+             and did nothing when tapped. Absolute path on purpose — see the note below. */
+          _wireSeeAll(seeAll);
+        }
       }
+    }
+
+    /* "See all" was broken two ways at once.
+
+       1. It linked to "products.html?shopId=..." — a RELATIVE url. The storefront lives at
+          /shop/<handle>, which hosting rewrites to minishopPage via `/shop/**`, so that
+          resolved to /shop/products.html, re-entered the same rewrite, and asked for a shop
+          whose handle was literally "products.html". That is the reported "Shop not found".
+       2. products.html does not exist in this repo at all, so even an absolute /products
+          would have 404'd.
+
+       The storefront already renders every product in #msAllProductsSection further down the
+       page, so "See all" now takes the customer there instead of navigating away. Same-page,
+       always correct, and it cannot break if a future products page is added or moved. */
+    function _seeAllAllProducts(ev) {
+      try {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        const target = document.getElementById('msAllProductsSection');
+        if (target && !target.hidden) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      } catch (_) {}
+      return false;
+    }
+    function _wireSeeAll(el) {
+      if (!el) return;
+      el.href = '#msAllProductsSection';
+      el.onclick = _seeAllAllProducts;
     }
 
     _renderSection('msBestSellersSection', 'msBestSellers', bestSellers, 'msBestSellersAll');
@@ -303,7 +334,7 @@ window.SokoniMiniShop = (() => {
         allSection.hidden = false;
         if (allGrid) allGrid.innerHTML = allItems.map(_productCard).join('');
         const seeAll = document.getElementById('msAllProductsAll');
-        if (seeAll) { seeAll.hidden = false; seeAll.href = 'products.html?shopId=' + shopId; }
+        if (seeAll) { seeAll.hidden = false; _wireSeeAll(seeAll); }
       } else {
         allSection.hidden = true;
       }
