@@ -775,6 +775,7 @@
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
     else if (id === 'settings') renderSettingsHub();
+    else if (id === 'payments') renderPayments();
     else if (id === 'reports' || id === 'revenue' || id === 'analytics') renderAnalytics(id);
     /* A contract route flagged status:'planned' has no renderer yet. Say so plainly —
        an empty panel would be exactly the "button silently fails" defect. Never invent
@@ -801,6 +802,89 @@
       '<button class="dbtn" style="margin-top:18px" onclick="window.__mgo(\'dashboard\')">Back to Dashboard</button>' +
       '</div>';
     if (!box.parentNode) panel.appendChild(box);
+  }
+
+  /* ── Payments — the merchant's money-out surface ─────────────────────────────
+     Was a "not built yet" placeholder. Reads the CANONICAL wallet, never a local tally:
+       getWalletBalance    — canonical withdrawable balance, in SHILLINGS
+       getPayoutHistory    — canonical payoutRequests for this seller
+     Deliberately NOT getPayoutAnalytics, which is admin-only.
+
+     UI Data Integrity: an unknown balance renders as — , never 0 and never an estimate. A
+     real canonical 0 is fine; an unknown shown as 0 would tell a merchant they have no money.
+     Nothing here marks a payout complete — withdrawal is server-authorised, and this screen
+     only ever reads. */
+  var _payTab = 'payouts';
+  window.__payTab = function (t) { _payTab = t; renderPayments(); };
+  function renderPayments () {
+    var host = document.getElementById('native-payments'); if (!host) return;
+    var fns = (window.firebase && window.firebase.functions) ? window.firebase.functions() : null;
+
+    host.innerHTML = '<div class="an-wrap">' +
+      '<div class="an-head"><div class="an-title">💳 Payments</div><div class="an-range">' +
+        '<button class="ord2-chip ' + (_payTab === 'payouts' ? 'active' : '') + '" onclick="__payTab(\'payouts\')">Payouts</button>' +
+        '<button class="ord2-chip ' + (_payTab === 'methods' ? 'active' : '') + '" onclick="__payTab(\'methods\')">Methods</button>' +
+      '</div></div>' +
+      '<div id="pay-body"><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:45%"></div></div>' +
+      '<div class="an-trace">ⓘ source: getWalletBalance + getPayoutHistory (canonical payoutRequests)</div>' +
+    '</div>';
+
+    var body = document.getElementById('pay-body');
+    if (_payTab === 'methods') {
+      body.innerHTML =
+        '<div class="an-sec">How this shop gets paid</div>' +
+        '<div class="an-row"><span>Settlement</span><span>SOKONI wallet</span></div>' +
+        '<div class="an-row"><span>Withdrawals</span><span>M-Pesa (server-authorised)</span></div>' +
+        '<div class="an-note">Collection methods accepted at checkout are configured per till in ' +
+        'POS Settings. Payouts always settle to this shop\'s canonical wallet first — SOKONI is ' +
+        'merchant of record, so a payout is never taken directly from a customer payment.</div>';
+      return;
+    }
+
+    if (!fns) { body.innerHTML = '<div class="an-empty">Wallet unavailable — reopen SOKONI Merchant.</div>'; return; }
+
+    Promise.all([
+      fns.httpsCallable('getWalletBalance')({}).catch(function (e) { return { __err: e }; }),
+      fns.httpsCallable('getPayoutHistory')({ limit: 20 }).catch(function (e) { return { __err: e }; })
+    ]).then(function (r) {
+      if (current !== 'payments') return;
+      var bal = r[0], hist = r[1];
+      var b = (bal && bal.data) || {};
+      /* Unknown must not become 0 — that would read as "you have no money". */
+      var avail = (b.balance != null) ? _anFmt(b.balance)
+                : (b.available != null) ? _anFmt(b.available)
+                : '<span style="color:var(--txt3)">—</span>';
+      var pend  = (b.pending != null) ? _anFmt(b.pending) : '<span style="color:var(--txt3)">—</span>';
+
+      var rows = [];
+      var list = (hist && hist.data && (hist.data.payouts || hist.data.items || hist.data.history)) || [];
+      if (Array.isArray(list) && list.length) {
+        rows = list.slice(0, 20).map(function (p) {
+          var when = p.createdAt || p.requestedAt || p.updatedAt || '';
+          try { when = when && new Date(when.seconds ? when.seconds * 1000 : when).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }); } catch (_) {}
+          return '<div class="an-row"><span>' + _ordEsc(String(when || '—')) + ' · ' +
+                 _ordEsc(String(p.status || 'pending')) + '</span><span>' +
+                 _anFmt(p.amount != null ? p.amount : p.amountKes) + '</span></div>';
+        });
+      }
+
+      body.innerHTML =
+        _anGrid([_anStat(avail, 'Available'), _anStat(pend, 'Pending')]) +
+        '<div class="an-sec">Recent payouts</div>' +
+        (rows.length ? rows.join('')
+          : (hist && hist.__err)
+            ? '<div class="an-empty">Could not load payout history. ' + _ordEsc(String((hist.__err && hist.__err.message) || '')) +
+              ' <button class="ord2-chip" onclick="__payTab(\'payouts\')">Retry</button></div>'
+            : '<div class="an-empty">No payouts yet</div>') +
+        ((bal && bal.__err)
+          ? '<div class="an-note">Balance unavailable: ' + _ordEsc(String(bal.__err.message || '')) + '</div>'
+          : '<div class="an-note">Withdrawals are authorised on the server. This screen only reads ' +
+            'your canonical wallet — it never moves money.</div>');
+    }).catch(function (e) {
+      if (current !== 'payments') return;
+      body.innerHTML = '<div class="an-empty">Unable to load payments. ' + _ordEsc(String(e && e.message || '')) +
+                       ' <button class="ord2-chip" onclick="__payTab(\'payouts\')">Retry</button></div>';
+    });
   }
 
   /* Honest terminal state for a registered-but-unbuilt destination. */

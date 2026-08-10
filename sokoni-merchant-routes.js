@@ -98,7 +98,7 @@
            'and pointing a merchant button at them would be a privilege defect.' },
 
     { id:'payments', name:'Payments', icon:'💳', tier:'primary',
-      kind:'native', tabs:['payouts','methods'], defaultTab:'payouts', status:'planned',
+      kind:'native', tabs:['payouts','methods'], defaultTab:'payouts',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'payments',
       note:'Payouts tab: canonical payoutRequests + wallet balance (shillings) on the FROZEN wallet ' +

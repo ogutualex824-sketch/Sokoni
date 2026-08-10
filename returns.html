@@ -426,30 +426,56 @@ auth.onAuthStateChanged(async user => {
 
   const token = await user.getIdTokenResult(true);
 
-  /* CONTEXT DECIDES THE ROLE, not just the claim set.
-     Admin was checked first unconditionally, so a merchant who is ALSO an admin — which the
-     founder account is — opened Returns from their own seller dashboard and got the platform
-     ADMIN view: every shop's returns, an Admin badge, admin controls, inside the merchant
-     experience. Wrong shop, wrong identity, wrong scope.
+  /* ── ROUTE CONTEXT FIRST, PERMISSIONS SECOND ───────────────────────────────
+     Two bugs came from getting this backwards, and both are instructive.
 
-     Hosted inside the merchant shell the context IS the seller's own shop, so a seller-capable
-     account resolves to 'seller' and sees only its own returns. Admin remains available by
-     opening Returns standalone. This narrows what an admin sees in-shell; it grants nobody
-     anything new, and Firestore rules enforce the same boundary server-side regardless. */
-  const inShell = !!(window.SokoniInShell && window.SokoniInShell.inShell);
-  const canSell = !!(token.claims.seller || token.claims.merchant);
+     1. `if (token.claims.admin)` was evaluated FIRST, unconditionally. A merchant who is also
+        an admin — the founder account is — opened Returns from their own dashboard and got the
+        PLATFORM ADMIN view: every shop's returns, inside the merchant experience.
 
-  if (inShell)                  userRole = canSell ? 'seller' : 'buyer';
-  else if (token.claims.admin)  userRole = 'admin';
-  else if (canSell)             userRole = 'seller';
-  else                          userRole = 'buyer';
+     2. The first fix then gated the seller role on `token.claims.seller`. That claim is only
+        ever set when a seller APPLICATION is approved (functions/application-lifecycle.js),
+        and SOKONI otherwise identifies sellers by users/{uid}.roles. A merchant without that
+        claim fell through to 'buyer' — so Returns showed the customer "Buy" experience inside
+        the seller dashboard. Deriving identity from a claim that is not the canonical source
+        was the mistake.
+
+     So: determine the CONTEXT, then evaluate permissions within it.
+       SELLER_OWNER    — hosted in the merchant shell. The shell only opens for a merchant
+                         (its auth-guard gates entry), and every query here is scoped to this
+                         uid's own shop. No claim lookup can override where the user is.
+       PLATFORM_ADMIN  — standalone + admin claim.
+       PUBLIC_CUSTOMER — standalone, everyone else.
+
+     This is a UI-scoping decision only. Firestore rules remain authoritative: the returns rule
+     permits a read solely when buyerId or sellerId equals the caller (or admin), so choosing
+     'seller' here cannot widen what any account is actually able to read. */
+  const ROUTE_CONTEXT = (window.SokoniInShell && window.SokoniInShell.inShell)
+    ? 'SELLER_OWNER'
+    : (token.claims.admin ? 'PLATFORM_ADMIN' : 'PUBLIC_CUSTOMER');
+
+  userRole = ROUTE_CONTEXT === 'SELLER_OWNER'   ? 'seller'
+           : ROUTE_CONTEXT === 'PLATFORM_ADMIN' ? 'admin'
+           : 'buyer';
+  window.__sokoniRouteContext = ROUTE_CONTEXT;   /* observable by tests, not a source of truth */
 
   document.getElementById('auth-loading').style.display = 'none';
   document.getElementById('app-root').style.display = 'block';
 
+  /* Say what this surface IS, in the merchant's language. "Buyer"/"Buy" on the seller's own
+     Returns screen was actively misleading — it read as the customer experience. The title and
+     badge now name the context, so the merchant can see at a glance whose returns these are. */
   const badge = document.getElementById('tb-role-badge');
-  badge.textContent = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+  const LABEL = { seller: 'Seller', admin: 'Admin', buyer: 'Buyer' };
+  badge.textContent = LABEL[userRole] || userRole;
   badge.className   = 'tb-role ' + userRole;
+
+  const titleEl = document.querySelector('.tb-title');
+  if (titleEl) {
+    titleEl.textContent = userRole === 'seller' ? 'Seller Returns'
+                        : userRole === 'admin'  ? 'Returns & Refunds — Admin'
+                        : 'Returns & Refunds';
+  }
 
   document.getElementById('view-' + userRole).classList.add('active');
   await loadReturns();
