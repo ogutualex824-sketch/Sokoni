@@ -786,7 +786,25 @@
       return;
     }
     if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec, m.label); showOnly(s); sellerSwitch(sellerPendingSec); return; }
-    if (m.kind === 'page')   { var _src = (m.dynamic && window.__miniShopUrl) ? window.__miniShopUrl : m.src; showOnly(pagePanel(id, _src, m.label, m.dynamic)); return; }
+    if (m.kind === 'page') {
+      /* A DYNAMIC page's src is resolved from ownership, so "no resolved url" is a real answer
+         and must not fall through to the static src. It did — and the static src for MiniShop
+         is the seller MANAGEMENT page, so a merchant who owned no shop was handed a control
+         centre for a shop that was not theirs. Owner → management; nobody else → empty state. */
+      if (m.dynamic) {
+        var _dyn = window.__miniShopUrl || null;
+        var _st  = window.__miniShopState || null;
+        if (!_dyn) {
+          showOnly(pagePanel(id, 'about:blank', m.label, true));
+          if (_st) showMiniShopEmpty();          /* resolved, and this uid owns no shop */
+          return;                                /* unresolved → panel stays blank, no claim UI */
+        }
+        showOnly(pagePanel(id, _dyn, m.label, true));
+        return;
+      }
+      showOnly(pagePanel(id, m.src, m.label, false));
+      return;
+    }
   }
   window.SokoniShell = window.SokoniShell || {};
   window.SokoniShell.go = go;   /* expose the router so the header My MiniShop button navigates in-shell */
@@ -809,6 +827,26 @@
 
   /* A hosted module refused to render for a role reason. Replace the panel's loading skeleton
      with an honest explanation rather than leaving a blank frame or a foreign page. */
+  /* The honest empty state for a merchant whose authenticated uid owns no shop.
+     It says so plainly, and it offers NO shop — not a storefront belonging to whoever used this
+     device last, and not the seller management page. */
+  function showMiniShopEmpty () {
+    var panel = content.querySelector('.mpanel.show'); if (!panel) return;
+    panel.classList.add('loaded');
+    var box = panel.querySelector('.sk-blocked') || document.createElement('div');
+    box.className = 'sk-blocked';
+    box.style.cssText = 'position:absolute;inset:0;z-index:3;display:flex;align-items:center;' +
+      'justify-content:center;padding:28px;background:var(--bg);text-align:center';
+    box.innerHTML = '<div style="max-width:420px">' +
+      '<div style="font-size:30px;margin-bottom:12px">🏪</div>' +
+      '<div style="font-weight:800;font-size:15px;margin-bottom:8px">You haven\'t claimed a MiniShop yet</div>' +
+      '<div style="color:var(--txt2);font-size:13px;line-height:1.5">A MiniShop belongs to a shop you own. ' +
+      'Once your seller account has a shop, you can claim its storefront handle here.</div>' +
+      '<button class="dbtn" style="margin-top:18px" onclick="window.__mgo(\'dashboard\')">Back to Dashboard</button>' +
+      '</div>';
+    if (!box.parentNode) panel.appendChild(box);
+  }
+
   function showModuleBlocked (page, reason) {
     var panel = content.querySelector('.mpanel.show'); if (!panel) return;
     panel.classList.add('loaded');
@@ -1992,64 +2030,114 @@
           console.warn('[merchant] MiniShop: ' + where + ' read failed — ' + ((e && (e.code || e.message)) || e));
         };
         var _get = async function (col, id) { try { var d = await m.getDoc(m.doc(window.firebaseDB, col, String(id))); return d.exists() ? d.data() : null; } catch (e) { _fail(col + '/' + id, e); return null; } };
-        /* Canonical claimed-shop resolution — try the direct docs first (shops/{sellerUid} is the
-           canonical id), then the active branch's own shop doc, then ownership queries. KASS is
-           claimed, so one of these must carry the handle — never send a claimed shop to Claim. */
-        /* OWNERSHIP IS shops/{shopId}.sellerUid — ask that FIRST and by name.
-           The old order asked shops/{uid} and ownerId before sellerUid, so a shop whose id is
-           not the uid (the normal case) was found only by luck of field-name drift. Ownership is
-           one question: which shop does this authenticated uid own? */
-        var ownedId = null;
-        var _q1Doc = async function (field) {
-          try {
-            var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'),
-                                            m.where(field, '==', uid), m.limit(1)));
-            if (!q.docs[0]) return null;
-            ownedId = q.docs[0].id;
-            return q.docs[0].data();
-          } catch (e) { _fail('shops[' + field + ']', e); return null; }
-        };
-        data = await _q1Doc('sellerUid');                       /* canonical */
-        if (!data) data = await _q1Doc('ownerUid');
-        if (!data) data = await _q1Doc('ownerId');              /* legacy shapes */
-        if (!data) data = await _q1Doc('uid');
-        if (!data) { data = await _get('shops', uid); if (data) ownedId = uid; }
-        if (!data && activeId) { data = await _get('shops', activeId); if (data) ownedId = activeId; }
-        /* Ownership must be the AUTHENTICATED uid, so a doc reached by id still has to prove it. */
-        if (data && ownedId && !(data.sellerUid === uid || data.ownerUid === uid || data.ownerId === uid || data.uid === uid)) {
-          console.warn('[merchant] MiniShop: shops/' + ownedId + ' does not name this uid as owner — not treating it as owned.');
-          data = null; ownedId = null;
-        }
-        /* Handle may be stored under any of these canonical fields. */
-        var handle = data && (data.minishopHandle || data.handle || data.slug || data.shopHandle || data.merchantSlug || data.username);
+        /* ── STEP 1 — WHICH SHOP DOES *THIS AUTHENTICATED UID* OWN? ─────────────────
+           Every lookup below is scoped BY UID: each one asks "which shop names me", so none of
+           them is capable of returning a shop belonging to someone else. Ownership is never
+           inferred from the existence of a handle, a config document, a public storefront, a
+           cached id, or "whichever shop a query happened to return first".
 
-        /* ── WHERE THE CLAIM ACTUALLY LIVES ──────────────────────────────────────
-           claimMinishopHandle (functions/minishop.js) persists a claim to TWO places:
+           The shell's active-branch id is deliberately NOT consulted as a way to FIND a shop.
+           It comes from SokoniBranch / localStorage.activeShopId, which survives an account
+           switch — so it can name a shop belonging to an entirely different seller. It is used
+           only to disambiguate BETWEEN shops this uid already provably owns. */
+        var ownedId = null, ownedVia = null, ownedAll = [];
+        var _ownedBy = async function (field) {
+          try {
+            /* limit(5), not limit(1). "The first document the query returned" is not an answer
+               when a seller might own more than one shop — ambiguity has to be visible rather
+               than silently resolved by result ordering. */
+            var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'),
+                                            m.where(field, '==', uid), m.limit(5)));
+            return q.docs.map(function (d) { return { id: d.id, data: d.data() }; });
+          } catch (e) { _fail('shops[' + field + ']', e); return []; }
+        };
+
+        ownedAll = await _ownedBy('sellerUid');                 /* THE canonical authority */
+        if (ownedAll.length) ownedVia = 'sellerUid';
+        else {
+          /* Shop documents written before sellerUid existed. Still ownership-scoped — each asks
+             which shop names MY uid — so they tolerate field-name drift without ever widening
+             to another seller's shop. Logged, because such a doc wants migrating. */
+          var LEGACY = ['ownerUid', 'ownerId', 'uid'];
+          for (var _i = 0; _i < LEGACY.length && !ownedAll.length; _i++) {
+            ownedAll = await _ownedBy(LEGACY[_i]);
+            if (ownedAll.length) ownedVia = LEGACY[_i];
+          }
+          if (ownedAll.length) {
+            console.warn('[merchant] MiniShop: ownership resolved via legacy field "' + ownedVia
+              + '" — shops/' + ownedAll[0].id + ' should carry sellerUid.');
+          }
+        }
+        if (!ownedAll.length) {
+          /* shops/{uid} — keyed by the caller's own uid, so it cannot name another seller. */
+          var _own = await _get('shops', uid);
+          if (_own) { ownedAll = [{ id: uid, data: _own }]; ownedVia = 'shops/{uid}'; }
+        }
+
+        /* PROVE IT. A document reached by id, or matched on a legacy field, must still name this
+           uid as its owner before it counts as mine. */
+        ownedAll = ownedAll.filter(function (s) {
+          var d = s.data || {};
+          if (d.sellerUid === uid || d.ownerUid === uid || d.ownerId === uid || d.uid === uid) return true;
+          console.warn('[merchant] MiniShop: shops/' + s.id + ' does not name this uid as owner — rejected.');
+          return false;
+        });
+
+        var ambiguous = ownedAll.length > 1;
+        if (ambiguous) {
+          /* Deterministic, never arbitrary: prefer the branch the merchant is actually working
+             in IF they own it, otherwise the lowest id. Loud, because owning several shops
+             changes what "my storefront" means. */
+          console.warn('[merchant] MiniShop: this uid owns ' + ownedAll.length + ' shops ('
+            + ownedAll.map(function (s) { return s.id; }).join(', ') + ') — selecting deterministically.');
+          ownedAll.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+        }
+        if (ownedAll.length) {
+          var mine = null;
+          if (activeId) {
+            for (var _j = 0; _j < ownedAll.length; _j++) { if (ownedAll[_j].id === activeId) { mine = ownedAll[_j]; break; } }
+          }
+          mine = mine || ownedAll[0];
+          ownedId = mine.id;
+          data = mine.data;
+        }
+
+        /* ── STEP 2 — DOES *MY* SHOP HAVE A HANDLE? ─────────────────────────────────
+           Asked only once ownership is established, and only about the shop I own.
+
+           This block used to fall back to `activeId || uid` when nothing was owned, read THAT
+           shop's minishopConfig, and adopt its handle. A seller who owned no shop was therefore
+           shown another seller's storefront as "Shop Live", with a link straight into it — and
+           because activeShopId is persisted in localStorage, that other seller could simply be
+           whoever used the device before. A handle is a property OF a shop; it can never be
+           evidence FOR one.
+
+           The claim itself lives in two places (claimMinishopHandle writes both):
                shopHandles/{handle}      { shopId, uid, handle }
                minishopConfig/{shopId}   { handle }
-           and to NEITHER field on the shops document. Reading only `shops` therefore found no
-           handle after a reload, concluded the shop was unclaimed, and sent the seller back to
-           the claim screen every single time — they claimed, edited, added products, reloaded,
-           and were asked to claim the same shop again.
-
-           So resolve from the collections the claim actually writes. Ownership stays canonical:
-           shopHandles carries the owner uid, and the config is keyed by the shopId that
-           claimMinishopHandle resolved from shops.sellerUid == uid. Nothing here trusts
-           localStorage or a UI flag. */
-        if (!handle) {
-          var shopId = ownedId || (data && (data.shopId || data.id)) || activeId || uid;
-          var cfg = await _get('minishopConfig', shopId);
-          if (cfg && cfg.handle) handle = cfg.handle;
-        }
-        if (!handle) {
-          /* Last resort: the handle registry itself, keyed by owner. Authoritative for "does
-             this seller own a claimed handle at all", independent of shop-doc shape drift. */
-          try {
-            var hq = await m.getDocs(m.query(
-              m.collection(window.firebaseDB, 'shopHandles'),
-              m.where('uid', '==', uid), m.limit(1)));
-            if (hq.docs[0]) handle = hq.docs[0].data().handle || hq.docs[0].id;
-          } catch (e) { _fail('shopHandles[uid]', e); }
+           so both are consulted — but strictly keyed to the shop this uid owns. */
+        var handle = null;
+        if (ownedId) {
+          handle = (data && (data.minishopHandle || data.handle || data.slug
+                             || data.shopHandle || data.merchantSlug || data.username)) || null;
+          if (!handle) {
+            var cfg = await _get('minishopConfig', ownedId);    /* MY shop id, nothing else */
+            if (cfg && cfg.handle) handle = cfg.handle;
+          }
+          if (!handle) {
+            /* The handle registry, keyed by owner — and the record must point back at the shop
+               I own. A handle of mine that names a different shopId is stale or belongs to
+               another of my shops; either way it is not this storefront's handle. */
+            try {
+              var hq = await m.getDocs(m.query(
+                m.collection(window.firebaseDB, 'shopHandles'),
+                m.where('uid', '==', uid), m.limit(5)));
+              hq.docs.forEach(function (d) {
+                var hd = d.data() || {};
+                if (!handle && hd.shopId === ownedId) handle = hd.handle || d.id;
+              });
+            } catch (e) { _fail('shopHandles[uid]', e); }
+          }
         }
         /* UNKNOWN IS NOT "UNCLAIMED".
            Nothing was found, but reads failed — so the honest answer is that ownership could not
@@ -2070,11 +2158,25 @@
         _mshop = {
           resolved: true,
           owner:    owned,
-          shopId:   ownedId || null,
+          shopId:   owned ? ownedId : null,
           ownerUid: owned ? uid : null,
-          claimed:  !!handle,
-          handle:   handle || null,
-          url:      handle ? '/shop/' + encodeURIComponent(handle) : 'minishop-admin.html',
+          /* Claimed is a statement about MY shop. Without ownership there is nothing to be
+             claimed, so a handle found anywhere else can never make this true. */
+          claimed:  owned && !!handle,
+          handle:   owned ? (handle || null) : null,
+          /* ── ONE SHOP, TWO EXPERIENCES ──────────────────────────────────────────
+             Owner  → the private control centre. Editing the shop, products, availability,
+                      orders and so on writes to the canonical records; Preview Store is how
+                      the owner looks at the public view. Management is never a copy of the
+                      storefront, and the storefront never renders management.
+             Non-owner → NOTHING. Not a storefront, not a management page. The old contract
+                      handed `minishop-admin.html` to anyone whose handle lookup came back
+                      empty, which is how a seller with no shop could land on a management
+                      screen. Resolve to null and let the shell render the empty state. */
+          url:      owned ? 'minishop-admin.html' : null,
+          previewUrl: owned && handle ? '/shop/' + encodeURIComponent(handle) : null,
+          ambiguous: ambiguous,
+          ownedVia: ownedVia,
           mode:     owned ? 'OWNER' : 'UNCLAIMED'
         };
       } catch (e) {
@@ -2089,6 +2191,9 @@
       window.__miniShopState = {
         mode: _mshop.mode, shopId: _mshop.shopId, ownerUid: _mshop.ownerUid,
         handle: _mshop.handle, claimed: _mshop.claimed,
+        /* How ownership was established, and whether it was ambiguous. "It picked the wrong
+           shop" is unanswerable without knowing which question produced the answer. */
+        ownedVia: _mshop.ownedVia || null, ambiguous: !!_mshop.ambiguous,
         /* The uid the ownership question was actually ASKED with. When a seller reports "it says
            unclaimed", the first thing worth knowing is whether the resolver was asking about
            them at all — a stale cached uid answers "no shop" perfectly correctly. */
@@ -2105,9 +2210,13 @@
       /* LOADING must never render Claim — that is the whole bug. Until Auth and Firestore have
          answered, the label stays neutral. Only a resolved, genuinely unowned shop offers Claim. */
       if (!_mshop.resolved) { btn.classList.remove('notclaimed'); st.textContent = 'My storefront'; return; }
-      if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
-      else if (_mshop.owner) { btn.classList.remove('notclaimed'); st.textContent = '🏪 Set up storefront'; }
-      else { btn.classList.add('notclaimed'); st.textContent = '✨ Claim Shop'; }
+      /* OWNERSHIP IS THE FIRST QUESTION, not the second. This tested `claimed` first, so a
+         handle picked up from anywhere rendered "Shop Live" without anyone checking whose shop
+         it was — a seller who owned nothing could be shown another seller's storefront as
+         though it were theirs. Non-owner has exactly one state. */
+      if (!_mshop.owner) { btn.classList.add('notclaimed'); st.textContent = '✨ Claim Shop'; return; }
+      btn.classList.remove('notclaimed');
+      st.textContent = _mshop.claimed ? '🟢 Shop Live' : '🏪 Set up storefront';
     }
     /* TEMPORARY VISIBLE DIAGNOSTIC (item 9 of the claim directive).
        While the claim fix is being proven on real devices, the seller must be able to READ the

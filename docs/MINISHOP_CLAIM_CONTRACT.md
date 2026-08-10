@@ -19,6 +19,45 @@ caches and projections; a cache can be stale, cleared, or written by a previous 
 `sellerUid` is queried **first and by name**. A shop reached by document id must still name the
 caller as its owner before it counts.
 
+### Ownership selection — the rules
+
+```
+Firebase Auth UID
+      ↓
+find shops owned by THIS UID          (every query scoped BY UID)
+      ↓
+exactly one owned shop?
+      ├── YES → resolve ITS handle/config → OWNER MANAGEMENT
+      └── NO  → this seller has no claimed shop → CLAIM SHOP
+```
+
+A shop is **never** selected because a `shopHandles` record exists, a `minishopConfig` exists, a
+handle exists, the shop is publicly available, it was the first row a query returned, or a
+previous shop is cached.
+
+> **`activeShopId` is not an ownership signal.** It comes from `SokoniBranch` and
+> `localStorage.activeShopId`, and it survives an account switch — on a shared device it can name
+> the *previous* seller's shop. It is used only to disambiguate between shops this uid already
+> provably owns, never to find one.
+
+If more than one shop names this uid, that is logged as `ambiguous` and resolved
+deterministically (the active branch if it is one of them, otherwise the lowest id) — never by
+result ordering.
+
+### Two experiences, one shop
+
+| | Owner | Everyone else |
+|---|---|---|
+| Entry | My MiniShop → **management** | Market → KassShop → **public storefront** |
+| Surface | edit shop, products, availability, orders, deliveries, analytics, followers, reviews, **Preview Store** | cover, shop info, rating/reviews, products, availability, follow, contact, recommendations, buy |
+| Data | writes the **canonical** shop/product/availability records | reads those same records |
+
+Seller controls → canonical data → public KassShop. **Not** seller controls → a separate MiniShop
+copy → a public MiniShop copy.
+
+A non-owner is handed **nothing** — not a storefront, and not the management page. The shell
+renders *"You haven't claimed a MiniShop yet."*
+
 ---
 
 ## 2. Three states — and LOADING is not UNCLAIMED

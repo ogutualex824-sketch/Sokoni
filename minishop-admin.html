@@ -1310,22 +1310,52 @@
       initUI();
     }, 10000);
 
-    db.collection('shops').where('ownerId','==',uid).limit(1).get()
+    /* ── ONE OWNERSHIP AUTHORITY ────────────────────────────────────────────
+       This asked `shops where ownerId == uid`, while the merchant shell and every MiniShop
+       Cloud Function ask `shops where sellerUid == uid`. Two different authorities inside one
+       feature: the shell could correctly place a seller in owner mode and hand them this page,
+       which then found nothing and rendered as though they had no shop at all.
+
+       It also read the handle from `shops.minishopHandle` and the config from
+       `shops.minishopConfig` — neither of which is where a claim lands. claimMinishopHandle
+       writes `minishopConfig/{shopId}.handle`, so a seller who HAD claimed saw an unclaimed
+       storefront here.
+
+       sellerUid is canonical; ownerId is read only as a legacy shape, and both are scoped by
+       uid so neither can select a shop belonging to someone else. */
+    var _byField = function (field) {
+      return db.collection('shops').where(field, '==', uid).limit(1).get();
+    };
+    _byField('sellerUid')
+      .then(function (snap) { return snap.empty ? _byField('ownerId') : snap; })
       .then(function(snap) {
+        if (_readTimedOut) return null;
+        if (snap.empty) return null;
+        var doc = snap.docs[0];
+        var data = doc.data() || {};
+        /* Prove it, exactly as the shell does — a doc must name this uid as its owner. */
+        if (!(data.sellerUid === uid || data.ownerUid === uid || data.ownerId === uid || data.uid === uid)) {
+          console.warn('[MSA] shops/' + doc.id + ' does not name this uid as owner — ignoring.');
+          return null;
+        }
+        _state.shopId = doc.id;
+        _state.shopName = data.name || 'My Shop';
+        _state.handle = data.minishopHandle || null;
+        _state.config = data.minishopConfig || {};
+        window.msAdminShopId = doc.id;
+        /* The handle lives where the claim put it. Keyed by MY shop id, never anything else. */
+        if (_state.handle) return null;
+        return db.collection('minishopConfig').doc(doc.id).get();
+      })
+      .then(function (cfgSnap) {
         clearTimeout(readTimer);
         if (_readTimedOut) return;   // UI already initialised by the timeout path
-        if (!snap.empty) {
-          var doc = snap.docs[0];
-          var data = doc.data();
-          _state.shopId = doc.id;
-          _state.shopName = data.name || 'My Shop';
-          _state.handle = data.minishopHandle || null;
-          _state.config = data.minishopConfig || {};
-          if (_state.handle) {
-            _state.shopUrl = buildShopUrl(_state.handle);
-          }
-          window.msAdminShopId = doc.id;
+        if (cfgSnap && cfgSnap.exists) {
+          var cfg = cfgSnap.data() || {};
+          if (cfg.handle) _state.handle = cfg.handle;
+          _state.config = Object.assign({}, cfg, _state.config || {});
         }
+        if (_state.handle) _state.shopUrl = buildShopUrl(_state.handle);
         hideAuthGate();
         initUI();
       })

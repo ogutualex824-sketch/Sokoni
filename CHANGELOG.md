@@ -1,3 +1,78 @@
+## [2026-08-10] — fix(minishop): P0 — a seller could be shown ANOTHER seller's shop as their own
+
+Different bug from the claim-persistence one below, and more serious. The claim race being 25/25
+proves the write; it says nothing about **which shop gets selected for the current seller**.
+
+### The leak
+
+[merchant.html] resolved the handle like this:
+
+```js
+var shopId = ownedId || (data && (data.shopId || data.id)) || activeId || uid;
+var cfg = await _get('minishopConfig', shopId);
+if (cfg && cfg.handle) handle = cfg.handle;
+```
+
+When the seller owned **nothing**, `ownedId` was null and it fell through to `activeId` — and
+`activeShopId` comes from `SokoniBranch` / `localStorage.activeShopId`, which **survives an
+account switch**. So on a shared device it names whoever used it last. The resolver read *that*
+shop's config, adopted its handle, set `claimed: true`, rendered **🟢 Shop Live**, and linked
+`/shop/<the other seller's handle>`.
+
+`_paint()` compounded it by testing `claimed` **before** `owner`, so a handle picked up from
+anywhere rendered as a live shop without anyone asking whose it was.
+
+And `url` fell back to `minishop-admin.html` whenever no handle resolved — handing the **seller
+management page** to a merchant who owned no shop.
+
+### The rule now
+
+A seller enters owner mode only when `shops/{shopId}.sellerUid === current Firebase Auth UID`.
+Every ownership query is scoped BY UID, so none can return someone else's shop. A shop is never
+selected because a handle, a `shopHandles` record, a `minishopConfig`, a public storefront, a
+cached id, or "the first row returned" exists.
+
+- `activeShopId` is no longer consulted to **find** a shop — only to disambiguate between shops
+  this uid already provably owns.
+- Ownership queries use `limit(5)`, not `limit(1)`: "the first document returned" is not an answer
+  when a seller might own several. Ambiguity is logged and resolved deterministically.
+- The handle is asked **only about the shop I own**, and a `shopHandles` record must point back at
+  that shop id.
+- `claimed` requires ownership. `_paint()` asks `owner` first.
+- Non-owner resolves to `url: null` and the shell renders *"You haven't claimed a MiniShop yet."*
+  — not a storefront, not a management page.
+- Owner opens the private control centre; the public storefront is `previewUrl`.
+
+### A second ownership authority, in the same feature
+
+`minishop-admin.html` resolved the seller's shop with `where('ownerId','==',uid)` while the shell
+and every MiniShop Cloud Function use `sellerUid`. The shell could correctly place a seller in
+owner mode and hand them a management page that then found nothing and rendered as though they
+had no shop. It also read the handle from `shops.minishopHandle` and the config from
+`shops.minishopConfig` — neither of which is where a claim lands. Now `sellerUid` first, `ownerId`
+only as a legacy shape, both uid-scoped, with the handle read from `minishopConfig/{shopId}`.
+
+**No cross-seller WRITE was ever possible.** `_assertShopOwner()` gates every mutating MiniShop
+callable on `snap.data().sellerUid !== uid → permission-denied`, and `getMyMinishop` is scoped to
+`sellerUid == uid` server-side. This was a display and routing leak, not a data-integrity one.
+
+### Tests
+
+`test-minishop-claim-persistence.js` — **31/31**, up from 19. Two new sections:
+
+- **another seller's claimed shop sits in `activeShopId`** — a uid owning nothing must adopt no
+  shopId, no handle, no `claimed`, must not say "Shop Live", and opening MiniShop must load
+  neither `minishop-admin.html` nor `/shop/…`, showing the empty state instead. On the previous
+  code four of these fail.
+- **owner opens My MiniShop** → lands on the control centre, not the public storefront.
+
+**Files:** `merchant.html`, `minishop-admin.html`, `scripts/test-minishop-claim-persistence.js`,
+`docs/MINISHOP_CLAIM_CONTRACT.md`. **Database:** none. **API:** none. **Security:** a seller can
+no longer be shown, or routed into, a shop they do not own. **Breaking:** My MiniShop now opens
+management for owners rather than the public storefront (as specified).
+
+---
+
 ## [2026-08-10] — fix(minishop): P0 — the KassShop claim now survives a reload, and an unknown answer is no longer rendered as "unclaimed"
 
 **Symptom:** a seller claims KassShop, gets owner mode, reloads — and is asked to claim the same

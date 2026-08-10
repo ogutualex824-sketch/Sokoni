@@ -63,11 +63,19 @@ wd.unref && wd.unref();
 /* Stub Auth + Firestore INSIDE the page, before any shell script runs.
    authDelayMs models Auth restoration latency: 0 = warm, 2500 = a cold mobile start where the
    old 700ms timer had already given up and declared the shop unclaimed. */
-function makeStubs({ authDelayMs, shopDoc, config, handles, failReads }) {
+function makeStubs({ authDelayMs, shopDoc, config, handles, failReads, uid, activeShopId, shopDocs }) {
   return `(function(){
     var FAIL_READS = ${failReads ? 'true' : 'false'};
-    var UID = ${JSON.stringify(OWNER)};
+    var UID = ${JSON.stringify(uid || OWNER)};
+    var ACTIVE_SHOP = ${JSON.stringify(activeShopId || null)};
+    if (ACTIVE_SHOP) {
+      try { localStorage.setItem('activeShopId', ACTIVE_SHOP); } catch (e) {}
+      window.SokoniShell = window.SokoniShell || {};
+      window.SokoniShell.activeShopId = ACTIVE_SHOP;
+    }
+    var EXTRA_SHOPS = ${JSON.stringify(shopDocs || [])};
     var SHOP = ${JSON.stringify(shopDoc)};
+    var ALL_SHOPS = (SHOP ? [SHOP] : []).concat(EXTRA_SHOPS || []);
     var CFG = ${JSON.stringify(config)};
     var HANDLES = ${JSON.stringify(handles)};
     var listeners = [];
@@ -94,7 +102,8 @@ function makeStubs({ authDelayMs, shopDoc, config, handles, failReads }) {
       getDoc: async function(ref){
         window.__fsReads.push('get:' + ref.col + '/' + ref.id);
         if (FAIL_READS) { var e = new Error('Missing or insufficient permissions.'); e.code = 'permission-denied'; throw e; }
-        if (ref.col === 'shops' && SHOP && ref.id === SHOP.__id) return { exists: function(){return true;}, data: function(){ return SHOP; } };
+        var hit = ALL_SHOPS.filter(function(s){ return s.__id === ref.id; })[0];
+        if (ref.col === 'shops' && hit) return { exists: function(){return true;}, data: function(){ return hit; } };
         if (ref.col === 'minishopConfig' && CFG && CFG[ref.id]) return { exists: function(){return true;}, data: function(){ return CFG[ref.id]; } };
         return { exists: function(){return false;}, data: function(){ return null; } };
       },
@@ -103,8 +112,9 @@ function makeStubs({ authDelayMs, shopDoc, config, handles, failReads }) {
         window.__fsReads.push('query:' + q.col + (w ? '[' + w.f + '=' + w.v + ']' : ''));
         if (FAIL_READS) { var e = new Error('Missing or insufficient permissions.'); e.code = 'permission-denied'; throw e; }
         var docs = [];
-        if (q.col === 'shops' && SHOP && w && SHOP[w.f] === w.v) {
-          docs = [{ id: SHOP.__id, data: function(){ return SHOP; } }];
+        if (q.col === 'shops' && w) {
+          docs = ALL_SHOPS.filter(function(s){ return s[w.f] === w.v; })
+                          .map(function(s){ return { id: s.__id, data: function(){ return s; } }; });
         }
         if (q.col === 'shopHandles' && w) {
           Object.keys(HANDLES || {}).forEach(function(h){
@@ -279,12 +289,85 @@ server.listen(0, async () => {
     await ctx.close();
   }
 
+  /* ── 7. A shop this uid does NOT own must never be adopted ── */
+  console.log('\n7. Another seller\'s claimed shop sits in activeShopId — it is not mine');
+  {
+    /* THE CROSS-SELLER LEAK.
+       activeShopId comes from SokoniBranch / localStorage and survives an account switch, so on
+       a shared device it can name the PREVIOUS seller's shop. The handle lookup used to fall
+       back to `activeId || uid` when nothing was owned, read that shop's minishopConfig, and
+       adopt its handle — so a seller who owned nothing was shown someone else's storefront as
+       "Shop Live", with a link straight into it. */
+    const ctx = await newSession(browser, {
+      authDelayMs: 0,
+      uid: 'seller-with-no-shop',
+      activeShopId: SHOP_ID,                 // the OTHER seller's shop, left behind on the device
+      shopDoc: CLAIMED_SHOP,                 // owned by OWNER, not by us
+      config: CONFIG,                        // and it has a handle
+      handles: HANDLES,
+    });
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 40000 });
+    const st = await resolveState(page);
+
+    ck('does not enter OWNER mode', st && st.mode !== 'OWNER', JSON.stringify(st));
+    ck('adopts no shopId', st && !st.shopId, String(st && st.shopId));
+    ck('adopts no handle', st && !st.handle, String(st && st.handle));
+    ck('is not reported as claimed', st && st.claimed === false, String(st && st.claimed));
+    ck('ownerUid is not set to this uid', st && !st.ownerUid, String(st && st.ownerUid));
+
+    const label = await page.evaluate(() => (document.getElementById('mshop-state') || {}).textContent || '');
+    ck('the header does NOT say "Shop Live"', !/shop live/i.test(label), 'label="' + label.trim() + '"');
+
+    /* And opening it must give an empty state — not the other seller's storefront, and not the
+       seller management page. */
+    const opened = await page.evaluate(async () => {
+      try { window.__mgo('minishop'); } catch (e) { return { err: e.message }; }
+      await new Promise((r) => setTimeout(r, 1500));
+      const panel = document.querySelector('.mpanel.show');
+      const frame = panel && panel.querySelector('iframe');
+      return {
+        src: (frame && frame.getAttribute('src')) || null,
+        empty: !!(panel && panel.querySelector('.sk-blocked')),
+        text: (panel && panel.textContent || '').slice(0, 120),
+        url: window.__miniShopUrl || null,
+      };
+    });
+    ck('no management page is loaded', !/minishop-admin/.test(opened.src || ''), 'src=' + opened.src);
+    ck('no storefront is loaded', !/\/shop\//.test(opened.src || ''), 'src=' + opened.src);
+    ck('the empty state is shown instead', opened.empty === true, JSON.stringify(opened));
+    ck('it says the shop is not claimed', /haven't claimed|have not claimed/i.test(opened.text),
+       opened.text.replace(/\s+/g, ' ').slice(0, 80));
+    await ctx.close();
+  }
+
+  /* ── 8. The owner gets management, and the storefront only as a preview ── */
+  console.log('\n8. Owner opens My MiniShop — management, not the public storefront');
+  {
+    const ctx = await newSession(browser, { authDelayMs: 0, shopDoc: CLAIMED_SHOP, config: CONFIG, handles: HANDLES });
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 40000 });
+    await resolveState(page);
+    const opened = await page.evaluate(async () => {
+      try { window.__mgo('minishop'); } catch (e) { return { err: e.message }; }
+      await new Promise((r) => setTimeout(r, 1500));
+      const frame = document.querySelector('.mpanel.show iframe');
+      return { src: (frame && frame.getAttribute('src')) || null, url: window.__miniShopUrl || null };
+    });
+    ck('owner lands on the private control centre', /minishop-admin/.test(opened.src || ''), 'src=' + opened.src);
+    ck('the public storefront is a preview, not the destination',
+       !/\/shop\//.test(opened.src || ''), 'src=' + opened.src);
+    await ctx.close();
+  }
+
   await browser.close(); server.close(); clearTimeout(wd);
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   console.log('\n  SCOPE: proves the resolver survives page destruction, a cleared cache and late');
-  console.log('         Auth, and that ownership comes from shops.sellerUid == authenticated uid.');
-  console.log('         NOT VERIFIED here: the CLAIM WRITE itself against real Firestore, and the');
-  console.log('         on-device reload. Those need the emulator and a device.');
+  console.log('         Auth; that ownership comes from shops.sellerUid == authenticated uid and');
+  console.log('         from nothing else; and that a non-owner is handed neither a storefront');
+  console.log('         nor the seller management page.');
+  console.log('         The claim WRITE is covered by test-minishop-claim-firestore.js.');
+  console.log('         NOT VERIFIED here: the on-device reload.');
   process.exit(fail ? 1 : 0);
 });
