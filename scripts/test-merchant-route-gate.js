@@ -35,8 +35,13 @@ const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text
   '.png':'image/png', '.json':'application/json', '.svg':'image/svg+xml',
   '.jpg':'image/jpeg', '.webp':'image/webp', '.ico':'image/x-icon', '.woff2':'font/woff2' };
 
-/* Batch 1 per the acceptance plan. --all widens to every primary route. */
-const BATCH_1 = ['dashboard', 'plan', 'products', 'inventory', 'cashier'];
+/* Batch 1 per the acceptance plan. --all widens to every primary route.
+   'inventory' and 'cashier' were separate sidebar rows before the POS merge; they are now
+   ALIASES of one POS route, so walking them here looked for buttons that deliberately no longer
+   exist. Resolved through the contract so this list follows the architecture instead of
+   restating a superseded copy of it, and de-duplicated so POS is not walked three times. */
+const BATCH_1 = [...new Set(['dashboard', 'plan', 'products', 'inventory', 'cashier']
+  .map((id) => C.resolve(id) || id))];
 const TARGETS = process.argv.includes('--all')
   ? C.primary().map(r => r.id)
   : BATCH_1;
@@ -126,7 +131,20 @@ server.listen(0, async () => {
                crushed: items.filter(i => i.w < 44 || i.h < 30).map(i => i.id) };
     });
     check('sidebar opens', sb.railVisible && sb.railVisible !== 'none' ? true : sb.count > 0);
-    check('all contract routes are present as buttons', sb.count === C.ROUTES.length, sb.count + '/' + C.ROUTES.length);
+    /* The sidebar is a PROJECTION of the contract, not a copy of it. Routes carry a tier, and
+       `hidden` ones (MiniShop, reached from the header) deliberately have no sidebar row — so
+       asserting count === ROUTES.length was asserting the pre-tier architecture and failed the
+       moment a hidden route existed. Assert the projection in BOTH directions instead: every
+       visible route present, and every hidden route absent. That is stricter than the count it
+       replaces — a count cannot tell a missing row from an extra one. */
+    const visibleRoutes = C.ROUTES.filter((r) => r.tier !== 'hidden');
+    const hiddenRoutes  = C.ROUTES.filter((r) => r.tier === 'hidden');
+    const missing = visibleRoutes.filter((r) => !sb.items.some((i) => i.id === r.id)).map((r) => r.id);
+    const leaked  = hiddenRoutes.filter((r) => sb.items.some((i) => i.id === r.id)).map((r) => r.id);
+    check('every visible contract route has a sidebar button',
+          missing.length === 0, missing.length ? 'missing: ' + missing.join(', ') : sb.count + '/' + visibleRoutes.length);
+    check('no hidden route leaks into the sidebar',
+          leaked.length === 0, leaked.length ? 'leaked: ' + leaked.join(', ') : hiddenRoutes.map((r) => r.id).join(', ') + ' correctly absent');
     check('Plan button is visible in the sidebar', sb.items.some(i => i.id === 'plan'),
           (sb.items.find(i => i.id === 'plan') || {}).label || 'MISSING');
     check('sidebar scrolls (no unreachable rows)', sb.scrolls, sb.navScrollH + ' > ' + sb.navClientH);
@@ -252,7 +270,12 @@ server.listen(0, async () => {
       shown: document.querySelectorAll('.mpanel.show').length,
       frame: (document.querySelector('.mpanel.show iframe') || {}).id || null,
     }));
-    check('deep link #inventory restores the route', deep.hash === 'inventory', '#' + deep.hash);
+    /* #inventory is an ALIAS of pos since the Cashier + Inventory merge — a bookmark on the old
+       hash must still land somewhere real, and the contract says that place is POS. Asserting
+       the hash stayed `inventory` was asserting the pre-merge architecture; what matters is that
+       the alias RESOLVES rather than dead-ends. */
+    check('deep link #inventory resolves through the alias to POS',
+          deep.hash === C.resolve('inventory'), '#' + deep.hash + ' (contract: ' + C.resolve('inventory') + ')');
     check('deep link mounts the POS panel', deep.frame === 'mfx-pos', String(deep.frame));
     check('deep link shows exactly one panel', deep.shown === 1, String(deep.shown));
 

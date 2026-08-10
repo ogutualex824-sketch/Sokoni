@@ -630,7 +630,14 @@
      state actually applied, and re-post until it does (bounded). `verify` reads the iframe's
      own DOM, so it is proof rather than optimism. Cheap when it works first time. */
   function _deepSwitch (frameId, msg, verify, label) {
-    var tries = 0, MAX = 25;           /* ~5s at 200ms — longer than any observed boot */
+    /* ~10s at 250ms. "Longer than any observed boot" was measured on an idle machine; under a
+       four-viewport acceptance run — and, more to the point, on a mid-range phone on mobile
+       data — a hosted module can still be booting at 5s. The retry then gave up and logged
+       "the panel may be showing the wrong section" while the section was in fact fine, which is
+       a false alarm reported to the seller's console as a defect. The ASSERTION is unchanged:
+       the switch must still be confirmed from the hosted DOM, and the loop still gives up and
+       says so rather than assuming success. It simply waits as long as a slow device needs. */
+    var tries = 0, MAX = 40, STEP = 250;
     function attempt () {
       var f = document.getElementById(frameId);
       if (!f || !f.contentWindow) return;
@@ -664,7 +671,7 @@
           }
           attempt();
         }, 700);
-      }, 200);
+      }, STEP);
     }
     attempt();
   }
@@ -2270,11 +2277,22 @@
       _resolve().then(function () { _paint(); _go(); });
     };
     window.__refreshMiniShop = function () { _resolve().then(function () { _paint(); _diag(); if (current === 'minishop') { try { window.__mgo('minishop'); } catch (_) {} } }); };
-    /* NO 700ms TIMER. Resolution starts immediately and _resolve waits on the Auth EVENT, so a
-       cold start that takes two seconds to restore the session resolves when the session is
-       actually there. The old `setTimeout(refresh, 700)` raced Auth and lost, and losing meant
-       "unclaimed" — the reload bug. A timer cannot know when Auth is ready; the event does. */
-    window.__refreshMiniShop();
+    /* NO TIMER DECIDES THE ANSWER — but the answer need not compete for the boot.
+       The old `setTimeout(refresh, 700)` raced Auth and lost, and losing meant "unclaimed": the
+       reload bug. _resolve now waits on the Auth EVENT, so correctness no longer depends on
+       when this starts. Starting it synchronously, however, put a module import and four
+       Firestore round-trips on the critical path, competing with the panel the merchant is
+       actually waiting for — deep-switch confirmations started missing their window.
+
+       So: kick it off when the shell is idle. Ownership is header chrome, not the route. The
+       fallback timer is a ceiling, not the mechanism — browsers without requestIdleCallback
+       still resolve, and the Auth event still decides the answer whenever it arrives. */
+    (function () {
+      var started = false;
+      var start = function () { if (started) return; started = true; window.__refreshMiniShop(); };
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(start, { timeout: 2500 });
+      else setTimeout(start, 300);
+    })();
     document.addEventListener('soBranchChanged', function () { _mshop.resolved = false; window.__refreshMiniShop(); });
   })();
 
@@ -2288,11 +2306,22 @@
     if (!raw) return;
     var id = CONTRACT.resolve(raw);
     if (id && id !== current) go(id);
+    else if (id && id !== raw) {
+      /* Already on the route this alias resolves to, so there is nothing to mount — but the URL
+         still says `#inventory`, a name the contract no longer has. go() normalises the hash as
+         part of navigating; when no navigation happens nothing did, so a legacy hash could
+         survive indefinitely and be refreshed, shared or bookmarked. Normalise in place. */
+      try { history.replaceState({ sokoniRoute: id }, '', '#' + id); } catch (_) {}
+    }
     else if (!id) console.error('[merchant] unknown route in URL hash: "' + raw + '"');
   });
 
   /* Boot */
   paintStatus();
+  /* go() already rewrites the hash to the canonical route id, so a boot on the legacy
+     `#inventory` / `#cashier` alias lands on POS and the URL says `#pos`. Verified by probe,
+     not assumed. The only gap was an alias arriving when its target route is ALREADY current —
+     no navigation, so nothing normalised it; the hashchange listener above now handles that. */
   var boot = CONTRACT.resolve(location.hash.replace('#', ''));
   go(boot || 'dashboard');
 

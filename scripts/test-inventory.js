@@ -94,6 +94,16 @@ const DECLARED = {
             'It cannot fit the 60s per-suite budget here and is not a unit suite; this runner ' +
             'would only ever report it as TIMEOUT. Run it directly: npm run test:merchant-visual-gate.',
   },
+  'test-minishop-claim-persistence': {
+    verdict: 'ENV',
+    reason: 'Long-running browser suite — 8 sections in webkit, each booting /merchant and ' +
+            'waiting out a deliberately late Auth restoration, several minutes total. It cannot ' +
+            'fit the 60s per-suite budget and this runner would only ever report it as TIMEOUT. ' +
+            'NOT a licence to skip it: it is the only proof that a claimed KassShop survives a ' +
+            'destroyed page and a cleared cache, that ownership comes from shops.sellerUid and ' +
+            'nothing else, and that a non-owner is handed neither a storefront nor the seller ' +
+            'management page. Run it directly: npm run test:claim:persistence.',
+  },
 };
 
 /* Untriaged genuine failures. Visible every run, blocking none, until each is
