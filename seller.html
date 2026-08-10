@@ -2609,6 +2609,11 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               returnPolicy:storeData.returnPolicy, returnText:storeData.returnText,
               packagingNote:storeData.packagingNote, freeDelivery:storeData.freeDelivery,
               zones:storeData.zones
+            }, compliance:{
+              /* Tax + registration numbers. Sent through the same canonical save so they
+                 survive a reload, but stored by the server in shops/{id}/private/compliance
+                 — never on the world-readable shop document. */
+              kraPin:storeData.kraPin, sbpNumber:storeData.sbpNumber, brsNumber:storeData.brsNumber
             }});
             var d=res&&res.data;
             if(!d||d.success!==true||!d.shopId) throw new Error('Save did not complete');
@@ -2669,6 +2674,12 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               var payload=Object.assign({},storeData,{uid:uid,updatedAt:m.serverTimestamp()});
               /* Strip blob images from Firestore document to stay under 1MB limit */
               delete payload.bannerSrc; delete payload.logoSrc;
+              /* `sellers/{uid}` is `allow read: if true`. This wrote the whole of storeData,
+                 so every seller's KRA PIN and permit numbers were readable by anyone. They
+                 now live in shops/{id}/private/compliance, written by saveShopProfile; the
+                 public mirror must not carry them. */
+              delete payload.kraPin; delete payload.sbpNumber; delete payload.brsNumber;
+              delete payload.sbpNum;  delete payload.brsNum;
               m.setDoc(m.doc(db,'sellers',uid),payload,{merge:true}).catch(function(e){console.warn('[shop] sellers write:',e&&e.message);});
               /* Business directory listing — complete + rules-compliant. getDoc first
                  so createdAt is written once (on first launch) and preserved on edits. */
@@ -2772,7 +2783,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           if(!d.exists){ swSetState('empty'); swSetMode(false); return; }
           window.__kasShopId=d.shopId;
           window.__kasShopHandle=d.handle||null;
-          swApply(d.profile||{}, d.availability||{});
+          swApply(d.profile||{}, d.availability||{}, d.compliance||{});
           swSetMode(true);
           swSetState('loaded');
         }catch(e){
@@ -2844,8 +2855,12 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       }
       window.swSetField=swSetField;
 
-      function swApply(p, avail){
+      function swApply(p, avail, comp){
         const set=(id,val)=>swSetField(id,val);
+        /* Compliance arrives in its own object because the server keeps it off the public
+           shop document. Without this the seller's KRA PIN and permit numbers came back
+           empty on every reload — they were collected, and then silently dropped. */
+        if(comp){ set('swKraPin',comp.kraPin);set('swSbpNumber',comp.sbpNumber);set('swBrsNumber',comp.brsNumber); }
         set('swStoreName',p.name||p.storeName);set('swTagline',p.tagline);set('swAbout',p.about||p.description);
         set('swCity',p.city);set('swAddress',p.address);set('swMapsLink',p.mapsLink);
         set('swPhone',p.phone);set('swEmail',p.email);set('swWebsite',p.website);

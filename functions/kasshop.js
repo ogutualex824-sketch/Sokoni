@@ -98,6 +98,23 @@ const TEXT_FIELDS = {
 };
 const AVAILABILITY_FIELDS = ['acceptingOrders', 'online', 'delivery', 'pickup'];
 
+/* Regulatory identifiers. Deliberately NOT in TEXT_FIELDS: `shops/{shopId}` is
+   `allow read: if true`, so anything listed there is public. These are the seller's
+   tax and registration numbers — they belong to the shop, but not to the storefront.
+   They are stored in `shops/{shopId}/private/compliance`, which only this function
+   (Admin SDK) writes and only the owner may read. */
+const COMPLIANCE_FIELDS = { kraPin: 20, sbpNumber: 40, brsNumber: 40 };
+const COMPLIANCE_DOC = 'compliance';
+
+function _cleanCompliance(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [key, max] of Object.entries(COMPLIANCE_FIELDS)) {
+    if (key in raw) out[key] = _san(raw[key], max);
+  }
+  return out;
+}
+
 /** Whitelist + sanitise an incoming profile patch. Absent keys are left untouched. */
 function _cleanProfile(raw) {
   const out = {};
@@ -138,9 +155,10 @@ exports.getShopProfile = onCall(
     }
 
     const db = _db();
-    const [cfgSnap, schedSnap] = await Promise.all([
+    const [cfgSnap, schedSnap, compSnap] = await Promise.all([
       db.collection('minishopConfig').doc(owned.id).get(),
       db.collection('providerAvailability').doc(uid).get(),
+      db.collection('shops').doc(owned.id).collection('private').doc(COMPLIANCE_DOC).get(),
     ]);
     const cfg = cfgSnap.exists ? cfgSnap.data() : {};
 
@@ -156,11 +174,22 @@ exports.getShopProfile = onCall(
       availability[key] = owned.data[key] !== undefined ? !!owned.data[key] : true;
     }
 
+    /* Owner-only. This response is already gated by the ownership assertion above,
+       so returning it here does not widen who can see it. */
+    const compliance = {};
+    if (compSnap.exists) {
+      const c = compSnap.data() || {};
+      for (const key of Object.keys(COMPLIANCE_FIELDS)) {
+        if (c[key] !== undefined) compliance[key] = c[key];
+      }
+    }
+
     return {
       exists: true,
       shopId: owned.id,
       ownerUid: uid,
       profile,
+      compliance,
       availability,
       schedule: schedSnap.exists ? (schedSnap.data() || null) : null,
       handle: cfg.handle || owned.data.minishopHandle || null,
@@ -176,9 +205,13 @@ exports.saveShopProfile = onCall(
   { region: REGION, cors: true },
   async (request) => {
     const uid = _requireAuth(request);
-    const patch = _cleanProfile((request.data || {}).profile);
+    const data = request.data || {};
+    const patch = _cleanProfile(data.profile);
+    /* Compliance may arrive nested (`{compliance:{…}}`) or flattened into the profile
+       by an older client. Both are accepted; neither reaches the public document. */
+    const compliance = Object.assign(_cleanCompliance(data.profile), _cleanCompliance(data.compliance));
 
-    if (!Object.keys(patch).length) {
+    if (!Object.keys(patch).length && !Object.keys(compliance).length) {
       throw new HttpsError('invalid-argument', 'Nothing to save.');
     }
     /* A shop needs a name to exist. Enforced here rather than in the form, because the form is
@@ -205,6 +238,12 @@ exports.saveShopProfile = onCall(
            through sellerUid like everything else. */
         const write = Object.assign({}, patch, { sellerUid: uid, updatedAt: now });
         tx.set(ref, write, { merge: true });
+        /* Same transaction: the storefront copy and the regulatory identifiers commit
+           together or not at all, so a half-saved form can never be reported as saved. */
+        if (Object.keys(compliance).length) {
+          tx.set(ref.collection('private').doc(COMPLIANCE_DOC),
+            Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+        }
       });
       logger.info('KassShop profile updated', { shopId: owned.id, fields: Object.keys(patch).length });
       return { success: true, created: false, shopId: owned.id, ownerUid: uid };
@@ -234,6 +273,10 @@ exports.saveShopProfile = onCall(
         /* Someone else's request created it first — fold into that shop rather than adding one. */
         const existing = dupe.docs[0];
         tx.set(existing.ref, Object.assign({}, patch, { sellerUid: uid, updatedAt: now }), { merge: true });
+        if (Object.keys(compliance).length) {
+          tx.set(existing.ref.collection('private').doc(COMPLIANCE_DOC),
+            Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+        }
         return;
       }
       tx.set(ref, Object.assign({}, patch, {
@@ -244,6 +287,10 @@ exports.saveShopProfile = onCall(
         createdAt: now,
         updatedAt: now,
       }));
+      if (Object.keys(compliance).length) {
+        tx.set(ref.collection('private').doc(COMPLIANCE_DOC),
+          Object.assign({}, compliance, { sellerUid: uid, updatedAt: now }), { merge: true });
+      }
     });
 
     /* Re-resolve rather than assume: if the transaction folded into a concurrently-created

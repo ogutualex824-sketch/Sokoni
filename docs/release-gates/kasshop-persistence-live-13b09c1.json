@@ -1,0 +1,121 @@
+{
+  "gate": "kasshop-persistence-live",
+  "status": "FAIL",
+  "counts": {
+    "pass": 18,
+    "fail": 2,
+    "blocked": 0
+  },
+  "evidence": "production-probe",
+  "environment": "production",
+  "commit": "13b09c1",
+  "workingTreeDirty": true,
+  "confidence": "high",
+  "startedAt": "2026-08-10T23:12:58.697Z",
+  "finishedAt": "2026-08-10T23:13:40.296Z",
+  "assertions": [
+    {
+      "status": "PASS",
+      "label": "control: a new uid reports exists:false",
+      "detail": "exists=false"
+    },
+    {
+      "status": "PASS",
+      "label": "Shop Details saves",
+      "detail": "created=true shopId=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "the shop id is the owner uid (buyer surfaces key on it)",
+      "detail": "shopId=8m2YPoPjgvOtQ15JohH79fg3Jvh1 uid=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "sellerUid on the document is the owner",
+      "detail": "sellerUid=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "reload returns the SAME shopId",
+      "detail": "reloaded=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "reload preserves every field Shop Details collects",
+      "detail": "all 27 fields round-tripped"
+    },
+    {
+      "status": "PASS",
+      "label": "regulatory identifiers are not on the public shop document",
+      "detail": "kraPin/sbpNumber/brsNumber absent"
+    },
+    {
+      "status": "FAIL",
+      "label": "the owner can read their own compliance doc (rule is live)",
+      "detail": "HTTP 403"
+    },
+    {
+      "status": "FAIL",
+      "label": "compliance values are stored intact",
+      "detail": "kraPin=undefined sbpNumber=undefined brsNumber=undefined"
+    },
+    {
+      "status": "PASS",
+      "label": "regulatory identifiers are not on the public sellers document",
+      "detail": "absent (doc not written by this probe)"
+    },
+    {
+      "status": "PASS",
+      "label": "a second save UPDATES the same shop",
+      "detail": "created=false shopId=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "exactly one shop exists for this seller",
+      "detail": "count=1"
+    },
+    {
+      "status": "PASS",
+      "label": "the edit is what comes back on reload",
+      "detail": "about=about-edited-03578697"
+    },
+    {
+      "status": "PASS",
+      "label": "the public shop can be found at shops/{sellerUid}",
+      "detail": "HTTP 200"
+    },
+    {
+      "status": "PASS",
+      "label": "the found shop is active and visible",
+      "detail": "status=active isVisible=true"
+    },
+    {
+      "status": "PASS",
+      "label": "availability writes through the canonical boundary",
+      "detail": "shopId=8m2YPoPjgvOtQ15JohH79fg3Jvh1"
+    },
+    {
+      "status": "PASS",
+      "label": "availability landed on the canonical shop document",
+      "detail": "acceptingOrders=false online=false delivery=true"
+    },
+    {
+      "status": "PASS",
+      "label": "availability did not write anywhere else",
+      "detail": "no stray documents"
+    },
+    {
+      "status": "PASS",
+      "label": "the buyer-visible state reflects the flip",
+      "detail": "open=false reason=offline"
+    },
+    {
+      "status": "PASS",
+      "label": "Preview Store does not open the wrong shop",
+      "detail": "no handle: routes to setup"
+    }
+  ],
+  "notes": [
+    "Preview Store: this shop has no minishop handle, so goToMyStore() routes to Shop Setup rather than a storefront. Nothing points at the wrong shop — but a brand-new KassShop has no public URL until a handle is claimed."
+  ]
+}

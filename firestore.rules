@@ -1424,6 +1424,18 @@ service cloud.firestore {
         allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
         allow write: if false;
       }
+
+      /* Regulatory identifiers — KRA PIN, single business permit, BRS number.
+         Shop Setup collects these, and the legacy save wrote them into
+         `sellers/{uid}`, which is `allow read: if true` — so every seller's tax
+         identifier was readable by anyone who asked. They are NOT storefront
+         copy and must never sit on a world-readable document, so they live here
+         instead: written only by saveShopProfile (Admin SDK, after it has proved
+         ownership) and readable only by the owner and admins. */
+      match /private/{doc} {
+        allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+        allow write: if false;
+      }
     }
 
     /* Canonical platform-wide analytics (analytics/global, analytics/daily_*) — the ONE source
