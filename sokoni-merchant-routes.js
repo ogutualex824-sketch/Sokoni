@@ -153,7 +153,7 @@
            'Replaces the old target (POS settings tab), which was device config masquerading as merchant settings.' },
 
     /* ── MORE: preserved destinations, one tap deeper. Nothing here is lost. ── */
-    { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'more',
+    { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
       kind:'page', src:'minishop-admin.html', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'minishop',
@@ -280,7 +280,11 @@
   var POS_TABS = ['pos','inventory','orders','customers','reports','finance','settings',
     'audit','bos','repair','more'];
   var KINDS = ['native','pos','seller','page'];
-  var TIERS = ['primary','more'];
+  /* 'hidden' = a real, routable destination that is NOT a sidebar row. My MiniShop lives here:
+     it is reached from the header button, and having it in BOTH the header and the sidebar gave
+     the seller two controls that looked like they might do different things. Still resolvable,
+     still deep-linkable, simply not duplicated in navigation. */
+  var TIERS = ['primary','more','hidden'];
 
   /* Patterns that must NEVER appear in a route target — the Phase 2J rule set. */
   var FORBIDDEN_SRC = /^(https?:)?\/\/|^javascript:|dashboard\.html|seller-dashboard/i;

@@ -473,7 +473,13 @@
      Every row carries its canonical route id; nothing here invents a destination. */
   var MODULES = CONTRACT.primary().concat([{ head: 'More' }], CONTRACT.more())
     .map(function (r) { return r.head ? r : Object.assign({}, r, { label: r.name }); });
+  /* byId must cover EVERY contract route, not just the ones rendered as sidebar rows.
+     MODULES is the sidebar projection (primary + More). Building byId from it meant a
+     tier:'hidden' route — My MiniShop, which is reached from the header button rather than a
+     duplicated sidebar row — was absent, so go('minishop') found no module and crashed the
+     shell on `m.label`. Render from MODULES; resolve from the whole contract. */
   var byId = {};
+  CONTRACT.ROUTES.forEach(function (r) { if (r.id) byId[r.id] = Object.assign({}, r, { label: r.name }); });
   MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
   /* My MiniShop is ALSO a header destination. It is a normal contract route (tier: more),
      so it is already in byId — its src is resolved from the canonical claimed-shop record
@@ -633,14 +639,31 @@
       setTimeout(function () {
         var applied = false;
         try { applied = verify(f); } catch (_) { applied = false; }   /* not readable yet */
-        if (applied || tries >= MAX) {
-          if (!applied && tries >= MAX) {
+        if (!applied) {
+          if (tries >= MAX) {
             console.error('[merchant] deep-switch to "' + label + '" was never confirmed by the module ' +
                           'after ' + tries + ' attempts — the panel may be showing the wrong section.');
+            return;
           }
-          return;
+          return attempt();
         }
-        attempt();
+        /* CONFIRM IT STUCK. Observing the right state once is not enough on a booting module:
+           seller.js resets to 'overview' as part of its own start-up, so a switch could verify
+           during the gap and then be silently overwritten a moment later — which is exactly the
+           first-navigation case where Products briefly appeared and then showed the home page.
+           Re-check after a settle delay and resume retrying if it regressed. */
+        setTimeout(function () {
+          var still = false;
+          try { still = verify(f); } catch (_) { still = false; }
+          if (still || tries >= MAX) {
+            if (!still) {
+              console.error('[merchant] deep-switch to "' + label + '" was overwritten by the module ' +
+                            'after being applied, and could not be re-established.');
+            }
+            return;
+          }
+          attempt();
+        }, 700);
       }, 200);
     }
     attempt();
@@ -1852,10 +1875,47 @@
      synchronous user gesture (no popup block); re-resolves on branch switch. ── */
   (function () {
     var _mshop = { resolved: false, claimed: false, url: 'minishop-admin.html', handle: null };
-    function _uid () { try { var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); return (u && (u.uid || u.id)) || null; } catch (_) { return null; } }
+    /* OWNERSHIP AUTHORITY IS THE AUTHENTICATED UID.
+       This read localStorage.sokoniUser — a profile CACHE — as the identity for resolving shop
+       ownership. A cache can be stale, cleared, or written by a previous account; ownership must
+       come from Firebase Auth. localStorage is kept only as a last-resort hint so a warm start
+       is fast, never as the authority. */
+    function _uid () {
+      try {
+        var a = window.firebaseAuth && window.firebaseAuth.currentUser;
+        if (a && a.uid) return a.uid;
+      } catch (_) {}
+      try { var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); return (u && (u.uid || u.id)) || null; } catch (_) { return null; }
+    }
+
+    /* BOOTSTRAP ORDERING — do not decide "unclaimed" before Auth has restored.
+       _resolve ran ONCE, 700ms after load, and returned early if Auth or Firestore were not
+       ready yet. That early return left _mshop at its default {claimed:false}, so a seller who
+       had genuinely claimed a shop was shown the claim screen again on every reload — the
+       resolver had simply asked before there was anyone to ask about. Firebase Auth restoration
+       routinely takes longer than 700ms on a cold mobile start.
+
+       Wait for a real authenticated uid AND a Firestore handle before answering, bounded so it
+       can never hang. A timeout leaves _mshop.resolved false, which the paint code already
+       treats as "unknown" rather than asserting "unclaimed". */
+    function _awaitAuth (ms) {
+      return new Promise(function (res) {
+        var t0 = Date.now();
+        (function poll () {
+          var uid = _uid();
+          if (uid && window.firebaseDB) return res(uid);
+          if (Date.now() - t0 > (ms || 12000)) return res(null);
+          setTimeout(poll, 250);
+        })();
+      });
+    }
+
     async function _resolve () {
-      var uid = _uid();
-      if (!uid || !window.firebaseDB) return _mshop;
+      var uid = await _awaitAuth(12000);
+      if (!uid || !window.firebaseDB) {
+        console.warn('[merchant] MiniShop: no authenticated uid after wait — leaving claim state UNRESOLVED (not "unclaimed").');
+        return _mshop;
+      }
       try {
         var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         var activeId = (window.SokoniShell && SokoniShell.activeShopId) || null;

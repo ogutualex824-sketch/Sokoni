@@ -139,7 +139,12 @@ server.listen(0, async () => {
 
   /* POS panel: two routes share it, so the tab must be re-asserted the same way. */
   console.log('\n  shared POS panel — Inventory vs Cashier vs Audit');
-  for (const [id, tab] of [['inventory', 'inventory'], ['cashier', 'pos'], ['audit', 'audit'], ['inventory', 'inventory']]) {
+  /* Cashier and Inventory were MERGED into one POS route; audit and pos-settings are POS tabs
+     and no longer sidebar rows. The sidebar now offers a single POS entry, so this walks that
+     one route and leaves tab-to-tab switching to test-pos-tab-transitions.js, which drives the
+     POS controller directly. Asserting sidebar rows that deliberately no longer exist would be
+     testing the old architecture. */
+  for (const [id, tab] of [['pos', 'pos']]) {
     await page.evaluate((rid) => { const e = document.querySelector('.mnav-item[data-id="' + rid + '"]'); if (e) e.click(); }, id);
     await page.waitForTimeout(5000);
     const posOk = await page.evaluate((t) => {
@@ -156,7 +161,7 @@ server.listen(0, async () => {
     const title = await page.evaluate(() => (document.getElementById('mtitle') || {}).textContent);
     /* "Cashier", not "POS / Cashier": this route is the in-shop CHECKOUT surface, and the POS
        app's other surfaces are their own merchant routes. Kept in sync with the route contract. */
-    const want = { inventory: 'Inventory', cashier: 'Cashier', audit: 'Audit Log' }[id];
+    const want = { pos: 'POS' }[id];
     ck(id + ' title is correct', title === want, title);
   }
 
