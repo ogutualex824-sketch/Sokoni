@@ -55,7 +55,8 @@
     "test:merchant-visual-gate": "node scripts/test-merchant-visual-gate.js",
     "test:returns-states": "node scripts/test-returns-states.js",
     "test:seller-cached-user": "node scripts/test-seller-cached-user.js",
-    "bench:cashier": "node scripts/bench-cashier-load.js"
+    "bench:cashier": "node scripts/bench-cashier-load.js",
+    "test:pos-tabs": "node scripts/test-pos-tab-transitions.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

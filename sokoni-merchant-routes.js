@@ -60,22 +60,19 @@
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
 
-    { id:'inventory', name:'Inventory', icon:'📦', tier:'primary',
-      kind:'pos', tab:'inventory',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
-      mobile:true, desktop:true, activeKey:'inventory',
-      note:'Stock authority. Reads/writes canonical products.stock — see reference_pos_checkout_stock_authority.' },
-
-    { id:'cashier', name:'Cashier', icon:'💳', tier:'primary',
-      kind:'pos', tab:'pos', posChrome:'checkout',
+    { id:'pos', name:'POS', icon:'🧮', tier:'primary',
+      kind:'pos', tab:'pos',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
-      mobile:true, desktop:true, activeKey:'cashier',
-      note:'THE IN-SHOP CHECKOUT SURFACE — not the POS dashboard. Named "Cashier" because that ' +
-           'is what the merchant does here: serve a customer at the till. posChrome:"checkout" ' +
-           'tells the shell to suppress the POS app\'s own tab bar so this route is the checkout ' +
-           'ALONE; the wider POS surfaces stay reachable as their own routes (Inventory, Audit ' +
-           'Log, POS Settings). Its charge bar sits at the panel bottom — the shell MUST keep ' +
-           'the bottom nav clear of it.' },
+      mobile:true, desktop:true, activeKey:'pos',
+      note:'ONE in-shop surface. Cashier and Inventory used to be separate top-level routes that ' +
+           'both opened this same application at different tabs — two sidebar rows, one app, and ' +
+           'a shell that had to deep-switch into it. POS now owns the whole in-shop operation ' +
+           '(Checkout, Inventory, Audit Log) through the POS app\'s own tabs. It opens on ' +
+           'CHECKOUT, because that is what a merchant standing at the till needs first; Inventory ' +
+           'is a tab inside, not a second application. The POS tab bar is deliberately NOT ' +
+           'suppressed here — it is now the navigation for this surface. #cashier and #inventory ' +
+           'alias here so existing links keep working. Products stays separate: catalogue ' +
+           'management is a different job from in-shop stock operations.' },
 
     { id:'orders', name:'Orders', icon:'🧾', tier:'primary',
       kind:'native',
@@ -250,7 +247,7 @@
      by accident when a route definition moves. Every id here must be tier:'primary', and every
      tier:'primary' route must appear here — validate() enforces both directions. */
   var PRIMARY_ORDER = [
-    'dashboard', 'plan', 'products', 'inventory', 'cashier', 'orders', 'analytics', 'revenue',
+    'dashboard', 'plan', 'products', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
@@ -259,6 +256,8 @@
      module rather than hit the unknown-route failure. Aliases resolve BEFORE the
      unknown-id check, so they are back-compat — not a silent fallback to Dashboard. */
   var ALIASES = {
+    cashier:     'pos',       /* merged: Cashier was this same app at its checkout tab */
+    inventory:   'pos',       /* merged: Inventory is a TAB inside POS, not a second app */
     finance:     'revenue',      /* native Finance surface is now the Revenue destination */
     team:        'staff',
     promotions:  'flash-sale',
@@ -273,7 +272,7 @@
   var BOTTOM_NAV = [
     { id:'dashboard', icon:'🏠', label:'Home'   },
     { id:'orders',    icon:'🧾', label:'Orders' },
-    { id:'cashier',   icon:'💳', label:'Sell'   },
+    { id:'pos',       icon:'💳', label:'Sell'   },
     { id:'__more',    icon:'☰',  label:'More'   }
   ];
 

@@ -127,7 +127,12 @@ check('Plan is NOT in the bottom nav (must not crowd it)',
 console.log('\n9. Founder sidebar coverage');
 /* The founder's canonical sidebar, in order. This literal is the SPEC — the contract must
    match it, not the other way round. Marketing moved to the More tier; Disputes is primary. */
-const FOUNDER_SIDEBAR = ['dashboard','plan','products','inventory','cashier','orders','analytics',
+/* Cashier and Inventory MERGED into one POS route. They were two sidebar rows opening the same
+   application at different tabs, which forced the shell to deep-switch into it and made the
+   src hash load-bearing. POS now owns the in-shop operation (Checkout / Inventory / Audit Log)
+   through the POS app's own tabs, and opens on Checkout. Products stays separate: catalogue
+   management is a different job from in-shop stock operations. Both old ids alias to 'pos'. */
+const FOUNDER_SIDEBAR = ['dashboard','plan','products','pos','orders','analytics',
   'revenue','payments','deliveries','returns','receipts','staff','messages','disputes','settings'];
 
 FOUNDER_SIDEBAR.forEach(id => {
