@@ -61,13 +61,53 @@
   }
   async function _fs () { return await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'); }
 
+  /* ── WHICH SHOP DOCUMENT IS THIS SELLER'S? ──────────────────────────────────
+     Every read and write below addressed `shops/{uid}` — assuming the shop's document id IS
+     the seller's uid. It generally is not: a shop has its own id and names its owner in
+     `sellerUid`. Two consequences, both live:
+
+       · reads missed the real shop entirely, so the availability toggle showed defaults and
+         changes never reached the storefront; and
+       · setDoc(..., {merge:true}) CREATES a missing document, so every toggle wrote a phantom
+         `shops/{uid}` doc carrying acceptingOrders/online/delivery/pickup and no owner field
+         at all — junk in the canonical shops collection.
+
+     Ownership is one question, asked the same way everywhere: which shop has
+     sellerUid == this authenticated uid. The uid-keyed document is honoured only as a legacy
+     shape, and only when it actually names this uid as its owner. */
+  var _shopIdCache = { uid: null, id: null };
+  async function ownedShopId (uid) {
+    uid = uid || _uid();
+    if (!uid || !root.firebaseDB) return null;
+    if (_shopIdCache.uid === uid && _shopIdCache.id) return _shopIdCache.id;
+    var id = null;
+    try {
+      var m = await _fs();
+      var q = await m.getDocs(m.query(m.collection(root.firebaseDB, 'shops'),
+                                      m.where('sellerUid', '==', uid), m.limit(1)));
+      if (q.docs[0]) id = q.docs[0].id;
+      if (!id) {
+        var d = await m.getDoc(m.doc(root.firebaseDB, 'shops', String(uid)));
+        if (d.exists()) {
+          var x = d.data() || {};
+          if (x.sellerUid === uid || x.ownerUid === uid || x.ownerId === uid || x.uid === uid) id = uid;
+          else console.warn('[availability] shops/' + uid + ' does not name this uid as owner — ignoring.');
+        }
+      }
+    } catch (e) { console.warn('[availability] owned-shop lookup failed:', e && (e.code || e.message)); return null; }
+    _shopIdCache = { uid: uid, id: id };
+    return id;
+  }
+
   /* Read the canonical shop-state for a seller (defaults applied). */
   async function readShop (uid) {
     uid = uid || _uid();
     if (!uid || !root.firebaseDB) return normalizeShop(null);   /* headless / logged-out → open defaults */
     try {
+      var shopId = await ownedShopId(uid);
+      if (!shopId) return normalizeShop(null);                  /* owns no shop → open defaults */
       var m = await _fs();
-      var snap = await m.getDoc(m.doc(root.firebaseDB, 'shops', uid));
+      var snap = await m.getDoc(m.doc(root.firebaseDB, 'shops', String(shopId)));
       return normalizeShop(snap.exists() ? snap.data() : null);
     } catch (_) { return normalizeShop(null); }
   }
@@ -98,10 +138,14 @@
     var clean = {};
     SHOP_KEYS.forEach(function (k) { if (k in (patch || {})) clean[k] = !!patch[k]; });
     if (!Object.keys(clean).length) return clean;
+    /* Refuse rather than invent. Writing to shops/{uid} when this seller owns no shop is what
+       created phantom documents; a toggle with nothing to toggle is an error, not a new shop. */
+    var shopId = await ownedShopId(uid);
+    if (!shopId) throw new Error('No shop found for your account — availability has nothing to apply to.');
     var m = await _fs();
     clean.updatedAt = m.serverTimestamp();
-    await m.setDoc(m.doc(root.firebaseDB, 'shops', uid), clean, { merge: true });
-    try { if (root.SokoniSync) root.SokoniSync.shopChanged({ uid: uid, patch: clean }); } catch (_) {}
+    await m.setDoc(m.doc(root.firebaseDB, 'shops', String(shopId)), clean, { merge: true });
+    try { if (root.SokoniSync) root.SokoniSync.shopChanged({ uid: uid, shopId: shopId, patch: clean }); } catch (_) {}
     return clean;
   }
 
@@ -126,6 +170,9 @@
     counts: counts,
     readShop: readShop,
     readProducts: readProducts,
+    /* Exposed so every surface that needs "which shop is mine" asks the same question rather
+       than deriving its own answer — that divergence is what this module was suffering from. */
+    ownedShopId: ownedShopId,
     setShop: setShop,
     setProductAvailability: setProductAvailability
   };

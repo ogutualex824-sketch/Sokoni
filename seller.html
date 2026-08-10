@@ -294,15 +294,46 @@
        Neither collection exists yet for any merchant, so there is no published storefront
        to open. Until one is published, send the merchant to the in-dashboard store tab,
        which is real and already built, instead of a builder that cannot see their shop. */
-    function goToMyStore(){
+    /* VISIT STORE MUST OPEN THE STOREFRONT THIS AUTHENTICATED SELLER OWNS.
+       This read the handle out of localStorage.sokoniUser — a profile CACHE that survives an
+       account switch. On a shared device it sent the seller straight into the PREVIOUS seller's
+       storefront, and a stale handle kept working long after it stopped being theirs. Ownership
+       is never a localStorage fact.
+
+       Two canonical sources, in order, and nothing else:
+         1. In the merchant shell, the shell has already resolved ownership from
+            shops.sellerUid == Auth uid — read its answer rather than resolving again.
+         2. Standalone, ask getMyMinishop, which resolves server-side from the same field and
+            returns nulls when this uid owns nothing.
+       If neither yields a handle there is no storefront to visit, and the honest destination is
+       the setup surface — never someone else's shop. */
+    async function _ownedStorefrontUrl () {
+      /* 1. The shell's resolved state (same document tree, so this is a plain property read). */
       try {
-        const user = JSON.parse(localStorage.getItem("sokoniUser") || "null");
-        const handle = user && (user.shopHandle || user.merchantSlug || user.handle);
-        if (handle) { window.location.href = "/shop/" + encodeURIComponent(handle); return; }
-      } catch(e) { /* fall through to the dashboard tab */ }
-      if (typeof sdSwitchTab === 'function') { sdSwitchTab('store'); return; }
-      if (typeof showDashPage === 'function') { showDashPage('store'); return; }
-      window.location.href = "seller.html#store";
+        var st = window.parent && window.parent !== window && window.parent.__miniShopState;
+        if (st && st.mode === 'OWNER' && st.handle) return '/shop/' + encodeURIComponent(st.handle);
+        if (st && st.mode === 'OWNER') return null;      /* owner, no handle yet — go to setup */
+      } catch (_) { /* cross-origin: not our shell, fall through */ }
+      /* 2. Server-side, uid-scoped. */
+      try {
+        if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+        if (typeof window.sokoniCallable === 'function') {
+          var res = await window.sokoniCallable('getMyMinishop')({});
+          var d = res && res.data;
+          if (d && d.handle) return '/shop/' + encodeURIComponent(d.handle);
+        }
+      } catch (e) { console.warn('[seller] getMyMinishop failed:', e && (e.code || e.message)); }
+      return null;
+    }
+
+    function goToMyStore(){
+      _ownedStorefrontUrl().then(function (url) {
+        if (url) { window.location.href = url; return; }
+        /* No owned storefront: the store setup surface, not a guess at someone's handle. */
+        if (typeof sdSwitchTab === 'function') { sdSwitchTab('store'); return; }
+        if (typeof showDashPage === 'function') { showDashPage('store'); return; }
+        window.location.href = "seller.html#store";
+      });
     }
     window.goToMyStore = goToMyStore;
   </script>
