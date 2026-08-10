@@ -1872,6 +1872,35 @@
         if (!data) data = await _q1('uid');
         /* Handle may be stored under any of these canonical fields. */
         var handle = data && (data.minishopHandle || data.handle || data.slug || data.shopHandle || data.merchantSlug || data.username);
+
+        /* ── WHERE THE CLAIM ACTUALLY LIVES ──────────────────────────────────────
+           claimMinishopHandle (functions/minishop.js) persists a claim to TWO places:
+               shopHandles/{handle}      { shopId, uid, handle }
+               minishopConfig/{shopId}   { handle }
+           and to NEITHER field on the shops document. Reading only `shops` therefore found no
+           handle after a reload, concluded the shop was unclaimed, and sent the seller back to
+           the claim screen every single time — they claimed, edited, added products, reloaded,
+           and were asked to claim the same shop again.
+
+           So resolve from the collections the claim actually writes. Ownership stays canonical:
+           shopHandles carries the owner uid, and the config is keyed by the shopId that
+           claimMinishopHandle resolved from shops.sellerUid == uid. Nothing here trusts
+           localStorage or a UI flag. */
+        if (!handle) {
+          var shopId = (data && (data.shopId || data.id)) || activeId || uid;
+          var cfg = await _get('minishopConfig', shopId);
+          if (cfg && cfg.handle) handle = cfg.handle;
+        }
+        if (!handle) {
+          /* Last resort: the handle registry itself, keyed by owner. Authoritative for "does
+             this seller own a claimed handle at all", independent of shop-doc shape drift. */
+          try {
+            var hq = await m.getDocs(m.query(
+              m.collection(window.firebaseDB, 'shopHandles'),
+              m.where('uid', '==', uid), m.limit(1)));
+            if (hq.docs[0]) handle = hq.docs[0].data().handle || hq.docs[0].id;
+          } catch (_) {}
+        }
         _mshop = handle
           ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
           : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };
