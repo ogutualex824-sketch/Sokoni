@@ -212,8 +212,22 @@ exports.saveShopProfile = onCall(
 
     /* CREATE — first-time setup. Exactly one shop per seller: the ownership query above found
        none, and the transaction re-checks before committing so two concurrent first saves
-       cannot mint two shops. */
-    const ref = db.collection('shops').doc();
+       cannot mint two shops.
+
+       THE DOCUMENT ID IS THE OWNER'S UID, AND THAT IS NOT THE BUG WE FIXED.
+       This first used an auto-generated id, and the shop then vanished from everything
+       downstream: store.html, product.js and the seller analytics reader all fetch
+       `shops/{uid}` directly, and firestore.rules only ever authorises a client to write
+       `shops/{request.auth.uid}`. A newly created KassShop existed and was owned correctly, yet
+       no buyer surface could find it.
+
+       The rule that matters is "ownership is never INFERRED from the document id" — every
+       resolver still asks `where sellerUid == uid` and still requires a doc reached by id to
+       name the caller as owner. Choosing the uid AS the id does not weaken that; it just stops
+       the canonical shop being invisible to every consumer that already keys on it. Shops whose
+       id is not a uid remain fully supported — they are resolved by sellerUid like everything
+       else, which is exactly what the suite asserts. */
+    const ref = db.collection('shops').doc(uid);
     await db.runTransaction(async (tx) => {
       const dupe = await tx.get(db.collection('shops').where('sellerUid', '==', uid).limit(1));
       if (!dupe.empty) {

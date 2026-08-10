@@ -16,9 +16,12 @@
  * getShopProfile call that shares no state with the save. If the value comes back, it came
  * back out of Firestore.
  *
- * Ownership is asserted to be `shops/{shopId}.sellerUid === uid` and NEVER `shopId === uid` —
- * every shop here is created with a generated id precisely so that a uid-keyed implementation
- * would fail rather than accidentally pass.
+ * Ownership is asserted to be `shops/{shopId}.sellerUid === uid` and NEVER inferred from the
+ * document id: section 3b creates a shop whose id is NOT a uid and requires it to resolve,
+ * update in place, and take availability — which a shopId === uid implementation cannot do.
+
+
+
  */
 
 const path = require('path');
@@ -84,7 +87,14 @@ async function wipe () {
     ok('reports created:true', r.value && r.value.created === true, r.value);
     shopId = r.value && r.value.shopId;
     ok('returns a shopId', !!shopId, shopId);
-    ok('the shop id is NOT the uid', shopId !== A, shopId);
+    /* A new shop is keyed by the owner's uid, because store.html, product.js and the seller
+       analytics reader all fetch shops/{uid} directly and firestore.rules only authorises a
+       client to write shops/{auth.uid}. An auto-generated id left the shop owned correctly and
+       invisible to every consumer. The rule being protected is that ownership is never INFERRED
+       from the id — proven in section 3b below, where a shop whose id is NOT a uid still
+       resolves by sellerUid. */
+    ok('a new shop is reachable at shops/{uid} by every consumer that keys on it',
+       shopId === A, shopId);
 
     const doc = (await db.collection('shops').doc(shopId).get()).data();
     ok('shops/{shopId}.sellerUid is the authenticated uid', doc && doc.sellerUid === A, doc && doc.sellerUid);
@@ -104,6 +114,32 @@ async function wipe () {
     ok('availability defaults to open', r.value && r.value.availability.acceptingOrders === true, r.value.availability);
   }
 
+  /* ── 3b. THE RULE ITSELF: a shop whose id is NOT a uid still resolves by sellerUid ── */
+  group('3b. Ownership is resolved by sellerUid, never inferred from the document id');
+  {
+    /* Existing production shops have their own generated ids. If ownership were inferred from
+       the document id — the original bug — these sellers would be told they own nothing. */
+    const D = 'seller-D-uid';
+    await db.collection('shops').doc('legacyShopWithOwnId').set({ sellerUid: D, name: 'Legacy Shop' });
+
+    const r = await caught(call(kasshop.getShopProfile, D, {}));
+    ok('a non-uid-keyed shop is resolved', r.value && r.value.exists === true, r.value);
+    ok('its real document id is returned', r.value && r.value.shopId === 'legacyShopWithOwnId', r.value && r.value.shopId);
+    ok('the id is deliberately NOT the uid', r.value && r.value.shopId !== D, r.value && r.value.shopId);
+
+    /* Editing it must update THAT document, not create a second one at shops/{uid}. */
+    const save = await caught(call(kasshop.saveShopProfile, D, { profile: { name: 'Legacy Shop Renamed' } }));
+    ok('editing updates the existing document', save.value && save.value.shopId === 'legacyShopWithOwnId',
+       save.value && save.value.shopId);
+    ok('no second shop was created at shops/{uid}', !(await db.collection('shops').doc(D).get()).exists);
+    ok('exactly one shop belongs to this seller',
+       (await db.collection('shops').where('sellerUid', '==', D).get()).size === 1);
+
+    const av = await caught(call(kasshop.setShopAvailability, D, { availability: { online: false } }));
+    ok('availability applies to the non-uid-keyed shop', av.value && av.value.shopId === 'legacyShopWithOwnId',
+       av.value && av.value.shopId);
+  }
+
   /* ── 4. Editing updates the SAME document ── */
   group('4. Editing updates the same shop, never a second one');
   {
@@ -111,7 +147,10 @@ async function wipe () {
     ok('save succeeds', r.value && r.value.success === true, r.err && r.err.message);
     ok('reports created:false', r.value && r.value.created === false, r.value);
     ok('same shopId', r.value && r.value.shopId === shopId, r.value && r.value.shopId);
-    ok('still exactly one shop', (await db.collection('shops').get()).size === 1);
+    /* Scoped to THIS seller, not a global count — the meaning is "editing did not mint a second
+       shop for A", and a global total silently depends on what other sections created. */
+    ok('still exactly one shop for this seller',
+       (await db.collection('shops').where('sellerUid', '==', A).get()).size === 1);
 
     const back = await call(kasshop.getShopProfile, A, {});
     ok('the new name reads back', back.profile.name === 'KassShop Nairobi', back.profile.name);
@@ -181,7 +220,11 @@ async function wipe () {
     /* B saving creates B's OWN shop — it must never fold into A's. */
     const save = await caught(call(kasshop.saveShopProfile, B, { profile: { name: 'B Shop' } }));
     ok('B\'s save creates a separate shop', save.value && save.value.shopId !== shopId, save.value && save.value.shopId);
-    ok('there are now two distinct shops', (await db.collection('shops').get()).size === 2);
+    ok('A and B own one shop each, and they are different',
+       (await db.collection('shops').where('sellerUid', '==', A).get()).size === 1
+       && (await db.collection('shops').where('sellerUid', '==', B).get()).size === 1
+       && save.value.shopId !== shopId,
+       'A=' + shopId + ' B=' + (save.value && save.value.shopId));
     const aDoc = (await db.collection('shops').doc(shopId).get()).data();
     ok('A\'s shop name was not overwritten', aDoc.name === 'KassShop Nairobi', aDoc.name);
   }

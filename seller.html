@@ -2616,13 +2616,18 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             swSetState('saved');
             var okBtn=document.getElementById('swSaveBtn');
             if(okBtn){okBtn.textContent='✅ Shop Saved!';okBtn.style.background='linear-gradient(135deg,#00c878,#00a860)';}
+            /* The shop now exists whether or not it did a moment ago, so the surface becomes
+               management: the action returns to "Save Changes" rather than sitting on a
+               celebration, and the last step becomes a Preview instead of a launch step. */
+            setTimeout(function(){ try{ var b=document.getElementById('swSaveBtn'); if(b)b.style.background=''; swSetMode(true); }catch(_){ } },2600);
             var okMsg=document.getElementById('swSaveMsg');
             if(okMsg){okMsg.innerHTML='🎉 <strong style="color:#71ff00;">Saved to your KassShop.</strong> Buyers see these details on your storefront.';okMsg.style.color='#71ff00';}
           }catch(e){
             console.error('[shop] saveShopProfile failed:', e&&(e.code||e.message));
             swSetState('error',(e&&(e.message||e.code))||'save failed');
             var badBtn=document.getElementById('swSaveBtn');
-            if(badBtn){badBtn.textContent='🚀 Launch My Shop';badBtn.style.background='';}
+            if(badBtn) badBtn.style.background='';
+            swSetMode(!!window.__kasShopId);   /* restore the label the state actually warrants */
             var badMsg=document.getElementById('swSaveMsg');
             if(badMsg){badMsg.textContent='⚠️ Your shop was NOT saved — '+((e&&(e.message||e.code))||'please try again.');badMsg.style.color='#ff6b6b';}
           }
@@ -2764,10 +2769,11 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           var res=await window.sokoniCallable('getShopProfile')({});
           var d=res&&res.data;
           if(!d) throw new Error('empty response');
-          if(!d.exists){ swSetState('empty'); return; }
+          if(!d.exists){ swSetState('empty'); swSetMode(false); return; }
           window.__kasShopId=d.shopId;
           window.__kasShopHandle=d.handle||null;
           swApply(d.profile||{}, d.availability||{});
+          swSetMode(true);
           swSetState('loaded');
         }catch(e){
           /* An error is NOT an empty shop. Say so, and leave whatever the cache painted alone
@@ -2777,6 +2783,40 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         }
       }
       window.swLoadCanonical=swLoadCanonical;
+
+      /* SHOP DETAILS IS MANAGEMENT ONCE THE SHOP EXISTS, NOT A LAUNCH FUNNEL.
+         The whole surface was written as a create-and-go-live wizard: the primary action said
+         "🚀 Launch My Shop", and the last step was headed "Preview & Go Live — this is exactly
+         how your shop appears to buyers". For a seller who already HAS a shop and came here to
+         change their details, that is the buyer's view presented as the destination, and an
+         action that implies their live shop is not live yet.
+
+         Same panes, same fields, same canonical save — only the framing follows the state:
+           no shop  → creating it, "Launch My Shop", the last step is the launch step
+           has shop → managing it, "Save Changes", the last step is a Preview of the buyer view
+
+         Anything richer (Products, Orders, Analytics, Followers, Reviews in one console) is the
+         KassShop Management phase and is deliberately NOT started here. */
+      function swSetMode(hasShop){
+        try{
+          var btn=document.getElementById('swSaveBtn');
+          if(btn) btn.textContent = hasShop ? '💾 Save Changes' : '🚀 Launch My Shop';
+          var pane=document.getElementById('sw-pane-5');
+          if(pane){
+            var t=pane.querySelector('.sw-pane-title');
+            var s=pane.querySelector('.sw-pane-sub');
+            if(t) t.textContent = hasShop ? '👁️ Preview Store' : '🚀 Preview & Go Live';
+            if(s) s.innerHTML = hasShop
+              ? 'This is the buyer-facing view of your KassShop. Edit any step above, then '
+                + '<strong style="color:#71ff00;">Save Changes</strong> — your storefront updates with it.'
+              : 'This is exactly how your shop appears to buyers on SOKONI. Review everything, then hit '
+                + '<strong style="color:#71ff00;">Launch My Shop</strong> to go live!';
+          }
+          var visit=document.getElementById('visitMiniStoreLink');
+          if(visit) visit.style.display = hasShop ? 'inline-block' : 'none';
+        }catch(_){ }
+      }
+      window.swSetMode=swSetMode;
 
       /* ONE FIELD SETTER FOR EVERY HYDRATION PATH.
          A <select> silently discards a value that matches no option. swCity's options are
