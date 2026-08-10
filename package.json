@@ -54,7 +54,8 @@
     "test:rules:returns": "firebase emulators:exec --only firestore --project sokoni-returns-rules-test \"node scripts/test-returns-rules.js\"",
     "test:merchant-visual-gate": "node scripts/test-merchant-visual-gate.js",
     "test:returns-states": "node scripts/test-returns-states.js",
-    "test:seller-cached-user": "node scripts/test-seller-cached-user.js"
+    "test:seller-cached-user": "node scripts/test-seller-cached-user.js",
+    "bench:cashier": "node scripts/bench-cashier-load.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

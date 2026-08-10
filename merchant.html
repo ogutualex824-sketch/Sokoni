@@ -1256,6 +1256,23 @@
     if (_ordFeedStarted) return;
     _ordFeedStarted = true;
     try { sellerPanel('overview'); } catch (_) {}
+
+    /* ── POS PRE-WARM: measured, effective, and DELIBERATELY NOT SHIPPED YET ──────
+       Cashier takes 6.1–8.3s to a usable checkout (bench: scripts/bench-cashier-load.js).
+       The breakdown shows checkout only becomes usable once the hosted document COMPLETES,
+       and completing means fetching ~132 scripts — the merchant watches the entire POS bundle
+       download while a customer waits at the till.
+
+       Pre-creating the panel here while the shell is idle cut that to a 3.4s median, a 59%
+       reduction. It was reverted anyway, because it REGRESSED tab switching: the panel is
+       currently created with the first tab encoded in the src hash (pos.html#inventory), and
+       pre-creating it without that hash left Inventory and Audit Log relying solely on the
+       postMessage switch, which then failed to activate their tabs (deep-switch 20/1 -> 18/3).
+
+       A 59% speed win that breaks Inventory is a bad trade. The real fix is to make
+       SPos.ui.switchTab reliably activate a tab post-boot so the src hash stops being load-
+       bearing — then warming becomes safe. Tracked as the next Cashier performance task; the
+       bench stays so the before/after is reproducible. */
   }
   var _ordSearchT = null;
   function _ordFmt (n) { return Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
