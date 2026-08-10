@@ -263,19 +263,11 @@ exports.claimMinishopHandle = onCall(
 
     const db = _db();
 
-    /* ── Check for existing claim ── */
-    const existingSnap = await db.collection('shopHandles').doc(handle).get();
-    if (existingSnap.exists) {
-      const existing = existingSnap.data();
-      if (existing.uid !== uid) {
-        throw new HttpsError('already-exists', 'This handle is already taken.');
-      }
-      // Same uid — idempotent success
-      const url = SHOP_URL + handle;
-      return { success: true, handle, url };
-    }
-
-    /* ── Find the seller's shop (single-field query) ── */
+    /* ── Find the seller's shop ─────────────────────────────────────────────────
+       Claiming a handle NEVER creates a shop. `shops/{shopId}.sellerUid == uid` is the
+       ownership authority; if no shop names this uid, the claim is refused. A claim that
+       minted a second shop would give the seller two identities and split their products,
+       orders and settlement across both. */
     const shopsSnap = await db
       .collection('shops')
       .where('sellerUid', '==', uid)
@@ -286,31 +278,47 @@ exports.claimMinishopHandle = onCall(
       throw new HttpsError('not-found', 'No shop found for your account. Please register as a seller first.');
     }
 
-    const shopId    = shopsSnap.docs[0].id;
-    const batch     = db.batch();
-    const now       = FieldValue.serverTimestamp();
+    const shopId = shopsSnap.docs[0].id;
 
-    /* ── Write handle doc ── */
-    batch.set(db.collection('shopHandles').doc(handle), {
-      shopId,
-      uid,
-      handle,
-      createdAt: now,
+    /* ── Reserve the handle ATOMICALLY ──────────────────────────────────────────
+       This read shopHandles/{handle}, then committed a batch. Between those two calls
+       another seller could pass the same check, and `batch.set` overwrites — so two
+       concurrent claims both reported success and the first seller silently lost the
+       handle their storefront links already pointed at. A transaction makes the
+       read-then-write one operation: the loser retries, sees the doc, and is told the
+       handle is taken.
+
+       The same-uid path re-asserts minishopConfig rather than returning early. A claim
+       whose handle doc landed but whose config write did not would otherwise report
+       "already yours" forever while the storefront resolver found no handle. */
+    const now = FieldValue.serverTimestamp();
+    const handleRef = db.collection('shopHandles').doc(handle);
+    const configRef = db.collection('minishopConfig').doc(shopId);
+
+    await db.runTransaction(async (tx) => {
+      const existingSnap = await tx.get(handleRef);
+
+      if (existingSnap.exists) {
+        const existing = existingSnap.data() || {};
+        if (existing.uid !== uid) {
+          throw new HttpsError('already-exists', 'This handle is already taken.');
+        }
+        if (existing.shopId && existing.shopId !== shopId) {
+          /* The handle belongs to this seller but points at a different shop doc — that is
+             an ownership inconsistency, not something to silently repoint. */
+          throw new HttpsError('failed-precondition', 'This handle is linked to a different shop on your account.');
+        }
+      } else {
+        tx.set(handleRef, { shopId, uid, handle, createdAt: now });
+      }
+
+      tx.set(configRef, { handle, shopId, ownerUid: uid, updatedAt: now }, { merge: true });
     });
-
-    /* ── Update config with handle ── */
-    batch.set(
-      db.collection('minishopConfig').doc(shopId),
-      { handle, updatedAt: now },
-      { merge: true }
-    );
-
-    await batch.commit();
 
     logger.info('MiniShop handle claimed', { shopId, handle });
 
     const url = SHOP_URL + handle;
-    return { success: true, handle, url };
+    return { success: true, handle, shopId, ownerUid: uid, url };
   }
 );
 

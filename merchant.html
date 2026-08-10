@@ -1888,48 +1888,138 @@
       try { var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); return (u && (u.uid || u.id)) || null; } catch (_) { return null; }
     }
 
-    /* BOOTSTRAP ORDERING — do not decide "unclaimed" before Auth has restored.
+    /* BOOTSTRAP ORDERING — Auth event, not a timer.
        _resolve ran ONCE, 700ms after load, and returned early if Auth or Firestore were not
-       ready yet. That early return left _mshop at its default {claimed:false}, so a seller who
-       had genuinely claimed a shop was shown the claim screen again on every reload — the
-       resolver had simply asked before there was anyone to ask about. Firebase Auth restoration
-       routinely takes longer than 700ms on a cold mobile start.
+       ready. That early return left _mshop at {claimed:false}, so a seller who HAD claimed was
+       shown the claim screen again on every reload — the resolver asked before there was anyone
+       to ask about, and never asked again. Firebase Auth restoration routinely takes longer than
+       700ms on a cold mobile start.
 
-       Wait for a real authenticated uid AND a Firestore handle before answering, bounded so it
-       can never hang. A timeout leaves _mshop.resolved false, which the paint code already
-       treats as "unknown" rather than asserting "unclaimed". */
+       There are THREE states, and LOADING must never render as UNCLAIMED:
+         LOADING    Auth has not answered yet            -> neutral label, no Claim button
+         CLAIMED    shops/{shopId}.sellerUid === my uid  -> owner mode
+         UNCLAIMED  Auth answered, no owned shop found   -> Claim
+       A missing uid is LOADING or signed-out; it is never evidence that a shop is unclaimed. */
     function _awaitAuth (ms) {
+      return new Promise(function (res) {
+        var settled = false;
+        var off = null;
+        var done = function (v) {
+          if (settled) return;
+          settled = true;
+          try { off && off(); } catch (_) {}
+          res(v);
+        };
+        /* SUBSCRIBE WHEN AUTH APPEARS, NOT WHEN THIS FUNCTION IS CALLED.
+           firebase.js publishes window.firebaseAuth from an ES module, so it is almost never
+           present at the instant this inline block runs. Reading it once meant the event branch
+           was skipped in production and everything rode on the 250ms poll below — which is why
+           resolution was intermittent: whether the shop resolved depended on where Auth
+           restoration landed relative to a fixed 15s poll bound. Watch for the object, then
+           attach to the event that actually knows. */
+        var attached = false;
+        var attach = function () {
+          if (settled || attached) return;
+          var a;
+          try { a = window.firebaseAuth; } catch (_) { return; }
+          if (!a) return;
+          if (a.currentUser && a.currentUser.uid) return done(a.currentUser.uid);
+          if (typeof a.onAuthStateChanged !== 'function') return;
+          attached = true;
+          /* A NULL user is not an answer. onAuthStateChanged fires immediately on subscribe —
+             with null — while persisted-session restoration is still in flight, and fires AGAIN
+             with the real user a second later. Unsubscribing on that first null made a cold
+             reload conclude "no uid", which the resolver treats as LOADING, so the shop never
+             resolved at all. Stay subscribed until a uid arrives, or until the bound expires. */
+          try {
+            off = a.onAuthStateChanged(function (u) { if (u && u.uid) done(u.uid); });
+            if (settled) { try { off && off(); } catch (_) {} }   /* fired synchronously */
+          } catch (_) { attached = false; }
+        };
+
+        /* Watch for Auth to appear, then let the EVENT decide. The uid poll stays only as a
+           backstop for a shell that never publishes firebaseAuth at all, and the bound stops a
+           missing Auth from hanging the shell forever. */
+        var t0 = Date.now();
+        (function poll () {
+          if (settled) return;
+          attach();
+          if (settled) return;
+          var uid = _uid();
+          if (uid && window.firebaseDB) return done(uid);
+          if (Date.now() - t0 > (ms || 15000)) return done(null);
+          setTimeout(poll, 120);
+        })();
+      });
+    }
+
+    /* Auth and Firestore are published independently, and Auth often wins. Taking the event
+       path and then testing window.firebaseDB in the same tick failed whenever the session
+       restored before firebase.js had published the database — and because nothing re-ran the
+       resolver, that latched LOADING for the rest of the session. Wait for the DB too. */
+    function _awaitDb (ms) {
       return new Promise(function (res) {
         var t0 = Date.now();
         (function poll () {
-          var uid = _uid();
-          if (uid && window.firebaseDB) return res(uid);
-          if (Date.now() - t0 > (ms || 12000)) return res(null);
-          setTimeout(poll, 250);
+          if (window.firebaseDB) return res(true);
+          if (Date.now() - t0 > (ms || 8000)) return res(false);
+          setTimeout(poll, 120);
         })();
       });
     }
 
     async function _resolve () {
-      var uid = await _awaitAuth(12000);
+      var uid = await _awaitAuth(15000);
+      if (uid) await _awaitDb(8000);
       if (!uid || !window.firebaseDB) {
-        console.warn('[merchant] MiniShop: no authenticated uid after wait — leaving claim state UNRESOLVED (not "unclaimed").');
-        return _mshop;
+        console.warn('[merchant] MiniShop: Auth did not resolve a uid — state stays LOADING, NOT "unclaimed".');
+        return _mshop;   /* resolved:false — _paint renders the neutral label, never Claim */
       }
       try {
         var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         var activeId = (window.SokoniShell && SokoniShell.activeShopId) || null;
         var data = null;
-        var _get = async function (col, id) { try { var d = await m.getDoc(m.doc(window.firebaseDB, col, String(id))); return d.exists() ? d.data() : null; } catch (_) { return null; } };
-        var _q1 = async function (field) { try { var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'), m.where(field, '==', uid), m.limit(1))); return q.docs[0] ? q.docs[0].data() : null; } catch (_) { return null; } };
+        /* A FAILED READ IS NOT AN EMPTY RESULT.
+           Every lookup below swallowed its error and returned null, so a permission-denied
+           query, an offline client or a missing index looked exactly like "this seller owns no
+           shop" — and the UI rendered that as Claim Shop. That is the reported bug in its most
+           damaging form: an error presented to a seller as an invitation to re-claim a shop they
+           already own. Count the failures; if nothing was found AND something failed, the answer
+           is unknown, and unknown stays LOADING. */
+        var readErrors = 0;
+        var _fail = function (where, e) {
+          readErrors++;
+          console.warn('[merchant] MiniShop: ' + where + ' read failed — ' + ((e && (e.code || e.message)) || e));
+        };
+        var _get = async function (col, id) { try { var d = await m.getDoc(m.doc(window.firebaseDB, col, String(id))); return d.exists() ? d.data() : null; } catch (e) { _fail(col + '/' + id, e); return null; } };
         /* Canonical claimed-shop resolution — try the direct docs first (shops/{sellerUid} is the
            canonical id), then the active branch's own shop doc, then ownership queries. KASS is
            claimed, so one of these must carry the handle — never send a claimed shop to Claim. */
-        data = await _get('shops', uid);
-        if (!data && activeId) data = await _get('shops', activeId);
-        if (!data) data = await _q1('ownerId');
-        if (!data) data = await _q1('sellerUid');
-        if (!data) data = await _q1('uid');
+        /* OWNERSHIP IS shops/{shopId}.sellerUid — ask that FIRST and by name.
+           The old order asked shops/{uid} and ownerId before sellerUid, so a shop whose id is
+           not the uid (the normal case) was found only by luck of field-name drift. Ownership is
+           one question: which shop does this authenticated uid own? */
+        var ownedId = null;
+        var _q1Doc = async function (field) {
+          try {
+            var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'),
+                                            m.where(field, '==', uid), m.limit(1)));
+            if (!q.docs[0]) return null;
+            ownedId = q.docs[0].id;
+            return q.docs[0].data();
+          } catch (e) { _fail('shops[' + field + ']', e); return null; }
+        };
+        data = await _q1Doc('sellerUid');                       /* canonical */
+        if (!data) data = await _q1Doc('ownerUid');
+        if (!data) data = await _q1Doc('ownerId');              /* legacy shapes */
+        if (!data) data = await _q1Doc('uid');
+        if (!data) { data = await _get('shops', uid); if (data) ownedId = uid; }
+        if (!data && activeId) { data = await _get('shops', activeId); if (data) ownedId = activeId; }
+        /* Ownership must be the AUTHENTICATED uid, so a doc reached by id still has to prove it. */
+        if (data && ownedId && !(data.sellerUid === uid || data.ownerUid === uid || data.ownerId === uid || data.uid === uid)) {
+          console.warn('[merchant] MiniShop: shops/' + ownedId + ' does not name this uid as owner — not treating it as owned.');
+          data = null; ownedId = null;
+        }
         /* Handle may be stored under any of these canonical fields. */
         var handle = data && (data.minishopHandle || data.handle || data.slug || data.shopHandle || data.merchantSlug || data.username);
 
@@ -1947,7 +2037,7 @@
            claimMinishopHandle resolved from shops.sellerUid == uid. Nothing here trusts
            localStorage or a UI flag. */
         if (!handle) {
-          var shopId = (data && (data.shopId || data.id)) || activeId || uid;
+          var shopId = ownedId || (data && (data.shopId || data.id)) || activeId || uid;
           var cfg = await _get('minishopConfig', shopId);
           if (cfg && cfg.handle) handle = cfg.handle;
         }
@@ -1959,14 +2049,52 @@
               m.collection(window.firebaseDB, 'shopHandles'),
               m.where('uid', '==', uid), m.limit(1)));
             if (hq.docs[0]) handle = hq.docs[0].data().handle || hq.docs[0].id;
-          } catch (_) {}
+          } catch (e) { _fail('shopHandles[uid]', e); }
         }
-        _mshop = handle
-          ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
-          : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };
-      } catch (_) {}
+        /* UNKNOWN IS NOT "UNCLAIMED".
+           Nothing was found, but reads failed — so the honest answer is that ownership could not
+           be determined, and the seller must not be shown a Claim button for a shop that may
+           well be theirs. Stay LOADING and let the next resolve (branch switch, revisit) ask
+           again. A genuinely shopless seller reaches this point with readErrors === 0. */
+        if (!data && readErrors > 0) {
+          console.warn('[merchant] MiniShop: ' + readErrors + ' ownership read(s) failed and nothing was'
+            + ' found — ownership is UNKNOWN, staying LOADING rather than claiming "unclaimed".');
+          return _mshop;
+        }
+        /* OWNERSHIP and HANDLE are different questions.
+           Owning a shop makes this seller the OWNER; the handle only decides whether there is a
+           public storefront to open. Treating "no handle" as "not the owner" is what sent a
+           claimed seller back to the claim screen. A shop owned but not yet handled opens the
+           storefront setup, still in OWNER mode. */
+        var owned = !!(data && ownedId);
+        _mshop = {
+          resolved: true,
+          owner:    owned,
+          shopId:   ownedId || null,
+          ownerUid: owned ? uid : null,
+          claimed:  !!handle,
+          handle:   handle || null,
+          url:      handle ? '/shop/' + encodeURIComponent(handle) : 'minishop-admin.html',
+          mode:     owned ? 'OWNER' : 'UNCLAIMED'
+        };
+      } catch (e) {
+        console.error('[merchant] MiniShop resolve failed — state stays LOADING, not "unclaimed":', e && e.message);
+        return _mshop;
+      }
       window.__miniShopUrl = _mshop.url;                 /* the minishop page module reads this */
       window.__miniShopClaimed = _mshop.claimed;
+      /* Observable resolved identity. Item 9 of the claim directive: the seller (and the
+         regression test) must be able to see WHICH shop resolved and WHO owns it, rather than
+         inferring it from a button. Not a source of truth — a readout of one. */
+      window.__miniShopState = {
+        mode: _mshop.mode, shopId: _mshop.shopId, ownerUid: _mshop.ownerUid,
+        handle: _mshop.handle, claimed: _mshop.claimed,
+        /* The uid the ownership question was actually ASKED with. When a seller reports "it says
+           unclaimed", the first thing worth knowing is whether the resolver was asking about
+           them at all — a stale cached uid answers "no shop" perfectly correctly. */
+        authUid: uid, resolvedAt: Date.now()
+      };
+      console.info('[merchant] MiniShop resolved:', JSON.stringify(window.__miniShopState));
       return _mshop;
     }
     function _paint () {
@@ -1974,10 +2102,47 @@
       if (!btn || !st) return;
       /* Honest state: never assert "Shop Live" until the canonical claimed-shop resolution
          succeeds. Before that, a neutral label; after, the true claimed/unclaimed state. */
+      /* LOADING must never render Claim — that is the whole bug. Until Auth and Firestore have
+         answered, the label stays neutral. Only a resolved, genuinely unowned shop offers Claim. */
       if (!_mshop.resolved) { btn.classList.remove('notclaimed'); st.textContent = 'My storefront'; return; }
       if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
+      else if (_mshop.owner) { btn.classList.remove('notclaimed'); st.textContent = '🏪 Set up storefront'; }
       else { btn.classList.add('notclaimed'); st.textContent = '✨ Claim Shop'; }
     }
+    /* TEMPORARY VISIBLE DIAGNOSTIC (item 9 of the claim directive).
+       While the claim fix is being proven on real devices, the seller must be able to READ the
+       resolved identity instead of inferring it from which button appeared. Shows the shop id,
+       the owner uid and whether the claim is persisted in Firestore.
+
+       It is a READOUT of window.__miniShopState, never a source of truth, and it renders only
+       for the signed-in owner on their own shell — no other user, no public page. Remove once
+       the on-device reload check is signed off. */
+    function _diag () {
+      try {
+        var host = document.getElementById('mshop-diag');
+        if (!host) {
+          var anchor = document.getElementById('mshop-btn');
+          if (!anchor || !anchor.parentNode) return;
+          host = document.createElement('div');
+          host.id = 'mshop-diag';
+          host.style.cssText = 'font:11px/1.5 ui-monospace,Menlo,monospace;opacity:.72;padding:6px 10px;'
+            + 'margin:6px 0 0;border-radius:8px;background:rgba(113,255,0,.06);'
+            + 'border:1px solid rgba(113,255,0,.18);word-break:break-all;';
+          anchor.parentNode.insertBefore(host, anchor.nextSibling);
+        }
+        /* textContent, not innerHTML — these values come from Firestore documents.
+           The unresolved case is shown too. "Still resolving" is the honest reading of a state
+           that is neither claimed nor unclaimed, and it is the one a seller most needs to be
+           able to tell apart from "you have no shop". */
+        host.textContent = !_mshop.resolved
+          ? 'Shop ID: —  ·  Owner UID: —  ·  Claim: RESOLVING (ownership not yet known)'
+          : 'Shop ID: ' + (_mshop.shopId || '—')
+            + '  ·  Owner UID: ' + (_mshop.ownerUid || '—')
+            + '  ·  Claim: ' + (_mshop.claimed ? 'SAVED (' + _mshop.handle + ')'
+                                : _mshop.owner ? 'NOT CLAIMED (shop owned)' : 'NO SHOP');
+      } catch (_) {}
+    }
+
     /* IN-SHELL navigation — routes to the 'minishop' page module (same /merchant document,
        same tab, no window.open, no full-page leave, shell panel transition not a splash).
        Claimed → storefront /shop/<handle>; unclaimed → claim flow. Resolves first if needed so
@@ -1995,8 +2160,12 @@
       if (_mshop.resolved) { _go(); return; }
       _resolve().then(function () { _paint(); _go(); });
     };
-    window.__refreshMiniShop = function () { _resolve().then(function () { _paint(); if (current === 'minishop') { try { window.__mgo('minishop'); } catch (_) {} } }); };
-    setTimeout(window.__refreshMiniShop, 700);
+    window.__refreshMiniShop = function () { _resolve().then(function () { _paint(); _diag(); if (current === 'minishop') { try { window.__mgo('minishop'); } catch (_) {} } }); };
+    /* NO 700ms TIMER. Resolution starts immediately and _resolve waits on the Auth EVENT, so a
+       cold start that takes two seconds to restore the session resolves when the session is
+       actually there. The old `setTimeout(refresh, 700)` raced Auth and lost, and losing meant
+       "unclaimed" — the reload bug. A timer cannot know when Auth is ready; the event does. */
+    window.__refreshMiniShop();
     document.addEventListener('soBranchChanged', function () { _mshop.resolved = false; window.__refreshMiniShop(); });
   })();
 

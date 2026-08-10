@@ -1,3 +1,94 @@
+## [2026-08-10] — fix(minishop): P0 — the KassShop claim now survives a reload, and an unknown answer is no longer rendered as "unclaimed"
+
+**Symptom:** a seller claims KassShop, gets owner mode, reloads — and is asked to claim the same
+shop again. The claim was in Firestore the whole time.
+
+### Four distinct defects, all in the read path
+
+1. **`onAuthStateChanged` unsubscribed on its first `null`.** The listener fires immediately on
+   subscribe — with `null` — while persisted-session restoration is still in flight, and fires
+   *again* with the real user a second or two later. Dropping the subscription on that first
+   `null` meant a cold reload concluded "no uid". Now a `null` user is not treated as an answer:
+   the subscription is held until a uid arrives or the 15s bound expires.
+
+2. **The Auth object was read once, at call time.** `firebase.js` publishes
+   `window.firebaseAuth` from an ES module, so it is almost never present when the shell's inline
+   block runs. The event branch was therefore skipped *in production* and everything rode on a
+   uid poll. The resolver now watches for Auth to appear and then attaches to the event.
+
+3. **Auth can be ready before Firestore is published.** The event path tested
+   `window.firebaseDB` in the same tick and bailed to LOADING when it was absent — and nothing
+   re-ran the resolver, so that latched for the rest of the session. Added a bounded `_awaitDb`.
+
+4. **A failed read was indistinguishable from an empty one.** Every ownership lookup swallowed
+   its error and returned `null`, so permission-denied, offline, or a missing index looked
+   exactly like "this seller owns no shop" — and the UI rendered that as **Claim Shop**. Read
+   failures are now counted; nothing-found *with* failures resolves to UNKNOWN, which stays
+   LOADING. A genuinely shopless seller reaches that point with zero read errors.
+
+`setTimeout(refreshMiniShop, 700)` is gone. A timer cannot know when Auth is ready; the event
+can. Ownership is asked as one question — which shop has `sellerUid == <authenticated uid>` —
+with `sellerUid` queried first, and a shop reached by document id must still name the caller as
+owner before it counts.
+
+### Write path — `claimMinishopHandle`
+
+- **Now transactional.** It read `shopHandles/{handle}` and then committed a batch. Two sellers
+  could both pass that read and the second `set` silently overwrote the first — both reporting
+  success. `runTransaction` makes the read-then-write one operation; the loser is refused.
+- **The idempotent path repairs instead of returning early.** A claim whose handle doc landed but
+  whose config write did not previously reported "already yours" forever while the storefront
+  resolver found no handle. Re-claiming now re-asserts `minishopConfig/{shopId}`.
+- **A handle owned by the caller but pointing at a different shop is refused**, not repointed.
+- **Still never creates a shop.** Ownership is decided by `shops/{shopId}.sellerUid`; no shop, no
+  claim.
+- Returns `shopId` and `ownerUid` so the client can stop inferring them.
+
+### No fake success
+
+`sokoni-minishop.js` painted "@handle claimed!" on the absence of a throw, without reading the
+response. It now requires `success === true` and a server-returned handle, uses the **server's**
+handle rather than the text still in the input, and otherwise shows
+*"Claim failed — your shop was not saved."*
+
+### Temporary visible diagnostic
+
+The merchant shell renders a seller-only readout under the storefront entry: **Shop ID / Owner
+UID / Claim status**, including an explicit `RESOLVING` state. It is a readout of
+`window.__miniShopState`, never a source of truth. `__miniShopState` also carries `authUid` — the
+uid ownership was actually asked with, because "it says unclaimed" is usually answered by finding
+out the resolver was asking about somebody else. Remove once the on-device reload check is signed
+off.
+
+### Tests
+
+- `scripts/test-minishop-claim-persistence.js` — **19/19**. Drives the shell's own resolver, then
+  destroys the page, clears every client store, restores Auth late, and requires the same
+  `shopId` / `ownerUid` / `mode: OWNER` back out of Firestore. Asserts no button, no CSS class, no
+  ARIA attribute and no localStorage key. Also covers: another seller's shop is not mine, a
+  genuinely unowned shop still offers Claim, and denied reads never render Claim.
+- `scripts/test-minishop-claim-write.js` — **31/31**. Runs the real `claimMinishopHandle` handler
+  against a Firestore fake with versioned optimistic concurrency, so the concurrent-claim
+  interleaving is forced rather than hoped for.
+
+**A flake in the first suite was the suite's own fault, and is worth recording.** Runs alternated
+between pass and fail. The service worker takes control ~2s in and serves gstatic from its own
+cache, which Playwright's `route()` does not intercept — so the warm-start case got the stubbed
+Firestore and the late-Auth case silently got the *real* SDK, found no shop, and reported
+UNCLAIMED. The suite was measuring its own service worker. `serviceWorkers: 'block'` fixed it;
+3/3 clean runs before the denied-reads case was added.
+
+**NOT VERIFIED:** the claim write against real Firestore (needs the emulator — App Check cannot
+attest 127.0.0.1) and the on-device reload. Both remain open.
+
+**Files:** `merchant.html`, `functions/minishop.js`, `sokoni-minishop.js`,
+`scripts/test-minishop-claim-persistence.js` (new), `scripts/test-minishop-claim-write.js` (new).
+**Database:** none. **API:** `claimMinishopHandle` response gains `shopId` and `ownerUid`
+(additive). **Security:** a claim can no longer be taken from its owner by a concurrent claim.
+**Breaking:** none.
+
+---
+
 ## [2026-08-09] — release: PHASE 2 BATCH 1 DEPLOYED (v496 / 4655f5a) — PASS WITH RETURNS DATA-LAYER BLOCKER
 
 Application code is live. The Returns authorization rule is NOT, and is tracked separately.

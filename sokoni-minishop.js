@@ -962,15 +962,26 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const btn = document.getElementById('msaClaimBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Claiming…'; }
     try {
+      /* SUCCESS IS THE SERVER'S ANSWER, NOT THE ABSENCE OF A THROW.
+         The UI painted "@handle claimed!" as soon as the call returned, without reading what
+         came back. A callable that resolves with anything other than a committed claim — a
+         shape change, a partial result — would have shown the seller a claimed storefront that
+         does not exist. Require the canonical fields the transaction returns, and use the
+         SERVER's handle, not the text still sitting in the input. */
       const res = await _callCF('claimMinishopHandle', { handle });
-      _state.handle = handle;
-      _setEl('msaHandleDisplay', '@' + handle);
-      _setEl('msaHandleUrl', 'mysokoni.co.ke/shop/' + handle);
+      if (!res || res.success !== true || !res.handle) {
+        throw new Error('Claim failed — your shop was not saved.');
+      }
+      const saved = res.handle;
+      _state.handle = saved;
+      if (res.shopId) _state.shopId = res.shopId;
+      _setEl('msaHandleDisplay', '@' + saved);
+      _setEl('msaHandleUrl', 'mysokoni.co.ke/shop/' + saved);
       const vl = document.getElementById('msaViewShop');
-      if (vl) vl.href = '/shop/' + handle;
-      _toast('@' + handle + ' claimed!', 'success');
+      if (vl) vl.href = '/shop/' + saved;
+      _toast('@' + saved + ' claimed!', 'success');
     } catch (err) {
-      _toast(err.message || 'Handle not available', 'error');
+      _toast(err.message || 'Claim failed — your shop was not saved.', 'error');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Claim'; }
     }
