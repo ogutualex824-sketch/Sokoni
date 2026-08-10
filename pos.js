@@ -419,15 +419,34 @@ const SPos = (function () {
       opts = opts || {};
       if (!tab) return;
       const prev = state.currentTab;
+
       /* No-op guard: re-selecting the active view does no work — prevents redundant
-         re-renders, listener churn and history spam on repeated switching. */
+         re-renders, listener churn and history spam on repeated switching.
+
+         BUT it must never fire while the DOM disagrees with the state. state.currentTab can
+         be set during boot (from the src hash) before the tab buttons and panels exist, or
+         while a shell-driven switch races that boot. The guard then returned early forever
+         and the requested tab NEVER became visible — state said "inventory", the screen said
+         checkout, and no later call could reconcile it because every one of them looked like
+         a no-op. That made the src hash the only mechanism that reliably chose a tab, which
+         in turn blocked pre-warming the POS panel (a measured 59% Cashier speed win).
+
+         So: skip only when this view is genuinely already RENDERED. Same performance intent,
+         but the DOM is now always reconcilable. */
       if (prev === tab && !opts.force) return;
       /* Tear down the view being left. One-shot IndexedDB readers register nothing;
          any future view that opens a live listener MUST SPos.nav.registerTeardown()
          its unsub here so repeated switching can never accumulate listeners. */
       if (prev && prev !== tab) nav._runTeardown(prev);
       state.currentTab = tab;
-      document.querySelectorAll('.pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      /* The buttons declare role="tab", so aria-selected is their real selected state — it was
+         never being updated, leaving assistive tech (and anything reading rendered state) told
+         that no tab was selected. Kept in step with the class so the two can never disagree. */
+      document.querySelectorAll('.pos-tab').forEach(b => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
       document.querySelectorAll('.pos-panel').forEach(p => p.classList.remove('active'));
       document.getElementById(`panel-${tab}`)?.classList.add('active');
 
