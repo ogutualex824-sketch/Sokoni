@@ -154,7 +154,9 @@ server.listen(0, async () => {
     }, tab);
     ck(id + ' activates the ' + tab + ' tab', posOk.ok, posOk.why);
     const title = await page.evaluate(() => (document.getElementById('mtitle') || {}).textContent);
-    const want = { inventory: 'Inventory', cashier: 'POS / Cashier', audit: 'Audit Log' }[id];
+    /* "Cashier", not "POS / Cashier": this route is the in-shop CHECKOUT surface, and the POS
+       app's other surfaces are their own merchant routes. Kept in sync with the route contract. */
+    const want = { inventory: 'Inventory', cashier: 'Cashier', audit: 'Audit Log' }[id];
     ck(id + ' title is correct', title === want, title);
   }
 

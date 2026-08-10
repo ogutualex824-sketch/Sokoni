@@ -425,9 +425,24 @@ auth.onAuthStateChanged(async user => {
   currentUser = user;
 
   const token = await user.getIdTokenResult(true);
-  if (token.claims.admin)  userRole = 'admin';
-  else if (token.claims.seller) userRole = 'seller';
-  else userRole = 'buyer';
+
+  /* CONTEXT DECIDES THE ROLE, not just the claim set.
+     Admin was checked first unconditionally, so a merchant who is ALSO an admin — which the
+     founder account is — opened Returns from their own seller dashboard and got the platform
+     ADMIN view: every shop's returns, an Admin badge, admin controls, inside the merchant
+     experience. Wrong shop, wrong identity, wrong scope.
+
+     Hosted inside the merchant shell the context IS the seller's own shop, so a seller-capable
+     account resolves to 'seller' and sees only its own returns. Admin remains available by
+     opening Returns standalone. This narrows what an admin sees in-shell; it grants nobody
+     anything new, and Firestore rules enforce the same boundary server-side regardless. */
+  const inShell = !!(window.SokoniInShell && window.SokoniInShell.inShell);
+  const canSell = !!(token.claims.seller || token.claims.merchant);
+
+  if (inShell)                  userRole = canSell ? 'seller' : 'buyer';
+  else if (token.claims.admin)  userRole = 'admin';
+  else if (canSell)             userRole = 'seller';
+  else                          userRole = 'buyer';
 
   document.getElementById('auth-loading').style.display = 'none';
   document.getElementById('app-root').style.display = 'block';

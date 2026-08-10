@@ -1299,6 +1299,14 @@
    deferred (perf-guard blocks a new blocking script), and waiting for it would flash the
    double bar. The .sk-in-shell flag is set by the inline snippet in <head>. */
 .sk-in-shell .pos-quick-nav { display: none !important; }
+
+/* CHECKOUT-ONLY mode. The merchant shell opens this app for two different jobs: the Cashier
+   route is the in-shop CHECKOUT surface a merchant uses to serve a customer at the till, while
+   Inventory / Audit Log / POS Settings are separate merchant routes in their own right. Showing
+   the POS app's full tab bar under Cashier exposed a second, competing navigation for surfaces
+   the merchant sidebar already owns. The shell sets data-pos-chrome="checkout" for that route
+   only; every other POS-backed route keeps the tab bar. */
+html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 .sk-in-shell #pos-app { padding-bottom: 0 !important; }
 
 /* ── Quick nav strip (mobile / tablet, hidden on desktop ≥901px) ── */

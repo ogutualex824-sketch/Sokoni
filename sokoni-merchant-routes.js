@@ -66,11 +66,16 @@
       mobile:true, desktop:true, activeKey:'inventory',
       note:'Stock authority. Reads/writes canonical products.stock — see reference_pos_checkout_stock_authority.' },
 
-    { id:'cashier', name:'POS / Cashier', icon:'💳', tier:'primary',
-      kind:'pos', tab:'pos',
+    { id:'cashier', name:'Cashier', icon:'💳', tier:'primary',
+      kind:'pos', tab:'pos', posChrome:'checkout',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
       mobile:true, desktop:true, activeKey:'cashier',
-      note:'The checkout surface. Its charge bar sits at the panel bottom — the shell MUST keep the bottom nav clear of it.' },
+      note:'THE IN-SHOP CHECKOUT SURFACE — not the POS dashboard. Named "Cashier" because that ' +
+           'is what the merchant does here: serve a customer at the till. posChrome:"checkout" ' +
+           'tells the shell to suppress the POS app\'s own tab bar so this route is the checkout ' +
+           'ALONE; the wider POS surfaces stay reachable as their own routes (Inventory, Audit ' +
+           'Log, POS Settings). Its charge bar sits at the panel bottom — the shell MUST keep ' +
+           'the bottom nav clear of it.' },
 
     { id:'orders', name:'Orders', icon:'🧾', tier:'primary',
       kind:'native',

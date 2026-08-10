@@ -646,6 +646,18 @@
     attempt();
   }
 
+  /* Cashier is the checkout ALONE; every other POS-backed route keeps the app's tab bar.
+     Set on the hosted document so the CSS applies before the tab switch paints, and cleared
+     again for the other routes since the panel is shared and persistent. */
+  function posChrome (mode) {
+    var f = document.getElementById('mfx-pos');
+    try {
+      var d = f && f.contentDocument; if (!d || !d.documentElement) return;
+      if (mode) d.documentElement.setAttribute('data-pos-chrome', mode);
+      else      d.documentElement.removeAttribute('data-pos-chrome');
+    } catch (_) { /* not readable yet — reapplied on the next switch */ }
+  }
+
   function posSwitch (tab) {
     /* Confirmed when the POS marks that tab active. pos.html renders tabs with
        data-tab + aria-selected, so this reads the app's own state, not our expectation. */
@@ -739,7 +751,17 @@
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
-    if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab, m.label); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
+    if (m.kind === 'pos')    {
+      posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null;
+      var p = posPanel(posPendingTab, m.label); showOnly(p);
+      /* Cashier = checkout only; the other POS routes keep the app's own tab bar. Applied both
+         now and after the switch settles, because the panel may still be booting on first open. */
+      posChrome(m.posChrome || null);
+      posSwitch(posPendingTab);
+      setTimeout(function () { if (current === id) posChrome(m.posChrome || null); }, 600);
+      if (posPendingAction) posAction(posPendingAction);
+      return;
+    }
     if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec, m.label); showOnly(s); sellerSwitch(sellerPendingSec); return; }
     if (m.kind === 'page')   { var _src = (m.dynamic && window.__miniShopUrl) ? window.__miniShopUrl : m.src; showOnly(pagePanel(id, _src, m.label, m.dynamic)); return; }
   }

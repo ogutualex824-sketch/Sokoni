@@ -186,6 +186,15 @@ ul, ol {
 /* ─────────────────────────────────────────────
    7. COVER
 ───────────────────────────────────────────── */
+/* No cover image → collapse to a slim brand strip instead of reserving the full band.
+   At 280px on a phone an empty cover pushed the shop name below the fold, so a customer
+   opening the shop saw blank space first. Kept tall enough for the Share / Follow actions
+   that sit inside the cover, and the avatar's -36px overlap still lands on it. */
+.ms-cover.ms-cover--empty { --ms-cover-h: 96px; height: 96px; }
+@media (max-width: 640px) {
+  .ms-cover.ms-cover--empty { --ms-cover-h: 88px; height: 88px; }
+}
+
 .ms-cover {
   height: var(--ms-cover-h);
   background: #111 center / cover no-repeat;

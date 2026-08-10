@@ -524,6 +524,12 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     // Cover
     const cover = document.getElementById('msCover');
     if (cover && config.coverUrl) cover.style.backgroundImage = 'url(' + _esc(config.coverUrl) + ')';
+    /* A shop with NO cover image still reserved the full cover height (220px, 280px on a
+       phone) — an empty band above the fold that pushed the shop name far down the screen,
+       so the first thing a customer saw was blank space instead of the shop. Mark it so the
+       stylesheet can collapse it to a slim brand strip. The shop name is the headline; the
+       cover is decoration and only earns its height when there is an image to show. */
+    if (cover) cover.classList.toggle('ms-cover--empty', !config.coverUrl);
 
     // Logo + placeholder
     const logoEl = document.getElementById('msLogo');
