@@ -1418,43 +1418,82 @@ function deleteProduct(index){
        products with no status field stay visible — absence means active. */
     const uid = (JSON.parse(localStorage.getItem("sokoniUser") || "null") || {}).uid || null;
 
-    /* Remove from the local cache immediately so the dashboard updates without a
-       round-trip, and so realtime.js does not re-merge it from `mine`. */
-    sellerProducts.splice(index, 1);
-    localStorage.setItem("sellerProducts", JSON.stringify(sellerProducts));
-    displaySellerProducts();
-    updateSellerStats();
+    /* ── THE CANONICAL WRITE COMES FIRST, AND IT MUST SUCCEED ────────────────────
+       This used to splice localStorage, repaint, emit the sync event and toast
+       "Product Archived" — then attempt the Firestore archive fire-and-forget behind
+       `if (!target.id || !window.firebaseDB) return;` with a catch that only warned.
 
-    /* Persist the archive to Firestore. Fire-and-forget and guarded: the local
-       view already updated; a merchant offline still sees it gone and the archive
-       syncs on their next connected action. Legacy localStorage-only products
-       (no Firestore id) simply skip — there is nothing to archive server-side. */
+       So every one of these silently left the product ACTIVE in Firestore while telling the
+       merchant it was gone:
+         · the cached entry had no Firestore id (legacy localStorage-only product)
+         · firebaseDB had not initialised yet
+         · the update threw (offline, rules, App Check)
+       The list looked shorter, the count did not drop, and a refresh brought the product
+       back — the reported "Sync tried to delete but the product count is not reducing".
+
+       Firestore is the authority, so it is written FIRST and awaited. The local cache, the
+       repaint, the sync broadcast and the success toast now happen only after the canonical
+       archive is durable. A failure says so and changes nothing — never a success message for
+       an operation that did not happen (CLAUDE.md: no success toast before the canonical
+       backend operation completes). */
+    const _restore = sellerProducts.slice();          /* exact pre-delete cache, for rollback */
+
     (async function () {
+        /* A product with no Firestore id exists only in this browser. Removing it from the
+           cache IS the whole operation — but say so plainly rather than implying a server
+           archive happened. */
+        if (!target.id) {
+            sellerProducts.splice(index, 1);
+            localStorage.setItem("sellerProducts", JSON.stringify(sellerProducts));
+            displaySellerProducts();
+            updateSellerStats();
+            showNotification("Removed from this device — it was never saved to your shop", "delete");
+            return;
+        }
+
+        if (!window.firebaseDB) {
+            showNotification("Can't archive right now — no connection to your shop. Nothing was changed.", "error");
+            return;
+        }
+
         try {
-            if (!target.id || !window.firebaseDB) return;
             const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
             await m.updateDoc(m.doc(window.firebaseDB, "products", String(target.id)), {
-                status:     "archived",
+                status:     "archived",   /* in SokoniProductVisibility.HIDDEN -> excluded everywhere */
                 isVisible:  false,
+                active:     false,        /* some legacy readers check this instead of status */
                 archivedAt: m.serverTimestamp(),
                 archivedBy: uid,
                 updatedAt:  m.serverTimestamp(),
             });
         } catch (e) {
-            console.warn("[seller] archive sync deferred:", e && e.message);
+            console.error("[seller] product archive FAILED — nothing was changed:", e && e.message);
+            /* The cache was never touched, so there is nothing to roll back; repaint anyway in
+               case another surface mutated it while we were awaiting. */
+            localStorage.setItem("sellerProducts", JSON.stringify(_restore));
+            displaySellerProducts();
+            updateSellerStats();
+            showNotification("Couldn't archive that product: " + ((e && e.message) || "unknown error"), "error");
+            return;
         }
+
+        /* Canonical write is durable — only now does the rest of the world change. */
+        sellerProducts.splice(index, 1);
+        localStorage.setItem("sellerProducts", JSON.stringify(sellerProducts));
+        displaySellerProducts();
+        updateSellerStats();
+
+        /* Propagate across every surface (POS cache, inventory, search count) via the ONE
+           shared bus. Carries deleted:true so POS removes THIS id immediately and cannot
+           resurrect it. Idempotent by id. */
+        try {
+            if (window.SokoniSync && window.SokoniSync.productChanged) {
+                window.SokoniSync.productChanged({ productId: String(target.id), id: String(target.id), deleted: true, action: 'PRODUCT_DELETED', branchId: (target.branchId || null) }, { source: 'seller' });
+            }
+        } catch (_) {}
+
+        showNotification("🗑️ Product Archived", "delete");
     })();
-
-    /* Propagate the retirement across every surface (POS cache, inventory, search count) via
-       the ONE shared bus — same infrastructure as create/edit. Carries deleted:true so POS
-       removes THIS id immediately (no full rebuild) and cannot resurrect it. Idempotent by id. */
-    try {
-        if (window.SokoniSync && window.SokoniSync.productChanged) {
-            window.SokoniSync.productChanged({ productId: String(target.id || ''), id: String(target.id || ''), deleted: true, action: 'PRODUCT_DELETED', branchId: (target.branchId || null) }, { source: 'seller' });
-        }
-    } catch (_) {}
-
-    showNotification("🗑️ Product Archived", "delete");
 }
 
 /* =========================
