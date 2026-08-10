@@ -2305,6 +2305,13 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <button type="button" class="sw-save-btn" id="swSaveBtn" onclick="swSaveStore()" style="display:none;">🚀 Launch My Shop</button>
       </div>
 
+      <!-- TEMPORARY: Shop Setup persistence tracer. Inert unless ?shopdiag=1 is present, so it
+           costs real sellers nothing. Loaded HERE, after the wizard's inputs exist and before
+           the wizard's own script runs, so the field recorder is installed in time to catch the
+           parse-time hydration — the very writes a later <script> tag would miss. Remove once
+           the device persistence question is answered. -->
+      <script src="sokoni-shop-diagnostic.js"></script>
+
       <script>
       /* ═══════ SHOP WIZARD JS ═══════ */
       let swStep=1;
@@ -2771,8 +2778,34 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       }
       window.swLoadCanonical=swLoadCanonical;
 
+      /* ONE FIELD SETTER FOR EVERY HYDRATION PATH.
+         A <select> silently discards a value that matches no option. swCity's options are
+         lowercase ('nairobi') while the stored profile holds what the seller typed and the
+         server sanitised ('Nairobi'), so assigning it produced '' — the city was lost on every
+         hydration, from the cache and from Firestore alike. A field that cannot round-trip
+         through its own control is indistinguishable from data that was never saved.
+
+         Defined once and used by both hydration paths, because two copies of this drifted
+         apart before: the cache path and the canonical path each had their own `set`. */
+      function swSetField(id,val){
+        var el=document.getElementById(id);
+        if(!el||val==null||val==='')return;
+        if(el.tagName==='SELECT'){
+          var want=String(val).trim().toLowerCase();
+          var opt=Array.prototype.find.call(el.options,function(o){
+            return String(o.value).trim().toLowerCase()===want
+                || String(o.textContent).trim().toLowerCase()===want;
+          });
+          if(opt){el.value=opt.value;return;}
+          console.warn('[shop] "'+val+'" has no matching option in #'+id+' — left unset rather than blanked.');
+          return;
+        }
+        el.value=val;
+      }
+      window.swSetField=swSetField;
+
       function swApply(p, avail){
-        const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null&&val!=='')el.value=val;};
+        const set=(id,val)=>swSetField(id,val);
         set('swStoreName',p.name||p.storeName);set('swTagline',p.tagline);set('swAbout',p.about||p.description);
         set('swCity',p.city);set('swAddress',p.address);set('swMapsLink',p.mapsLink);
         set('swPhone',p.phone);set('swEmail',p.email);set('swWebsite',p.website);
@@ -2800,7 +2833,9 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         try{
           const saved=JSON.parse(localStorage.getItem('sokoniStore')||'null');
           if(!saved){ swLoadCanonical(); return; }
-          const set=(id,val)=>{const el=document.getElementById(id);if(el&&val)el.value=val;};
+          /* Same <select> trap as swApply — reuse its setter rather than keeping a second,
+             subtly different copy that loses the city on the cache path only. */
+          const set=(id,val)=>swSetField(id,val);
           set('swStoreName',saved.name);set('swTagline',saved.tagline);set('swAbout',saved.about);
           set('swKraPin',saved.kraPin);set('swSbpNumber',saved.sbpNumber);set('swBrsNumber',saved.brsNumber);
           if(saved.city){const el=document.getElementById('swCity');if(el)el.value=saved.city;}
