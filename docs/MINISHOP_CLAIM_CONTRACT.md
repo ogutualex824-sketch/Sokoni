@@ -105,10 +105,18 @@ Otherwise: *"Claim failed — your shop was not saved."*
 
 ## 5. Tests
 
-| Suite | Proves |
-|---|---|
-| `scripts/test-minishop-claim-persistence.js` | claim survives page destruction, a cleared cache and late Auth; another seller's shop is not mine; denied reads never render Claim |
-| `scripts/test-minishop-claim-write.js` | the real handler never creates a shop, is idempotent, repairs a lost config, and refuses a concurrent claim |
+| Suite | Run | Proves |
+|---|---|---|
+| `test-minishop-claim-persistence.js` | `npm run test:claim:persistence` | claim survives page destruction, a cleared cache and late Auth; another seller's shop is not mine; denied reads never render Claim |
+| `test-minishop-claim-write.js` | `npm run test:claim:write` | the handler never creates a shop, is idempotent, repairs a lost config, refuses a concurrent claim (Firestore fake) |
+| `test-minishop-claim-firestore.js` | `npm run test:claim:firestore` | the same handler against the **real** transaction engine, with genuine concurrent contention |
+
+The third suite exists because the claim's most important property is a *concurrency* property,
+and a hand-written fake is the weakest possible place to prove one — a bug in my model of
+Firestore would hide a bug in the code. It fires six simultaneous claims for one free handle,
+then repeats a four-way race ten more times, and requires exactly one winner each time whose
+stored `uid` matches the caller who was told they won. **Needs JDK 21** — `firebase-tools` refuses
+to start its emulators below that.
 
 The persistence suite asserts `shopId`, `ownerUid` and `mode` **only**. It deliberately does not
 assert a button, a CSS class, an ARIA attribute or a `localStorage` key — none of those are
@@ -134,8 +142,10 @@ Run on a real phone, signed in as a seller who owns a shop:
 Until steps 1–4 are observed on a device, this contract is **engineering complete, not production
 proven** — see [[Release Validation Standard]].
 
-**Still unproven:** the claim write against real Firestore. The emulator is required, because App
-Check cannot attest `127.0.0.1`.
+**Still unproven:** the security rules for `shopHandles` and `minishopConfig`. The admin SDK
+bypasses rules, so the emulator suite proves the handler, not the authorization around it.
+`firebase.json` declares no Firestore rules file, so the emulator defaults to allow-all — wiring
+rules into the emulator is the next step for that gap.
 
 ---
 

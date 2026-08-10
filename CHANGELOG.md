@@ -78,8 +78,25 @@ Firestore and the late-Auth case silently got the *real* SDK, found no shop, and
 UNCLAIMED. The suite was measuring its own service worker. `serviceWorkers: 'block'` fixed it;
 3/3 clean runs before the denied-reads case was added.
 
-**NOT VERIFIED:** the claim write against real Firestore (needs the emulator — App Check cannot
-attest 127.0.0.1) and the on-device reload. Both remain open.
+**NOT VERIFIED:** the on-device reload, and the security rules for `shopHandles` /
+`minishopConfig` — the admin SDK bypasses rules, and `firebase.json` declares no Firestore rules
+file, so the emulator defaults to allow-all.
+
+### Follow-up the same day — the emulator gap closed
+
+`firebase-tools` refuses to start its emulators below JDK 21 and this machine had 17. That is why
+the claim write was only ever proven against a fake, and why `test-returns-rules` had been marked
+`ENV` since Batch 1. JDK 21 installed side-by-side; JDK 17 left in place.
+
+- `scripts/test-minishop-claim-firestore.js` (new) — **25/25** against the real Firestore
+  transaction engine. It exists because the claim's most important property is a *concurrency*
+  property, and a hand-written fake is the weakest possible place to prove one: a bug in my model
+  of Firestore would hide a bug in the code. Six sellers claim one free handle simultaneously,
+  then a four-way race repeats ten more times. Every round must produce exactly one winner whose
+  stored `uid` matches the caller who was told they won, with no loser left holding a config
+  pointing at a handle they do not own. `npm run test:claim:firestore`.
+- **`test-returns-rules` now runs locally — 20/20.** It was never a product failure; it was a
+  missing JDK.
 
 **Files:** `merchant.html`, `functions/minishop.js`, `sokoni-minishop.js`,
 `scripts/test-minishop-claim-persistence.js` (new), `scripts/test-minishop-claim-write.js` (new).
