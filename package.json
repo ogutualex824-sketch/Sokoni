@@ -62,7 +62,8 @@
     "bench:cashier": "node scripts/bench-cashier-load.js",
     "test:pos-tabs": "node scripts/test-pos-tab-transitions.js",
     "test:product-delete": "node scripts/test-product-delete-canonical.js",
-    "test:shop-hydration": "node scripts/test-shop-setup-hydration.js"
+    "test:shop-hydration": "node scripts/test-shop-setup-hydration.js",
+    "verify:kasshop-live": "node scripts/verify-kasshop-live.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

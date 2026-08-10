@@ -1,3 +1,42 @@
+## [2026-08-11] — fix(kasshop): compliance fields were collected, dropped, and publicly leaked
+
+**Deployed + live-verified.** `saveShopProfile`/`getShopProfile` (canonical shop id) and the
+`seller.html` Save Changes / Preview Store framing are live (v508→v509, `ee77b31`), proven
+against production by `scripts/verify-kasshop-live.js` — 20/20, real seller, real Firestore,
+probe shop deleted on every exit path.
+
+**What the live probe caught that two green emulator suites could not.** Shop Setup lost
+`kraPin`, `sbpNumber`, `brsNumber` on every reload: collected by the form, sent only to the
+legacy save, and absent from `TEXT_FIELDS`, so the canonical boundary dropped them silently.
+
+The obvious fix would have been worse than the bug. `shops/{shopId}` is `allow read: if true`,
+so listing them there publishes every seller's tax identifier. Checking why they were safe
+before showed they were not: the legacy path writes all of `storeData` into `sellers/{uid}`,
+also world-readable. **These identifiers have been public all along.**
+
+They now travel through the same canonical save into `shops/{shopId}/private/compliance`,
+written by `saveShopProfile` after it proves ownership, in the SAME transaction as the profile,
+returned to the owner by `getShopProfile`. The legacy mirror strips them.
+
+**Files:** `functions/kasshop.js`, `seller.html`, `firestore.rules`, `scripts/verify-kasshop-live.js`
+**Database:** new `shops/{shopId}/private/compliance` subdocument (CF-written, owner-read)
+**Security:** closes a public exposure of seller KRA PIN / permit / BRS numbers on new saves
+**Breaking:** none — `getShopProfile` gains a `compliance` object; absent keys are untouched
+
+### Open, not fixed here
+
+1. **Existing exposed data.** `sellers/*` documents already in production still carry these
+   fields publicly. New saves are clean; a scrub of existing data is a separate migration.
+2. **The rules release is stuck.** `firebase deploy --only firestore:rules` returns
+   `409 Requested entity already exists` on the `cloud.firestore` release. The live ruleset
+   dates from **2026-08-09** and is missing already-committed rule changes: per-shop
+   `analytics`, `branches/{id}/analytics`, `posRetailSales.merchantId` reads, and the new
+   `shops/{uid}/private/{doc}` grant. Those paths are default-denied in production today —
+   safe, but the features that read them are silently broken. Rollback handle for the
+   default database is ruleset `73ec10da-0e9b-4aec-8909-bab6ff72b0c9`.
+
+---
+
 ## [2026-08-10] — correction + finding: the shop WRITE path is blocked by the rules, not by the client
 
 **Correction.** The `sokoni-availability.js` commit claimed its `shops/{uid}` write was creating
