@@ -1,3 +1,41 @@
+## [2026-08-10] — correction + finding: the shop WRITE path is blocked by the rules, not by the client
+
+**Correction.** The `sokoni-availability.js` commit claimed its `shops/{uid}` write was creating
+phantom shop documents. That is wrong and the record should not stand. `firestore.rules` has
+`allow create: if isAdmin()` on `/shops/{uid}`, so a client cannot create a shop document at all.
+The write was failing, not writing junk. The fix (resolve the owned shop id; refuse rather than
+invent) is still right; the stated reason was not. No phantom-document audit is needed.
+
+**The finding underneath it is bigger.** The rules encode the same `shopId === uid` assumption
+the client code did:
+
+```
+match /shops/{uid} {
+  allow create: if isAdmin();
+  allow update: if isAdmin() || (isAuthed() && request.auth.uid == uid && …
+                   .hasOnly(['name','tagline','about','logo','banner','phone','email',
+                             'address','city','hours','returnPolicy','delMethod', …]));
+}
+```
+
+Three consequences:
+
+1. A client may only write `shops/{its-own-uid}`. A seller whose canonical shop is
+   `shops/shop-A` with `sellerUid: A` **cannot write to their own shop**.
+2. The allowed key list does **not** include `acceptingOrders`, `online`, `delivery` or
+   `pickup`, so availability cannot be written to `shops` from a client at all.
+3. Nothing client-side can create a shop, so "setup creates the shop" is not currently possible
+   without a Cloud Function.
+
+This is why Shop Setup writes `sellers/{uid}` + `businesses/{uid}` and reads
+`localStorage.sokoniStore`, and why the storefront drifted from it: the canonical document was
+never writable. Converging Shop Setup onto `shops/{shopId}` requires authorising by **ownership**
+(`resource.data.sellerUid == request.auth.uid`) rather than by document id, admitting the
+availability keys, and adding an owner-scoped create — or routing writes through a callable.
+Flagged, not assumed: it is a security-rules change.
+
+---
+
 ## [2026-08-10] — fix(minishop): P0 — a seller could be shown ANOTHER seller's shop as their own
 
 Different bug from the claim-persistence one below, and more serious. The claim race being 25/25

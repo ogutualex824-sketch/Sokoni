@@ -64,17 +64,31 @@
   /* ── WHICH SHOP DOCUMENT IS THIS SELLER'S? ──────────────────────────────────
      Every read and write below addressed `shops/{uid}` — assuming the shop's document id IS
      the seller's uid. It generally is not: a shop has its own id and names its owner in
-     `sellerUid`. Two consequences, both live:
-
-       · reads missed the real shop entirely, so the availability toggle showed defaults and
-         changes never reached the storefront; and
-       · setDoc(..., {merge:true}) CREATES a missing document, so every toggle wrote a phantom
-         `shops/{uid}` doc carrying acceptingOrders/online/delivery/pickup and no owner field
-         at all — junk in the canonical shops collection.
+     `sellerUid`, so reads missed the real shop and the toggle showed defaults while the
+     storefront never changed.
 
      Ownership is one question, asked the same way everywhere: which shop has
      sellerUid == this authenticated uid. The uid-keyed document is honoured only as a legacy
-     shape, and only when it actually names this uid as its owner. */
+     shape, and only when it actually names this uid as its owner.
+
+     ── THE WRITE PATH IS STILL BLOCKED, AND NOT BY THIS FILE ────────────────────
+     firestore.rules encodes the same shopId === uid assumption this code did:
+
+         match /shops/{uid} {
+           allow create: if isAdmin();
+           allow update: if isAdmin() || (isAuthed() && request.auth.uid == uid && …
+                            .hasOnly([... a fixed key list ...]))
+         }
+
+     So a client can only ever write `shops/{its-own-uid}`, can never create a shop document,
+     and the allowed key list does NOT contain acceptingOrders / online / delivery / pickup.
+     setShop() therefore fails with permission-denied today regardless of which document it
+     targets — it is not silently writing junk, it is not writing at all.
+
+     Fixing that means authorising by OWNERSHIP rather than by document id
+     (`resource.data.sellerUid == request.auth.uid`) and admitting the availability keys, or
+     routing the write through a Cloud Function. That is a security-rules decision, so it is
+     flagged rather than assumed here. See docs/MINISHOP_CLAIM_CONTRACT.md. */
   var _shopIdCache = { uid: null, id: null };
   async function ownedShopId (uid) {
     uid = uid || _uid();
