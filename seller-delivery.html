@@ -98,6 +98,7 @@
   <!-- Tabs -->
   <div class="sd-tabs">
     <button class="sd-tab active" data-tab="active">Active</button>
+    <button class="sd-tab" data-tab="riders">Riders</button>
     <button class="sd-tab" data-tab="pending">Pending</button>
     <button class="sd-tab" data-tab="history">History</button>
     <button class="sd-tab" data-tab="failed">Failed/Returns</button>
@@ -108,6 +109,13 @@
   <div id="tabActive">
     <div id="activeList"></div>
   </div>
+  <!-- Rider availability. This is the seller's view of who can carry their orders —
+       NOT a rider's own account, and not an admin roster: there is no suspend, no
+       document review and no cross-shop rider administration here. -->
+  <div id="tabRiders" style="display:none">
+    <div id="ridersList"></div>
+  </div>
+
   <div id="tabPending" style="display:none">
     <div id="pendingList"></div>
   </div>
@@ -179,9 +187,10 @@
         var tab = btn.dataset.tab;
         document.querySelectorAll('.sd-tab').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        ['active','pending','history','failed','analytics'].forEach(function (t) {
+        ['active','riders','pending','history','failed','analytics'].forEach(function (t) {
           document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
         });
+        if (tab === 'riders'    && !_unsubRiders)   _loadRiders();
         if (tab === 'pending'   && !_unsubPending)  _loadPending();
         if (tab === 'history'   && !_unsubHistory)  _loadHistory();
         if (tab === 'failed'    && !_unsubFailed)   _loadFailed();
@@ -189,6 +198,94 @@
       });
     });
     document.getElementById('histSearch').addEventListener('input', _filterHistory);
+
+    /* Deep link: the "Riders" nav entry opens seller-delivery.html#riders so the seller
+       lands on the roster rather than on Active and having to hunt for it. */
+    var hash = (location.hash || '').replace('#', '');
+    if (hash) {
+      var target = document.querySelector('.sd-tab[data-tab="' + hash.replace(/[^a-z]/gi, '') + '"]');
+      if (target) target.click();
+    }
+  }
+
+  /* ── Rider availability ──────────────────────────────────────────────────────
+     Who can carry this seller's orders right now. `rideDrivers` is readable by any
+     signed-in user per firestore.rules, so this needs no elevated access — and it
+     deliberately shows only what the rider already publishes. Nothing is invented:
+     a rider with no rating shows no rating rather than a default, and a rider whose
+     current job is not this seller's is shown as busy WITHOUT naming the order,
+     which belongs to another shop. */
+  var _unsubRiders = null;
+  var _riders = [];
+
+  function _loadRiders() {
+    if (_unsubRiders) _unsubRiders();
+    var el = document.getElementById('ridersList');
+    el.innerHTML = '<div class="sd-empty"><div class="sd-empty-text">Loading riders…</div></div>';
+    _unsubRiders = firebase.firestore()
+      .collection('rideDrivers')
+      .where('isOnline', '==', true)
+      .limit(50)
+      .onSnapshot(function (snap) {
+        _riders = snap.docs.map(function (d) { return Object.assign({ uid: d.id }, d.data()); });
+        _renderRiders();
+      }, function (err) {
+        /* A failed roster must not blank the hub — deliveries stay usable. */
+        console.warn('[delivery-hub] rider roster unavailable:', err && err.code);
+        el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">🏍️</div>' +
+          '<div class="sd-empty-text">Rider availability is temporarily unavailable.<br>' +
+          'Your deliveries are unaffected.</div></div>';
+      });
+  }
+
+  function _riderEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function _renderRiders() {
+    var el = document.getElementById('ridersList');
+    if (!_riders.length) {
+      el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">🏍️</div>' +
+        '<div class="sd-empty-text">No riders available right now.<br>' +
+        'Riders appear here as soon as they go online.</div></div>';
+      return;
+    }
+
+    /* Which riders are already carrying THIS seller's active deliveries. */
+    var mine = {};
+    _activeDeliveries.forEach(function (d) {
+      var rid = d.riderId || d.driverId || d.assignedDriverId;
+      if (rid) mine[rid] = d;
+    });
+
+    el.innerHTML = _riders.map(function (r) {
+      var job = mine[r.uid];
+      var busyElsewhere = !job && (r.currentDeliveryId || r.onTrip === true);
+      var state = job ? 'On your delivery' : (busyElsewhere ? 'On another delivery' : 'Available');
+      var dot = job ? '#00aaff' : (busyElsewhere ? '#f5a623' : '#71ff00');
+      var name = _riderEsc(r.name || r.displayName || r.fullName || 'Rider');
+      /* Rating only when the rider actually has one — an unrated rider must not be
+         rendered as 0.0, which reads as a terrible rider rather than a new one. */
+      var rating = (typeof r.rating === 'number' && r.rating > 0)
+        ? '<span style="color:rgba(255,255,255,0.45);">★ ' + r.rating.toFixed(1) + '</span>' : '';
+      var vehicle = r.vehicleType ? '<span style="color:rgba(255,255,255,0.35);">' + _riderEsc(r.vehicleType) + '</span>' : '';
+
+      return '<div class="sd-card" style="display:flex;align-items:center;gap:12px;">' +
+        '<span style="color:' + dot + ';font-size:18px;line-height:1;">●</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-weight:800;color:white;">' + name + '</div>' +
+          '<div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">' +
+            '<span style="color:' + dot + ';font-weight:700;">' + state + '</span>' + vehicle + rating +
+          '</div>' +
+        '</div>' +
+        /* Same tracking destination and ?ref= convention the delivery cards already use —
+           one tracking surface over the canonical delivery record, not a second one. */
+        (job ? '<a class="btn-track" style="flex:0 0 auto;padding:8px 14px;" target="_blank" rel="noopener" ' +
+               'href="delivery-tracking.html?ref=' + encodeURIComponent(job.id) + '">Track</a>' : '') +
+      '</div>';
+    }).join('');
   }
 
   /* ── Active deliveries (real-time) ── */

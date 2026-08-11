@@ -102,11 +102,17 @@
            'engine. Methods tab: accepted collection methods for this shop. Never computes balances ' +
            'client-side — unknown renders as — , never 0.' },
 
-    { id:'deliveries', name:'Deliveries', icon:'🛵', tier:'primary',
-      kind:'page', src:'dispatch.html',
+    { id:'deliveries', name:'Delivery Hub', icon:'🛵', tier:'primary',
+      kind:'page', src:'seller-delivery.html',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'deliveries',
-      note:'Dispatch board. Page-level data-require-role was blanking this for non-admins — fixed 1d81f11.' },
+      note:'Was dispatch.html — the ADMIN dispatch console (data-require-role="admin"). It ' +
+           'queries every packageRequests document platform-wide with no seller filter, and ' +
+           'firestore.rules only permits a non-admin to read deliveries their own uid is party ' +
+           'to. So the query was rejected outright and the seller got an EMPTY board: the ' +
+           '"blanking" that 1d81f11 tried to fix by loosening the page gate was Firestore ' +
+           'refusing an admin query, not a role bug. It also offered rider suspension. ' +
+           'seller-delivery.html scopes every read to sellerUid == the signed-in seller.' },
 
     { id:'receipts', name:'Receipts', icon:'🧾', tier:'primary',
       kind:'seller', sec:'receipts',
@@ -208,11 +214,14 @@
       mobile:true, desktop:true, activeKey:'fulfilment' },
 
     { id:'riders', name:'Riders', icon:'🏍️', tier:'more',
-      kind:'page', src:'driver.html',
+      kind:'page', src:'seller-delivery.html#riders',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'riders',
-      note:'REVIEW: driver.html is the rider-facing app. Kept to preserve the existing destination, ' +
-           'but a merchant-facing rider roster is the correct long-term target.' },
+      note:'Was driver.html — the RIDER-FACING app. A seller tapping "Riders" in their own ' +
+           'dashboard was handed a personal rider account: the wrong context entirely, and the ' +
+           'previous note here already flagged it as REVIEW. Now a deep link into the seller\'s ' +
+           'Delivery Hub rider roster. Three contexts stay distinct: driver.html = MY rider ' +
+           'account, this = the seller\'s delivery operation, track.html = a buyer\'s own order.' },
 
     { id:'verification', name:'Verification', icon:'✅', tier:'more',
       kind:'page', src:'verification.html',
