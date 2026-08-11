@@ -152,6 +152,21 @@ reads 3 and the card badges read 1. Choosing a winner would silently change badg
 live pages, so the service exposes **both** `lines()` and `units()`, and every migrated call
 site must say which it meant. Convergence is a later, deliberate decision.
 
+### DECIDED 2026-08-12 — the badge converges on **units**
+
+`market-actions.js` adopts the `shared-header.js` formula, `Σ(qty||1)`. Evidence:
+
+* 311 pages already read units; only 5 read lines.
+* **All 5 of those pages also load `shared-header.js`**, and the two badges target different
+  elements (`_syncBadges` deliberately excludes the header pip) — so both are on screen at
+  once, disagreeing whenever an item carries a `qty` field.
+* A shopper with one item at qty 3 should see 3.
+
+Effect when `market-actions.js` is migrated in 2.3: on those 5 pages a qty-field item goes
+1 → 3 (now agreeing with the header); duplicate-row items are unchanged at 3. No change on
+the other 306 pages. The convergence happens once, at that call site, not as a side effect
+spread across the migration.
+
 ### Deliberately NOT uid-scoped
 
 The opposite of the wishlist. A cart is filled by shoppers who have not signed in; stamping an
