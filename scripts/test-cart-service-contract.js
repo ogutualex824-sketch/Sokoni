@@ -358,12 +358,15 @@ console.log('\nL. The frozen perimeter is still frozen');
   const cp = require('child_process');
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ck('L', 'checkout.html untouched', !changed.includes('checkout.html'), changed.join(', '));
-  ck('L', 'cart.js untouched', !changed.includes('cart.js'), changed.join(', '));
-  ck('L', 'provider-wiring.js untouched — the setItem interceptor is 2.6\'s',
-     !changed.includes('provider-wiring.js'), changed.join(', '));
-  ck('L', 'shared-header.js untouched — its badge formula was already units',
-     !changed.includes('shared-header.js'), changed.join(', '));
+  /* Driven by the shared state, not by names hardcoded here. `cart.js untouched` was
+     hardcoded and became stale the moment 2.3.6 legitimately migrated it — the third
+     time a per-suite list has gone stale in this track. The frozen set is the part that
+     must hold no matter how many surfaces migrate. */
+  const STATE = require('./cart-migration-state.js');
+  STATE.FROZEN.forEach(f => ck('L', f + ' untouched — its own slice owns it',
+    !changed.includes(f), changed.join(', ')));
+  STATE.DEFERRED.forEach(f => ck('L', f + ' deferred and untouched',
+    !changed.includes(f), changed.join(', ')));
 }
 
 /* ── summary ── */

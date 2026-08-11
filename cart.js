@@ -9,30 +9,28 @@
    Now the raw value is quarantined under its own key first, so support can
    restore it and so the bug leaves evidence instead of a shrug. A non-array
    is treated as corruption too: JSON.parse("5") succeeds and would otherwise
-   hand every downstream .map/.reduce a number. */
-function _readCart(){
-  const raw = localStorage.getItem("cart");
-  if (raw == null || raw === "") return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-    throw new Error("cart was " + typeof parsed + ", expected an array");
-  } catch (e) {
-    try { localStorage.setItem("cart_corrupt_" + Date.now(), raw); } catch (_) {}
-    console.error("[SOKONI] Cart data unreadable — quarantined, not overwritten: " + e.message);
-    return [];
-  }
-}
+   hand every downstream .map/.reduce a number.
 
-let cart = _readCart();
+   That quarantine is NOT gone — it moved into SokoniCart, where every surface gets it
+   instead of only this page. */
 
-/* Single write path for this page. Every mutation persists AND announces, so
-   the header badge can never disagree with stored state. */
-function _saveCartState(){
-  try { localStorage.setItem("cart", JSON.stringify(cart)); }
-  catch (e) { console.error("[SOKONI] Could not save cart: " + e.message); return; }
-  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: cart.length } })); } catch (_) {}
+/* Canonical cart (Track 2.3.6). This page owned _readCart and _saveCartState: the last
+   of the thirteen copies of that read/modify/write cycle, and the one the others were
+   modelled on. SokoniCart owns the read, the write, the announcement and the quarantine.
+
+   `cart` survives as a RENDER PROJECTION. _syncCart() refills it from the service at the
+   top of renderCart(), so the totals, the food grouping and the row templates below need
+   no change — and none of them can drift from what is stored. Nothing writes to it. */
+function _cartSvc(){ return window.SokoniCart || null; }
+
+let cart = [];
+
+function _syncCart(){
+  const c = _cartSvc();
+  cart = c ? c.list() : [];
+  return cart;
 }
+_syncCart();
 
 const cartContainer = document.getElementById("cartContainer");
 
@@ -185,6 +183,10 @@ function renderProductSection(productItems){
 
 /* ── Main render ── */
 function renderCart(){
+    /* Refill the projection from the authority BEFORE the early return, so what is drawn
+       always matches what is stored — including changes made on another tab or by a
+       surface that is not this page. */
+    _syncCart();
     if(!cartContainer) return;
 
     const foodItems    = cart.filter(i => i.type === 'food');
@@ -213,33 +215,47 @@ function renderCart(){
 }
 
 /* ── Mutations ── */
+/* removeAt, NOT removeAllById. This is the cart page's per-ROW delete: a shopper with
+   three duplicate rows of one product who taps ✖ on one expects two to remain. The
+   product-level removal (removeAllById) belongs to the marketplace card toggle, where
+   "remove from cart" means the product is gone. Two different intents, two methods. */
 function removeFromCart(index){
-    cart.splice(index, 1);
-    _saveCartState();
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    if(!c.removeAt(index)){ showNotif("Couldn't update your cart — please try again", "error"); return; }
     showNotif("Item removed from cart", "success");
     renderCart();
 }
 
+/* Food rows are keyed by cartId, not by product id: the same dish can appear twice with
+   different notes and they are different lines. */
 function removeFoodItem(cartId){
-    const idx = cart.findIndex(i => i.cartId === cartId);
-    if(idx !== -1) cart.splice(idx, 1);
-    _saveCartState();
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    if(!c.removeByCartId(cartId)){ showNotif("Couldn't update your cart — please try again", "error"); return; }
     showNotif("Item removed", "success");
     renderCart();
 }
 
+/* qty <= 0 removing the row is EXISTING behaviour and is preserved — the service's
+   setQty does the same thing, but the branch stays here so the correct toast still
+   fires. */
 function foodQty(cartId, qty){
     if(qty <= 0){ removeFoodItem(cartId); return; }
-    const item = cart.find(i => i.cartId === cartId);
-    if(item){ item.qty = qty; }
-    _saveCartState();
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    /* A string ref resolves cartId first, so a food line is matched by its own key. */
+    if(!c.setQty(cartId, qty)){ showNotif("Couldn't update the quantity — please try again", "error"); return; }
     renderCart();
 }
 
 function productQty(index, qty){
     if(qty <= 0){ removeFromCart(index); return; }
-    if(cart[index]){ cart[index].qty = qty; }
-    _saveCartState();
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    /* A numeric ref is an array index — the rendered row order, which is the service's
+       order, so duplicate rows stay individually adjustable. */
+    if(!c.setQty(index, qty)){ showNotif("Couldn't update the quantity — please try again", "error"); return; }
     renderCart();
 }
 
@@ -291,9 +307,12 @@ function moveToWishlist(index){
 }
 
 function clearCart(){
-    if(cart.length === 0) return;
-    cart = [];
-    _saveCartState();
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    if(c.lines() === 0) return;
+    /* The one legitimate caller of clear(). checkout.html also clears the cart after an
+       order, but that is part of the order lifecycle and stays on its own path until 2.4. */
+    if(!c.clear()){ showNotif("Couldn't clear your cart — please try again", "error"); return; }
     showNotif("Cart cleared", "success");
     renderCart();
 }

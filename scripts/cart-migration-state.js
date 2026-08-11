@@ -22,6 +22,7 @@ const MIGRATED = [
   'script.js',                                                /* 2.3 surface 3 */
   'flashsale.html', 'business.html', 'ministore.html',          /* 2.3 surface 4 */
   'wishlist.html',                                            /* 2.3 surface 5 */
+  'cart.js',                                                  /* 2.3 surface 6 */
 ];
 
 /* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
@@ -43,7 +44,7 @@ const DEFERRED = [
 /* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
-  'cart.js', 'shared-header.js',
+  'shared-header.js',
   'food.html', 'profile.js', 'seller-wiring.js',
 ];
 
@@ -51,7 +52,12 @@ const PENDING = [
    artifacts. Named so "unexpected" means unexpected. */
 const PRE_EXISTING = [
   'availability-manager.html',          /* Track 1 — availability schedule projection */
-  'cart.html',                          /* Track 4 — min-width:0 overflow fix */
+  /* cart.html is dirty for TWO reasons: the Track 4 min-width:0 overflow fix, and the
+     2.3.6 <script src="sokoni-cart.js"> tag its page now needs. It is deliberately NOT
+     in MIGRATED — two inline cart READERS remain in it and they are 2.3.7 work. Marking
+     it migrated early would have made the scanner control "migrated surfaces have no
+     direct cart access" fail, which is exactly what caught this. */
+  'cart.html',
   'version.json',                       /* predeploy artifacts, not authored by this work */
   'docs/release-gates/unknown.json',
 ];

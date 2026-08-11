@@ -49,6 +49,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 /* LAYOUT */
 .cart-layout{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:16px 16px 40px;max-width:1100px;margin:0 auto;}
 @media(max-width:820px){.cart-layout{grid-template-columns:1fr;}}
+/* `1fr` is minmax(AUTO,1fr), and that auto minimum is the grid ITEM's min-content —
+   so the track cannot shrink below the widest cart card, however narrow the screen.
+   With real rows (long product names) the column measured 852px inside a 320px
+   viewport and 960px inside 412px; on desktop it took 795px of a 712px slot. The
+   media query above was working correctly the whole time — the column simply refused
+   to shrink, and an ancestor's overflow:hidden clipped the excess instead of
+   producing a scrollbar, which is why the standard scrollWidth check reported clean
+   and the defect stayed invisible to automated checks.
+
+   min-width:0 releases that floor so the track takes its 1fr share and the content
+   wraps. This is the structural fix; overflow-x:hidden would only re-hide it. */
+.cart-items-col,.cart-summary-col{min-width:0;}
 
 /* ITEMS COL */
 .cart-items-col{display:flex;flex-direction:column;gap:10px;}
@@ -241,6 +253,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <!-- Canonical wishlist authority. Must load before cart.js, whose moveToWishlist()
      calls SokoniWishlist instead of writing localStorage['wishlist']. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.3.6). cart.js no longer reads or writes
+     localStorage['cart'] — every row removal, quantity change and Clear Cart goes
+     through the service. Without this tag the page renders an empty cart and every
+     control fails closed, so load order is asserted by the suite. -->
+<script src="sokoni-cart.js"></script>
 <script src="cart.js"></script>
 <script>
 /* Keep the mobile checkout bar's total in sync with the order summary (single source),
