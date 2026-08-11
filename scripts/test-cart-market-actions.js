@@ -281,7 +281,10 @@ console.log('\nM. No page is left calling a service it never loaded');
   const pages = ['car-hub.html', 'category.html', 'healthcare.html', 'index.html', 'services.html'];
   const missing = pages.filter(p => !/src="sokoni-cart\.js"/.test(read(p)));
   ck('M', 'all 5 market-actions pages load sokoni-cart.js', missing.length === 0, missing.join(', '));
-  const others = cp.execSync('git grep -l "market-actions.js" -- "*.html" || true',
+  /* Match the SCRIPT TAG, not the filename anywhere in the file — business.html mentions
+     market-actions.js in a comment explaining how its quantity model differs, and a raw
+     text grep counted that as a page loading it. */
+  const others = cp.execSync('git grep -l "src=\\"market-actions.js\\"" -- "*.html" || true',
     { cwd: ROOT, encoding: 'utf8' }).split('\n').map(s => s.trim()).filter(Boolean);
   ck('M', 'and there are no OTHER market-actions pages', others.length === pages.length,
      others.join(', '));

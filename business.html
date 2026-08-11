@@ -7,6 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <script src="security.js"></script>
+<!-- Canonical cart access path (Track 2.3). This page no longer touches
+     localStorage['cart']; without this tag add-to-cart fails closed. -->
+<script src="sokoni-cart.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Business Profile — SOKONI</title>
   <meta name="description" content="View business profile, products, services and reviews on SOKONI Kenya marketplace.">
@@ -1062,21 +1065,27 @@ window.bizFilterProducts = function (cat, btn) {
   document.getElementById('prodGrid').innerHTML = list.map(p => productCardHtml(p)).join('');
 };
 
+/* Canonical cart (Track 2.3).
+
+   This surface uses a THIRD quantity model — merge by id with a qty bump, unlike
+   product.js (duplicate rows) and market-actions.js (refuse the duplicate). Preserved
+   exactly: SokoniCart.add(item, {merge:true}) bumps an existing row's qty and appends
+   otherwise, which is what this code did by hand. The service's merge additionally
+   refuses to land on a food row, which this hand-rolled version would have collided with
+   had a food line ever shared an id.
+
+   The try/catch already reported failure honestly — one of the few call sites that did —
+   so the only change is that the write now goes through the service and the result is
+   checked rather than inferred from the absence of an exception. */
 window.bizAddToCart = function (id, name, price, image) {
-  try {
-    let cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const idx = cart.findIndex(i => i.id === id);
-    if (idx >= 0) {
-      cart[idx].qty = (cart[idx].qty || 1) + 1;
-    } else {
-      cart.push({ id, name, price: Number(price), image, qty: 1, businessId: BIZ_ID });
-    }
-    localStorage.setItem('cart', JSON.stringify(cart));
-    if (window.skNavRefresh) skNavRefresh();
-    showToast('Added to cart!');
-  } catch (e) {
-    showToast('Could not add to cart');
-  }
+  const c = window.SokoniCart;
+  if (!c) { showToast('Cart is still loading'); return false; }
+  const ok = c.add({ id, name, price: Number(price), image, qty: 1, businessId: BIZ_ID },
+                   { merge: true });
+  if (!ok) { showToast('Could not add to cart'); return false; }
+  if (window.skNavRefresh) skNavRefresh();
+  showToast('Added to cart!');
+  return true;
 };
 
 function renderOverviewProducts(list) {

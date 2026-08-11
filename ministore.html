@@ -7,6 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <script src="security.js"></script>
+<!-- Canonical cart access path (Track 2.3). This page no longer touches
+     localStorage['cart']; without this tag add-to-cart fails closed. -->
+<script src="sokoni-cart.js"></script>
   <!-- Identifies this document to the service worker's root-cache guard
        (rootCacheIsValid in service-worker.js). Without it this page was
        unidentified, and an unidentified document could occupy the "/" cache slot
@@ -1384,14 +1387,24 @@ function _msCardClick(cardEl, id){
 }
 window._revealAdultCard=_revealAdultCard; window._msCardClick=_msCardClick;
 
+/* Canonical cart (Track 2.3). Merge-by-id with a qty bump, preserved exactly via
+   SokoniCart.add(item,{merge:true}).
+
+   The hand-rolled `c.type!=='food'` guard is preserved in effect, not by accident: the
+   service merges only onto rows with no cartId, and food rows carry both `type:'food'`
+   and a cartId — and key their identity on `itemId`, not `id`, so they could never have
+   matched here anyway. The guard was belt-and-braces and remains so.
+
+   It also stops swallowing failures. The bare setItem meant a quota error threw before
+   toast() ever ran, so the shopper saw nothing at all — no confirmation and no error. */
 function addToCartFromStore(id){
   const p = getProds().find(x=>x.id===id);
-  if(!p) return;
-  let cart = []; try{cart=JSON.parse(localStorage.getItem("cart"))||[];}catch(e){}
-  const ex = cart.find(c=>c.id===id && c.type!=='food');
-  if(ex){ ex.qty=(ex.qty||1)+1; } else { cart.push({...p,qty:1}); }
-  localStorage.setItem("cart",JSON.stringify(cart));
+  if(!p) return false;
+  const c = window.SokoniCart;
+  if(!c){ toast("Cart is still loading"); return false; }
+  if(!c.add({...p,qty:1},{merge:true})){ toast("Could not add to cart"); return false; }
   toast(p.name.substring(0,25)+" added to cart!");
+  return true;
 }
 
 function renderStoreReviews(){

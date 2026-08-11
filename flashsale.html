@@ -252,6 +252,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <!-- Canonical wishlist authority. Must load before the inline block below, whose
      fsAddWish() calls SokoniWishlist instead of writing localStorage['wishlist']. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.3). The inline block below no longer
+     touches localStorage['cart']; without this tag Add to Cart and Buy Now fail closed. -->
+<script src="sokoni-cart.js"></script>
 <script>
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -325,11 +328,19 @@ function showToast(msg){
 function _findProduct(id){ return allProducts.find(p=>p.id===id)||DEMO_FLASH.find(p=>p.id===id)||null; }
 
 /* ── CART / WISH ── */
+/* Canonical cart (Track 2.3). This read and wrote localStorage['cart'] directly.
+   Append semantics are preserved — this surface has never de-duplicated, and the flash
+   price is carried on the row as `{...p, price}` exactly as before. */
+function _fsCart(){ return window.SokoniCart || null; }
+
 function fsAddCart(id,price){
-  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return;
-  const cart=JSON.parse(localStorage.getItem('cart')||'[]');
-  cart.push({...p,price}); localStorage.setItem('cart',JSON.stringify(cart));
+  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return false;
+  const c=_fsCart();
+  /* Fails closed — no localStorage fallback. */
+  if(!c){ showToast('Cart is still loading'); return false; }
+  if(!c.add({...p,price})){ showToast("Couldn't add to cart — try again"); return false; }
   updateCartPips(); showToast('⚡ Added to cart 🛒');
+  return true;
 }
 /* Canonical wishlist (wishlistItems/{uid}_{productId} via commerceDispatch). This wrote
    localStorage['wishlist'] and was the last live writer of that key anywhere in the repo —
@@ -353,11 +364,21 @@ function fsAddWish(id){
                                                              : "Couldn't save — try again");
                 return false; });
 }
+/* The THIRD copy of the Buy Now navigate-on-failure pattern, after product.js and
+   category.js. Like script.js and unlike those two it APPENDS rather than replacing —
+   preserved, because changing it would be a behaviour change dressed as a migration.
+
+   What is corrected is the navigation: it ran unconditionally, so a storage failure sent
+   the shopper to checkout with the PREVIOUS cart still loaded — buying something they had
+   not chosen, at a total they had never seen. Nothing is navigated to until the write has
+   actually landed. */
 function fsBuyNow(id,price){
-  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return;
-  const cart=JSON.parse(localStorage.getItem('cart')||'[]');
-  cart.push({...p,price}); localStorage.setItem('cart',JSON.stringify(cart));
+  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return false;
+  const c=_fsCart();
+  if(!c){ showToast('Cart is still loading'); return false; }
+  if(!c.add({...p,price})){ showToast("Couldn't start checkout — try again"); return false; }
   window.location.href='checkout.html';
+  return true;
 }
 
 /* ── CATEGORIES ── */
@@ -449,8 +470,20 @@ function searchFS(){ renderGrid(); }
 
 /* ── CART PIPS ── */
 function updateCartPips(){
-  const cart=JSON.parse(localStorage.getItem('cart')||'[]');
-  const n=cart.reduce((s,i)=>s+(i.qty||1),0);
+  /* This surface ALREADY counted units — reduce((s,i)=>s+(i.qty||1),0) — so units() is a
+     like-for-like swap, not a semantics change. It is the only migrated surface where the
+     badge number does not move at all. */
+  const c=_fsCart();
+  const n=c?c.units():null;
+  if(n==null){
+    /* No service, no count. Rendering 0 would assert an empty cart this page cannot
+       verify; the pips are simply left hidden. */
+    const pip0=document.getElementById('bnavCartPip');
+    if(pip0){pip0.textContent='';pip0.style.display='none';}
+    const b0=document.getElementById('cartBadge');
+    if(b0){b0.textContent='';b0.style.display='none';}
+    return;
+  }
   const pip=document.getElementById('bnavCartPip');
   if(pip){pip.textContent=n||'';pip.style.display=n?'flex':'none';}
   const badge=document.getElementById('cartBadge');
