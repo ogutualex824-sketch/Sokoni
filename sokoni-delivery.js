@@ -365,13 +365,29 @@ const SokoniDelivery = {
     /* Reject unusable fixes rather than plotting a marker in the Gulf of Guinea. */
     if (!Number.isFinite(a) || !Number.isFinite(b) ||
         Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return;
-    await updateDoc(doc(db, 'packageRequests', deliveryRef), {
-      driverLat:           a,
-      driverLng:           b,
-      driverLocUpdatedAt:  new Date().toISOString(),
-      ...(Number.isFinite(Number(extras?.speed)) ? { driverSpeed: Number(extras.speed) } : {}),
-      updatedAt:           serverTimestamp(),
-    });
+    const speed = Number.isFinite(Number(extras?.speed)) ? { driverSpeed: Number(extras.speed) } : {};
+    try {
+      await updateDoc(doc(db, 'packageRequests', deliveryRef), {
+        driverLat:          a,
+        driverLng:          b,
+        driverLocUpdatedAt: new Date().toISOString(),
+        ...speed,
+        updatedAt:          serverTimestamp(),
+      });
+    } catch (e) {
+      /* driverLocUpdatedAt is a NEW key in the rider's permitted set. Until the
+         matching rules release lands, the whole update is refused because
+         affectedKeys().hasOnly() sees an unknown key — which would take the live
+         rider marker down with it. driverLat/driverLng/updatedAt have always been
+         permitted, so retry without the optional field: the buyer still gets a
+         moving marker, and freshness falls back to updatedAt (the tracking page
+         already reads either). Remove this fallback once the rules are released. */
+      if (e?.code !== 'permission-denied') throw e;
+      console.warn('[SokoniDelivery] position write refused; retrying without driverLocUpdatedAt');
+      await updateDoc(doc(db, 'packageRequests', deliveryRef), {
+        driverLat: a, driverLng: b, ...speed, updatedAt: serverTimestamp(),
+      });
+    }
   },
 
   /* ─────────────────────────────────────────
