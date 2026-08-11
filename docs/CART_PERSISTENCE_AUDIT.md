@@ -1,6 +1,6 @@
 # Cart Persistence — Audit and Track 2 Plan
 
-**Status:** Audit complete. **Slice 2.1 done (not deployed); 2.2–2.7 not started.**
+**Status:** Audit complete. **2.1 and 2.2A done (not deployed); 2.2B–2.7 not started.**
 Related: [[WISHLIST_CANONICALISATION]] · [[Commerce Lifecycle]] · [[CANONICAL_COLLECTIONS]]
 
 ---
@@ -105,12 +105,72 @@ shipped source and runs it in a `vm` sandbox against a real emulator.
 | slice | scope | gate |
 |---|---|---|
 | **2.1** | KASS cart truth | **done, not deployed** |
-| 2.2 | canonical client cart service | design decision first: local service + optional authenticated persistence, **or** a real server cart |
+| **2.2A** | canonical client cart service, built inert | **done, not deployed** — see below |
+| 2.2B | migrate one representative writer + reader | not started |
 | 2.3 | migrate 17 writers / 27 readers | one surface at a time, as Track 3 |
 | 2.4 | checkout boundary | `checkout.html` holds 10 references incl. both post-order `removeItem('cart')` calls — inside the do-not-modify perimeter |
 | 2.5 | food-hub `sokoniCart` bridge | |
 | 2.6 | remove the global `setItem` interceptor | only safe once 2.2–2.5 land |
 | 2.7 | cart isolation / persistence suite | |
 
-**The 2.2 decision is not made.** The audit proves only what cannot be done: the existing
-`carts/` model cannot be adopted as-is. Whether SOKONI needs a server cart at all is open.
+**The 2.2 decision is made:** canonical client service first, `localStorage['cart']` retained as
+the store, authenticated persistence deferred to a separate capability behind the same service.
+A server-authoritative cart is NOT being built now.
+
+---
+
+## Slice 2.2A — the SokoniCart service (done, inert)
+
+`sokoni-cart.js` exposes `window.SokoniCart`. **No page loads it yet** — it ships unreferenced
+so the service and the migration can be reviewed separately.
+
+### The design constraint that shaped everything
+
+`checkout.html:2443` sends `orderItems: cart` — the raw array — to `verifyIntasendPayment`,
+which resolves `item.id || item.productId` against the product catalogue and
+`item.qty || item.quantity` for its price cross-check. **The cart item shape is a
+server-facing payment contract**, not a UI convention. So the service preserves the shape
+exactly and normalises nothing; a field it "tidied" would change what lands in an order.
+
+### Two quantity models, both live, both kept
+
+```
+product.js   pushes N DUPLICATE rows, no qty field
+cart.js      reads a qty field on a single row
+```
+
+Both charge correctly — the server multiplies unit price by qty and sums. They differ in what
+a COUNT means, and the platform already disagrees with itself:
+
+```
+shared-header.js:1250   cart.reduce((s,i) => s + (i.qty||1), 0)   -> units
+market-actions.js:71    _loadCart().length                        -> lines
+```
+
+For one product added three times via `product.js` both read 3; via a `qty` field the header
+reads 3 and the card badges read 1. Choosing a winner would silently change badge numbers on
+live pages, so the service exposes **both** `lines()` and `units()`, and every migrated call
+site must say which it meant. Convergence is a later, deliberate decision.
+
+### Deliberately NOT uid-scoped
+
+The opposite of the wishlist. A cart is filled by shoppers who have not signed in; stamping an
+owner would empty every anonymous visitor’s cart. Assertion K pins this: no `firebaseAuth`,
+no uid in the key, no auth listener.
+
+### Writes stay interceptable
+
+The service writes through ordinary `localStorage.setItem('cart', ...)` **on purpose**, so
+`provider-wiring.js`’s `cart` ⇄ `sokoniCart` bridge keeps firing. Bypassing it would
+desynchronise the food hub. The interceptor comes out in 2.6.
+
+### Verified — 66/66 (`scripts/test-cart-service-contract.js`)
+
+Fixtures in the exact shapes the current writers emit, replayed through the real consumer
+logic transcribed from `checkout.html`, `cart.js` and `verifyIntasendPayment`. The assertions
+that matter are the ones proving the service does *not* tidy: field-for-field round trip,
+duplicate rows preserved, both count models reproduced, corruption quarantined.
+
+One behaviour change, deliberate and asserted: `add()` stores a **copy** per push.
+`product.js` currently pushes the same object reference N times, so editing one line silently
+edits all of them. Copying cannot alter totals and stops that leak.
