@@ -397,6 +397,11 @@ input:checked+.ch-toggle-slider::before{transform:translateX(18px);background:#0
 .bnav-item:hover i,.bnav-item.active-bnav i{color:#71ff00;}
 body{padding-bottom:70px;}
 </style>
+<!-- Canonical wishlist authority. market-actions.js and the Saved Parts tile both call
+     SokoniWishlist; without this tag _wl() is null forever, so hearts answer "Wishlist is
+     still loading" and the tile stays "—". Not deferred: market-actions.js is, so this
+     evaluates first either way. -->
+<script src="sokoni-wishlist.js"></script>
 <script src="market-actions.js" defer></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
@@ -4785,19 +4790,36 @@ var CarHubPro = (function(){
     try{
       var bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]'); cars=bks.slice(0,3);
       var mBks=JSON.parse(localStorage.getItem('sokoniMechBookings')||'[]'); mechs=mBks.slice(0,3);
-      var pWl=JSON.parse(localStorage.getItem('sokoniWishlist')||'[]'); parts=pWl.slice(0,3);
     }catch(e){}
+    /* Saved Parts came from localStorage['sokoniWishlist'] — a legacy key nothing writes
+       any more, so it would count to zero forever. The canonical count is SokoniWishlist,
+       which resolves asynchronously, so this tile renders "—" until it answers and is
+       filled in below. Never 0-for-unknown: a real zero and an unresolved read must not
+       look the same. (The old code also did slice(0,3), capping the displayed total at 3.) */
+    var partsCount = null;
     wrap.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;">'
       +'<div style="background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:14px;padding:16px;text-align:center;">'
       +'<div style="font-size:26px;font-weight:900;color:#71ff00;">'+cars.length+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;margin-top:4px;">Car Bookings</div></div>'
       +'<div style="background:rgba(249,115,22,0.04);border:1px solid rgba(249,115,22,0.15);border-radius:14px;padding:16px;text-align:center;">'
       +'<div style="font-size:26px;font-weight:900;color:#f97316;">'+mechs.length+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;margin-top:4px;">Mechanic Jobs</div></div>'
       +'<div style="background:rgba(0,170,255,0.04);border:1px solid rgba(0,170,255,0.15);border-radius:14px;padding:16px;text-align:center;">'
-      +'<div style="font-size:26px;font-weight:900;color:#00aaff;">'+parts.length+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;margin-top:4px;">Saved Parts</div></div>'
+      +'<div style="font-size:26px;font-weight:900;color:#00aaff;" id="chSavedParts">'+(partsCount==null?'—':partsCount)+'</div><div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;margin-top:4px;">Saved Parts</div></div>'
       +'</div>'
       +(!cars.length&&!mechs.length?'<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.25);"><div style="font-size:36px;margin-bottom:12px;">📊</div><div style="font-size:13px;font-weight:700;">No activity yet</div><div style="font-size:11px;margin-top:6px;">Browse cars, book mechanics, and save parts to see them here.</div></div>':'')
       +(cars.map(function(b){ return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;margin-bottom:8px;"><div style="font-size:12px;font-weight:800;color:white;">🚗 '+b.carMake+' '+b.carModel+'</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">'+new Date(b.ts||0).toLocaleDateString()+' · KES '+(b.totalCost||0).toLocaleString()+'</div></div>'; }).join(''))
       +(mechs.map(function(b){ return '<div style="background:rgba(249,115,22,0.03);border:1px solid rgba(249,115,22,0.1);border-radius:12px;padding:12px 14px;margin-bottom:8px;"><div style="font-size:12px;font-weight:800;color:white;">🔧 '+b.mechanic+'</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">'+b.vehicle+' · '+b.desc+'</div></div>'; }).join(''));
+
+    /* Fill Saved Parts once the canonical count resolves. On failure the tile keeps "—":
+       telling a signed-in owner they have 0 saved parts when the read simply failed is a
+       fabricated metric, and indistinguishable from a true zero. */
+    (function(){
+      var W = window.SokoniWishlist;
+      if(!W) return;
+      W.load().then(function(){
+        var el = document.getElementById('chSavedParts');
+        if(el) el.textContent = W.count();
+      }).catch(function(){ /* leave "—" */ });
+    })();
   }
 
   /* ── MODAL ── */

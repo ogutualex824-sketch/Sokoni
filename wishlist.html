@@ -311,10 +311,25 @@
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
+<!-- Canonical wishlist authority. Must load before the render block below, which calls
+     SokoniWishlist for load, list, remove and the legacy migration. -->
+<script src="sokoni-wishlist.js"></script>
 <script>
-/* ── WISHLIST PREMIUM RENDER ── */
+/* ── WISHLIST PREMIUM RENDER ──────────────────────────────────────────────────
+   Canonical authority: wishlistItems/{uid}_{productId}, reached only through
+   SokoniWishlist → commerceDispatch.
+
+   _wishData used to be seeded from localStorage['wishlist'] and written back on every
+   mutation, with a two-way sync to the legacy wishlists/{uid} document. That made the
+   page its own wishlist authority, per-DEVICE rather than per-USER, and disagreeing with
+   product detail, category, marketplace and the market-actions cards once those moved to
+   the canonical service.
+
+   It is now a RENDER BUFFER only: filled from SokoniWishlist.list(), never from
+   localStorage, and never written back. The index-based handlers below (share, remove,
+   move-to-cart, buy-now) keep working because the buffer mirrors canonical order. */
 var _wishData = [];
-try { _wishData = JSON.parse(localStorage.getItem("wishlist")) || []; } catch(e){}
+var _wishState = 'loading';   /* loading | ready | error — never "empty on failure" */
 
 function showNotif(msg, type){
   var c = document.getElementById("notificationContainer");
@@ -363,6 +378,26 @@ function renderWishlist(list){
   var container = document.getElementById("wishlistContainer");
   if(!container) return;
   updateWishCount(list);
+
+  /* A failed canonical read is NOT an empty wishlist. Rendering "Your wishlist is
+     empty" when we simply could not ask is a claim we cannot support, and it invites
+     the shopper to re-save things they already have. */
+  if(_wishState === 'error'){
+    container.innerHTML = `<div class="wish-empty">
+      <div class="wish-empty-icon">⚠️</div>
+      <h2>Couldn't load your wishlist</h2>
+      <p>Your saved items are safe — we just can't show them right now.</p>
+      <button class="wish-empty-shop" onclick="_wishReload()">Retry</button>
+    </div>`;
+    return;
+  }
+  if(_wishState === 'loading'){
+    container.innerHTML = `<div class="wish-empty">
+      <div class="wish-empty-icon">❤️</div>
+      <h2>Loading your wishlist…</h2>
+    </div>`;
+    return;
+  }
 
   if(list.length === 0){
     container.innerHTML = `<div class="wish-empty">
@@ -416,48 +451,110 @@ function renderWishlist(list){
   }).join("");
 }
 
-/* ── Firestore wishlist sync ── */
-var _wishUid = null;
-var _wishFSCFG = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",
-  projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
-  messagingSenderId:"24799054989",appId:"1:24799054999:web:e1cf6ca8c281bf1abf26c4"};
+/* The "wl-fs" Firebase app and its hardcoded _wishFSCFG are gone.
 
-function _wishFSSave(items){
-  if(!_wishUid) return;
-  (async()=>{try{
-    var {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    var {getFirestore,doc,setDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    var _a=getApps().find(function(a){return a.name==="wl-fs";})||initializeApp(_wishFSCFG,"wl-fs");
-    await setDoc(doc(getFirestore(_a),"wishlists",_wishUid),{items:items,updatedAt:serverTimestamp()},{merge:true});
-  }catch(e){}})();
+   It existed only to read/write wishlists/{uid} directly from the client. Both halves
+   are now removed: the write because that document is migration history rather than
+   authority, and the read because `wishlists` has no rule in firestore.rules — locally
+   or in the live ruleset ca9e8924 — so Firestore denied it by default and always had.
+
+   Deleting it also removes a duplicated hardcoded config (whose appId was a digit wrong
+   until this phase), a second Firebase app instance, and an App Check bypass, since this
+   app was initialised without the shared App Check setup. The page now uses only the
+   canonical service. */
+
+/* _wishFSSave() and _wishFSLoad() removed.
+   _wishFSSave wrote the page's local array straight into wishlists/{uid}.items[] — a
+   direct client write to what is now migration history, not authority. _wishFSLoad
+   merged that document INTO localStorage, which is how the two-way sync existed in the
+   first place. Both are replaced by _wishReadLegacy() (read-only) feeding
+   SokoniWishlist.migrateLegacy(). The legacy document is never written again.
+   _wishFSCFG above is retained solely for that read until wl-fs is retired. */
+
+/* ── Canonical load + one-time legacy migration ───────────────────────────────
+   Order matters. Canonical state must resolve FIRST: migrateLegacy() refuses to run
+   against an unknown wishlist, because treating "we could not read it" as "it is empty"
+   would re-add everything the shopper already has.
+
+   The legacy document is read through the existing wl-fs instance and its items[] are
+   passed straight in — never localStorage, which on this page still holds the old
+   two-way-sync cache. wl-fs stays until that read has a proven replacement.
+
+   The legacy document is never written, mutated or deleted here. It is migration
+   history, not ongoing authority. */
+var _wishUidActive = null;
+
+/* ── LEGACY MIGRATION SOURCE IS UNAVAILABLE FROM THE CLIENT ───────────────────
+   There is deliberately no _wishReadLegacy() here, and no "wl-fs" Firebase app.
+
+   `wishlists/{uid}` has NO rule in firestore.rules — not locally and not in the live
+   ruleset ca9e8924 — and there is no catch-all, so Firestore denies the read by default.
+   The old wl-fs instance was therefore never reading anything: its getDoc sat inside a
+   catch(e){} and failed silently on every page load. Removing it loses no capability and
+   removes a duplicated hardcoded config plus an App Check bypass.
+
+   SokoniWishlist.migrateLegacy() remains implemented and proven (engine + safety
+   properties, 52/52) but has no production input path. When one is wanted it belongs
+   server-side, where the Admin SDK is not subject to rules:
+
+       Firebase Auth → commerceDispatch → Admin SDK reads wishlists/{uid}
+                     → validate items → SokoniWishlist canonical write semantics
+                     → wishlistItems/{uid}_{productId}      (legacy document untouched)
+
+   That is a separate, explicitly authorised decision. Nothing here fabricates a
+   migration that cannot run, and no legacy data is touched meanwhile. */
+
+function _wishRender(){
+  _wishData = (window.SokoniWishlist ? window.SokoniWishlist.list() : []).slice();
+  renderWishlist(_wishData);
 }
 
-function _wishFSLoad(uid){
-  _wishUid = uid;
-  (async()=>{try{
-    var {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    var {getFirestore,doc,getDoc}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    var _a=getApps().find(function(a){return a.name==="wl-fs";})||initializeApp(_wishFSCFG,"wl-fs");
-    var snap=await getDoc(doc(getFirestore(_a),"wishlists",uid));
-    if(snap.exists()){
-      var fsItems=(snap.data().items||[]);
-      var ids=new Set(_wishData.map(function(x){return x.id||x.name;}));
-      fsItems.forEach(function(it){if(!ids.has(it.id||it.name))_wishData.push(it);});
-      localStorage.setItem("wishlist",JSON.stringify(_wishData));
-      renderWishlist(_wishData);
-    } else if(_wishData.length){
-      _wishFSSave(_wishData);
-    }
-  }catch(e){}})();
+function _wishReload(){
+  var W = window.SokoniWishlist;
+  var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+  if(!W || !uid){ _wishState = 'ready'; _wishData = []; renderWishlist(_wishData); return; }
+  _wishUidActive = uid;
+  _wishState = 'loading'; renderWishlist([]);
+
+  W.load(true).then(function(){
+    _wishState = 'ready';
+    _wishRender();
+    /* No legacy migration call here — see the note above. The client cannot read
+       wishlists/{uid}, so wiring one would only look like it migrates. */
+  }).catch(function(e){
+    /* Canonical unknown → error state. Never an empty wishlist. */
+    _wishState = 'error';
+    renderWishlist([]);
+    console.warn('[wishlist] canonical load failed:', e && (e.code || e.message));
+  });
 }
 
 document.addEventListener("sokoniAuthReady",function(e){
   var uid=e.detail&&e.detail.uid;
-  if(uid) _wishFSLoad(uid);
+  if(uid) _wishReload();
 });
 if(window.firebaseAuth&&window.firebaseAuth.currentUser){
-  _wishFSLoad(window.firebaseAuth.currentUser.uid);
+  _wishReload();
 }
+
+/* Account switch: SokoniWishlist clears its own cache, but this page must not keep
+   painting the previous account's rows while the new state loads. */
+(function(){
+  var a = window.firebaseAuth;
+  if(!a || typeof a.onAuthStateChanged !== 'function') return;
+  a.onAuthStateChanged(function(u){
+    var uid = (u && u.uid) || null;
+    if(uid === _wishUidActive) return;
+    _wishData = []; _wishState = uid ? 'loading' : 'ready';
+    renderWishlist(_wishData);
+    if(uid) _wishReload();
+  });
+})();
+
+/* Canonical change anywhere — this page, product detail, category, marketplace. */
+window.addEventListener('sokoni:wishlist-changed', function(){
+  if(_wishState === 'ready') _wishRender();
+});
 
 /* Share by index. The old handler serialised the product NAME into an inline
    onclick string literal, escaping single quotes only — double quotes,
@@ -478,26 +575,41 @@ function shareWish(index){
   });
 }
 
+/* Both mutations go through the canonical service and only report success once it
+   resolves. Previously they spliced a local array, wrote localStorage and announced
+   success immediately — a localStorage write cannot fail the way a server call can, so
+   the shopper was always told it worked. */
 function removeWishlist(index){
-  _wishData.splice(index, 1);
-  localStorage.setItem("wishlist", JSON.stringify(_wishData));
-  _wishFSSave(_wishData);
-  showNotif("Removed from wishlist", "error");
-  renderWishlist(_wishData);
+  var item = _wishData[index];
+  var W = window.SokoniWishlist;
+  if(!item || !W) return;
+  W.remove(item.productId || item.id).then(function(){
+    showNotif("Removed from wishlist", "error");
+    _wishRender();
+  }).catch(function(){
+    showNotif("Couldn't remove — try again", "error");
+  });
 }
 
 function moveToCart(index){
   var item = _wishData[index];
+  var W = window.SokoniWishlist;
+  if(!item || !W) return;
+  /* Cart remains client-side for now (Track 2 owns its consolidation); only the
+     wishlist half is canonical here. The cart write happens first so a failed
+     wishlist removal cannot lose the item entirely. */
   var cart = [];
   try { cart = JSON.parse(localStorage.getItem("cart")||"[]"); } catch(e){}
   cart.push(item);
-  localStorage.setItem("cart", JSON.stringify(cart));
-  _wishData.splice(index, 1);
-  localStorage.setItem("wishlist", JSON.stringify(_wishData));
-  _wishFSSave(_wishData);
+  try { localStorage.setItem("cart", JSON.stringify(cart)); } catch(e){}
   updateCartBadge();
-  showNotif("Moved to cart 🛒", "success");
-  renderWishlist(_wishData);
+
+  W.remove(item.productId || item.id).then(function(){
+    showNotif("Moved to cart 🛒", "success");
+    _wishRender();
+  }).catch(function(){
+    showNotif("Added to cart, but couldn't clear it from your wishlist", "error");
+  });
 }
 
 function buyNowWish(index){

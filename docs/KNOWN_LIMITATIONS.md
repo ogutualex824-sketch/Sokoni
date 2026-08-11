@@ -519,6 +519,13 @@ already failed once.
 precache — so it was not exploitable, but it was a landmine for anyone wiring it
 up. Escaped rather than deleted (another process writes this repo).
 
+> **Closed 2026-08-11.** `wishlist.js` was deleted during the Track 3 wishlist
+> migration, along with its service-worker precache entry. The landmine is gone
+> rather than defused: the file held the retired `localStorage['wishlist']`
+> model, which [[Wishlist Canonicalisation]] replaced with
+> `wishlistItems/{uid}_{productId}`. Nothing loads a wishlist implementation
+> other than `sokoni-wishlist.js` now.
+
 ## Architectural — two definitions of an indexed document
 
 ### Backfill and live indexing produce different records

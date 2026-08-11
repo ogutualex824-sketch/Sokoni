@@ -392,6 +392,10 @@
 <link rel="stylesheet" href="compact-grid.css">
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
+<!-- Canonical wishlist authority. market-actions.js calls SokoniWishlist for every heart;
+     without this tag _wl() is null forever and saving silently never works. Not deferred:
+     market-actions.js is, so this evaluates first either way. -->
+<script src="sokoni-wishlist.js"></script>
 <script src="market-actions.js" defer></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>

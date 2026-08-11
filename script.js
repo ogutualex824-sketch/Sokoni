@@ -182,11 +182,24 @@ let cart = JSON.parse(
    WISHLIST
 ========================= */
 
-let wishlist = JSON.parse(
+/* The wishlist is NOT held here any more. This was `let wishlist = JSON.parse(
+   localStorage.getItem("wishlist"))` — a module-level snapshot taken once at load, which
+   made the homepage its own wishlist authority and let it drift from Product Detail and
+   Category. SokoniWishlist owns the state; ask it at render time rather than caching a
+   copy that goes stale the moment anything changes.
 
-    localStorage.getItem("wishlist")
+   Deliberately a function, not a variable: a `let wishlist = SokoniWishlist.list()` would
+   reintroduce exactly the stale snapshot this removes. */
+function _isWishlisted(id){
+    try { return !!(window.SokoniWishlist && window.SokoniWishlist.isWishlisted(id)); }
+    catch (e) { return false; }
+}
 
-) || [];
+/* Canonical state changed anywhere — including another surface — so repaint the cards. */
+window.addEventListener('sokoni:wishlist-changed', function(){
+    try { if (typeof displayProducts === 'function' && typeof products !== 'undefined') displayProducts(products); }
+    catch (e) {}
+});
 
 /* =========================
    PRODUCTS
@@ -806,7 +819,8 @@ function buildProductCard(product, size = "normal"){
       : "";
     const compact    = (size === "compact");
     const _mkSafeId  = id => String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
-    const inWishlist = Array.isArray(wishlist) && wishlist.some(w => _mkSafeId(w.id) === safeId);
+    /* Asked at render time, so a card cannot disagree with canonical state. */
+    const inWishlist = _isWishlisted(product.id);
     const stockNum   = Number(product.stock);
     const stockChip  = !oos && product.stock !== undefined && stockNum > 0 && stockNum <= 5
         ? `<span class="pcard-stock pcard-stock--low">⚡ Only ${stockNum} left</span>`
@@ -1350,20 +1364,37 @@ async function addToWishlist(productId){
         }
     }
 
-    const alreadyExists = wishlist.find(item => _mkSafe(item.id) === productId);
+    /* Canonical: wishlistItems/{uid}_{productId} via SokoniWishlist → commerceDispatch.
+       This read and wrote localStorage['wishlist'], so the homepage owned a different
+       wishlist from Product Detail and Category — add here, and the heart elsewhere
+       disagreed. Both toasts also fired before anything was persisted, so neither could
+       ever report a failure. */
+    const W = window.SokoniWishlist;
+    if(!W){ showNotification("Wishlist is still loading — try again.", "error"); return; }
 
-    /* REMOVE */
-    if(alreadyExists){
-        wishlist = wishlist.filter(item => _mkSafe(item.id) !== productId);
-        localStorage.setItem("wishlist", JSON.stringify(wishlist));
-        displayProducts(products);
-        showNotification("Removed From Wishlist 💔", "error");
+    const already = W.isWishlisted(selectedProduct.id);
+
+    try{
+        if(already){
+            await W.remove(selectedProduct.id);
+            displayProducts(products);
+            showNotification("Removed From Wishlist 💔", "error");
+            return;
+        }
+        await W.add({
+            productId: selectedProduct.id,
+            shopId:    selectedProduct.shopId || selectedProduct.sellerId || null,
+            name:      selectedProduct.name,
+            price:     selectedProduct.price,
+            image:     selectedProduct.image,
+        });
+    }catch(e){
+        /* The canonical operation failed, so nothing is claimed and nothing repaints. */
+        showNotification(/sign in/i.test((e && e.message) || "") ? "Sign in to save items"
+                                                                : "Couldn't save — try again", "error");
         return;
     }
 
-    /* ADD */
-    wishlist.push(Object.assign({}, selectedProduct, { savedPrice: selectedProduct.price, savedAt: new Date().toISOString() }));
-    localStorage.setItem("wishlist", JSON.stringify(wishlist));
     trackWishlistDemand(selectedProduct.name, true);
     displayProducts(products);
     showNotification("Added To Wishlist ❤️", "success");

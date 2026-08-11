@@ -9,9 +9,10 @@
      SokoniMarket.isInCart(id)            // → boolean
      SokoniMarket.isInWishlist(id)        // → boolean
 
-   Cart items saved as "cart" key in localStorage.
-   Wishlist items saved as "wishlist" key in localStorage.
-   Both are arrays of objects: { id, name, price, image, category, ... }
+   Cart items saved as "cart" key in localStorage: array of { id, name, price, image, ... }.
+   Wishlist is NOT local — it is canonical (wishlistItems/{uid}_{productId}) and reached
+   only through SokoniWishlist. This header used to claim a localStorage["wishlist"] key;
+   that model is retired and no code here writes it.
 ================================================================ */
 window.SokoniMarket = (function(){
 
@@ -48,9 +49,16 @@ window.SokoniMarket = (function(){
     }
   }
   function _loadCart(){     return _readList('cart');     }
-  function _loadWishlist(){ return _readList('wishlist'); }
   function _saveCart(arr){     localStorage.setItem('cart',     JSON.stringify(arr)); _syncBadges(); _emitCartChanged(arr.length); }
-  function _saveWishlist(arr){ localStorage.setItem('wishlist', JSON.stringify(arr)); _syncBadges(); _emitCartChanged(_loadCart().length); }
+
+  /* WISHLIST persistence is NOT here any more.
+     This file is loaded by car-hub, category, healthcare, index and services, and it held
+     a complete second wishlist implementation writing localStorage['wishlist']. That made
+     it a live legacy writer on the very pages whose own scripts had already been migrated:
+     a card button here and the page's own heart wrote to different places and disagreed.
+     SokoniWishlist is the single authority; this file now only renders its state. */
+  function _wl(){ return window.SokoniWishlist || null; }
+  function _wishCount(){ const w = _wl(); return w ? w.count() : 0; }
 
   /* _syncBadges only reaches badges matching its own selectors, which do NOT
      include the header pip. The event is what covers everything else. */
@@ -61,7 +69,7 @@ window.SokoniMarket = (function(){
   /* ── Update any cart count badges visible on the current page ── */
   function _syncBadges(){
     const cartLen = _loadCart().length;
-    const wishLen = _loadWishlist().length;
+    const wishLen = _wishCount();          /* canonical, via SokoniWishlist */
     document.querySelectorAll('[data-cart-count],[class*="cart-count"],[id="cartCount"],[id*="cart-count"]').forEach(el=>{ el.textContent=cartLen; el.style.display=cartLen?'flex':'none'; });
     document.querySelectorAll('[data-wish-count],[class*="wish-count"],[id*="wishCount"],[id*="wish-count"]').forEach(el=>{ el.textContent=wishLen; el.style.display=wishLen?'flex':'none'; });
   }
@@ -136,26 +144,34 @@ window.SokoniMarket = (function(){
     _toast('Removed from cart', '#ff6b6b');
   }
 
+  /* All three now await the canonical operation before touching the UI. Previously the
+     toast and button state were applied first and could never report a failure, because
+     a localStorage write does not fail the way a server call does. */
   function addToWishlist(raw){
-    const item = _norm(raw);
-    const wish = _loadWishlist();
-    if(wish.find(w=>w.id===item.id)){ _toast('Already in wishlist ❤️', '#fbbf24'); return false; }
-    wish.push(item);
-    _saveWishlist(wish);
-    _refreshButtons(item.id);
-    _toast('Added to wishlist ❤️', '#f472b6');
-    return true;
+    const item = _norm(raw), w = _wl();
+    if(!w){ _toast('Wishlist is still loading', '#fbbf24'); return Promise.resolve(false); }
+    if(w.isWishlisted(item.id)){ _toast('Already in wishlist ❤️', '#fbbf24'); return Promise.resolve(false); }
+    return w.add({ productId: item.id, shopId: item.shopId || null,
+                   name: item.name, price: item.price, image: item.image })
+      .then(function(){ _refreshButtons(item.id); _toast('Added to wishlist ❤️', '#f472b6'); return true; })
+      .catch(function(e){
+        _toast(/sign in/i.test((e && e.message) || '') ? 'Sign in to save items'
+                                                       : "Couldn't save — try again", '#ff6b6b');
+        return false;
+      });
   }
 
   function removeFromWishlist(id){
-    _saveWishlist(_loadWishlist().filter(w=>w.id!==String(id)));
-    _refreshButtons(id);
-    _toast('Removed from wishlist', '#ff6b6b');
+    const w = _wl();
+    if(!w){ _toast('Wishlist is still loading', '#fbbf24'); return Promise.resolve(false); }
+    return w.remove(String(id))
+      .then(function(){ _refreshButtons(id); _toast('Removed from wishlist', '#ff6b6b'); return true; })
+      .catch(function(){ _toast("Couldn't update — try again", '#ff6b6b'); return false; });
   }
 
   function toggleWishlist(raw){
     const item = _norm(raw);
-    isInWishlist(item.id) ? removeFromWishlist(item.id) : addToWishlist(item);
+    return isInWishlist(item.id) ? removeFromWishlist(item.id) : addToWishlist(item);
   }
 
   function toggleCart(raw){
@@ -164,7 +180,11 @@ window.SokoniMarket = (function(){
   }
 
   function isInCart(id){     return !!_loadCart().find(c=>c.id===String(id)); }
-  function isInWishlist(id){ return !!_loadWishlist().find(w=>w.id===String(id)); }
+  /* Stays synchronous, but reads SokoniWishlist's in-memory view of canonical state
+     rather than a second store. That view is populated by load() and refreshed on every
+     canonical change, so this is a projection of the authority — not another copy of it.
+     Deliberately NOT `let wishlist = [...]`: nothing here can be written to. */
+  function isInWishlist(id){ const w = _wl(); return !!(w && w.isWishlisted(String(id))); }
 
   /* ── Inject button pair HTML ── */
   /* Returns a string of two <button> elements to embed in any card. */
@@ -207,6 +227,18 @@ window.SokoniMarket = (function(){
   })();
 
   _syncBadges();
+
+  /* Canonical wishlist state changed — here, or on Product Detail, Category, Marketplace,
+     or any other surface on the canonical path. Repaint every SokoniMarket button and
+     badge on this page so the same product never reads two different ways. */
+  window.addEventListener('sokoni:wishlist-changed', function(){
+    try {
+      _syncBadges();
+      document.querySelectorAll('[data-wish-id]').forEach(function(btn){
+        _refreshButtons(btn.getAttribute('data-wish-id'));
+      });
+    } catch (e) {}
+  });
 
   return { addToCart, removeFromCart, addToWishlist, removeFromWishlist, toggleCart, toggleWishlist, isInCart, isInWishlist, btnHTML, _syncBadges };
 

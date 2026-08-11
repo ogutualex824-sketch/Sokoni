@@ -463,15 +463,30 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
 /* Wishlist count badge */
 (function(){
   try{
-    const wl = JSON.parse(localStorage.getItem("sokoniWishlist"))||[];
+    /* Read localStorage["sokoniWishlist"] — a legacy key nothing writes any more, so the
+       badge would count to zero permanently. Canonical count comes from SokoniWishlist and
+       resolves asynchronously, so the badge is painted when it answers and repainted on
+       every canonical change. If the read fails no badge is drawn, which is the correct
+       neutral state here: absence claims nothing, whereas a "0" would. */
     const btn = document.querySelector(".wishlist-nav-btn");
-    if(btn && wl.length > 0){
-      btn.style.position = "relative";
-      const badge = document.createElement("span");
-      badge.style.cssText = "position:absolute;top:-4px;right:-4px;background:#ff4d4d;color:white;font-size:9px;font-weight:900;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;";
-      badge.textContent = wl.length > 9 ? "9+" : wl.length;
-      btn.appendChild(badge);
-    }
+    const W = window.SokoniWishlist;
+    if(!btn || !W) return;
+
+    const paint = () => {
+      const n = W.count();
+      let badge = btn.querySelector("[data-wish-badge]");
+      if(!n){ if(badge) badge.remove(); return; }
+      if(!badge){
+        btn.style.position = "relative";
+        badge = document.createElement("span");
+        badge.setAttribute("data-wish-badge", "1");
+        badge.style.cssText = "position:absolute;top:-4px;right:-4px;background:#ff4d4d;color:white;font-size:9px;font-weight:900;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;";
+        btn.appendChild(badge);
+      }
+      badge.textContent = n > 9 ? "9+" : n;
+    };
+    window.addEventListener("sokoni:wishlist-changed", paint);
+    W.load().then(paint).catch(() => {});
   }catch(e){}
 })();
 
@@ -493,6 +508,10 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
 <!-- Shared product schema: supplies the card variant summary and the variant
      filter facets. Deferred like category.js, so it evaluates first. -->
 <script src="sokoni-product-schema.js" defer></script>
+<!-- Canonical wishlist authority (wishlistItems/{uid}_{productId} via commerceDispatch).
+     Not deferred: category.js is, so this is parsed and evaluated first either way, and
+     SokoniWishlist must exist before the first card handler can fire. -->
+<script src="sokoni-wishlist.js"></script>
 <script src="category.js" defer></script>
 <script src="scroll-memory.js" defer></script>
 <script src="market-actions.js" defer></script>

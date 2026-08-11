@@ -39,15 +39,20 @@ if (_pEmail) _pEmail.innerText = user.email || '';
 
 
 /* WISHLIST + CART */
-const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]");
-const cart     = JSON.parse(localStorage.getItem("cart") || "[]");
-/* Null-guarded like every other lookup in this file. profile.html no longer
-   renders #wishlistCount / #cartItemsCount, and these two lines were the only
-   unguarded ones — so they threw on every load and aborted the whole of the
-   rest of profile.js (orders list, tabs, and the header/menu wiring below). */
-const _wishCountEl = document.getElementById("wishlistCount");
-if (_wishCountEl) _wishCountEl.innerText = wishlist.length;
+/* The wishlist count read localStorage['wishlist'] — a per-device key that is now retired.
+   It rendered into #wishlistCount, which profile.html has not contained for some time, so
+   the read fed nothing; it is removed rather than rerouted, so this page takes no
+   dependency it does not use.
 
+   If a wishlist count returns to this page it must come from SokoniWishlist.count() after
+   load() resolves (add <script src="sokoni-wishlist.js"> above profile.js), and must show
+   "—" until it does. A count is a business metric: an unresolved read rendered as 0 tells
+   the owner their saved items are gone. Never reintroduce a localStorage wishlist read. */
+const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+/* Null-guarded like every other lookup in this file. profile.html no longer renders
+   #cartItemsCount, and this was one of the two unguarded lines — so they threw on every
+   load and aborted the whole of the rest of profile.js (orders list, tabs, and the
+   header/menu wiring below). */
 const _cartCountEl = document.getElementById("cartItemsCount");
 if (_cartCountEl) _cartCountEl.innerText = cart.length;
 

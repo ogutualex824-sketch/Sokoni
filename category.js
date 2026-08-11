@@ -358,7 +358,10 @@ function renderProducts(list){
                       + '<button type="button" ' + dis + ' aria-label="Add ' + _esc(p.name) + ' to cart" '
                       +   'onclick="event.stopPropagation();addToCart(\'' + pid + '\')" '
                       +   'style="' + btn + 'background:#71ff00;color:#050505;border:none;">🛒 Add</button>'
+                      /* data-wish-pid lets _catSyncWishlistButtons() reflect canonical
+                         state on this card without re-rendering the grid. */
                       + '<button type="button" ' + dis + ' aria-label="Save ' + _esc(p.name) + ' to wishlist" '
+                      +   'data-wish-pid="' + _esc(pid) + '" '
                       +   'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')" '
                       +   'style="' + btn + 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);flex:0 0 42px;">🤍</button>'
                       + '</div>'
@@ -522,15 +525,46 @@ async function addToWishlistCat(id){
         }
     }
 
-    const wishData = JSON.parse(localStorage.getItem("wishlist") || "[]");
-    if(wishData.find(p => p.id === product.id)){
+    /* Canonical: wishlistItems/{uid}_{productId} via SokoniWishlist → commerceDispatch.
+       This read and wrote localStorage['wishlist'] directly, so saved items belonged to
+       the DEVICE rather than the account, and the success toast fired with no write
+       behind it at all — it could never fail, because nothing was being attempted. */
+    const W = window.SokoniWishlist;
+    if(!W){ showNotif("Wishlist is still loading — try again.", "error"); return; }
+
+    if(W.isWishlisted(product.id)){
         showNotif("Already in wishlist ❤️", "success");
         return;
     }
-    wishData.push(product);
-    localStorage.setItem("wishlist", JSON.stringify(wishData));
-    showNotif("Added to wishlist ❤️", "success");
+
+    try{
+        await W.add({
+            productId: product.id,
+            shopId:    product.shopId || product.sellerId || null,
+            name:      product.name,
+            price:     product.price,
+            image:     product.image,
+        });
+        /* Only now — the toast follows the canonical write, never precedes it. */
+        showNotif("Added to wishlist ❤️", "success");
+    }catch(e){
+        showNotif(/sign in/i.test((e && e.message) || "") ? "Sign in to save items"
+                                                         : "Couldn't save — try again", "error");
+    }
 }
+
+/* Keep every rendered card in step with canonical state, so the same product reads the
+   same way here, on product detail, and anywhere else that adopts the service. */
+function _catSyncWishlistButtons(){
+    const W = window.SokoniWishlist;
+    if(!W) return;
+    document.querySelectorAll('[data-wish-pid]').forEach(function(btn){
+        const on = W.isWishlisted(btn.getAttribute('data-wish-pid'));
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('is-wishlisted', on);
+    });
+}
+window.addEventListener('sokoni:wishlist-changed', _catSyncWishlistButtons);
 
 /* BUY NOW */
 async function buyNowCat(id){

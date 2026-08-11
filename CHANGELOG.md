@@ -1,3 +1,72 @@
+## [2026-08-11] — FIXED: the wishlist belonged to the device, not the shopper
+
+**Track 3 complete (Phases 4.1–4.7). Not deployed.** Full write-up:
+`docs/WISHLIST_CANONICALISATION.md`.
+
+Four wishlist models were live at once and none of them was the one the server already had.
+The buyer UI wrote `localStorage['wishlist']`, so saved items belonged to a **device**: a
+force-quit, or a session restored as another account, left one shopper looking at another's
+saved items. `localStorage['sokoniWishlist']` had **zero writers anywhere in the repo** — the
+`inspiq.js` personalisation reading it had always scored an empty array.
+
+The canonical model `wishlistItems/{uid}_{productId}` was already correct and simply unused.
+Nothing was redesigned: no new collection, no new resolver, no `sellerUid`, no Firestore rule
+change. `sokoni-wishlist.js` (`window.SokoniWishlist`) is now the single client authority;
+`localStorage` is a uid-stamped paint cache that is discarded whenever the stamp does not match
+the live session.
+
+### Latent data loss, reachable only after migration
+
+A `localStorage` write cannot fail; a server call can. Two surfaces had failure bugs that were
+unreachable until the operation became fallible:
+
+* `cart.js moveToWishlist()` removed the cart line **unconditionally**. Left as-is against an
+  async save, a signed-out shopper or a permission error would have emptied the row and saved
+  nothing. Now remove-after-add, re-locating the item by identity rather than the stale index.
+* `flashsale.html fsAddWish()` claimed "Added to wishlist ❤️" before anything was saved.
+
+### Fixed on the way through
+
+* **`car-hub.html`, `healthcare.html`, `services.html` were migrated but inert** — they call
+  `SokoniWishlist` via `market-actions.js` and never loaded `sokoni-wishlist.js`, so every heart
+  answered "Wishlist is still loading" forever. A missing `<script>` tag is invisible to per-file
+  scanning; assertion L now derives the consumer list from the repo and fails on any omission.
+* `wishlist.js` **deleted** — orphaned dead code holding the retired model, loaded by no page.
+  Its `service-worker.js` precache entry went with it (that list has been inert since the
+  2026-07-18 retirement, so it could not have failed an install). Closes the open landmine noted
+  in `docs/KNOWN_LIMITATIONS.md`.
+* `profile.js` legacy wishlist count removed rather than rerouted — it fed `#wishlistCount`,
+  which `profile.html` no longer contains.
+
+### Verification
+
+**289 assertions pass, 0 fail**, across 7 emulator suites — all exercising the shipped files in
+`vm` sandboxes against the real `commerceDispatch` handlers, nothing reimplemented. 4 assertions
+are recorded INCONCLUSIVE and documented; none was converted to a pass.
+
+`scripts/scan-legacy-wishlist.js` enforces the invariant — **0 executable readers and 0 writers**
+for both legacy keys — across `.js` and inline `<script>`, comments excluded. It carries positive
+controls (it must be able to report non-zero) and lists every comment-suppressed mention rather
+than discarding it, because its residual inaccuracies all blank *more* than they should.
+
+### Not done — explicit
+
+**Production legacy migration is NOT verified.** `migrateLegacy()` is proven by 52 assertions but
+has no input path: `wishlists/{uid}` has no rule in the live ruleset (`ca9e8924`), so a client read
+is default-denied. The engine works; nothing can feed it. A server-side path via `commerceDispatch`
++ Admin SDK is **deferred pending authorisation**. Legacy documents are untouched — migration moves
+authority, not history.
+
+**Files:** `sokoni-wishlist.js` (new), `scripts/scan-legacy-wishlist.js` (new), `cart.js`,
+`cart.html`, `profile.js`, `flashsale.html`, `market-actions.js`, `inspiq.js`, `product.js`,
+`product.html`, `category.js`, `category.html`, `script.js`, `index.html`, `wishlist.html`,
+`car-hub.html`, `healthcare.html`, `services.html`, `service-worker.js`,
+`functions/account-purge-spec.js`, `wishlist.js` (deleted), 7 suites under `scripts/`.
+**Database:** none. **API:** none. **Security:** none — rules unchanged at `ca9e8924`.
+**Breaking:** none. **Deployment:** hosting-only, gated on review.
+
+---
+
 ## [2026-08-11] — FIXED: Shop Details could show one seller another seller's shop
 
 **P0.** The report was "Shop Details is linked to the wrong email/account". It is — and the

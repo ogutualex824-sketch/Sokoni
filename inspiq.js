@@ -460,10 +460,16 @@
     };
     if (cat && catMap[cat]) track(catMap[cat], 2);
 
-    try {
-      const wl = JSON.parse(localStorage.getItem('sokoniWishlist') || '[]');
-      wl.forEach(p => { if (p.category && catMap[p.category]) track(catMap[p.category], 1); });
-    } catch {}
+    /* The wishlist interest signal is removed rather than repointed.
+       It read localStorage['sokoniWishlist'], a key with ZERO writers anywhere in the
+       repo — so `wl` was always [] and this loop has never contributed a single point.
+       Rerouting it to the canonical wishlist would not change that: wishlistItems stores
+       uid/productId/shopId/name/price/image/addedAt and carries NO category, so
+       catMap[p.category] would be undefined for every record. Wiring it up would look
+       like a migration while still scoring nothing.
+       If wishlist-driven personalisation is wanted, `category` has to be added to the
+       canonical record deliberately — a schema decision, not a side effect of this
+       cleanup. Until then this signal does not exist, and says so. */
 
     try {
       const cart = JSON.parse(localStorage.getItem('sokoniCart') || '[]');

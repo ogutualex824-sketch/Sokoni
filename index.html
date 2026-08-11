@@ -2867,6 +2867,10 @@
        Deferred like script.js, so it is evaluated first and is present before
        any card renders. -->
   <script src="sokoni-product-schema.js" defer></script>
+  <!-- Canonical wishlist authority (wishlistItems/{uid}_{productId} via commerceDispatch).
+       Not deferred: script.js is, so this evaluates first and SokoniWishlist exists before
+       the first card renders or a heart is tapped. -->
+  <script src="sokoni-wishlist.js"></script>
   <script src="script.js" defer></script>
 <!-- The tag above was missing its </script>. A <script> element with a src still
      requires a closing tag, so the HTML parser treated everything up to the NEXT

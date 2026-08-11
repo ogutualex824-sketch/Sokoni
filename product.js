@@ -1372,17 +1372,47 @@ function submitOffer(){
 
 /* WISHLIST (product page) */
 
+/* Canonical: wishlistItems/{uid}_{productId} via SokoniWishlist → commerceDispatch.
+   This wrote localStorage['wishlist'] directly, which made saved items per-DEVICE
+   rather than per-USER: a clean sign-out cleared them, but a force-quit or a session
+   restored as a different account left one shopper looking at another's saves. The
+   service derives the owner from Firebase Auth and the deterministic document id
+   makes a repeat save idempotent, so the "Already in your Wishlist" branch is now a
+   real state check rather than a scan of a local array. */
 function addToWishlistProduct(){
-    let wishlist = [];
-    try { wishlist = JSON.parse(localStorage.getItem("wishlist"))||[]; } catch(e){}
-    if(!wishlist.find(w=>w.id===product.id)){
-        wishlist.push({ id:product.id, name:product.name, price:product.price, image:product.image, category:product.category, addedAt:Date.now() });
-        localStorage.setItem("wishlist", JSON.stringify(wishlist));
+    const W = window.SokoniWishlist;
+    if (!W) { _showProductNotif("Wishlist is still loading — try again.", "error"); return; }
+    if (W.isWishlisted(product.id)) { _showProductNotif("Already in your Wishlist!", "error"); return; }
+
+    W.add({
+        productId: product.id,
+        shopId:    product.shopId || product.sellerId || null,
+        name:      product.name,
+        price:     product.price,
+        image:     product.image,
+    }).then(function(){
         _showProductNotif("❤️ Added to Wishlist!", "success");
-    } else {
-        _showProductNotif("Already in your Wishlist!", "error");
-    }
+        _syncWishlistBtn();
+    }).catch(function(e){
+        /* No success message before the canonical write lands. */
+        _showProductNotif(
+            /sign in/i.test(e && e.message || '') ? "Sign in to save items" : "Couldn't save — try again",
+            "error");
+    });
 }
+
+/* Reflect canonical state on the button so the same product reads the same way here
+   as it does on every other surface. */
+function _syncWishlistBtn(){
+    try {
+        const btn = document.querySelector('.prd-cta-icon-btn.wishlist');
+        if (!btn || !window.SokoniWishlist || !product) return;
+        const on = window.SokoniWishlist.isWishlisted(product.id);
+        btn.innerHTML = on ? '❤️ Saved' : '❤️ Save';
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    } catch(e){}
+}
+window.addEventListener('sokoni:wishlist-changed', _syncWishlistBtn);
 
 window.shareProductWhatsApp  = shareProductWhatsApp;
 window.openMakeOffer         = openMakeOffer;

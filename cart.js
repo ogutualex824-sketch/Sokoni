@@ -243,17 +243,51 @@ function productQty(index, qty){
     renderCart();
 }
 
+/* Canonical wishlist (wishlistItems/{uid}_{productId} via commerceDispatch). This wrote
+   localStorage['wishlist'], which made "Moved to wishlist" a per-DEVICE claim the wishlist
+   page could not honour once that page became canonical: the item left the cart and
+   appeared nowhere.
+
+   The order matters and was wrong before. "Move" is remove-after-add, never
+   remove-and-hope: the cart line is only dropped once the canonical write has RESOLVED.
+   With a localStorage write that distinction was invisible, because it cannot fail. With a
+   server call it is the difference between moving an item and destroying it — a signed-out
+   shopper, an offline moment or a permission error would previously have emptied the row
+   and saved nothing. On failure the item stays in the cart and the toast says so. */
 function moveToWishlist(index){
     const item = cart[index];
-    let wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]");
-    if(!wishlist.find(p => p.id === item.id)){
-        wishlist.push(item);
-        localStorage.setItem("wishlist", JSON.stringify(wishlist));
-        showNotif("Moved to wishlist ❤️", "success");
-    } else {
+    if(!item) return Promise.resolve(false);
+    const W = window.SokoniWishlist;
+    if(!W){ showNotif("Wishlist is still loading", "error"); return Promise.resolve(false); }
+
+    const pid = String(item.productId || item.id || "");
+    if(!pid){ showNotif("This item can't be saved", "error"); return Promise.resolve(false); }
+
+    /* Already saved is a success for the user's intent — the item IS in the wishlist — so
+       the cart line still goes. Nothing is lost: canonical state already holds it. */
+    if(W.isWishlisted(pid)){
         showNotif("Already in wishlist", "success");
+        removeFromCart(index);
+        return Promise.resolve(true);
     }
-    removeFromCart(index);
+
+    return W.add({ productId: pid, shopId: item.shopId || null, name: item.name || "",
+                   price: item.price != null ? item.price : null,
+                   image: item.image || item.imageUrl || null })
+      .then(() => {
+          showNotif("Moved to wishlist ❤️", "success");
+          /* Re-locate by identity rather than reusing `index`: the await gave other
+             handlers a window to mutate the cart, and a stale index removes the wrong row. */
+          const now = cart.indexOf(item);
+          if(now !== -1) removeFromCart(now);
+          return true;
+      })
+      .catch(e => {
+          const msg = (e && e.message) || "";
+          showNotif(/sign in/i.test(msg) ? "Sign in to save items"
+                                         : "Couldn't save — item kept in your cart", "error");
+          return false;
+      });
 }
 
 function clearCart(){

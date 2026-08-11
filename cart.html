@@ -238,6 +238,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 </nav>
 
 <!-- cart.js handles all rendering — no override -->
+<!-- Canonical wishlist authority. Must load before cart.js, whose moveToWishlist()
+     calls SokoniWishlist instead of writing localStorage['wishlist']. -->
+<script src="sokoni-wishlist.js"></script>
 <script src="cart.js"></script>
 <script>
 /* Keep the mobile checkout bar's total in sync with the order summary (single source),

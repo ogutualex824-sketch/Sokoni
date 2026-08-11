@@ -28,6 +28,12 @@ const PURGE_SPEC = [
   { collection: 'loyaltyAccounts', action: 'delete',    byDocId: true,                               legalBasis: null,                                   retention: null },
   { collection: 'loyaltyPoints',   action: 'delete',    byDocId: true,                               legalBasis: null,                                   retention: null },
   { collection: 'wishlists',       action: 'delete',    byDocId: true,                               legalBasis: null,                                   retention: null },
+  /* wishlistItems is doc-id `{uid}_{productId}`, so byDocId cannot reach it — matched on
+     the uid FIELD instead, the same way follows and cartSaves are. It was absent from this
+     spec while the buyer UI still kept wishlists in localStorage, so nothing was orphaned;
+     the moment the UI writes to the canonical collection, an erasure that skipped it would
+     leave saved-item data behind. Added before that migration ships, not after. */
+  { collection: 'wishlistItems',   action: 'delete',    uidFields: ['uid'],                          legalBasis: null,                                   retention: null },
   { collection: 'cartSaves',       action: 'delete',    uidFields: ['uid'],                          legalBasis: null,                                   retention: null },
   /* sessions + the users/{uid} doc are handled directly by the worker (email-keyed / shell-redaction). */
 

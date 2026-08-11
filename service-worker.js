@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260811090859-v513";
+const CACHE_VERSION = "sokoni-20260811113950-v519";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -327,7 +327,11 @@ const PRECACHE_STATIC = [
   "/adult-gate.js", "/age-gate.js", "/contact-guard.js",
   "/provider-wiring.js", "/seller-wiring.js",
   /* Utilities */
-  "/realtime.js", "/wishlist.js", "/provider-status.js",
+  /* wishlist.js removed 2026-08-11 — orphaned legacy wishlist model, no page loaded
+     it. This list has been inert since the 2026-07-18 retirement above, so the entry
+     could not have 404'd an install, but a dangling name here would still read as a
+     shipped file. SokoniWishlist (sokoni-wishlist.js) is the only wishlist code. */
+  "/realtime.js", "/provider-status.js",
   "/sports-hub.js", "/management-init.js",
   /* ── Architecture Layer v1.0 ── */
   "/sokoni-tokens.css", "/sokoni-ui.js", "/sokoni-layout.js", "/sokoni-bootstrap.js",

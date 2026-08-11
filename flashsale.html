@@ -249,6 +249,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <div class="fs-toast" id="fsToast"></div>
 <div id="notificationContainer"></div>
 
+<!-- Canonical wishlist authority. Must load before the inline block below, whose
+     fsAddWish() calls SokoniWishlist instead of writing localStorage['wishlist']. -->
+<script src="sokoni-wishlist.js"></script>
 <script>
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -328,11 +331,27 @@ function fsAddCart(id,price){
   cart.push({...p,price}); localStorage.setItem('cart',JSON.stringify(cart));
   updateCartPips(); showToast('⚡ Added to cart 🛒');
 }
+/* Canonical wishlist (wishlistItems/{uid}_{productId} via commerceDispatch). This wrote
+   localStorage['wishlist'] and was the last live writer of that key anywhere in the repo —
+   left alone it would have kept re-creating the per-device model every other surface had
+   already been migrated off, and the saved item would never reach the wishlist page.
+
+   The toast now waits for the canonical write. The old version said "Added to wishlist"
+   before anything had been saved and could not report a failure, because a localStorage
+   write does not fail — the exact healthy-looking-failure shape this migration exists to
+   remove. */
 function fsAddWish(id){
-  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return;
-  const w=JSON.parse(localStorage.getItem('wishlist')||'[]');
-  if(!w.find(x=>x.id===id)){w.push(p);localStorage.setItem('wishlist',JSON.stringify(w));}
-  showToast('Added to wishlist ❤️');
+  const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return Promise.resolve(false);
+  const W=window.SokoniWishlist;
+  if(!W){ showToast('Wishlist is still loading'); return Promise.resolve(false); }
+  const pid=String(p.productId||p.id||''); if(!pid) return Promise.resolve(false);
+  if(W.isWishlisted(pid)){ showToast('Already in wishlist ❤️'); return Promise.resolve(false); }
+  return W.add({ productId:pid, shopId:p.shopId||null, name:p.name||'',
+                 price:p.price!=null?p.price:null, image:p.image||p.imageUrl||null })
+    .then(()=>{ showToast('Added to wishlist ❤️'); return true; })
+    .catch(e=>{ showToast(/sign in/i.test((e&&e.message)||'') ? 'Sign in to save items'
+                                                             : "Couldn't save — try again");
+                return false; });
 }
 function fsBuyNow(id,price){
   const p=_findProduct(id)||flashProducts.find(p=>p.id===id); if(!p) return;

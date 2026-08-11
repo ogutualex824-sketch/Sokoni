@@ -223,6 +223,9 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
      seller forms use, so the page cannot describe an attribute differently
      from the form that captured it. Must load before product.js. -->
 <script src="sokoni-product-schema.js"></script>
+<!-- Canonical wishlist authority (wishlistItems/{uid}_{productId} via commerceDispatch).
+     Must load before product.js, which calls SokoniWishlist for the Save control. -->
+<script src="sokoni-wishlist.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>
