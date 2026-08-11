@@ -174,6 +174,16 @@ exports.getMinishopPublic = onRequest(
       const configRaw = configSnap.exists ? configSnap.data() : {};
       const shop      = { id: shopId, ...shopRaw };
 
+      /* Open/closed and the timetable, from the SAME resolver KassShop Management
+         writes through. Without this the storefront had the raw availability flags
+         but no decision, so it could not tell a buyer whether the shop was open —
+         and a calendar drawn from anything else would drift from the schedule the
+         seller actually manages. Resolved with the shop's OWNER uid, since the
+         timetable lives at providerAvailability/{ownerUid}. */
+      const { publicShopState } = require('./kasshop');
+      const state = await publicShopState(
+        shopId, shopRaw.sellerUid || shopRaw.ownerUid || shopRaw.ownerId || uid || null);
+
       /* Branding was historically written to shops/{id}.minishopConfig under a
          different set of key names, so reading only minishopConfig/{id} renders
          those shops with no logo, cover or tagline at all. resolve() merges the
@@ -224,6 +234,11 @@ exports.getMinishopPublic = onRequest(
         reviews,
         totalProducts,
         followerCount,
+        /* null when it could not be resolved — the storefront renders a neutral
+           state rather than guessing "Open", which would be a fabricated fact
+           about a real business. */
+        availability: state.availability,
+        schedule: state.schedule,
       });
     } catch (err) {
       logger.error('getMinishopPublic error', { code: err.code });

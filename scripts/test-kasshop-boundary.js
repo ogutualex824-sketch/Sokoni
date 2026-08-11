@@ -269,6 +269,52 @@ async function wipe () {
     }
   }
 
+  /* ── 11. One shop, two views ──
+     The premise of KassShop is that seller management and the public storefront are
+     two views of ONE shop. That only holds if a change made through the seller
+     boundary is what the buyer resolver reports — so this asserts the propagation
+     itself rather than each side in isolation. */
+  group('11. What the seller changes is what the buyer sees');
+  {
+    await wipe();
+    await call(kasshop.saveShopProfile, A, { profile: { name: 'Two Views Shop' } });
+    const shopId = (await call(kasshop.getShopProfile, A, {})).shopId;
+
+    /* Open by default: no timetable means the live state alone decides. */
+    const before = await kasshop.publicShopState(shopId, A);
+    ok('a new shop reads as open to buyers', before.availability && before.availability.open === true,
+       before.availability && before.availability.reason);
+
+    /* The seller flips offline in KassShop Management. */
+    await call(kasshop.setShopAvailability, A, { availability: { online: false } });
+    const after = await kasshop.publicShopState(shopId, A);
+    ok('flipping offline closes the storefront', after.availability && after.availability.open === false,
+       after.availability && after.availability.reason);
+    ok('and the reason is reported, not just the verdict',
+       after.availability && after.availability.reason === 'offline',
+       after.availability && after.availability.reason);
+
+    /* Back online, then closed by the timetable instead of the switch. */
+    await call(kasshop.setShopAvailability, A, { availability: { online: true } });
+    await db.collection('providerAvailability').doc(A).set({
+      hours: { mon: { closed: true, periods: [] }, tue: { closed: true, periods: [] },
+               wed: { closed: true, periods: [] }, thu: { closed: true, periods: [] },
+               fri: { closed: true, periods: [] }, sat: { closed: true, periods: [] },
+               sun: { closed: true, periods: [] } },
+    });
+    const closed = await kasshop.publicShopState(shopId, A);
+    ok('the timetable can close a shop that is switched on',
+       closed.availability && closed.availability.open === false, closed.availability && closed.availability.reason);
+    ok('the buyer gets the schedule behind the decision, not just a badge',
+       !!(closed.schedule && closed.schedule.hours && closed.schedule.hours.mon),
+       closed.schedule && closed.schedule.hours ? 'hours present' : 'MISSING');
+
+    /* An unresolvable shop must not throw — the storefront degrades to neutral. */
+    const missing = await kasshop.publicShopState('no-such-shop-id', A);
+    ok('an unknown shop yields neutral state instead of an error',
+       missing && missing.availability === null, JSON.stringify(missing && missing.availability));
+  }
+
   await wipe();
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');

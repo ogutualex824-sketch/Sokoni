@@ -416,6 +416,59 @@ async function effectiveForShop(shopId, atMs) {
 }
 exports.effectiveForShop = effectiveForShop;
 
+/**
+ * The one resolver the PUBLIC storefront uses for shop state.
+ *
+ * KassShop Management and the buyer-facing storefront are two views of one shop, not
+ * two copies of it. The seller flips "offline" or edits opening hours in the console;
+ * the buyer must see that same decision. That only holds if both sides derive state
+ * from the same place, so the storefront calls this rather than re-reading the shop
+ * and re-deciding for itself.
+ *
+ * Returns the effective open/closed decision AND the timetable behind it, because a
+ * storefront calendar that is not the schedule the seller actually manages is
+ * decoration — it would keep looking right while being wrong.
+ *
+ * NEVER THROWS. A storefront that 500s because availability could not be resolved is
+ * worse than one that omits the badge: callers get null and render a neutral state,
+ * per the platform rule that unknown is never rendered as a value.
+ */
+async function publicShopState(shopId, ownerUid) {
+  try {
+    const db = _db();
+    const uid = ownerUid || null;
+    const [eff, schedSnap] = await Promise.all([
+      effectiveForShop(shopId, Date.now()),
+      uid ? db.collection('providerAvailability').doc(uid).get() : Promise.resolve(null),
+    ]);
+    if (!eff) return { availability: null, schedule: null };
+
+    const sched = schedSnap && schedSnap.exists ? (schedSnap.data() || {}) : {};
+    const shopSnap = await db.collection('shops').doc(String(shopId)).get();
+    const shopHours = shopSnap.exists ? (shopSnap.data() || {}).openingHours : null;
+
+    return {
+      availability: {
+        open: eff.open, reason: eff.reason, source: eff.source,
+        acceptingOrders: eff.state.acceptingOrders,
+        delivery: eff.state.delivery,
+        pickup: eff.state.pickup,
+      },
+      /* The seller-managed timetable wins over the copy denormalised on the shop —
+         the same precedence effectiveForShop() applies, so the calendar a buyer sees
+         and the decision they are given cannot disagree. */
+      schedule: {
+        hours: sched.hours || sched.openingHours || shopHours || null,
+        overrides: sched.overrides || null,
+      },
+    };
+  } catch (err) {
+    logger.warn('KassShop publicShopState failed', { code: err && err.code });
+    return { availability: null, schedule: null };
+  }
+}
+exports.publicShopState = publicShopState;
+
 exports.getShopAvailability = onCall(
   { region: REGION, cors: true },
   async (request) => {
