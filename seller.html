@@ -2693,6 +2693,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           u.storeZones=storeData.zones;
           u.verified=!!(storeData.kraPin||storeData.sbpNumber||storeData.brsNumber);
           localStorage.setItem('sokoniUser',JSON.stringify(u));
+          /* Stamp the cache with the AUTHENTICATED owner. Without this the cache is
+             anonymous, so nothing downstream can tell whose shop it holds — and the
+             first-paint path happily showed it to whoever opened the page next. The
+             uid comes from Firebase Auth, never from the cached session blob. */
+          try{
+            var _ownerUid=(window.firebaseAuth&&window.firebaseAuth.currentUser&&window.firebaseAuth.currentUser.uid)||null;
+            if(_ownerUid) storeData.ownerUid=_ownerUid;
+          }catch(_){ }
           localStorage.setItem('sokoniStore',JSON.stringify(storeData));
         }catch(e){}
 
@@ -2828,9 +2836,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           var res=await window.sokoniCallable('getShopProfile')({});
           var d=res&&res.data;
           if(!d) throw new Error('empty response');
-          if(!d.exists){ swSetState('empty'); swSetMode(false); return; }
+          /* "No shop" must EMPTY the form, not merely relabel the banner. It used to
+             leave the cached paint untouched, so a seller with no KassShop was shown
+             the previous account's shop — and a save would then have adopted those
+             values as their own. */
+          if(!d.exists){ swResetForm(); swSetState('empty'); swSetMode(false); return; }
+          /* Reset before applying: the response is the whole truth, and any field it
+             omits must be blank rather than inherited from the cache paint. */
+          swResetForm();
           window.__kasShopId=d.shopId;
           window.__kasShopHandle=d.handle||null;
+          /* The stored owner, for the identity assertion
+             auth.currentUser.uid == shops/{shopId}.sellerUid.
+             Null on legacy shops matched by ownerUid/ownerId, and null until the
+             getShopProfile that returns it is deployed — the diagnostic renders that
+             as "—" rather than reporting a false mismatch. */
+          window.__kasShopSellerUid=d.sellerUid||null;
           swApply(d.profile||{}, d.availability||{}, d.compliance||{});
           swSetMode(true);
           swSetState('loaded');
@@ -2903,6 +2924,40 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       }
       window.swSetField=swSetField;
 
+      /* ── EVERY FIELD THIS FORM OWNS ───────────────────────────────────────────
+         swSetField deliberately refuses to write an empty value, and swApply only
+         touches keys PRESENT in the response. Together that means a field the new
+         answer does not carry keeps whatever was on screen — so a value cached by a
+         DIFFERENT account survived into this seller's Shop Details. Proven by
+         test-shop-setup-hydration.js cases 4-6: seller A's name, description, email
+         and KRA PIN all persisted into seller B's form, and persisted completely when
+         B had no shop at all (nothing arrived to overwrite them).
+
+         Hydration therefore has to be authoritative about ABSENCE as well as value.
+         Reset first, then apply — never merge onto whatever happened to be there. */
+      var SW_MANAGED_FIELDS = ['swStoreName','swTagline','swAbout','swKraPin','swSbpNumber',
+        'swBrsNumber','swCity','swAddress','swMapsLink','swPhone','swEmail','swWebsite',
+        'swInstagram','swTikTok','swFacebook','swTwitter','swYoutube','swLinkedin',
+        'swReturnText','swPackagingNote','swFreeDelivery','swDelTime'];
+
+      function swResetForm(){
+        SW_MANAGED_FIELDS.forEach(function(id){
+          var el=document.getElementById(id); if(!el) return;
+          if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
+        });
+        try{
+          var img=document.getElementById('swBannerImg'),hint=document.getElementById('swBannerHint');
+          if(img){ img.removeAttribute('src'); img.style.display='none'; }
+          if(hint) hint.style.display='';
+          var limg=document.getElementById('swLogoImg'),lem=document.getElementById('swLogoEmoji');
+          if(limg){ limg.removeAttribute('src'); limg.style.display='none'; }
+          if(lem) lem.style.display='';
+          swData.bannerSrc=''; swData.logoSrc='';
+          window.__kasShopId=null; window.__kasShopHandle=null; window.__kasShopAvailability=null;
+        }catch(_){ }
+      }
+      window.swResetForm=swResetForm;
+
       function swApply(p, avail, comp){
         const set=(id,val)=>swSetField(id,val);
         /* Compliance arrives in its own object because the server keeps it off the public
@@ -2932,10 +2987,35 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       window.swApply=swApply;
 
       (function swLoadSaved(){
-        /* Cache-first paint only — never authority. swLoadCanonical() overwrites it. */
+        /* Cache-first paint only — never authority. swLoadCanonical() overwrites it.
+
+           OWNERSHIP GATE. The cache used to be anonymous, so this painted whatever the
+           device last held into whoever opened the page next — including the previous
+           seller's email and their KRA / SBP / BRS numbers, which the server keeps in an
+           owner-only subcollection precisely because they are not public. sokoniSignOut()
+           wipes localStorage, so a clean sign-out was safe; a force-quit, a session
+           restored as another user, or any path that skipped the sign-out handler was not.
+
+           The uid is read from Firebase Auth, never from localStorage.sokoniUser — a
+           cached profile blob is not an identity authority. If Auth has not restored yet
+           the cache is NOT painted: a few hundred ms of skeleton is worth more than a
+           chance of showing one seller another seller's shop. */
         try{
           const saved=JSON.parse(localStorage.getItem('sokoniStore')||'null');
           if(!saved){ swLoadCanonical(); return; }
+          var _uidNow=null;
+          try{ _uidNow=(window.firebaseAuth&&window.firebaseAuth.currentUser&&window.firebaseAuth.currentUser.uid)||null; }catch(_){ }
+          if(!_uidNow || !saved.ownerUid || saved.ownerUid!==_uidNow){
+            /* Not provably this account's cache. Drop it and wait for the canonical
+               answer rather than painting someone else's shop. A cache with no
+               ownerUid is pre-fix data whose owner cannot be established. */
+            if(saved.ownerUid && _uidNow && saved.ownerUid!==_uidNow){
+              try{ localStorage.removeItem('sokoniStore'); }catch(_){ }
+            }
+            swResetForm();
+            swLoadCanonical();
+            return;
+          }
           /* Same <select> trap as swApply — reuse its setter rather than keeping a second,
              subtly different copy that loses the city on the cache path only. */
           const set=(id,val)=>swSetField(id,val);
@@ -2963,6 +3043,41 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         }catch(e){}
         /* Whatever the cache painted, ask the canonical shop and let it win. */
         swLoadCanonical();
+      })();
+
+      /* ── ACCOUNT-SWITCH GUARD ─────────────────────────────────────────────────
+         Shop Details is resolved once at load. If the authenticated user CHANGES
+         while the page is open — a session restoring as a different account, a
+         token landing after a switch, a second tab signing in — everything on
+         screen still belongs to the previous uid, and nothing re-asked.
+
+         Sign-out is not the only way accounts change, so this does not rely on it:
+         it watches Firebase Auth itself and, on any uid transition, empties the form
+         before resolving the new user's shop. The form is emptied FIRST so there is
+         no window in which the new seller can see the previous one's details. */
+      (function swWatchAccount(){
+        /* `first` is a separate flag, NOT a null check on `seen`: the first callback can
+           legitimately carry no user (auth still restoring), and using null as the
+           sentinel made every subsequent callback look like the first one — so a real
+           account change would have been skipped. */
+        var seen, first=true;
+        function _bind(){
+          var a=window.firebaseAuth;
+          if(!a||typeof a.onAuthStateChanged!=='function'){ setTimeout(_bind,300); return; }
+          try{
+            a.onAuthStateChanged(function(u){
+              var uid=(u&&u.uid)||null;
+              if(first){ first=false; seen=uid; return; }  /* the load we already did */
+              if(uid===seen) return;                       /* token refresh, same account */
+              seen=uid;
+              try{ localStorage.removeItem('sokoniStore'); }catch(_){ }
+              swResetForm();
+              if(!uid){ swSetState('empty'); swSetMode(false); return; }
+              swLoadCanonical();
+            });
+          }catch(_){ }
+        }
+        _bind();
       })();
 
       /* Init */

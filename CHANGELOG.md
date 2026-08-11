@@ -1,3 +1,74 @@
+## [2026-08-11] — FIXED: Shop Details could show one seller another seller's shop
+
+**P0.** The report was "Shop Details is linked to the wrong email/account". It is — and the
+identity chain is not where it breaks.
+
+### The chain is correct
+
+| link | verdict |
+|---|---|
+| `getShopProfile` accepts a client `shopId` | **no** — derives everything from `request.auth.uid` |
+| `_ownedShop` can return another seller's shop | **no** — every branch is `where(field,'==',uid)` |
+| `swSaveStore` sends an owner uid | **no** — sends `{profile:{…}}` only |
+
+`saveShopProfile` was therefore not modified.
+
+### The break: hydration never cleared
+
+`swSetField` refuses to write an empty value, and `swApply` only touches keys **present** in the
+response — so any field the new account lacks kept the previous account's value. Combined with a
+`localStorage.sokoniStore` carrying **no owner identity**, seller B could open Shop Details and
+see seller A's name, description, email, and A's `kraPin` — which the server keeps in an
+owner-only `shops/{id}/private/compliance` subcollection precisely because it is not public.
+With B having no shop at all, **every** one of A's values survived: nothing arrived to overwrite
+them.
+
+`sokoniSignOut()` wipes localStorage, so a clean sign-out was already safe. What was not covered
+is every path that skips it — a force-quit mid-session, a session restored as another user, or a
+switch that never reached the sign-out handler.
+
+The existing suite passed 12/12 throughout, because its "no shop" case asserted only the banner
+and the shopId — never the fields.
+
+### Fix (hydration + session only)
+
+* `swResetForm()` blanks every managed field; the response is authoritative about **absence**
+* `exists:false` empties the form instead of relabelling the banner over the previous shop
+* `sokoniStore` is stamped with `ownerUid` from **Firebase Auth** — never `localStorage.sokoniUser`,
+  which is a cached blob and not an identity authority — and is painted only on a match; a
+  mismatched cache is deleted
+* an `onAuthStateChanged` uid transition clears the form **before** resolving the new shop
+
+**Behaviour change:** because the uid must come from Auth, which has not restored at first paint,
+the instant cache paint is effectively disabled — sellers briefly see "Loading your KassShop…".
+Correctness over speed, deliberately.
+
+### Identity assertion
+
+`getShopProfile` now also returns the document's `sellerUid`. The existing `ownerUid` **is** the
+authenticated uid, so comparing it to `auth.currentUser.uid` proves nothing. `?shopdiag=1` prints
+Auth UID, Auth email, shopId, `shops/{shopId}.sellerUid` and the cache owner — at boot and again
+after auth restores — and flags either mismatch.
+
+### Open, deliberately not changed
+
+`_ownedShop` falls back to legacy `ownerUid`/`ownerId`. No branch can return another seller's
+shop, but a document matched on a legacy field may carry a **different** `sellerUid`, in which
+case `auth.uid == shops/{id}.sellerUid` does not hold. Made visible (server warning + diagnostic
+line) rather than silently retightened, which could orphan legacy shops.
+
+**Verification:** `scripts/test-shop-setup-hydration.js` **27/27**, including the two-seller
+account switch (B with a shop, and the harder B-with-no-shop). The suite previously stubbed
+`firebase.js` out entirely; it now keeps the real module and pins only `window.firebaseAuth`,
+because stubbing the module produced import failures that read as product bugs.
+**Files:** `seller.html`, `functions/kasshop.js`, `sokoni-shop-diagnostic.js`,
+`scripts/test-shop-setup-hydration.js`
+**Deployment:** hosting ships independently. `getShopProfile` needs a functions deploy, which
+resets `run.invoker` — re-set `allUsers` after. Until then `sellerUid` is absent and renders `—`.
+**Breaking:** none.
+
+---
+
 ## [2026-08-11] — FIXED: the buyer's tracking map could never show a rider
 
 **P0.** My Orders → Order → Track Delivery rendered a blank region where the live map

@@ -184,10 +184,29 @@ exports.getShopProfile = onCall(
       }
     }
 
+    /* `ownerUid` below is the AUTHENTICATED uid, so comparing it to auth.currentUser.uid
+       proves nothing — it is the same value by construction. The invariant that actually
+       matters is against the stored document:
+
+           auth.currentUser.uid  ==  shops/{shopId}.sellerUid
+
+       _ownedShop accepts the legacy `ownerUid` / `ownerId` fields for shops that predate
+       `sellerUid`, and each is scoped by uid so none can return another seller's shop —
+       but a document matched on a legacy field may carry a DIFFERENT `sellerUid`, in which
+       case the invariant does not hold and the client should be able to see that rather
+       than infer it. Returned for that comparison; null on legacy shops that never had it. */
+    const shopSellerUid = owned.data.sellerUid || null;
+    if (shopSellerUid && shopSellerUid !== uid) {
+      logger.warn('KassShop: owned shop carries a different sellerUid', {
+        shopId: owned.id, authUid: uid, shopSellerUid,
+      });
+    }
+
     return {
       exists: true,
       shopId: owned.id,
       ownerUid: uid,
+      sellerUid: shopSellerUid,
       profile,
       compliance,
       availability,

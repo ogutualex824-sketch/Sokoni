@@ -224,6 +224,66 @@
     rec('NOTE', 'localStorage.sokoniStore at boot: ' + (cached ? short(JSON.parse(cached).name + ' / ' + JSON.parse(cached).about, 120) : 'ABSENT'));
   } catch (_) { rec('NOTE', 'localStorage.sokoniStore unreadable'); }
 
+  /* ── 6. THE IDENTITY CHAIN, from the LIVE session ────────────────────────────
+     The question this answers is not "did the save land" but "whose shop is this
+     page even showing". Everything below is read from Firebase Auth at the moment
+     Shop Details resolves — never from localStorage.sokoniUser, which is a cached
+     profile blob and not an identity authority.
+
+     The invariant, stated once so a wrong line is obvious at a glance:
+
+         auth.currentUser.uid  ==  shops/{shopId}.sellerUid
+
+     `cache owner` is the third party to that comparison: an unstamped cache is
+     pre-fix data whose owner cannot be established, and a cache stamped with a
+     DIFFERENT uid is the wrong-account bug caught in the act. */
+  (function identityChain() {
+    function line(label, val, bad) {
+      rec(bad ? 'IDENT!' : 'IDENT', label + ': ' + (val == null || val === '' ? '—' : String(val)));
+    }
+    function snapshot(tag) {
+      var u = null;
+      try { u = root.firebaseAuth && root.firebaseAuth.currentUser; } catch (_) {}
+      var authUid = (u && u.uid) || null;
+      var authEmail = (u && u.email) || null;
+      var shopId = root.__kasShopId || null;
+      var shopSellerUid = root.__kasShopSellerUid || null;   /* present once the CF echoes it */
+      var cacheOwner = null, cacheName = null;
+      try {
+        var c = JSON.parse(localStorage.getItem('sokoniStore') || 'null');
+        if (c) { cacheOwner = c.ownerUid || null; cacheName = c.name || null; }
+      } catch (_) {}
+
+      rec('IDENT', '── identity chain @ ' + tag + ' ──');
+      line('Firebase Auth UID', authUid, !authUid);
+      line('Firebase Auth email', authEmail);
+      line('shopId from getShopProfile', shopId);
+      line('shops/{shopId}.sellerUid', shopSellerUid);
+      line('cache owner uid', cacheOwner, !!(cacheOwner && authUid && cacheOwner !== authUid));
+      line('cache shop name', cacheName);
+
+      if (cacheOwner && authUid && cacheOwner !== authUid) {
+        rec('IDENT!', 'MISMATCH — the cached shop belongs to ' + cacheOwner
+                    + ' but the session is ' + authUid + '. It must not be painted.');
+      }
+      if (shopSellerUid && authUid && shopSellerUid !== authUid) {
+        rec('IDENT!', 'MISMATCH — shops/' + shopId + '.sellerUid is ' + shopSellerUid
+                    + ' but the session is ' + authUid + '. WRONG ACCOUNT.');
+      }
+    }
+    snapshot('boot');
+    /* Again once auth has restored and the canonical answer has had time to land —
+       at boot the uid is usually still null, which on its own proves nothing. */
+    setTimeout(function () { snapshot('after auth + canonical'); }, 6000);
+    try {
+      if (root.firebaseAuth && typeof root.firebaseAuth.onAuthStateChanged === 'function') {
+        root.firebaseAuth.onAuthStateChanged(function (u) {
+          rec('IDENT', 'onAuthStateChanged → ' + ((u && u.uid) || 'signed out'));
+        });
+      }
+    } catch (_) {}
+  })();
+
   root.__shopDiagLog = LOG;
   paint();
 })(typeof window !== 'undefined' ? window : null,

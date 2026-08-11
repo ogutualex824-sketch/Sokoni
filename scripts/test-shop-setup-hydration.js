@@ -59,16 +59,30 @@ wd.unref && wd.unref();
 
 /* Stub Auth + the callable bridge. getShopProfile answers after `delayMs`, modelling the real
    round-trip — the cache paints first on a device, and the question is what happens next. */
-function stubs({ delayMs, cache, exists }) {
+function stubs({ delayMs, cache, exists, uid, email, profile, shopId }) {
+  const _uid   = uid   || UID;
+  const _email = email || 'hydration@sokoni.test';
+  const _shop  = shopId || SHOP_ID;
+  const _prof  = profile || { name: NAME, about: ABOUT, city: 'Nairobi', phone: '+254700000731' };
   return `(function(){
-    var UID = ${JSON.stringify(UID)};
+    var UID = ${JSON.stringify(_uid)};
+    var EMAIL = ${JSON.stringify(_email)};
     ${cache ? `try{ localStorage.setItem('sokoniStore', JSON.stringify(${JSON.stringify(cache)})); }catch(e){}` : `try{ localStorage.removeItem('sokoniStore'); }catch(e){}`}
     try{ localStorage.setItem('loggedIn','true');
-         localStorage.setItem('sokoniUser', JSON.stringify({uid:UID,name:'Hydration',roles:['seller'],role:'seller'})); }catch(e){}
+         localStorage.setItem('sokoniUser', JSON.stringify({uid:UID,email:EMAIL,name:'Hydration',roles:['seller'],role:'seller'})); }catch(e){}
 
-    var listeners=[]; var current={uid:UID};
-    window.firebaseAuth = { get currentUser(){return current;},
+    var listeners=[]; var current={uid:UID,email:EMAIL};
+    var _authStub = { get currentUser(){return current;},
       onAuthStateChanged:function(cb){ listeners.push(cb); try{cb(current);}catch(e){} return function(){}; } };
+    /* The real firebase.js does \`window.firebaseAuth = <real Auth>\` on load and would
+       replace this, leaving currentUser null — which made every identity assertion
+       vacuous. A setter that IGNORES writes keeps the stub authoritative and is legal
+       in strict mode (unlike a getter-only property, which would throw in the module). */
+    try {
+      Object.defineProperty(window, 'firebaseAuth', {
+        configurable: true, get: function(){ return _authStub; }, set: function(){ /* ignored */ },
+      });
+    } catch(e) { window.firebaseAuth = _authStub; }
     window.firebaseDB = { __stub:true };
     window.__sokoniAppCheckReady = Promise.resolve();
 
@@ -79,9 +93,8 @@ function stubs({ delayMs, cache, exists }) {
         if (name === 'getShopProfile') {
           return new Promise(function(res){ setTimeout(function(){
             res({ data: ${exists ? `{
-              exists:true, shopId:${JSON.stringify(SHOP_ID)}, ownerUid:UID,
-              profile:{ name:${JSON.stringify(NAME)}, about:${JSON.stringify(ABOUT)},
-                        city:'Nairobi', phone:'+254700000731' },
+              exists:true, shopId:${JSON.stringify(_shop)}, ownerUid:UID,
+              profile:${JSON.stringify(_prof)},
               availability:{acceptingOrders:true,online:true,delivery:true,pickup:true},
               handle:'kasstest731', storefrontUrl:'/shop/kasstest731'
             }` : `{ exists:false, shopId:null, ownerUid:null, profile:null, availability:null, handle:null }`} });
@@ -98,6 +111,14 @@ async function readForm(page) {
     name: (document.getElementById('swStoreName') || {}).value,
     about: (document.getElementById('swAbout') || {}).value,
     city: (document.getElementById('swCity') || {}).value,
+    /* Identity-bearing fields. These are the ones that make a wrong-account paint
+       obvious to the seller — and kraPin/sbp/brs are the regulatory identifiers the
+       Cloud Function deliberately keeps in an owner-only subcollection. */
+    email: (document.getElementById('swEmail') || {}).value,
+    phone: (document.getElementById('swPhone') || {}).value,
+    kraPin: (document.getElementById('swKraPin') || {}).value,
+    authUid: (window.firebaseAuth && window.firebaseAuth.currentUser || {}).uid || null,
+    authEmail: (window.firebaseAuth && window.firebaseAuth.currentUser || {}).email || null,
     state: (document.getElementById('swStateBanner') || {}).dataset
       ? (document.getElementById('swStateBanner') || {}).dataset.state : null,
     banner: (document.getElementById('swStateBanner') || {}).textContent || null,
@@ -116,6 +137,17 @@ server.listen(0, async () => {
     const ctx = await browser.newContext({
       viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, serviceWorkers: 'block',
     });
+    /* The real firebase.js reassigns window.firebaseAuth on load, clobbering the stub —
+       so the page saw currentUser === null and the identity assertions were vacuous.
+       Ownership now depends on Firebase Auth specifically (a cached profile blob is not
+       an identity authority), so the stub has to be the one the page reads. The callable
+       bridge and App Check are already stubbed, so nothing else here needs the module. */
+    /* firebase.js is left REAL. Stubbing the module out broke every consumer that
+       imports db/auth/storage by name, which surfaced as page errors that looked like
+       product bugs but were the harness's. The only thing that needs overriding is the
+       identity the page reads — see stubs(), which pins window.firebaseAuth behind a
+       getter whose setter ignores writes, so the real module's assignment is discarded
+       while db/storage/fns stay genuine objects. */
     await ctx.addInitScript(stubs(opts));
     const page = await ctx.newPage();
     /* App Check cannot attest 127.0.0.1, so Firebase loads the Google API iframe helper and it
@@ -157,7 +189,7 @@ server.listen(0, async () => {
   {
     const { form } = await run({
       delayMs: 1500, exists: true,
-      cache: { name: 'OLD CACHED NAME', about: 'OLD CACHED DESCRIPTION', city: 'Mombasa' },
+      cache: { ownerUid: UID, name: 'OLD CACHED NAME', about: 'OLD CACHED DESCRIPTION', city: 'Mombasa' },
     });
     ck('the stale cached name was replaced', form.name === NAME, JSON.stringify(form.name));
     ck('the stale cached description was replaced', form.about === ABOUT, JSON.stringify(form.about));
@@ -174,7 +206,7 @@ server.listen(0, async () => {
   {
     const { form } = await run({
       delayMs: 4000, exists: true, settle: 12000,
-      cache: { name: 'OLD CACHED NAME', about: 'OLD CACHED DESCRIPTION' },
+      cache: { ownerUid: UID, name: 'OLD CACHED NAME', about: 'OLD CACHED DESCRIPTION' },
     });
     ck('the late canonical name won', form.name === NAME, JSON.stringify(form.name));
     ck('the late canonical description won', form.about === ABOUT, JSON.stringify(form.about));
@@ -185,10 +217,68 @@ server.listen(0, async () => {
   {
     const { form } = await run({
       delayMs: 900, exists: false,
-      cache: { name: 'GHOST SHOP', about: 'SHOULD NOT SURVIVE' },
+      cache: { ownerUid: UID, name: 'GHOST SHOP', about: 'SHOULD NOT SURVIVE',
+               email: 'ghost@previous.test', kraPin: 'A00GHOST99Z' },
     });
     ck('the empty state is reported', form.state === 'empty', form.state + ' :: ' + String(form.banner).slice(0, 60));
     ck('no shopId is adopted', !form.shopId, String(form.shopId));
+    /* The banner and the shopId were the only things asserted here before, so this
+       case passed while the seller was still looking at the previous shop's name,
+       email and KRA PIN in the form. "You don't have a KassShop yet" has to mean
+       the FIELDS say so too — otherwise a save would adopt the ghost values. */
+    ck('the ghost NAME was cleared from the form',        !form.name,   JSON.stringify(form.name));
+    ck('the ghost DESCRIPTION was cleared from the form', !form.about,  JSON.stringify(form.about));
+    ck('the ghost EMAIL was cleared from the form',       !form.email,  JSON.stringify(form.email));
+    ck('the ghost KRA PIN was cleared from the form',     !form.kraPin, JSON.stringify(form.kraPin));
+  }
+
+  /* ── 5. THE ACCOUNT-SWITCH CASE ───────────────────────────────────────────────
+     Seller B opens Shop Details on a device whose cache still holds Seller A's shop.
+     This is the wrong-account report: B sees A's email in their own Shop Details.
+
+     sokoniSignOut() wipes localStorage, so a CLEAN sign-out already protects this.
+     What it does not cover is every path that skips it — a force-quit mid-session, a
+     session restored as a different user, or an account switch that never reached the
+     sign-out handler. The cache is not stamped with an owner, so nothing else can tell
+     whose data it is. Firestore must win, and until it answers no other account's
+     values may be on screen. */
+  console.log('\n5. Account switch — Seller B must never see Seller A\'s shop');
+  {
+    const A_CACHE = { ownerUid: 'seller-A-uid', name: 'SELLER A SHOP', about: 'SELLER A TEST',
+                      email: 'sellerA@sokoni.test', phone: '+254700000001',
+                      kraPin: 'A123456789Z', city: 'Mombasa' };
+    const B_PROFILE = { name: 'SELLER B SHOP', about: 'SELLER B DESCRIPTION',
+                        email: 'sellerB@sokoni.test', phone: '+254700000002', city: 'Nairobi' };
+
+    const { form } = await run({
+      delayMs: 1500, exists: true, cache: A_CACHE,
+      uid: 'seller-B-uid', email: 'sellerB@sokoni.test',
+      shopId: 'shopSellerB', profile: B_PROFILE,
+    });
+    ck('the session really is Seller B',   form.authUid === 'seller-B-uid', form.authUid);
+    ck('B sees B\'s shop name',            form.name  === 'SELLER B SHOP', JSON.stringify(form.name));
+    ck('B does NOT see A\'s description',  form.about !== 'SELLER A TEST', JSON.stringify(form.about));
+    ck('B does NOT see A\'s email',        form.email !== 'sellerA@sokoni.test', JSON.stringify(form.email));
+    ck('B does NOT see A\'s KRA PIN',      !form.kraPin || form.kraPin !== 'A123456789Z', JSON.stringify(form.kraPin));
+    ck('B adopted B\'s shopId',            form.shopId === 'shopSellerB', String(form.shopId));
+  }
+
+  /* ── 6. Account switch where B has NO shop — the hardest version ──────────────
+     B is new. Firestore answers exists:false, so there is nothing to overwrite A's
+     cached paint with. Every field must still be B's (empty), not A's. */
+  console.log('\n6. Account switch, B has no shop — A\'s values must not survive');
+  {
+    const { form } = await run({
+      delayMs: 1200, exists: false,
+      cache: { ownerUid: 'seller-A-uid', name: 'SELLER A SHOP', about: 'SELLER A TEST',
+               email: 'sellerA@sokoni.test', kraPin: 'A123456789Z' },
+      uid: 'seller-B-uid', email: 'sellerB@sokoni.test',
+    });
+    ck('the empty state is reported', form.state === 'empty', String(form.banner).slice(0, 60));
+    ck('A\'s name did not survive',    !form.name,   JSON.stringify(form.name));
+    ck('A\'s description did not survive', !form.about, JSON.stringify(form.about));
+    ck('A\'s email did not survive',   !form.email,  JSON.stringify(form.email));
+    ck('A\'s KRA PIN did not survive', !form.kraPin, JSON.stringify(form.kraPin));
   }
 
   await browser.close(); server.close(); clearTimeout(wd);
