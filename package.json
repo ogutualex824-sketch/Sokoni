@@ -66,7 +66,8 @@
     "verify:kasshop-live": "node scripts/verify-kasshop-live.js",
     "qa:storefront": "node C:/Users/USER1/.claude/skills/browser-automation/browser.mjs http://localhost:3111/minishop.html?handle=qa --script scripts/qa/storefront-availability.mjs",
     "qa:shop-flow": "node scripts/qa/run-shop-setup-flow.js",
-    "qa:delivery-hub": "node scripts/qa/run-delivery-hub-check.js"
+    "qa:delivery-hub": "node scripts/qa/run-delivery-hub-check.js",
+    "qa:delivery-isolation": "node scripts/qa/run-delivery-isolation.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

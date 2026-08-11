@@ -1,3 +1,53 @@
+## [2026-08-11] — VERIFIED: seller delivery isolation, with real deliveries and two real sellers
+
+Closes the gap flagged in the v512 report. That check proved the seller lands on the right
+*surface*; it could not prove isolation, because its probe seller had no deliveries — and an
+empty hub looks identical whether the rule works or the query found nothing.
+
+`npm run qa:delivery-isolation` provisions **two** throwaway sellers on production, gives each
+a **real** `packageRequests` delivery with an unmistakable marker, and asserts both directions
+at the enforcement boundary:
+
+| check | result |
+|---|---|
+| CONTROL: A reads A's own delivery | HTTP **200** |
+| CONTROL: B reads B's own delivery | HTTP **200** |
+| B reads A's delivery | HTTP **403 denied** |
+| A reads B's delivery | HTTP **403 denied** |
+
+**The controls are the point.** Two earlier runs of this harness produced a blanket denial in
+which *every* read failed, including a seller reading their own delivery. "B cannot see A's"
+was true both times and meant nothing both times. The controls caught it twice:
+
+1. **App Check enforcement in the browser.** Headless cannot pass reCAPTCHA, so
+   `exchangeRecaptchaV3Token` 403s and Firestore refuses every read before rules are consulted.
+2. **App Check enforcement over REST.** A request carrying only a Firebase ID token is
+   rejected with 403 *before rules are evaluated*. The `X-Firebase-AppCheck` header (from a
+   registered debug token, revoked afterwards) is what makes a 403 mean "the rule refused this".
+
+### Honestly not verified
+
+The **UI layer remains INCONCLUSIVE**. The headless browser cannot obtain an App Check token —
+injecting `FIREBASE_APPCHECK_DEBUG_TOKEN` did not take effect; the SDK still attempted the
+reCAPTCHA exchange. So neither seller's hub rendered any delivery, and the harness reports
+INCONCLUSIVE rather than passing on a blanket denial. What is proven is the security boundary
+itself (rules + real tokens), which is the property that actually protects sellers. The hub's
+`where('sellerUid','==',uid)` query shape was separately confirmed to need no composite index
+(runQuery HTTP 200).
+
+**Files:** `scripts/qa/delivery-isolation.mjs`, `scripts/qa/run-delivery-isolation.js`
+**Cleanup:** two auth users, two shops, two deliveries and the App Check debug token, all
+removed and confirmed on every exit path.
+
+### Product defect found while testing
+
+`seller-delivery.html::_loadActive()` passes **no error callback** to `onSnapshot`. A failed
+query — App Check, rules, or a future index requirement — leaves the list empty and silent,
+which renders as "No active deliveries right now". A failure that looks exactly like an empty
+success is the hardest kind to diagnose. Not fixed in this change; logged as the next item.
+
+---
+
 ## [2026-08-11] — P0: the seller's Rider button opened a personal rider account
 
 Two seller destinations pointed at the wrong context. The route table already admitted one.
