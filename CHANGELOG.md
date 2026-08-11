@@ -1,3 +1,41 @@
+## [2026-08-11] — feat(kasshop): Phase 2 increment 1 — one shop, two views
+
+**The spine, before the surface.** The premium KassShop brief is that seller management and
+the public storefront are two views of ONE shop. Most of that already existed:
+`getMinishopPublic` reads canonical `shops/{shopId}`, and products, reviews and followers are
+all keyed by `shopId`. Rebuilding it would have been the wrong move.
+
+**What was actually missing.** The storefront carried no open/closed state.
+`effectiveForShop()` had been deciding availability for the seller side all along and the
+buyer response never included it — so a seller could flip offline in KassShop Management and
+the storefront would keep taking orders. It also carried no timetable, so any storefront
+calendar would have been drawn from something other than the schedule the seller manages.
+
+`publicShopState()` is now the single resolver both sides go through, returning the effective
+decision *and* the schedule behind it under the same seller-timetable-wins precedence. It
+never throws: callers get `null` and render a neutral state rather than a guessed "Open".
+
+**Files:** `functions/kasshop.js`, `functions/minishop.js`, `scripts/test-kasshop-boundary.js`
+**API:** `getMinishopPublic` response gains `availability` and `schedule` (both nullable)
+**Deployed:** `getMinishopPublic`; verified live against the real KASS SHOP storefront
+**Tests:** 65/65 — new section asserts propagation, not just each side in isolation
+**Breaking:** none — additive response fields
+
+### Still open
+
+**The rules release is blocked, and it is not what it looked like.** Root cause is now known:
+`updateRelease` PATCH is fine (a no-op PATCH returns 200, and a ruleset built from the *live*
+source releases cleanly), but a ruleset built from the current `firestore.rules` is refused
+with a bare `400 INVALID_ARGUMENT`. firebase-tools swallows that 400, falls back to
+`createRelease`, and reports `409 Requested entity already exists` — which is why this read as
+a CLI quirk for two days. Size is **not** the cause: a comment-stripped 199,014-byte version
+(rule-bearing lines proven identical) is refused too. The offending content is somewhere in
+the 23 rule-bearing lines added since 2026-08-09. `scripts/deploy/release-firestore-rules.js`
+carries `--dry-run`, `--diagnose`, `--bisect` and `--try-file` to finish the bisect.
+Production is unaffected and still on equivalent content.
+
+---
+
 ## [2026-08-11] — fix(kasshop): compliance fields were collected, dropped, and publicly leaked
 
 **Deployed + live-verified.** `saveShopProfile`/`getShopProfile` (canonical shop id) and the
@@ -25,8 +63,11 @@ returned to the owner by `getShopProfile`. The legacy mirror strips them.
 
 ### Open, not fixed here
 
-1. **Existing exposed data.** `sellers/*` documents already in production still carry these
-   fields publicly. New saves are clean; a scrub of existing data is a separate migration.
+1. ~~**Existing exposed data.**~~ **CLOSED — nothing was exposed.**
+   `scripts/audit-public-compliance-exposure.js` (read-only) scanned every publicly-readable
+   `sellers`, `businesses` and `shops` document: **0 carry these fields.** The leak was real in
+   the write path but no seller had ever saved a value through it, so there is nothing to
+   remediate. The audit is kept as a standing check.
 2. **The rules release is stuck.** `firebase deploy --only firestore:rules` returns
    `409 Requested entity already exists` on the `cloud.firestore` release. The live ruleset
    dates from **2026-08-09** and is missing already-committed rule changes: per-shop
