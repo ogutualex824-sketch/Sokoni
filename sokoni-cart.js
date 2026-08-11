@@ -211,6 +211,20 @@
     return _write(arr);
   }
 
+  /* Removes EVERY line sharing the id, in one write. Added for 2.2B: market-actions.js
+     has always done `filter(c => c.id !== id)`, and its card buttons are a per-product
+     toggle — "remove from cart" there means the product is gone, not one unit of it.
+     Routing that through removeById would have quietly changed the button's meaning on
+     five live pages whenever another writer had created duplicate rows. The service
+     offers both; the call site says which it means. */
+  function removeAllById(id) {
+    var arr = _read();
+    var want = String(id || '');
+    var kept = arr.filter(function (i) { return idOf(i) !== want; });
+    if (kept.length === arr.length) return false;
+    return _write(kept);
+  }
+
   function removeByCartId(cartId) {
     var arr = _read();
     var want = String(cartId || '');
@@ -248,7 +262,8 @@
     lines: lines, units: units,        /* no subtotal — see the note above */
     /* write */
     add: add, setQty: setQty,
-    removeAt: removeAt, removeById: removeById, removeByCartId: removeByCartId,
+    removeAt: removeAt, removeById: removeById, removeAllById: removeAllById,
+    removeByCartId: removeByCartId,
     clear: clear,
     /* helpers a migrated call site needs to keep behaving identically */
     idOf: idOf, cartIdOf: cartIdOf, qtyOf: qtyOf,

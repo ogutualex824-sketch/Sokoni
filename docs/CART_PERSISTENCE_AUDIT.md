@@ -1,6 +1,6 @@
 # Cart Persistence — Audit and Track 2 Plan
 
-**Status:** Audit complete. **2.1 and 2.2A done (not deployed); 2.2B–2.7 not started.**
+**Status:** Audit complete. **2.1, 2.2A and 2.2B done (not deployed); 2.3–2.7 not started.**
 Related: [[WISHLIST_CANONICALISATION]] · [[Commerce Lifecycle]] · [[CANONICAL_COLLECTIONS]]
 
 ---
@@ -106,7 +106,7 @@ shipped source and runs it in a `vm` sandbox against a real emulator.
 |---|---|---|
 | **2.1** | KASS cart truth | **done, not deployed** |
 | **2.2A** | canonical client cart service, built inert | **done, not deployed** — see below |
-| 2.2B | migrate one representative writer + reader | not started |
+| **2.2B** | `market-actions.js` migrated onto SokoniCart | **done, not deployed** |
 | 2.3 | migrate 17 writers / 27 readers | one surface at a time, as Track 3 |
 | 2.4 | checkout boundary | `checkout.html` holds 10 references incl. both post-order `removeItem('cart')` calls — inside the do-not-modify perimeter |
 | 2.5 | food-hub `sokoniCart` bridge | |
@@ -215,3 +215,56 @@ duplicate rows preserved, both count models reproduced, corruption quarantined.
 One behaviour change, deliberate and asserted: `add()` stores a **copy** per push.
 `product.js` currently pushes the same object reference N times, so editing one line silently
 edits all of them. Copying cannot alter totals and stops that leak.
+
+---
+
+## Slice 2.2B — market-actions.js migrated (done)
+
+The first writer on the service. Chosen because it is already scheduled for 2.3, its badge
+semantics were the ones moving to `units()`, it exercises add/remove/toggle/read, and it
+needs nothing from the frozen checkout boundary.
+
+```
+market-actions.js  ->  SokoniCart  ->  localStorage['cart']
+```
+
+### What moved
+
+* `_readList` / `_loadCart` / `_saveCart` deleted. The corruption quarantine they carried
+  was not lost — it lives in the service now, so every surface gets it rather than this one.
+* `addToCart` / `removeFromCart` / `toggleCart` / `isInCart` go through the service.
+* `_syncBadges` counts `units()`. On these five pages the card badge and the header pip now
+  agree; before, an item with a `qty` field showed 3 in the header and 1 on the card.
+* The private `_emitCartChanged` is gone — the service emits on every mutation. The file
+  now *subscribes* instead, so its badges also refresh when an unmigrated surface writes.
+  Previously they went stale until the next page load.
+
+### One service addition: `removeAllById`
+
+`removeFromCart` has always been `filter(c => c.id !== id)` — every line with that id —
+because the card button is a per-PRODUCT toggle: "remove from cart" means the product is
+gone, not one unit of it. Routing it through `removeById` (single line) would have quietly
+changed that button's meaning on five live pages whenever another writer had created
+duplicate rows. The service offers both; the call site says which it means.
+
+### Fails closed
+
+Without `SokoniCart` the buttons say "Cart is still loading" and write nothing. The old
+fallback — writing `localStorage` directly — is exactly what this migration removes, and a
+button that appears to work while storing nothing is the defect Track 2.1 was about. All
+five consumer pages load the service; asserted, because a missing `<script>` tag is
+invisible to per-file scanning and is how three pages shipped migrated-but-inert in Track 3.
+
+### Verified — 63/63 (`scripts/test-cart-market-actions.js`)
+
+Runs the shipped `market-actions.js` and `sokoni-cart.js` together in one sandbox. Covers
+every condition in the 2.2B gate, including the negative ones: a failed write is reported
+rather than swallowed, no direct cart persistence remains, no second writer appeared, and
+the frozen perimeter is untouched.
+
+### Retired assertions
+
+Three assertions in the 2.2A suite asserted the service ships INERT — no page loading it,
+no writer migrated. 2.2B deliberately ended both, so they were **removed and named** rather
+than relaxed, and blast-radius checking moved to the 2.2B suite. The 2.2A suite keeps the
+part still worth failing on: the frozen perimeter. It now stands at 76/76.

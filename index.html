@@ -2871,6 +2871,11 @@
        Not deferred: script.js is, so this evaluates first and SokoniWishlist exists before
        the first card renders or a heart is tapped. -->
   <script src="sokoni-wishlist.js"></script>
+  <!-- Canonical cart access path (Track 2.2B). market-actions.js no longer touches
+       localStorage['cart'] itself; without this tag its buttons fail closed and say the cart
+       is still loading. Not deferred: market-actions.js is, so this evaluates first either
+       way. -->
+  <script src="sokoni-cart.js"></script>
   <script src="script.js" defer></script>
 <!-- The tag above was missing its </script>. A <script> element with a src still
      requires a closing tag, so the HTML parser treated everything up to the NEXT

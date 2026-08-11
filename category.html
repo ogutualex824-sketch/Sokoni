@@ -512,6 +512,11 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
      Not deferred: category.js is, so this is parsed and evaluated first either way, and
      SokoniWishlist must exist before the first card handler can fire. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.2B). market-actions.js no longer touches
+     localStorage['cart'] itself; without this tag its buttons fail closed and say the cart
+     is still loading. Not deferred: market-actions.js is, so this evaluates first either
+     way. -->
+<script src="sokoni-cart.js"></script>
 <script src="category.js" defer></script>
 <script src="scroll-memory.js" defer></script>
 <script src="market-actions.js" defer></script>

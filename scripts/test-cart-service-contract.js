@@ -338,40 +338,32 @@ console.log('\nK. Anonymous carts keep working (no owner stamping)');
   ck('K', 'add works with no session at all', Cart.lines() === 1);
 }
 
-/* ══ L. no writer was migrated in this slice ══ */
-console.log('\nL. 2.2A changed no page');
+/* ══ L. perimeter ══
+   ─────────────────────────────────────────────────────────────────────────────
+   RETIRED HERE, 2026-08-12, by Track 2.2B. This block used to assert that the service
+   shipped INERT: no page loading sokoni-cart.js, no writer migrated. Those were true and
+   load-bearing for 2.2A, and 2.2B deliberately ended both — market-actions.js is migrated
+   and five pages load the service on purpose.
+
+   They are removed rather than relaxed, and named here so the change reads as a decision
+   instead of a green suite. Blast-radius checking now lives in
+   scripts/test-cart-market-actions.js, which owns the slice that actually moves pages.
+
+   What survives is the part that is still true and still worth failing on: the frozen
+   perimeter. checkout.html, cart.js and provider-wiring.js must stay untouched no matter
+   how many writers migrate.
+   ───────────────────────────────────────────────────────────────────────────── */
+console.log('\nL. The frozen perimeter is still frozen');
 {
   const cp = require('child_process');
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  /* Diffing against HEAD cannot tell this slice's changes from other tracks' — the tree
-     also carries Track 1 (availability) and Track 4 (cart.html CSS) work that was dirty
-     before 2.2A began. Two earlier versions of this assertion failed on exactly that and
-     were patched to dodge it, which is how a guard turns into a rubber stamp. So the
-     pre-existing set is named explicitly: anything dirty and NOT on this list is
-     something 2.2A touched, and the assertion says so by name. */
-  const PRE_EXISTING = [
-    'availability-manager.html',        /* Track 1 — availability schedule projection */
-    'cart.html',                        /* Track 4 — min-width:0 overflow fix */
-    'version.json',                     /* predeploy artifacts, not authored here */
-    'docs/release-gates/unknown.json',
-  ];
-  const MINE = ['sokoni-cart.js', 'scripts/test-cart-service-contract.js',
-                'CHANGELOG.md', 'docs/CART_PERSISTENCE_AUDIT.md'];
-  const unexpected = changed.filter(f => !PRE_EXISTING.includes(f) && !MINE.includes(f));
-  ck('L', 'nothing outside this slice and the known pre-existing set is dirty',
-     unexpected.length === 0, unexpected.join(', '));
-  ck('L', 'no page anywhere references SokoniCart yet',
-     !cp.execSync('git grep -l "SokoniCart" -- "*.html" || true', { cwd: ROOT, encoding: 'utf8' }).trim(),
-     'a page references it');
   ck('L', 'checkout.html untouched', !changed.includes('checkout.html'), changed.join(', '));
   ck('L', 'cart.js untouched', !changed.includes('cart.js'), changed.join(', '));
-  ck('L', 'no existing cart writer migrated',
-     !changed.some(f => /^(product|category|script|market-actions|provider-wiring)\.js$/.test(f)),
-     changed.join(', '));
-  const loaders = cp.execSync('git grep -l "sokoni-cart.js" -- "*.html" || true',
-    { cwd: ROOT, encoding: 'utf8' }).trim();
-  ck('L', 'no page loads sokoni-cart.js yet — the service ships inert', !loaders, loaders);
+  ck('L', 'provider-wiring.js untouched — the setItem interceptor is 2.6\'s',
+     !changed.includes('provider-wiring.js'), changed.join(', '));
+  ck('L', 'shared-header.js untouched — its badge formula was already units',
+     !changed.includes('shared-header.js'), changed.join(', '));
 }
 
 /* ── summary ── */

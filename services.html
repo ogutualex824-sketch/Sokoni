@@ -396,6 +396,11 @@
      without this tag _wl() is null forever and saving silently never works. Not deferred:
      market-actions.js is, so this evaluates first either way. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.2B). market-actions.js no longer touches
+     localStorage['cart'] itself; without this tag its buttons fail closed and say the cart
+     is still loading. Not deferred: market-actions.js is, so this evaluates first either
+     way. -->
+<script src="sokoni-cart.js"></script>
 <script src="market-actions.js" defer></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
