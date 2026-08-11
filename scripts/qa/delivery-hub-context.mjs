@@ -89,11 +89,24 @@ export default async function run(page) {
   });
   await signIn(page);
 
-  await page.goto(ORIGIN + '/merchant', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  /* Sign in on /seller, not /merchant. The merchant shell ships a nonce +
+     strict-dynamic CSP that blocks the injected init script, so the sign-in helper
+     never runs there. Authenticating first and then navigating is also the honest
+     order: a seller signs in, then opens their merchant OS. The session persists
+     across the navigation via Firebase's IndexedDB. */
+  await page.goto(ORIGIN + '/seller', { waitUntil: 'domcontentloaded', timeout: 60000 });
   const si = await waitSignedIn(page);
   out.push(step('signed in as the QA seller', si.ok, si.error || EMAIL));
   if (!si.ok) return { results: out, verdict: 'BLOCKED: sign-in failed' };
-  await page.waitForTimeout(6000);
+
+  await page.goto(ORIGIN + '/merchant', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForTimeout(9000);
+  const landed = await page.evaluate(() => ({
+    url: location.href, title: document.title,
+    chars: (document.body && document.body.innerText || '').length,
+  }));
+  out.push(step('the merchant shell loaded while signed in',
+    /merchant/i.test(landed.title || '') || landed.chars > 200, landed));
 
   /* The route TABLE is asserted in Node by the runner (it is a module, and this driver
      evaluates in an isolated world where page globals are invisible). What happens here

@@ -1,3 +1,53 @@
+## [2026-08-11] — P0: the seller's Rider button opened a personal rider account
+
+Two seller destinations pointed at the wrong context. The route table already admitted one.
+
+| route | was | problem |
+|---|---|---|
+| `riders` | `driver.html` | the **rider-facing app** — a seller tapping "Riders" in their own dashboard got *go online / my earnings / my trips*. The route's own note said: *"REVIEW: driver.html is the rider-facing app… a merchant-facing rider roster is the correct long-term target."* |
+| `deliveries` | `dispatch.html` | the **admin dispatch console** (`data-require-role="admin"`), querying every `packageRequests` document platform-wide with no seller filter, offering rider suspension for GPS fraud |
+
+**The second explains the blank board.** `firestore.rules` lets a non-admin read a delivery
+only when their uid is party to it (`uid` / `buyerUid` / `sellerUid` / `assignedDriverId`), so
+an unfiltered platform-wide query is refused outright and the seller got an **empty** console.
+The "blanking for non-admins" that `1d81f11` fixed by loosening the page gate was Firestore
+refusing an admin query, not a role bug. **No data leaked — the rules held.**
+
+### Fix — reused, not rebuilt
+
+`seller-delivery.html` already existed, already scoped every read to `sellerUid == the
+signed-in seller`, and already had real-time active/pending/failed lists, stats and empty
+states. It was simply **not wired to anything**. Both routes now open it.
+
+Added: a **Riders roster** (`rideDrivers where isOnline`, readable by any signed-in user per
+the rules) showing availability and whether a rider is on *this* seller's job or another
+shop's, with a Track link reusing the delivery cards' existing `?ref=` convention. Nothing is
+invented — an unrated rider shows **no** rating rather than `0.0`, and another shop's order is
+never named.
+
+**The map is not mandatory and cannot be.** The hub ships no map at all, so "Heatmap OFF"
+cannot become the seller experience; the delivery list and rider roster are independent of any
+map surface. A failed rider roster degrades to a message and leaves deliveries working.
+
+### Three contexts, kept distinct
+
+| context | surface |
+|---|---|
+| Rider — my own account | `driver.html` |
+| Seller — my delivery operation | `seller-delivery.html` |
+| Anyone party to one order | `delivery-tracking.html` |
+
+**Files:** `sokoni-merchant-routes.js`, `seller-delivery.html`, `scripts/qa/*`
+**Deployed:** hosting v512 (`4d30f0a`)
+**Tests:** `npm run qa:delivery-hub` — 7/7 contract + **11/11 runtime**. The runtime half
+signs in, **clicks the real control** (`🛵 Delivery Hub`) and inspects the document that loads
+(`seller-delivery.html`, title *Seller Delivery Dashboard*, zero rider-app markers), because a
+route table can be right while the product is wrong. Also `npm run test:merchant-routes` 60/60.
+
+**Not touched:** KassShop persistence (v511), POS, returns, payments.
+
+---
+
 ## [2026-08-11] — P0 CLOSED: Shop Setup → Preview Store works end to end
 
 **Proven on production, in a real signed-in browser, with unmistakable values**
