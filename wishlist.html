@@ -314,6 +314,10 @@
 <!-- Canonical wishlist authority. Must load before the render block below, which calls
      SokoniWishlist for load, list, remove and the legacy migration. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.3.5). Move to Cart and Buy Now no longer
+     touch localStorage['cart']; without this tag they fail closed and say so, rather
+     than removing a wishlist item that never reached the cart. -->
+<script src="sokoni-cart.js"></script>
 <script>
 /* ── WISHLIST PREMIUM RENDER ──────────────────────────────────────────────────
    Canonical authority: wishlistItems/{uid}_{productId}, reached only through
@@ -347,13 +351,17 @@ function updateWishCount(list){
 }
 
 function updateCartBadge(){
-  try {
-    var cart = JSON.parse(localStorage.getItem("cart")||"[]");
-    var el = document.getElementById("cartBadge");
-    if(el) el.textContent = cart.reduce(function(s,i){ return s+(i.qty||1); },0);
-  } catch(e){}
+  /* This badge ALREADY counted units — reduce((s,i)=>s+(i.qty||1),0) — so units() is a
+     like-for-like swap, not a semantics change. With no service it shows an em dash: an
+     unverifiable count must not be rendered as 0, which would assert an empty cart. */
+  var el = document.getElementById("cartBadge");
+  if(!el) return;
+  var C = window.SokoniCart;
+  el.textContent = C ? C.units() : "—";
 }
 updateCartBadge();
+/* Refresh when any surface changes the cart, not only this page's own moves. */
+try { window.addEventListener("sokoni:cart-changed", updateCartBadge); } catch(e){}
 
 /* Product names, categories and image URLs are seller-supplied and were being
    interpolated RAW into this template — a stored-XSS hole: a product named
@@ -594,31 +602,56 @@ function removeWishlist(index){
 function moveToCart(index){
   var item = _wishData[index];
   var W = window.SokoniWishlist;
+  var C = window.SokoniCart;
   if(!item || !W) return;
-  /* Cart remains client-side for now (Track 2 owns its consolidation); only the
-     wishlist half is canonical here. The cart write happens first so a failed
-     wishlist removal cannot lose the item entirely. */
-  var cart = [];
-  try { cart = JSON.parse(localStorage.getItem("cart")||"[]"); } catch(e){}
-  cart.push(item);
-  try { localStorage.setItem("cart", JSON.stringify(cart)); } catch(e){}
+  if(!C){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+
+  /* Move is add-then-remove, and the ADD MUST BE CONFIRMED before the remove.
+
+     The ordering was already right and the error handling defeated it: the cart write was
+     `try { localStorage.setItem(...) } catch(e){}` — a swallowed failure — and the code
+     carried straight on to remove the item from the wishlist and report "Moved to cart".
+     On a full quota that DESTROYED the item: gone from the wishlist, never in the cart,
+     and the shopper told it had moved. The comment above it claimed the ordering made
+     that impossible.
+
+     Now the add is checked. If it fails, the wishlist entry is left exactly where it
+     was — the shopper still has the item. */
+  if(!C.add(item)){
+    showNotif("Couldn't add to cart — the item is still in your wishlist", "error");
+    return;
+  }
   updateCartBadge();
 
   W.remove(item.productId || item.id).then(function(){
     showNotif("Moved to cart 🛒", "success");
     _wishRender();
   }).catch(function(){
+    /* The cart half succeeded, so this is honest: the item IS in the cart and also still
+       saved. Not a failure of the move, just an incomplete tidy-up. */
     showNotif("Added to cart, but couldn't clear it from your wishlist", "error");
   });
 }
 
+/* The FOURTH copy of the Buy Now navigate-on-failure pattern, after product.js,
+   category.js and flashsale.html. It APPENDS — like script.js and flashsale, unlike
+   Product Detail and Category which replace — and that is preserved. Only the
+   unconditional navigation is corrected: a storage failure used to send the shopper to
+   checkout with the previous cart, buying something they had not chosen.
+
+   Note this deliberately does NOT remove the item from the wishlist. Buy Now is not a
+   move; the shopper keeps the saved item. */
 function buyNowWish(index){
   var item = _wishData[index];
-  var cart = [];
-  try { cart = JSON.parse(localStorage.getItem("cart")||"[]"); } catch(e){}
-  cart.push(item);
-  localStorage.setItem("cart", JSON.stringify(cart));
+  if(!item) return false;
+  var C = window.SokoniCart;
+  if(!C){ showNotif("Cart is still loading — try again in a moment", "error"); return false; }
+  if(!C.add(item)){
+    showNotif("Couldn't start checkout — please try again", "error");
+    return false;
+  }
   window.location.href = "checkout.html";
+  return true;
 }
 
 function searchWishlist(){

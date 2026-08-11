@@ -21,6 +21,7 @@ const MIGRATED = [
   'category.js',                                              /* 2.3 surface 2 */
   'script.js',                                                /* 2.3 surface 3 */
   'flashsale.html', 'business.html', 'ministore.html',          /* 2.3 surface 4 */
+  'wishlist.html',                                            /* 2.3 surface 5 */
 ];
 
 /* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
@@ -43,7 +44,6 @@ const DEFERRED = [
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
   'cart.js', 'shared-header.js',
-  'wishlist.html',
   'food.html', 'profile.js', 'seller-wiring.js',
 ];
 

@@ -288,6 +288,13 @@ const L2 = { productId: 'lp2', name: 'Sukari 1kg', price: 180, image: 'j.png', s
 
     g.window = g; g.updateCartBadge = () => {}; g.updateWishCount = () => {};
     vm.createContext(g);
+    /* wishlist.html now loads sokoni-cart.js as well (Track 2.3.5): moveToCart and
+       buyNowWish go through SokoniCart instead of writing localStorage['cart'] directly,
+       and they FAIL CLOSED without it. Block R exercises moveToCart, so the sandbox has
+       to carry the page's real dependencies or it tests a page that cannot exist. The
+       assertion itself is unchanged — the item must reach the cart before the canonical
+       wishlist removal. */
+    vm.runInContext(fsx.readFileSync(path.resolve(__dirname, '..', 'sokoni-cart.js'), 'utf8'), g);
     vm.runInContext(render, g);
     return { g, container, svc, W: g.SokoniWishlist };
   }
