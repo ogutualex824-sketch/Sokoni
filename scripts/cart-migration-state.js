@@ -26,32 +26,61 @@ const MIGRATED = [
   'cart.html', 'food.html', 'profile.js',                     /* 2.3 surface 7 readers */
 ];
 
-/* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
-   the global setItem interceptor and is 2.6. */
-const FROZEN = ['checkout.html', 'provider-wiring.js'];
+/* ── SURVIVORS ────────────────────────────────────────────────────────────────
+   Track 2.3 closes at "all writers + all unblocked readers". Files still touching the
+   cart directly are NOT leftovers: each carries an owning phase and the architectural
+   fact that blocks it. "UNMIGRATED" in a sweep report must never be readable as
+   "forgotten", so the reason lives here, next to the name, and the sweep prints it.
 
-/* Owned by a LATER slice, deliberately not 2.3.
-   sokoni-food.js is a complete parallel cart implementation on the same key, reached
-   through const SHARED_CART_KEY = 'cart' — which is why the literal-only scanner missed
-   it for three slices. Its saveCart() rewrites the whole array (all non-food rows + all
-   food rows) on every food mutation, and that behaviour is what provider-wiring.js's
-   cart <-> sokoniCart bridge was built around. Migrating it inside 2.3 would mix two
-   architectural changes and make the verification impossible to read, so the food cart
-   and the bridge move together in 2.5. */
+   Every entry is {file, phase, reason} — a bare name would let the next reader assume it
+   was simply missed. */
+
+const FROZEN = [
+  { file: 'checkout.html', phase: '2.4',
+    reason: 'The order lifecycle owns cart clearing (two removeItem calls) and sends the ' +
+            'raw array as orderItems to verifyIntasendPayment. Out of bounds until its ' +
+            'own verified slice.' },
+  { file: 'provider-wiring.js', phase: '2.6',
+    reason: 'Carries the global localStorage.setItem interceptor that mirrors cart <-> ' +
+            'sokoniCart, injected by security.js on ~288 pages. Removing it requires ' +
+            'every legitimate dependency to be gone first.' },
+];
+
 const DEFERRED = [
-  'sokoni-food.js',                                            /* 2.5, with the bridge */
+  { file: 'sokoni-food.js', phase: '2.5',
+    reason: 'A complete parallel cart implementation on the SAME key, reached through ' +
+            'const SHARED_CART_KEY = "cart" — which is why the literal-only scanner ' +
+            'missed it for three slices. Its saveCart() rewrites the whole array on every ' +
+            'food mutation, and that behaviour is what the sokoniCart bridge was built ' +
+            'around. The food cart and the bridge move together.' },
 ];
 
-/* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
-   Move an entry from here to MIGRATED when its slice lands. */
-const PENDING = [
-  /* Both BLOCKED, not forgotten — see the 2.3.7 report and test-cart-readers.js E/F.
-     shared-header.js renders on 311 pages of which few load the service; migrating it
-     would hide the cart badge on most of the platform. seller-wiring.js reads the cart
-     only inside its checkout.html patch, and checkout.html is FROZEN so it cannot load
-     the service — migrating it would silently stop post-order stock decrements. */
-  'shared-header.js', 'seller-wiring.js',
+/* Blocked by a boundary this track deliberately will not cross. Both were assessed in
+   2.3.7 and left alone; shared-header.js was migrated and then REVERTED when the reach
+   was measured. */
+const BLOCKED = [
+  { file: 'shared-header.js', phase: '2.6',
+    reason: 'Renders on 311 pages, of which 12 load sokoni-cart.js. Migrating it turns ' +
+            'the cart pip from a number into hidden on 299 pages. This is a platform-wide ' +
+            'dependency rollout, not a reader migration — and it shares its precondition ' +
+            'with removing the interceptor.' },
+  { file: 'seller-wiring.js', phase: '2.4',
+    reason: 'Its cart read exists only inside the patch it applies to saveAndRedirect, ' +
+            'which is defined solely in checkout.html. Checkout is FROZEN and so cannot ' +
+            'load the service; migrating this read would return an empty cart and ' +
+            'silently stop post-order stock decrements.' },
 ];
+
+/* Name-only views, for the assertions that just need a list. */
+const FROZEN_FILES   = FROZEN.map(e => e.file);
+const DEFERRED_FILES = DEFERRED.map(e => e.file);
+const BLOCKED_FILES  = BLOCKED.map(e => e.file);
+
+/* Every file still permitted to touch the cart directly, with its owner. */
+function survivorFor(file) {
+  return FROZEN.find(e => e.file === file) || DEFERRED.find(e => e.file === file) ||
+         BLOCKED.find(e => e.file === file) || null;
+}
 
 /* Dirty in the working tree for reasons that predate Track 2 — other tracks and build
    artifacts. Named so "unexpected" means unexpected. */
@@ -83,7 +112,11 @@ const TEST_HARNESS = [
   'tests/rc/suites/rc-02-buyer.js',
 ];
 
-const isSuite = (f) => /^scripts\/(test-cart-|cart-migration-state)/.test(f);
+/* The cart tooling itself: suites, this registry, and the scanner. Named as one set so
+   that changing the guard infrastructure is never mistaken for changing a product surface
+   — the scanner was omitted here and every suite flagged it as an unexplained dirty file
+   the moment 2.3.8 touched it. */
+const isSuite = (f) => /^scripts\/(test-cart-|cart-migration-state|scan-cart-writers)/.test(f);
 
 /* Anything dirty that none of the above explains. */
 function unexpected(changed) {
@@ -92,5 +125,15 @@ function unexpected(changed) {
     !INFRASTRUCTURE.includes(f) && !TEST_HARNESS.includes(f) && !isSuite(f));
 }
 
-module.exports = { MIGRATED, FROZEN, PENDING, DEFERRED, PRE_EXISTING, INFRASTRUCTURE,
-                   TEST_HARNESS, isSuite, unexpected };
+module.exports = {
+  MIGRATED, PRE_EXISTING, INFRASTRUCTURE, TEST_HARNESS,
+  /* Structured, with phase + reason */
+  FROZEN, DEFERRED, BLOCKED, survivorFor,
+  /* Name-only views */
+  FROZEN_FILES, DEFERRED_FILES, BLOCKED_FILES,
+  /* PENDING is retained as an alias for BLOCKED_FILES: the suites written during 2.3
+     assert against "surfaces not migrated yet", and at close of 2.3 that set is exactly
+     the two blocked readers. Kept so those assertions keep meaning what they meant. */
+  PENDING: BLOCKED_FILES,
+  isSuite, unexpected,
+};

@@ -213,7 +213,7 @@ console.log('\nK. Frozen perimeter and unmigrated surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('K', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.concat(STATE.PENDING)
+  STATE.FROZEN_FILES.concat(STATE.PENDING)
     .forEach(f => ck('K', f + ' untouched', !changed.includes(f), changed.join(', ')));
   ck('K', 'the RC harness is classified, not an unexplained survivor',
      STATE.TEST_HARNESS.includes('tests/rc/suites/rc-02-buyer.js'));

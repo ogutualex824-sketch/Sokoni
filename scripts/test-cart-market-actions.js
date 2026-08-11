@@ -263,7 +263,7 @@ console.log('\nL. Blast radius');
   const STATE = require('./cart-migration-state.js');
   ck('L', 'nothing dirty that the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.forEach(f => ck('L', f + ' untouched — its own slice owns it',
+  STATE.FROZEN_FILES.forEach(f => ck('L', f + ' untouched — its own slice owns it',
     !changed.includes(f), changed.join(', ')));
   STATE.PENDING.forEach(f => ck('L', f + ' not migrated yet',
     !changed.includes(f), changed.join(', ')));

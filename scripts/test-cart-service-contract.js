@@ -363,9 +363,9 @@ console.log('\nL. The frozen perimeter is still frozen');
      time a per-suite list has gone stale in this track. The frozen set is the part that
      must hold no matter how many surfaces migrate. */
   const STATE = require('./cart-migration-state.js');
-  STATE.FROZEN.forEach(f => ck('L', f + ' untouched — its own slice owns it',
+  STATE.FROZEN_FILES.forEach(f => ck('L', f + ' untouched — its own slice owns it',
     !changed.includes(f), changed.join(', ')));
-  STATE.DEFERRED.forEach(f => ck('L', f + ' deferred and untouched',
+  STATE.DEFERRED_FILES.forEach(f => ck('L', f + ' deferred and untouched',
     !changed.includes(f), changed.join(', ')));
 }
 

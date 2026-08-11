@@ -275,8 +275,8 @@ console.log('\nK. Frozen perimeter, deferred surface, unmigrated surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('K', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.forEach(f => ck('K', f + ' FROZEN', !changed.includes(f), changed.join(', ')));
-  STATE.DEFERRED.forEach(f => ck('K', f + ' DEFERRED to 2.5 — untouched',
+  STATE.FROZEN_FILES.forEach(f => ck('K', f + ' FROZEN', !changed.includes(f), changed.join(', ')));
+  STATE.DEFERRED_FILES.forEach(f => ck('K', f + ' DEFERRED to 2.5 — untouched',
     !changed.includes(f), changed.join(', ')));
   STATE.PENDING.forEach(f => ck('K', f + ' not migrated yet', !changed.includes(f), changed.join(', ')));
 }

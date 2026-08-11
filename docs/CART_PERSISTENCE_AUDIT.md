@@ -1,6 +1,6 @@
 # Cart Persistence — Audit and Track 2 Plan
 
-**Status:** Audit complete. **2.1, 2.2A and 2.2B done (not deployed); 2.3–2.7 not started.**
+**Status:** **2.1, 2.2A, 2.2B and 2.3 COMPLETE (not deployed).** 2.4–2.7 not started.
 Related: [[WISHLIST_CANONICALISATION]] · [[Commerce Lifecycle]] · [[CANONICAL_COLLECTIONS]]
 
 ---
@@ -268,3 +268,95 @@ Three assertions in the 2.2A suite asserted the service ships INERT — no page 
 no writer migrated. 2.2B deliberately ended both, so they were **removed and named** rather
 than relaxed, and blast-radius checking moved to the 2.2B suite. The 2.2A suite keeps the
 part still worth failing on: the frozen perimeter. It now stands at 76/76.
+
+---
+
+## Track 2.3 — CLOSED at "all writers + all unblocked readers"
+
+**Completion condition, stated deliberately:**
+
+> Every cart **writer** is migrated. Every **unblocked** reader is migrated. Every remaining
+> direct reader is blocked or deferred behind a named architectural boundary, with an
+> owning phase and a recorded reason.
+
+This is a legitimate completion state, not a compromised one. A gate demanding zero
+survivors would create pressure to unfreeze `checkout.html` or push the service onto ~300
+pages unreviewed — turning a cart migration into an unreviewed checkout change. The final
+acceptance suite asserts the real condition, and separately asserts that **no boundary was
+crossed to reach it**.
+
+### Migrated (18 surfaces)
+
+| slice | surfaces |
+|---|---|
+| 2.2B | `market-actions.js` + its 5 consumer pages |
+| 2.3.1 | `product.js` · `product.html` |
+| 2.3.2 | `category.js` |
+| 2.3.3 | `script.js` |
+| 2.3.4 | `flashsale.html` · `business.html` · `ministore.html` |
+| 2.3.5 | `wishlist.html` |
+| 2.3.6 | `cart.js` — the last writer |
+| 2.3.7 | `cart.html` · `food.html` · `profile.js` |
+
+### Survivors — each with an owner and a reason
+
+| file | phase | why |
+|---|---|---|
+| `shared-header.js` | **2.6** | On 311 pages; 12 load the service. Migrating turns the cart pip from a number into *hidden* on 299 pages. A platform-wide dependency rollout, not a reader migration — same precondition as removing the interceptor. |
+| `seller-wiring.js` | **2.4** | Its cart read lives only inside its `saveAndRedirect` patch, and that function is defined solely in `checkout.html`. Checkout is frozen and cannot load the service, so migrating would return an empty cart and **silently stop post-order stock decrements**. |
+| `sokoni-food.js` | **2.5** | A parallel cart implementation on the same key via `const SHARED_CART_KEY`. Its `saveCart()` rewrites the whole array on every food mutation — the behaviour the `sokoniCart` bridge was built around. Moves with the bridge. |
+| `checkout.html` | **2.4** | Owns cart clearing in the order lifecycle and sends the raw array as `orderItems`. |
+| `provider-wiring.js` | **2.6** | Carries the global `setItem` interceptor. |
+| `rc-02-buyer.js` | — | Test harness, seeds a cart on purpose. Classified, not migrated. |
+
+### Defects the migration exposed and fixed
+
+Each was a real defect, fixed and tested rather than folded in silently:
+
+* **Buy Now navigated on a failed write — four separate copies** (`product.js`,
+  `category.js`, `flashsale.html`, `wishlist.html`). A storage failure sent the shopper to
+  checkout with the *previous* cart: buying an item they had not chosen, at a total they
+  had never seen.
+* **`wishlist.html` destroyed items.** The cart write sat in `try { … } catch(e){}`, then
+  the canonical wishlist removal ran anyway and reported "Moved to cart 🛒". The item was
+  gone from the wishlist, never in the cart. Its own comment claimed the ordering made
+  that impossible.
+* **Success without a write** — `category.js` discarded `_saveCatCart`'s return;
+  `script.js`'s `buyProduct` ignored `_persistCart`'s failure toast and said "Added To
+  Cart" anyway; `cart.js` reported "Item removed from cart" after a failed save.
+* **`ministore.html` swallowed failures entirely** — the bare `setItem` threw before
+  `toast()`, so the shopper saw nothing at all.
+* **`script.js` held a module-level snapshot**, so the homepage was its own cart authority
+  and overwrote changes made anywhere else.
+* **Persistence depended on the DOM** — `updateCart()` saved on its last line, below an
+  early return taken when a hidden `<ul>` was absent.
+* **`cart.html` never loaded the service** after `cart.js` was migrated — the migration
+  would have been correct and completely inert.
+
+### Semantics preserved, deliberately
+
+Three quantity models coexist and all three survive: duplicate rows (`product.js`),
+merge-by-id (`business.html`, `ministore.html`), and refuse-duplicate (`market-actions.js`).
+`SokoniCart` normalises none of them — `orderItems: cart` goes to `verifyIntasendPayment`
+verbatim, so the item shape is a **server-facing payment contract**.
+
+Removal stayed split on intent: `removeAt` for a cart-page row, `removeAllById` for the
+marketplace card's per-product toggle, `removeByCartId` for food lines that differ only by
+note.
+
+The badge converged on **units** — `Σ(qty||1)` — the formula 311 pages already used.
+
+### Verification
+
+```
+11 cart suites            551 pass / 0 fail
+constant-aware sweep      ACCOUNTED (exit 0)
+final acceptance          36 / 36
+sync contract             24 / 24
+Track 3 wishlist sweep    CLEAN
+```
+
+The scanner resolves literals, bracket form, key constants, storage aliases and inline
+`<script>`, and carries 30 positive controls — because the previous scan required a string
+literal and therefore missed `sokoni-food.js` for three slices while the reports quoted
+confident writer counts.

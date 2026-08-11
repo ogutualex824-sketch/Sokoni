@@ -186,7 +186,7 @@ console.log('\nF. seller-wiring.js left on its direct read — and why');
      !/src="sokoni-cart\.js"/.test(read('checkout.html')));
   /* Therefore migrating it would return an empty cart and stock would stop decrementing. */
   const STATE = require('./cart-migration-state.js');
-  ck('F', 'checkout.html is on the frozen list', STATE.FROZEN.includes('checkout.html'));
+  ck('F', 'checkout.html is on the frozen list', STATE.FROZEN_FILES.includes('checkout.html'));
 }
 
 /* ══ G. no new persistence path anywhere in this slice ══ */
@@ -207,13 +207,13 @@ console.log('\nH. Repo-wide picture through the constant-aware scanner');
   const STATE = require('./cart-migration-state.js');
   const hits = SCAN.scan().filter(h => h.key === 'cart');
   const unaccounted = [...new Set(hits.map(h => h.file))].filter(f =>
-    f !== 'sokoni-cart.js' && !STATE.FROZEN.includes(f) && !STATE.DEFERRED.includes(f) &&
+    f !== 'sokoni-cart.js' && !STATE.FROZEN_FILES.includes(f) && !STATE.DEFERRED_FILES.includes(f) &&
     !STATE.TEST_HARNESS.includes(f) && !STATE.PENDING.includes(f));
   ck('H', 'every remaining direct cart access is classified', unaccounted.length === 0,
      unaccounted.join(', '));
   ck('H', 'no unmigrated WRITER remains',
      hits.filter(h => h.kind === 'WRITE' && h.file !== 'sokoni-cart.js' &&
-       !STATE.FROZEN.includes(h.file) && !STATE.DEFERRED.includes(h.file) &&
+       !STATE.FROZEN_FILES.includes(h.file) && !STATE.DEFERRED_FILES.includes(h.file) &&
        !STATE.TEST_HARNESS.includes(h.file)).length === 0);
   ck('H', 'the two blocked readers are the only PENDING entries left',
      STATE.PENDING.length === 2 && STATE.PENDING.includes('shared-header.js') &&
@@ -228,8 +228,8 @@ console.log('\nI. Frozen and deferred surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('I', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.forEach(f => ck('I', f + ' FROZEN', !changed.includes(f)));
-  STATE.DEFERRED.forEach(f => ck('I', f + ' DEFERRED to 2.5', !changed.includes(f)));
+  STATE.FROZEN_FILES.forEach(f => ck('I', f + ' FROZEN', !changed.includes(f)));
+  STATE.DEFERRED_FILES.forEach(f => ck('I', f + ' DEFERRED to 2.5', !changed.includes(f)));
   ck('I', 'shared-header.js was reverted, not left half-migrated',
      !changed.includes('shared-header.js'), changed.join(', '));
   ck('I', 'seller-wiring.js untouched', !changed.includes('seller-wiring.js'));

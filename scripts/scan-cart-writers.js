@@ -176,18 +176,30 @@ if (require.main === module) {
 
   const classify = (f) => {
     if (f === 'sokoni-cart.js') return 'SERVICE';
-    if (STATE.FROZEN.includes(f)) return 'FROZEN';
+    if (STATE.FROZEN_FILES.includes(f)) return 'FROZEN';
     if (STATE.TEST_HARNESS.includes(f)) return 'HARNESS';
-    if (STATE.DEFERRED.includes(f)) return 'DEFERRED';
+    if (STATE.DEFERRED_FILES.includes(f)) return 'DEFERRED';
+    if (STATE.BLOCKED_FILES.includes(f)) return 'BLOCKED';
     if (STATE.MIGRATED.includes(f)) return 'MIGRATED';
-    return 'UNMIGRATED';
+    return 'UNACCOUNTED';
   };
 
   console.log('\nCART PERSISTENCE — repo-wide, indirection resolved\n' + '='.repeat(70));
-  const groups = { UNMIGRATED: [], DEFERRED: [], FROZEN: [], SERVICE: [], HARNESS: [], MIGRATED: [] };
+  const ORDER = ['UNACCOUNTED', 'BLOCKED', 'DEFERRED', 'FROZEN', 'SERVICE', 'HARNESS', 'MIGRATED'];
+  const groups = {}; ORDER.forEach(g => { groups[g] = []; });
   Object.keys(byFile).sort().forEach(f => groups[classify(f)].push(f));
 
-  ['UNMIGRATED', 'DEFERRED', 'FROZEN', 'SERVICE', 'HARNESS', 'MIGRATED'].forEach(g => {
+  const wrap = (text, indent) => {
+    const words = text.split(' '); const out = []; let line = '';
+    words.forEach(w => {
+      if ((line + ' ' + w).trim().length > 84) { out.push(line.trim()); line = w; }
+      else line += ' ' + w;
+    });
+    if (line.trim()) out.push(line.trim());
+    return out.map(l => indent + l).join('\n');
+  };
+
+  ORDER.forEach(g => {
     if (!groups[g].length) return;
     console.log('\n' + g + ':');
     groups[g].forEach(f => {
@@ -196,17 +208,31 @@ if (require.main === module) {
       const r = m.filter(h => h.kind === 'READ').length;
       const d = m.filter(h => h.kind === 'DELETE').length;
       const via = [...new Set(m.map(h => h.via))].join(', ');
-      console.log('   ' + f.padEnd(34) + ' w=' + w + ' r=' + r + (d ? ' d=' + d : '') + '   via ' + via);
+      const own = STATE.survivorFor(f);
+      console.log('   ' + f.padEnd(30) + ' w=' + w + ' r=' + r + (d ? ' d=' + d : '') +
+                  '   via ' + via + (own ? '   → ' + own.phase : ''));
+      /* Every survivor prints WHY. A name on its own reads as an oversight; the reason is
+         what makes "not migrated" a decision somebody can audit. */
+      if (own) console.log(wrap(own.reason, '        '));
     });
   });
 
-  const stragglers = groups.UNMIGRATED;
+  /* UNACCOUNTED is the only failing state. BLOCKED / DEFERRED / FROZEN each carry an
+     owning phase and a reason in cart-migration-state.js — they are decisions, not
+     leftovers, and a sweep that treated them as failures would pressure someone into
+     unfreezing a boundary just to make this print zero. */
+  const rogue = groups.UNACCOUNTED;
   console.log('\n' + '='.repeat(70));
-  if (stragglers.length) {
-    console.log('UNMIGRATED surfaces still touching the cart directly: ' + stragglers.length);
-    console.log('(DEFERRED / FROZEN / SERVICE / HARNESS are accounted for by cart-migration-state.js)');
+  if (rogue.length) {
+    console.log('UNACCOUNTED — direct cart access with no owning phase: ' + rogue.length);
+    rogue.forEach(f => console.log('   ' + f));
+    console.log('\nEither migrate these or record them in cart-migration-state.js with a phase');
+    console.log('and a reason. An unexplained survivor is the failure this scan exists to catch.');
   } else {
-    console.log('CLEAN — every direct cart access is the service, frozen, or a classified harness.');
+    console.log('ACCOUNTED — every direct cart access is the service, or carries an owning phase.');
+    console.log('  BLOCKED  ' + (groups.BLOCKED.length || 0) + '   ' + groups.BLOCKED.join(', '));
+    console.log('  DEFERRED ' + (groups.DEFERRED.length || 0) + '   ' + groups.DEFERRED.join(', '));
+    console.log('  FROZEN   ' + (groups.FROZEN.length || 0) + '   ' + groups.FROZEN.join(', '));
   }
-  process.exit(stragglers.length ? 1 : 0);
+  process.exit(rogue.length ? 1 : 0);
 }

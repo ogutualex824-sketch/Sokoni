@@ -290,7 +290,7 @@ console.log('\nL. Frozen perimeter and unmigrated surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('L', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.concat(STATE.PENDING)
+  STATE.FROZEN_FILES.concat(STATE.PENDING)
     .forEach(f => ck('L', f + ' untouched', !changed.includes(f), changed.join(', ')));
 }
 

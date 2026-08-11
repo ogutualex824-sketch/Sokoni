@@ -243,8 +243,8 @@ console.log('\nJ. Frozen, deferred and pending surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('J', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.forEach(f => ck('J', f + ' FROZEN', !changed.includes(f)));
-  STATE.DEFERRED.forEach(f => ck('J', f + ' DEFERRED to 2.5 — untouched', !changed.includes(f)));
+  STATE.FROZEN_FILES.forEach(f => ck('J', f + ' FROZEN', !changed.includes(f)));
+  STATE.DEFERRED_FILES.forEach(f => ck('J', f + ' DEFERRED to 2.5 — untouched', !changed.includes(f)));
   STATE.PENDING.forEach(f => ck('J', f + ' not migrated yet', !changed.includes(f)));
 }
 

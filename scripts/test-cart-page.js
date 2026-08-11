@@ -228,7 +228,7 @@ console.log('\nJ. No unmigrated cart WRITER remains anywhere');
   const STATE = require('./cart-migration-state.js');
   const all = SCAN.scan().filter(h => h.key === 'cart' && h.kind === 'WRITE');
   const rogue = all.filter(h => h.file !== 'sokoni-cart.js' &&
-    !STATE.FROZEN.includes(h.file) && !STATE.DEFERRED.includes(h.file) &&
+    !STATE.FROZEN_FILES.includes(h.file) && !STATE.DEFERRED_FILES.includes(h.file) &&
     !STATE.TEST_HARNESS.includes(h.file));
   ck('J', 'every remaining cart writer is the service, frozen, deferred or a harness',
      rogue.length === 0, rogue.map(h => h.file + ':' + h.line).join(', '));
@@ -246,8 +246,8 @@ console.log('\nK. Frozen, deferred and pending surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('K', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.forEach(f => ck('K', f + ' FROZEN', !changed.includes(f)));
-  STATE.DEFERRED.forEach(f => ck('K', f + ' DEFERRED to 2.5', !changed.includes(f)));
+  STATE.FROZEN_FILES.forEach(f => ck('K', f + ' FROZEN', !changed.includes(f)));
+  STATE.DEFERRED_FILES.forEach(f => ck('K', f + ' DEFERRED to 2.5', !changed.includes(f)));
   /* Read from the shared state, never a list typed here. This assertion originally
      hardcoded four names and went stale the moment 2.3.7 migrated two of them — the
      fourth per-suite list to do so in this track, and written AFTER the shared registry

@@ -222,7 +222,7 @@ console.log('\nJ. Frozen perimeter and unmigrated surfaces');
   const STATE = require('./cart-migration-state.js');
   ck('J', 'nothing dirty that the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  STATE.FROZEN.concat(STATE.PENDING)
+  STATE.FROZEN_FILES.concat(STATE.PENDING)
     .forEach(f => ck('J', f + ' untouched', !changed.includes(f), changed.join(', ')));
   ck('J', 'no page gained mixed line endings', (function () {
     const s = read('product.html');
