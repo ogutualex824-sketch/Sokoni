@@ -230,11 +230,14 @@
         _riders = snap.docs.map(function (d) { return Object.assign({ uid: d.id }, d.data()); });
         _renderRiders();
       }, function (err) {
-        /* A failed roster must not blank the hub — deliveries stay usable. */
-        console.warn('[delivery-hub] rider roster unavailable:', err && err.code);
-        el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">🏍️</div>' +
-          '<div class="sd-empty-text">Rider availability is temporarily unavailable.<br>' +
-          'Your deliveries are unaffected.</div></div>';
+        /* A failed roster must not blank the hub — deliveries stay usable, and the
+           wording says the roster failed rather than implying no riders exist. */
+        console.warn('[delivery-hub] rider roster unavailable:', err && (err.code || err.message));
+        el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">⚠️</div>' +
+          '<div class="sd-empty-text">We couldn\'t load rider availability.<br>' +
+          'Your deliveries are unaffected.</div>' +
+          '<button class="btn-track" style="margin-top:14px;max-width:170px;margin-inline:auto;" ' +
+                  'onclick="_sdRetry(\'riders\')">Retry</button></div>';
       });
   }
 
@@ -288,9 +291,57 @@
     }).join('');
   }
 
+  /* ══ THREE STATES, NOT TWO ═══════════════════════════════════════════════════
+     Every listener below used to pass onSnapshot a success handler and nothing
+     else. A query that FAILED — App Check, a rules change, a future composite
+     index requirement, an offline device — therefore never called anything, the
+     list kept whatever was in it (nothing), and the seller read:
+
+         "No active deliveries right now"
+
+     A failure that is indistinguishable from an empty success is the hardest kind
+     to diagnose, and this page is the seller's whole delivery operation: it says
+     "you have no work" when what happened is "we could not ask". Two probe runs
+     of the isolation harness hit exactly this and looked like clean empty states.
+
+     So: Loading → (Data | Empty) → Error, with Error offering a retry. The query
+     itself and its sellerUid scoping are unchanged. ══════════════════════════ */
+
+  function _listLoading(elId, label) {
+    var el = document.getElementById(elId);
+    if (el) el.innerHTML = '<div class="sd-empty"><div class="sd-empty-text">Loading ' + label + '…</div></div>';
+  }
+
+  /* Deliberately worded so it can never be mistaken for "you have none". */
+  function _listError(elId, key, err) {
+    console.warn('[delivery-hub] ' + key + ' query failed:', err && (err.code || err.message));
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML =
+      '<div class="sd-empty">' +
+        '<div class="sd-empty-icon">⚠️</div>' +
+        '<div class="sd-empty-text">We couldn\'t load deliveries.<br>' +
+        'Check your connection and try again.</div>' +
+        /* key is one of a fixed set of literals below — never user input. */
+        '<button class="btn-track" style="margin-top:14px;max-width:170px;margin-inline:auto;" ' +
+                'onclick="_sdRetry(\'' + key + '\')">Retry</button>' +
+      '</div>';
+  }
+
+  /* Retry re-subscribes the failed listener only. A fixed key set, never user input —
+     the inline handler below is built from these literals alone. */
+  window._sdRetry = function (key) {
+    if (key === 'active')  return _loadActive();
+    if (key === 'pending') return _loadPending();
+    if (key === 'history') return _loadHistory();
+    if (key === 'failed')  return _loadFailed();
+    if (key === 'riders')  return _loadRiders();
+  };
+
   /* ── Active deliveries (real-time) ── */
   function _loadActive() {
     if (_unsubActive) _unsubActive();
+    _listLoading('activeList', 'deliveries');
     _unsubActive = firebase.firestore()
       .collection('packageRequests')
       .where('sellerUid', '==', _sellerUid)
@@ -299,6 +350,11 @@
         _activeDeliveries = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         _renderActive();
         _updateStats();
+      }, function (err) {
+        /* Stats are derived from this same set, so a failed load must not leave
+           yesterday's numbers on screen as if they were current. */
+        _activeDeliveries = [];
+        _listError('activeList', 'active', err);
       });
   }
 
@@ -379,6 +435,8 @@
 
   /* ── Pending deliveries ── */
   function _loadPending() {
+    if (_unsubPending) _unsubPending();
+    _listLoading('pendingList', 'pending deliveries');
     _unsubPending = firebase.firestore()
       .collection('packageRequests')
       .where('sellerUid', '==', _sellerUid)
@@ -387,12 +445,14 @@
         var items = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         var el = document.getElementById('pendingList');
         el.innerHTML = items.length ? items.map(_buildCard).join('') : '<div class="sd-empty"><div class="sd-empty-icon">✅</div><div class="sd-empty-text">No pending deliveries</div></div>';
-      });
+      }, function (err) { _listError('pendingList', 'pending', err); });
   }
 
   /* ── History ── */
   var _historyAll = [];
   function _loadHistory() {
+    if (_unsubHistory) _unsubHistory();
+    _listLoading('historyList', 'history');
     _unsubHistory = firebase.firestore()
       .collection('packageRequests')
       .where('sellerUid', '==', _sellerUid)
@@ -401,7 +461,7 @@
       .onSnapshot(function (snap) {
         _historyAll = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         _filterHistory();
-      });
+      }, function (err) { _historyAll = []; _listError('historyList', 'history', err); });
   }
 
   function _filterHistory() {
@@ -415,6 +475,8 @@
 
   /* ── Failed / returns ── */
   function _loadFailed() {
+    if (_unsubFailed) _unsubFailed();
+    _listLoading('failedList', 'issues');
     _unsubFailed = firebase.firestore()
       .collection('packageRequests')
       .where('sellerUid', '==', _sellerUid)
@@ -423,7 +485,7 @@
         var items = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         var el = document.getElementById('failedList');
         el.innerHTML = items.length ? items.map(_buildCard).join('') : '<div class="sd-empty"><div class="sd-empty-icon">✅</div><div class="sd-empty-text">No failed deliveries</div></div>';
-      });
+      }, function (err) { _listError('failedList', 'failed', err); });
   }
 
   /* ── Stats ── */
