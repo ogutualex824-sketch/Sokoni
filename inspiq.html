@@ -130,6 +130,9 @@
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
+<!-- Canonical cart access path (Track 2.5). inspiq.js reaches the cart only
+     through SokoniCart; without this tag its cart cannot be read or written. -->
+<script src="sokoni-cart.js"></script>
 <script src="inspiq.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {

@@ -143,6 +143,9 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
      analytics render died. Commission rates must come from this generated
      snapshot of functions/commission-config.js — never a hardcoded local rate. -->
 <script src="sokoni-commission-rates.js"></script>
+<!-- Canonical cart access path (Track 2.5). sokoni-food.js reaches the cart only
+     through SokoniCart; without this tag its cart cannot be read or written. -->
+<script src="sokoni-cart.js"></script>
 <script src="sokoni-food.js"></script>
 
 <nav class="fn">

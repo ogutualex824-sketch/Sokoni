@@ -294,18 +294,53 @@ window.SokoniFood = (function () {
     lsSet(k,Number(lsGet(k)||0)+1);
   }
 
-  /* ══ CART — unified with main "cart" key, type:'food' ══ */
-  const SHARED_CART_KEY='cart';
+  /* ══ CART — the SAME cart every other surface uses, with type:'food' rows ══
 
-  function _allItems(){ try{ return JSON.parse(localStorage.getItem(SHARED_CART_KEY)||'[]'); }catch{ return []; } }
-  function _saveAll(items){ localStorage.setItem(SHARED_CART_KEY,JSON.stringify(items)); }
+     Canonical (Track 2.5). This file held a complete parallel cart implementation on the
+     same key, reached through `const SHARED_CART_KEY = 'cart'` — which is exactly why the
+     literal-only scanner could not see it and it survived three migration slices while
+     the reports quoted confident writer counts.
+
+     It is now the last consumer to move onto SokoniCart, and its three peculiarities are
+     preserved rather than normalised:
+
+       saveCart()   is a WHOLE-ARRAY replace: non-food rows first, then every food row.
+                    That ordering is observable — checkout reads cart[0] for pickupCoords
+                    and the seller id — so it is kept exactly, as one write.
+       addToCart()  merges on itemId + restaurantId, its OWN rule. Not id, not cartId. The
+                    service's merge:true would key on the wrong field, so the array is
+                    assembled here and handed to replace().
+       clearCart()  empties the FOOD rows only. SokoniCart.clear() would take the
+                    shopper's products with it. */
+  function _svc(){ return window.SokoniCart || null; }
+
+  /* Returns null — not [] — when the cart cannot be read. Callers decide what to do with
+     "unknown"; none of them may treat it as "empty". */
+  function _allItemsOrNull(){ const c=_svc(); return c ? c.list() : null; }
+  function _allItems(){
+    const a=_allItemsOrNull();
+    if(a===null){
+      try{ console.error('[SOKONI] food: SokoniCart unavailable — the food cart cannot be read'); }catch(e){}
+      return [];
+    }
+    return a;
+  }
+  function _saveAll(items){ const c=_svc(); return c ? c.replace(items) : false; }
 
   function getCart(){ return _allItems().filter(i=>i.type==='food'); }
 
   function saveCart(foodItems){
-    const rest=_allItems().filter(i=>i.type!=='food');
-    _saveAll([...rest,...foodItems]);
+    const all=_allItemsOrNull();
+    /* Refuse rather than rebuild the cart from an assumed-empty read: `rest` would come
+       out empty and the shopper's product rows would be deleted by a food mutation. */
+    if(all===null){
+      try{ console.error('[SOKONI] food: refusing to save — the cart is unreadable'); }catch(e){}
+      return false;
+    }
+    const rest=all.filter(i=>i.type!=='food');
+    const ok=_saveAll([...rest,...foodItems]);
     _updateBadge();
+    return ok;
   }
 
   function addToCart(restaurantId,restaurantName,restaurantEmoji,item,qty=1,note=''){
@@ -324,17 +359,19 @@ window.SokoniFood = (function () {
     return getCartCount();
   }
 
-  function removeFromCart(cartId){ saveCart(getCart().filter(c=>c.cartId!==cartId)); }
+  function removeFromCart(cartId){ return saveCart(getCart().filter(c=>c.cartId!==cartId)); }
 
   function updateQty(cartId,qty){
     const cart=getCart();
     const item=cart.find(c=>c.cartId===cartId);
-    if(!item) return;
-    if(qty<=0){ removeFromCart(cartId); return; }
-    item.qty=qty; saveCart(cart);
+    if(!item) return false;
+    if(qty<=0){ return removeFromCart(cartId); }
+    item.qty=qty; return saveCart(cart);
   }
 
-  function clearCart(){ saveCart([]); }
+  /* FOOD rows only. Deliberately not SokoniCart.clear(), which empties the whole cart —
+     ordering food and then clearing it must not remove the shopper's products. */
+  function clearCart(){ return saveCart([]); }
   function getCartCount(){ return getCart().reduce((s,c)=>s+c.qty,0); }
 
   function getCartByVendor(){
@@ -356,11 +393,16 @@ window.SokoniFood = (function () {
   }
 
   function _updateBadge(){
-    /* Count ALL cart items (food + products) for the shared badge */
-    const all=_allItems();
-    const total=all.reduce((s,i)=>s+(i.qty||1),0);
+    /* Counts ALL cart items (food + products) for the shared badge — Σ(qty||1), which is
+       exactly SokoniCart.units(), the formula every badge on the platform converged on.
+       A like-for-like swap: this number does not move.
+
+       With no service the badge goes blank and hidden rather than 0, since an
+       unverifiable count must not assert an empty cart. */
+    const c=_svc();
+    const total=c?c.units():null;
     document.querySelectorAll('.food-cart-badge,.sk-cart-pip').forEach(el=>{
-      el.textContent=total||'';
+      el.textContent=(total==null||!total)?'':total;
       el.style.display=total?'flex':'none';
     });
   }

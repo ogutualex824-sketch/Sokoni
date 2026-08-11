@@ -92,13 +92,21 @@ console.log('\nD. Against the real repository');
 {
   const all = S.scan().filter(h => h.key === 'cart');
   const files = new Set(all.map(h => h.file));
-  /* The control that matters: the scanner must SEE the file that hid from its predecessor. */
-  ck('finds sokoni-food.js — invisible to the previous scanner', files.has('sokoni-food.js'),
+  /* The control that matters: constant-keyed access must still be visible against the
+     REAL repository, not only against synthetic strings.
+
+     This used to point at sokoni-food.js, the file that hid from the literal-only scanner
+     for three slices. 2.5 migrated it, so it no longer has cart access to find — but the
+     capability it proved still needs proving, and sokoni-cart.js reaches the same key
+     through `const KEY = 'cart'`. Retargeted rather than dropped: losing this control
+     would let the scanner silently regress to literal-only again. */
+  ck('resolves a constant key against the real repo', files.has('sokoni-cart.js'),
      [...files].join(', '));
   ck('and reports it as constant-keyed',
-     all.some(h => h.file === 'sokoni-food.js' && /^const /.test(h.via)),
-     all.filter(h => h.file === 'sokoni-food.js').map(h => h.via).join(','));
-  ck('finds the service itself (also constant-keyed)', files.has('sokoni-cart.js'));
+     all.some(h => h.file === 'sokoni-cart.js' && /^const /.test(h.via)),
+     all.filter(h => h.file === 'sokoni-cart.js').map(h => h.via).join(','));
+  ck('sokoni-food.js no longer appears at all — 2.5 migrated it',
+     !files.has('sokoni-food.js'), [...files].join(', '));
   /* Was `checkout.html && provider-wiring.js`. 2.4 migrated checkout, so it no longer
      appears at all — the assertion is now driven by the registry rather than by two names
      typed here, and it keeps testing the same thing: the scanner can see the survivors. */

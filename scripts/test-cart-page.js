@@ -238,8 +238,11 @@ console.log('\nJ. No unmigrated cart WRITER remains anywhere');
   ck('J', 'every still-frozen surface is still a writer (they are, by definition, unmigrated)',
      STATE.FROZEN_FILES.every(f => all.some(h => h.file === f)),
      STATE.FROZEN_FILES.join(', '));
-  ck('J', 'sokoni-food.js still writes — deferred to 2.5, untouched',
-     all.some(h => h.file === 'sokoni-food.js'));
+  /* Was "sokoni-food.js still writes — deferred to 2.5". 2.5 migrated it, so it must now
+     be absent. Same guard, opposite direction. */
+  ck('J', 'sokoni-food.js no longer writes the cart — 2.5 migrated it',
+     !all.some(h => h.file === 'sokoni-food.js'),
+     all.filter(h => h.file === 'sokoni-food.js').map(h => h.line).join(', '));
 }
 
 /* ══ K. perimeter ══ */

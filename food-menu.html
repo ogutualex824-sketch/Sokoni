@@ -95,6 +95,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <body>
 <script src="splash.js"></script>
 <script src="sokoni-delivery-engine.js"></script>
+<!-- Canonical cart access path (Track 2.5). sokoni-food.js reaches the cart only
+     through SokoniCart; without this tag its cart cannot be read or written. -->
+<script src="sokoni-cart.js"></script>
 <script src="sokoni-food.js"></script>
 
 <nav class="fn">

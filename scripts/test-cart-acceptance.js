@@ -87,8 +87,11 @@ console.log('\nC. No boundary is crossed except by its own authorised slice');
   ck('C', 'and checkout.html is no longer a survivor', !STATE.survivorFor('checkout.html'));
   ck('C', 'the interceptor is still in place — 2.6 has not started',
      /localStorage\.setItem\s*=/.test(execOf('provider-wiring.js')));
-  ck('C', 'sokoni-food.js still owns its own cart — 2.5 has not started',
-     !!STATE.survivorFor('sokoni-food.js'));
+  /* Was "sokoni-food.js still owns its own cart — 2.5 has not started". It does not any
+     more; 2.5 was authorised to change exactly that. The boundary that remains is the
+     interceptor, asserted above. */
+  ck('C', 'sokoni-food.js is migrated — 2.5 authorised exactly this',
+     !STATE.survivorFor('sokoni-food.js'));
 }
 
 /* ══ D. the migrated set genuinely has no direct access ══ */

@@ -25,6 +25,8 @@ const MIGRATED = [
   'cart.js',                                                  /* 2.3 surface 6 */
   'cart.html', 'food.html', 'profile.js',                     /* 2.3 surface 7 readers */
   'checkout.html', 'seller-wiring.js',                        /* 2.4 checkout boundary */
+  'sokoni-food.js', 'inspiq.js', 'inspiq.html',               /* 2.5 food cart + sokoniCart */
+  'food-menu.html', 'food-order.html', 'food-dashboard.html', 'food-rider.html',
 ];
 
 /* ── SURVIVORS ────────────────────────────────────────────────────────────────
@@ -44,14 +46,11 @@ const FROZEN = [
             'every legitimate dependency to be gone first.' },
 ];
 
-const DEFERRED = [
-  { file: 'sokoni-food.js', phase: '2.5',
-    reason: 'A complete parallel cart implementation on the SAME key, reached through ' +
-            'const SHARED_CART_KEY = "cart" — which is why the literal-only scanner ' +
-            'missed it for three slices. Its saveCart() rewrites the whole array on every ' +
-            'food mutation, and that behaviour is what the sokoniCart bridge was built ' +
-            'around. The food cart and the bridge move together.' },
-];
+/* Emptied by 2.5. sokoni-food.js was the only entry: a complete parallel cart
+   implementation on the same key, which moved onto SokoniCart together with the last
+   product consumer of the sokoniCart mirror (inspiq.js). The bridge that maintains that
+   mirror is provider-wiring.js and remains FROZEN for 2.6. */
+const DEFERRED = [];
 
 /* Blocked by a boundary this track deliberately will not cross. Both were assessed in
    2.3.7 and left alone; shared-header.js was migrated and then REVERTED when the reach

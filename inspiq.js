@@ -471,9 +471,16 @@
        canonical record deliberately — a schema decision, not a side effect of this
        cleanup. Until then this signal does not exist, and says so. */
 
+    /* Canonical (Track 2.5). This read localStorage['sokoniCart'] — which is not a cart
+       anyone writes deliberately, but a MIRROR that provider-wiring.js's setItem bridge
+       keeps in step with the real one. Scoring off the mirror worked only for as long as
+       the bridge did, and it was the last product consumer of that key: with this moved,
+       nothing but the bridge itself touches sokoniCart, which is what lets 2.6 remove it.
+
+       Unlike the wishlist signal above, this one is real — cart rows carry `category`. */
     try {
-      const cart = JSON.parse(localStorage.getItem('sokoniCart') || '[]');
-      cart.forEach(p => { if (p.category && catMap[p.category]) track(catMap[p.category], 2); });
+      const C = window.SokoniCart;
+      if (C) C.list().forEach(p => { if (p.category && catMap[p.category]) track(catMap[p.category], 2); });
     } catch {}
 
     if (q) {
