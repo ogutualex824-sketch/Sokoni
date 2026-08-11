@@ -172,11 +172,26 @@ window.showToast = function(msg, type){ window._sokoniToast(msg, type||'success'
    CART
 ========================= */
 
-let cart = JSON.parse(
+/* The cart is NOT held here any more (Track 2.3).
 
-    localStorage.getItem("cart")
+   This was `let cart = JSON.parse(localStorage.getItem("cart"))` — a module-level snapshot
+   taken once at load, exactly the shape the wishlist snapshot had before Track 3 removed
+   it. The homepage became its own cart authority: anything added on another tab, or by
+   market-actions on this same page, was invisible until reload, and the next mutation
+   here wrote this stale array back over it.
 
-) || [];
+   `cart` survives as a RENDER PROJECTION only. _syncCart() refills it from SokoniCart
+   immediately before every render, so the 50-odd read sites below need no change and none
+   of them can drift. Nothing writes to it — mutations call the service. */
+let cart = [];
+
+function _cartSvc(){ return window.SokoniCart || null; }
+
+function _syncCart(){
+  const c = _cartSvc();
+  cart = c ? c.list() : [];
+  return cart;
+}
 
 /* =========================
    WISHLIST
@@ -1252,7 +1267,22 @@ async function buyProduct(productId, _trigBtn){
         }
     }
 
-    cart.push(selectedProduct);
+    const _svc = _cartSvc();
+    /* Fails closed. No localStorage fallback: a button that appears to work while storing
+       nothing is worse than one that says it cannot. */
+    if(!_svc){
+        showNotification("Cart is still loading — try again in a moment", "error");
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
+    }
+    /* The result is checked before anything celebrates. _persistCart already reported a
+       quota failure with a toast, but the caller carried on to "Added To Cart 🛒"
+       regardless — two contradictory messages for one failed write. */
+    if(!_svc.add(selectedProduct)){
+        showNotification("Couldn't add to cart — please try again", "error");
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
+    }
     flyToCart(selectedProduct);
     selectedProduct.views = (selectedProduct.views || 0) + 1;
     updateCart();
@@ -1305,8 +1335,19 @@ async function buyNow(productId, _trigBtn){
         }
     }
 
-    cart.push(selectedProduct);
-    localStorage.setItem("cart", JSON.stringify(cart));
+    /* This APPENDS and then goes to checkout — deliberately unlike the Buy Now on Product
+       Detail and Category, which replace the cart. Preserved as-is: changing it here would
+       be a behaviour change dressed as a migration.
+
+       The navigation now depends on the write. Previously setItem ran bare, so a quota
+       failure threw before updateCart() and the shopper got no message at all — or, had it
+       been wrapped, would have arrived at checkout without the item they just chose. */
+    const _svc = _cartSvc();
+    if(!_svc){ showNotification("Cart is still loading — try again in a moment", "error"); return; }
+    if(!_svc.add(selectedProduct)){
+        showNotification("Couldn't start checkout — please try again", "error");
+        return;
+    }
     updateCart();
     showNotification("Proceeding To Checkout 💳", "success");
     saveHomeScroll();
@@ -1414,47 +1455,30 @@ async function addToWishlist(productId){
    UPDATE CART
 ========================= */
 
-/* Persistence is not rendering.
+/* _persistCart and _emitCartChanged are GONE (Track 2.3).
 
-   updateCart() used to save the cart on its LAST line, below an early return
-   that fires when #cartItems is absent. So whether a customer's cart survived
-   navigation depended on whether a particular <ul> existed on the page. It
-   worked only because index.html carries a hidden <ul id="cartItems"> kept
-   alive by a comment explaining it is "still needed for navbar count" —
-   deleting that presentation element would have silently stopped every add
-   from persisting, and the toast would still have said success.
+   They were correct — save first, announce after, report a quota failure rather than
+   assume success — and they were one of thirteen copies of that logic. SokoniCart owns
+   the write, the announcement and the corruption quarantine now, so this page keeps only
+   the rendering.
 
-   Saving now happens first and unconditionally. Rendering is what degrades
-   when the DOM is absent, which is the correct way round. */
-/* The single synchronization signal. Every cart mutation dispatches this
-   after persisting; every cart indicator listens. One mutation, one event,
-   no page needing to know which widgets exist. */
-function _emitCartChanged(){
-  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: cart.length } })); }
-  catch (_) { /* pre-CustomEvent browsers: the badge stays stale, nothing breaks */ }
-}
+   The note that used to live here is still the point, and now applies platform-wide:
+   persistence is not rendering. updateCart() saved on its LAST line, below an early
+   return that fires when #cartItems is absent, so whether a customer's cart survived
+   navigation depended on whether a particular <ul> existed on the page. It worked only
+   because index.html carries a hidden <ul id="cartItems"> kept alive by a comment
+   explaining it is "still needed for navbar count" — deleting that presentation element
+   would have silently stopped every add from persisting, and the toast would still have
+   said success.
 
-function _persistCart(){
-  try {
-    localStorage.setItem("cart", JSON.stringify(cart));
-    _emitCartChanged();
-    return true;
-  } catch (e) {
-    /* Quota exceeded, or Safari private mode where setItem throws. The user
-       must know the item did not stick — the old code could not tell them,
-       because it never looked. */
-    console.error("[SOKONI] Could not save cart: " + e.message);
-    if (typeof showPushToast === "function") {
-      showPushToast("⚠️ Cart not saved", "Your device is out of storage space. Free some space and try again.", "orange");
-    }
-    return false;
-  }
-}
+   The write now happens in the service, before updateCart() is ever called. This function
+   renders, and rendering is what is allowed to degrade when the DOM is absent. */
 
 function updateCart(){
 
-    /* Save before anything can return early. */
-    _persistCart();
+    /* Refill the render projection from the authority. Any add made elsewhere — another
+       tab, market-actions on this same page — shows up here without a reload. */
+    _syncCart();
 
     const cartItems =
     document.getElementById(
@@ -1540,13 +1564,22 @@ function updateCart(){
 
     }
 
+    /* Both indicators count UNITS — Σ(qty||1) — matching shared-header.js's pip, which
+       sits on this same page. They counted array length, so an item carrying a qty field
+       made the two disagree on screen. A cart badge means "how many things are in my
+       cart", and the header was already answering that. */
+    const _svcC = _cartSvc();
+    const _units = _svcC ? _svcC.units() : null;
+
     if(cartCount){
-        cartCount.innerText = cart.length;
+        /* "—" rather than 0 when the service is absent: an unverifiable count must not
+           assert an empty cart. */
+        cartCount.innerText = _units == null ? "—" : _units;
     }
 
     const badge = document.getElementById("cartCountBadge");
     if(badge) {
-      badge.innerText = cart.length;
+      badge.innerText = _units == null ? "—" : _units;
       /* Phase 9 — badge pop micro-interaction */
       badge.classList.remove('p9-badge-pop');
       void badge.offsetWidth;
@@ -1562,9 +1595,15 @@ function updateCart(){
    REMOVE CART
 ========================= */
 
+/* removeAt, not removeById: the index comes from the rendered row order, which is the
+   service's own order, and duplicate rows for one product must stay individually
+   removable — this list is where a shopper drops ONE of three units. */
 function removeFromCart(index){
 
-    cart.splice(index,1);
+    const svc = _cartSvc();
+    if(!svc){ showNotification("Cart is still loading — try again in a moment", "error"); return; }
+
+    svc.removeAt(index);
 
     updateCart();
 
@@ -2687,7 +2726,11 @@ function renderSavedSearches(){
 ============================================== */
 
 function checkAbandonedCart(){
-  const cart = JSON.parse(localStorage.getItem("cart")||"[]");
+  /* Reads the service, not localStorage. Without it there is nothing to say: a reminder
+     is a claim about the shopper's cart, and this must not guess one. */
+  const svc = _cartSvc();
+  if(!svc) return;
+  const cart = svc.list();
   if(!cart.length) return;
 
   const lastActivity = Number(localStorage.getItem("sokoniLastActivity")||0);

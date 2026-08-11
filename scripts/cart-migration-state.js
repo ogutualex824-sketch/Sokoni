@@ -19,6 +19,7 @@ const MIGRATED = [
   'car-hub.html', 'category.html', 'healthcare.html', 'index.html', 'services.html',
   'product.js', 'product.html',                               /* 2.3 surface 1 */
   'category.js',                                              /* 2.3 surface 2 */
+  'script.js',                                                /* 2.3 surface 3 */
 ];
 
 /* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
@@ -28,7 +29,7 @@ const FROZEN = ['checkout.html', 'provider-wiring.js'];
 /* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
-  'script.js', 'cart.js', 'shared-header.js',
+  'cart.js', 'shared-header.js',
   'flashsale.html', 'business.html', 'ministore.html', 'wishlist.html',
   'food.html', 'profile.js', 'seller-wiring.js',
 ];
