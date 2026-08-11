@@ -244,6 +244,19 @@
     return arr.findIndex(function (i) { return idOf(i) === want; });
   }
 
+  /* Swaps the entire cart in ONE write. Added for 2.3 (product.js "Buy Now"), which is
+     express-checkout for a single item and must not inherit whatever was already saved —
+     appending there once made checkout charge for stale accumulated entries.
+
+     Deliberately not clear()+add(): that is two writes with a window in between, and if
+     the second failed the shopper would be left with NO cart and nothing added. Destroying
+     before the replacement has landed is the same mistake as removing a cart line before
+     the wishlist write resolved. One write, or nothing changes. */
+  function replace(items) {
+    if (!Array.isArray(items)) return false;
+    return _write(items.map(function (i) { return Object.assign({}, i); }));
+  }
+
   /* clear() exists so the eventual checkout migration has somewhere to land. It is NOT
      called from anywhere yet: checkout.html owns cart clearing as part of the order
      lifecycle and stays closed until its own verified slice. */
@@ -261,7 +274,7 @@
     list: list, raw: raw, has: has, find: find,
     lines: lines, units: units,        /* no subtotal — see the note above */
     /* write */
-    add: add, setQty: setQty,
+    add: add, setQty: setQty, replace: replace,
     removeAt: removeAt, removeById: removeById, removeAllById: removeAllById,
     removeByCartId: removeByCartId,
     clear: clear,

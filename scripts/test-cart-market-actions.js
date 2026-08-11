@@ -257,23 +257,16 @@ console.log('\nL. Blast radius');
 {
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  const PRE_EXISTING = ['availability-manager.html', 'cart.html', 'version.json',
-                        'docs/release-gates/unknown.json'];
-  const MINE = ['market-actions.js', 'sokoni-cart.js', 'car-hub.html', 'category.html',
-                'healthcare.html', 'index.html', 'services.html',
-                'scripts/test-cart-market-actions.js', 'scripts/test-cart-service-contract.js',
-                'CHANGELOG.md', 'docs/CART_PERSISTENCE_AUDIT.md'];
-  const unexpected = changed.filter(f => !PRE_EXISTING.includes(f) && !MINE.includes(f));
-  ck('L', 'nothing outside this slice is dirty', unexpected.length === 0, unexpected.join(', '));
-  ck('L', 'checkout.html untouched', !changed.includes('checkout.html'));
-  ck('L', 'provider-wiring.js untouched — the interceptor is 2.6\'s',
-     !changed.includes('provider-wiring.js'));
-  ck('L', 'cart.js untouched', !changed.includes('cart.js'));
-  ck('L', 'product.js untouched', !changed.includes('product.js'));
-  ck('L', 'category.js untouched', !changed.includes('category.js'));
-  ck('L', 'script.js untouched', !changed.includes('script.js'));
-  ck('L', 'shared-header.js untouched — its formula was already units',
-     !changed.includes('shared-header.js'));
+  /* Blast radius is asserted against the shared migration state, not a list kept here.
+     A per-suite allowlist goes stale the moment the NEXT slice legitimately touches a file
+     this one froze — and widening it each time is how a guard learns to pass. */
+  const STATE = require('./cart-migration-state.js');
+  ck('L', 'nothing dirty that the migration state does not explain',
+     STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
+  STATE.FROZEN.forEach(f => ck('L', f + ' untouched — its own slice owns it',
+    !changed.includes(f), changed.join(', ')));
+  STATE.PENDING.forEach(f => ck('L', f + ' not migrated yet',
+    !changed.includes(f), changed.join(', ')));
   /* The 5 HTML pages may only have gained the script tag. */
   const badPage = ['car-hub.html', 'category.html', 'healthcare.html', 'index.html', 'services.html']
     .filter(f => cp.execSync('git diff HEAD -- ' + f, { cwd: ROOT, encoding: 'utf8' })

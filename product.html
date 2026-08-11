@@ -226,6 +226,10 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- Canonical wishlist authority (wishlistItems/{uid}_{productId} via commerceDispatch).
      Must load before product.js, which calls SokoniWishlist for the Save control. -->
 <script src="sokoni-wishlist.js"></script>
+<!-- Canonical cart access path (Track 2.3). product.js no longer touches
+     localStorage['cart']; without this tag Add to Cart and Buy Now fail closed and say
+     so. Must load before product.js. -->
+<script src="sokoni-cart.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>

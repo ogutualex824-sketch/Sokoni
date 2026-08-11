@@ -1199,26 +1199,43 @@ function _wireQtyHold(){
 
 /* ADD TO CART */
 
-function addToCart(){
+/* Canonical cart (Track 2.3). This read localStorage['cart'] and wrote it back — one of
+   thirteen copies of that cycle. SokoniCart is the single access path now.
 
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+   The DUPLICATE-ROW quantity model is preserved exactly: `times` pushes N rows rather
+   than setting a qty field, because the badges, the checkout line list and the server's
+   price cross-check all already agree on what that means. Converting it to a qty field
+   here would be a quantity-model change smuggled in as a migration. The one difference is
+   that the service copies per row — this pushed the SAME object reference N times, so
+   editing one line silently edited them all. */
+function _cartSvc(){ return window.SokoniCart || null; }
 
-    const item = Object.assign({}, product, {
+function _cartItem(){
+    return Object.assign({}, product, {
         selectedSize:  window._selectedSize  || null,
         selectedColor: window._selectedColor || null,
         /* Full map alongside the two legacy fields: a shopper can now pick a
            material or a pack size, and neither has a legacy field to land in. */
         selectedVariants: Object.assign({}, window._selectedVariants || {}),
     });
+}
 
-    for(let i = 0; i < quantity; i++){
-        cart.push(item);
+function addToCart(){
+
+    const c = _cartSvc();
+    /* Fails closed. Writing localStorage directly as a fallback is exactly what this
+       migration removes, and a button that appears to work while storing nothing is
+       worse than one that says it cannot. */
+    if(!c){ _showProductNotif("Cart is still loading — try again in a moment", "error"); return false; }
+
+    if(!c.add(_cartItem(), { times: quantity })){
+        _showProductNotif("Couldn't add to cart — please try again", "error");
+        return false;
     }
-
-    localStorage.setItem("cart", JSON.stringify(cart));
 
     const tag = window._selectedSize ? ` — ${window._selectedSize}` : '';
     _showProductNotif(`${product.name}${tag} added to cart 🛒`, "success");
+    return true;
 
 }
 
@@ -1231,22 +1248,26 @@ function buyNowProduct(){
     /* Buy Now = express-checkout THIS item only. Build a FRESH cart instead of
        appending to whatever was saved — appending made checkout charge for stale/
        accumulated entries (observed as "the whole stock" instead of 1). */
-    const cart = [];
+    const c = _cartSvc();
+    if(!c){ _showProductNotif("Cart is still loading — try again in a moment", "error"); return false; }
 
-    const item = Object.assign({}, product, {
-        selectedSize:  window._selectedSize  || null,
-        selectedColor: window._selectedColor || null,
-        /* Full map alongside the two legacy fields: a shopper can now pick a
-           material or a pack size, and neither has a legacy field to land in. */
-        selectedVariants: Object.assign({}, window._selectedVariants || {}),
-    });
+    const item = _cartItem();
+    const rows = [];
+    for(let i = 0; i < quantity; i++){ rows.push(item); }
 
-    for(let i = 0; i < quantity; i++){
-        cart.push(item);
+    /* replace() swaps the cart in ONE write. Not clear()+add(): that is two writes, and a
+       failure on the second would leave the shopper with an empty cart and nothing added.
+
+       And the navigation now depends on the write. Previously it ran unconditionally, so a
+       storage failure sent the shopper to checkout with the PREVIOUS cart still loaded —
+       express-checkout for an item they had not chosen, at a total they had not seen. */
+    if(!c.replace(rows)){
+        _showProductNotif("Couldn't start checkout — please try again", "error");
+        return false;
     }
 
-    localStorage.setItem("cart", JSON.stringify(cart));
     window.location.href = "checkout.html";
+    return true;
 
 }
 
