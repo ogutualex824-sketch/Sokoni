@@ -170,10 +170,18 @@ Cart.add(P_MARKET, { times: 2 });
   ck('D', 'seller resolves from cart[0]', coSeller(c) === 'seller-A', coSeller(c));
   ck('D', 'session payload maps every line', coSession(c).length === 3, JSON.stringify(coSession(c)));
   ck('D', 'every session entry has a productId', coSession(c).every(i => i.productId));
-  ck('D', 'subtotal matches checkout line arithmetic',
-     Cart.subtotal() === c.reduce((s, i) => s + coLineTotal(i), 0), Cart.subtotal());
   ck('D', 'orderItems payload is the array itself, unwrapped',
      Array.isArray(Cart.raw()) && JSON.stringify(Cart.raw()) === store.cart);
+  /* The service deliberately exposes no money helper. A subtotal on a shared service is
+     an invitation for a call site to render it as the authoritative amount; the server
+     decides that in verifyIntasendPayment. Pages compute display totals where they
+     display them. This guards against it being added back. */
+  ck('D', 'the service exposes NO money helper',
+     Cart.subtotal === undefined && Cart.total === undefined,
+     Object.keys(Cart).filter(k => /total|subtotal|amount|price/i.test(k)).join(','));
+  ck('D', 'checkout can still compute its own subtotal from the service output',
+     c.reduce((s, i) => s + coLineTotal(i), 0) === 3250,
+     c.reduce((s, i) => s + coLineTotal(i), 0));
 }
 
 /* ══ E. food rows ══ */
@@ -251,6 +259,54 @@ ck('I', 'merge:true bumps qty instead', Cart.lines() === 1 && Cart.raw()[0].qty 
    JSON.stringify(Cart.raw()));
 ck('I', 'merged row still charges for two units',
    svTotal(Cart.raw(), { p1: { price: 250 } }) === 500, svTotal(Cart.raw(), { p1: { price: 250 } }));
+
+/* merge must key on cartId for food rows. Two lines of the same dish differing only by
+   note are NOT the same line — collapsing them would discard a shopper instruction and
+   charge for a dish they did not order that way. */
+reset();
+Cart.add(P_FOOD);                                              /* f-1, "extra ugali" */
+Cart.add(Object.assign({}, P_FOOD, { cartId: 'f-2', note: 'no ugali' }), { merge: true });
+{
+  const c = Cart.raw();
+  ck('I', 'merge does NOT collapse food rows that share an id',
+     c.length === 2, JSON.stringify(c.map(i => i.cartId)));
+  ck('I', 'both notes survive',
+     c[0].note === 'extra ugali' && c[1].note === 'no ugali', JSON.stringify(c.map(i => i.note)));
+}
+Cart.add(Object.assign({}, P_FOOD, { cartId: 'f-1' }), { merge: true });
+{
+  const c = Cart.raw();
+  ck('I', 'merge on a matching cartId bumps that row', c.length === 2 && c[0].qty === 4,
+     JSON.stringify(c.map(i => ({ cartId: i.cartId, qty: i.qty }))));
+  ck('I', 'and leaves the other food row alone', c[1].qty === 2, c[1].qty);
+}
+/* THE INVARIANT: merge and append must charge the same. An early version added `times`
+   rather than `times × the item's own qty`, so merging a food row carrying qty:2 added one
+   unit — the shopper paid for one dish instead of two. Only this assertion caught it. */
+[['product, no qty', P_PRODUCT], ['food, qty 2', P_FOOD], ['qty 5', Object.assign({}, P_PRODUCT, { qty: 5 })]]
+  .forEach(function (pair) {
+    const label = pair[0], item = pair[1];
+    reset(); Cart.add(item); Cart.add(item);                      /* append twice */
+    const appended = Cart.units();
+    reset(); Cart.add(item); Cart.add(item, { merge: true });      /* append then merge */
+    const merged = Cart.units();
+    ck('I', 'merge charges the same as append — ' + label,
+       appended === merged, appended + ' appended vs ' + merged + ' merged');
+  });
+reset(); Cart.add(P_PRODUCT); Cart.add(P_PRODUCT, { merge: true, times: 3 });
+ck('I', 'merge honours times as a multiplier', Cart.units() === 4, Cart.units());
+
+/* A product merge must never land on a food row that happens to share the id. */
+reset();
+Cart.add(P_FOOD);                                              /* id dish-1, cartId f-1 */
+Cart.add({ id: 'dish-1', name: 'Fish (retail)', price: 800 }, { merge: true });
+{
+  const c = Cart.raw();
+  ck('I', 'a product merge does not absorb into a food row', c.length === 2, c.length);
+  ck('I', 'the food row keeps its own qty and note',
+     c[0].qty === 2 && c[0].note === 'extra ugali', JSON.stringify(c[0]));
+  ck('I', 'the product row has no cartId', !c[1].cartId, JSON.stringify(c[1].cartId));
+}
 
 /* ══ J. writes go through the ordinary setItem so the food bridge still fires ══ */
 console.log('\nJ. Persistence path is unchanged (provider-wiring bridge intact)');

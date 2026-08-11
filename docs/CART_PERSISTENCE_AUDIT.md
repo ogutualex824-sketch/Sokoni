@@ -124,6 +124,32 @@ A server-authoritative cart is NOT being built now.
 `sokoni-cart.js` exposes `window.SokoniCart`. **No page loads it yet** — it ships unreferenced
 so the service and the migration can be reviewed separately.
 
+### Review changes (2026-08-12)
+
+Two changes were required at review before any writer moves, and both are in:
+
+* **`merge` keys on `cartId`.** Two food lines can share an id and differ only by note
+  ("extra ugali" / "no ugali"); merging by id would discard a shopper instruction. A product
+  merge is also barred from landing on a food row.
+* **`subtotal()` removed.** The figure was honest, but a money total on a shared service
+  invites a call site to render it as the authoritative amount — the server decides that in
+  `verifyIntasendPayment`. Pages compute display totals where they display them. A test now
+  guards against it being added back.
+
+Writing the `cartId` merge test exposed a real defect: `merge` added `times` rather than
+`times × the item’s own qty`, so merging a food row carrying `qty:2` added **one** unit and
+the shopper would have been charged for one dish instead of two. Merge and append now
+provably charge the same, asserted as an invariant across three item shapes.
+
+### Known, considered, deliberately NOT changed
+
+* **Numeric refs are array indices.** `setQty(3, …)` means index 3; a numeric product id
+  passed during migration would edit the wrong row. Raised at review and left as-is —
+  revisit if a migrated writer needs id-based qty updates.
+* **No cross-tab safety.** Two tabs diverge and the last write wins, silently. The current
+  per-page code has the same flaw, so this is not a regression, but a single service is the
+  natural place to fix it later.
+
 ### The design constraint that shaped everything
 
 `checkout.html:2443` sends `orderItems: cart` — the raw array — to `verifyIntasendPayment`,
@@ -179,7 +205,7 @@ The service writes through ordinary `localStorage.setItem('cart', ...)` **on pur
 `provider-wiring.js`’s `cart` ⇄ `sokoniCart` bridge keeps firing. Bypassing it would
 desynchronise the food hub. The interceptor comes out in 2.6.
 
-### Verified — 66/66 (`scripts/test-cart-service-contract.js`)
+### Verified — 78/78 (`scripts/test-cart-service-contract.js`)
 
 Fixtures in the exact shapes the current writers emit, replayed through the real consumer
 logic transcribed from `checkout.html`, `cart.js` and `verifyIntasendPayment`. The assertions

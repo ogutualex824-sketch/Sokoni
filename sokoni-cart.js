@@ -117,16 +117,13 @@
     return (arr || _read()).reduce(function (s, i) { return s + qtyOf(i); }, 0);
   }
 
-  /* ── money ─────────────────────────────────────────────────────────────────
-     Display only. The server re-prices every line from the catalogue in
-     verifyIntasendPayment and rejects an underpayment, so this figure is never what the
-     shopper is charged — it must simply agree with what checkout renders, which is
-     price × qty summed. */
-  function subtotal(arr) {
-    return (arr || _read()).reduce(function (s, i) {
-      return s + (Number(i && i.price || 0) * qtyOf(i));
-    }, 0);
-  }
+  /* ── no money helper, deliberately ────────────────────────────────────────
+     An earlier draft exposed subtotal(). It was removed before any page adopted the
+     service. The figure was honest — real cart data, and the server re-prices every line
+     in verifyIntasendPayment and rejects an underpayment — but a money total on a SHARED
+     service is an invitation for some call site to render it as the authoritative amount.
+     Pages that need a displayed subtotal compute it where they display it, next to the
+     caveat that the server decides. Do not add subtotal() back here. */
 
   /* ── queries ── */
   function list()  { return _read().slice(); }
@@ -150,11 +147,27 @@
     var times = Math.max(1, Math.round(Number(opts.times) || 1));
     var arr = _read();
 
+    /* merge keys on cartId when the item has one, and NEVER lets a product merge land on
+       a food row. Two food lines can legitimately share an id and differ only by note
+       ("extra ugali" / "no ugali"); collapsing them by id would silently discard one
+       shopper instruction and charge for a dish they did not order that way. cartId is
+       what makes a food line unique, so it is what merge has to match on. */
     if (opts.merge) {
-      var id = idOf(item);
-      var at = id ? arr.findIndex(function (i) { return idOf(i) === id; }) : -1;
+      var at = -1;
+      var cid = cartIdOf(item);
+      if (cid) {
+        at = arr.findIndex(function (i) { return cartIdOf(i) === cid; });
+      } else {
+        var id = idOf(item);
+        at = id ? arr.findIndex(function (i) { return idOf(i) === id && !cartIdOf(i); }) : -1;
+      }
       if (at > -1) {
-        arr[at] = Object.assign({}, arr[at], { qty: qtyOf(arr[at]) + times });
+        /* Add `times × the item's own qty`, NOT `times`. Appending this item would have
+           contributed exactly that many units, and merge must not change the total —
+           otherwise merging a food row carrying qty:2 adds a single unit and the shopper
+           is charged for one dish instead of two. Asserted as an invariant: merge and
+           append produce identical unit counts. */
+        arr[at] = Object.assign({}, arr[at], { qty: qtyOf(arr[at]) + (times * qtyOf(item)) });
         return _write(arr);
       }
     }
@@ -232,7 +245,7 @@
   root.SokoniCart = {
     /* read */
     list: list, raw: raw, has: has, find: find,
-    lines: lines, units: units, subtotal: subtotal,
+    lines: lines, units: units,        /* no subtotal — see the note above */
     /* write */
     add: add, setQty: setQty,
     removeAt: removeAt, removeById: removeById, removeByCartId: removeByCartId,
