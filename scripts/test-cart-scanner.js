@@ -99,7 +99,13 @@ console.log('\nD. Against the real repository');
      all.some(h => h.file === 'sokoni-food.js' && /^const /.test(h.via)),
      all.filter(h => h.file === 'sokoni-food.js').map(h => h.via).join(','));
   ck('finds the service itself (also constant-keyed)', files.has('sokoni-cart.js'));
-  ck('finds the frozen surfaces', files.has('checkout.html') && files.has('provider-wiring.js'));
+  /* Was `checkout.html && provider-wiring.js`. 2.4 migrated checkout, so it no longer
+     appears at all — the assertion is now driven by the registry rather than by two names
+     typed here, and it keeps testing the same thing: the scanner can see the survivors. */
+  const STATE_ = require('./cart-migration-state.js');
+  const survivors = [...STATE_.FROZEN_FILES, ...STATE_.DEFERRED_FILES, ...STATE_.BLOCKED_FILES];
+  ck('finds every declared survivor', survivors.every(f => files.has(f)),
+     survivors.filter(f => !files.has(f)).join(', ') || 'all present');
   ck('finds every already-migrated surface\'s absence', (function () {
     /* Migrated files must NOT appear at all. */
     const STATE = require('./cart-migration-state.js');

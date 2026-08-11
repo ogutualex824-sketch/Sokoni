@@ -222,9 +222,26 @@
     if (window.saveAndRedirect && !window.saveAndRedirect.__sw) {
       const orig = window.saveAndRedirect;
       window.saveAndRedirect = function(...a) {
-        const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+        /* Canonical (Track 2.4). Snapshotting BEFORE the original runs is load-bearing:
+           saveAndRedirect clears the cart, so reading after it would always decrement
+           nothing. That ordering is unchanged.
+
+           A missing service is NOT an empty cart. Returning [] here would skip
+           _decrementStock silently and leave sold stock on the shelf — a stock-integrity
+           failure with no symptom until someone oversells. checkout.html loads
+           sokoni-cart.js (this patch only ever runs there), so absence means something is
+           actually wrong, and it says so instead of quietly doing nothing. */
+        const C = window.SokoniCart;
+        let cartItems = null;
+        if (C) {
+          cartItems = C.list();
+        } else {
+          console.error('[SOKONI] seller-wiring: SokoniCart unavailable on the checkout ' +
+                        'path — stock was NOT decremented for this order. This needs ' +
+                        'manual reconciliation.');
+        }
         const result = orig.apply(this, a);
-        if (cartItems.length) _decrementStock(cartItems);
+        if (cartItems && cartItems.length) _decrementStock(cartItems);
         return result;
       };
       window.saveAndRedirect.__sw = true;

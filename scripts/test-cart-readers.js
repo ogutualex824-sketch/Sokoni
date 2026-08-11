@@ -174,19 +174,31 @@ console.log('\nE. shared-header.js left on its direct read — and why');
 }
 
 /* ══ F. seller-wiring.js DELIBERATELY NOT MIGRATED ══ */
-console.log('\nF. seller-wiring.js left on its direct read — and why');
+/* ── RETIRED by Track 2.4 ──────────────────────────────────────────────────────
+   This block asserted that seller-wiring.js was BLOCKED: that it still read the cart
+   directly, and that checkout.html was frozen and did not load the service. Every one of
+   those was true and load-bearing at the close of 2.3 — and 2.4 was authorised precisely
+   to change them. Unfreezing checkout is what unblocked this file.
+
+   The assertions are replaced rather than deleted, so the block still fails if the
+   migration regresses. What it now asserts is the state 2.4 established.
+   ───────────────────────────────────────────────────────────────────────────── */
+console.log('\nF. seller-wiring.js was unblocked by 2.4 and is now migrated');
 {
   const src = stripComments(read('seller-wiring.js'));
-  ck('F', 'it still reads the cart directly',
-     /localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(src));
-  ck('F', 'the read feeds post-order stock decrements', /_decrementStock/.test(src));
-  ck('F', 'it only runs by patching saveAndRedirect', /saveAndRedirect/.test(src));
-  ck('F', 'saveAndRedirect is defined on checkout.html', /function saveAndRedirect|saveAndRedirect\s*=/.test(read('checkout.html')));
-  ck('F', 'checkout.html is FROZEN and does not load the service',
-     !/src="sokoni-cart\.js"/.test(read('checkout.html')));
-  /* Therefore migrating it would return an empty cart and stock would stop decrementing. */
+  ck('F', 'no direct cart read remains',
+     !/localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(src));
+  ck('F', 'it reaches the cart through the service', /window\.SokoniCart/.test(src));
+  ck('F', 'the read still feeds post-order stock decrements', /_decrementStock/.test(src));
+  ck('F', 'it still only runs by patching saveAndRedirect', /saveAndRedirect/.test(src));
+  ck('F', 'saveAndRedirect is still defined on checkout.html',
+     /function saveAndRedirect|saveAndRedirect\s*=/.test(read('checkout.html')));
+  ck('F', 'checkout.html now loads the service — the change 2.4 authorised',
+     /src="sokoni-cart\.js"/.test(read('checkout.html')));
   const STATE = require('./cart-migration-state.js');
-  ck('F', 'checkout.html is on the frozen list', STATE.FROZEN_FILES.includes('checkout.html'));
+  ck('F', 'and neither file is a survivor any more',
+     !STATE.FROZEN_FILES.includes('checkout.html') &&
+     !STATE.BLOCKED_FILES.includes('seller-wiring.js'));
 }
 
 /* ══ G. no new persistence path anywhere in this slice ══ */
@@ -215,9 +227,14 @@ console.log('\nH. Repo-wide picture through the constant-aware scanner');
      hits.filter(h => h.kind === 'WRITE' && h.file !== 'sokoni-cart.js' &&
        !STATE.FROZEN_FILES.includes(h.file) && !STATE.DEFERRED_FILES.includes(h.file) &&
        !STATE.TEST_HARNESS.includes(h.file)).length === 0);
-  ck('H', 'the two blocked readers are the only PENDING entries left',
-     STATE.PENDING.length === 2 && STATE.PENDING.includes('shared-header.js') &&
-     STATE.PENDING.includes('seller-wiring.js'), STATE.PENDING.join(', '));
+  /* Was "the TWO blocked readers". 2.4 unblocked seller-wiring.js, leaving one. Asserted
+     as "every blocked entry is genuinely still unmigrated" rather than as a count, which
+     is the property that actually matters and does not expire each slice. */
+  ck('H', 'every BLOCKED entry still touches the cart directly',
+     STATE.BLOCKED_FILES.every(f => [...new Set(hits.map(h => h.file))].includes(f)),
+     STATE.BLOCKED_FILES.join(', '));
+  ck('H', 'seller-wiring.js is no longer among them — 2.4 unblocked it',
+     !STATE.BLOCKED_FILES.includes('seller-wiring.js'), STATE.BLOCKED_FILES.join(', '));
 }
 
 /* ══ I. perimeter ══ */
@@ -232,7 +249,11 @@ console.log('\nI. Frozen and deferred surfaces');
   STATE.DEFERRED_FILES.forEach(f => ck('I', f + ' DEFERRED to 2.5', !changed.includes(f)));
   ck('I', 'shared-header.js was reverted, not left half-migrated',
      !changed.includes('shared-header.js'), changed.join(', '));
-  ck('I', 'seller-wiring.js untouched', !changed.includes('seller-wiring.js'));
+  /* Was "seller-wiring.js untouched" — true while it was blocked, and 2.4 was authorised
+     to change it. shared-header.js is the one that must still be untouched, and it is
+     asserted above via STATE. */
+  ck('I', 'seller-wiring.js is migrated, not blocked',
+     !require('./cart-migration-state.js').BLOCKED_FILES.includes('seller-wiring.js'));
 }
 
 console.log('\n' + '='.repeat(66));

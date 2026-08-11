@@ -232,8 +232,12 @@ console.log('\nJ. No unmigrated cart WRITER remains anywhere');
     !STATE.TEST_HARNESS.includes(h.file));
   ck('J', 'every remaining cart writer is the service, frozen, deferred or a harness',
      rogue.length === 0, rogue.map(h => h.file + ':' + h.line).join(', '));
-  ck('J', 'the frozen pair still write (expected, they are 2.4 / 2.6)',
-     all.some(h => h.file === 'checkout.html') && all.some(h => h.file === 'provider-wiring.js'));
+  /* Was "the frozen PAIR still write". 2.4 migrated checkout.html, so the pair is now a
+     single file. Driven by the registry so it tracks whichever surfaces are frozen at the
+     time, instead of encoding a count that a later slice invalidates. */
+  ck('J', 'every still-frozen surface is still a writer (they are, by definition, unmigrated)',
+     STATE.FROZEN_FILES.every(f => all.some(h => h.file === f)),
+     STATE.FROZEN_FILES.join(', '));
   ck('J', 'sokoni-food.js still writes — deferred to 2.5, untouched',
      all.some(h => h.file === 'sokoni-food.js'));
 }

@@ -1559,6 +1559,13 @@
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
+<!-- Canonical cart access path (Track 2.4). checkout.html no longer reads or writes
+     localStorage['cart'] directly. This tag MUST stay above the inline block below,
+     which snapshots the cart at parse time and feeds `orderItems` to
+     verifyIntasendPayment — a deferred or later tag would leave that snapshot empty and
+     the page would tell a shopper with a full cart that it was empty. Not deferred, and
+     ahead of every consumer on the page. -->
+<script src="sokoni-cart.js"></script>
 <script src="sokoni-invoice.js"></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
@@ -1600,8 +1607,35 @@ function _setImpact(btn, amt) {
   updateTotals();
 }
 
-/* Load cart items into summary */
-const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+/* Load cart items into summary.
+
+   Canonical (Track 2.4), and deliberately still a SNAPSHOT taken once at parse time.
+   `orderItems: cart` sends this exact array to verifyIntasendPayment, which re-prices
+   every line against the catalogue — so the shape and the moment it is captured are both
+   part of the payment contract. list() returns the same objects this parsed before;
+   nothing about what reaches the server changes. Making it a live read would change the
+   timing, so it is not one. */
+const _ckCart = window.SokoniCart || null;
+const cart = _ckCart ? _ckCart.list() : null;
+
+/* UNKNOWN IS NOT EMPTY — and on a money path that distinction is the whole guard.
+   Without the service there is no cart to read, and the empty-cart branch below would
+   tell a shopper holding a full cart that it was empty and send them back to browse.
+   Say so instead, and let nothing downstream run on a fabricated []. */
+if(cart === null){
+  const itemsContainer = document.getElementById("checkoutItems");
+  if(itemsContainer){
+    itemsContainer.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">⚠️</div><div style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;">Couldn\'t load your cart</div><div style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Your items are safe. Reload the page to continue checking out.</div><a href="cart.html" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:14px;text-decoration:none;">Back to Cart</a></div>';
+  }
+  /* Disable by CLASS, not by id — the Place Order control is
+     `<button class="co-place-btn" onclick="placeOrder()">` and carries no id. A guard
+     written against a guessed id would have silently done nothing and left the button
+     live on a page that cannot read the cart. */
+  document.querySelectorAll(".co-place-btn").forEach(function(b){
+    b.disabled = true; b.style.opacity = "0.5"; b.style.pointerEvents = "none";
+  });
+  throw new Error("[SOKONI] checkout: SokoniCart unavailable — refusing to render a cart state it cannot verify");
+}
 
 /* Empty-cart guard — redirect back to shopping */
 if(cart.length === 0 && !location.search.includes('order=')){
@@ -1678,11 +1712,13 @@ itemsEl.innerHTML = _itemsHTML.join("");
 /* Remove a single line item from the cart on the checkout page. Splice localStorage
    and reload so the item list, subtotal, delivery and total all recompute cleanly. */
 window.removeCartItem = function(idx){
-  try {
-    var c = JSON.parse(localStorage.getItem("cart") || "[]");
-    if(idx >= 0 && idx < c.length){ c.splice(idx, 1); localStorage.setItem("cart", JSON.stringify(c)); }
-  } catch(e){}
-  location.reload();
+  /* removeAt — a checkout line is a ROW, exactly as on the cart page. The reload is what
+     recomputes subtotal, delivery and total, and it only happens if the removal actually
+     landed: reloading after a failed splice would redraw the same line and read as a
+     button that does nothing. */
+  var C = window.SokoniCart;
+  if(!C){ return; }
+  if(C.removeAt(idx)) location.reload();
 };
 
 /* Auto-apply any promo code saved from the cart page */
@@ -2009,7 +2045,9 @@ async function _placeOrderCore(){
      No per-seller Daraja credentials required — the platform collects and the
      webhook credits the seller's wallet + finalises the order. */
   if (selectedPayment === 'mpesa') {
-    const currentCart2 = JSON.parse(localStorage.getItem('cart') || '[]');
+    /* Read fresh at send time, as before — the seller identity must reflect the cart as
+       it stands when the STK push goes out, not the parse-time snapshot. */
+    const currentCart2 = (window.SokoniCart ? window.SokoniCart.list() : []);
     const _sUid = currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerUid
                  || currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerId
                  || null;
@@ -2066,7 +2104,13 @@ async function _placeOrderCore(){
            saveAndRedirect, which the page redirect can interrupt before it runs.
            This is why the item lingered in the cart after a successful order. */
         try {
-          localStorage.removeItem('cart');
+        /* SokoniCart.clear(), not localStorage.removeItem("cart") — removeItem is invisible
+           to provider-wiring.js's setItem bridge, so the sokoniCart mirror kept the ordered
+           items and the next page load pushed them back into the cart via _mergeCarts().
+           Reproduced directly. clear() writes through setItem, so the mirror clears too.
+           This is the other half of "the item lingered in the cart after a successful
+           order". */
+          window.SokoniCart && window.SokoniCart.clear();
           localStorage.removeItem('sokoniAppliedPromo');
           if (typeof cart !== 'undefined' && Array.isArray(cart)) cart.length = 0;
           window.dispatchEvent(new Event('sokoni-cart-updated'));
@@ -2437,7 +2481,9 @@ async function sendStkPush(){
              Buyer (dropoff) from live geolocation; seller (pickup) best-effort from the cart's first item. */
           deliveryCoords:  (window.deliveryLocation && window.deliveryLocation.lat)
                              ? { lat: window.deliveryLocation.lat, lng: window.deliveryLocation.lng } : null,
-          pickupCoords:    (function(){ try { var c = JSON.parse(localStorage.getItem("cart")||"[]")[0]||{};
+          /* Also read fresh here, as before — this deliberately reads the CURRENT cart
+             rather than the parse-time snapshot, and that timing is preserved. */
+          pickupCoords:    (function(){ try { var C = window.SokoniCart; var c = (C ? C.list() : [])[0]||{};
                              return (c.sellerLat && c.sellerLng) ? { lat: c.sellerLat, lng: c.sellerLng } : null; } catch(_) { return null; } })(),
           /* amount and orderItems omitted when sessionId is present — server uses session data */
           ...(!_sessionId && { amount: orderTotal, orderItems: cart }),
@@ -2693,7 +2739,9 @@ function processPaypalPayment(){
    order shape; the webhook (Admin SDK) later flips status→paid, which the client
    never overwrites. Idempotent via the deterministic orderId + { merge:true }. */
 async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems){
-  const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
+  /* Fresh read, unchanged timing. This persists the pending order the moment the STK
+     push is accepted, so it must reflect the cart at that instant. */
+  const currentCart = (window.SokoniCart ? window.SokoniCart.list() : []);
   /* The orders CREATE rule requires request.auth.uid === the order's uid
      (claimsOwner) with a real Firebase Auth token — a localStorage uid does NOT
      satisfy it. Place Order can fire before Firebase has restored the session, so
@@ -2738,7 +2786,10 @@ async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems)
 }
 
 function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified, alreadyPersisted){
-  const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
+  /* Fresh read at the same point as before. seller-wiring.js patches THIS function and
+     snapshots the cart just before calling it, precisely because the clears below empty
+     it — that ordering is load-bearing for the stock decrement and is unchanged. */
+  const currentCart = (window.SokoniCart ? window.SokoniCart.list() : []);
   /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
      Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
   const total = (typeof orderTotal === "number" && orderTotal > 0)
@@ -2913,7 +2964,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     unread:1,spam:false,createdAt:Date.now()
   });
   localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
-  localStorage.removeItem("cart");
+  window.SokoniCart && window.SokoniCart.clear();
   localStorage.removeItem("sokoniAppliedPromo");
 
   /* Affiliate: record conversion so referrer earns their commission */
@@ -3096,7 +3147,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     } catch (_) {}
 
     /* Clear cart */
-    localStorage.removeItem("cart");
+    window.SokoniCart && window.SokoniCart.clear();
 
     /* ── Loyalty: award points for this purchase ── */
     try {

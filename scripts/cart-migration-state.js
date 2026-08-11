@@ -24,10 +24,12 @@ const MIGRATED = [
   'wishlist.html',                                            /* 2.3 surface 5 */
   'cart.js',                                                  /* 2.3 surface 6 */
   'cart.html', 'food.html', 'profile.js',                     /* 2.3 surface 7 readers */
+  'checkout.html', 'seller-wiring.js',                        /* 2.4 checkout boundary */
 ];
 
 /* ── SURVIVORS ────────────────────────────────────────────────────────────────
-   Track 2.3 closes at "all writers + all unblocked readers". Files still touching the
+   Track 2.3 closed at "all writers + all unblocked readers"; 2.4 then took the checkout
+   boundary. Files still touching the
    cart directly are NOT leftovers: each carries an owning phase and the architectural
    fact that blocks it. "UNMIGRATED" in a sweep report must never be readable as
    "forgotten", so the reason lives here, next to the name, and the sweep prints it.
@@ -36,10 +38,6 @@ const MIGRATED = [
    was simply missed. */
 
 const FROZEN = [
-  { file: 'checkout.html', phase: '2.4',
-    reason: 'The order lifecycle owns cart clearing (two removeItem calls) and sends the ' +
-            'raw array as orderItems to verifyIntasendPayment. Out of bounds until its ' +
-            'own verified slice.' },
   { file: 'provider-wiring.js', phase: '2.6',
     reason: 'Carries the global localStorage.setItem interceptor that mirrors cart <-> ' +
             'sokoniCart, injected by security.js on ~288 pages. Removing it requires ' +
@@ -64,11 +62,6 @@ const BLOCKED = [
             'the cart pip from a number into hidden on 299 pages. This is a platform-wide ' +
             'dependency rollout, not a reader migration — and it shares its precondition ' +
             'with removing the interceptor.' },
-  { file: 'seller-wiring.js', phase: '2.4',
-    reason: 'Its cart read exists only inside the patch it applies to saveAndRedirect, ' +
-            'which is defined solely in checkout.html. Checkout is FROZEN and so cannot ' +
-            'load the service; migrating this read would return an empty cart and ' +
-            'silently stop post-order stock decrements.' },
 ];
 
 /* Name-only views, for the assertions that just need a list. */
@@ -86,12 +79,6 @@ function survivorFor(file) {
    artifacts. Named so "unexpected" means unexpected. */
 const PRE_EXISTING = [
   'availability-manager.html',          /* Track 1 — availability schedule projection */
-  /* cart.html is dirty for TWO reasons: the Track 4 min-width:0 overflow fix, and the
-     2.3.6 <script src="sokoni-cart.js"> tag its page now needs. It is deliberately NOT
-     in MIGRATED — two inline cart READERS remain in it and they are 2.3.7 work. Marking
-     it migrated early would have made the scanner control "migrated surfaces have no
-     direct cart access" fail, which is exactly what caught this. */
-  'cart.html',
   'version.json',                       /* predeploy artifacts, not authored by this work */
   'docs/release-gates/unknown.json',
 ];
