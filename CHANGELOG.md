@@ -1,3 +1,39 @@
+## [2026-08-11] — feat(kasshop): storefront reads the shop's real state (Phase 2, increment 2)
+
+**The storefront had a second availability implementation.** `_getOpenStatus(config)` in
+`sokoni-minishop.js` decided open/closed in the browser, and was wrong in four ways that all
+pointed the same direction — towards telling a customer a shut shop was open:
+
+| defect | effect |
+|---|---|
+| read `config.hours`, not the seller's timetable | a different source from the one Management writes |
+| one open/close pair per day | canonical `periods[]` (split shifts) collapsed |
+| ignored the live switch | "go offline" did nothing to the storefront |
+| ignored overrides; used the visitor's clock | special closures missed; wrong day abroad |
+
+Deleted. The badge now presents `publicShopState()`'s decision and the calendar is drawn from
+the schedule behind it, so the hours a customer reads cannot disagree with the verdict.
+
+**Three states, not two.** A shop switched off by its seller reads *Temporarily unavailable* —
+"Closed" implies it reopens at a scheduled hour. Fulfilment chips show only while open.
+Unresolved availability hides the badge rather than defaulting to "Open".
+
+**Files:** `sokoni-minishop.js`, `minishop.html`, `minishop.css`, `scripts/qa/storefront-availability.mjs`
+**Deployed:** hosting v510 (`627ca84`) — verified live: old logic absent, new renderers present
+**Tests:** `npm run qa:storefront` — 6/6 in a real browser (labels, classes, fulfilment
+visibility, 7 rows, one today marker, multi-period days, override notice, neutral case)
+
+### Two harness defects fixed rather than worked around
+
+1. **The service worker was silently defeating network mocks.** `shared-header.js` registers a
+   SW; once it claims the origin it serves fetches around Playwright's `page.route`, so only
+   the first case saw its fixture and the rest hit the real network. Any QA of this page that
+   mocks the backend must neutralise the SW first, or it will report confident nonsense.
+2. **`--script` could not load absolute paths on Windows** in the browser-automation skill —
+   ESM rejects `C:\…` as scheme `'c:'`. Fixed with `pathToFileURL`.
+
+---
+
 ## [2026-08-11] — feat(kasshop): Phase 2 increment 1 — one shop, two views
 
 **The spine, before the surface.** The premium KassShop brief is that seller management and
