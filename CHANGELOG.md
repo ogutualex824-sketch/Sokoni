@@ -1,3 +1,68 @@
+## [2026-08-11] — FIXED: KASS said "Added to cart" and added nothing
+
+**Track 2, Slice 1. Not deployed.**
+
+`add_to_cart` wrote `carts/{uid}/items/{productId}` and replied *"Added 2x **Unga** to your
+cart."* with a **🛒 View Cart** button. Nothing else in the platform reads that collection —
+no client file, and it has no Firestore rule, so a browser read is default-denied even if one
+were added. The buyer's cart is `localStorage['cart']`, rendered by `cart.js`. The shopper
+tapped through to an empty cart.
+
+`view_cart` read the same private collection, so KASS confirmed back its own writes. The two
+handlers agreed with each other, which is why it read as working. `kass-widget.js` renders a
+green ✅ panel whenever the reply matches `/added|saved|booked|…/`, so the false claim was
+also visually certified.
+
+**`view_cart` was reporting an invented money figure.** It computed a `KES` total from
+`input.price` — a number supplied by the language model, never looked up from the catalogue.
+
+### The fix: stop claiming
+
+`localStorage` is client-side and `sokoniChat` is a server function, so there is **no path
+from KASS to the cart the shopper sees**. Any success this endpoint reports is a claim it
+cannot keep. So it no longer reports one.
+
+* `add_to_cart` writes nothing. It resolves the product against `products/{id}`, and returns
+  a link to its page with `added:false, requiresUserAction:true`. Name and price come from
+  the catalogue document; `price` and `sellerUid` were **removed from the tool schema** so a
+  model-supplied number can no longer reach a shopper's screen. An unknown product gets no
+  link rather than a confident dead end.
+* `view_cart` states no count, no total, and — deliberately — never says the cart is empty.
+  Telling a shopper with a full cart that it is empty is the same defect in the other
+  direction.
+* Tool descriptions and the system prompt now instruct the model never to say "added" and
+  never to guess a count or total. The handler cannot control the model's prose; the
+  description is the only lever, so it is part of the fix and is asserted.
+
+KASS regains a real add-to-cart in Track 2.2, through the canonical client cart service.
+Not by writing `localStorage` from a Cloud Function, which is impossible, and not by
+resurrecting `carts/`, which no buyer surface can read.
+
+### Verification
+
+`scripts/test-kass-cart-truth.js` — **47/47**. The handlers are not exported (Firebase
+deploys every export as a function), so the suite slices `_execChatTool` out of the shipped
+source and runs it in a `vm` sandbox against a real emulator — the actual code, not a copy.
+
+The load-bearing assertion is **H**: it reads `_isSuccessMsg`'s regex out of
+`kass-widget.js` and requires that neither handler produce a message that would trigger the
+green tick. An early draft of the `view_cart` copy ended *"everything you've added"* and
+failed it.
+
+**Not touched:** `checkout.html`, `cart.js`, `cart.html` logic, and every Track 3 wishlist
+file — asserted in block J. No new cart collection, no server cart, no new client cart
+writer. The remaining 17 `localStorage['cart']` writers are Track 2.3's problem.
+
+**Files:** `functions/index.js`, `scripts/test-kass-cart-truth.js` (new),
+`docs/CART_PERSISTENCE_AUDIT.md` (new).
+**Database:** `carts/{uid}/items` is now written by nothing; existing documents are left in
+place, unread. **API:** `add_to_cart` no longer accepts `price` or `sellerUid`; both tools
+return a different shape. **Security:** removes a path by which a model-supplied price
+reached a user-visible money figure. **Breaking:** KASS can no longer add to the cart —
+deliberate, restored in 2.2. **Deployment:** requires a functions deploy (`sokoniChat`).
+
+---
+
 ## [2026-08-11] — FIXED: the wishlist belonged to the device, not the shopper
 
 **Track 3 complete (Phases 4.1–4.7). Not deployed.** Full write-up:

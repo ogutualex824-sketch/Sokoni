@@ -1139,22 +1139,32 @@ const _CHAT_TOOLS = [
   /* ── ACTION TOOLS (write operations — require auth) ── */
   {
     name: "add_to_cart",
-    description: "Add a product to the user's shopping cart. ALWAYS state the item name, price, and quantity to the user and get confirmation before calling this.",
+    /* The description is the contract the model actually follows, so it states the
+       limitation rather than the intent. Described as "adds to cart", the model narrated
+       a success this tool never performed — and the widget stamped a green tick on it. */
+    description: "Find a product and give the user a link to its page, where THEY add it to "
+               + "the cart. This tool does NOT add anything to the cart and cannot see the "
+               + "cart. NEVER tell the user the item has been added, saved, or is in their "
+               + "cart. Say you're opening the product page for them.",
     input_schema: {
       type: "object",
       properties: {
         productId:   { type: "string",  description: "Product ID from search results" },
-        productName: { type: "string",  description: "Product name for confirmation display" },
-        quantity:    { type: "number",  description: "Quantity to add (default 1)" },
-        price:       { type: "number",  description: "Unit price in KES" },
-        sellerUid:   { type: "string",  description: "Seller UID from search results" },
+        productName: { type: "string",  description: "Product name, for display only" },
+        quantity:    { type: "number",  description: "Quantity the user mentioned (default 1)" },
+        /* `price` and `sellerUid` were removed deliberately. Price arrived here from the
+           model and was echoed back to the shopper as a KES total; the catalogue document
+           is the only acceptable source for a money figure. */
       },
       required: ["productId", "productName"],
     },
   },
   {
     name: "view_cart",
-    description: "View the user's current cart contents, item count, and total. Call when user asks 'what's in my cart', 'show my cart', 'view cart'.",
+    description: "Give the user a link to open their cart. This tool CANNOT read the cart — "
+               + "it does not know what is in it, how many items there are, or the total. "
+               + "NEVER state or guess an item count, a subtotal, or that the cart is empty. "
+               + "Just offer to open it.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -1421,34 +1431,93 @@ async function _execChatTool(name, input, ctx) {
       return { found: rows.length, jobs: rows.map(d => ({ title:d.data().title, company:d.data().company, location:d.data().location, salary:d.data().salary||"Negotiable", type:d.data().type })) };
     }
 
-    /* ── ACTION: add_to_cart ── */
+    /* ══════════════════════════════════════════════════════════════════════════
+       CART — KASS opens the cart, it does not fill it.  (Track 2.1)
+
+       Both handlers used to read and write `carts/{uid}/items/{productId}`. That
+       collection is reachable by NOTHING else: no client file reads it, and it has no
+       Firestore rule, so a browser read is default-denied even if one were added. The
+       buyer's cart is `localStorage['cart']`, read by cart.js on cart.html.
+
+       So "Added 2x Unga to your cart" was false. KASS wrote a store only KASS could
+       see, then offered a "View Cart" button to a page that showed nothing — and
+       kass-widget.js renders a green ✅ panel whenever the reply matches /added|saved/,
+       certifying the claim visually. The two handlers agreed with each other, which is
+       why it read as working.
+
+       view_cart was worse than useless: it reported an itemCount and a `KES` TOTAL
+       computed from `input.price` — a number supplied by the language model, never
+       looked up from the catalogue. A money figure invented upstream and rendered as
+       fact is exactly what the no-fabricated-metrics rule forbids.
+
+       The fix is not to write the real cart: localStorage is client-side and this is a
+       server function, so there is no path from here to the cart the shopper sees. Any
+       "success" this endpoint reports would be a claim it cannot keep. It therefore
+       stops claiming. KASS now resolves the product and hands over a link; the add
+       happens on the product page, where the cart actually lives.
+
+       KASS regains a real add-to-cart in Track 2.2, through the canonical client cart
+       service — not by writing localStorage from a Cloud Function, which is impossible,
+       and not by resurrecting carts/, which no buyer surface can read.
+       ══════════════════════════════════════════════════════════════════════════ */
+
+    /* ── ACTION: add_to_cart — resolves the product and links to it ── */
     if (name === "add_to_cart") {
       if (!ctx.uid) return _authRequired();
-      const { productId, productName, quantity = 1, price, sellerUid } = input;
-      const itemRef = db.collection("carts").doc(ctx.uid).collection("items").doc(productId);
-      const existing = await itemRef.get().catch(() => null);
-      const prevQty = existing?.exists ? (existing.data().quantity || 0) : 0;
-      await itemRef.set({ productId, productName, quantity: prevQty + quantity, price, sellerUid,
-        updatedAt: new Date().toISOString(), addedByKASS: true }, { merge: true });
-      ctx.addAction({ label: "🛒 View Cart", url: "cart.html" });
-      ctx.addAction({ label: "💳 Checkout", url: "cart.html?checkout=1" });
-      return { success: true, message: `Added ${quantity}x **${productName}** to your cart.`, newQty: prevQty + quantity };
+      const { productId, productName, quantity = 1 } = input;
+      const pid = String(productId || "").trim();
+      if (!pid) return { added: false, error: "No product specified." };
+
+      /* Confirm the product exists before offering a link to it. `productId` reaches us
+         from the model, and a link to a 404 is another confident-looking dead end. The
+         NAME and PRICE shown come from the catalogue document, never from the model. */
+      const pSnap = await db.collection("products").doc(pid).get().catch(() => null);
+      if (!pSnap || !pSnap.exists) {
+        ctx.addAction({ label: "🛍️ Browse Marketplace", url: "/" });
+        return { added: false, found: false,
+          message: "I couldn't find that product. Search the marketplace and try again." };
+      }
+      const p = pSnap.data() || {};
+      const name_ = p.name || productName || "this item";
+      const url   = `product.html?id=${pid}`;
+
+      ctx.addResult({ type: "product", id: pid, name: name_, price: p.price,
+        image: p.imageUrl || p.image, url });
+      ctx.addAction({ label: `Open ${name_}`, url });
+
+      /* `added:false` and `requiresUserAction:true` are the contract: this tool does NOT
+         put anything in the cart, and the model is told so here as well as in the tool
+         description, so it cannot narrate a success that did not happen. */
+      return {
+        added: false,
+        requiresUserAction: true,
+        productId: pid,
+        productName: name_,
+        price: p.price != null ? p.price : null,
+        quantity,
+        url,
+        message: `Open **${name_}** to put it in your cart — the button is below. `
+               + `I can't add items for you yet.`,
+      };
     }
 
-    /* ── ACTION: view_cart ── */
+    /* ── ACTION: view_cart — opens the cart, reports nothing about its contents ── */
     if (name === "view_cart") {
       if (!ctx.uid) return _authRequired();
-      const snap = await db.collection("carts").doc(ctx.uid).collection("items").limit(15).get().catch(() => ({ docs: [] }));
-      if (snap.empty) {
-        ctx.addAction({ label: "🛍️ Browse Marketplace", url: "/" });
-        return { empty: true, message: "Your cart is empty. Start shopping!" };
-      }
-      const items = snap.docs.map(d => d.data());
-      const total = items.reduce((s, i) => s + (Number(i.price || 0) * (Number(i.quantity) || 1)), 0);
-      items.forEach(i => ctx.addResult({ type: "product", id: i.productId, name: i.productName, price: i.price, url: `product.html?id=${i.productId}` }));
+      /* No count and no total. The cart lives in the browser; this function cannot read
+         it, and the previous figures came from the orphaned collection priced by the
+         model. An unknown count rendered as a number is a fabricated metric — and
+         rendering it as 0 ("Your cart is empty") would be worse, because a shopper with
+         a full cart would be told it was empty. */
       ctx.addAction({ label: "🛒 Open Cart", url: "cart.html" });
-      ctx.addAction({ label: "💳 Checkout Now", url: "cart.html?checkout=1" });
-      return { itemCount: items.length, total: `KES ${total.toLocaleString()}`, items: items.map(i => ({ name: i.productName, qty: i.quantity, price: i.price ? `KES ${Number(i.price).toLocaleString()}` : null })) };
+      /* Wording matters as much as the payload here. kass-widget.js stamps a green ✅
+         panel on any reply matching /added|saved|booked|…/, so a message that merely
+         MENTIONS "added" gets certified as a completed action. An earlier draft of this
+         line ended "everything you've added" and tripped exactly that. */
+      return {
+        canRead: false,
+        message: "I can't see inside your cart yet — open it below to see what's in it.",
+      };
     }
 
     /* ── ACTION: get_my_orders ── */
@@ -1841,8 +1910,8 @@ BEHAVIOUR RULES (follow exactly)
 ACTION TOOLS  (${uid ? "LIVE — user is signed in" : "will prompt sign-in"})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-add_to_cart       — add product (confirm item name, price, qty first)
-view_cart         — show cart contents and subtotal
+add_to_cart       — LINK to a product page; does NOT add to cart. Never say "added"
+view_cart         — LINK to the cart page; you cannot read it. Never state a count or total
 get_my_orders     — list recent orders with status
 track_order       — live GPS tracking + ETA
 cancel_order      — cancel pending/confirmed order (confirm first)
