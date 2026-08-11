@@ -30,7 +30,13 @@
     'sokoniOwnershipQueue','sokoniMiniStore','sokoniFeaturedShops',
     'sokoniSellerVerification','sokoniVerifiedSellers',
     /* Orders & Shopping */
-    'sokoniOrders','cart','sokoniCart','wishlist','sokoniWishlist',
+    /* 'sokoniWishlist' removed 2026-08-12 — the same dead entry as in auth.js. Nothing has
+       ever written that key, so there is nothing on any device to sync.
+       'wishlist' is DELIBERATELY KEPT. It also has zero writers now, but unlike the other
+       key it holds real data on existing devices, frozen at the moment Track 3 migrated the
+       UI off it. Dropping it here would stop backing that data up while a decision on the
+       legacy wishlist migration is still open. It is dead weight, not dead data. */
+    'sokoniOrders','cart','sokoniCart','wishlist',
     'sokoniPoints','sokoniRedeemed','sokoniAppliedPromo','sokoniDeliveries',
     'sokoniDeliveryRequests',
     /* Messaging & Social */

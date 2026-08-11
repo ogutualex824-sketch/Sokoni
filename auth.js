@@ -338,9 +338,15 @@ async function loginUser(){
         if(typeof SokoniSecurity !== 'undefined'){
             SokoniSecurity.setSession && SokoniSecurity.setSession(profile);
             SokoniSecurity.clearLoginLockout && SokoniSecurity.clearLoginLockout(email);
+            /* 'sokoniWishlist' removed 2026-08-12. migrateUserData copies each key into a
+               uid-scoped copy, so the list only means anything for keys something writes.
+               That key never had a writer anywhere in the repo (established by the Track 3
+               sweep, which now enforces zero readers and zero writers for it), so the entry
+               could only ever have been a no-op. The wishlist is canonical — see
+               sokoni-wishlist.js. 'sokoniCart' stays: it is still live and is Track 2's. */
             SokoniSecurity.migrateUserData && SokoniSecurity.migrateUserData([
                 'sellerProducts','sellerOrders','sokoniOrders','sokoniCart',
-                'sokoniWishlist','sokoniMessages','sokoniBookings','sokoniTeams',
+                'sokoniMessages','sokoniBookings','sokoniTeams',
                 'sokoniBroadcasts','sokoniBnbBookings',
             ]);
         }
