@@ -185,6 +185,13 @@
            rather than calling showDashPage. Placed next to Orders because that is
            where a merchant looks when work arrives. -->
       <li class="nav-item" onclick="location.href='/seller-fulfilment'">🚚 Fulfilment</li>
+      <!-- Delivery Hub — the SELLER's delivery management (active / riders / pending /
+           history / failed / analytics), scoped to sellerUid. The sidebar had no
+           delivery entry at all, so a seller looking for their deliveries fell back to
+           the site menu, which lands on delivery.html — the send-a-parcel hub whose
+           header offers "Be a Rider". That is the rider context, not the seller's.
+           seller-delivery.html is the seller surface; driver.html stays the rider app. -->
+      <li class="nav-item" onclick="location.href='/seller-delivery'">🛵 Delivery Hub</li>
       <li class="nav-item" onclick="showDashPage('customers',this)">👤 Customers</li>
       <li class="nav-item" onclick="showDashPage('receipts',this)">🧾 Receipts</li>
       <li class="nav-item" onclick="showDashPage('messages',this)">💬 Messages</li>

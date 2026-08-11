@@ -1363,6 +1363,63 @@
     return nav;
   }
 
+  /* ── Delivery entry, resolved per role ─────────────────────────────────────
+     The same canonical delivery is viewed by seller, rider and buyer, but each
+     role gets its OWN context and controls — the rider UI is never reused as the
+     seller UI. This menu is shared by every page, so a single hard-coded
+     delivery.html sent sellers into the send-a-parcel hub, whose header offers
+     "Be a Rider" and which sokoni-permissions.js classes as a driver page.
+
+     seller/merchant → seller-delivery.html   (manage MY shop's deliveries)
+     driver/rider    → driver.html            (the rider app — unchanged)
+     everyone else   → delivery.html          (send a parcel / track)
+
+     Role comes from the same cached `sokoniUser` the rest of this file reads.
+     Unknown or signed-out falls through to the consumer hub, which is the safe
+     default: it never exposes a control the visitor is not entitled to. */
+  function _deliveryLink() {
+    var roles = [], active = '';
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null') || {};
+      roles  = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
+      /* _skSwitchRole writes BOTH u.role and roles[0], so either identifies the
+         role the user is currently acting as. */
+      active = String(u.role || roles[0] || '').toLowerCase();
+    } catch (e) {}
+    roles = roles.map(function (r) { return String(r || '').toLowerCase(); });
+
+    var SELLER = { key:'delivery', icon:'🛵', label:'Delivery Hub',  href:'seller-delivery.html' };
+    var RIDER  = { key:'delivery', icon:'🛵', label:'My Rider',      href:'driver.html' };
+    var BUYER  = { key:'delivery', icon:'🛵', label:'Send a Parcel', href:'delivery.html' };
+
+    /* ACTIVE role decides. A seller who is also a registered rider is acting as a
+       seller right now and must get the seller surface — resolving by list order
+       instead would hand them the rider app, which is the exact mix-up this
+       function exists to prevent. */
+    if (active === 'seller' || active === 'merchant') return SELLER;
+    if (active === 'driver' || active === 'rider')    return RIDER;
+    if (active === 'buyer')                           return BUYER;
+
+    /* No usable active role — fall back to what the account actually holds. */
+    if (roles.indexOf('seller') > -1 || roles.indexOf('merchant') > -1) return SELLER;
+    if (roles.indexOf('driver') > -1 || roles.indexOf('rider')    > -1) return RIDER;
+    return BUYER;
+  }
+
+  /* The drawer is built once per page load, but _skSwitchRole does NOT reload —
+     it only fires sokoniRoleChanged. Without this the menu would keep pointing at
+     the previous role's delivery surface, which is exactly the mix-up this entry
+     exists to prevent. Re-resolve in place on every role change. */
+  document.addEventListener('sokoniRoleChanged', function () {
+    var a = document.querySelector('#sk-menu-grid [data-sk-key="delivery"]');
+    if (!a) return;
+    var l = _deliveryLink();
+    a.setAttribute('href', l.href);
+    var spans = a.querySelectorAll('span');
+    if (spans[0]) spans[0].textContent = l.icon;
+    if (spans[1]) spans[1].textContent = l.label;
+  });
+
   /* ── Build the site menu as a SokoniDrawer (enterprise side drawer) ── */
   function _buildMenuDrawer() {
     if (document.getElementById('sk-menu-drawer')) return;
@@ -1379,7 +1436,7 @@
       { icon:'📱', label:'Tech Hub',       href:'tech-hub.html' },
       { icon:'💼', label:'Jobs',           href:'jobs.html' },
       { icon:'🎤', label:'Events',         href:'entertainment.html' },
-      { icon:'🛵', label:'Deliveries',     href:'delivery.html' },
+      _deliveryLink(),
       { icon:'🧾', label:'SmartPOS',       href:'pos.html' },
       { icon:'💬', label:'Messages',       href:'messages.html' },
       { icon:'🔔', label:'Notifications',  href:'notifications.html' },
@@ -1409,7 +1466,8 @@
       '<div class="sk-drawer-body">' +
         '<div id="sk-menu-grid">' +
           LINKS.map(function(l) {
-            return '<a href="' + l.href + '" class="sk-menu-item">' +
+            return '<a href="' + l.href + '" class="sk-menu-item"' +
+                (l.key ? ' data-sk-key="' + l.key + '"' : '') + '>' +
               '<span class="sk-menu-item-icon">' + l.icon + '</span>' +
               '<span>' + l.label + '</span>' +
             '</a>';
