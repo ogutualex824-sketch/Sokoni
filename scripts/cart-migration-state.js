@@ -26,6 +26,18 @@ const MIGRATED = [
    the global setItem interceptor and is 2.6. */
 const FROZEN = ['checkout.html', 'provider-wiring.js'];
 
+/* Owned by a LATER slice, deliberately not 2.3.
+   sokoni-food.js is a complete parallel cart implementation on the same key, reached
+   through const SHARED_CART_KEY = 'cart' — which is why the literal-only scanner missed
+   it for three slices. Its saveCart() rewrites the whole array (all non-food rows + all
+   food rows) on every food mutation, and that behaviour is what provider-wiring.js's
+   cart <-> sokoniCart bridge was built around. Migrating it inside 2.3 would mix two
+   architectural changes and make the verification impossible to read, so the food cart
+   and the bridge move together in 2.5. */
+const DEFERRED = [
+  'sokoni-food.js',                                            /* 2.5, with the bridge */
+];
+
 /* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
@@ -68,5 +80,5 @@ function unexpected(changed) {
     !INFRASTRUCTURE.includes(f) && !TEST_HARNESS.includes(f) && !isSuite(f));
 }
 
-module.exports = { MIGRATED, FROZEN, PENDING, PRE_EXISTING, INFRASTRUCTURE,
+module.exports = { MIGRATED, FROZEN, PENDING, DEFERRED, PRE_EXISTING, INFRASTRUCTURE,
                    TEST_HARNESS, isSuite, unexpected };
