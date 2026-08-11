@@ -48,13 +48,16 @@ if (_pEmail) _pEmail.innerText = user.email || '';
    load() resolves (add <script src="sokoni-wishlist.js"> above profile.js), and must show
    "—" until it does. A count is a business metric: an unresolved read rendered as 0 tells
    the owner their saved items are gone. Never reintroduce a localStorage wishlist read. */
-const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-/* Null-guarded like every other lookup in this file. profile.html no longer renders
-   #cartItemsCount, and this was one of the two unguarded lines — so they threw on every
-   load and aborted the whole of the rest of profile.js (orders list, tabs, and the
-   header/menu wiring below). */
-const _cartCountEl = document.getElementById("cartItemsCount");
-if (_cartCountEl) _cartCountEl.innerText = cart.length;
+/* The cart count is removed rather than rerouted (Track 2.3.7), for the same reason its
+   wishlist twin above was: it fed #cartItemsCount, which profile.html has not contained
+   for some time. Rerouting it would make this page load the cart service to feed nothing.
+
+   Note it counted cart.length — LINES, not units — while every badge on the platform
+   counts Σ(qty||1). Had it been rerouted mechanically it would have had to pick one, and
+   picking wrong is a silent change to a number an owner reads. If a cart count returns
+   to this page it must come from SokoniCart.units() (add <script src="sokoni-cart.js">
+   above profile.js) and must show "—" until the service is there. Never reintroduce a
+   localStorage cart read. */
 
 /* ORDERS */
 let orders = [];

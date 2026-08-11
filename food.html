@@ -6,6 +6,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
+<!-- Canonical cart access path (Track 2.3.7). The bottom-nav cart pip reads
+     SokoniCart.units(); without this tag it stays blank rather than asserting 0. -->
+<script src="sokoni-cart.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SOKONI Food Hub — Restaurants, Delivery & Groceries Nairobi</title>
@@ -278,10 +281,14 @@ if(_urlCat&&SokoniFood.CATEGORIES.find(c=>c.id===_urlCat)) setCat(_urlCat);
   /* ── bottom nav cart pip ── */
   (function(){
     function _upd(){
-      var all=[];try{all=JSON.parse(localStorage.getItem('cart')||'[]');}catch{}
-      var n=all.reduce(function(s,i){return s+(i.qty||1);},0);
+      /* Canonical (Track 2.3.7). Already summed (qty||1), so units() is like-for-like.
+         Without the service the pip is blank and hidden rather than 0 — this page shows a
+         FOOD cart that sokoni-food.js still writes directly (deferred to 2.5), so an
+         asserted 0 here would be wrong twice over. */
+      var C=window.SokoniCart;
+      var n=C?C.units():null;
       var pip=document.getElementById('bnavCartPip');
-      if(pip){pip.textContent=n||'';pip.style.display=n?'flex':'none';}
+      if(pip){pip.textContent=(n==null||!n)?'':n;pip.style.display=n?'flex':'none';}
       var old=document.getElementById('cartBadge');
       if(old){old.textContent=n||'';old.style.display=n?'flex':'none';}
     }

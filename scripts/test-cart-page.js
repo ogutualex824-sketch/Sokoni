@@ -248,8 +248,11 @@ console.log('\nK. Frozen, deferred and pending surfaces');
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
   STATE.FROZEN.forEach(f => ck('K', f + ' FROZEN', !changed.includes(f)));
   STATE.DEFERRED.forEach(f => ck('K', f + ' DEFERRED to 2.5', !changed.includes(f)));
-  ['shared-header.js', 'food.html', 'profile.js', 'seller-wiring.js']
-    .forEach(f => ck('K', f + ' left for 2.3.7', !changed.includes(f)));
+  /* Read from the shared state, never a list typed here. This assertion originally
+     hardcoded four names and went stale the moment 2.3.7 migrated two of them — the
+     fourth per-suite list to do so in this track, and written AFTER the shared registry
+     existed. If a suite needs to know what is unmigrated, it asks. */
+  STATE.PENDING.forEach(f => ck('K', f + ' still pending', !changed.includes(f)));
 }
 
 console.log('\n' + '='.repeat(66));

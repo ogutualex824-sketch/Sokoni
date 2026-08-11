@@ -23,6 +23,7 @@ const MIGRATED = [
   'flashsale.html', 'business.html', 'ministore.html',          /* 2.3 surface 4 */
   'wishlist.html',                                            /* 2.3 surface 5 */
   'cart.js',                                                  /* 2.3 surface 6 */
+  'cart.html', 'food.html', 'profile.js',                     /* 2.3 surface 7 readers */
 ];
 
 /* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
@@ -44,8 +45,12 @@ const DEFERRED = [
 /* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
-  'shared-header.js',
-  'food.html', 'profile.js', 'seller-wiring.js',
+  /* Both BLOCKED, not forgotten — see the 2.3.7 report and test-cart-readers.js E/F.
+     shared-header.js renders on 311 pages of which few load the service; migrating it
+     would hide the cart badge on most of the platform. seller-wiring.js reads the cart
+     only inside its checkout.html patch, and checkout.html is FROZEN so it cannot load
+     the service — migrating it would silently stop post-order stock decrements. */
+  'shared-header.js', 'seller-wiring.js',
 ];
 
 /* Dirty in the working tree for reasons that predate Track 2 — other tracks and build

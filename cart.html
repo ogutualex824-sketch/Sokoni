@@ -281,10 +281,16 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
    and the updateSummary wrapper below never ran. */
 /* ── Hero count — updated after cart.js renders ── */
 function _updateHeroCount(){
-  var cart=[]; try{cart=JSON.parse(localStorage.getItem('cart')||'[]');}catch(e){}
-  var total=cart.reduce(function(s,i){return s+(i.qty||1);},0);
+  /* Canonical (Track 2.3.7). This already summed (qty||1), so units() is a like-for-like
+     swap. Without the service there is no count to state — "0 items in cart" would assert
+     an empty cart the page cannot verify, which is precisely the reading a shopper would
+     act on. */
+  var C=window.SokoniCart;
   var el=document.getElementById('cartHeroCount');
-  if(el) el.textContent=total+' item'+(total!==1?'s':'')+' in cart';
+  if(!el) return;
+  if(!C){ el.textContent='Loading your cart…'; return; }
+  var total=C.units();
+  el.textContent=total+' item'+(total!==1?'s':'')+' in cart';
 }
 
 /* ── Wrap cart.js updateSummary to preserve applied promo ── */
@@ -341,13 +347,25 @@ function applyCartPromo(){
   }
 }
 
+/* Canonical (Track 2.3.7). The arithmetic stays HERE rather than moving into the service:
+   SokoniCart deliberately exposes no money helper, because a subtotal on a shared service
+   invites a call site to render it as the authoritative amount. The server decides that in
+   verifyIntasendPayment. This is a promo-preview figure and nothing more.
+
+   Returns null, not 0, when the cart cannot be read — a promo saving computed from a
+   fabricated zero would be a made-up number shown next to a real one. */
 function _cartSubtotal(){
-  var cart=[]; try{cart=JSON.parse(localStorage.getItem('cart')||'[]');}catch(e){}
-  return cart.reduce(function(s,p){return s+Number(p.price||0)*(p.qty||1);},0);
+  var C=window.SokoniCart;
+  if(!C) return null;
+  return C.list().reduce(function(s,p){return s+Number(p.price||0)*(p.qty||1);},0);
 }
 
 function _applyPromoToSummary(pct,code){
   var sub=_cartSubtotal();
+  /* null means the cart is unreadable. Every figure below is derived from `sub`, so
+     rendering them from a stand-in 0 would put three invented KES amounts on screen —
+     including a "saving" the shopper might act on. Leave the summary as it was. */
+  if(sub===null) return;
   var saving=pct>0?Math.round(sub*pct/100):0;
   var discEl=document.getElementById('summaryDiscount');
   var subEl=document.getElementById('summarySubtotal');
