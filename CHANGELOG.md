@@ -1,3 +1,67 @@
+## [2026-08-11] — P0 CLOSED: Shop Setup → Preview Store works end to end
+
+**Proven on production, in a real signed-in browser, with unmistakable values**
+(`KASS TEST 8472` / `PREMIUM TEST 8472`). `npm run qa:shop-flow` — **12/12**,
+verdict *"edit, save, reload, cold start and preview all agree"*. The probe seller,
+shop, handle and account are deleted on every exit path.
+
+### The distinction the diagnosis established
+
+The device flow was run BEFORE any fix, to separate three possibilities rather than guess:
+
+| stage | before | after |
+|---|---|---|
+| Save reported success | ✅ | ✅ |
+| Reload shows saved values | ✅ | ✅ |
+| Cold start shows saved values | ✅ | ✅ |
+| Preview Store navigated | ❌ stayed on `/seller#store` | ✅ `/shop/kass-test-8472` |
+| Preview Store shows the shop | ❌ | ✅ `KASS TEST 8472` |
+
+So it was **never the save path** and **never localStorage overwriting Firestore** —
+the data already survived both a reload and a cold start.
+
+### Root cause
+
+`goToMyStore()` resolved seller → `getMyMinishop` → `/shop/{handle}`, and a newly created
+KassShop **has no handle**. Claiming one was a separate step the seller had to discover, so
+the storefront was opt-in without saying so. With no handle the resolver returned null and
+the button routed back to Shop Setup — the page simply did not move. The shop was correct
+the whole time; it was unreachable.
+
+### Fixes
+
+1. **`saveShopProfile` provisions the handle** from the name already typed — transactional
+   against collisions (`mama-fua-cleaners`, then `-2`), honouring `claimMinishopHandle`'s
+   reserved list rather than a second copy that would drift. Best-effort: an unsluggable
+   name still saves, without a handle, because a shop that saved correctly must never be
+   reported as failed over its vanity URL. Returns `handle` + `storefrontUrl`.
+2. **Preview Store walks the canonical chain** — seller → owned shopId → canonical shop →
+   canonical handle → `/shop/{handle}`, via `getShopProfile`. Independent of form state;
+   works with Shop Setup closed.
+3. **Cold-start auth race hardened.** `swLoadCanonical` waited for App Check and the
+   callable but not the SESSION. On a force-quit reopen the callable exists before Firebase
+   restores auth, so `getShopProfile` could answer unauthenticated, be caught, and leave the
+   stale cache painted — the seller sees old values and concludes the save was lost. Now
+   awaits `waitForSokoniAuthReady()`.
+
+**Files:** `functions/kasshop.js`, `functions/minishop.js`, `seller.html`,
+`scripts/test-kasshop-boundary.js`, `scripts/qa/shop-setup-preview-flow.mjs`,
+`scripts/qa/run-shop-setup-flow.js`
+**Deployed:** `saveShopProfile`, `getShopProfile`, hosting v511 (`59dd62d`)
+**Tests:** 79/79 boundary (13 new on provisioning/collision/unsluggable) · 12/12 device flow
+**Breaking:** none — `saveShopProfile` gains `handle` + `storefrontUrl`
+
+### Corrections to my own verification
+
+- The harness ranked *"Save reported success"* above actual persistence and printed
+  `SAVE PATH — the save itself did not complete` on a run where reload **and** cold start
+  both passed. A diagnostic that misnames the failing stage is worse than none; the verdict
+  now derives from whether the data survived.
+- `wipe()` did not clear `shopHandles`, so a suite section inherited an earlier handle and
+  asserted against a name it never set.
+
+---
+
 ## [2026-08-11] — feat(kasshop): storefront reads the shop's real state (Phase 2, increment 2)
 
 **The storefront had a second availability implementation.** `_getOpenStatus(config)` in
