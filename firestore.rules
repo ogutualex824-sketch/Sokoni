@@ -1687,6 +1687,7 @@ service cloud.firestore {
                                                       'pickedUpAt','deliveredAt','arrivedAtSellerAt',
                                                       'acceptedAt','etaMin','payoutDue','proofNote',
                                                       'driverLat','driverLng','driverSpeed',
+                                                      'driverLocUpdatedAt',
                                                       'timeline','_lastTimelineEntry'])
                         && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
                             || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
@@ -1773,11 +1774,19 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.senderUid   == request.auth.uid
                         && !request.resource.data.diff(resource.data).affectedKeys()
                             .hasAny(['senderUid','deliveryFee','proofPIN']))
+                    /* driverLat/driverLng/driverLocUpdatedAt let the assigned rider
+                       publish their live position onto the delivery record itself.
+                       deliveryLocations is rider/admin-only, so this mirror is the
+                       sender's ONLY readable source for the live tracking map. Read
+                       access is unchanged — still sender, rider, or admin. */
                     || (isAuthed() && resource.data.assignedRiderId == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys()
                             .hasOnly(['status','timeline','updatedAt','assignedRiderId',
                                       'riderName','riderPhone','riderAt','pickedUpAt',
-                                      'deliveredAt','etaMin']));
+                                      'deliveredAt','etaMin',
+                                      'driverLat','driverLng','driverLocUpdatedAt'])
+                        && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
+                            || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
       allow delete: if isAdmin();
     }
 
