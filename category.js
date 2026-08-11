@@ -165,13 +165,24 @@ if(_sortParam === "picks") {
 
 document.getElementById("catCount").textContent = `${filtered.length} product${filtered.length !== 1 ? "s" : ""} found`;
 
-/* Cart count */
+/* Cart count — canonical, and counting UNITS (Track 2.3).
+   #catCartCount is the 🛒 pip in this page's nav, beside the header pip that
+   shared-header.js renders with Σ(qty||1). This read array length, so the two badges sat
+   on screen disagreeing whenever an item carried a qty field — the same contradiction
+   fixed on the market-actions surfaces. A cart pip means "how many things are in my
+   cart", so units() is the honest reading. */
 const updateCartCount = () => {
-    const c = JSON.parse(localStorage.getItem("cart") || "[]");
     const el = document.getElementById("catCartCount");
-    if(el) el.textContent = c.length;
+    if(!el) return;
+    const c = window.SokoniCart;
+    /* Without the service there is no count to state. Leaving the markup's placeholder
+       0 in place would assert an empty cart the page cannot actually verify. */
+    el.textContent = c ? c.units() : "—";
 };
 updateCartCount();
+/* Also refresh when any other surface changes the cart — previously this pip only
+   updated from this page's own writes and went stale until reload. */
+try { window.addEventListener("sokoni:cart-changed", updateCartCount); } catch (_) {}
 
 /* ── VARIANT FILTERS ────────────────────────────────────────────────────────
    Facets are derived from the products actually in view, not from a per-category
@@ -466,20 +477,19 @@ function showNotif(msg, type){
     setTimeout(() => n.remove(), 3000);
 }
 
-/* Persist through the platform's single synchronisation signal.
+/* Cart persistence is NOT here any more (Track 2.3).
 
-   This page wrote localStorage directly and called its own updateCartCount(),
-   which only reaches badges on this page. The header pip is owned by
-   shared-header.js and listens for sokoni:cart-changed, so a category add
-   updated the cart correctly and left the header stale — the same defect
-   package 2 fixed everywhere else. Routing through here means the category
-   page needs no knowledge of which widgets exist. */
-function _saveCatCart(arr){
-  try { localStorage.setItem("cart", JSON.stringify(arr)); }
-  catch (e) { console.error("[SOKONI] Could not save cart: " + e.message); return false; }
-  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: arr.length } })); } catch (_) {}
-  return true;
-}
+   _saveCatCart wrote localStorage and dispatched sokoni:cart-changed itself — the right
+   idea, one of thirteen copies of it. SokoniCart owns both halves now: one write path,
+   one announcement, and the corruption quarantine this copy never had.
+
+   The original note is worth keeping because it explains why the event matters: this page
+   used to write localStorage and call only its own updateCartCount(), which reaches
+   badges on this page alone. The header pip is owned by shared-header.js and listens for
+   sokoni:cart-changed, so a category add updated the cart correctly and left the header
+   stale. Going through the service means the category page needs no knowledge of which
+   widgets exist. */
+function _cartSvc(){ return window.SokoniCart || null; }
 
 /* CART */
 async function addToCart(id){
@@ -493,16 +503,27 @@ async function addToCart(id){
         }
     }
 
-    const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
+    const cart = _cartSvc();
+    /* Fails closed. Writing localStorage directly as a fallback is what this migration
+       removes, and a button that appears to work while storing nothing is worse than one
+       that admits it cannot. */
+    if(!cart){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+
     /* Match marketplace behaviour: adding the same product twice is a no-op
        rather than a second line item. market-actions.js has always done this;
        this path did not, so a double tap produced duplicate rows. */
-    if (cartData.some(c => String(c.id) === String(product.id))) {
+    if (cart.has(String(product.id))) {
         showNotif("Already in cart 🛒", "info");
         return;
     }
-    cartData.push(product);
-    _saveCatCart(cartData);
+    /* The return value is now checked. _saveCatCart already reported failure correctly —
+       and this call site threw the answer away and showed "Added to cart 🛒" regardless,
+       so a full quota told the shopper their item was saved when nothing had been
+       written. A success toast must follow the write, never accompany it. */
+    if(!cart.add(product)){
+        showNotif("Couldn't add to cart — please try again", "error");
+        return;
+    }
     updateCartCount();
     showNotif("Added to cart 🛒", "success");
     try {
@@ -579,8 +600,20 @@ async function buyNowCat(id){
     }
 
     /* Buy Now = express-checkout THIS item only — REPLACE the cart, don't append to
-       stale/accumulated entries (appending charged the whole cart instead of 1 unit). */
-    localStorage.setItem("cart", JSON.stringify([product]));
+       stale/accumulated entries (appending charged the whole cart instead of 1 unit).
+
+       replace() swaps the cart in ONE write; clear()+add() would leave the shopper with
+       nothing at all if the second write failed. And the navigation now depends on the
+       write: it used to run unconditionally, so a storage failure sent the shopper to
+       checkout with the PREVIOUS cart still loaded — express-checkout for an item they
+       had not chosen, at a total they had never seen. Identical to the defect found on
+       product.js, in a second copy of the same code. */
+    const cart = _cartSvc();
+    if(!cart){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
+    if(!cart.replace([product])){
+        showNotif("Couldn't start checkout — please try again", "error");
+        return;
+    }
     window.location.href = "checkout.html";
 }
 

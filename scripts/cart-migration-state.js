@@ -18,6 +18,7 @@ const MIGRATED = [
   'market-actions.js',                                        /* 2.2B */
   'car-hub.html', 'category.html', 'healthcare.html', 'index.html', 'services.html',
   'product.js', 'product.html',                               /* 2.3 surface 1 */
+  'category.js',                                              /* 2.3 surface 2 */
 ];
 
 /* Must not change until their own slice. checkout.html is 2.4; provider-wiring.js carries
@@ -27,7 +28,7 @@ const FROZEN = ['checkout.html', 'provider-wiring.js'];
 /* Not yet migrated — asserted untouched so a slice cannot quietly reach ahead of itself.
    Move an entry from here to MIGRATED when its slice lands. */
 const PENDING = [
-  'category.js', 'script.js', 'cart.js', 'shared-header.js',
+  'script.js', 'cart.js', 'shared-header.js',
   'flashsale.html', 'business.html', 'ministore.html', 'wishlist.html',
   'food.html', 'profile.js', 'seller-wiring.js',
 ];
@@ -48,13 +49,23 @@ const INFRASTRUCTURE = [
   'docs/CART_PERSISTENCE_AUDIT.md',
 ];
 
+/* Test fixtures that write localStorage['cart'] ON PURPOSE and stay that way.
+   rc-02-buyer.js seeds a cart to exercise the buyer flow end to end; routing it through
+   SokoniCart would make it test the service instead of the integration, and would mask
+   exactly the behaviour it exists to catch. Classified explicitly so the final legacy
+   sweep reports it as a decision rather than an unexplained survivor. */
+const TEST_HARNESS = [
+  'tests/rc/suites/rc-02-buyer.js',
+];
+
 const isSuite = (f) => /^scripts\/(test-cart-|cart-migration-state)/.test(f);
 
 /* Anything dirty that none of the above explains. */
 function unexpected(changed) {
   return changed.filter(f =>
     !MIGRATED.includes(f) && !PRE_EXISTING.includes(f) &&
-    !INFRASTRUCTURE.includes(f) && !isSuite(f));
+    !INFRASTRUCTURE.includes(f) && !TEST_HARNESS.includes(f) && !isSuite(f));
 }
 
-module.exports = { MIGRATED, FROZEN, PENDING, PRE_EXISTING, INFRASTRUCTURE, isSuite, unexpected };
+module.exports = { MIGRATED, FROZEN, PENDING, PRE_EXISTING, INFRASTRUCTURE,
+                   TEST_HARNESS, isSuite, unexpected };
