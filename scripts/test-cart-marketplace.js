@@ -278,8 +278,9 @@ console.log('\nK. script.js and index.html leave no second persistence path');
     const s = stripComments(read(f));
     return /localStorage\s*(?:\.\s*getItem\s*\(\s*|\[\s*)["'](cart|sokoniCart)["']/.test(s);
   });
-  ck('K', 'the only remaining direct reader is shared-header.js (2.3.7)',
-     readers.length === 1 && readers[0] === 'shared-header.js', readers.join(', '));
+  /* Was "the only remaining direct reader is shared-header.js". 2.6 migrated it, so the
+     page now has no direct cart reader at all besides the service. */
+  ck('K', 'no direct cart reader remains on this page', readers.length === 0, readers.join(', '));
 }
 
 /* ══ L. perimeter ══ */

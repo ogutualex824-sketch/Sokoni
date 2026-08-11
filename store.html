@@ -377,6 +377,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SOKONI">
 <link rel="stylesheet" href="compact-grid.css">
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>

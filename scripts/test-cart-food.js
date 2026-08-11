@@ -296,8 +296,11 @@ console.log('\nJ. sokoniCart is now touched only by the bridge itself');
      !nonBridge.some(h => h.file === 'inspiq.js'), nonBridge.map(h => h.file).join(', '));
   ck('J', 'nothing outside provider-wiring.js touches sokoniCart',
      nonBridge.length === 0, nonBridge.map(h => h.file + ':' + h.line).join(', '));
-  ck('J', 'the bridge itself still does — that is 2.6\'s to remove',
-     hits.some(h => h.file === 'provider-wiring.js'));
+  /* Was "the bridge itself still does — that is 2.6's to remove". 2.6 removed it, so
+     nothing anywhere touches sokoniCart now. */
+  ck('J', 'and the bridge is gone too — 2.6 removed it',
+     !hits.some(h => h.file === 'provider-wiring.js'),
+     hits.map(h => h.file + ':' + h.line).join(', '));
   ck('J', 'inspiq.js now scores off the canonical cart', /SokoniCart/.test(stripComments(read('inspiq.js'))));
   ck('J', 'and inspiq.html loads the service', /src="sokoni-cart\.js"/.test(read('inspiq.html')));
 }
@@ -307,12 +310,16 @@ console.log('\nK. Perimeter — 2.6 has not started');
 {
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ck('K', 'provider-wiring.js UNTOUCHED', !changed.includes('provider-wiring.js'), changed.join(', '));
-  ck('K', 'the setItem interceptor is still in place',
-     /localStorage\.setItem\s*=/.test(stripComments(read('provider-wiring.js'))));
-  ck('K', 'shared-header.js UNTOUCHED — still 2.6', !changed.includes('shared-header.js'));
-  ck('K', 'shared-header.js is still declared BLOCKED',
-     STATE.BLOCKED_FILES.includes('shared-header.js'));
+  /* These four asserted that 2.6 had not started. It has. Inverted rather than deleted,
+     so the block still fails if the interceptor or the header regresses. */
+  ck('K', 'the cart interceptor is gone from provider-wiring.js',
+     !/["'](cart|sokoniCart)["']/.test(stripComments(read('provider-wiring.js'))));
+  ck('K', 'its unrelated provider/booking setItem watchers remain',
+     (stripComments(read('provider-wiring.js')).match(/localStorage\.setItem\s*=/g) || []).length === 2);
+  ck('K', 'shared-header.js is migrated', !STATE.BLOCKED_FILES.includes('shared-header.js'));
+  ck('K', 'no survivors remain declared at all',
+     STATE.BLOCKED_FILES.length === 0 && STATE.FROZEN_FILES.length === 0 &&
+     STATE.DEFERRED_FILES.length === 0);
   ck('K', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
   ck('K', 'the saveAndRedirect fallback total is still untouched',

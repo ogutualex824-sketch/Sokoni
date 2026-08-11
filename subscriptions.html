@@ -137,6 +137,9 @@
 
     @media(max-width:600px){.plans-grid{grid-template-columns:1fr;}}
   </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>

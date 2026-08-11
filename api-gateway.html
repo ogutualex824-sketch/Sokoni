@@ -10,6 +10,9 @@
   <title>API Gateway — SOKONI</title>
   <meta name="robots" content="noindex,nofollow">
   <script src="sokoni-config.js"></script>
+  <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+       through SokoniCart; without this tag the pip cannot render a count. -->
+  <script src="sokoni-cart.js"></script>
   <script src="shared-header.js"></script>
   <style>
     :root{--bg:#050505;--surface:#0e0e0e;--card:#111;--border:#1a1a1a;--muted:#2a2a2a;

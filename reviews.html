@@ -106,6 +106,9 @@
 @media(max-width:540px) { .reviews-list { grid-template-columns:repeat(3,1fr) !important; } }
 @media(max-width:360px) { .reviews-list { grid-template-columns:repeat(2,1fr) !important; } }
 </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>

@@ -8,6 +8,10 @@
 <script src="security.js"></script>
 <script type="module" src="sokoni-init.js"></script>
 <script src="auth-guard.js"></script>
+<!-- Canonical cart access path (Track 2.6). shared-header.js here is NOT deferred,
+     so this must sit above it or the pip renders before the service exists. It also
+     still precedes sokoni-food.js further down. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -113,9 +117,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 </head>
 <body>
 <script src="splash.js"></script>
-<!-- Canonical cart access path (Track 2.5). sokoni-food.js reaches the cart only
-     through SokoniCart; without this tag its cart cannot be read or written. -->
-<script src="sokoni-cart.js"></script>
 <script src="sokoni-food.js"></script>
 
 <nav class="fn">

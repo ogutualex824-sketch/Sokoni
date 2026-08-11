@@ -3,7 +3,7 @@
    Fixes all cross-hub provider & booking gaps in one file.
    Auto-loaded on every page via security.js injection.
    ─────────────────────────────────────────────────────────────────
-   1. FOOD CART BRIDGE   sokoniCart ↔ cart (fixes food checkout)
+   1. (removed 2.6)      the sokoniCart ↔ cart bridge and its global setItem patch
    2. PROVIDER SYNC      any hub's provider save → Firestore providers
    3. BOOKING SYNC       car / BnB / ride bookings → Firestore bookings
    4. DISCOVERY PULL     hub pages without local data pull from Firestore
@@ -15,7 +15,6 @@
   const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
   let _db  = null;
   let _uid = null;
-  let _bridging = false;  /* recursion guard for cart bridge */
 
   function _getDb() {
     if (_db) return _db;
@@ -59,55 +58,36 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     1. FOOD CART BRIDGE — sync sokoniCart ↔ cart
-     food.html uses "sokoniCart", checkout cart.html uses "cart"
+     1. FOOD CART BRIDGE — REMOVED (Track 2.6)
+
+     This kept two carts in step: localStorage['sokoniCart'] and localStorage['cart'],
+     because food.html once used one key and cart.html the other. It did so by MONKEY-
+     PATCHING localStorage.setItem globally — on the ~288 pages security.js injects this
+     file into — so every cart write anywhere mirrored itself into the other key, plus a
+     _mergeCarts() pass on load that merged them back together.
+
+     There is one cart now. sokoni-food.js reads and writes the same 'cart' key through
+     SokoniCart (2.5), and inspiq.js — the last thing that read the sokoniCart mirror —
+     moved with it. Nothing outside this file has touched sokoniCart since.
+
+     NO COMPATIBILITY WRITER IS LEFT BEHIND. Keeping the mirror "just in case" would
+     recreate the second store this whole track exists to remove, and a global setItem
+     patch is not something to leave running for a reader that no longer exists.
+
+     What the bridge cost while it ran, both found during this track:
+
+       - removeItem was invisible to it. Post-order clearing used
+         localStorage.removeItem('cart'), so the mirror kept the ordered items and the
+         next page load's _mergeCarts() pushed them straight back into the cart. Items
+         reappeared after a completed order (fixed in 2.4 by clearing through the service,
+         which writes via setItem).
+       - _mergeCarts() merged by `id`, and food rows key on `itemId` with no `id` at all,
+         so every food row looked like a distinct item on every pass.
+
+     Stale localStorage['sokoniCart'] values are left on devices deliberately: nothing
+     reads them, and deleting user data to tidy a key we no longer use is not this
+     slice's business.
   ═══════════════════════════════════════════════════════════════ */
-
-  function _mergeCarts() {
-    try {
-      const sc  = JSON.parse(localStorage.getItem('sokoniCart') || '[]');
-      const mc  = JSON.parse(localStorage.getItem('cart')       || '[]');
-      const scIds = new Set(sc.map(i => i.id));
-      const mcIds = new Set(mc.map(i => i.id));
-
-      /* Merge food items into main cart */
-      if (sc.length > 0) {
-        const merged = [...mc];
-        sc.forEach(item => { if (!mcIds.has(item.id)) merged.push(item); });
-        if (merged.length !== mc.length) {
-          localStorage.setItem('cart', JSON.stringify(merged));
-        }
-      }
-
-      /* Merge main cart items into sokoniCart so food.html badge counts match */
-      if (mc.length > 0) {
-        const merged2 = [...sc];
-        mc.forEach(item => { if (!scIds.has(item.id)) merged2.push(item); });
-        if (merged2.length !== sc.length) {
-          localStorage.setItem('sokoniCart', JSON.stringify(merged2));
-        }
-      }
-    } catch(e) {}
-  }
-
-  /* Patch localStorage.setItem to keep carts in sync in real time */
-  (function _patchCartBridge() {
-    const prev = localStorage.setItem;
-    localStorage.setItem = function(key, value) {
-      prev.call(this, key, value);
-      if (_bridging) return;
-      if (key === 'sokoniCart') {
-        _bridging = true;
-        try { prev.call(this, 'cart', value); } finally { _bridging = false; }
-      } else if (key === 'cart') {
-        _bridging = true;
-        try { prev.call(this, 'sokoniCart', value); } finally { _bridging = false; }
-      }
-    };
-  }());
-
-  /* Run merge on load (covers food→cart.html redirect) */
-  _mergeCarts();
 
   /* ═══════════════════════════════════════════════════════════════
      2. PROVIDER SYNC — write to Firestore providers collection
@@ -470,7 +450,6 @@
 
   /* ── Public API ── */
   window.ProviderWiring = {
-    mergeCarts       : _mergeCarts,
     writeProvider    : _writeProvider,
     pullProviders    : _pullProvidersForHub,
   };

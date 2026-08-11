@@ -27,6 +27,7 @@ const MIGRATED = [
   'checkout.html', 'seller-wiring.js',                        /* 2.4 checkout boundary */
   'sokoni-food.js', 'inspiq.js', 'inspiq.html',               /* 2.5 food cart + sokoniCart */
   'food-menu.html', 'food-order.html', 'food-dashboard.html', 'food-rider.html',
+  'shared-header.js', 'provider-wiring.js',                    /* 2.6 rollout + interceptor removed */
 ];
 
 /* ── SURVIVORS ────────────────────────────────────────────────────────────────
@@ -39,12 +40,12 @@ const MIGRATED = [
    Every entry is {file, phase, reason} — a bare name would let the next reader assume it
    was simply missed. */
 
-const FROZEN = [
-  { file: 'provider-wiring.js', phase: '2.6',
-    reason: 'Carries the global localStorage.setItem interceptor that mirrors cart <-> ' +
-            'sokoniCart, injected by security.js on ~288 pages. Removing it requires ' +
-            'every legitimate dependency to be gone first.' },
-];
+/* Emptied by 2.6. provider-wiring.js carried the global setItem interceptor that
+   mirrored cart <-> sokoniCart; with the food cart and inspiq.js migrated in 2.5 the
+   mirror had no consumer left, and it was removed rather than kept as a compatibility
+   writer. The file still patches setItem for PROVIDER and BOOKING keys — a different
+   feature, untouched, and neither watches a cart key. */
+const FROZEN = [];
 
 /* Emptied by 2.5. sokoni-food.js was the only entry: a complete parallel cart
    implementation on the same key, which moved onto SokoniCart together with the last
@@ -55,13 +56,10 @@ const DEFERRED = [];
 /* Blocked by a boundary this track deliberately will not cross. Both were assessed in
    2.3.7 and left alone; shared-header.js was migrated and then REVERTED when the reach
    was measured. */
-const BLOCKED = [
-  { file: 'shared-header.js', phase: '2.6',
-    reason: 'Renders on 311 pages, of which 12 load sokoni-cart.js. Migrating it turns ' +
-            'the cart pip from a number into hidden on 299 pages. This is a platform-wide ' +
-            'dependency rollout, not a reader migration — and it shares its precondition ' +
-            'with removing the interceptor.' },
-];
+/* Emptied by 2.6. shared-header.js was the last direct cart reader; it could not move
+   until the service loaded on all 311 pages that carry it, which is what the rollout in
+   this slice did first. */
+const BLOCKED = [];
 
 /* Name-only views, for the assertions that just need a list. */
 const FROZEN_FILES   = FROZEN.map(e => e.file);
@@ -104,11 +102,42 @@ const TEST_HARNESS = [
    the moment 2.3.8 touched it. */
 const isSuite = (f) => /^scripts\/(test-cart-|cart-migration-state|scan-cart-writers)/.test(f);
 
+/* The 2.6 rollout added <script src="sokoni-cart.js"> to 293 pages. Listing them by name
+   in MIGRATED would be 293 lines that say nothing a reader could check, and would need
+   editing every time a page is added. They are explained STRUCTURALLY instead: a dirty
+   .html whose diff is only the service tag and its comment is the rollout, and anything
+   else in an .html is not. */
+const ROLLOUT_ONLY = /^[+-]\s*(<!-- Canonical cart access path|through SokoniCart;|<script src="sokoni-cart\.js"><\/script>|NOT deferred|so this must sit above it|still precedes sokoni-food|the pip renders before|\s*)$/;
+
+function isRolloutOnly(file, diff) {
+  if (!/\.html$/.test(file) || !diff) return false;
+  const lines = diff.split('\n').filter(l => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+  if (!lines.length) return false;
+  if (!lines.some(l => /sokoni-cart\.js/.test(l))) return false;
+  /* Allow the tag block, blank lines, and a line that merely got SPLIT (its content
+     reappears on the other side of the diff). */
+  const added = lines.filter(l => l[0] === '+').map(l => l.slice(1).trim());
+  const removed = lines.filter(l => l[0] === '-').map(l => l.slice(1).trim());
+  return removed.every(r => !r || added.some(a => a.indexOf(r) > -1) ||
+                            r.split('><').every(part => added.some(a => a.indexOf(part) > -1)));
+}
+
 /* Anything dirty that none of the above explains. */
-function unexpected(changed) {
-  return changed.filter(f =>
-    !MIGRATED.includes(f) && !PRE_EXISTING.includes(f) &&
-    !INFRASTRUCTURE.includes(f) && !TEST_HARNESS.includes(f) && !isSuite(f));
+function unexpected(changed, diffOf) {
+  return changed.filter(f => {
+    if (MIGRATED.includes(f) || PRE_EXISTING.includes(f) ||
+        INFRASTRUCTURE.includes(f) || TEST_HARNESS.includes(f) || isSuite(f)) return false;
+    if (typeof diffOf === 'function' && isRolloutOnly(f, diffOf(f))) return false;
+    /* Without a diff getter, fall back to "is it an .html that now loads the service" —
+       enough for the suites that only pass a file list. */
+    if (/\.html$/.test(f)) {
+      try {
+        const src = require('fs').readFileSync(require('path').resolve(__dirname, '..', f), 'utf8');
+        if (/src="sokoni-cart\.js"/.test(src)) return false;
+      } catch (e) { /* fall through */ }
+    }
+    return true;
+  });
 }
 
 module.exports = {
@@ -121,5 +150,5 @@ module.exports = {
      assert against "surfaces not migrated yet", and at close of 2.3 that set is exactly
      the two blocked readers. Kept so those assertions keep meaning what they meant. */
   PENDING: BLOCKED_FILES,
-  isSuite, unexpected,
+  isSuite, unexpected, isRolloutOnly,
 };

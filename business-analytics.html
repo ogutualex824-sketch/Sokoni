@@ -306,6 +306,9 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-intasend.js" defer></script>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 <script src="scroll-top.js" defer></script>
 <script src="sw-register.js" defer></script>

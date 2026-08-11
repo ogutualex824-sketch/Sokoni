@@ -1243,11 +1243,22 @@
 
   /* ── Read user + cart from localStorage ── */
   function _readState() {
-    let user = null, cartCount = 0, hasNotif = false;
+    let user = null, cartCount = null, hasNotif = false;
     try { user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
+    /* Canonical (Track 2.6). This header renders on 311 pages and was the LAST direct
+       cart reader — it could not migrate until the service loaded on all of them, which
+       is what this slice did first.
+
+       Its formula, Σ(qty||1), is the one every other badge converged ON, so units() is a
+       like-for-like swap and this number does not move.
+
+       cartCount starts as NULL, not 0. "No service" and "empty cart" must stay
+       distinguishable: a shopper with items in the cart must never see the pip quietly
+       report nothing-in-particular. Null hides the pip; a real 0 hides it too, and any
+       positive count shows it — exactly as before. */
     try {
-      const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-      cartCount = cart.reduce((s, i) => s + (i.qty || 1), 0);
+      const C = window.SokoniCart;
+      if (C) cartCount = C.units();
     } catch (e) {}
     try { hasNotif = !!localStorage.getItem('sokoniHasNotif'); } catch (e) {}
     return { user, cartCount, hasNotif };
@@ -1332,7 +1343,10 @@
 
         /* Cart */
         '<a href="cart.html" id="sk-nav-cart" aria-label="Shopping cart">' +
-          '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount || 0) + ' items">' + (cartCount || 0) + '</span>' +
+          /* `cartCount || 0` would render an unreadable cart as "0 items" in the aria
+             label — a screen reader would announce an empty cart the page cannot verify.
+             Blank text and a neutral label when the count is unknown. */
+          '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount == null ? 'Cart' : cartCount + ' items') + '">' + (cartCount == null ? '' : cartCount) + '</span>' +
         '</a>' +
 
         /* Avatar / Profile — opens account dropdown */
@@ -1589,7 +1603,10 @@
 
     const pip = document.getElementById('sk-nav-cart-pip');
     if (pip) {
-      pip.textContent = cartCount;
+      /* Null means the cart could not be read. Writing it straight into textContent put
+         the literal string "null" in the pip — invisible only because display happens to
+         be none. Hidden and empty, not hidden and wrong. */
+      pip.textContent = (cartCount == null) ? '' : cartCount;
       pip.style.display = cartCount > 0 ? 'flex' : 'none';
     }
 

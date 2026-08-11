@@ -13,6 +13,9 @@
 <!-- Canonical Firebase config (window.SOKONI_FIREBASE_CONFIG). Classic blocking script:
      must be defined before any initializeApp() on this page. -->
 
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}

@@ -596,6 +596,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060606;color:#fff;m
 <div class="ec-toast" id="ecToast"></div>
 
 <!-- Shared header -->
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js"></script>
 <script src="auth-guard.js"></script>
 

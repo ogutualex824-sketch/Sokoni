@@ -230,8 +230,8 @@ console.log('\nI. No direct cart persistence remains on this page');
   ck('I', 'no other cart writer in page scope', writers.length === 0,
      writers.map(h => h.file + ':' + h.line).join(', '));
   const readers = hits.filter(h => h.key === 'cart' && h.kind === 'READ' && h.file !== 'sokoni-cart.js');
-  ck('I', 'the only remaining reader is shared-header.js (2.3.7)',
-     readers.length === 1 && readers[0].file === 'shared-header.js',
+  /* Was "the only remaining reader is shared-header.js". 2.6 migrated it. */
+  ck('I', 'no direct cart reader remains on this page', readers.length === 0,
      readers.map(h => h.file).join(', '));
 }
 

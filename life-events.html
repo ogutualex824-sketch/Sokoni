@@ -106,6 +106,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:white;
   .le-event-hub-tag{font-size:9px;padding:2px 7px;}
 }
 </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-premium-v2.css">
   <link rel="stylesheet" href="sokoni-desktop.css">

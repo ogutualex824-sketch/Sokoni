@@ -16,6 +16,9 @@
 <script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
 <!-- Home header (injects #sk-top-nav) so the earnings page matches the home page. -->
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 <style>
   :root{

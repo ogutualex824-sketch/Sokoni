@@ -268,6 +268,9 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
 /* ── NOTIFICATION BADGE ON TABS ── */
 .pv-badge{display:inline-flex;align-items:center;justify-content:center;background:#ff4444;color:white;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;margin-left:5px;}
   </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>

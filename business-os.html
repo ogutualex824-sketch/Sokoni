@@ -129,6 +129,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .bo-empty{padding:32px;text-align:center;color:rgba(255,255,255,0.28);font-size:12px;}
 .bo-empty-icon{font-size:32px;margin-bottom:8px;opacity:.4;}
 </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 </head>
 <body>

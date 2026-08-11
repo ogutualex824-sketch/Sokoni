@@ -10,6 +10,9 @@
        to login before the wallet shell paints; the async onAuthStateChanged gate
        in sokoni-wallet-v2.js remains as the live-session backstop. -->
   <script src="auth-guard.js"></script>
+  <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+       through SokoniCart; without this tag the pip cannot render a count. -->
+  <script src="sokoni-cart.js"></script>
   <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">

@@ -16,6 +16,9 @@
 <link rel="stylesheet" href="mobile.css">
 <link rel="stylesheet" href="sokoni-desktop.css">
 <link rel="stylesheet" href="leaflet.min.css">
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 <style>
   :root { --green:#71ff00; --blue:#00aaff; --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08); }

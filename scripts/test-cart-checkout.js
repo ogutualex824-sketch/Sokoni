@@ -170,10 +170,17 @@ console.log('\nD. Ordered items no longer reappear after checkout');
     const g2 = sandbox({ withBridge: true, seed: g.store });
     return { mirrored: mirrored, afterReload: g2.store.cart };
   }
-  const bad = orderThenReload('removeItem');
-  ck('D', 'CONTROL: the bridge does mirror the cart on write', !!bad.mirrored, bad.mirrored);
-  ck('D', 'CONTROL: removeItem leaves the items to come back',
-     JSON.parse(bad.afterReload || '[]').length === 2, bad.afterReload);
+  /* RETIRED by 2.6. Two CONTROLs here demonstrated the defect live: that the bridge
+     mirrored every cart write, and that clearing with removeItem therefore left the items
+     to be restored on the next load. 2.6 deleted the bridge, so the MECHANISM no longer
+     exists and neither control can run — which is the correct outcome, not a regression.
+     The fix itself is still asserted below, and the reproduction is preserved in the 2.4
+     commit message and in docs/CART_PERSISTENCE_AUDIT.md. */
+  ck('D', 'the bridge that caused it is gone — nothing mirrors cart writes now',
+     !orderThenReload('removeItem').mirrored,
+     String(orderThenReload('removeItem').mirrored));
+  ck('D', 'so removeItem can no longer resurrect anything either',
+     JSON.parse(orderThenReload('removeItem').afterReload || '[]').length === 0);
   const good = orderThenReload('clear');
   ck('D', 'SokoniCart.clear() leaves nothing to restore',
      JSON.parse(good.afterReload || '[]').length === 0, good.afterReload);
@@ -272,11 +279,15 @@ console.log('\nI. Perimeter');
 {
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ck('I', 'provider-wiring.js UNTOUCHED — the interceptor is still 2.6\'s',
-     !changed.includes('provider-wiring.js'), changed.join(', '));
-  ck('I', 'sokoni-food.js UNTOUCHED — still 2.5', !changed.includes('sokoni-food.js'));
-  ck('I', 'shared-header.js UNTOUCHED — still 2.6', !changed.includes('shared-header.js'));
-  ck('I', 'the interceptor still exists', /localStorage\.setItem\s*=/.test(execOf('provider-wiring.js')));
+  /* These asserted the 2.5 and 2.6 boundaries had not been crossed yet. Both slices have
+     since run, so they are inverted: what must hold now is that the CART interceptor is
+     gone while the unrelated provider/booking watchers are not. */
+  ck('I', 'the cart interceptor is gone from provider-wiring.js',
+     !/["'](cart|sokoniCart)["']/.test(execOf('provider-wiring.js')));
+  ck('I', 'its two unrelated setItem watchers survive',
+     (execOf('provider-wiring.js').match(/localStorage\.setItem\s*=/g) || []).length === 2);
+  ck('I', 'shared-header.js is migrated',
+     !/localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(execOf('shared-header.js')));
   ck('I', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
   /* Repo-wide: checkout and seller-wiring should no longer be survivors. */
@@ -285,9 +296,10 @@ console.log('\nI. Perimeter');
   ck('I', 'checkout.html no longer touches the cart directly', !files.includes('checkout.html'),
      files.join(', '));
   ck('I', 'seller-wiring.js no longer touches the cart directly', !files.includes('seller-wiring.js'));
-  ck('I', 'the remaining survivors are exactly the 2.5/2.6 set',
-     files.filter(f => f !== 'sokoni-cart.js' && !STATE.TEST_HARNESS.includes(f)).sort().join(',') ===
-     ['provider-wiring.js', 'shared-header.js', 'sokoni-food.js'].sort().join(','),
+  /* Was "exactly the 2.5/2.6 set". Those phases have run; nothing is left but the
+     service and the classified harness. */
+  ck('I', 'nothing but the service and the harness touches the cart',
+     files.filter(f => f !== 'sokoni-cart.js' && !STATE.TEST_HARNESS.includes(f)).length === 0,
      files.join(', '));
 }
 

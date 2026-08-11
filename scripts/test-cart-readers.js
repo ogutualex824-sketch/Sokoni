@@ -153,27 +153,27 @@ console.log('\nD. profile.js dead cart count removed, not rerouted');
      /SokoniCart\.units\(\)/.test(read('profile.js')));
 }
 
-/* ══ E. shared-header.js DELIBERATELY NOT MIGRATED ══ */
-console.log('\nE. shared-header.js left on its direct read — and why');
+/* ── RETIRED by Track 2.6 ──────────────────────────────────────────────────────
+   This block asserted shared-header.js still read the cart directly, and MEASURED how few
+   pages loaded the service as the reason it could not move — 12 of 311. 2.6 rolled the
+   service out to all of them and migrated the header. The assertions are inverted rather
+   than deleted, so the block still fails if any of it regresses.
+   ───────────────────────────────────────────────────────────────────────────── */
+console.log('\nE. shared-header.js was unblocked by the 2.6 rollout');
 {
   const src = stripComments(read('shared-header.js'));
-  ck('E', 'it still reads the cart directly',
-     /localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(src));
-  ck('E', 'it still counts units — the formula everything converged on',
-     /reduce\(\(s,\s*i\)\s*=>\s*s\s*\+\s*\(i\.qty\s*\|\|\s*1\)/.test(src.replace(/\s+/g, ' ')) ||
-     /i\.qty\s*\|\|\s*1/.test(src));
-  /* The blocking fact, measured rather than asserted from memory. */
+  ck('E', 'no direct cart read remains',
+     !/localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(src));
+  ck('E', 'it reads units() — the formula it already used', /units\(\)/.test(src));
   const pages = cp.execSync('git grep -l "src=\\"shared-header.js\\"" -- "*.html" || true',
     { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const withSvc = pages.filter(p => /src="sokoni-cart\.js"/.test(read(p)));
-  ck('E', 'it is loaded on far more pages than load the service',
-     pages.length > 100 && withSvc.length < pages.length / 2,
-     withSvc.length + ' of ' + pages.length + ' pages load sokoni-cart.js');
-  ck('E', 'so migrating it would hide the badge on most of the platform',
-     pages.length - withSvc.length > 100, (pages.length - withSvc.length) + ' pages would lose it');
+  ck('E', 'every page carrying the header now loads the service',
+     withSvc.length === pages.length, withSvc.length + ' of ' + pages.length);
+  ck('E', 'so no page is left inert', pages.length - withSvc.length === 0);
 }
 
-/* ══ F. seller-wiring.js DELIBERATELY NOT MIGRATED ══ */
+/* ══ F. seller-wiring.js — migrated by 2.4 ══ */
 /* ── RETIRED by Track 2.4 ──────────────────────────────────────────────────────
    This block asserted that seller-wiring.js was BLOCKED: that it still read the cart
    directly, and that checkout.html was frozen and did not load the service. Every one of
@@ -247,8 +247,10 @@ console.log('\nI. Frozen and deferred surfaces');
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
   STATE.FROZEN_FILES.forEach(f => ck('I', f + ' FROZEN', !changed.includes(f)));
   STATE.DEFERRED_FILES.forEach(f => ck('I', f + ' DEFERRED to 2.5', !changed.includes(f)));
-  ck('I', 'shared-header.js was reverted, not left half-migrated',
-     !changed.includes('shared-header.js'), changed.join(', '));
+  /* Was "reverted, not left half-migrated" — correct while it was blocked. 2.6 migrated
+     it deliberately, so the assertion is now that it IS migrated and no longer blocked. */
+  ck('I', 'shared-header.js is migrated and no longer blocked',
+     !require('./cart-migration-state.js').BLOCKED_FILES.includes('shared-header.js'));
   /* Was "seller-wiring.js untouched" — true while it was blocked, and 2.4 was authorised
      to change it. shared-header.js is the one that must still be untouched, and it is
      asserted above via STATE. */

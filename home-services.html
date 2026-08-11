@@ -67,6 +67,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0805;color:white;
 .hs-wa-btn{width:100%;padding:10px;border:1px solid rgba(37,211,102,0.3);border-radius:10px;background:rgba(37,211,102,0.07);color:#25d366;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;margin-top:6px;}
 .hs-book-btn{width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;}
 </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-premium-v2.css">
   <link rel="stylesheet" href="sokoni-desktop.css">

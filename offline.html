@@ -21,6 +21,9 @@
     .btn-secondary{padding:14px 24px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);font-weight:700;font-size:14px;border-radius:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;}
     .status{margin-top:20px;font-size:11px;color:rgba(255,255,255,0.2);}
   </style>
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 </head>
 <body>

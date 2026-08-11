@@ -224,6 +224,9 @@ a{color:var(--acc);text-decoration:none}
   </div>
 </div>
 
+<!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+     through SokoniCart; without this tag the pip cannot render a count. -->
+<script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <script>
