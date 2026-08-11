@@ -160,20 +160,110 @@ window.SokoniMiniShop = (() => {
   }
 
   // ─── Open Status ─────────────────────────────────────────────────────────────
-  function _getOpenStatus(config) {
-    if (!config.hours) return null;
-    const now = new Date();
-    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-    const day = days[now.getDay()];
-    const h = config.hours[day];
-    if (!h || h.closed) return { open: false, label: 'Closed' };
-    const [oh, om] = (h.open || '00:00').split(':').map(Number);
-    const [ch, cm] = (h.close || '23:59').split(':').map(Number);
-    const current = now.getHours() * 60 + now.getMinutes();
-    const openMin = oh * 60 + (om || 0);
-    const closeMin = ch * 60 + (cm || 0);
-    const isOpen = current >= openMin && current < closeMin;
-    return { open: isOpen, label: isOpen ? 'Open' : 'Closed', closeAt: h.close };
+  /**
+   * Present the OPEN/CLOSED decision the server already made. Never decide it here.
+   *
+   * This used to re-derive the answer in the browser from `config.hours`, and it was
+   * wrong in four ways that all pointed the same direction — towards telling a customer
+   * a shut shop was open:
+   *
+   *   · it read a different source than the seller's own timetable
+   *   · it understood one open/close pair per day, not the canonical `periods[]`
+   *   · it ignored the live switch entirely, so "go offline" did nothing to the storefront
+   *   · it ignored date overrides, and used the visitor's clock rather than EAT
+   *
+   * KassShop Management, `publicShopState()` and this badge must agree, and the only way
+   * they can is if exactly one of them decides. That is the server.
+   *
+   * `null` means the state could not be resolved — the badge stays hidden rather than
+   * guessing "Open", because an invented fact about whether a real business is trading
+   * is worse than an absent one.
+   */
+  const _AVAILABILITY_LABEL = {
+    /* The seller switched the shop off. That is not the timetable closing — saying
+       "Closed" would imply they will be back at a scheduled hour. */
+    offline:       { label: 'Temporarily unavailable', cls: 'unavailable' },
+    closed_today:  { label: 'Closed today',            cls: 'closed' },
+    outside_hours: { label: 'Closed',                  cls: 'closed' },
+    within_hours:  { label: 'Open',                    cls: 'open' },
+    special_hours: { label: 'Open · special hours',    cls: 'open' },
+    no_schedule:   { label: 'Open',                    cls: 'open' },
+  };
+
+  function _renderAvailability(availability) {
+    const osEl = document.getElementById('msOpenStatus');
+    if (!osEl) return;
+    if (!availability) { osEl.hidden = true; return; }   /* unknown → say nothing */
+
+    const spec = _AVAILABILITY_LABEL[availability.reason] ||
+      { label: availability.open ? 'Open' : 'Closed', cls: availability.open ? 'open' : 'closed' };
+    osEl.textContent = spec.label;
+    osEl.className = 'ms-open-status ' + spec.cls;
+    osEl.hidden = false;
+
+    /* Fulfilment is a separate question from open/closed: a shop can be open for
+       collection while its riders are stood down. Only shown when the shop is open,
+       because "Delivery" beside "Closed" reads as an offer it cannot honour. */
+    const fEl = document.getElementById('msFulfilment');
+    if (fEl) {
+      const modes = [];
+      if (availability.delivery) modes.push('🛵 Delivery');
+      if (availability.pickup)   modes.push('🏬 Pickup');
+      const show = availability.open && modes.length;
+      fEl.textContent = show ? modes.join('  ·  ') : '';
+      fEl.hidden = !show;
+    }
+  }
+
+  /**
+   * The opening-hours calendar, drawn from the schedule the seller actually manages.
+   * Rendered only when there is a real timetable — an empty week grid tells a customer
+   * nothing and implies the shop never opens.
+   */
+  const _DAY_LABEL = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'],
+                      ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+
+  function _renderSchedule(schedule) {
+    const wrap = document.getElementById('msHours');
+    const body = document.getElementById('msHoursBody');
+    if (!wrap || !body) return;
+    const hours = schedule && schedule.hours;
+    if (!hours || !Object.keys(hours).length) { wrap.hidden = true; return; }
+
+    /* EAT (UTC+3) — the shop's clock, not the visitor's, so a customer abroad is not
+       told a Nairobi shop is open on their own timezone's Tuesday. */
+    const nowEat = new Date(Date.now() + 180 * 60000);
+    const todayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][nowEat.getUTCDay()];
+
+    body.innerHTML = _DAY_LABEL.map(([key, label]) => {
+      const cfg = hours[key];
+      const periods = cfg && Array.isArray(cfg.periods) ? cfg.periods : [];
+      const text = (!cfg || cfg.closed || !periods.length)
+        ? 'Closed'
+        : periods.map(p => _esc(p.open) + ' – ' + _esc(p.close)).join(', ');
+      const isToday = key === todayKey;
+      return '<div class="ms-hours-row' + (isToday ? ' is-today' : '') + '">' +
+               '<span class="ms-hours-day">' + label + (isToday ? ' · today' : '') + '</span>' +
+               '<span class="ms-hours-val">' + text + '</span>' +
+             '</div>';
+    }).join('');
+
+    /* A date override is the seller contradicting their own timetable on purpose, so it
+       is stated rather than silently folded into the grid. */
+    const ovEl = document.getElementById('msHoursOverride');
+    if (ovEl) {
+      const ymd = nowEat.toISOString().slice(0, 10);
+      const ov = schedule.overrides && schedule.overrides[ymd];
+      if (ov) {
+        ovEl.textContent = ov.closed === true
+          ? '⚠️ Closed today (special closure)'
+          : '⭐ Open today on special hours';
+        ovEl.hidden = false;
+      } else {
+        ovEl.hidden = true;
+      }
+    }
+    wrap.hidden = false;
   }
 
   // ─── Smart CTA ───────────────────────────────────────────────────────────────
@@ -580,16 +670,11 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       if (vbadge) vbadge.hidden = false;
     }
 
-    // Open/closed status
-    const openStatus = _getOpenStatus(config);
-    if (openStatus) {
-      const osEl = document.getElementById('msOpenStatus');
-      if (osEl) {
-        osEl.textContent = openStatus.label;
-        osEl.className = 'ms-open-status ' + (openStatus.open ? 'open' : 'closed');
-        osEl.hidden = false;
-      }
-    }
+    /* Open/closed + fulfilment + the timetable behind them — all server-decided.
+       `data.availability` is null when it could not be resolved, and the renderer
+       hides the badge rather than inventing a state. */
+    _renderAvailability(_state.availability);
+    _renderSchedule(_state.schedule);
 
     // Response time badge
     if (config.responseTime) {
@@ -789,6 +874,12 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       if (!res.ok) throw new Error('Server error ' + res.status);
       const data = await res.json();
       _state.shopId = data.shop?.id || data.shopId || '';
+      /* Carried on state rather than re-derived: these are the server's decision and
+         the seller's timetable, and nothing on this page may recompute either.
+         Undefined (an older function build) is normalised to null so the renderers
+         treat "not told" and "could not resolve" the same way — hidden, never guessed. */
+      _state.availability = data.availability || null;
+      _state.schedule     = data.schedule || null;
 
       if (statusMode) {
         _renderStatusMode(data);

@@ -375,6 +375,72 @@ ul, ol {
   color: var(--ms-danger);
 }
 
+/* The seller switched the shop off, as opposed to the timetable closing it. Amber
+   rather than red: it is a pause, not the end of trading hours, and the wording
+   ("Temporarily unavailable") deliberately makes no promise about when it lifts. */
+.ms-open-status.unavailable::before {
+  content: "●";
+  color: var(--ms-warning, #f5a623);
+}
+
+/* Fulfilment modes — shown only while the shop is open. */
+.ms-fulfilment {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ms-text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── Opening hours ──────────────────────────────────────────────────────────
+   A real timetable, not decoration: the rows come from the schedule the seller
+   manages, and today's row is marked so a customer can find it without reading
+   the whole week. */
+.ms-hours {
+  margin: 16px 12px;
+  padding: 14px 16px;
+  background: var(--ms-surface, rgba(255,255,255,0.03));
+  border: 1px solid var(--ms-border);
+  border-radius: 14px;
+}
+
+.ms-hours-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ms-text-muted);
+  margin: 0 0 10px;
+}
+
+.ms-hours-override {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ms-warning, #f5a623);
+  margin-bottom: 10px;
+}
+
+.ms-hours-body { display: flex; flex-direction: column; gap: 2px; }
+
+.ms-hours-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.ms-hours-row.is-today {
+  background: rgba(113, 255, 0, 0.08);
+  font-weight: 700;
+}
+
+.ms-hours-day { color: var(--ms-text-muted); }
+.ms-hours-row.is-today .ms-hours-day { color: var(--ms-accent, #71ff00); }
+.ms-hours-val { text-align: right; }
+
 .ms-response-badge {
   font-size: 12px;
   color: var(--ms-text-muted);

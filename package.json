@@ -63,7 +63,8 @@
     "test:pos-tabs": "node scripts/test-pos-tab-transitions.js",
     "test:product-delete": "node scripts/test-product-delete-canonical.js",
     "test:shop-hydration": "node scripts/test-shop-setup-hydration.js",
-    "verify:kasshop-live": "node scripts/verify-kasshop-live.js"
+    "verify:kasshop-live": "node scripts/verify-kasshop-live.js",
+    "qa:storefront": "node C:/Users/USER1/.claude/skills/browser-automation/browser.mjs http://localhost:3111/minishop.html?handle=qa --script scripts/qa/storefront-availability.mjs"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

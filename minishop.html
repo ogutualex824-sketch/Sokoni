@@ -119,8 +119,20 @@
     <div class="ms-trust-div" aria-hidden="true"></div>
     <div id="msOpenStatus" class="ms-open-status" hidden></div>
     <div class="ms-trust-div" aria-hidden="true"></div>
+    <div id="msFulfilment" class="ms-fulfilment" hidden></div>
+    <div class="ms-trust-div" aria-hidden="true"></div>
     <div id="msResponseBadge" class="ms-response-badge" hidden></div>
   </div>
+
+  <!-- ══ OPENING HOURS ══════════════════════════
+       Hidden until the seller has a real timetable: an empty week grid tells a
+       customer nothing and reads as "never open". Populated from the same
+       schedule KassShop Management writes — never from a separate calendar. -->
+  <section id="msHours" class="ms-hours" hidden aria-labelledby="msHoursTitle">
+    <h2 id="msHoursTitle" class="ms-hours-title">Opening hours</h2>
+    <div id="msHoursOverride" class="ms-hours-override" hidden></div>
+    <div id="msHoursBody" class="ms-hours-body"></div>
+  </section>
 
   <!-- ══ STATS BAR ══════════════════════════════ -->
   <div class="ms-stats-bar">
