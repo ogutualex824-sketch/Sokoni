@@ -342,6 +342,39 @@ const SokoniDelivery = {
   },
 
   /* ─────────────────────────────────────────
+     3b. updateDriverPosition(deliveryRef, lat, lng, extras?)
+
+     Mirrors the rider's live GPS onto the CANONICAL delivery record.
+
+     Why this exists: the rider's GPS stream lands in driverLocations /
+     deliveryLocations, whose security rules only admit the rider themselves,
+     admins, or a uid listed in a `viewers` array that nothing ever writes. A
+     buyer therefore could never read the rider's position and their map stayed
+     empty. The buyer IS authorised to read this delivery document and is already
+     subscribed to it, so mirroring the position here — the one record the seller,
+     rider and buyer all share — makes tracking work without a second location
+     collection and without loosening a single read rule.
+
+     Deliberately does NOT go through _updateDelivery: a position ping must not
+     append a timeline entry. Writes only keys the rider is already permitted to
+     set on packageRequests.
+  ───────────────────────────────────────── */
+  async updateDriverPosition(deliveryRef, lat, lng, extras) {
+    const a = Number(lat), b = Number(lng);
+    if (!deliveryRef) return;
+    /* Reject unusable fixes rather than plotting a marker in the Gulf of Guinea. */
+    if (!Number.isFinite(a) || !Number.isFinite(b) ||
+        Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return;
+    await updateDoc(doc(db, 'packageRequests', deliveryRef), {
+      driverLat:           a,
+      driverLng:           b,
+      driverLocUpdatedAt:  new Date().toISOString(),
+      ...(Number.isFinite(Number(extras?.speed)) ? { driverSpeed: Number(extras.speed) } : {}),
+      updatedAt:           serverTimestamp(),
+    });
+  },
+
+  /* ─────────────────────────────────────────
      4. driverAcceptDelivery(deliveryRef, driverId)
   ───────────────────────────────────────── */
   async driverAcceptDelivery(deliveryRef, driverId) {

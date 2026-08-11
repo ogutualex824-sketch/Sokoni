@@ -43,6 +43,18 @@
   #dtMap { height:240px; width:100%; background:#111; }
   .dt-map-badge { position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:6px;z-index:400; }
   .dt-live-dot { width:6px;height:6px;border-radius:50%;background:var(--green);animation:dtPulse 1.3s ease-in-out infinite; }
+  .dt-live-dot.stale { background:rgba(255,255,255,0.35);animation:none; }
+
+  /* ── map placeholder states (never a blank map region) ── */
+  .dt-map-state { border-radius:18px;border:1px solid var(--border);background:var(--card);margin-bottom:16px;padding:26px 20px;text-align:center;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px; }
+  .dt-ms-icon  { font-size:34px;line-height:1; }
+  .dt-ms-tag   { font-size:10.5px;font-weight:800;letter-spacing:.9px;color:rgba(255,255,255,0.4); }
+  .dt-ms-title { font-size:14px;font-weight:800;color:white; }
+  .dt-ms-sub   { font-size:12px;color:rgba(255,255,255,0.45);line-height:1.55;max-width:300px; }
+  .dt-ms-btn   { margin-top:6px;padding:10px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:var(--green);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit; }
+  .dt-ms-dots  { display:inline-flex;gap:4px;vertical-align:middle;margin-left:2px; }
+  .dt-ms-dots i{ width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.4);animation:dtPulse 1.4s ease-in-out infinite; }
+  .dt-ms-dots i:nth-child(2){ animation-delay:.2s; } .dt-ms-dots i:nth-child(3){ animation-delay:.4s; }
   @keyframes dtPulse{ 0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.6);} }
 
   /* ── timeline ── */
@@ -117,8 +129,13 @@
   <!-- Live map -->
   <div class="dt-map-wrap" id="dtMapWrap" style="display:none;">
     <div id="dtMap"></div>
-    <div class="dt-map-badge"><div class="dt-live-dot"></div><span id="dtMapBadge">Live GPS</span></div>
+    <div class="dt-map-badge"><div class="dt-live-dot" id="dtLiveDot"></div><span id="dtMapBadge">Live GPS</span></div>
   </div>
+
+  <!-- Map placeholder — shown whenever a live map cannot be drawn. This region is
+       NEVER left blank: every non-live case (no rider, rider without GPS yet, or a
+       tracking error) renders an explicit, honest state here instead. -->
+  <div class="dt-map-state" id="dtMapState" style="display:none;"></div>
 
   <!-- Timeline -->
   <div class="dt-card" id="dtTimelineCard">
@@ -273,14 +290,16 @@ let _fullRouteCoords = []; /* [[lat,lng], ...] */
 let _animFrame = null, _prevRiderLat = null, _prevRiderLng = null;
 const _ANIM_MS = 3000; /* interpolation duration between GPS updates */
 
+/* Returns TRUE only when a real Leaflet map is live. The caller must not latch
+   "map ready" on anything else — a failed Leaflet load used to set the latch and
+   permanently disable markers for the rest of the session. */
 function _initMap(pickupLat, pickupLng) {
   const wrap = document.getElementById('dtMapWrap');
-  if (!wrap || _map) return;
-  if (typeof L === 'undefined') {
-    wrap.style.display = 'block';
-    wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>';
-    return;
-  }
+  if (!wrap) return false;
+  if (_map) return true;
+  /* Leaflet missing (blocked/offline/CDN-less) — leave the container intact so a
+     later retry can still build the map, and report failure to the state machine. */
+  if (typeof L === 'undefined') return false;
   wrap.style.display = 'block';
   let center = pickupLat ? [pickupLat, pickupLng] : null;
   if (!center && navigator.geolocation) {
@@ -302,6 +321,7 @@ function _initMap(pickupLat, pickupLng) {
   document.addEventListener('visibilitychange', ()=>{
     if (document.visibilityState==='visible') [0,100,400].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));
   });
+  return true;
 }
 
 function _placeMarker(lat, lng, htmlIcon, popup) {
@@ -347,12 +367,10 @@ function _updateLiveETA(riderLat, riderLng) {
   const remainKm = _hav(riderLat, riderLng, d.deliveryCoords.lat, d.deliveryCoords.lng) * 1.35;
   /* Nairobi moto avg ~25 km/h = 0.416 km/min */
   const etaMin = Math.max(1, Math.ceil(remainKm / 0.416));
-  /* Update ETA in driver card */
+  /* Update ETA in driver card. The map badge is owned solely by _updateBadge() —
+     two authors used to fight over it and flip the text on every animation frame. */
   const etaEl = document.getElementById('dtLiveETA');
   if (etaEl) etaEl.textContent = etaMin <= 1 ? 'Arriving now' : '~' + etaMin + ' min';
-  /* Update map badge */
-  const badge = document.getElementById('dtMapBadge');
-  if (badge) badge.textContent = 'Live GPS · ETA ' + (etaMin <= 1 ? 'now' : etaMin + ' min');
   /* Auto-trigger "arriving" visual when within 200 m */
   if (remainKm < 0.20 && d.status === 'in_transit') {
     const lbl = document.getElementById('dtStatusLabel');
@@ -625,25 +643,322 @@ function _renderActions(d, role) {
 /* ── GPS driver tracking listener ── */
 let _gpsUnsub = null;
 
+/* Dedicated GPS collection — rider/admin-readable only. For a buyer this listener
+   is expected to be denied, and that is NOT an error state: the buyer's canonical
+   position comes from the delivery-doc mirror. Anything it does deliver is merged
+   in as a fresher sample. */
 function _attachGPS(driverId, driverName, src) {
   if (_gpsUnsub) { _gpsUnsub(); _gpsUnsub = null; }
   if (!driverId) return;
-  if (src === 'hub') {
-    /* Hub deliveries track via deliveryLocations collection */
-    _gpsUnsub = DeliveryHub.listenRiderLocation(driverId, loc => {
-      if (loc?.lat && loc?.lng) _updateRiderMarker(loc.lat, loc.lng, driverName);
-    });
-  } else {
-    _gpsUnsub = SokoniDB.listenDriverLocation(driverId, loc => {
-      if (loc?.lat && loc?.lng) _updateRiderMarker(loc.lat, loc.lng, driverName);
-    });
+  const onLoc = loc => {
+    if (!loc || !_isGeo(loc.lat, loc.lng)) return;
+    _gpsPos = {
+      lat: +loc.lat, lng: +loc.lng,
+      at: loc.updatedAt?.toDate ? loc.updatedAt.toDate().toISOString()
+        : (typeof loc.updatedAt === 'string' ? loc.updatedAt : new Date().toISOString()),
+    };
+    if (_currentData) _renderMapState(_currentData);
+  };
+  try {
+    _gpsUnsub = (src === 'hub')
+      ? window.DeliveryHub?.listenRiderLocation(driverId, onLoc)
+      : window.SokoniDB?.listenDriverLocation(driverId, onLoc);
+  } catch (e) {
+    /* Enhancement only — never surfaced to the buyer. */
+    console.warn('[dt] GPS enhancement unavailable:', e.message);
   }
 }
+
+/* ── Rider-side GPS push ────────────────────────────────────────────────────
+   The packageRequests rider works this very page (role === 'rider' drives the
+   accept / at-seller / picked-up actions below), so this is where their position
+   must be published to the canonical delivery record. Without it the buyer's map
+   has nothing readable to plot: driverLat/driverLng was previously written once
+   at assignment and never refreshed.
+   Publishes only while the trip is live, and only for the assigned rider. */
+let _riderPushTimer = null;
+const _RIDER_PUSH_MS = 15000;
+
+function _startRiderPush(d) {
+  if (_riderPushTimer) return;
+  const ref = d.deliveryRef || d.ref || delivRef;
+  const fsId = d._fsId;
+  if (!ref && !fsId) return;
+
+  const push = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        const lat = p.coords.latitude, lng = p.coords.longitude;
+        if (!_isGeo(lat, lng)) return;
+        if (_currentData?._src === 'hub') {
+          window.DeliveryHub?.updateDeliveryPosition(fsId, lat, lng).catch(()=>{});
+        } else {
+          window.SokoniDelivery?.updateDriverPosition(ref, lat, lng,
+            { speed: p.coords.speed }).catch(()=>{});
+        }
+      },
+      err => console.warn('[dt] rider GPS:', err.message),
+      { enableHighAccuracy:true, timeout:10000, maximumAge:5000 }
+    );
+  };
+  push();
+  _riderPushTimer = setInterval(push, _RIDER_PUSH_MS);
+}
+
+function _stopRiderPush() {
+  if (_riderPushTimer) { clearInterval(_riderPushTimer); _riderPushTimer = null; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MAP STATE MACHINE
+
+   The map region previously rendered only for a 5-status whitelist and was
+   `display:none` otherwise — so "rider assigned but not yet accepted" showed a
+   driver card above a blank gap. Worse, the rider marker could never appear for
+   a buyer at all: the rider's live GPS is written to deliveryLocations /
+   driverLocations, whose rules require the reader to be listed in a `viewers`
+   array that nothing in the codebase ever writes. The buyer's listener therefore
+   failed with permission-denied into a console.warn and simply never fired.
+
+   ONE LOCATION TRUTH: the rider's position that the buyer sees is the
+   driverLat/driverLng mirror on the canonical delivery record (packageRequests /
+   deliveries). The buyer is already authorised to read that document and already
+   receives it over the existing onSnapshot, so no new collection, no new listener
+   and no relaxed read rule is involved. The dedicated GPS collection remains the
+   rider/fleet channel and is used here only as an opportunistic enhancement.
+
+   Every branch renders an explicit state. The region is never left blank.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+const _TERMINAL_OK  = ['delivered','buyer_confirmed','completed'];
+const _TERMINAL_BAD = ['cancelled','failed','returned'];
+function _isTerminal(s){ return _TERMINAL_OK.includes(s) || _TERMINAL_BAD.includes(s); }
+
+function _esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* A coordinate is usable only if it is a finite non-zero-island number in range.
+   (0,0) is the classic "GPS not acquired" sentinel and must not plot a marker. */
+function _isGeo(lat, lng){
+  const a = Number(lat), b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b)
+      && Math.abs(a) <= 90 && Math.abs(b) <= 180
+      && !(a === 0 && b === 0);
+}
+
+function _riderIdOf(d){ return d.assignedDriverId || d.assignedRiderId || null; }
+function _riderNameOf(d){ return d.driverName || d.riderName || 'Your rider'; }
+
+/* Best-effort GPS-collection position, when the reader happens to be authorised. */
+let _gpsPos = null;
+
+/* Firestore hands back Timestamps, ISO strings or epoch numbers depending on the
+   write path. Normalise before any freshness maths — Date.parse(Timestamp) is NaN,
+   which silently made every mirrored position look infinitely stale. */
+function _toIso(v){
+  if (!v) return null;
+  try {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') return new Date(v).toISOString();
+    if (typeof v.toDate === 'function') return v.toDate().toISOString();
+    if (typeof v.seconds === 'number')  return new Date(v.seconds * 1000).toISOString();
+    if (v instanceof Date)              return v.toISOString();
+  } catch(e){}
+  return null;
+}
+
+/* Canonical buyer-visible rider position, newest wins. */
+function _riderPosOf(d){
+  const mirror = _isGeo(d.driverLat, d.driverLng)
+    ? { lat:+d.driverLat, lng:+d.driverLng,
+        at:_toIso(d.driverLocUpdatedAt) || _toIso(d.updatedAt) }
+    : null;
+  if (mirror && _gpsPos) {
+    const ma = Date.parse(mirror.at || 0) || 0, ga = Date.parse(_gpsPos.at || 0) || 0;
+    return ga > ma ? _gpsPos : mirror;
+  }
+  return mirror || _gpsPos;
+}
+
+function _relTime(at){
+  const t = Date.parse(at || 0);
+  if (!t) return null;
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 15)   return 'just now';
+  if (s < 60)   return s + 's ago';
+  if (s < 3600) return Math.round(s/60) + ' min ago';
+  return Math.round(s/3600) + ' h ago';
+}
+
+/* Swap which of the two regions is visible — exactly one is ever shown. */
+function _showMapRegion(showMap){
+  const wrap = document.getElementById('dtMapWrap');
+  const st   = document.getElementById('dtMapState');
+  if (wrap) wrap.style.display = showMap ? 'block' : 'none';
+  if (st)   st.style.display   = showMap ? 'none'  : 'flex';
+  if (showMap) [0,120,400].forEach(ms => setTimeout(()=>_map?.invalidateSize(true), ms));
+}
+
+function _mapState(icon, tag, title, sub, btnHtml){
+  const st = document.getElementById('dtMapState');
+  if (!st) return;
+  st.innerHTML =
+    '<div class="dt-ms-icon">' + icon + '</div>' +
+    '<div class="dt-ms-tag">' + _esc(tag) + '</div>' +
+    '<div class="dt-ms-title">' + title + '</div>' +
+    '<div class="dt-ms-sub">' + sub + '</div>' +
+    (btnHtml || '');
+  _showMapRegion(false);
+}
+
+/* Build the map + static geometry once, and only latch when it truly succeeded. */
+function _ensureMap(d){
+  if (_map) return true;
+  const ok = _initMap(d.pickupCoords?.lat, d.pickupCoords?.lng);
+  /* No latch on failure. The old code set `_mapReady = true` BEFORE calling
+     _initMap, so a single failed Leaflet load disabled the map — and every
+     marker — for the rest of the session with no way back. `_map` itself is now
+     the only readiness signal, so the next snapshot simply retries. */
+  if (!ok || !_map) return false;
+
+  if (_isGeo(d.pickupCoords?.lat, d.pickupCoords?.lng)) {
+    _pickupMarker = _placeMarker(d.pickupCoords.lat, d.pickupCoords.lng,
+      '<div style="font-size:20px;">📍</div>', '📍 ' + _esc(d.pickupAddress || 'Pickup'));
+  }
+  if (_isGeo(d.deliveryCoords?.lat, d.deliveryCoords?.lng)) {
+    _dropoffMarker = _placeMarker(d.deliveryCoords.lat, d.deliveryCoords.lng,
+      '<div style="font-size:20px;">🎯</div>', '🎯 ' + _esc(d.deliveryAddress || 'Delivery'));
+  }
+  /* Route/progress line where the routing service supports it. */
+  if (_isGeo(d.pickupCoords?.lat, d.pickupCoords?.lng) &&
+      _isGeo(d.deliveryCoords?.lat, d.deliveryCoords?.lng)) {
+    if (window.SokoniRouting) {
+      SokoniRouting.getRoute(d.pickupCoords.lat, d.pickupCoords.lng,
+                             d.deliveryCoords.lat, d.deliveryCoords.lng)
+        .then(r => { if (r) _drawRoute(r.geometry, d.pickupCoords.lat, d.pickupCoords.lng,
+                                       d.deliveryCoords.lat, d.deliveryCoords.lng); })
+        .catch(()=>{});
+    } else {
+      _drawRoute(null, d.pickupCoords.lat, d.pickupCoords.lng,
+                       d.deliveryCoords.lat, d.deliveryCoords.lng);
+    }
+  }
+  return true;
+}
+
+/* Tracking-layer failure (permission denied, listener error). Set by the
+   listeners below; an error must never be reported as "no delivery". */
+let _trackingError = null;
+
+function _renderMapState(d){
+  /* 1 — tracking error: honest, recoverable, never a blank page. */
+  if (_trackingError) {
+    _mapState('⚠️', 'TRACKING TEMPORARILY UNAVAILABLE',
+      'We can\'t show the live map right now',
+      'Your order is still being processed.<br>We\'ll continue updating the delivery status.',
+      '<button class="dt-ms-btn" onclick="dtRetryTracking()">Retry</button>');
+    return;
+  }
+
+  const status  = d.status;
+  const riderId = _riderIdOf(d);
+  const pos     = _riderPosOf(d);
+
+  /* 2 — cancelled: no map, plain explanation. */
+  if (_TERMINAL_BAD.includes(status)) {
+    _mapState('❌', 'DELIVERY ' + String(status || 'cancelled').toUpperCase(),
+      'This delivery is no longer active',
+      'Live tracking has ended. See the timeline below for the full history.');
+    return;
+  }
+
+  /* 3 — delivered: keep the map (final positions) rather than yanking it away. */
+  if (_TERMINAL_OK.includes(status)) {
+    if (_ensureMap(d) && (pos || _dropoffMarker)) {
+      if (pos) _updateRiderMarker(pos.lat, pos.lng, _riderNameOf(d));
+      const badge = document.getElementById('dtMapBadge');
+      const dot   = document.getElementById('dtLiveDot');
+      if (badge) badge.textContent = 'Delivered';
+      if (dot)   dot.classList.add('stale');
+      _showMapRegion(true);
+    } else {
+      _mapState('✅', 'DELIVERED', 'Your order was delivered',
+        'Thanks for shopping with SOKONI.');
+    }
+    return;
+  }
+
+  /* 4 — no rider assigned yet. */
+  if (!riderId) {
+    _mapState('🔍', 'WAITING FOR RIDER', 'We\'re finding a rider for your delivery',
+      'You\'ll see the live map here the moment a rider accepts.' +
+      '<span class="dt-ms-dots"><i></i><i></i><i></i></span>');
+    return;
+  }
+
+  /* 5 — rider assigned, but no usable position yet. */
+  if (!pos) {
+    _mapState('🏍️', 'RIDER ASSIGNED',
+      _esc(_riderNameOf(d)) + ' is handling your delivery',
+      'Waiting for the rider\'s location…' +
+      '<span class="dt-ms-dots"><i></i><i></i><i></i></span>');
+    return;
+  }
+
+  /* 6 — LIVE. */
+  if (!_ensureMap(d)) {
+    _mapState('🗺️', 'MAP UNAVAILABLE', 'The map could not load',
+      'Your delivery is still on its way and the status below stays live.',
+      '<button class="dt-ms-btn" onclick="dtRetryTracking()">Retry</button>');
+    return;
+  }
+  _showMapRegion(true);
+  _updateRiderMarker(pos.lat, pos.lng, _riderNameOf(d));
+
+  _updateBadge(pos, d);
+}
+
+/* Single author for the map badge — distance, ETA and freshness composed in one
+   place so the live-ETA path and the state machine can't overwrite each other. */
+function _updateBadge(pos, d){
+  const badge = document.getElementById('dtMapBadge');
+  const dot   = document.getElementById('dtLiveDot');
+  if (!badge) return;
+  const rel   = _relTime(pos?.at);
+  /* Anything older than ~5 min is no longer "live" — say so instead of implying it. */
+  const stale = !!(rel && (/h ago/.test(rel) || /^([5-9]|\d{2,}) min ago$/.test(rel)));
+  if (dot) dot.classList.toggle('stale', stale);
+
+  const parts = [];
+  if (pos && _isGeo(d?.deliveryCoords?.lat, d?.deliveryCoords?.lng)) {
+    const km = _hav(pos.lat, pos.lng, d.deliveryCoords.lat, d.deliveryCoords.lng);
+    parts.push((km < 1 ? Math.round(km/0.05)*50 + ' m' : km.toFixed(1) + ' km') + ' away');
+    if (!stale) {
+      const etaMin = Math.max(1, Math.ceil((km * 1.35) / 0.416)); /* Nairobi moto ≈25 km/h */
+      parts.push(etaMin <= 1 ? 'arriving now' : '~' + etaMin + ' min');
+    }
+  }
+  if (rel) parts.push(rel);
+  badge.textContent = parts.length ? parts.join(' · ') : (stale ? 'Location paused' : 'Live GPS');
+}
+
+/* Retry: clear the error, rebuild listeners from scratch. */
+window.dtRetryTracking = function(){
+  _trackingError = null;
+  _mapState('⏳', 'RECONNECTING', 'Reconnecting to live tracking',
+    'One moment…<span class="dt-ms-dots"><i></i><i></i><i></i></span>');
+  try { _deliveryUnsub?.(); } catch(e){}
+  try { _gpsUnsub?.(); } catch(e){}
+  _deliveryUnsub = null; _gpsUnsub = null; _gpsPos = null;
+  _startTracking();
+};
 
 /* ── Main delivery listener ── */
 let _deliveryUnsub = null;
 let _currentData   = null;
-let _mapReady      = false;
 
 function _onDelivery(d) {
   if (!d) return;
@@ -700,77 +1015,128 @@ function _onDelivery(d) {
   );
   if (hasDriver) _renderDriver(d);
 
-  /* Map */
-  const showMap = ['driver_accepted','driver_at_seller','in_transit',
-                   'rider_en_route','picked_up'].includes(d.status);
-  if (showMap && !_mapReady) {
-    _mapReady = true;
-    _initMap(d.pickupCoords?.lat, d.pickupCoords?.lng);
-    /* Place pickup + dropoff markers */
-    if (_map && d.pickupCoords?.lat) {
-      _pickupMarker = _placeMarker(d.pickupCoords.lat, d.pickupCoords.lng,
-        '<div style="font-size:20px;">📍</div>', '📍 ' + (d.pickupAddress||'Pickup'));
-    }
-    if (_map && d.deliveryCoords?.lat) {
-      _dropoffMarker = _placeMarker(d.deliveryCoords.lat, d.deliveryCoords.lng,
-        '<div style="font-size:20px;">🎯</div>', '🎯 ' + (d.deliveryAddress||'Delivery'));
-    }
-    /* Draw static route line */
-    if (d.pickupCoords?.lat && d.deliveryCoords?.lat) {
-      if (window.SokoniRouting) {
-        SokoniRouting.getRoute(
-          d.pickupCoords.lat, d.pickupCoords.lng,
-          d.deliveryCoords.lat, d.deliveryCoords.lng
-        ).then(route => {
-          if (route) _drawRoute(route.geometry, d.pickupCoords.lat, d.pickupCoords.lng, d.deliveryCoords.lat, d.deliveryCoords.lng);
-        }).catch(()=>{});
-      }
-    }
-    /* Initial rider marker from stored coords */
-    if (d.driverLat && d.driverLng) _updateRiderMarker(d.driverLat, d.driverLng, d.driverName);
+  /* Map — one state machine, never a blank region */
+  _renderMapState(d);
+
+  /* Live GPS. The dedicated GPS collection is readable only by the rider and
+     admins, so for a buyer this is a best-effort ENHANCEMENT — the authoritative
+     buyer-visible position is the driverLat/driverLng mirror on this delivery
+     doc, which arrives through the delivery listener above. */
+  const _rid = _riderIdOf(d);
+  if (_rid && !_gpsUnsub && !_isTerminal(d.status)) {
+    _attachGPS(_rid, d.driverName, d._src);
   }
 
-  /* Live GPS for active trips */
-  if (showMap && d.assignedDriverId && !_gpsUnsub) {
-    _attachGPS(d.assignedDriverId, d.driverName, d._src);
-  }
+  /* If *we* are the assigned rider, publish our position to the canonical
+     delivery doc so the buyer's map has a readable source. Stops at terminal. */
+  if (role === 'rider' && !_isTerminal(d.status)) _startRiderPush(d);
+  else if (_isTerminal(d.status)) _stopRiderPush();
 
   /* Actions */
   _renderActions(d, role);
 }
 
-/* ── URL → start listener ── */
-const params    = new URLSearchParams(location.search);
-const delivRef  = params.get('ref') || params.get('deliveryRef');
+/* ── URL → start listener ──
+   Accepts either a delivery reference (?ref=) or an order id (?order=). The
+   order form exists so My Orders has ONE tracking destination: an order whose
+   deliveryRef hasn't been written yet used to be routed to a different page with
+   a different map that read riderLocations — a collection buyers are not allowed
+   to read at all, so that map could never render. Resolving the ref from the
+   order here keeps a single canonical tracking surface. */
+const params   = new URLSearchParams(location.search);
+let   delivRef = params.get('ref') || params.get('deliveryRef');
+const orderId  = params.get('order') || params.get('orderId');
 
-if (!delivRef) {
-  document.getElementById('dtStatusLabel').textContent = 'No delivery reference';
-  document.getElementById('dtStatusSub').textContent   = 'Add ?ref=DEL-XXXXXXX to the URL';
-} else {
-  /* Try packageRequests first; if it never fires with data, fall back to deliveries */
-  let _pkgGotData = false;
-  _deliveryUnsub = SokoniDelivery.listenDelivery(delivRef, data => {
-    if (data) {
-      _pkgGotData = true;
-      _delivSource = 'pkg';
-      _onDelivery(data);
-    }
-  });
+let _pkgGotData = false;
+let _fallbackTimer = null;
+
+function _startTracking() {
+  _pkgGotData = false;
+  clearTimeout(_fallbackTimer);
+
+  /* Paint an honest "connecting" state immediately — the map region is never
+     blank, not even for the first few hundred milliseconds. */
+  if (!_currentData) {
+    _mapState('⏳', 'CONNECTING', 'Loading your delivery',
+      'Fetching live tracking…<span class="dt-ms-dots"><i></i><i></i><i></i></span>');
+  }
+
+  try {
+    _deliveryUnsub = SokoniDelivery.listenDelivery(delivRef, data => {
+      if (data) { _pkgGotData = true; _delivSource = 'pkg'; _trackingError = null; _onDelivery(data); }
+    });
+  } catch (e) { _trackingError = e; }
+
   /* After 4 s, if packageRequests returned nothing, try the deliveries collection */
-  setTimeout(() => {
+  _fallbackTimer = setTimeout(() => {
     if (_pkgGotData) return;
-    /* Unsubscribe from empty packageRequests listener */
-    _deliveryUnsub?.();
+    try { _deliveryUnsub?.(); } catch(e){}
     _delivSource = 'hub';
-    _deliveryUnsub = DeliveryHub.listenDeliveryByRef(delivRef, data => {
-      if (data) {
-        _onDelivery(_normalizeHub(data));
-      } else if (!_pkgGotData) {
-        document.getElementById('dtStatusLabel').textContent = 'Delivery not found';
-        document.getElementById('dtStatusSub').textContent   = 'Reference ' + delivRef + ' was not found.';
+    try {
+      _deliveryUnsub = DeliveryHub.listenDeliveryByRef(delivRef, data => {
+        if (data) { _trackingError = null; _onDelivery(_normalizeHub(data)); return; }
+        if (_pkgGotData) return;
+        /* Neither collection yielded the delivery. This is genuinely
+           indeterminate from the client — a missing ref and a denied read look
+           identical here — so say the recoverable thing, offer Retry, and keep
+           the order status intact rather than asserting "no delivery". */
+        _trackingError = new Error('unresolved');
+        document.getElementById('dtStatusLabel').textContent = 'Tracking temporarily unavailable';
+        document.getElementById('dtStatusSub').textContent   =
+          'Your order is still being processed. We\'ll keep updating the status.';
+        _renderMapState(_currentData || {});
+      });
+    } catch (e) {
+      _trackingError = e;
+      _renderMapState(_currentData || {});
+    }
+  }, 4000);
+}
+
+/* Resolve ?order= → deliveryRef off the canonical order doc. Kept as a LIVE
+   listener, not a one-shot read: a buyer who opens tracking before dispatch has
+   assigned the delivery will roll straight into the map the moment the ref is
+   written, with no refresh. */
+let _orderUnsub = null;
+function _resolveFromOrder(id) {
+  document.getElementById('dtHeaderRef').textContent = id;
+  _mapState('📦', 'PREPARING YOUR DELIVERY', 'Your order is being prepared',
+    'Live tracking starts as soon as the delivery is dispatched.' +
+    '<span class="dt-ms-dots"><i></i><i></i><i></i></span>');
+  try {
+    _orderUnsub = SokoniDB.listenOrder(id, o => {
+      if (!o) return;
+      /* Keep the buyer informed from the order itself while we wait. */
+      const lbl = document.getElementById('dtStatusLabel');
+      const sub = document.getElementById('dtStatusSub');
+      if (!delivRef) {
+        if (lbl) lbl.textContent = 'Order ' + String(o.status || 'received').replace(/_/g, ' ');
+        if (sub) sub.textContent = 'We\'ll show the live map once a rider is dispatched.';
+      }
+      const ref = o.deliveryRef;
+      if (ref && !delivRef) {
+        delivRef = ref;
+        try { _orderUnsub?.(); } catch(e){}
+        _orderUnsub = null;
+        _startTracking();
       }
     });
-  }, 4000);
+  } catch (e) {
+    _trackingError = e;
+    _renderMapState({});
+  }
+}
+
+if (delivRef) {
+  _startTracking();
+} else if (orderId) {
+  _resolveFromOrder(orderId);
+} else {
+  document.getElementById('dtStatusLabel').textContent = 'No delivery reference';
+  document.getElementById('dtStatusSub').textContent   = 'This tracking link is missing its delivery reference.';
+  _mapState('🔗', 'TRACKING LINK INCOMPLETE', 'We couldn\'t identify this delivery',
+    'Open the order from My Orders to track it.',
+    '<a class="dt-ms-btn" style="text-decoration:none;display:inline-block;" href="my-orders.html">Go to My Orders</a>');
 }
 
 /* ── Action handlers ── */
@@ -1263,6 +1629,8 @@ window.dtHubCancel = async function(fsId, _c) {
 window.addEventListener('beforeunload', () => {
   _deliveryUnsub?.();
   _gpsUnsub?.();
+  _stopRiderPush();
+  clearTimeout(_fallbackTimer);
   if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
 });
 </script>

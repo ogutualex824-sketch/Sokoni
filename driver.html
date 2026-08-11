@@ -2917,7 +2917,13 @@ function _startDHLocationPush(riderId) {
           catch(_){ res(null); }
         }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
     _locFn.then(pos => {
-      if (pos) DeliveryHub.updateRiderLocation(riderId, pos.lat, pos.lng).catch(() => {});
+      if (!pos) return;
+      /* Pass the active delivery so the position is ALSO mirrored onto that
+         delivery doc — deliveryLocations is rider/admin-only, so the mirror is
+         the buyer's only readable source for the live tracking map. */
+      const _activeId = _dhActive?._fsId || _dhActive?.id || null;
+      DeliveryHub.updateRiderLocation(riderId, pos.lat, pos.lng,
+        _activeId ? { deliveryId: _activeId } : undefined).catch(() => {});
     });
   }, 15000); /* every 15 s */
 }

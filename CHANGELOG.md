@@ -1,3 +1,69 @@
+## [2026-08-11] — FIXED: the buyer's tracking map could never show a rider
+
+**P0.** My Orders → Order → Track Delivery rendered a blank region where the live map
+belongs. Two independent faults, each fatal on its own, in complementary directions:
+
+| # | fault | consequence |
+|---|---|---|
+| RC‑1 | `deliveryLocations` / `driverLocations` rules require the reader in a `viewers` array — **nothing in the repo has ever written that array** | the buyer's GPS listener failed `permission-denied` into a `console.warn` and never fired |
+| RC‑2 | `driverLat`/`driverLng` on the delivery doc — the one channel the buyer *can* read — was written **once at assignment** and never refreshed | the readable channel was always stale |
+| RC‑3 | `showMap` whitelisted 5 statuses; `driver_assigned` was excluded while `hasDriver` included it | rider card rendered above a blank gap |
+| RC‑4 | `_mapReady = true` was set *before* `_initMap` ran | one failed Leaflet load disabled the map for the whole session, unrecoverably |
+| RC‑5 | both listeners empty ⇒ "Delivery not found" | an auth failure was reported as a missing delivery |
+| RC‑6 | orders without a `deliveryRef` routed to `track.html`, whose map reads `riderLocations` (rider/admin-only) | a second, permanently dead buyer map |
+
+> **The rider wrote a channel the buyer could not read; the buyer read a channel nobody wrote.**
+
+### One location truth
+
+The rider now mirrors position onto the **canonical delivery record** (`packageRequests` /
+`deliveries`) that buyer, seller and rider already share — the document the buyer is already
+authorised to read and already subscribed to. **No new collection, no new listener, and no
+relaxed read rule.** The dedicated GPS collection stays the rider/fleet channel and is used by
+the buyer only as an opportunistic enhancement when authorised.
+
+### Map states — the region is never blank
+
+`WAITING FOR RIDER` · `RIDER ASSIGNED — {name} … waiting for the rider's location` ·
+`LIVE (map + distance + ETA + freshness)` · `DELIVERED` · `TRACKING TEMPORARILY UNAVAILABLE
+[Retry]` · `PREPARING YOUR DELIVERY` · `TRACKING LINK INCOMPLETE`. A `(0,0)` GPS sentinel is
+rejected rather than plotted. Positions older than ~5 min de-pulse the live dot.
+
+### Security
+
+Rules are **additive only** — the assigned rider gains `driverLat`/`driverLng`/
+`driverLocUpdatedAt` on their own delivery, guarded by the existing `_validGPS` Kenya bbox.
+**No read rule was touched.** `scripts/test-delivery-tracking-rules.js` (22/22, emulator)
+pins the boundary: a buyer reads their own delivery and **not** another customer's; only the
+**assigned** rider may publish a position; buyer and seller **cannot** forge one; the rider
+cannot smuggle `deliveryFee`/`proofPIN` alongside it; and buyers still **cannot** read
+`deliveryLocations`/`driverLocations` — proving the mirror is necessary, not a shortcut.
+
+### Verification
+
+Headless run of the real page with only its data modules stubbed: all 7 states render with a
+non-zero height (map 362 px / state panels 170–246 px — **no blank region in any state**);
+live case shows 6 tiles, 3 markers, 2 route polylines, badge `2.4 km away · ~8 min · just now`,
+**0 console errors**.
+
+### Known gap (pre-existing, recorded not introduced)
+
+The hub `deliveries` sender clause is a **blocklist** (`!hasAny(['senderUid','deliveryFee',
+'proofPIN'])`), so a sender can write any other field on their own delivery — including
+`status`/`deliveredAt`. The `packageRequests` equivalent is a strict allowlist and correctly
+denies this. Tracking impact is nil (the sender is the only reader of their own map); the
+status-forging exposure predates this work and belongs to a hub-rules convergence. Characterised
+explicitly in the test suite so it cannot be mistaken for a pass.
+
+**Files:** `delivery-tracking.html`, `my-orders.html`, `driver.html`, `sokoni-delivery.js`,
+`delivery-hub.js`, `firestore.rules`, `scripts/test-delivery-tracking-rules.js`
+**Database:** new field `driverLocUpdatedAt` (ISO-8601) on `packageRequests`/`deliveries`.
+No migration — absent means "no fix yet", which the UI already renders as *rider assigned*.
+**API:** `SokoniDelivery.updateDriverPosition()`, `DeliveryHub.updateDeliveryPosition()`.
+**Breaking:** none. `track.html` is untouched and still reachable directly.
+
+---
+
 ## [2026-08-11] — VERIFIED: seller delivery isolation, with real deliveries and two real sellers
 
 Closes the gap flagged in the v512 report. That check proved the seller lands on the right

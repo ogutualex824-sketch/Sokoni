@@ -588,6 +588,30 @@ const DeliveryHub = {
     const data = { uid:riderId, riderId, lat, lng, updatedAt:serverTimestamp(), ...(extras||{}) };
     await setDoc(doc(db, 'deliveryLocations', riderId), data, { merge:true });
     await updateDoc(doc(db, 'deliveryRiders', riderId), { lat, lng, updatedAt:serverTimestamp() }).catch(()=>{});
+    /* Mirror onto the active delivery so the SENDER can see it. deliveryLocations
+       is rider/admin-only by rule, so without this mirror the buyer's tracking map
+       has no readable position source at all. Best-effort: a failed mirror must
+       never break the rider's own GPS stream. */
+    if (extras?.deliveryId) {
+      await this.updateDeliveryPosition(extras.deliveryId, lat, lng).catch(()=>{});
+    }
+  },
+
+  /* updateDeliveryPosition(fsId, lat, lng)
+     Writes the rider position onto the canonical `deliveries` doc — the record the
+     sender is already authorised to read and already listening to. Keys are
+     restricted to those the rider may set. */
+  async updateDeliveryPosition(fsId, lat, lng) {
+    const a = Number(lat), b = Number(lng);
+    if (!fsId) return;
+    if (!Number.isFinite(a) || !Number.isFinite(b) ||
+        Math.abs(a) > 90 || Math.abs(b) > 180 || (a === 0 && b === 0)) return;
+    await updateDoc(doc(db, 'deliveries', fsId), {
+      driverLat:          a,
+      driverLng:          b,
+      driverLocUpdatedAt: new Date().toISOString(),
+      updatedAt:          serverTimestamp(),
+    });
   },
 
   /* ────────────────────────────────────────────────────────

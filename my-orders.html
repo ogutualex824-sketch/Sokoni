@@ -76,9 +76,14 @@
 
     function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
 
+    /* ONE tracking destination. Orders without a deliveryRef used to fall through
+       to track.html, whose map reads `riderLocations` — a collection whose rules
+       admit only the rider themselves and admins, so that map could never render
+       for a buyer. delivery-tracking.html resolves the ref from the order doc and
+       is the only page wired to the canonical delivery record. */
     function orderHref(o){
       if (o.deliveryRef) return 'delivery-tracking.html?ref=' + encodeURIComponent(o.deliveryRef);
-      return 'track.html?id=' + encodeURIComponent(o.id || o._fsId || '');
+      return 'delivery-tracking.html?order=' + encodeURIComponent(o.id || o._fsId || '');
     }
     function orderDate(o){
       if (o.date) return esc(o.date);
