@@ -54,7 +54,12 @@ const NON_KE = { lat: 51.5074, lng: -0.1278 };
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-deliv-track-test',
     firestore: {
-      rules: fs.readFileSync(path.resolve(__dirname, '..', 'firestore.rules'), 'utf8'),
+      /* RULES_FILE lets the SAME assertions run against the built (comment-stripped)
+         ruleset. Identical results from both files is the evidence that
+         build-firestore-rules.js preserved behaviour — brace balance alone proves
+         nothing about an authorization expression. */
+      rules: fs.readFileSync(
+        path.resolve(__dirname, '..', process.env.RULES_FILE || 'firestore.rules'), 'utf8'),
       host: '127.0.0.1', port: 8080,
     },
   });

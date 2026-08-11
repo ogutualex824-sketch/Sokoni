@@ -38,7 +38,7 @@ const BUYER = 'buyer-uid-1', SELLER = 'seller-uid-1', OTHER = 'seller-uid-2', AD
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-returns-rules-test',
     firestore: {
-      rules: fs.readFileSync(path.resolve(__dirname, '..', 'firestore.rules'), 'utf8'),
+      rules: fs.readFileSync(path.resolve(__dirname, '..', process.env.RULES_FILE || 'firestore.rules'), 'utf8'),
       host: '127.0.0.1', port: 8080,
     },
   });

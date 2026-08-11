@@ -29,7 +29,7 @@ const check = async (label, p) => {
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-rules-test',
     firestore: {
-      rules: fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8'),
+      rules: fs.readFileSync(path.join(__dirname, '..', process.env.RULES_FILE || 'firestore.rules'), 'utf8'),
       host: '127.0.0.1',
       port: 8080,
     },
