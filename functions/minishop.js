@@ -53,6 +53,10 @@ const RESERVED_HANDLES = new Set([
   'admin', 'sokoni', 'shop', 'api', 'www', 'app',
   'help', 'support', 'terms', 'privacy',
 ]);
+/* Exported so KassShop's auto-provisioning honours the same reservations a manual
+   claim does — two lists would eventually disagree and mint a handle that
+   claimMinishopHandle would have refused. */
+exports.RESERVED_HANDLES = RESERVED_HANDLES;
 
 /** Allowed social-traffic sources for view tracking */
 const VALID_SOURCES = new Set([

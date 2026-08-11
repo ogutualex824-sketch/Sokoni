@@ -51,7 +51,10 @@ const ok = (name, cond, detail) => {
 const group = (n) => console.log('\n' + n);
 
 async function wipe () {
-  for (const col of ['shops', 'minishopConfig', 'providerAvailability']) {
+  /* shopHandles must be included: a handle reserved by an earlier section is found by
+     uid, so leaving it behind makes the next section inherit that shop's public address
+     and assert against a name it never set. */
+  for (const col of ['shops', 'minishopConfig', 'providerAvailability', 'shopHandles']) {
     const snap = await db.collection(col).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
   }
@@ -313,6 +316,53 @@ async function wipe () {
     const missing = await kasshop.publicShopState('no-such-shop-id', A);
     ok('an unknown shop yields neutral state instead of an error',
        missing && missing.availability === null, JSON.stringify(missing && missing.availability));
+  }
+
+  /* ── 12. A saved shop is always previewable ──
+     Preview Store resolves seller → shop → handle → /shop/{handle}. A shop with no
+     handle has no public URL, so the button had nowhere to go and silently returned
+     the seller to Shop Setup. Saving must therefore leave a handle behind. */
+  group('12. Saving provisions the public address');
+  {
+    await wipe();
+    const r1 = await call(kasshop.saveShopProfile, A, { profile: { name: 'Mama Fua Cleaners' } });
+    ok('save returns a handle', !!r1.handle, r1.handle);
+    ok('the handle is a slug of the shop name', r1.handle === 'mama-fua-cleaners', r1.handle);
+    ok('save returns a usable storefront URL', r1.storefrontUrl === '/shop/mama-fua-cleaners', r1.storefrontUrl);
+
+    const hSnap = await db.collection('shopHandles').doc(r1.handle).get();
+    ok('the handle is reserved to this shop', hSnap.exists && hSnap.data().shopId === r1.shopId,
+       hSnap.exists ? hSnap.data().shopId : 'MISSING');
+    const cSnap = await db.collection('minishopConfig').doc(r1.shopId).get();
+    ok('the storefront resolver can find it', cSnap.exists && cSnap.data().handle === r1.handle,
+       cSnap.exists ? cSnap.data().handle : 'MISSING');
+
+    /* getShopProfile is what Preview Store asks — it must carry the same address. */
+    const prof = await call(kasshop.getShopProfile, A, {});
+    ok('getShopProfile reports the same handle', prof.handle === r1.handle, prof.handle);
+    ok('getShopProfile reports the storefront URL', prof.storefrontUrl === '/shop/' + r1.handle, prof.storefrontUrl);
+
+    /* Re-saving must not mint a second handle. */
+    const r2 = await call(kasshop.saveShopProfile, A, { profile: { about: 'edited' } });
+    ok('re-saving keeps the same handle', r2.handle === r1.handle, r2.handle);
+    const all = await db.collection('shopHandles').where('uid', '==', A).get();
+    ok('exactly one handle exists for this seller', all.size === 1, all.size);
+
+    /* A second seller wanting the same name must not steal it. */
+    const r3 = await call(kasshop.saveShopProfile, B, { profile: { name: 'Mama Fua Cleaners' } });
+    ok('a colliding name gets a distinct handle', r3.handle && r3.handle !== r1.handle, r3.handle);
+    const bSnap = await db.collection('shopHandles').doc(r3.handle).get();
+    ok('and it belongs to the second seller', bSnap.exists && bSnap.data().uid === B,
+       bSnap.exists ? bSnap.data().uid : 'MISSING');
+    const stillA = await db.collection('shopHandles').doc(r1.handle).get();
+    ok("the first seller's handle is untouched", stillA.exists && stillA.data().uid === A,
+       stillA.exists ? stillA.data().uid : 'MISSING');
+
+    /* A name that cannot produce a valid slug must not fail the save. */
+    await wipe();
+    const r4 = await call(kasshop.saveShopProfile, A, { profile: { name: '!!' } });
+    ok('an unsluggable name still saves', r4.success === true && !!r4.shopId, r4.shopId);
+    ok('and simply has no handle rather than a broken one', !r4.handle, r4.handle);
   }
 
   await wipe();

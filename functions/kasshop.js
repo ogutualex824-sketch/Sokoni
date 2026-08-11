@@ -198,6 +198,87 @@ exports.getShopProfile = onCall(
   }
 );
 
+/**
+ * Guarantee the shop has a public address.
+ *
+ * WHY A SHOP MUST HAVE A HANDLE THE MOMENT IT EXISTS
+ * "Preview Store" resolves seller → owned shop → handle → /shop/{handle}. A shop with
+ * no handle has no public URL, so the button had nowhere to send the seller and quietly
+ * routed them back to Shop Setup — they saved their details, pressed Preview, and the
+ * page did not move. The shop was correct the whole time; it was simply unreachable.
+ *
+ * Claiming a handle was a separate, optional step the seller had to discover. That made
+ * the storefront opt-in without ever saying so. It is now provisioned here, from the
+ * name the seller already typed, so a saved shop is always previewable and always
+ * shareable.
+ *
+ * BEST EFFORT, NEVER FATAL. A shop that saved correctly must not be reported as failed
+ * because its vanity URL could not be minted, so every failure path returns null and
+ * leaves the save intact.
+ */
+function _slugify(name) {
+  const base = String(name || '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30)
+    .replace(/-+$/g, '');
+  return base.length >= 3 ? base : '';
+}
+
+async function _ensureHandle(db, shopId, uid, name) {
+  try {
+    /* Already has one — either mirrored on the config, or reserved under this uid. */
+    const cfgSnap = await db.collection('minishopConfig').doc(shopId).get();
+    const existing = cfgSnap.exists ? (cfgSnap.data() || {}).handle : null;
+    if (existing) return existing;
+
+    const owned = await db.collection('shopHandles').where('uid', '==', uid).limit(1).get();
+    if (!owned.empty) {
+      const h = owned.docs[0].id;
+      /* The reservation landed but the config mirror did not, so the storefront
+         resolver could not find it. Repair rather than mint a second handle. */
+      await db.collection('minishopConfig').doc(shopId)
+        .set({ handle: h, shopId, ownerUid: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return h;
+    }
+
+    const slug = _slugify(name);
+    if (!slug) return null;
+
+    let reserved = null;
+    const { RESERVED_HANDLES } = require('./minishop');   /* lazy: avoids a require cycle */
+    /* Deterministic first, then suffixed. Bounded: a seller whose name collides ten
+       times gets no handle rather than an unbounded scan of the collection. */
+    for (let i = 0; i < 10 && !reserved; i++) {
+      const candidate = (i === 0 ? slug : (slug + '-' + (i + 1))).slice(0, 30).replace(/-+$/g, '');
+      if (candidate.length < 3) continue;
+      if (RESERVED_HANDLES && RESERVED_HANDLES.has(candidate)) continue;
+
+      const ref = db.collection('shopHandles').doc(candidate);
+      /* Transactional so two concurrent first saves cannot both take the same name —
+         the loser sees the document and moves to the next candidate. */
+      const won = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists) return (snap.data() || {}).uid === uid;
+        tx.set(ref, { shopId, uid, handle: candidate, createdAt: FieldValue.serverTimestamp() });
+        return true;
+      });
+      if (won) reserved = candidate;
+    }
+    if (!reserved) return null;
+
+    await db.collection('minishopConfig').doc(shopId)
+      .set({ handle: reserved, shopId, ownerUid: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    logger.info('KassShop handle provisioned', { shopId, handle: reserved });
+    return reserved;
+  } catch (err) {
+    logger.warn('KassShop handle provisioning failed', { shopId, code: err && err.code });
+    return null;
+  }
+}
+
 /* ================================================================
    2. saveShopProfile — create on first setup, update thereafter
 ================================================================ */
@@ -246,7 +327,12 @@ exports.saveShopProfile = onCall(
         }
       });
       logger.info('KassShop profile updated', { shopId: owned.id, fields: Object.keys(patch).length });
-      return { success: true, created: false, shopId: owned.id, ownerUid: uid };
+      const handle = await _ensureHandle(db, owned.id, uid, name);
+      return {
+        success: true, created: false, shopId: owned.id, ownerUid: uid,
+        handle: handle || null,
+        storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
+      };
     }
 
     /* CREATE — first-time setup. Exactly one shop per seller: the ownership query above found
@@ -296,8 +382,14 @@ exports.saveShopProfile = onCall(
     /* Re-resolve rather than assume: if the transaction folded into a concurrently-created
        shop, `ref.id` is not the seller's shop and returning it would be a lie. */
     const settled = await _ownedShop(uid);
-    logger.info('KassShop created', { shopId: settled ? settled.id : ref.id });
-    return { success: true, created: true, shopId: settled ? settled.id : ref.id, ownerUid: uid };
+    const settledId = settled ? settled.id : ref.id;
+    logger.info('KassShop created', { shopId: settledId });
+    const handle = await _ensureHandle(db, settledId, uid, name);
+    return {
+      success: true, created: true, shopId: settledId, ownerUid: uid,
+      handle: handle || null,
+      storefrontUrl: handle ? '/shop/' + encodeURIComponent(handle) : null,
+    };
   }
 );
 

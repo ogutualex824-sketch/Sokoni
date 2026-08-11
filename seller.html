@@ -314,9 +314,42 @@
         if (st && st.mode === 'OWNER' && st.handle) return '/shop/' + encodeURIComponent(st.handle);
         if (st && st.mode === 'OWNER') return null;      /* owner, no handle yet — go to setup */
       } catch (_) { /* cross-origin: not our shell, fall through */ }
-      /* 2. Server-side, uid-scoped. */
+      /* 2. THE CANONICAL CHAIN — seller → owned shop → handle → /shop/{handle}.
+         Preview Store must not depend on whatever is currently typed into Shop Setup,
+         and must work with that surface closed. getShopProfile is the same authority
+         the form loads from, so the preview and the form can never disagree about
+         which shop is being previewed. */
       try {
         if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+        /* Auth must be RESTORED, not merely present. On a cold start the callable
+           exists before the session does, and an unauthenticated getShopProfile
+           returns nothing — which previously read as "this seller has no shop". */
+        if (typeof window.waitForSokoniAuthReady === 'function') {
+          try { await window.waitForSokoniAuthReady(); } catch (_) {}
+        }
+        if (typeof window.sokoniCallable === 'function') {
+          var prof = await window.sokoniCallable('getShopProfile')({});
+          var pd = prof && prof.data;
+          if (pd && pd.exists) {
+            if (pd.storefrontUrl) return pd.storefrontUrl;
+            if (pd.handle) return '/shop/' + encodeURIComponent(pd.handle);
+            /* Owned shop with no handle. Saving provisions one, so ask the canonical
+               save to settle it rather than sending the seller to a dead URL. */
+            try {
+              var mk = await window.sokoniCallable('saveShopProfile')({
+                profile: { name: (pd.profile && (pd.profile.name || pd.profile.storeName)) || '' },
+              });
+              var md = mk && mk.data;
+              if (md && md.storefrontUrl) return md.storefrontUrl;
+              if (md && md.handle) return '/shop/' + encodeURIComponent(md.handle);
+            } catch (e2) { console.warn('[seller] handle provisioning failed:', e2 && (e2.code || e2.message)); }
+          }
+        }
+      } catch (e) { console.warn('[seller] getShopProfile failed:', e && (e.code || e.message)); }
+
+      /* 3. Legacy resolver, kept as a fallback for shops whose handle predates the
+            canonical mirror on minishopConfig. */
+      try {
         if (typeof window.sokoniCallable === 'function') {
           var res = await window.sokoniCallable('getMyMinishop')({});
           var d = res && res.data;
@@ -2777,6 +2810,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             await new Promise(function(r){ setTimeout(r,100); });
           }
           if(typeof window.sokoniCallable!=='function') throw new Error('SOKONI did not finish loading');
+          /* WAIT FOR THE SESSION, NOT JUST THE SDK. getShopProfile requires auth, and on a
+             cold start (force-quit and reopen) sokoniCallable exists well before Firebase
+             has restored the session. Calling too early returns unauthenticated, which the
+             catch below treats as "load failed" and leaves the stale cache painted — the
+             seller sees old values and concludes their save was lost. */
+          if(typeof window.waitForSokoniAuthReady==='function'){
+            try{ await window.waitForSokoniAuthReady(); }catch(_){}
+          }
           var res=await window.sokoniCallable('getShopProfile')({});
           var d=res&&res.data;
           if(!d) throw new Error('empty response');
