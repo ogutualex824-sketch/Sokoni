@@ -1,3 +1,77 @@
+## [2026-08-12] — Auth Slice 4: the email verification screen
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`).
+
+The screen a password account sees when Slice 3's gate holds it. It talks to `authDispatch`
+and to nothing else: it has no idea what the code is, cannot compute one, and cannot decide
+that anybody is verified.
+
+### Success is proven, never taken on trust
+
+`emailChallengeVerify` returning `ok:true` means the *server* marked the Auth record — so
+before this screen says a single reassuring word it calls `user.reload()` and re-reads
+`emailVerified` from the refreshed token. If that flag is not true the user is told it did
+not complete, however encouraging the response looked. A screen that says "Verified!" and
+then drops the user back at the gate is worse than one that says nothing, and it is the
+defect class this platform already has a standing rule about.
+
+The suite mutates that check away and requires the mutant to celebrate a false success —
+otherwise the assertion guarding it proves nothing.
+
+### Status before issue
+
+Opening the screen does **not** automatically send mail. The model enforces a 60s resend
+cooldown and a ceiling of 5 sends; auto-issuing on every open would burn that budget on
+refreshes and back-buttons, and tell the user to wait for a cooldown they never started. So
+the screen asks `emailChallengeStatus` what is already true — verified? a live challenge?
+when may we resend? — and issues only when there is nothing to resume. A live challenge is
+resumed, because the code already in the inbox still works.
+
+### States covered
+
+| State | Behaviour |
+|---|---|
+| code entry | `SokoniOtp`, the same field the phone flow mounts — not a second grid |
+| resend cooldown | counted down locally, seeded from the server's `cooldownMs`/`retryAfterMs` |
+| invalid code | distinct message, attempts remaining, field cleared and re-focused |
+| expired / consumed | distinguished from wrong, each with the way forward |
+| max attempts | explained, with the resend that resolves it |
+| send ceiling | explained without inviting a pointless retry |
+| loading | every call routes through one busy gate, so a double submit cannot fire twice |
+| transport failure | error, never navigation, never a success |
+| `delivered:false` | says the mail did not leave rather than "check your inbox" for mail that is not coming |
+| back path | signs out, clears the pending marker, returns to a clean login |
+
+### Also fixed
+
+* `open()` did not await the already-verified pass-through, so it resolved while still
+  deciding — caught by the test that asserts the user actually lands.
+* The inline open-redirect sanitiser in `loginUser` was extracted to
+  `_sokoniLoginRedirect()`, now shared by the login path and the screen. The held user's
+  destination is **peeked, not consumed**: they have not completed login, and consuming it
+  would silently drop them at the homepage after verifying.
+
+### Reported, not fixed (pre-existing)
+
+`auth.js` carries **five copies** of the same open-redirect guard. Slice 4 removed the one
+inside `loginUser`; the other four are in the bootstrap (2) and the Google/OAuth fallbacks
+(2) — paths this slice is not authorised to touch. Ratcheted in the suite so a sixth fails.
+
+### Files
+
+`sokoni-verify-screen.js` (new) · `login.html` · `auth.js` · `auth.css` ·
+`scripts/test-auth-verify-screen.js` (new) · `scripts/test-auth-verify-gate.js` ·
+`scripts/cart-migration-state.js`
+
+**Database changes:** none. **API changes:** none — Slice 2's ops, unchanged. **Security
+changes:** none beyond Slice 3's gate. **Breaking changes:** none.
+
+**Tests:** verify-screen 93/93 (3 mutation controls), verify-gate 117/117, cart 729/729.
+Two Slice 3 assertions were superseded and rewritten rather than widened: the interim
+message check, and "pure addition" — now expressed as the line-ending-flip signature
+(`--ignore-cr-at-eol` must not shrink the diff), which does not expire when a later slice
+legitimately rewrites a line.
+
 ## [2026-08-12] — Auth Slice 3: the login-path verification gate
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`).

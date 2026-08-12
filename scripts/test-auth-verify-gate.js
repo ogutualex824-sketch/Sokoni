@@ -405,8 +405,15 @@ function user(o) {
     /* The message must be able to render. auth.css hides .auth-msg by default. */
     ok('F15 the message type used by the gate has a visible style',
        /\.auth-msg\.info\s*\{[^}]*display:\s*block/.test(read('auth.css')));
-    ok('F16 ...and the login path uses exactly that type',
-       /showAuthMsg\([\s\S]*?"info"/.test(gatedBranch));
+    /* SUPERSEDED at Slice 4 — this asserted the gated branch called showAuthMsg(…,"info").
+       That message was Slice 3's stopgap while the screen did not exist; Slice 4 replaced
+       it with the handoff, so the assertion now describes a state the product has moved
+       past. Rewritten to the thing that must stay true whoever owns the rendering: the
+       branch shows the user SOMETHING and grants no session either way. */
+    ok('F16 the gated branch surfaces the state rather than dying quietly',
+       /SokoniVerifyScreen\.open|showAuthMsg/.test(gatedBranch));
+    ok('F16b ...and still writes no session, whichever path it takes',
+       !/setItem\((["'])loggedIn\1/.test(gatedBranch) && !/setSession/.test(gatedBranch));
 
     /* Slice 3 issues no code — Slice 4's screen is what calls authDispatch. A message
        saying one is on its way would leave the user waiting for mail nobody requested,
@@ -456,18 +463,32 @@ function user(o) {
     ok('G9  the gate never CREATES a session — it has no loggedIn writer',
        !/setItem\((["'])loggedIn\1/.test(read('sokoni-verify-gate.js')));
 
-    /* Slice 3 only ADDS to the three files it edits. A deletion in any of them means
-       something was rewritten rather than extended — and the way that has actually
-       happened here before is a whole-file line-ending flip: auth.css is a mixed-EOL
-       file, and editing it converted 65 untouched LF lines to CRLF, which git reported
-       as 65 deletions inside a 13-line change. Counting deletions catches that whatever
-       causes it, without needing to know the file's ending style. */
+    /* NO WHOLE-FILE LINE-ENDING FLIP.
+
+       This started as "Slice 3 only adds, so deletions must be zero", which caught the
+       real thing: auth.css is a mixed-EOL file and editing it converted 65 untouched LF
+       lines to CRLF, reported by git as 65 deletions inside a 13-line change. But "zero
+       deletions" expires the moment a later slice legitimately rewrites a line — Slice 4
+       replaced the interim message and the inline redirect sanitiser, and the assertion
+       failed for a correct reason.
+
+       So assert the corruption SIGNATURE instead, which never expires: a diff that shrinks
+       when carriage returns at end-of-line are ignored contains a CR-only change. Real
+       edits are identical under both readings. */
     const cp = require('child_process');
-    for (const f of ['auth.js', 'firebase.js', 'auth.css']) {
-      const stat = cp.execSync('git diff --numstat -- ' + f, { cwd: ROOT, encoding: 'utf8' }).trim();
-      const dels = stat ? Number(stat.split(/\s+/)[1]) : 0;
-      ok('G10 ' + f + ' is a pure addition — no line was rewritten (deletions: ' + dels + ')',
-         dels === 0, stat);
+    const num = (args, f) => {
+      const out = cp.execSync('git diff ' + args + ' --numstat -- ' + f,
+                              { cwd: ROOT, encoding: 'utf8' }).trim();
+      if (!out) return [0, 0];
+      const p = out.split('\n')[0].split(/\s+/);
+      return [Number(p[0]) || 0, Number(p[1]) || 0];
+    };
+    for (const f of ['auth.js', 'firebase.js', 'auth.css', 'login.html']) {
+      const plain = num('', f), ignoring = num('--ignore-cr-at-eol', f);
+      ok('G10 ' + f + ' carries no line-ending flip (' + plain.join('/') + ' vs ' +
+         ignoring.join('/') + ' ignoring CR)',
+         plain[0] === ignoring[0] && plain[1] === ignoring[1],
+         'a CR-only change is hiding in this diff');
     }
   }
 

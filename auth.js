@@ -212,6 +212,23 @@ window.onunhandledrejection = function(e) {
 })();
 
 /* ── UI helpers ── */
+/* Post-login destination, sanitised. Only same-origin relative paths — an absolute URL or
+   a protocol-relative "//evil" is an open redirect, and this is reached straight after a
+   successful authentication, which is exactly when one is worth the most to an attacker.
+
+   Extracted in Auth Slice 4 because the verification screen needs the same destination and
+   the same rule. Two copies of a security check is how one of them quietly stops matching
+   the other; the suite asserts this regex appears exactly once in the file.
+
+   `peek` leaves the key in place: a user held at the verification screen has not completed
+   login, and consuming their destination would silently drop them at the homepage after
+   they verify. */
+function _sokoniLoginRedirect(peek){
+    const raw = sessionStorage.getItem("sokoniLoginRedirect") || "index.html";
+    if (!peek) sessionStorage.removeItem("sokoniLoginRedirect");
+    return /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(raw) && !raw.includes('//') ? raw : "index.html";
+}
+
 function showAuthMsg(msg, type){
     const el = document.getElementById("authMsg");
     if(!el) return;
@@ -334,17 +351,28 @@ async function loginUser(){
             if (_verdict.gated) {
                 console.warn('[AUTH STEP 3b] email not verified — holding at challenge, no session written');
                 if (btn) { btn.disabled = false; btn.textContent = "Sign In →"; }
-                /* States the situation and promises nothing. Slice 3 does not send a
-                   code — Slice 4's screen is what calls authDispatch — so wording this
-                   as "we've sent you a code" would be a claim this code cannot keep,
-                   and the user would sit waiting for mail that was never requested. */
-                showAuthMsg(
-                    "Your email address hasn't been confirmed yet. " +
-                    "It needs to be confirmed before you can continue.",
-                    "info"
-                );
                 if (typeof SokoniAudit !== 'undefined')
                     SokoniAudit.log('LOGIN_VERIFICATION_REQUIRED', { email, uid: cred.user.uid });
+
+                /* Hand off to the Slice 4 screen, which owns every state from here:
+                   code entry, resend cooldown, invalid/expired, attempt ceiling, and the
+                   navigation that follows a verification it has PROVEN against a refreshed
+                   token. It is given the user object rather than a uid — it must never take
+                   an identity from anything the page could have written. */
+                if (window.SokoniVerifyScreen && window.SokoniVerifyScreen.open) {
+                    await window.SokoniVerifyScreen.open({
+                        user: cred.user,
+                        next: _sokoniLoginRedirect(true),   /* peek — login is not complete */
+                    });
+                } else {
+                    /* The screen failed to load. Say so plainly rather than leaving a card
+                       that looks like the click did nothing — and still grant no session. */
+                    showAuthMsg(
+                        "Your email address hasn't been confirmed yet, and the confirmation " +
+                        "step could not load. Please reload the page and try again.",
+                        "error"
+                    );
+                }
                 return;
             }
         }
@@ -489,10 +517,8 @@ async function loginUser(){
             } catch (_) { /* non-fatal — never block login */ }
         })();
 
-        const _rawRedir = sessionStorage.getItem("sokoniLoginRedirect") || "index.html";
-        sessionStorage.removeItem("sokoniLoginRedirect");
-        /* Validate redirect — only allow same-origin relative paths, block open-redirect */
-        const _safeRedir = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(_rawRedir) && !_rawRedir.includes('//') ? _rawRedir : "index.html";
+        /* Same rule as the verification screen uses — see _sokoniLoginRedirect. */
+        const _safeRedir = _sokoniLoginRedirect();
         console.log('[AUTH STEP 6] Redirecting user to:', _safeRedir);
         setTimeout(() => window.location.href = _safeRedir, 1200);
 

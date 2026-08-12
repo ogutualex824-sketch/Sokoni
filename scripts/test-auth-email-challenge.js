@@ -289,8 +289,21 @@ console.log('\nK. Slice 1 is model-only');
      They are replaced below by the thing they were really protecting: that the Slice 1
      MODEL stays server-only. That constraint is still true, still meaningful, and does not
      expire when the next slice lands. */
-  ck('K', 'login.html untouched — Slice 4 owns the verification screen',
-     !changed.includes('login.html'));
+  /* RETIRED at Slice 4 — "login.html untouched". It marked that the verification screen
+     had not been built yet, which was true through Slice 3 and is now false by
+     authorisation: Slice 4 is that screen, and it mounts on login.html.
+
+     What replaces it is the constraint that actually protects the model and does not
+     expire: no challenge internals may ever reach the page. The code, its hash and its
+     salt live server-side, and a client surface that carried any of them would have
+     defeated Slice 1 no matter how the screen is written. */
+  {
+    const page = fs.readFileSync(path.join(ROOT, 'login.html'), 'utf8');
+    ck('K', 'no challenge internals reach the login page',
+       !/authEmailChallenges|codeHash|challengeSalt|timingSafeEqual/.test(page));
+    ck('K', 'the page stores no verification verdict of its own',
+       !/emailVerified\s*[:=]\s*true/.test(page));
+  }
   ck('K', 'index.js does not export the model directly (it is reached only via authDispatch)',
      !/auth-email-challenge/.test(fs.readFileSync(path.join(FN, 'index.js'), 'utf8')));
   {

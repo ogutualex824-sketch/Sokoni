@@ -73,6 +73,11 @@
 
       <div id="authMsg" class="auth-msg"></div>
 
+      <!-- Auth Slice 4 — email verification screen. Empty until the Slice 3 gate holds a
+           sign-in; sokoni-verify-screen.js renders into it and adds .skv-active to the
+           card, which hides the login form. Never shown by default. -->
+      <div id="skvMount" style="display:none"></div>
+
       <!-- Email + Password -->
       <div class="auth-field">
         <i class="fas fa-envelope" aria-hidden="true"></i>
@@ -228,6 +233,9 @@
   <script type="module" src="session-manager.js"></script>
   <!-- Must load BEFORE auth.js: auth.js mounts the field on DOM ready. -->
   <script src="sokoni-otp.js"></script>
+  <!-- Must precede auth.js: the login path hands off to this screen the moment the gate
+       holds an unverified account. It reuses the SokoniOtp field mounted above. -->
+  <script src="sokoni-verify-screen.js"></script>
   <script src="auth.js"></script>
   <script src="sokoni-audit.js" defer></script>
   <script src="scroll-top.js" defer></script>

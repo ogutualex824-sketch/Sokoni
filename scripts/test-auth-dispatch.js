@@ -355,8 +355,19 @@ console.log('\nJ. Wiring, and the slice boundary');
      login.html and firestore.rules stay: Slice 4 owns the verification screen and the
      rules remain frozen at ca9e8924, so both are still live constraints. What Slice 2
      itself must not do is reach into the client, which is asserted directly below. */
-  ['login.html', 'firestore.rules'].forEach(f =>
+  /* RETIRED at Slice 4 — 'login.html' was in this list. It meant "the verification screen
+     does not exist yet", which is now false by authorisation. firestore.rules stays: the
+     ruleset is still frozen at ca9e8924, so that one is a live constraint.
+
+     The durable replacement is below: nothing this dispatcher owns may surface on the
+     page. */
+  ['firestore.rules'].forEach(f =>
     ck('J', f + ' untouched', !changed.includes(f), changed.join(', ')));
+  {
+    const page = fs.readFileSync(path.join(ROOT, 'login.html'), 'utf8');
+    ck('J', 'no dispatcher internals reach the login page',
+       !/authEmailChallenges|SENDGRID|emailChallengeIssue\s*\(/.test(page));
+  }
   /* execSrc, not src: the header comment explains that verification must not depend on
      "a localStorage value", and matching raw text flagged that explanation as the thing
      it warns against — the same comment-vs-code trap that first bit the sendOrQueue

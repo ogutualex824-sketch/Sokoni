@@ -719,3 +719,30 @@ body{
     line-height: 44px;
   }
 }
+
+/* ── Auth Slice 4 — email verification screen ─────────────────────────────
+   The screen takes over the whole card with ONE class instead of the caller
+   listing which elements to hide; an enumeration goes stale the next time a
+   field is added to the login form and would leave a password box floating
+   under the code entry. The brand stays so the user still knows where they are. */
+.auth-card.skv-active > *:not(#skvMount):not(.auth-brand){ display:none !important; }
+
+/* Text-button that must not inherit .auth-btn. Kept a real <button> rather than an
+   <a>: it performs an action, and an anchor without href is unreachable by keyboard. */
+.skv-link{
+    background:none;
+    border:0;
+    padding:0;
+    font:inherit;
+    color:#71ff00;
+    font-weight:700;
+    cursor:pointer;
+}
+.skv-link:disabled{
+    color:rgba(255,255,255,0.32);
+    cursor:default;
+}
+#skvTimer{
+    font-size:12px;
+    color:rgba(255,255,255,0.38);
+}

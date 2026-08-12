@@ -1,6 +1,6 @@
 # Email Verification — server-controlled challenge
 
-**Status:** Slices 1–3 complete, **not deployed**. Firestore rules unchanged (`ca9e8924`).
+**Status:** Slices 1–4 complete, **not deployed**. Firestore rules unchanged (`ca9e8924`).
 **Related:** [[Authentication]] · [[Security]] · [[Communication Engine]] · [[Release Roadmap]]
 
 Replaces the old "you are logged in because you typed the right password" model with a
@@ -15,6 +15,7 @@ server-issued code that proves the account's email address belongs to whoever is
 | Model | `functions/auth-email-challenge.js` | the challenge document, its hash, its lifetime |
 | Transport | `functions/auth-dispatch.js` | `authDispatch` — issue / verify / status, App Check enforced |
 | Gate | `sokoni-verify-gate.js` | whether an unverified account gets an application session |
+| Screen | `sokoni-verify-screen.js` | the challenge the held user actually answers |
 
 ### Model — Slice 1
 
@@ -82,6 +83,28 @@ the flag in the login path alone would have been undone milliseconds later.
 page — a pre-existing hole in the localStorage-only guard. `pos-v2.html` carries
 `data-require-auth` but omits `auth-guard.js`; also pre-existing.
 
+### Screen — Slice 4
+
+The screen the gate hands off to. It talks to `authDispatch` and nothing else.
+
+**Success is proven, never taken on trust.** `ok:true` means the server marked the record;
+the screen then calls `user.reload()` and re-reads `emailVerified` before saying anything.
+If the flag is not true it reports failure however encouraging the response looked — a screen
+that celebrates and then drops the user back at the gate is the false-success defect class.
+
+**Status before issue.** Opening does not send mail. The screen asks `emailChallengeStatus`
+first and resumes a live challenge rather than reissuing, because the code already in the
+inbox still works and reissuing would burn one of the 5 sends and start an unasked-for
+cooldown.
+
+Covers: code entry (reusing `SokoniOtp`), resend cooldown, invalid, expired, consumed,
+attempt ceiling, send ceiling, loading, transport failure, `delivered:false`, and a back
+path that signs out and returns to a clean login.
+
+**Not a true change-email.** Changing the address on the Auth record needs a server op that
+does not exist and was not authorised here; the back path leaves the account instead. A real
+change-email belongs with the R1.1 profile work already on the roadmap.
+
 ---
 
 ## ⚠ Rollout risk — read before deploying
@@ -95,8 +118,10 @@ Turning the gate on before the verification screen exists would hold every one o
 accounts at a challenge with **no way to answer it**. The gate is correct; the rollout order
 is what matters:
 
-1. **Slice 4 must ship with or before the gate.** Then a held user gets a code and is through
-   in under a minute — self-service, no support queue.
+1. **The gate and the screen deploy TOGETHER, never the gate alone.** Both now exist, so a
+   held user gets a code and is through in under a minute — self-service, no support queue.
+   Shipping `sokoni-verify-gate.js` without `sokoni-verify-screen.js` and the `login.html`
+   mount recreates exactly the lockout this section warns about.
 2. **Measure first.** Count `emailVerified === false` among password accounts in production
    before deploying, so the size of the affected population is a number and not a guess.
 3. **If that number is large,** decide explicitly between grandfathering accounts created
@@ -111,14 +136,16 @@ is what matters:
 |---|---|
 | `scripts/test-auth-email-challenge.js` | 62 |
 | `scripts/test-auth-dispatch.js` | 58 |
-| `scripts/test-auth-verify-gate.js` | 106 |
+| `scripts/test-auth-verify-gate.js` | 117 |
+| `scripts/test-auth-verify-screen.js` | 93 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still
-made by the real code. The third runs the shipped `sokoni-verify-gate.js` in a `vm` sandbox
-and includes four **mutation controls** — each breaks the gate on purpose and requires the
+made by the real code. The last two run the shipped client files in a `vm` sandbox and carry
+seven **mutation controls** between them — each breaks the code on purpose and requires the
 answer to change, because a suite that only ever sees correct code cannot tell "this passes"
-from "this asserts nothing".
+from "this asserts nothing". The sharpest of them deletes the screen`s `emailVerified === true`
+proof and requires the mutant to celebrate a false success.
 
 ## Deployment
 

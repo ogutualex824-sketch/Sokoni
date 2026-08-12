@@ -113,6 +113,15 @@ const PRE_EXISTING = [
      clicked the old verification link is held at a challenge it cannot answer. */
   'docs/AUTH_EMAIL_VERIFICATION.md',
   'docs/RELEASE_ROADMAP.md',
+  /* Auth slice 4 — the verification screen the gate hands off to.
+       sokoni-verify-screen.js  new — the screen
+       login.html               mount point + script tag. Named EXPLICITLY: it already
+                                loads sokoni-cart.js, so the .html fallback in
+                                unexpected() would have excused it without anyone
+                                deciding to, which is not the same as being explained. */
+  'sokoni-verify-screen.js',
+  'login.html',
+  'scripts/test-auth-verify-screen.js',
 ];
 
 /* The service, its docs and the suites themselves. */
