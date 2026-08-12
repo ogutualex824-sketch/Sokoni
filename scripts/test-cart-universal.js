@@ -77,13 +77,22 @@ console.log('\nA. No page is left inert for want of the service');
 /* ══ B. line endings survived a 293-file rollout ══ */
 console.log('\nB. The rollout did not mangle any file');
 {
-  const changed = cp.execSync('git diff --name-only HEAD -- "*.html"', { cwd: ROOT, encoding: 'utf8' })
+  /* Compare against the commit that PERFORMED the rollout, not the working tree. These
+     assertions were written while 2.6 was uncommitted, when the rollout WAS the working
+     diff; once committed the tree went clean and they measured nothing — passing on an
+     empty set would have been worse than failing. BASE is the rollout commit's parent, so
+     the same evidence is re-checked for good. */
+  const BASE = cp.execSync('git log --format=%H --grep="universal rollout, interceptor removed" -1',
+    { cwd: ROOT, encoding: 'utf8' }).trim() + '~1';   /* ~1, NOT ^ — node spawns cmd.exe on
+       Windows, where ^ is the ESCAPE character, so "<sha>^" silently became "<sha>" and this
+       block diffed the rollout commit against itself and measured one file. */
+  const changed = cp.execSync('git diff --name-only ' + BASE + ' -- "*.html"', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
   ck('B', 'a large number of pages changed (control)', changed.length > 250, changed.length);
   /* Only the pages THIS rollout touched. availability-manager.html is Track 1 dirt and
      comparing it here says nothing. */
   const rolled = changed.filter(f =>
-    /src="sokoni-cart\.js"/.test(cp.execSync('git diff HEAD -- "' + f + '"', { cwd: ROOT, encoding: 'utf8' })));
+    /src="sokoni-cart\.js"/.test(cp.execSync('git diff ' + BASE + ' -- "' + f + '"', { cwd: ROOT, encoding: 'utf8' })));
   ck('B', 'the rollout touched the expected number of pages', rolled.length > 250, rolled.length);
 
   /* Line endings: comparing against `git show HEAD:` is invalid — git may normalise on
@@ -118,7 +127,7 @@ console.log('\nB. The rollout did not mangle any file');
   const overreach = rolled.filter(f => {
     if (PRE.includes(f)) return false;
     const now = tagsOf(read(f));
-    const was = tagsOf(cp.execSync('git show HEAD:"' + f + '"', { cwd: ROOT, encoding: 'utf8', maxBuffer: 1e8 }));
+    const was = tagsOf(cp.execSync('git show ' + BASE + ':"' + f + '"', { cwd: ROOT, encoding: 'utf8', maxBuffer: 1e8 }));
     const hadService = was.some(t => /sokoni-cart\.js/.test(t));
     const gained = now.filter(t => { const i = was.indexOf(t); if (i > -1) { was.splice(i, 1); return false; } return true; });
     /* `was` now holds anything LOST; `gained` anything new.
@@ -135,7 +144,7 @@ console.log('\nB. The rollout did not mangle any file');
   const tailChanged = rolled.filter(f => {
     if (PRE.includes(f)) return false;
     const now = fs.readFileSync(path.join(ROOT, f));
-    const was = cp.execSync('git show HEAD:"' + f + '"', { cwd: ROOT, encoding: 'buffer', maxBuffer: 1e8 });
+    const was = cp.execSync('git show ' + BASE + ':"' + f + '"', { cwd: ROOT, encoding: 'buffer', maxBuffer: 1e8 });
     return Buffer.compare(now.slice(-8), was.slice(-8)) !== 0;
   });
   ck('B', 'no file had its trailing bytes rewritten', tailChanged.length === 0,
