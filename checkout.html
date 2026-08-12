@@ -1654,6 +1654,23 @@ const subtotalEl = document.getElementById("summarySubtotal");
 const btnTotalEl = document.getElementById("btnTotal");
 
 let subtotal = 0;
+
+/* ── the ONE line-total ─────────────────────────────────────────────────────────
+   Quantity-aware, and the single definition of what a cart line is worth on this page.
+   The effective-quantity semantics are preserved exactly as they were: a missing,
+   zero, negative, fractional or non-numeric qty resolves to at least 1, falling back to
+   `quantity` before defaulting — unchanged, because changing what a quantity MEANS is a
+   different decision from fixing arithmetic that forgot to use it.
+
+   This is not a new pricing authority. The charge remains server-authoritative:
+   createCheckoutSession recomputes the amount, _serverTotalOverride carries it back, and
+   every payment call sends orderTotal/stkAmount — never the value below. What this feeds
+   is the displayed subtotal and, through saveAndRedirect, the order record, the printed
+   receipt and referral credit. */
+function _ckLineTotal(item) {
+  const qty = Math.max(1, Math.round(Number(item && item.qty) || Number(item && item.quantity) || 1));
+  return Number((item && item.price) || 0) * qty;
+}
 let promoDiscount = 0;
 let deliveryFee = 0;
 let fulfillmentType = 'delivery';   /* 'delivery' (rider + fee) | 'pickup' (free, no rider) */
@@ -1685,9 +1702,15 @@ const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").repla
 const _itemsHTML = [];
 cart.forEach((item, _idx) => {
   /* Quantity-aware line total — mirrors the server (createCheckoutSession) so the
-     displayed subtotal matches the amount actually charged when qty > 1. */
-  const qty       = Math.max(1, Math.round(Number(item.qty) || Number(item.quantity) || 1));
-  const lineTotal = Number(item.price || 0) * qty;
+     displayed subtotal matches the amount actually charged when qty > 1.
+
+     The arithmetic now lives in _ckLineTotal() so that the ONE other place that has to
+     total a cart — the last-resort fallback in saveAndRedirect — cannot drift from it.
+     It had already drifted: that fallback summed price and ignored qty entirely, which
+     under-reported multi-quantity orders on the receipt and in referral credit. Copying
+     this expression there would have created the second pricing authority all over
+     again, so there is now exactly one. */
+  const lineTotal = _ckLineTotal(item);
   subtotal += lineTotal;
   /* XSS-safe: escape all user-supplied strings before inserting into innerHTML */
   const safeName  = _esc(item.name);
@@ -2790,11 +2813,23 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
      snapshots the cart just before calling it, precisely because the clears below empty
      it — that ordering is load-bearing for the stock decrement and is unchanged. */
   const currentCart = (window.SokoniCart ? window.SokoniCart.list() : []);
-  /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
-     Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
+  /* Use the already-computed orderTotal (includes delivery fee, platform fee, promo and
+     loyalty discounts). Fall back to a cart sum only when orderTotal was never set — which
+     means updateTotals() never ran, so no fee or discount figure exists to include either.
+
+     THE FALLBACK USED TO IGNORE QUANTITY. It summed Number(p.price) across the cart, so an
+     order for three of something was recorded, receipted and credited to a referrer at the
+     price of one. It now uses _ckLineTotal — the same function that produces the displayed
+     subtotal — so the two cannot disagree about what a line is worth.
+
+     What it still does NOT include is delivery and fees, and that is deliberate rather than
+     an oversight: this branch only executes when those were never computed. Inventing them
+     here would be a second pricing authority guessing at figures the page does not have.
+     The charge itself is unaffected in either case — every payment call sends
+     orderTotal/stkAmount/_serverTotalOverride, never this value. */
   const total = (typeof orderTotal === "number" && orderTotal > 0)
     ? orderTotal
-    : currentCart.reduce((s,p) => s + Number(p.price||0), 0);
+    : currentCart.reduce((s, p) => s + _ckLineTotal(p), 0);
   /* Use the server-generated orderId when provided — prevents client-side order ID forgery.
      For non-M-Pesa paths use _ckOrderId() which is deterministic from the stable session
      key, so a retry or double-submit resolves to the same orderId and the Firestore

@@ -322,8 +322,22 @@ console.log('\nK. Perimeter — 2.6 has not started');
      STATE.DEFERRED_FILES.length === 0);
   ck('K', 'nothing dirty the migration state does not explain',
      STATE.unexpected(changed).length === 0, STATE.unexpected(changed).join(', '));
-  ck('K', 'the saveAndRedirect fallback total is still untouched',
-     /currentCart\.reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  /* RETIRED at the release pass. This asserted the saveAndRedirect fallback still summed
+     price WITHOUT quantity — correct while that defect was deliberately carried, and now
+     false by authorisation: the release explicitly cleared it as a money-path blocker.
+
+     Replaced by the constraints that outlive the fix: the fallback is quantity-aware, it
+     shares ONE line-total with the displayed subtotal rather than carrying a second copy,
+     and the charge is still the server's. scripts/test-checkout-fallback-total.js proves
+     the arithmetic; these keep the cart suites honest about it. */
+  ck('K', 'the saveAndRedirect fallback is quantity-aware',
+     /currentCart\.reduce\(\(s, p\) => s \+ _ckLineTotal\(p\), 0\)/.test(read('checkout.html')));
+  ck('K', 'the qty-blind sum is gone',
+     !/reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  ck('K', 'the line total has exactly ONE definition',
+     (read('checkout.html').match(/function _ckLineTotal/g) || []).length === 1);
+  ck('K', 'the charge is still server-authoritative',
+     /amount:\s*stkAmount \?\? _serverTotalOverride \?\? orderTotal/.test(read('checkout.html')));
 }
 
 console.log('\n' + '='.repeat(70));

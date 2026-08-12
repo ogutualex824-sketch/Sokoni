@@ -467,8 +467,21 @@ console.log('\nL. No legacy cart authority survives');
 /* ══ M. frozen invariants ══ */
 console.log('\nM. Frozen invariants — reported, not silently fixed');
 {
-  ck('M', 'the saveAndRedirect fallback still sums price WITHOUT qty — untouched',
-     /currentCart\.reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  /* RETIRED at the release pass. This pinned the defect in place — "still sums price
+     WITHOUT qty" was the correct guard while the issue was deliberately carried past
+     Track 2, and is now false by authorisation: the release cleared it as a money-path
+     blocker before arming the auth cutoff.
+
+     What replaces it is what must remain true afterwards. The arithmetic itself is proved
+     in scripts/test-checkout-fallback-total.js; these three keep the cart suites from
+     losing sight of it. */
+  ck('M', 'the saveAndRedirect fallback is quantity-aware',
+     /currentCart\.reduce\(\(s, p\) => s \+ _ckLineTotal\(p\), 0\)/.test(read('checkout.html')));
+  ck('M', 'the qty-blind sum is gone',
+     !/reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  ck('M', 'the line total has exactly ONE definition, shared with the displayed subtotal',
+     (read('checkout.html').match(/function _ckLineTotal/g) || []).length === 1 &&
+     (read('checkout.html').match(/_ckLineTotal\(/g) || []).length >= 3);
   console.log('     ^ known money-path issue, deliberately left for its own decision');
   ck('M', 'the service exposes no open() — the minishop collision stays inert',
      !/\bopen\s*:/.test(stripComments(read('sokoni-cart.js'))));

@@ -292,12 +292,30 @@ console.log('\nG. Guards held');
 {
   ck('G', 'the checkout payment contract is untouched',
      /orderItems: cart/.test(execOf('checkout.html')));
-  ck('G', 'the saveAndRedirect fallback total is still untouched',
-     /currentCart\.reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  /* RETIRED at the release pass. This asserted the saveAndRedirect fallback still summed
+     price WITHOUT quantity — correct while that defect was deliberately carried, and now
+     false by authorisation: the release explicitly cleared it as a money-path blocker.
+
+     Replaced by the constraints that outlive the fix: the fallback is quantity-aware, it
+     shares ONE line-total with the displayed subtotal rather than carrying a second copy,
+     and the charge is still the server's. scripts/test-checkout-fallback-total.js proves
+     the arithmetic; these keep the cart suites honest about it. */
+  ck('G', 'the saveAndRedirect fallback is quantity-aware',
+     /currentCart\.reduce\(\(s, p\) => s \+ _ckLineTotal\(p\), 0\)/.test(read('checkout.html')));
+  ck('G', 'the qty-blind sum is gone',
+     !/reduce\(\(s,p\) => s \+ Number\(p\.price\|\|0\), 0\)/.test(read('checkout.html')));
+  ck('G', 'the line total has exactly ONE definition',
+     (read('checkout.html').match(/function _ckLineTotal/g) || []).length === 1);
+  ck('G', 'the charge is still server-authoritative',
+     /amount:\s*stkAmount \?\? _serverTotalOverride \?\? orderTotal/.test(read('checkout.html')));
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ck('G', 'checkout.html not modified in this slice', !changed.includes('checkout.html'),
-     changed.filter(f => f === 'checkout.html').join(''));
+  /* RETIRED at the release pass — checkout.html IS modified now, by the authorised
+     money-path fix. What replaces it is the thing that must stay true: the payment
+     contract the 2.6 rollout was protecting is intact. */
+  ck('G', 'the checkout payment contract survived the fallback fix',
+     /orderItems: cart/.test(execOf('checkout.html')) &&
+     /_serverTotalOverride/.test(read('checkout.html')));
   /* Scoped to product files: scripts/test-cart-wishlist-page.js is a cart SUITE whose
      name contains "wishlist", and matching it flagged a guard against itself. */
   ck('G', 'no wishlist product file was touched',

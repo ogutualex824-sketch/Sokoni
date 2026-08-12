@@ -151,6 +151,10 @@ const PRE_EXISTING = [
      other sets it on both sides atomically. Neither deploys, and the sentinel stands. */
   'scripts/auth-cutoff-dry-run.js',
   'scripts/auth-activate-cutoff.js',
+  /* Release pass: the saveAndRedirect fallback total, carried since Track 2.4 and cleared
+     as a money-path blocker before arming the auth cutoff. */
+  'checkout.html',
+  'scripts/test-checkout-fallback-total.js',
   'docs/AUTH_ACTIVATION_RUNBOOK.md',
 ];
 

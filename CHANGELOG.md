@@ -1,3 +1,74 @@
+## [2026-08-12] — Release pass, Phase 0: money-path blocker cleared, credentials removed
+
+**Not deployed.** Rules `ca9e8924`. Both cutoffs still `2099-01-01T00:00:00.000Z`.
+
+### The `saveAndRedirect` fallback ignored quantity
+
+It summed `Number(p.price)` across the cart. An order for three of something was **recorded,
+receipted and credited to a referrer at the price of one** — 500 shillings missing on a single
+250×3 line.
+
+**Nobody was mischarged.** The charge is server-authoritative: `createCheckoutSession`
+recomputes it, `_serverTotalOverride` carries it back, and every payment call sends
+`orderTotal` / `stkAmount` / `_serverTotalOverride`. This value never reaches a provider. It
+reaches the order record, the printed receipt (`grandTotal`, `payments[].amount`) and
+`SokoniReferral.recordReferredPurchase` — which is why it was still a money-path defect.
+
+### One line-total, not two
+
+The obvious fix — copy the quantity expression into the fallback — would have recreated the
+second pricing authority that caused the drift in the first place. Instead the canonical
+expression was extracted to `_ckLineTotal()` and **both** sites call it, so they cannot
+disagree about what a line is worth.
+
+Effective-quantity semantics are preserved exactly: missing, null, zero, negative, fractional
+and non-numeric quantities resolve as before, `quantity` still stands in for `qty`. Changing
+what a quantity *means* is a different decision from fixing arithmetic that forgot to use it.
+
+The fallback still excludes delivery and fees — deliberately. It only runs when
+`updateTotals()` never did, so those figures were never computed; inventing them would be the
+second authority again.
+
+**Recorded, not fixed:** a non-numeric price yields `NaN`, in the fallback *and* in the
+displayed subtotal, because the original expression did the same. Identical on both sides, so
+it cannot cause a disagreement — but it is pre-existing behaviour, not something this change
+introduced, and altering it would change what the page displays for malformed catalogue data.
+
+### Four cart assertions retired, not widened
+
+Three suites pinned the defect in place — *"the saveAndRedirect fallback total is still
+untouched"* and *"checkout.html not modified in this slice"* — correct while the issue was
+deliberately carried past Track 2, and false by authorisation once the release cleared it.
+Replaced with the constraints that outlive the fix: the fallback is quantity-aware, the
+qty-blind sum is gone, the line total has exactly one definition, and the charge is still the
+server's. Cart totals rose **729 → 737**.
+
+### Credentials removed from production
+
+The temporary measurement identity is gone, verified after the fact rather than assumed:
+
+* USER_MANAGED key `f8975231…` deleted
+* `roles/firebaseauth.viewer` binding removed
+* service account `auth-population-audit@sokoni-aeb26` deleted — confirmed absent from the
+  project's service-account list, with no bindings remaining
+* the local key at `C:\secure\sokoni\auth-audit.json` deleted
+
+The aggregate `unverified-population.json` is kept; it contains no identity. No credential
+ever entered the repository.
+
+### Files
+
+`checkout.html` · `scripts/test-checkout-fallback-total.js` (new) ·
+`scripts/test-cart-final.js` · `scripts/test-cart-food.js` · `scripts/test-cart-universal.js` ·
+`scripts/cart-migration-state.js`
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — the charge
+path is untouched. **Breaking changes:** none.
+
+**Tests:** checkout fallback 58/58 (5 mutation controls, incl. one proving the extraction
+changed no canonical value across 308 item shapes), cart 737/737, auth 635/635 across seven
+suites, challenge 63/63, dispatch 67/67, wishlist CLEAN.
+
 ## [2026-08-12] — Activation tooling and runbook (cutoff decision recorded, NOT set)
 
 **Not deployed. Enforcement still OFF — both cutoffs remain `2099-01-01T00:00:00.000Z`.**
