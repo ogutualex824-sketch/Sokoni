@@ -330,10 +330,21 @@ console.log('\nI. Nothing leaks the challenge to the caller');
   const policy = require(path.join(FN, 'auth-policy.js'));
   ck('I', 'status carries a server-computed enforcement verdict',
      st.enforcement && typeof st.enforcement.applies === 'boolean', JSON.stringify(st.enforcement));
-  ck('I', 'it reports the shipped sentinel, so enforcement is OFF',
-     st.enforcement.enabled === false && st.enforcement.cutoff === policy.SENTINEL_ISO,
+  /* STATE-AWARE. This asserted "the shipped cutoff is the sentinel, so enforcement is OFF"
+     — the same conflation that turned 31 client-side assertions red when the release armed.
+     This one lives in an emulator-only suite, so it was missed by that sweep and surfaced
+     here instead. What must hold in EITHER state: the dispatcher reports the cutoff the
+     server actually carries, and its `enabled` flag agrees with that value rather than
+     being independently decided. */
+  ck('I', 'status reports the cutoff the server actually carries',
+     st.enforcement.cutoff === policy.CUTOFF_ISO, JSON.stringify(st.enforcement));
+  ck('I', 'the enabled flag agrees with that cutoff',
+     st.enforcement.enabled === (policy.CUTOFF_ISO !== policy.SENTINEL_ISO),
      JSON.stringify(st.enforcement));
-  ck('I', 'and therefore applies to nobody yet', st.enforcement.applies === false);
+  /* This account is old (created by the harness moments ago, but before any sane activation
+     instant), so it must be grandfathered whether enforcement is on or off. */
+  ck('I', 'and this account is not subject to enforcement either way',
+     st.enforcement.applies === false, JSON.stringify(st.enforcement));
 
   /* Now the part that catches a handler which never reads the record: flip the server
      cutoff to a long-past date and the SAME account must become enforced. If metadata is

@@ -1,3 +1,66 @@
+## [2026-08-12] — ARMED: enforcement cutoff set to 2026-08-12T18:30:00.000Z
+
+**NOT DEPLOYED.** Rules `ca9e8924`. Phase 2 requires separate authorization.
+
+The email-verification enforcement cutoff is armed on both sides to the authorized production
+activation instant — **`2026-08-12T18:30:00.000Z`** (21:30 EAT). Enforcement begins at that
+instant *once the code is deployed*, and not before.
+
+```
+client (sokoni-verify-policy.js)  2026-08-12T18:30:00.000Z
+server (functions/auth-policy.js) 2026-08-12T18:30:00.000Z
+identical                         YES
+armed                             YES
+deployed                          NO
+```
+
+The diff is two lines — the cutoff declaration in each file, nothing else.
+
+### Why this instant
+
+It falls **after** the expected deployment window. That ordering is the point: the cutoff
+lands once the new code is live, so there is no window in which someone signs up under the
+old behaviour and is then held retroactively on their next login. If deployment slips past
+18:30Z the property inverts, and the correct response is to re-arm rather than deploy into
+the gap.
+
+### Verification
+
+* Dry-run against that exact value: **CLEAN**, `STATE: ARMED`, all **87** measured accounts
+  grandfathered, 0 enforced.
+* Boundary: 1 day / 1 s / 1 ms **before** → grandfathered; **exactly at** → ENFORCED; 1 ms /
+  1 s / 1 day after → enforced. Client and server agree on every one.
+* Unknown, empty and unparseable creation times → grandfathered. Google, phone and Facebook
+  created after the cutoff → not gated. A password account created after → enforced.
+* Client/server agreement: 3,204 instants compared around the cutoff, zero disagreements.
+
+### One assertion fixed, one crash recorded
+
+`test-auth-dispatch.js` carried a 32nd instance of the state/behaviour conflation —
+*"it reports the shipped sentinel, so enforcement is OFF"*. It lives in an emulator-only
+suite, so the earlier six-suite sweep missed it and it surfaced here. Rewritten to the claim
+that holds in either state: the dispatcher reports the cutoff the server actually carries,
+and its `enabled` flag agrees with that value rather than being independently decided.
+Verified green **armed and unarmed**.
+
+Separately, one run of `test-auth-dispatch.js` died at its header with Windows exit code
+`3221226505` (`0xC0000409`) before executing a single assertion. Re-run clean twice
+afterwards. Recorded as transient rather than explained — no code change was made for it, and
+nothing about the run that crashed suggested a defect in the suite or the product.
+
+### Suites, all against the ARMED state
+
+checkout fallback 58/58 · auth policy 94/94 · policy-server 80/80 · gate 126/126 ·
+screen 97/97 · transitions 100/100 · signup 85/85 · landing 58/58 ·
+cart 737/737 · challenge 63/63 · dispatch 68/68 · wishlist CLEAN
+
+### Deployment — still pending, still gated
+
+Hosting **and** Functions together. Never the gate alone. `authDispatch` has never been
+deployed; `sokoniChat` (`db1789f`) is also pending. Rollback is
+`node scripts/auth-activate-cutoff.js --revert --confirm` plus a redeploy — no user record is
+modified at activation, so nothing is left in a broken state.
+
 ## [2026-08-12] — Release suites made state-aware (the failed arming told us something real)
 
 **Not deployed.** Rules `ca9e8924`. Both cutoffs at the `2099-01-01T00:00:00.000Z` sentinel.
