@@ -1,3 +1,69 @@
+## [2026-08-12] — Activation tooling and runbook (cutoff decision recorded, NOT set)
+
+**Not deployed. Enforcement still OFF — both cutoffs remain `2099-01-01T00:00:00.000Z`.**
+No timestamp has been chosen or written.
+
+### The decision
+
+`CUTOFF_ISO` = **the exact instant enforcement is intentionally activated**. Accounts created
+before it are grandfathered; accounts created at or after it must verify. Not a historical
+date, and **not a guessed date committed in advance** — commit `2026-08-20` today and release
+on the 22nd, and two days of signups are gated by a timestamp nobody chose for them. The
+cutoff is set immediately before the coordinated release.
+
+### `scripts/auth-activate-cutoff.js`
+
+Sets the cutoff on **both** files from one input, or neither. The constant lives in two places
+because a functions deploy uploads only `functions/` and the deployed code cannot require the
+client copy; hand-editing two constants under release pressure is exactly where one gets
+missed, and a client enforcing from Tuesday while the server thinks Thursday is a divergence
+nobody would notice until users did.
+
+It refuses: a historical timestamp (earlier than the production measurement — that is a
+retroactive restriction on the accounts grandfathering exists to protect), a timestamp more
+than 90 days out (a sentinel wearing a real date, which reads as ON while being off), a
+non-UTC format, and any run without `--confirm`. `--check` reports the current state and fails
+if the two sides have diverged; `--revert` restores the sentinel.
+
+Verified by writing a cutoff, confirming both files carried it, then reverting — the files
+came back **byte-identical**, because only the matched declaration is replaced.
+
+### `scripts/auth-cutoff-dry-run.js`
+
+The pre-activation rehearsal, promoted from scratch into the repo because the agreed procedure
+now requires it. Requires an explicit timestamp — a dry-run that invents its own candidate
+proves nothing about the one about to ship.
+
+**Defect found and fixed during testing:** the first version hard-asserted "still ships the
+sentinel", so running it *after* the cutoff was set reported five problems and buried anything
+real — a tool that cries wolf at exactly the moment it matters most. It now reports the state
+and requires one of two coherent ones:
+
+* `STATE: PRE-ACTIVATION` — both files ship the sentinel; the candidate was rehearsed only.
+* `STATE: ARMED` — both files ship exactly the candidate under test.
+
+Anything else fails, including the dangerous middle case: **a dry-run against a timestamp the
+files do not carry**, which would otherwise pass while proving nothing about what deploys.
+
+### `docs/AUTH_ACTIVATION_RUNBOOK.md`
+
+The ordered procedure: check → set → dry-run with the real timestamp → full suite → commit →
+deploy hosting **and** functions together → post-deploy verification → rollback.
+
+It also records why the measurement-to-activation window is intentional: signups did not stop
+on 2026-08-12, so the grandfathered population at activation will exceed the 87 measured. Those
+accounts still receive the legacy verification link (6C suppresses it only when an account is
+gated), so they have a path to verification — they are simply not required to take it.
+
+**Files:** `scripts/auth-cutoff-dry-run.js` (new) · `scripts/auth-activate-cutoff.js` (new) ·
+`docs/AUTH_ACTIVATION_RUNBOOK.md` (new) · `scripts/cart-migration-state.js`
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — no product
+code changed. **Breaking changes:** none.
+
+**Tests:** the full auth set re-run unchanged — policy 92/92, policy-server 78/78, gate
+125/125, screen 97/97, transitions 100/100, signup 85/85, landing 58/58.
+
 ## [2026-08-12] — Verification landing: the login dead-end (auth-flow review, Finding 1)
 
 **Not deployed.** Rules unchanged (`ca9e8924`). Both cutoffs remain `2099-01-01T00:00:00.000Z`.

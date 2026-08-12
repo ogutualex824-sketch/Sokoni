@@ -147,6 +147,11 @@ const PRE_EXISTING = [
   /* Finding 1 from the auth-flow review: the login landing consumed none of the three
      states the gate created, so a held user met an ordinary login form. */
   'scripts/test-auth-verify-landing.js',
+  /* Activation tooling. Neither is product code: one rehearses a candidate cutoff, the
+     other sets it on both sides atomically. Neither deploys, and the sentinel stands. */
+  'scripts/auth-cutoff-dry-run.js',
+  'scripts/auth-activate-cutoff.js',
+  'docs/AUTH_ACTIVATION_RUNBOOK.md',
 ];
 
 /* The service, its docs and the suites themselves. */
