@@ -661,6 +661,8 @@ import {
   getFirestore, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, increment,
   collection, query, where, orderBy, limit, serverTimestamp, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+/* The app-wide Firebase app, already carrying App Check. See the note at _db below. */
+import { db as _canonicalDb } from './firebase.js';
 
 /* ── Firebase ── */
 const FB_CONFIG = {
@@ -670,8 +672,18 @@ const FB_CONFIG = {
   storageBucket: 'sokoni-aeb26.firebasestorage.app',
   messagingSenderId: '24799054989',
   appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
-const _fbApp = getApps().find(a => a.name === 'bizPage') || initializeApp(FB_CONFIG, 'bizPage');
-const _db    = getFirestore(_fbApp);
+/* Canonical Firebase app — NOT a second one.
+
+   This page used to run initializeApp(FB_CONFIG, 'bizPage'). App Check is attached to
+   the DEFAULT app (firebase.js:145) and a secondary app does NOT inherit it, so every
+   Firestore read from here went out with no App Check token. With enforcement on they
+   came back PERMISSION_DENIED, getDoc threw, and the catch rendered "Could not load
+   business" for a shop that exists and is perfectly readable.
+
+   Reusing the canonical db means public business reads travel the same attested path as
+   the rest of the marketplace. Rules unchanged, App Check unchanged, no fallback that
+   would hide a genuine permission error. */
+const _db = _canonicalDb;
 
 /* ── XSS helper ── */
 function escHtml(s) {

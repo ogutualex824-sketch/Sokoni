@@ -463,6 +463,8 @@ import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12
 import {
   getFirestore, collection, getDocs, query, orderBy, limit
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+/* The app-wide Firebase app, already carrying App Check. See the note at _db below. */
+import { db as _canonicalDb } from './firebase.js';
 
 /* ── Firebase ── */
 const FB_CONFIG = {
@@ -472,8 +474,13 @@ const FB_CONFIG = {
   storageBucket: 'sokoni-aeb26.firebasestorage.app',
   messagingSenderId: '24799054989',
   appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
-const _fbApp = getApps().find(a => a.name === 'bizDir') || initializeApp(FB_CONFIG, 'bizDir');
-const _db    = getFirestore(_fbApp);
+/* Canonical Firebase app — NOT a second one. This directory used to run
+   initializeApp(FB_CONFIG, 'bizDir'). App Check is attached to the DEFAULT app
+   (firebase.js:145) and secondary apps do not inherit it, so these reads carried no
+   App Check token and came back PERMISSION_DENIED under enforcement — the directory
+   rendered empty for a collection that is public and readable. Same defect as
+   business.html's 'bizPage'. Rules and App Check unchanged. */
+const _db = _canonicalDb;
 
 /* ── XSS helper ── */
 function escHtml(s) {
