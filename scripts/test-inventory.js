@@ -41,16 +41,66 @@ const AS_JSON = process.argv.includes('--json');
 const GATE = process.argv.includes('--gate');
 const TIMEOUT_MS = 60000;
 
+/* ── Why browser suites get their own budget ──────────────────────────────────
+   TIMEOUT is not a defect verdict — it lands in notBlocking. So when a suite times
+   out it does not turn the gate red, it SILENTLY LEAVES THE BLOCKING SET. A real
+   regression in that suite would then be invisible, and which suites cover the build
+   would depend on how busy the machine happened to be.
+
+   That is exactly what was happening. Measured on a clean serial browser batch
+   (25 suites, one browser at a time, nothing else running):
+
+       test-merchant-deep-switch   42.2s      test-auth-email             33.6s
+       test-banking-hub            40.4s      test-minishop-claim-persist 24.6s
+       test-merchant-route-gate    39.3s      test-pos-tab-transitions    25.6s
+       test-seller-cached-user     39.0s      test-nav-routes             16.1s
+
+   Four suites sit above 65% of a 60s budget. A ~1.4x slowdown — a second gate run
+   in a parallel worktree, an indexer, a deploy — pushes them over, and the recorded
+   timeouts drift accordingly: 56685d4 lost test-merchant-diag + test-nav-routes,
+   6f8048e lost test-cart-universal + test-shop-setup-hydration. Different suites
+   each run, which is the signature of contention, not of a defect.
+
+   Verified directly: test-nav-routes takes 16.1s and exits 0 run standalone AND in
+   the serial batch immediately after two suites that were killed at the budget —
+   so nothing it does is slow, and nothing leaks into it.
+
+   The budget below is therefore set from the measured maximum with real headroom
+   (~3.5x the slowest suite). This does not manufacture a PASS: no assertion changes,
+   no failing suite is reclassified, and a genuinely hung suite still dies — it just
+   stops converting machine load into lost coverage. nearBudget (below) makes the
+   creep visible long before it becomes a timeout again. */
+const BROWSER_TIMEOUT_MS = 150000;
+
+/* A suite that used more than this share of its budget is reported by name. The point
+   is to notice a suite drifting toward its ceiling while it is still passing. */
+const NEAR_BUDGET = 0.5;
+
 /* Classification lives in gate-classify.js so it can be tested directly. Execution
    status outranks output text there: a suite that printed assertions and exited
    non-zero is a FAIL, whatever words its log happens to contain. */
 const { classify, DECLARED, QUARANTINE, META_SUITES } = require('./gate-classify');
+
+/* --only <regex> narrows the run to matching suites. Diagnosing the drifting timeout
+   list needed exactly this — the browser batch, on its own, with the runner's real
+   spawn/env/budget rather than a hand-rolled copy of them. Reproducing a runner bug
+   with a script that only resembles the runner is how you end up fixing the copy.
+   Deliberately ignored when --gate is set: a release artifact must always describe
+   the whole population, never a subset someone filtered. */
+const ONLY = (() => {
+  const i = process.argv.indexOf('--only');
+  if (i < 0 || !process.argv[i + 1]) return null;
+  if (GATE) { console.log('  (--only ignored: --gate always runs the full population)'); return null; }
+  try { return new RegExp(process.argv[i + 1]); }
+  catch (e) { console.error('  --only: bad regex — ' + e.message); process.exit(2); }
+})();
 
 const files = fs.readdirSync(path.join(ROOT, 'scripts'))
   /* Meta-suites are excluded from the ordinary population on purpose — see
      META_SUITES in gate-classify.js. test-gate-isolation recursively spawns other
      suites and would always read as TIMEOUT here while adding its own concurrency. */
   .filter((f) => /^test-.*\.js$/.test(f) && f !== 'test-inventory.js' && !META_SUITES.has(f))
+  .filter((f) => !ONLY || ONLY.test(f))
   .sort();
 
 const results = [];
@@ -64,6 +114,33 @@ const results = [];
 function runOne(f) {
   return new Promise((resolve) => {
     const started = Date.now();
+    const name = f.replace(/\.js$/, '');
+    const browser = isBrowserSuite(f);
+
+    /* A DECLARED suite's verdict is a constant: classify() returns DECLARED[name].verdict
+       before it looks at the exit code or the output, so running the suite cannot change
+       the answer. Spawning it anyway cost the budget and, for the two long browser gates,
+       meant launching a ~10-minute webkit acceptance run and SIGKILLing it mid-navigation
+       on every gate — 60s each, immediately before the browser suites that were losing
+       their own budget. Skipping is not a weaker check; it is the same verdict without
+       burning two minutes and a browser to recompute a constant.
+
+       The declarations themselves still have to earn their place — they are audited by
+       scripts/test-gate-classify.js, and each carries the command to run the suite for real. */
+    if (DECLARED[name]) {
+      results.push({
+        suite: name,
+        verdict: DECLARED[name].verdict,
+        ms: 0,
+        exit: null,
+        assertions: null,
+        declared: true,
+        reason: DECLARED[name].reason,
+      });
+      return resolve();
+    }
+
+    const budget = browser ? BROWSER_TIMEOUT_MS : TIMEOUT_MS;
     /* Each suite gets its own emulator project namespace. Without this the CLI's
        injected GCLOUD_PROJECT overrides every suite's own declaration and all of
        them share one database — which, under CONCURRENCY, is a race rather than a
@@ -73,23 +150,28 @@ function runOne(f) {
     });
     let out = '';
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, budget);
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
     child.on('error', (e) => { out += String(e && e.message || e); });
     child.on('close', (code) => {
       clearTimeout(timer);
       const res = { status: timedOut ? null : code, error: timedOut ? { code: 'ETIMEDOUT' } : null };
-      const verdict = classify(res, out, f.replace(/.js$/, ''), isBrowserSuite(f));
+      const verdict = classify(res, out, name, browser);
       /* Pull an assertion count when the suite prints one, so a PASS with 0
          assertions is visible rather than counted as coverage it does not have. */
       const m = out.match(/ALL (\d+) PASSED|(\d+)\/(\d+)|(\d+) FAILED/);
+      const ms = Date.now() - started;
       results.push({
-        suite: f.replace(/\.js$/, ''),
+        suite: name,
         verdict,
-        ms: Date.now() - started,
+        ms,
         exit: res.status,
         assertions: m ? m[0] : null,
+        budgetMs: budget,
+        /* A suite creeping toward its ceiling is reported while it still passes —
+           the run before a timeout is the one where it is cheap to fix. */
+        nearBudget: verdict === 'PASS' && ms > budget * NEAR_BUDGET,
         reason: verdict === 'ENV' || verdict === 'FAIL'
           ? (out.split('\n').filter((l) => l.trim()).slice(-2).join(' ').slice(0, 110) || null)
           : null,
@@ -174,8 +256,21 @@ if (AS_JSON) {
     by('ENV').forEach((r) => console.log('    ' + r.suite));
   }
   if (summary.timeout) {
-    console.log('\n  TIMED OUT (>' + (TIMEOUT_MS / 1000) + 's — likely waiting on a service):');
-    by('TIMEOUT').forEach((r) => console.log('    ' + r.suite));
+    console.log('\n  TIMED OUT (killed at the budget — a timeout DROPS the suite from the');
+    console.log('  blocking set, so treat each one as lost coverage, not as a warning):');
+    by('TIMEOUT').forEach((r) => console.log('    ' + r.suite + '  — killed at ' + (r.budgetMs / 1000) + 's'));
+  }
+
+  /* Reported even when everything is green: this is the list that predicts next
+     week's timeouts, and a suite is far cheaper to fix while it still passes. */
+  const near = results.filter((r) => r.nearBudget);
+  if (near.length) {
+    console.log('\n  NEAR BUDGET (passing, but over ' + (NEAR_BUDGET * 100) + '% of the time allowed —');
+    console.log('  these are the suites a busier machine turns into lost coverage):');
+    near.sort((a, b) => b.ms / b.budgetMs - a.ms / a.budgetMs)
+        .forEach((r) => console.log('    ' + r.suite.padEnd(38) +
+          Math.round(r.ms / 1000) + 's of ' + (r.budgetMs / 1000) + 's  (' +
+          Math.round((r.ms / r.budgetMs) * 100) + '%)'));
   }
 
   console.log('\n  GATE-READY TODAY: ' + summary.pass + ' suites pass with no external dependency.');
@@ -208,7 +303,17 @@ if (GATE) {
         env:        summary.env,
         timeout:    summary.timeout,
       },
+      /* The budgets this run enforced. Recorded because a TIMEOUT is only
+         interpretable against the budget that produced it — without this, two
+         artifacts with different timeout lists look like a code change when they
+         were really a runner change. */
+      budgets: { defaultMs: TIMEOUT_MS, browserMs: BROWSER_TIMEOUT_MS },
       blocking: results.filter((r) => r.verdict === 'PASS').map((r) => r.suite),
+      /* Passing, but close enough to the budget that a busier machine would drop
+         them from `blocking`. This is the early warning for the drift that made
+         the recorded timeout list differ on every run. */
+      nearBudget: results.filter((r) => r.nearBudget)
+        .map((r) => ({ suite: r.suite, ms: r.ms, budgetMs: r.budgetMs })),
       /* Recorded by name so a suite silently leaving the blocking set is
          visible in a diff between two artifacts. */
       notBlocking: {

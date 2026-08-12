@@ -1,3 +1,66 @@
+## [2026-08-13] — TEST HARNESS: the browser budget was dropping suites from the gate (test-only)
+
+**Status: FIXED and proven.** No shipping file was modified.
+
+The recorded timeout list changed on every run — `56685d4` lost `test-merchant-diag` +
+`test-nav-routes`, `6f8048e` lost `test-cart-universal` + `test-shop-setup-hydration`.
+Different suites each time is the signature of contention, not of a defect. It mattered
+because **TIMEOUT is not a blocking verdict**: a timed-out suite lands in `notBlocking`
+and silently leaves the blocking set, so which suites actually covered a build depended
+on how busy the machine was.
+
+**Measured** (25 browser suites, one browser at a time, nothing else running):
+
+| suite | time | share of the old 60s budget |
+|---|---|---|
+| `test-merchant-deep-switch` | 42.2s | 70% |
+| `test-banking-hub` | 40.4s | 67% |
+| `test-seller-cached-user` | 39.8s | 66% |
+| `test-merchant-route-gate` | 39.3s | 65% |
+| `test-nav-routes` | 16.1s | 27% |
+
+`test-nav-routes` takes 16.1s and exits 0 standalone **and** in the serial batch
+immediately after two suites that were killed at the budget — so it is not slow and
+nothing leaks into it. Four suites above 65% meant a ~1.4x slowdown (a second gate in a
+parallel worktree, an indexer, a deploy) converted machine load into lost coverage.
+
+Two hypotheses were tested and **disproved** rather than assumed: orphaned webkit
+processes do exist on this machine, but Playwright cleans up its browser tree when the
+node child is SIGKILLed (measured 9 → 8), and browser suites were already serialised by
+`64f57cf`, so neither leaks nor mutual contention explain it.
+
+**Fix.**
+
+1. **Browser suites get their own measured budget** — `BROWSER_TIMEOUT_MS = 150000`,
+   ~3.5x the slowest measured suite. This does not manufacture a PASS: no assertion
+   changes, no failing suite is reclassified, and a genuinely hung suite still dies.
+   `test-shop-setup-hydration` still times out under it — correctly, it is a real hang
+   and is tracked separately.
+2. **DECLARED suites are no longer spawned.** `classify()` returns `DECLARED[name].verdict`
+   before it looks at the exit code or output, so running them cannot change the answer.
+   The gate was launching `test-merchant-visual-gate` — a ~10-minute webkit acceptance
+   run — and SIGKILLing it at 60s on every run, immediately before the browser suites
+   that were losing their budgets. Same verdicts, 0ms, no browser.
+3. **`nearBudget`** — suites over 50% of their budget are now named in the report and
+   recorded in the artifact, so the drift is visible while they still pass.
+4. **`budgets`** recorded in each artifact: a TIMEOUT list is only interpretable against
+   the budget that produced it.
+5. **`--only <regex>`** narrows a run to matching suites (ignored under `--gate`, which
+   must always describe the whole population). Diagnosing this needed the browser batch
+   run through the runner's real spawn/env/budget — reproducing a runner bug with a
+   script that merely resembles the runner is how you fix the copy instead.
+
+**Mutation control.** `test-gate-classify.js` section H asserts every `DECLARED` entry
+resolves to its declared verdict across seven different run outcomes (timeout, exit 0/1,
+silent, asserted, env text, spawn error), with an undeclared-suite control proving the
+check is not trivially true. Skipping execution is sound *only* while a declaration is
+independent of the run; if anyone reorders `classify()`, this fails.
+
+**Files:** `scripts/test-inventory.js`, `scripts/test-gate-classify.js` (43/43).
+
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none.
+
 ## [2026-08-12] — TEST HARNESS: execution status outranks output text (test-only)
 
 **Status: FIXED and proven.** No shipping file was modified.

@@ -176,6 +176,42 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
   ok('test-gate-isolation is excluded from auto-discovery as a meta-suite',
      META_SUITES.has('test-gate-isolation.js'));
 
+  /* ══ H. the invariant test-inventory.js relies on to SKIP declared suites ══
+     The runner no longer spawns a DECLARED suite: it records the declared verdict
+     and moves on. That is only sound while a declaration is genuinely independent
+     of what the process does — the moment classify() consults the exit code or the
+     output ahead of DECLARED, skipping execution would start reporting a verdict
+     the run did not earn.
+
+     This mattered concretely: test-merchant-visual-gate is a ~10-minute webkit
+     acceptance run that was being launched and SIGKILLed at the budget on every
+     gate, immediately before the browser suites that were themselves losing their
+     budgets. Pin the property so the optimisation cannot outlive its justification. */
+  head('H · a declaration does not depend on the run (why skipping is sound)');
+  const DECLARED_INPUTS = [
+    ['timed out',        timeout,             ''],
+    ['exit 0, silent',   exit(0),             ''],
+    ['exit 1, silent',   exit(1),             ''],
+    ['exit 0, asserted', exit(0),             '  ALL 12 PASSED\n'],
+    ['exit 1, asserted', exit(1),             '  2 passed, 3 failed\n'],
+    ['exit 1, env text', exit(1),             'ECONNREFUSED 127.0.0.1:8080\n'],
+    ['spawn error',      exit(null),          'Error: spawn ENOENT\n'],
+  ];
+  Object.keys(DECLARED).forEach((name) => {
+    const want = DECLARED[name].verdict;
+    const got = DECLARED_INPUTS.map(([, res, out]) => classify(res, out, name, true));
+    const stable = got.every((v) => v === want);
+    ok(name + ' → ' + want + ' for every possible run outcome', stable,
+       stable ? DECLARED_INPUTS.length + ' outcomes, all ' + want
+              : DECLARED_INPUTS.map(([l], i) => l + '=' + got[i]).join('  '));
+  });
+  /* The same property must NOT hold for an undeclared suite, or the check above
+     would pass trivially against a classify() that ignored its arguments. */
+  ok('an UNDECLARED suite still varies with the run (control)',
+     classify(exit(0), '  ALL 3 PASSED\n', 'test-not-declared', true) === 'PASS' &&
+     classify(exit(1), '  1 passed, 2 failed\n', 'test-not-declared', true) === 'FAIL' &&
+     classify(timeout, '', 'test-not-declared', true) === 'TIMEOUT');
+
   console.log('\n' + '─'.repeat(66));
   if (fail) { console.log('\x1b[31mFAILURES\x1b[0m'); failures.forEach((f) => console.log('  ✗ ' + f)); }
   console.log((fail ? '\x1b[31m' : '\x1b[32m') + 'gate classification: ' + pass + '/' + (pass + fail) + '\x1b[0m\n');
