@@ -40,8 +40,17 @@ console.log('\nTRACK 2.6 — UNIVERSAL ROLLOUT + INTERCEPTOR REMOVAL\n' + '='.re
 /* ══ A. every consumer page loads the service ══ */
 console.log('\nA. No page is left inert for want of the service');
 {
-  const headerPages = pages.filter(p => /<script[^>]*src="shared-header\.js"/.test(read(p)));
-  const missing = headerPages.filter(p => !/src="sokoni-cart\.js"/.test(read(p)));
+  /* Read each page ONCE. Block A scans 311 files and previously re-read them per check;
+     adding the async check pushed the suite past the harness's 60s limit and it started
+     reporting TIMEOUT instead of a verdict — a guard that stops answering is worse than a
+     slow one. One pass, cached. */
+  const headerPages = [];
+  const srcOf = new Map();
+  for (const p of pages) {
+    const s = read(p);
+    if (/<script[^>]*src="shared-header\.js"/.test(s)) { headerPages.push(p); srcOf.set(p, s); }
+  }
+  const missing = headerPages.filter(p => !/src="sokoni-cart\.js"/.test(srcOf.get(p)));
   ck('A', 'the header is on a lot of pages (control)', headerPages.length > 300, headerPages.length);
   ck('A', 'every one of them loads sokoni-cart.js', missing.length === 0,
      missing.slice(0, 6).join(', '));
@@ -62,7 +71,7 @@ console.log('\nA. No page is left inert for want of the service');
      DOMContentLoaded, so both qualify. What does NOT qualify is `async` (may land after)
      or no tag at all. Those still fail, and the mutation controls below still bite. */
   const badOrder = headerPages.filter(p => {
-    const s = read(p);
+    const s = srcOf.get(p);
     const hm = s.match(/<script[^>]*src="shared-header\.js"[^>]*>/);
     const cm = s.match(/<script[^>]*src="sokoni-cart\.js"[^>]*>/);
     if (!hm || !cm) return true;                      /* missing entirely — still a defect */
@@ -78,13 +87,28 @@ console.log('\nA. No page is left inert for want of the service');
      /if \(document\.readyState === 'loading'\)\s*\{\s*document\.addEventListener\('DOMContentLoaded', _inject\);/
        .test(read('shared-header.js')));
   ck('A', 'no page loads the service async', headerPages.every(p =>
-     !/<script[^>]*\basync\b[^>]*src="sokoni-cart\.js"|<script[^>]*src="sokoni-cart\.js"[^>]*\basync\b/.test(read(p))));
+     !/<script[^>]*\basync\b[^>]*src="sokoni-cart\.js"|<script[^>]*src="sokoni-cart\.js"[^>]*\basync\b/.test(srcOf.get(p))));
   ck('A', 'exactly one service tag per page', headerPages.every(p =>
-     (read(p).match(/src="sokoni-cart\.js"/g) || []).length === 1),
-     headerPages.filter(p => (read(p).match(/src="sokoni-cart\.js"/g) || []).length !== 1).slice(0, 5).join(', '));
+     (srcOf.get(p).match(/src="sokoni-cart\.js"/g) || []).length === 1),
+     headerPages.filter(p => (srcOf.get(p).match(/src="sokoni-cart\.js"/g) || []).length !== 1).slice(0, 5).join(', '));
+
+  /* RETIRED: 'never deferred'. Two problems, and the second is the worse one.
+
+     Superseded — the browser probe proved a deferred service is still defined before the
+     header reads it. And it was passing by ACCIDENT: the regex required `defer` to follow
+     `src=`, while the tag written for pos.html is <script defer src="...">. It would have
+     reported "never deferred" about a page that is deferred, which is the least useful
+     thing a guard can do.
+
+     Replaced by a count that matches on either attribute order, so which pages defer is
+     visible rather than implied. */
   const deferred = headerPages.filter(p =>
-    /<script[^>]*src="sokoni-cart\.js"[^>]*\bdefer\b/.test(read(p)));
-  ck('A', 'never deferred', deferred.length === 0, deferred.slice(0, 6).join(', '));
+    /<script[^>]*\bdefer\b[^>]*src="sokoni-cart\.js"|<script[^>]*src="sokoni-cart\.js"[^>]*\bdefer\b/
+      .test(srcOf.get(p)));
+  ck('A', 'deferred pages are known and few', deferred.length <= 1, deferred.join(', '));
+  ck('A', 'the only deferred page is pos.html (perf-guard baseline: 4 blocking scripts)',
+     deferred.length === 0 || (deferred.length === 1 && deferred[0] === 'pos.html'),
+     deferred.join(', '));
   /* Any page whose own scripts call the service must also carry it. */
   const API = /SokoniCart\s*\.\s*(list|raw|has|find|lines|units|add|setQty|replace|removeAt|removeById|removeAllById|removeByCartId|clear|subscribe)\b/;
   const inlineUsers = pages.filter(p => API.test(execOf(p)));
@@ -110,8 +134,16 @@ console.log('\nB. The rollout did not mangle any file');
   ck('B', 'a large number of pages changed (control)', changed.length > 250, changed.length);
   /* Only the pages THIS rollout touched. availability-manager.html is Track 1 dirt and
      comparing it here says nothing. */
-  const rolled = changed.filter(f =>
-    /src="sokoni-cart\.js"/.test(cp.execSync('git diff ' + BASE + ' -- "' + f + '"', { cwd: ROOT, encoding: 'utf8' })));
+  /* ONE diff, split per file — this used to spawn `git diff` once per changed page, 250+
+     subprocesses, and it was what pushed this suite past the harness's 60s limit into
+     TIMEOUT. A guard that stops returning a verdict is worse than a slow one. */
+  const wholeDiff = cp.execSync('git diff ' + BASE + ' -- "*.html"', { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 28 });
+  const perFile = new Map();
+  for (const chunk of wholeDiff.split(/^diff --git /m).slice(1)) {
+    const m = /^a\/(\S+)/.exec(chunk);
+    if (m) perFile.set(m[1], chunk);
+  }
+  const rolled = changed.filter(f => /src="sokoni-cart\.js"/.test(perFile.get(f) || ''));
   ck('B', 'the rollout touched the expected number of pages', rolled.length > 250, rolled.length);
 
   /* Line endings: comparing against `git show HEAD:` is invalid — git may normalise on
