@@ -62,6 +62,37 @@
     window.dataLayer = window.dataLayer || [];
     window.gtag = function () { window.dataLayer.push(arguments); };
     window.gtag("js", new Date());
+
+    /* ── Consent Mode — the flag below was not enough ──────────────────────────
+       allow_google_signals:false has been in this file and on the live site, and the
+       ad-network calls STILL fire. Measured on https://mysokoni.co.ke/ with consent
+       granted, in a real browser:
+
+         RES 204  analytics.google.com/g/collect            <- measurement works
+         Refused to connect  stats.g.doubleclick.net/g/collect
+         Refused to load     google.co.ke/ads/ga-audiences
+
+       Neither host is in connect-src/img-src, so the browser blocks both and then POSTs
+       a violation to the report-uri (cspReportCollect) — the cost this file's own note
+       already describes. The config flag is applied by gtag.js only after it has decided
+       what to send; Consent Mode is checked BEFORE, which is why it is the mechanism that
+       actually stops the request rather than merely disapproving of it.
+
+       ad_* stay denied permanently and are not wired to the consent modal: SOKONI runs no
+       advertising, so there is no state in which they should be granted. analytics_storage
+       is granted here because _initGA4 is only ever reached through the consent
+       subscription in section 7 — this function does not run for a user who has not agreed,
+       so the gate is unchanged, not loosened.
+
+       Pushed BEFORE config: gtag.js replays dataLayer in order, so a consent default
+       arriving after the config would be read too late to suppress the first hit. */
+    window.gtag("consent", "default", {
+      ad_storage:          "denied",
+      ad_user_data:        "denied",
+      ad_personalization:  "denied",
+      analytics_storage:   "granted",
+    });
+
     window.gtag("config", GA_ID, {
       anonymize_ip:   true,
       send_page_view: true,

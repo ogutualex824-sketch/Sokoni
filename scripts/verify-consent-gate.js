@@ -503,6 +503,45 @@ if (CONSENT_START === -1) {
     check(sb.pageViews() === 1,   'S14 no duplicate page view',       `${sb.pageViews()}`);
   }
 
+  /* 15 ── Consent Mode must deny the ad-network calls, and must do so BEFORE config.
+           allow_google_signals:false was already in this file and already live, and the
+           calls still fired. Measured on https://mysokoni.co.ke/ in a real browser with
+           consent granted:
+
+             RES 204            analytics.google.com/g/collect     <- measurement works
+             Refused to connect stats.g.doubleclick.net/g/collect
+             Refused to load    google.co.ke/ads/ga-audiences
+
+           Both are blocked by CSP and each blocked request POSTs a violation to
+           report-uri (cspReportCollect). The config flag is applied by gtag.js only after
+           it has decided what to send; Consent Mode is consulted before, which is why it
+           stops the request rather than merely disapproving of it.
+
+           ORDER IS THE ASSERTION. gtag.js replays dataLayer in sequence, so a consent
+           default pushed after config arrives too late to suppress the first hit — the
+           bug would be invisible to a test that only checked the values were present. */
+  {
+    const sb = boot({ sokoniPrivacyAccepted: '1730000000000' });
+    sb.ctx.window.SokoniConsent.grant();
+    const dl = (sb.ctx.window.dataLayer || []).map((a) => Array.from(a));
+    const iConsent = dl.findIndex((a) => a[0] === 'consent' && a[1] === 'default');
+    const iConfig  = dl.findIndex((a) => a[0] === 'config');
+    check(iConsent !== -1, 'S15 a consent default is pushed at all', `dataLayer=${dl.map((a) => a[0]).join(',')}`);
+    check(iConsent !== -1 && iConfig !== -1 && iConsent < iConfig,
+      'S15 consent default precedes config (later = too late to suppress the first hit)',
+      `consent@${iConsent} config@${iConfig}`);
+    const c = (iConsent !== -1 && dl[iConsent][2]) || {};
+    /* SOKONI runs no advertising, so there is no state in which these should be granted —
+       they are deliberately NOT wired to the consent modal. */
+    ['ad_storage', 'ad_user_data', 'ad_personalization'].forEach((k) => {
+      check(c[k] === 'denied', `S15 ${k} denied`, String(c[k]));
+    });
+    /* Measurement itself must still work — a gate that silently disabled analytics
+       would "pass" every ad-network assertion above for entirely the wrong reason. */
+    check(c.analytics_storage === 'granted', 'S15 analytics_storage granted (post-consent only)', String(c.analytics_storage));
+    check(sb.pageViews() === 1, 'S15 the page view still sends', `${sb.pageViews()}`);
+  }
+
   /* 8 ── Reads stay open. The admin dashboard must keep working; gating writes
           must not break the accessors. */
   {

@@ -1,3 +1,62 @@
+## [2026-08-13] — ANALYTICS: no duplicate page_view; the ad-network calls were the real defect
+
+**Status: MEASURED, then FIXED.** Consent gate 93/93.
+
+**Measured first, as asked. There is no duplicate page_view.** `gtag.js` loads exactly once
+in every configuration — standalone *and* merchant-embedded — so there is no loading boundary
+to fix:
+
+| case | consent | gtag.js requests |
+|---|---|---|
+| `seller.html` standalone | granted | 1 |
+| merchant shell → Products (`seller.html` **embedded**) | granted | 1 |
+| merchant shell → Products | **not given** | **0** |
+| `index.html` standalone | granted | 1 |
+
+The reason is architectural and worth recording: **`merchant.html` does not load `analytics.js`
+at all.** It loads `sokoni-analytics.js`, which is a *completely unrelated* module — the
+canonical business-metrics aggregate client, not GA4. The names invite exactly the merge this
+task warned against; they are not merged.
+
+**The real defect, found on the live site.** `allow_google_signals: false` is in this file
+**and is already live** — and the ad-network calls fire anyway. Measured on
+`https://mysokoni.co.ke/` in a real browser with consent granted:
+
+```
+RES 204            analytics.google.com/g/collect        <- measurement works correctly
+Refused to connect stats.g.doubleclick.net/g/collect
+Refused to load    google.co.ke/ads/ga-audiences
+```
+
+Neither host is in `connect-src`/`img-src`, so the browser blocks both and then POSTs a
+violation to `report-uri` → `cspReportCollect` — the per-page cost this file's own note
+already describes. The config flag is applied by `gtag.js` only *after* it has decided what to
+send; **Consent Mode is consulted before**, which is why it stops the request rather than
+merely disapproving of it.
+
+**Fix.** A `gtag('consent','default',…)` push with `ad_storage`, `ad_user_data` and
+`ad_personalization` all `denied`, emitted **before** `config`. `ad_*` are denied permanently
+and deliberately **not** wired to the consent modal — SOKONI runs no advertising, so there is
+no state in which they should be granted. `analytics_storage` is `granted` because `_initGA4`
+is only ever reached through the consent subscription in section 7: this does not loosen the
+gate, and the "not given → 0 requests" row above is unchanged.
+
+**Ordering is the assertion.** `gtag.js` replays `dataLayer` in sequence, so a consent default
+pushed *after* config arrives too late to suppress the first hit — a bug invisible to a test
+that only checked the values were present. S15 asserts `consent@1 < config@2`, and asserts the
+page view still sends, so a gate that silently disabled analytics cannot pass the ad-network
+checks for the wrong reason.
+
+> **Not yet confirmed in production.** The doubleclick/ga-audiences requests disappearing can
+> only be verified after deploy; live currently runs `6ac58e6`. The local harness cannot
+> confirm it either — GA4 does not send from a `127.0.0.1` origin, which is why the local
+> `/collect` count is 0 in every case above and is **not** reported as a defect.
+
+**Files:** `analytics.js` (Consent Mode push), `scripts/verify-consent-gate.js` (S15, 93/93).
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — this denies
+data sharing that was already intended to be off. **Breaking changes:** none.
+
 ## [2026-08-13] — APP CHECK: the secondary-Firebase-app defect is 30 files, not 2
 
 **Status: CLASS IDENTIFIED AND RATCHETED. 28 files still to convert — flagged, not fixed.**
