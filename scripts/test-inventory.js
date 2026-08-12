@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { suiteEnv } = require('./gate-namespace');
 
 /* How many suites run at once. Serial execution (one spawnSync after another)
    made this unusable as a predeploy hook: 61 suites x a 60s timeout is up to an
@@ -148,8 +149,12 @@ const results = [];
 function runOne(f) {
   return new Promise((resolve) => {
     const started = Date.now();
+    /* Each suite gets its own emulator project namespace. Without this the CLI's
+       injected GCLOUD_PROJECT overrides every suite's own declaration and all of
+       them share one database — which, under CONCURRENCY, is a race rather than a
+       cleanup problem. See scripts/gate-namespace.js. */
     const child = spawn(process.execPath, [path.join(ROOT, 'scripts', f)], {
-      cwd: ROOT, env: { ...process.env, NODE_ENV: 'test' },
+      cwd: ROOT, env: suiteEnv(f, process.env),
     });
     let out = '';
     let timedOut = false;

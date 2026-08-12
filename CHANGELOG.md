@@ -1,3 +1,35 @@
+## [2026-08-12] — TEST HARNESS: per-suite emulator isolation (test-only, no product change)
+
+**Status: FIXED and proven.** No shipping file was modified.
+
+Three suites passed standalone and failed inside the gate — `test-wishlist-marketplace`
+(28/0), `test-wishlist-market-actions` (35/0), `test-auth-email-challenge` (63/0). None was
+a product defect.
+
+**Root cause.** Every emulator-backed suite declares its own project id, but only as a
+fallback: `process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-…-test'`.
+`firebase emulators:exec` **injects** `GCLOUD_PROJECT` (measured: `sokoni-aeb26`), so the
+fallback never fires and all 158 suites share one emulator database — while the runner
+executes up to 6 concurrently. Suites asserting on global state (e.g. `test-wishlist-phase47`
+case E asserts the whole `wishlistItems` collection is empty) cannot survive a neighbour.
+
+**Fix.** `scripts/gate-namespace.js` gives each suite its own project namespace, applied by
+the runner at spawn. A namespace, not a cleanup: under concurrency a reset would delete a
+neighbour's data mid-run. No suite changed — they already read `GCLOUD_PROJECT`; they were
+being overridden.
+
+**Files:** `scripts/gate-namespace.js` (new), `scripts/test-gate-isolation.js` (new, 24/24),
+`scripts/test-inventory.js` (spawn env only).
+
+**Proof** (`npm-less`: run under `firebase emulators:exec --only firestore,auth`): namespaces
+unique/deterministic/well-formed across 158 suites; each affected suite passes standalone,
+after a state-mutating predecessor, and in reversed order; **positive control** — the three
+run concurrently in one namespace break (2 of 3 exit 1), and all pass isolated; a sentinel in
+the shared database survives a namespaced run untouched.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none.
+
 ## [2026-08-12] — FOLLOW-UP: Track 2.6 universal-cart coverage gap (not fixed in this release)
 
 **Status: OPEN. Deferred, not closed.** No file was modified for it.
