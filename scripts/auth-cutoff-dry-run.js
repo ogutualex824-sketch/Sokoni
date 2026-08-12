@@ -103,8 +103,15 @@ rule('1 · THE MEASURED PRODUCTION POPULATION AGAINST THIS CANDIDATE');
 
 /* Aggregates from the production run. Creation months are the measured distribution;
    every one of them precedes any activation timestamp chosen today or later. */
-/* The production measurement ran on 2026-08-12. Nothing measured can be newer than that. */
-const NEWEST_EXISTING = '2026-08-12T23:59:59.999Z';
+/* The true upper bound on an EXISTING account's creation time is the moment this runs —
+   nothing that exists now was created later than now.
+
+   This was hard-coded to end-of-day '2026-08-12T23:59:59.999Z', which was only accidentally
+   correct while the candidate cutoff was days away. Against a SAME-DAY cutoff it modelled
+   every existing account as created after it and reported 86 enforced — alarming, and wrong.
+   A release check that misfires precisely when the cutoff is close is a check that misfires
+   when it is most needed. */
+const NEWEST_EXISTING = new Date(Date.now() - 1).toISOString();
 
 const MEASURED = [
   { bucket: 'password, verified',            n: 4,  months: ['2026-06', '2026-07', '2026-08'] },
@@ -227,8 +234,12 @@ ok('describe() matches word for word', B.describe() === S.describe());
 
 /* ── 6. invariance: any future timestamp gives the same rollout ─────────────── */
 rule('6 · THE ANSWER DOES NOT DEPEND ON WHICH FUTURE INSTANT IS CHOSEN');
-const candidates = ['2026-08-13T00:00:00.000Z', '2026-08-20T00:00:00.000Z',
-                    '2026-09-01T00:00:00.000Z', '2026-12-31T23:59:59.999Z'];
+/* Candidates must be LATER than the newest existing account for the claim to hold; a
+   candidate in the past is a different (retroactive) policy, which the activation tool
+   refuses outright. Built relative to now so this stays true whenever it runs. */
+const _n = Date.now();
+const candidates = [new Date(_n + 3600000).toISOString(), new Date(_n + 86400000).toISOString(),
+                    new Date(_n + 7 * 86400000).toISOString(), new Date(_n + 60 * 86400000).toISOString()];
 console.log('');
 for (const c of candidates) {
   const newest = NEWEST_EXISTING;   /* newest account the measurement could have seen */

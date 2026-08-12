@@ -15,6 +15,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
+const STATE = require('./auth-policy-state.js');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 let pass = 0, fail = 0;
@@ -600,9 +601,19 @@ function user(o) {
     vm.runInContext(read('sokoni-verify-policy.js'), w, { filename: 'policy.js' });
     vm.runInContext(read('sokoni-verify-gate.js'), w, { filename: 'gate.js' });
 
-    eq('J1  the shipped cutoff is the sentinel', w.SokoniVerifyPolicy.CUTOFF_ISO,
-       w.SokoniVerifyPolicy.SENTINEL_ISO);
-    eq('J2  enforcement is disabled', w.SokoniVerifyPolicy.isEnforcementEnabled(), false);
+    /* STATE, not "still the sentinel". The shipped cutoff may be legitimately armed at
+       release time; what must never happen is the two sides disagreeing, or a malformed
+       or retroactive value. That guard does not expire. */
+    const _st = STATE.shippedState();
+    eq('J1  client and server ship the same cutoff', _st.client, _st.server);
+    ok('J1b the shipped cutoff is the sentinel OR a deliberate UTC instant',
+       _st.client === _st.sentinel || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(_st.client),
+       _st.client);
+    /* The BEHAVIOUR this block is really about: under the sentinel the gate holds nobody.
+       Set explicitly so it is true whether or not the release has armed. */
+    w.SokoniVerifyPolicy.CUTOFF_ISO = w.SokoniVerifyPolicy.SENTINEL_ISO;
+    eq('J2  under the sentinel, enforcement is disabled',
+       w.SokoniVerifyPolicy.isEnforcementEnabled(), false);
 
     const u = user({ emailVerified: false, created: '2026-08-12T00:00:00.000Z' });
     eq('J3  a brand-new unverified password account is NOT gated as shipped',

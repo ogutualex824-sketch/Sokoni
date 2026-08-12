@@ -27,6 +27,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
+const STATE = require('./auth-policy-state.js');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const HTML = read('checkout.html');
 
@@ -273,20 +274,26 @@ const fixedFallback = (cart) => cart.reduce((s, p) => s + lineTotal(p), 0);
     const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
       .split('\n').map((s) => s.trim()).filter(Boolean);
 
+    /* The two policy files may legitimately carry an armed cutoff at release time, so
+       they are excluded here and asserted separately (H5) to be cutoff-only. */
     ok('H1  only checkout.html changed among product files',
        !changed.some((f) => /\.(js|html)$/.test(f) && f !== 'checkout.html' &&
-                            !f.startsWith('scripts/') && f !== 'availability-manager.html'),
+                            !f.startsWith('scripts/') && f !== 'availability-manager.html' &&
+                            !STATE.POLICY_FILES.includes(f)),
        changed.join(', '));
 
     /* The carried items must NOT have been quietly fixed during a release pass. */
     ok('H2  the cart account-switch gap was not touched', !changed.includes('sokoni-cart.js'));
     ok('H3  the wishlist deferrals were not touched', !changed.includes('sokoni-wishlist.js'));
     ok('H4  firestore.rules untouched', !changed.includes('firestore.rules'));
-    ok('H5  the auth policy was not touched', !changed.includes('sokoni-verify-policy.js') &&
-       !changed.includes('functions/auth-policy.js'));
-    ok('H6  the cutoff is still the sentinel',
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(read('sokoni-verify-policy.js')) &&
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(read('functions/auth-policy.js')));
+    /* This money-path slice must not alter auth POLICY. It may coexist with an armed
+       cutoff, so the durable claim is that any policy change is the cutoff line only. */
+    const _cd = STATE.policyDiffIsCutoffOnly(STATE.CLIENT);
+    const _sd = STATE.policyDiffIsCutoffOnly(STATE.SERVER);
+    ok('H5  any auth-policy change is the cutoff line and nothing else',
+       _cd.only && _sd.only, _cd.lines.concat(_sd.lines).join(' | '));
+    const _st = STATE.shippedState();
+    eq('H6  client and server ship the same cutoff', _st.client, _st.server);
 
     const plain = cp.execSync('git diff --numstat HEAD -- checkout.html', { cwd: ROOT, encoding: 'utf8' }).trim();
     const ign = cp.execSync('git diff --ignore-cr-at-eol --numstat HEAD -- checkout.html',

@@ -155,6 +155,10 @@ const PRE_EXISTING = [
      as a money-path blocker before arming the auth cutoff. */
   'checkout.html',
   'scripts/test-checkout-fallback-total.js',
+  /* Release-suite state-awareness: the guards conflated "the sentinel disables
+     enforcement" with "the shipped cutoff IS the sentinel", so arming turned 31
+     assertions red. One helper now carries the state rule. */
+  'scripts/auth-policy-state.js',
   'docs/AUTH_ACTIVATION_RUNBOOK.md',
 ];
 

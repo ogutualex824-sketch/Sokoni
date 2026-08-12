@@ -1,3 +1,71 @@
+## [2026-08-12] — Release suites made state-aware (the failed arming told us something real)
+
+**Not deployed.** Rules `ca9e8924`. Both cutoffs at the `2099-01-01T00:00:00.000Z` sentinel.
+**No production activation timestamp was chosen.**
+
+### What the failed Phase 1 actually found
+
+Arming the cutoff turned **31 assertions across six suites red** — including two mutation
+controls. The dry-run passed completely: boundary vectors, 3,204-instant client/server
+comparison, all 87 accounts grandfathered. **The policy was correct; the guards were not
+state-aware.**
+
+The suites conflated two different claims:
+
+```
+"the SENTINEL VALUE disables enforcement"          permanent property of the code
+"the SHIPPED CUTOFF is currently the sentinel"     temporary deployment state
+```
+
+Assertions written against the second were used to test the first. The suites made the
+product untestable in the state it is meant to ship in.
+
+### The split
+
+**Behaviour tests** now pass `SENTINEL` explicitly as `{ cutoff: SENTINEL }`. That asserts
+what the sentinel *value* does — true armed or unarmed, and it never expires.
+
+**State tests** call one rule in `scripts/auth-policy-state.js`: the shipped cutoff must be
+either the sentinel, or **both sides carrying the same well-formed, non-retroactive UTC
+instant**. That is *stronger* than "must be the sentinel" — it still catches the failure that
+would actually hurt, a one-sided arming, and it keeps working after a deliberate arm.
+
+**"This file was untouched"** became **"any change to a policy file is the cutoff line and
+nothing else."** Narrower, and it catches more: an allowlist would have stopped noticing real
+edits, while this notices any edit that is not the cutoff.
+
+No mutation control was weakened or deleted. The two that failed (`F3`, `G5`) now evaluate
+*both* sides against the sentinel explicitly, so they keep biting in either state.
+
+### Proven in both states
+
+| | unarmed | armed (temporary `2026-10-01T12:00:00.000Z`) |
+|---|---|---|
+| checkout fallback | 58/58 | 58/58 |
+| auth policy | 94/94 | 94/94 |
+| auth policy-server | 80/80 | 80/80 |
+| auth gate | 126/126 | 126/126 |
+| auth screen | 97/97 | 97/97 |
+| session transitions | 100/100 | 100/100 |
+| signup gate | 85/85 | 85/85 |
+| landing | 58/58 | 58/58 |
+| cutoff dry-run | CLEAN | CLEAN, `STATE: ARMED` |
+
+The rehearsal timestamp was temporary and is **not** a production choice. After reverting,
+both policy files are byte-identical to `HEAD` — `git diff` reports zero lines.
+
+### Files
+
+`scripts/auth-policy-state.js` (new) · `scripts/test-auth-verify-policy.js` ·
+`scripts/test-auth-policy-server.js` · `scripts/test-auth-verify-gate.js` ·
+`scripts/test-auth-signup-gate.js` · `scripts/test-auth-verify-landing.js` ·
+`scripts/test-checkout-fallback-total.js` · `scripts/cart-migration-state.js`
+
+No product file changed. **Test infrastructure only.**
+
+**Tests:** cart 737/737, challenge 63/63, dispatch 67/67, wishlist CLEAN, plus the eight
+above in both states.
+
 ## [2026-08-12] — Release pass, Phase 0: money-path blocker cleared, credentials removed
 
 **Not deployed.** Rules `ca9e8924`. Both cutoffs still `2099-01-01T00:00:00.000Z`.

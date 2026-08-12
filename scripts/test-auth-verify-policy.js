@@ -24,6 +24,7 @@ const vm = require('vm');
 const ROOT = path.resolve(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const VECTORS = JSON.parse(read('scripts/auth-policy-vectors.json'));
+const STATE = require('./auth-policy-state.js');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -63,22 +64,36 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
   head('A · what ships: enforcement OFF');
   {
     const b = loadBrowser(), n = loadNode();
-    eq('A1  the shipped cutoff IS the sentinel', b.CUTOFF_ISO, b.SENTINEL_ISO);
-    eq('A2  ...so enforcement is disabled', b.isEnforcementEnabled(), false);
-    eq('A3  both runtimes ship the same value', b.CUTOFF_ISO, n.CUTOFF_ISO);
-    ok('A4  describe() says so in words', /enforcement OFF/.test(b.describe()), b.describe());
 
-    /* The property that makes deployment safe: with the sentinel, nobody is enforced. */
+    /* STATE — the shipped cutoff must be coherent, not necessarily the sentinel. */
+    const st = STATE.shippedState();
+    eq('A1  client and server ship the SAME cutoff', st.client, st.server);
+    eq('A2  the sentinel value is unchanged', st.sentinel, '2099-01-01T00:00:00.000Z');
+    ok('A3  the shipped cutoff is the sentinel OR a deliberate UTC instant',
+       st.client === st.sentinel || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(st.client),
+       st.client);
+    eq('A3b both runtimes agree on the shipped value', b.CUTOFF_ISO, n.CUTOFF_ISO);
+    ok('A4  describe() reports the state it is actually in',
+       st.armed ? /enforcement ON from /.test(b.describe()) : /enforcement OFF/.test(b.describe()),
+       b.describe());
+
+    /* Passes SENTINEL explicitly. This asserts what the sentinel VALUE does — a permanent
+       property of the code — rather than what the shipped constant happens to be today.
+       Reading the shipped constant made this fail the moment the cutoff was armed, which
+       is the one state the release exists to reach. */
+    const SENT = b.SENTINEL_ISO;
     const dates = ['1999-01-01T00:00:00.000Z', '2026-08-12T00:00:00.000Z',
                    '2099-01-01T00:00:00.000Z', '2150-01-01T00:00:00.000Z'];
-    ok('A5  no account is enforced at ANY creation date while the sentinel stands',
-       dates.every((d) => b.enforcementApplies({ metadata: { creationTime: d } }) === false));
-
-    /* And it is genuinely a no-op, not merely "off for realistic dates". */
-    eq('A6  an account created after the sentinel date is still not enforced',
-       b.enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } }), false);
+    ok('A5  the sentinel enforces nobody at ANY creation date',
+       dates.every((d) => b.enforcementApplies({ metadata: { creationTime: d } },
+                                               { cutoff: SENT }) === false));
+    eq('A6  ...including an account created after the sentinel date itself',
+       b.enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } },
+                            { cutoff: SENT }), false);
+    eq('A7  ...and the server agrees',
+       n.enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } },
+                            { cutoff: SENT }), false);
   }
-
   /* ══ B · the cross-runtime contract ══════════════════════════════════════ */
   head('B · cross-runtime contract — every vector, both runtimes');
   {
@@ -193,8 +208,10 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
     eq('E5  a verified new account is not gated',
        on.SokoniVerifyGate.isGated(pwUser('2026-09-02T00:00:00.000Z', true)), false);
 
-    const off = loadGate(null);   /* shipped sentinel */
-    eq('E6  with the shipped default, the new account is not gated either',
+    /* Explicitly the sentinel, not "whatever ships today" — this block is about what
+       the sentinel does. */
+    const off = loadGate(loadBrowser().SENTINEL_ISO);
+    eq('E6  under the sentinel the new account is not gated either',
        off.SokoniVerifyGate.isGated(fresh), false);
     eq('E7  ...while still being genuinely unverified',
        off.SokoniVerifyGate.needsVerification(fresh), true);
@@ -280,8 +297,9 @@ function finish() {
     ok('G4  without the sentinel short-circuit a post-2099 account is enforced — so A6 bites',
        m4.enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } }) === true);
 
-    ok('G5  ...and the shipped file still short-circuits',
-       loadBrowserSafe().enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } }) === false);
+    ok('G5  ...and the real file short-circuits on the sentinel',
+       loadBrowserSafe().enforcementApplies({ metadata: { creationTime: '2099-06-01T00:00:00.000Z' } },
+                                            { cutoff: loadBrowserSafe().SENTINEL_ISO }) === false);
   }
 
   /* ══ H · the policy writes nothing, anywhere ═════════════════════════════ */

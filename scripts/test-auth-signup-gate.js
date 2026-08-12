@@ -21,6 +21,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
+const STATE = require('./auth-policy-state.js');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const AUTH = read('auth.js');
 
@@ -180,14 +181,18 @@ const BEFORE = '2026-07-15T10:00:00.000Z';
     eq('C3  an existing account created before the cutoff is untouched', r2.gated, false);
     eq('C4  ...named as grandfathered', r2.reason, 'grandfathered');
 
-    /* THE SHIPPED DEFAULT: signup must behave exactly as it did before this slice. */
-    const off = loadGate(null);
+    /* UNDER THE SENTINEL: signup behaves exactly as it did before this slice. The
+       sentinel is set EXPLICITLY rather than inherited from the shipped constant — this
+       block is about what the sentinel does, and reading the shipped value made it fail
+       the moment the release armed. */
+    const SENT = STATE.SENTINEL;
+    const off = loadGate(SENT);
     const freshOff = newAccount(AFTER);
     const r3 = await off.gate.enforce(freshOff, { redirect: false });
-    eq('C5  with the 2099 sentinel a brand-new account is NOT held', r3.gated, false);
-    eq('C6  ...so signup is unchanged in production today', r3.reason, 'grandfathered');
+    eq('C5  under the sentinel a brand-new account is NOT held', r3.gated, false);
+    eq('C6  ...signup unchanged', r3.reason, 'grandfathered');
     eq('C7  ...and it cost no network round trip', freshOff.reloadCalls, 0);
-    eq('C8  the shipped cutoff really is the sentinel', off.policy.CUTOFF_ISO, off.policy.SENTINEL_ISO);
+    eq('C8  the sentinel value is unchanged', SENT, '2099-01-01T00:00:00.000Z');
   }
 
   /* ══ D · other providers untouched ═══════════════════════════════════════ */
@@ -305,9 +310,9 @@ const BEFORE = '2026-07-15T10:00:00.000Z';
     ok('H3  ...and the link still goes out when the account is not held',
        /if \(!_skvWillGate\) sendEmailVerification\(cred\.user\)/.test(AUTH));
 
-    /* With the sentinel, isGated is false, so the legacy behaviour is bit-for-bit intact. */
-    const off = loadGate(null);
-    eq('H4  under the shipped sentinel a new account is not gated, so the link is sent',
+    /* Under the sentinel isGated is false, so the legacy behaviour is bit-for-bit intact. */
+    const off = loadGate(STATE.SENTINEL);
+    eq('H4  under the sentinel a new account is not gated, so the link is sent',
        off.gate.isGated(newAccount(AFTER)), false);
     const on = loadGate(CUT);
     eq('H5  with enforcement on it is gated, so the link is suppressed',
@@ -340,12 +345,15 @@ const BEFORE = '2026-07-15T10:00:00.000Z';
       .filter((f) => /SLICE 6C|VerifyScreen/.test(read(f)));
     eq('I11 Stories untouched', stories.length, 0);
 
-    /* The sentinel must not have been quietly activated. */
-    const cli = read('sokoni-verify-policy.js'), srv = read('functions/auth-policy.js');
-    ok('I12 the client cutoff is still the sentinel',
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(cli), 'client');
-    ok('I13 the server cutoff is still the sentinel',
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(srv), 'server');
+    /* STATE, not "still the sentinel". The shipped cutoff may be legitimately armed at
+       release time; what must never happen is the two sides disagreeing, or a malformed
+       or retroactive value. That guard does not expire. */
+    const _st = STATE.shippedState();
+    eq('I12 client and server ship the same cutoff', _st.client, _st.server);
+    ok('I13 the shipped cutoff is the sentinel OR a deliberate, non-retroactive instant',
+       _st.client === _st.sentinel ||
+       (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(_st.client) &&
+        Date.parse(_st.client) >= Date.parse('2026-08-12T00:00:00.000Z')), _st.client);
 
     /* Line-ending corruption guard, same signature check as the other slices. */
     const cp = require('child_process');
@@ -398,8 +406,8 @@ const BEFORE = '2026-07-15T10:00:00.000Z';
     const real = loadGate(CUT);
     eq('J3  the shipped gate leaves the grandfathered account alone',
        real.gate.isGated(newAccount(BEFORE)), false);
-    eq('J4  ...and the shipped sentinel leaves the new one alone',
-       loadGate(null).gate.isGated(newAccount(AFTER)), false);
+    eq('J4  ...and the sentinel leaves the new one alone',
+       loadGate(STATE.SENTINEL).gate.isGated(newAccount(AFTER)), false);
   }
 
   console.log('\n' + '─'.repeat(70));

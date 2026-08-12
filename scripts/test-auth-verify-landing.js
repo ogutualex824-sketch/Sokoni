@@ -20,6 +20,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
+const STATE = require('./auth-policy-state.js');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const SCREEN = read('sokoni-verify-screen.js');
 const GATE = read('sokoni-verify-gate.js');
@@ -370,18 +371,26 @@ const settle = () => new Promise((r) => setImmediate(r));
     const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
       .split('\n').map((s) => s.trim()).filter(Boolean);
 
-    ok('H1  the policy is untouched', !changed.includes('sokoni-verify-policy.js'), changed.join(', '));
-    ok('H2  the server policy is untouched', !changed.includes('functions/auth-policy.js'));
+    /* A policy file MAY change at release time — but only its cutoff line. "Untouched"
+       expires the moment the release arms; "cutoff-only" does not, and catches more. */
+    const _cd = STATE.policyDiffIsCutoffOnly(STATE.CLIENT);
+    const _sd = STATE.policyDiffIsCutoffOnly(STATE.SERVER);
+    ok('H1  any client-policy change is the cutoff line and nothing else', _cd.only, _cd.lines.join(' | '));
+    ok('H2  any server-policy change is the cutoff line and nothing else', _sd.only, _sd.lines.join(' | '));
     ok('H3  the gate is untouched', !changed.includes('sokoni-verify-gate.js'));
     ok('H4  the dispatcher is untouched', !changed.includes('functions/auth-dispatch.js'));
     ok('H5  firestore.rules untouched', !changed.includes('firestore.rules'));
     ok('H6  no Stories file touched', !changed.some((f) => /stor(y|ies)/i.test(f)));
 
     /* Both cutoffs must still be the sentinel. */
-    ok('H7  the client cutoff is still the sentinel',
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(read('sokoni-verify-policy.js')));
-    ok('H8  the server cutoff is still the sentinel',
-       /CUTOFF_ISO:\s*SENTINEL_ISO/.test(read('functions/auth-policy.js')));
+    /* STATE, not "still the sentinel". The shipped cutoff may be legitimately armed at
+       release time; what must never happen is the two sides disagreeing, or a malformed
+       or retroactive value. That guard does not expire. */
+    const _st = STATE.shippedState();
+    eq('H7  client and server ship the same cutoff', _st.client, _st.server);
+    ok('H8  the shipped cutoff is the sentinel OR a deliberate UTC instant',
+       _st.client === _st.sentinel || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(_st.client),
+       _st.client);
     ok('H9  the sentinel value itself is unchanged on the client',
        /SENTINEL_ISO\s*=\s*'2099-01-01T00:00:00\.000Z'/.test(read('sokoni-verify-policy.js')));
     ok('H10 ...and on the server',

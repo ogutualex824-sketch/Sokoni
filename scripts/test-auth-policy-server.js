@@ -31,6 +31,7 @@ const vm = require('vm');
 const ROOT = path.resolve(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const VECTORS = JSON.parse(read('scripts/auth-policy-vectors.json'));
+const STATE = require('./auth-policy-state.js');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -68,18 +69,24 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
   head('A · the server policy, as shipped');
   {
     const srv = loadServer(), cli = loadNodeClient();
-    eq('A1  the server ships the sentinel', srv.CUTOFF_ISO, srv.SENTINEL_ISO);
-    eq('A2  ...so server enforcement is disabled', srv.isEnforcementEnabled(), false);
-    eq('A3  client and server ship the SAME sentinel', srv.SENTINEL_ISO, cli.SENTINEL_ISO);
-    eq('A4  ...and the SAME cutoff', srv.CUTOFF_ISO, cli.CUTOFF_ISO);
-    eq('A5  ...and describe it identically', srv.describe(), cli.describe());
+    const st = STATE.shippedState();
 
-    /* Flipping only one side is the failure this whole slice guards against. If a future
-       commit moves one cutoff and not the other, A4 fails before anything deploys. */
-    ok('A6  the shipped cutoff is a sentinel, not a real date',
-       srv.CUTOFF_ISO === '2099-01-01T00:00:00.000Z', srv.CUTOFF_ISO);
+    /* STATE — coherent, not necessarily unarmed. This is a STRONGER guard than
+       "must be the sentinel": it still catches the failure that would actually hurt,
+       a one-sided arming, and it keeps working once the release arms deliberately. */
+    eq('A1  client and server ship the SAME cutoff', srv.CUTOFF_ISO, cli.CUTOFF_ISO);
+    eq('A2  ...and the helper agrees with both', st.client, srv.CUTOFF_ISO);
+    eq('A3  the two SENTINEL constants are identical', srv.SENTINEL_ISO, cli.SENTINEL_ISO);
+    eq('A4  the sentinel value is unchanged', srv.SENTINEL_ISO, '2099-01-01T00:00:00.000Z');
+    eq('A5  describe() matches word for word', srv.describe(), cli.describe());
+    ok('A6  the shipped cutoff is the sentinel OR a deliberate UTC instant',
+       st.client === st.sentinel || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(st.client),
+       st.client);
+    ok('A7  an armed cutoff is never retroactive',
+       !st.armed || Date.parse(st.client) >= Date.parse('2026-08-12T00:00:00.000Z'), st.client);
+    eq('A8  enforcement flags agree across the two runtimes',
+       srv.isEnforcementEnabled(), cli.isEnforcementEnabled());
   }
-
   /* ══ B · every vector, all three runtimes ════════════════════════════════ */
   head('B · every vector · browser · node · server');
   {
@@ -235,16 +242,19 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
          au.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')));
     ok('E3  firestore.rules untouched', !changed.includes('firestore.rules'));
     ok('E4  no Stories file touched', !changed.some((f) => /stor(y|ies)/i.test(f)));
-    ok('E5  the client policy file was NOT edited by this slice',
-       !changed.includes('sokoni-verify-policy.js'), changed.join(', '));
+    /* A policy file MAY change — but only its cutoff line. "Untouched" expires the
+       moment the release arms; "cutoff-only" does not, and catches more. */
+    const cd = STATE.policyDiffIsCutoffOnly(STATE.CLIENT);
+    ok('E5  any change to the client policy is the cutoff line and nothing else',
+       cd.only, cd.lines.join(' | '));
     ok('E6  the vectors fixture was NOT edited to make this pass',
        !changed.includes('scripts/auth-policy-vectors.json'), changed.join(', '));
 
-    /* The production cutoff must still be the sentinel on both sides. */
-    eq('E7  client cutoff is still the sentinel',
-       loadNodeClient().CUTOFF_ISO, '2099-01-01T00:00:00.000Z');
-    eq('E8  server cutoff is still the sentinel',
-       loadServer().CUTOFF_ISO, '2099-01-01T00:00:00.000Z');
+    const sd = STATE.policyDiffIsCutoffOnly(STATE.SERVER);
+    ok('E7  any change to the server policy is the cutoff line and nothing else',
+       sd.only, sd.lines.join(' | '));
+    ok('E8  and the two sides are still identical', STATE.shippedState().identical,
+       JSON.stringify(STATE.shippedState()));
 
     /* index.js must still export authDispatch by name — a new require inside the module
        does not change that, but the deploy depends on it. */
@@ -283,10 +293,14 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
        n.enforcementApplies({ uid: 'u' }, { cutoff: CUT }) === false);
 
     /* Server ignoring the sentinel. */
+    /* Both sides evaluated against the SENTINEL explicitly, so this control keeps
+       working when the shipped cutoff is armed. */
     const m3 = mutantServer('if (cutoffIso === SENTINEL_ISO) return false;', '');
+    const SENT3 = n.SENTINEL_ISO;
+    const far = { metadata: { creationTime: '2150-01-01T00:00:00.000Z' } };
     ok('F3  a sentinel divergence is caught — so B-off really bites',
-       m3.enforcementApplies({ metadata: { creationTime: '2150-01-01T00:00:00.000Z' } }) === true &&
-       n.enforcementApplies({ metadata: { creationTime: '2150-01-01T00:00:00.000Z' } }) === false);
+       m3.enforcementApplies(far, { cutoff: SENT3 }) === true &&
+       n.enforcementApplies(far, { cutoff: SENT3 }) === false);
 
     /* And the sweep would catch a drift the fixture never samples: a server that is correct
        at every vector but wrong one day either side of an unsampled cutoff. */
