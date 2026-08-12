@@ -50,7 +50,60 @@ const MEASUREMENT = '2026-08-12T00:00:00.000Z';
 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
-const stamp = argv.find((a) => /^\d{4}-\d{2}-\d{2}T/.test(a)) || null;
+
+/* ── argument parsing: reject ambiguity, never reinterpret it ─────────────────
+   The first version detected a timestamp with /^\d{4}-\d{2}-\d{2}T/ and ignored anything
+   else. So `2026-09-04 13:00:00.000Z` — a space instead of a T — matched nothing, fell
+   through to the status path and exited 0. It never wrote anything, so the direction was
+   safe, but an operator who typed a timestamp and got back a state report with a success
+   exit could reasonably believe it had taken. Under release pressure that is the wrong
+   kind of ambiguity.
+
+   So: anything that is not a recognised flag is treated as an ATTEMPTED timestamp and must
+   satisfy the strict format or the script exits non-zero. Unknown flags are refused for the
+   same reason — a mistyped `--confrm` would otherwise run as a silent dry-run and look like
+   nothing happened. */
+const STRICT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const KNOWN_FLAGS = ['--check', '--confirm', '--revert'];
+
+const positional = argv.filter((a) => !KNOWN_FLAGS.includes(a));
+const badFlags = positional.filter((a) => a.startsWith('-'));
+
+function refuse(lines) {
+  console.error('\n  ' + lines.join('\n  ') + '\n');
+  process.exit(2);
+}
+
+if (badFlags.length) {
+  refuse(['REFUSED: unrecognised option ' + badFlags.join(', ') + '.',
+          'Known options: ' + KNOWN_FLAGS.join(' ') + '.',
+          'Release tooling does not guess — a mistyped flag must fail, not run quietly.']);
+}
+if (positional.length > 1) {
+  refuse(['REFUSED: more than one timestamp given (' + positional.join(', ') + ').',
+          'Exactly one activation instant, or none.']);
+}
+
+const stamp = positional.length ? positional[0] : null;
+
+if (stamp !== null && !STRICT.test(stamp)) {
+  refuse([
+    'REFUSED: "' + stamp + '" is not a valid activation timestamp.',
+    '',
+    'Required format: YYYY-MM-DDTHH:mm:ss.sssZ   (ISO-8601, UTC, milliseconds, trailing Z)',
+    'Example:         2026-09-04T13:00:00.000Z',
+    '',
+    'This is deliberately strict. Local time here is UTC+3, so a wall-clock reading',
+    'written without an explicit zone — or with an offset like +03:00 — is exactly the',
+    'ambiguity that would move the cutoff by hours. The tool rejects it rather than',
+    'helpfully reinterpreting what an operator meant.',
+  ]);
+}
+
+if (stamp !== null && has('--revert')) {
+  refuse(['REFUSED: --revert takes no timestamp.',
+          'Use --revert --confirm to restore the sentinel, or pass a timestamp to arm.']);
+}
 
 /* Both files declare the constant the same way, so one expression finds both. */
 const DECL = /(CUTOFF_ISO:\s*)(SENTINEL_ISO|'[^']*')/;
@@ -91,11 +144,8 @@ if (has('--check') || (!stamp && !has('--revert'))) {
 const target = has('--revert') ? 'SENTINEL' : stamp;
 
 if (!has('--revert')) {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(stamp || '')) {
-    console.error('\n  Timestamp must be ISO-8601 UTC with milliseconds and a trailing Z,\n' +
-                  '  e.g. 2026-09-04T13:00:00.000Z\n');
-    process.exit(2);
-  }
+  /* Format was already enforced during argument parsing, where a malformed value fails
+     instead of falling through. What remains here are the POLICY checks. */
   const t = Date.parse(stamp);
   if (t < Date.parse(MEASUREMENT)) {
     console.error('\n  REFUSED: ' + stamp + ' predates the production measurement (' + MEASUREMENT + ').\n' +

@@ -62,8 +62,25 @@ One input, both files, or neither. The cutoff lives in two places because a func
 uploads only `functions/` and the deployed code cannot require the client copy; hand-editing
 two constants under release pressure is precisely where one gets missed.
 
-The script refuses a historical timestamp, a timestamp more than 90 days out (a sentinel
-wearing a real date), a non-UTC format, and any run without `--confirm`.
+The script refuses, always with a non-zero exit:
+
+| input | why |
+|---|---|
+| `2026-09-04T13:00:00.000+03:00` | an offset is not UTC — local here is UTC+3 |
+| `2026-09-04T13:00:00` | no zone at all |
+| `2026-09-04T13:00:00Z` | no milliseconds |
+| `2026-09-04 13:00:00.000Z` | space instead of `T` |
+| two timestamps | ambiguous |
+| `--confrm` and other unknown flags | a typo must fail, not run quietly as a dry-run |
+| a historical timestamp | retroactive restriction |
+| more than 90 days out | a sentinel wearing a real date |
+| no `--confirm` | prints intent only |
+
+**Deliberately strict about the zone.** Local time is UTC+3, so a wall-clock reading written
+without an explicit zone is exactly the ambiguity that moves the cutoff by hours. The tool
+rejects it rather than reinterpreting what an operator meant. The residual error is also
+fail-safe: an EAT reading written with `Z` lands the cutoff three hours *later* than intended,
+which grandfathers more accounts, never fewer.
 
 ### 2 · Pre-activation dry-run, with the real timestamp
 
