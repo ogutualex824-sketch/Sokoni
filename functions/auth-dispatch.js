@@ -34,6 +34,10 @@ const admin = require('firebase-admin');
 const challenge = require('./auth-email-challenge');
 const emailSvc = require('./email-service');
 const rateLimiter = require('./redis-rate-limiter');
+/* Auth Slice 6B — the server copy of the enforcement policy. Lives in functions/ because
+   a deploy uploads only this directory; the client copy at the repo root is held to the
+   same behaviour by scripts/auth-policy-vectors.json. */
+const policy = require('./auth-policy');
 
 const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
 
@@ -218,10 +222,30 @@ async function emailChallengeStatus(req) {
   catch (e) { throw new HttpsError('not-found', 'Account not found.'); }
 
   const st = await challenge.status(uid);
+
+  /* ── AUTH SLICE 6B — the server's own enforcement verdict ───────────────────
+     Computed here, from the Auth record the Admin SDK returned, so the answer to "is this
+     account subject to enforcement?" exists on the server and not only in a browser that
+     could be told otherwise.
+
+     Reported, not enforced-with. issue() and verify() deliberately do NOT consult it: a
+     grandfathered account must still be able to verify voluntarily, which is what makes a
+     future re-verification campaign possible without a new endpoint. What this gives us
+     today is the ability to prove client and server cannot disagree about WHO is subject
+     to enforcement — before the signup path starts acting on it in 6C. */
+  const enforcement = {
+    applies: policy.enforcementApplies(user),
+    enabled: policy.isEnforcementEnabled(),
+    /* The cutoff is not a secret — it is a scheduling decision, and the screen may need to
+       explain why one account is asked and another is not. */
+    cutoff: policy.CUTOFF_ISO,
+  };
+
   return {
     ok: true,
     emailVerified: !!user.emailVerified,
     emailHint: _maskEmail(user.email),
+    enforcement,
     challenge: st.exists
       ? { expiresAt: st.expiresAt, expired: st.expired, consumed: st.consumed,
           attemptsRemaining: st.attemptsRemaining, canResendAt: st.canResendAt }

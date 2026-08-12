@@ -133,6 +133,12 @@ const PRE_EXISTING = [
   'scripts/auth-policy-vectors.json',
   'scripts/test-auth-verify-policy.js',
   'scripts/measure-email-verification.js',
+  /* Auth slice 6B — the server computes the same enforcement verdict. The policy is
+     implemented twice because a functions deploy uploads only functions/; the two copies
+     are held together by scripts/auth-policy-vectors.json plus a pairwise sweep. */
+  'functions/auth-policy.js',
+  'functions/auth-dispatch.js',
+  'scripts/test-auth-policy-server.js',
 ];
 
 /* The service, its docs and the suites themselves. */

@@ -1,0 +1,302 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   AUTH SLICE 6B — the server enforcement verdict, and three-way agreement
+   ------------------------------------------------------------------------------
+   The policy is implemented twice on purpose: `firebase deploy --only functions` uploads
+   only the functions/ directory, so the deployed code cannot require the client file.
+   Duplication is therefore a fact, and the job of this suite is to make drift impossible
+   to ship rather than to pretend the duplication is not there.
+
+   THREE RUNTIMES, ONE CONTRACT
+     browser   sokoni-verify-policy.js  as a classic script in a vm sandbox
+     node      sokoni-verify-policy.js  required as CommonJS
+     server    functions/auth-policy.js required as CommonJS
+
+   Every vector in scripts/auth-policy-vectors.json must produce the same verdict in all
+   three, and the three must agree with each other.
+
+   AND A SWEEP, BECAUSE 18 VECTORS ARE 18 SAMPLES
+   ----------------------------------------------
+   A fixture proves the cases somebody thought of. Drift usually appears somewhere nobody
+   sampled — an off-by-one that only shows at a millisecond boundary, a parser that differs
+   on one format. So after the vectors, several thousand generated timestamps are pushed
+   through both implementations and compared pairwise. Deterministic, so a failure is
+   reproducible rather than a Heisenbug.
+   ══════════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = path.resolve(__dirname, '..');
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const VECTORS = JSON.parse(read('scripts/auth-policy-vectors.json'));
+
+let pass = 0, fail = 0;
+const failures = [];
+function ok(label, cond, detail) {
+  if (cond) { pass++; return true; }
+  fail++; failures.push(label + (detail ? '  → ' + detail : ''));
+  return false;
+}
+const eq = (l, a, e) => ok(l, a === e, 'expected ' + JSON.stringify(e) + ', got ' + JSON.stringify(a));
+const head = (t) => console.log('\n\x1b[1m' + t + '\x1b[0m');
+
+/* ── the three runtimes ──────────────────────────────────────────────────────── */
+function loadBrowser() {
+  const w = { console: { warn() { }, log() { } } };
+  vm.createContext(w); w.window = w;
+  vm.runInContext(read('sokoni-verify-policy.js'), w, { filename: 'sokoni-verify-policy.js' });
+  return w.SokoniVerifyPolicy;
+}
+function loadNodeClient() {
+  const p = require.resolve(path.join(ROOT, 'sokoni-verify-policy.js'));
+  delete require.cache[p];
+  return require(p);
+}
+function loadServer() {
+  const p = require.resolve(path.join(ROOT, 'functions', 'auth-policy.js'));
+  delete require.cache[p];
+  return require(p);
+}
+
+const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { creationTime: v.creationTime } });
+
+(function run() {
+
+  /* ══ A · the server exists and ships OFF ═════════════════════════════════ */
+  head('A · the server policy, as shipped');
+  {
+    const srv = loadServer(), cli = loadNodeClient();
+    eq('A1  the server ships the sentinel', srv.CUTOFF_ISO, srv.SENTINEL_ISO);
+    eq('A2  ...so server enforcement is disabled', srv.isEnforcementEnabled(), false);
+    eq('A3  client and server ship the SAME sentinel', srv.SENTINEL_ISO, cli.SENTINEL_ISO);
+    eq('A4  ...and the SAME cutoff', srv.CUTOFF_ISO, cli.CUTOFF_ISO);
+    eq('A5  ...and describe it identically', srv.describe(), cli.describe());
+
+    /* Flipping only one side is the failure this whole slice guards against. If a future
+       commit moves one cutoff and not the other, A4 fails before anything deploys. */
+    ok('A6  the shipped cutoff is a sentinel, not a real date',
+       srv.CUTOFF_ISO === '2099-01-01T00:00:00.000Z', srv.CUTOFF_ISO);
+  }
+
+  /* ══ B · every vector, all three runtimes ════════════════════════════════ */
+  head('B · every vector · browser · node · server');
+  {
+    const b = loadBrowser(), n = loadNodeClient(), s = loadServer();
+    const cut = VECTORS.cutoffs;
+    let disagreements = 0;
+
+    VECTORS.vectors.forEach((v, i) => {
+      const cutoff = cut[v.cutoff];
+      const u = userFrom(v);
+      const rb = b.enforcementApplies(u, { cutoff });
+      const rn = n.enforcementApplies(u, { cutoff });
+      const rs = s.enforcementApplies(u, { cutoff });
+
+      ok('B' + (i + 1) + 's  server · ' + v.label, rs === v.enforced,
+         'expected ' + v.enforced + ', got ' + rs);
+      if (!(rb === rn && rn === rs)) {
+        disagreements++;
+        ok('B' + (i + 1) + 'x  runtimes agree · ' + v.label, false,
+           'browser=' + rb + ' node=' + rn + ' server=' + rs);
+      } else {
+        ok('B' + (i + 1) + 'x  all three runtimes agree · ' + v.label, true);
+      }
+    });
+    eq('B·  zero disagreements across all vectors', disagreements, 0);
+
+    /* The boundary cases named in the acceptance, called out individually so a reader can
+       see them rather than trusting a count. */
+    const at = '2026-09-01T00:00:00.000Z';
+    eq('B-lt  < cutoff  → not enforced (server)',
+       s.enforcementApplies({ metadata: { creationTime: '2026-08-31T23:59:59.999Z' } }, { cutoff: at }), false);
+    eq('B-eq  === cutoff → ENFORCED (server)',
+       s.enforcementApplies({ metadata: { creationTime: at } }, { cutoff: at }), true);
+    eq('B-gt  > cutoff  → enforced (server)',
+       s.enforcementApplies({ metadata: { creationTime: '2026-09-01T00:00:00.001Z' } }, { cutoff: at }), true);
+    eq('B-off sentinel → not enforced even for a future account (server)',
+       s.enforcementApplies({ metadata: { creationTime: '2150-01-01T00:00:00.000Z' } },
+                            { cutoff: s.SENTINEL_ISO }), false);
+    eq('B-rfc RFC-1123 at the cutoff instant → ENFORCED (server)',
+       s.enforcementApplies({ metadata: { creationTime: 'Tue, 01 Sep 2026 00:00:00 GMT' } },
+                            { cutoff: at }), true);
+    eq('B-unk unparseable → grandfathered (server)',
+       s.enforcementApplies({ metadata: { creationTime: 'not-a-date' } }, { cutoff: at }), false);
+    eq('B-nul missing → grandfathered (server)',
+       s.enforcementApplies({ uid: 'u' }, { cutoff: at }), false);
+  }
+
+  /* ══ C · the sweep ═══════════════════════════════════════════════════════ */
+  head('C · sweep — thousands of generated instants, compared pairwise');
+  {
+    const n = loadNodeClient(), s = loadServer();
+    const CUTOFFS = ['2026-09-01T00:00:00.000Z', '2020-02-29T23:59:59.999Z',
+                     '2027-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z'];
+    /* Offsets clustered where an off-by-one lives, plus a wide spread. Deterministic. */
+    const OFFSETS = [];
+    for (let d = -3; d <= 3; d++) OFFSETS.push(d);                       /* ±3 ms */
+    for (let k = 1; k <= 60; k++) OFFSETS.push(k * 1000, -k * 1000);     /* ±seconds */
+    for (let k = 1; k <= 48; k++) OFFSETS.push(k * 3600000, -k * 3600000);   /* ±hours */
+    for (let k = 1; k <= 60; k++) OFFSETS.push(k * 86400000, -k * 86400000); /* ±days */
+    for (let k = 1; k <= 25; k++) OFFSETS.push(k * 31536000000, -k * 31536000000); /* ±years */
+
+    let compared = 0, mismatches = [];
+    for (const c of CUTOFFS) {
+      const base = Date.parse(c);
+      for (const off of OFFSETS) {
+        const t = base + off;
+        /* Both formats Firebase can hand us, for the same instant. */
+        for (const fmt of [new Date(t).toISOString(), new Date(t).toUTCString()]) {
+          const u = { metadata: { creationTime: fmt } };
+          const rn = n.enforcementApplies(u, { cutoff: c });
+          const rs = s.enforcementApplies(u, { cutoff: c });
+          compared++;
+          if (rn !== rs && mismatches.length < 5) {
+            mismatches.push('cutoff=' + c + ' created=' + fmt + ' client=' + rn + ' server=' + rs);
+          }
+        }
+      }
+    }
+    /* The exact expected count, not an arbitrary floor. A floor is a number somebody
+       guessed, and when the loop shrinks the honest fix looks identical to lowering the
+       bar. This asserts the sweep ran to COMPLETION — every offset, every cutoff, both
+       formats — so a silently truncated loop fails instead of passing smaller. */
+    const expected = OFFSETS.length * CUTOFFS.length * 2;
+    eq('C1  the sweep ran to completion (' + OFFSETS.length + ' offsets × ' + CUTOFFS.length +
+       ' cutoffs × 2 formats)', compared, expected);
+    ok('C2  client and server never disagreed', mismatches.length === 0, mismatches.join(' | '));
+    console.log('     ' + compared + ' instants compared across ' + CUTOFFS.length + ' cutoffs');
+
+    /* toUTCString() drops milliseconds — so an instant 1ms after the cutoff is, in RFC-1123,
+       the cutoff instant itself. Both sides must reach the same (correct) answer from the
+       same lossy input rather than one of them compensating. */
+    const c = '2026-09-01T00:00:00.000Z';
+    const lossy = new Date(Date.parse(c) - 1).toUTCString();   /* → 31 Aug 23:59:59 GMT */
+    eq('C3  a millisecond lost to RFC-1123 rounding is handled identically',
+       n.enforcementApplies({ metadata: { creationTime: lossy } }, { cutoff: c }),
+       s.enforcementApplies({ metadata: { creationTime: lossy } }, { cutoff: c }));
+  }
+
+  /* ══ D · the dispatcher reports it, and does not act on it ═══════════════ */
+  head('D · emailChallengeStatus reports the verdict; issue/verify ignore it');
+  {
+    const src = read('functions/auth-dispatch.js');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+    ok('D1  the dispatcher requires the SERVER policy, not the client file',
+       /require\(['"]\.\/auth-policy['"]\)/.test(code) &&
+       !/sokoni-verify-policy/.test(code));
+
+    const status = code.slice(code.indexOf('async function emailChallengeStatus'));
+    ok('D2  status computes the verdict server-side', /policy\.enforcementApplies\(user\)/.test(status));
+    ok('D3  ...and reports enabled + cutoff alongside it',
+       /enabled:\s*policy\.isEnforcementEnabled\(\)/.test(status) && /cutoff:\s*policy\.CUTOFF_ISO/.test(status));
+
+    /* The deliberate omission: a grandfathered account may still verify voluntarily, which
+       is what makes a re-verification campaign possible without a new endpoint. */
+    const issue = code.slice(code.indexOf('async function emailChallengeIssue'),
+                             code.indexOf('function _maskEmail'));
+    const verify = code.slice(code.indexOf('async function emailChallengeVerify'),
+                              code.indexOf('async function emailChallengeStatus'));
+    ok('D4  issue() does NOT consult the policy', !/policy\./.test(issue),
+       (issue.match(/policy\.[a-zA-Z]+/g) || []).join(','));
+    ok('D5  verify() does NOT consult the policy', !/policy\./.test(verify),
+       (verify.match(/policy\.[a-zA-Z]+/g) || []).join(','));
+
+    /* 6B must not have wandered into 6C or into the verification model. */
+    ok('D6  the policy never writes a user record',
+       !/policy[\s\S]{0,80}updateUser|updateUser[\s\S]{0,80}policy/.test(code));
+    ok('D7  emailVerified is still only set by verify()',
+       (code.match(/updateUser\([^)]*emailVerified/g) || []).length === 1);
+    ok('D8  the server policy file writes nothing at all',
+       !/admin\.|updateUser|firestore|setCustomUserClaims/.test(read('functions/auth-policy.js')));
+  }
+
+  /* ══ E · blast radius ════════════════════════════════════════════════════ */
+  head('E · 6B changed nothing it was told not to');
+  {
+    const cp = require('child_process');
+    const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
+      .split('\n').map((s) => s.trim()).filter(Boolean);
+
+    /* Signup untouched — that is 6C. */
+    ok('E1  auth.js untouched by 6B', !changed.includes('auth.js'), changed.join(', '));
+    ok('E2  the signup path still writes its own session (6C has not happened)',
+       /localStorage\.setItem\("loggedIn", "true"\)/.test(read('auth.js')));
+    ok('E3  firestore.rules untouched', !changed.includes('firestore.rules'));
+    ok('E4  no Stories file touched', !changed.some((f) => /stor(y|ies)/i.test(f)));
+    ok('E5  the client policy file was NOT edited by this slice',
+       !changed.includes('sokoni-verify-policy.js'), changed.join(', '));
+    ok('E6  the vectors fixture was NOT edited to make this pass',
+       !changed.includes('scripts/auth-policy-vectors.json'), changed.join(', '));
+
+    /* The production cutoff must still be the sentinel on both sides. */
+    eq('E7  client cutoff is still the sentinel',
+       loadNodeClient().CUTOFF_ISO, '2099-01-01T00:00:00.000Z');
+    eq('E8  server cutoff is still the sentinel',
+       loadServer().CUTOFF_ISO, '2099-01-01T00:00:00.000Z');
+
+    /* index.js must still export authDispatch by name — a new require inside the module
+       does not change that, but the deploy depends on it. */
+    ok('E9  authDispatch is still re-exported by name',
+       /exports\.authDispatch\s*=/.test(read('functions/index.js')));
+  }
+
+  /* ══ F · positive controls ═══════════════════════════════════════════════ */
+  head('F · positive controls — drift must be detectable');
+  {
+    const srvSrc = read('functions/auth-policy.js');
+    function mutantServer(from, to) {
+      ok('F·  mutation target present: ' + from.slice(0, 36), srvSrc.indexOf(from) >= 0);
+      const m = { exports: {} };
+      const ctx = { module: m, exports: m.exports, require, console };
+      vm.createContext(ctx);
+      vm.runInContext(srvSrc.replace(from, to), ctx, { filename: 'mutant-server.js' });
+      return m.exports;
+    }
+    const n = loadNodeClient();
+    const CUT = '2026-09-01T00:00:00.000Z';
+    const at = { metadata: { creationTime: CUT } };
+
+    /* The classic drift: server uses > where the client uses >=. Byte-identical constants
+       would not notice; the vectors do. */
+    const m1 = mutantServer('return created >= cutoff;', 'return created > cutoff;');
+    const dm1 = m1.enforcementApplies(at, { cutoff: CUT });
+    ok('F1  a > / >= drift is caught at the exact cutoff — so B-eq really bites',
+       dm1 === false && n.enforcementApplies(at, { cutoff: CUT }) === true,
+       'server=' + dm1);
+
+    /* Server enforcing an undateable account while the client grandfathers it. */
+    const m2 = mutantServer('if (created === null) return false;', 'if (created === null) return true;');
+    ok('F2  an unknown-date divergence is caught — so B-nul really bites',
+       m2.enforcementApplies({ uid: 'u' }, { cutoff: CUT }) === true &&
+       n.enforcementApplies({ uid: 'u' }, { cutoff: CUT }) === false);
+
+    /* Server ignoring the sentinel. */
+    const m3 = mutantServer('if (cutoffIso === SENTINEL_ISO) return false;', '');
+    ok('F3  a sentinel divergence is caught — so B-off really bites',
+       m3.enforcementApplies({ metadata: { creationTime: '2150-01-01T00:00:00.000Z' } }) === true &&
+       n.enforcementApplies({ metadata: { creationTime: '2150-01-01T00:00:00.000Z' } }) === false);
+
+    /* And the sweep would catch a drift the fixture never samples: a server that is correct
+       at every vector but wrong one day either side of an unsampled cutoff. */
+    const m4 = mutantServer('return created >= cutoff;',
+                            'return created >= cutoff + 86400000;');
+    let sweepCaught = 0;
+    const base = Date.parse('2027-01-01T00:00:00.000Z');
+    for (let k = 0; k < 200; k++) {
+      const u = { metadata: { creationTime: new Date(base + k * 3600000).toISOString() } };
+      if (m4.enforcementApplies(u, { cutoff: '2027-01-01T00:00:00.000Z' }) !==
+          n.enforcementApplies(u, { cutoff: '2027-01-01T00:00:00.000Z' })) sweepCaught++;
+    }
+    ok('F4  a one-day skew the fixture never samples is caught by the sweep',
+       sweepCaught > 0, 'divergences seen: ' + sweepCaught);
+  }
+
+  /* ── result ────────────────────────────────────────────────────────────── */
+  console.log('\n' + '─'.repeat(70));
+  if (fail) { console.log('\x1b[31mFAILURES\x1b[0m'); failures.forEach((f) => console.log('  ✗ ' + f)); }
+  console.log((fail ? '\x1b[31m' : '\x1b[32m') + 'auth policy server: ' + pass + '/' + (pass + fail) + '\x1b[0m');
+  process.exit(fail ? 1 : 0);
+})();

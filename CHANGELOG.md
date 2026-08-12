@@ -1,3 +1,71 @@
+## [2026-08-12] — Auth Slice 6B: the server computes the same enforcement verdict
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`). Enforcement still OFF on both sides.
+
+`emailChallengeStatus` now returns an `enforcement` block — `{ applies, enabled, cutoff }` —
+computed server-side from the Auth record the Admin SDK returned. The answer to "is this
+account subject to enforcement?" now exists somewhere a browser cannot be told otherwise.
+
+### Why the policy is implemented twice
+
+`firebase deploy --only functions` uploads the `functions/` directory and nothing else. A
+`require('../sokoni-verify-policy.js')` resolves perfectly on a developer's machine and then
+throws `MODULE_NOT_FOUND` in production — the worst possible place to find out. So
+`functions/auth-policy.js` is a deliberate second implementation, and the duplication is held
+together by a contract rather than by hope.
+
+### Three runtimes, one contract, plus a sweep
+
+Every vector in `scripts/auth-policy-vectors.json` is replayed in all three runtimes — browser
+(classic script), Node (CommonJS), server (`functions/auth-policy.js`) — and all three must
+agree with the table *and* with each other.
+
+But 18 vectors are 18 samples, and drift usually appears where nobody sampled. So after the
+vectors, **3,224 generated instants** are pushed through both implementations and compared
+pairwise: ±3 ms, ±60 s, ±48 h, ±60 days and ±25 years around four different cutoffs, each in
+both formats Firebase emits. Deterministic, so a failure is reproducible.
+
+The count is asserted as `offsets × cutoffs × formats` rather than "more than N". A floor is a
+number somebody guessed, and when the loop silently shrinks, the honest fix and lowering the
+bar look identical.
+
+One case worth naming: `toUTCString()` **drops milliseconds**, so an instant 1 ms before the
+cutoff becomes, in RFC-1123, a second earlier. Both sides must reach the same answer from the
+same lossy input rather than one of them compensating — asserted directly.
+
+### Reported, not enforced-with
+
+`issue()` and `verify()` deliberately do **not** consult the policy, and the suite asserts they
+contain no reference to it. A grandfathered account must still be able to verify voluntarily —
+that is what makes the future re-verification campaign possible without a new endpoint.
+
+### The emulator proof that a pure-function test cannot give
+
+`metadata.creationTime` arrives from Firebase as an RFC-1123 string on a real `UserRecord`. A
+handler that forgot to pass `metadata` to the policy would report "not enforced" for everybody
+and look perfectly healthy doing it.
+
+So against the real Auth emulator: the same account is checked with the shipped sentinel
+(not enforced), then with a long-past cutoff (**enforced**), then with a future cutoff
+(grandfathered again) — proving the record genuinely reaches the policy. The shipped cutoff is
+restored in a `finally`, and that restoration is itself asserted.
+
+### Files
+
+`functions/auth-policy.js` (new) · `functions/auth-dispatch.js` ·
+`scripts/test-auth-policy-server.js` (new) · `scripts/test-auth-dispatch.js` ·
+`scripts/cart-migration-state.js`
+
+**Database changes:** none. **API changes:** `emailChallengeStatus` gains an `enforcement`
+block; no op removed or altered. **Security changes:** none — the verdict is reported, and
+nothing acts on it yet. **Breaking changes:** none.
+
+**Tests:** policy-server 78/78 (4 mutation controls), policy 92/92, gate 125/125, screen 96/96,
+transitions 100/100, challenge 63/63, dispatch 67/67, cart 729/729, wishlist CLEAN.
+
+Not started: 6C (signup). `auth.js` untouched — asserted, including that the signup path still
+writes its own session, so the gap 6C closes is recorded rather than assumed.
+
 ## [2026-08-12] — Auth Slice 6A: enforcement policy (grandfathering), enforcement OFF
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`).

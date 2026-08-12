@@ -320,6 +320,51 @@ console.log('\nI. Nothing leaks the challenge to the caller');
      JSON.stringify(st.challenge));
   ck('I', 'and the authoritative verified flag', st.emailVerified === false);
   ck('I', 'the address is masked here too', /•/.test(st.emailHint), st.emailHint);
+
+  /* ── AUTH SLICE 6B — the enforcement verdict, end to end ──────────────────
+     The pure-function contract is proven in test-auth-policy-server.js. What can only be
+     proven HERE, against a real emulator, is that the dispatcher feeds the policy a real
+     UserRecord: metadata.creationTime arrives from Firebase as an RFC-1123 string, and a
+     handler that forgot to pass metadata would report "not enforced" for everybody and
+     look perfectly healthy doing it. */
+  const policy = require(path.join(FN, 'auth-policy.js'));
+  ck('I', 'status carries a server-computed enforcement verdict',
+     st.enforcement && typeof st.enforcement.applies === 'boolean', JSON.stringify(st.enforcement));
+  ck('I', 'it reports the shipped sentinel, so enforcement is OFF',
+     st.enforcement.enabled === false && st.enforcement.cutoff === policy.SENTINEL_ISO,
+     JSON.stringify(st.enforcement));
+  ck('I', 'and therefore applies to nobody yet', st.enforcement.applies === false);
+
+  /* Now the part that catches a handler which never reads the record: flip the server
+     cutoff to a long-past date and the SAME account must become enforced. If metadata is
+     not reaching the policy, this stays false. */
+  const realUser = await admin.auth().getUser(UID_A);
+  ck('I', 'the Auth record really carries a creationTime',
+     !!(realUser.metadata && realUser.metadata.creationTime), String(realUser.metadata));
+  const shipped = policy.CUTOFF_ISO;
+  policy.CUTOFF_ISO = '2000-01-01T00:00:00.000Z';
+  try {
+    const st2 = await H.emailChallengeStatus(reqFor(UID_A, {}, freshIp()));
+    ck('I', 'with an active cutoff the SAME account is enforced — metadata does reach the policy',
+       st2.enforcement.applies === true, JSON.stringify(st2.enforcement));
+    ck('I', 'and the reported cutoff follows the server, not a client claim',
+       st2.enforcement.cutoff === '2000-01-01T00:00:00.000Z', st2.enforcement.cutoff);
+    ck('I', 'a future cutoff grandfathers the same account again',
+       await (async () => {
+         policy.CUTOFF_ISO = '2090-01-01T00:00:00.000Z';
+         const st3 = await H.emailChallengeStatus(reqFor(UID_A, {}, freshIp()));
+         return st3.enforcement.applies === false;
+       })());
+  } finally {
+    policy.CUTOFF_ISO = shipped;         /* never leave the cutoff moved */
+  }
+  ck('I', 'the shipped cutoff is restored after the probe', policy.CUTOFF_ISO === shipped);
+
+  /* Enforcement must not have leaked into the parts that must stay unconditional. */
+  const issAgain = await H.emailChallengeIssue(reqFor(UID_A, {}, freshIp()));
+  ck('I', 'issue() still works regardless of policy (re-verification campaigns need this)',
+     issAgain && (issAgain.ok === true || issAgain.reason === 'cooldown'),
+     JSON.stringify(issAgain));
 }
 
 /* ══ J. wiring and slice boundary ══ */

@@ -1,6 +1,6 @@
 # Email Verification — server-controlled challenge
 
-**Status:** Slices 1–5 + 6A complete, **not deployed**. Enforcement ships OFF. Firestore rules unchanged (`ca9e8924`).
+**Status:** Slices 1–5 + 6A + 6B complete, **not deployed**. Enforcement ships OFF. Firestore rules unchanged (`ca9e8924`).
 **Related:** [[Authentication]] · [[Security]] · [[Communication Engine]] · [[Release Roadmap]]
 
 Replaces the old "you are logged in because you typed the right password" model with a
@@ -17,7 +17,8 @@ server-issued code that proves the account's email address belongs to whoever is
 | Gate | `sokoni-verify-gate.js` | whether an unverified account gets an application session |
 | Screen | `sokoni-verify-screen.js` | the challenge the held user actually answers |
 | Transitions | `sokoni-verify-gate.js` (watcher) | keeping every tab on the current answer |
-| Policy | `sokoni-verify-policy.js` | WHO is asked — grandfathering, and the enforcement cutoff |
+| Policy (client) | `sokoni-verify-policy.js` | WHO is asked — grandfathering, and the enforcement cutoff |
+| Policy (server) | `functions/auth-policy.js` | the same verdict where no client can reach |
 | Transitions | `sokoni-verify-gate.js` (watcher) | keeping every tab on the current answer |
 
 ### Model — Slice 1
@@ -202,11 +203,35 @@ a *string*, not a *date*: different parsing, a timezone assumption, or `>` versu
 survive that and diverge exactly at the boundary. So `scripts/auth-policy-vectors.json`
 carries 18 dated vectors with expected verdicts, replayed in both runtimes the file runs in
 — browser (classic script) and Node (CommonJS) — and asserted to agree with each other as
-well as with the table. **Slice 6B must assert against this fixture, not a copied constant.**
+well as with the table. **Slice 6B does assert against this fixture, not a copied constant** — see below.
 
 **Policy before network.** `evaluate()` checks the policy before refreshing the token: a
 grandfathered account will not be gated whatever the server says, so refreshing first would
 cost a round trip per page load for the very accounts this exists to leave alone.
+
+### Server verdict — Slice 6B
+
+`emailChallengeStatus` returns `enforcement: { applies, enabled, cutoff }`, computed from the
+Auth record by `functions/auth-policy.js`.
+
+**Why the policy is implemented twice:** `firebase deploy --only functions` uploads only that
+directory, so the deployed code cannot require the client file — it would resolve locally and
+throw `MODULE_NOT_FOUND` in production. The duplication is deliberate and held by the contract.
+
+**Three runtimes** (browser, Node, server) replay every vector and must agree with the table
+and with each other. Then **3,224 generated instants** — ±3 ms, ±60 s, ±48 h, ±60 days,
+±25 years around four cutoffs, in both formats Firebase emits — are compared pairwise, because
+18 vectors are 18 samples and drift appears where nobody sampled. `toUTCString()` drops
+milliseconds, so a lossy RFC-1123 round trip is asserted to land identically on both sides.
+
+**Reported, not enforced-with.** `issue()` and `verify()` do not consult the policy, asserted
+by absence — a grandfathered account must still be able to verify voluntarily, which is what
+makes a re-verification campaign possible without a new endpoint.
+
+**Proven against the emulator, not only as a pure function:** the same account is checked with
+the sentinel (not enforced), a long-past cutoff (enforced) and a future cutoff (grandfathered),
+which is the only way to show `metadata.creationTime` actually reaches the policy. A handler
+that forgot to pass metadata would report "not enforced" for everybody and look healthy.
 
 ---
 
@@ -241,11 +266,12 @@ is what matters:
 | Suite | Assertions |
 |---|---|
 | `scripts/test-auth-email-challenge.js` | 62 |
-| `scripts/test-auth-dispatch.js` | 58 |
+| `scripts/test-auth-dispatch.js` | 67 |
 | `scripts/test-auth-verify-gate.js` | 117 |
 | `scripts/test-auth-verify-screen.js` | 96 |
 | `scripts/test-auth-session-transitions.js` | 100 |
 | `scripts/test-auth-verify-policy.js` | 92 |
+| `scripts/test-auth-policy-server.js` | 78 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still
