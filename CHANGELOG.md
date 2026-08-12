@@ -1,3 +1,47 @@
+## [2026-08-13] — APP CHECK: the secondary-Firebase-app defect is 30 files, not 2
+
+**Status: CLASS IDENTIFIED AND RATCHETED. 28 files still to convert — flagged, not fixed.**
+
+App Check attaches to the **default** Firebase app (`firebase.js`). A secondary app —
+`initializeApp(cfg, 'some-name')` — does not inherit it, so every Firestore read or write
+through it carries **no App Check token**. `search.html`'s own comment confirms enforcement
+is live on `firestore.googleapis.com`, so these are live defects, not latent ones.
+
+`81ca4f2` fixed `business.html` and `businesses.html`; `search.html` was converted earlier.
+A repo-wide scan found the same pattern in **28 more files (32 apps)** — including write
+paths for bookings and leads: `cln-write`, `elc-write`, `plm-write`, `cr-write`, `ch-write`,
+`hs-write`, `th-write`, `mkt-write`, `dh-wd`. A failed *read* renders a visible error; a
+failed *write* renders a **success toast for a booking that was never stored**.
+
+**Delivered:** `scripts/test-secondary-firebase-apps.js` (9/9) — a ratchet, not a cleanup.
+The 28 known files are baselined and do not fail; what fails is a **new** secondary app, a
+baselined file gaining another, or a **stale baseline entry** (so converting a file must also
+shrink the list — the list cannot rot into fiction). It strips comments and string literals
+before scanning: `business.html`, `businesses.html` and `search.html` all still *describe*
+the `initializeApp(...)` call they no longer make, and a naive grep reports all three as
+defective — the same read-the-code-not-the-prose trap `81ca4f2`'s test called out.
+
+> **Not fixed here, deliberately.** Converting 28 public surfaces is a shipping change well
+> beyond "finish KASS Shop verification", it touches money paths, and RC policy is critical
+> fixes only. It needs your go-ahead, and the fix differs per page (modular vs compat SDK).
+
+### KASS Shop live verification — blocked on deployment, not on engineering
+
+Live is `6ac58e6` (2026-08-11, `dirtyWorkingTree: true`). `81ca4f2` is **not** an ancestor:
+production still serves `bizPage` and no `_canonicalDb`. Verifying the fix against the real
+domain would measure the *old* code.
+
+Separately, this harness **cannot** verify App Check-gated live reads without a debug token,
+which was excluded. Measured on `https://mysokoni.co.ke/businesses`: "0 businesses found",
+and the only failing requests were `google.com/recaptcha/api2/pat` **401** and `/clr` **400** —
+reCAPTCHA Enterprise attestation, which headless webkit cannot pass. **No Firestore request
+failed at all**, so this run is not evidence that live is broken for real users, and it is not
+reported as such.
+
+**Files:** `scripts/test-secondary-firebase-apps.js` (new, 9/9).
+**Database changes:** none. **API changes:** none. **Security changes:** none — this adds a
+guard, changes no runtime code. **Breaking changes:** none.
+
 ## [2026-08-13] — MERCHANT SHELL: no way out, and Back depended on how you arrived
 
 **Status: FIXED and proven.** 14/14, webkit, 393x852, real clicks.
