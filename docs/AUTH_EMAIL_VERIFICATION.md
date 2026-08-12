@@ -1,6 +1,6 @@
 # Email Verification — server-controlled challenge
 
-**Status:** Slices 1–5 complete, **not deployed**. Firestore rules unchanged (`ca9e8924`).
+**Status:** Slices 1–5 + 6A complete, **not deployed**. Enforcement ships OFF. Firestore rules unchanged (`ca9e8924`).
 **Related:** [[Authentication]] · [[Security]] · [[Communication Engine]] · [[Release Roadmap]]
 
 Replaces the old "you are logged in because you typed the right password" model with a
@@ -16,6 +16,8 @@ server-issued code that proves the account's email address belongs to whoever is
 | Transport | `functions/auth-dispatch.js` | `authDispatch` — issue / verify / status, App Check enforced |
 | Gate | `sokoni-verify-gate.js` | whether an unverified account gets an application session |
 | Screen | `sokoni-verify-screen.js` | the challenge the held user actually answers |
+| Transitions | `sokoni-verify-gate.js` (watcher) | keeping every tab on the current answer |
+| Policy | `sokoni-verify-policy.js` | WHO is asked — grandfathering, and the enforcement cutoff |
 | Transitions | `sokoni-verify-gate.js` (watcher) | keeping every tab on the current answer |
 
 ### Model — Slice 1
@@ -132,6 +134,80 @@ reference would go on answering for the account that has left.
 `recheck()` with no watcher installed now reports `{unknown:true}` and changes nothing. Not
 knowing who is signed in is not the same as knowing nobody is.
 
+### Session transitions — Slice 5
+
+**The invariant:** application access is derived from *current* Firebase Auth state, never
+from cached verification or session state.
+
+The gate at `onAuthStateChanged` covers every page LOAD — refresh, typed URL, back/forward,
+restored tab. It cannot cover an already-open tab, because Firebase fires that callback on
+sign-in and sign-out, **not when `emailVerified` flips**. A second tab held at the challenge
+would sit there forever after the user verified in the first one: verified, and still locked
+out, with nothing on screen suggesting otherwise.
+
+Closed with two triggers into `recheck()`, which asks Firebase: `storage` (another tab
+announced a verification, or cleared the session flag) and `visibilitychange`. A verified
+user short-circuits before any network call, so tab-switching costs nothing. A tab that
+discovers it is no longer held **reloads**, so the session is built by the one existing path
+rather than assembled a second, divergent way.
+
+The screen announces only **after the refreshed token agreed** — announcing on the response
+alone would turn one tab’s false success into several. `firebase.js` clears the marker and
+tears the screen down on sign-out and on an account change, and the watcher takes a
+**getter**, not a captured user: an account switch replaces the user, and a captured
+reference would go on answering for the account that has left.
+
+`recheck()` with no watcher installed now reports `{unknown:true}` and changes nothing. Not
+knowing who is signed in is not the same as knowing nobody is.
+
+### Policy — Slice 6A (grandfathering)
+
+The production measurement settled it: **66 of 74 password accounts (89.2%)** would have
+been held the moment the gate went live, and not because of old accounts — July 40/57,
+August 23/26. Existing accounts are grandfathered; only accounts created from the
+enforcement launch onward are asked.
+
+```
+needsVerification(user)   is this address unproven?     Slice 3 — UNCHANGED
+enforcementApplies(user)  do we ask THIS account?       Slice 6A
+isGated = both
+```
+
+**No user record is modified.** Setting `emailVerified = true` on the 66 would have made
+the flag mean "this account is old" instead of "this person proved they own this address",
+and every future decision reading it — ours or Firebase's — would inherit that. You still
+cannot become verified without the server-issued code.
+
+**Ships OFF.** `CUTOFF_ISO` is the sentinel `2099-01-01T00:00:00.000Z`, which disables
+enforcement at *every* date, not merely plausible ones. Gate, screen and dispatcher can
+deploy together and be observed while provably a no-op; enabling enforcement is a one-line
+change with a one-line revert.
+
+| created | verdict |
+|---|---|
+| `< cutoff` | grandfathered |
+| `=== cutoff` | **enforced** — half-open `[cutoff, ∞)` |
+| `> cutoff` | enforced |
+| unknown / unparseable | **grandfathered** |
+
+That last row inverts the gate's own failure direction on purpose. Failing closed on
+*verification* costs someone a code they already have; failing closed on *policy* locks an
+undateable account out of a platform it has always used. Production holds exactly one.
+
+Comparison is on epoch milliseconds, never strings — Firebase reports `creationTime` as
+RFC-1123, not ISO-8601, and string ordering across the two formats is meaningless.
+
+**The cross-runtime contract.** A byte-identical cutoff string proves two sides agree about
+a *string*, not a *date*: different parsing, a timezone assumption, or `>` versus `>=` all
+survive that and diverge exactly at the boundary. So `scripts/auth-policy-vectors.json`
+carries 18 dated vectors with expected verdicts, replayed in both runtimes the file runs in
+— browser (classic script) and Node (CommonJS) — and asserted to agree with each other as
+well as with the table. **Slice 6B must assert against this fixture, not a copied constant.**
+
+**Policy before network.** `evaluate()` checks the policy before refreshing the token: a
+grandfathered account will not be gated whatever the server says, so refreshing first would
+cost a round trip per page load for the very accounts this exists to leave alone.
+
 ---
 
 ## ⚠ Rollout risk — read before deploying
@@ -151,9 +227,12 @@ is what matters:
    mount recreates exactly the lockout this section warns about.
 2. **Measure first.** Count `emailVerified === false` among password accounts in production
    before deploying, so the size of the affected population is a number and not a guess.
-3. **If that number is large,** decide explicitly between grandfathering accounts created
-   before a cutoff and holding everyone. That is a product decision, not an implementation
-   detail, and it is deliberately not encoded in the gate.
+3. **DECIDED 2026-08-12.** The number was large — 89.2%. Existing password accounts are
+   grandfathered (Slice 6A); enforcement applies only from the cutoff onward. The cutoff
+   itself is still the sentinel, so enforcement is off until someone sets it deliberately.
+   Remaining: 6B (the server computes the same verdict) and 6C (the signup path), then the
+   66 grandfathered accounts keep access until a separate re-verification campaign retires
+   that state.
 
 ---
 
@@ -166,6 +245,7 @@ is what matters:
 | `scripts/test-auth-verify-gate.js` | 117 |
 | `scripts/test-auth-verify-screen.js` | 96 |
 | `scripts/test-auth-session-transitions.js` | 100 |
+| `scripts/test-auth-verify-policy.js` | 92 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still

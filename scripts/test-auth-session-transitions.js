@@ -23,6 +23,7 @@ const vm = require('vm');
 const ROOT = path.resolve(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const GATE = read('sokoni-verify-gate.js');
+const POLICY = read('sokoni-verify-policy.js');
 const SCREEN = read('sokoni-verify-screen.js');
 
 let pass = 0, fail = 0;
@@ -126,6 +127,16 @@ function makeBrowser() {
     tab.byId = byId;
 
     vm.createContext(w); w.window = w;
+  /* AUTH SLICE 6A — these suites test the GATE MECHANISM, which sits below the rollout
+     policy. The shipped policy default is enforcement OFF (the sentinel), so without
+     this the gate would correctly refuse to gate anyone and every scenario here would
+     fail for a reason that has nothing to do with what it is testing.
+
+     So enforcement is switched ON for these contexts with a long-past cutoff, and the
+     shipped default is asserted separately. Test users carry a creationTime after that
+     cutoff for the same reason — an undateable account is deliberately grandfathered. */
+    vm.runInContext(POLICY, w, { filename: 'sokoni-verify-policy.js' });
+    w.SokoniVerifyPolicy.CUTOFF_ISO = '2000-01-01T00:00:00.000Z';
     vm.runInContext(GATE, w, { filename: 'sokoni-verify-gate.js' });
     if (opts.withScreen) vm.runInContext(SCREEN, w, { filename: 'sokoni-verify-screen.js' });
 
@@ -147,6 +158,9 @@ function makeUser(o) {
     uid: o.uid || 'u1', email: 'email' in o ? o.email : 'a@b.c',
     emailVerified: !!o.emailVerified,
     providerData: (o.providers || ['password']).map((id) => ({ providerId: id })),
+    /* dated after the suite's cutoff — an undateable account is grandfathered by
+       design, which would quietly disarm every scenario below */
+    metadata: { creationTime: o.created || '2020-06-01T00:00:00.000Z' },
     reloadCalls: 0,
   };
   u.reload = function () {

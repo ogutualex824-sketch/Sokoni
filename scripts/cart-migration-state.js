@@ -126,6 +126,13 @@ const PRE_EXISTING = [
      (storage + visibilitychange -> recheck) and firebase.js installs the watcher and
      tears the screen down on sign-out. */
   'scripts/test-auth-session-transitions.js',
+  /* Auth slice 6A — the enforcement policy layer. Grandfathers existing password accounts
+     (production measurement: 66 of 74 would otherwise have been locked out) and ships with
+     enforcement OFF behind a sentinel cutoff. */
+  'sokoni-verify-policy.js',
+  'scripts/auth-policy-vectors.json',
+  'scripts/test-auth-verify-policy.js',
+  'scripts/measure-email-verification.js',
 ];
 
 /* The service, its docs and the suites themselves. */

@@ -90,6 +90,16 @@ function loadGate(opts) {
 
   vm.createContext(win);
   win.window = win;
+  /* AUTH SLICE 6A — these suites test the GATE MECHANISM, which sits below the rollout
+     policy. The shipped policy default is enforcement OFF (the sentinel), so without
+     this the gate would correctly refuse to gate anyone and every scenario here would
+     fail for a reason that has nothing to do with what it is testing.
+
+     So enforcement is switched ON for these contexts with a long-past cutoff, and the
+     shipped default is asserted separately. Test users carry a creationTime after that
+     cutoff for the same reason — an undateable account is deliberately grandfathered. */
+  vm.runInContext(read('sokoni-verify-policy.js'), win, { filename: 'sokoni-verify-policy.js' });
+  win.SokoniVerifyPolicy.CUTOFF_ISO = opts.cutoff || '2000-01-01T00:00:00.000Z';
   vm.runInContext(read('sokoni-verify-gate.js'), win, { filename: 'sokoni-verify-gate.js' });
 
   return { gate: win.SokoniVerifyGate, win, doc, events, nav, sandbox: win };
@@ -104,6 +114,9 @@ function user(o) {
     email: 'email' in o ? o.email : 'shopper@example.com',
     emailVerified: !!o.emailVerified,
     providerData: (o.providers || ['password']).map((id) => ({ providerId: id })),
+    /* after the suite's cutoff, so the policy layer does not silently grandfather
+       every fixture and turn this whole suite green for the wrong reason */
+    metadata: { creationTime: o.created || '2020-06-01T00:00:00.000Z' },
     reloadCalls: 0,
   };
   u.reload = function () {
@@ -541,6 +554,8 @@ function user(o) {
         CustomEvent: function () { }, console: console, module: { exports: {} },
       };
       vm.createContext(w); w.window = w;
+      vm.runInContext(read('sokoni-verify-policy.js'), w, { filename: 'policy.js' });
+      w.SokoniVerifyPolicy.CUTOFF_ISO = '2000-01-01T00:00:00.000Z';
       vm.runInContext(src.replace(from, to), w, { filename: 'mutant-' + label + '.js' });
       return w;
     }
@@ -569,6 +584,35 @@ function user(o) {
     await m4.SokoniVerifyGate.enforce(user({ emailVerified: false }));
     ok('I4  mutant leaves a forged session flag in place — so C2/E2 bite',
        m4.localStorage.getItem('loggedIn') === 'true');
+  }
+
+  /* ══ J · the shipped default ═════════════════════════════════════════════
+     Every block above runs with enforcement switched ON. This one runs the gate exactly
+     as it ships — sentinel cutoff — and requires that it holds nobody. That is the
+     property that makes the deploy safe, so it is asserted rather than assumed. */
+  head('J · as shipped: the gate is a no-op');
+  {
+    const w = { console: console, document: { documentElement: { dataset: { requireAuth: 'true' } }, dispatchEvent: () => true },
+                localStorage: makeStorage(), sessionStorage: makeStorage(),
+                location: { pathname: '/wallet.html', search: '', replace() { }, href: '' },
+                CustomEvent: function () { }, module: { exports: {} } };
+    vm.createContext(w); w.window = w;
+    vm.runInContext(read('sokoni-verify-policy.js'), w, { filename: 'policy.js' });
+    vm.runInContext(read('sokoni-verify-gate.js'), w, { filename: 'gate.js' });
+
+    eq('J1  the shipped cutoff is the sentinel', w.SokoniVerifyPolicy.CUTOFF_ISO,
+       w.SokoniVerifyPolicy.SENTINEL_ISO);
+    eq('J2  enforcement is disabled', w.SokoniVerifyPolicy.isEnforcementEnabled(), false);
+
+    const u = user({ emailVerified: false, created: '2026-08-12T00:00:00.000Z' });
+    eq('J3  a brand-new unverified password account is NOT gated as shipped',
+       w.SokoniVerifyGate.isGated(u), false);
+    eq('J4  ...though it is genuinely unverified', w.SokoniVerifyGate.needsVerification(u), true);
+    const r = await w.SokoniVerifyGate.enforce(u);
+    eq('J5  enforce() grants a pass', r.gated, false);
+    eq('J6  ...naming the policy as the reason', r.reason, 'grandfathered');
+    eq('J7  ...and does not redirect', w.location.href, '');
+    eq('J8  ...and spends no network round trip', u.reloadCalls, 0);
   }
 
   /* ── result ────────────────────────────────────────────────────────────── */

@@ -1,3 +1,106 @@
+## [2026-08-12] — Auth Slice 6A: enforcement policy (grandfathering), enforcement OFF
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`).
+
+The production measurement said **66 of 74 password accounts (89.2%)** would have been held
+the moment the gate went live — and not because of old accounts: July 40/57, August 23/26.
+Existing accounts are therefore grandfathered, and only accounts created from the enforcement
+launch onward are asked to verify.
+
+### The layering
+
+```
+needsVerification(user)   is this address unproven?     Slice 3 — UNCHANGED
+enforcementApplies(user)  do we ask THIS account?       Slice 6A
+isGated = both
+```
+
+`needsVerification()` is deliberately untouched. It states a fact about an account; whether we
+act on that fact is a different question and now lives in its own file. That separation is
+what lets the measurement report both numbers, and it keeps every existing assertion about the
+verification rule meaning exactly what it meant.
+
+### What was NOT done
+
+No user record is modified. The Admin SDK would let us set `emailVerified = true` on all 66
+and the problem would vanish — and the flag would stop meaning "this person proved they own
+this address" and start meaning "this account is old". Every future decision reading it,
+ours or Firebase's, would inherit that. **Grandfathering is an access policy; the verification
+model is untouched.** You still cannot become verified without the server-issued code.
+
+### Ships OFF
+
+`CUTOFF_ISO` ships as the sentinel `2099-01-01T00:00:00.000Z`, which disables enforcement for
+everyone — including accounts created after that date, because "off" must mean off at every
+date rather than at plausible ones. So gate, screen and dispatcher can deploy together and be
+observed while provably a no-op; turning enforcement on is a one-line change with a one-line
+revert. The dangerous step and the deployment step are separated on purpose.
+
+### The boundary, defined
+
+| created | verdict |
+|---|---|
+| `< cutoff` | grandfathered |
+| `=== cutoff` | **enforced** — the cutoff is the instant enforcement begins, half-open `[cutoff, ∞)` |
+| `> cutoff` | enforced |
+| unknown / unparseable | **grandfathered** |
+
+That last row is the opposite of the gate's own failure direction, deliberately. Failing
+closed on *verification* costs someone a code they already have; failing closed on *policy*
+locks an undateable account out of a platform it has always used. Production holds exactly one
+such account.
+
+Comparison is on epoch milliseconds, never strings — Firebase reports `creationTime` as
+RFC-1123 (`Tue, 01 Sep 2026 00:00:00 GMT`), not ISO-8601, and string ordering across those two
+formats is meaningless.
+
+### The cross-runtime contract
+
+A byte-identical cutoff string proves two sides agree about a *string*, not about a *date*.
+Different parsing, a timezone assumption, or a `>` where the other has `>=` all survive that
+check and diverge exactly at the boundary — the one place a mistake locks somebody out.
+
+So the contract is `scripts/auth-policy-vectors.json`: 18 dated vectors with expected verdicts,
+replayed in **both runtimes the file actually runs in** — the browser (classic script in a vm
+sandbox) and Node (CommonJS require) — and asserted to agree with each other as well as with
+the table. Slice 6B adds the Functions runtime as a third consumer and must assert against this
+fixture rather than a copied constant.
+
+### Policy before network
+
+`evaluate()` checks the policy *before* refreshing the token. A grandfathered account is not
+going to be gated whatever the server says about its address, so refreshing first would spend
+a round trip on every page load for the 66 accounts this policy exists to leave alone.
+Asserted: `reloadCalls === 0` for a grandfathered user.
+
+### Measurement tool now reports three numbers
+
+`unverified (raw)` · `eligible: rule would hold` (the figure the decision was made on) ·
+`GATED under the live policy` — plus a line naming the live policy, so "which policy produced
+this number" is never a guess. Re-rehearsed against the Auth emulator: eligible **7**, gated
+**0** under the shipped sentinel.
+
+The tool now passes `metadata` through to the rule. Omitting it would have made every account
+undateable, hence grandfathered, hence a confident report of zero at risk.
+
+### Files
+
+`sokoni-verify-policy.js` (new) · `sokoni-verify-gate.js` · `firebase.js` ·
+`scripts/auth-policy-vectors.json` (new) · `scripts/test-auth-verify-policy.js` (new) ·
+`scripts/measure-email-verification.js` · `scripts/test-auth-verify-gate.js` ·
+`scripts/test-auth-session-transitions.js` · `scripts/cart-migration-state.js`
+
+The two earlier suites now switch enforcement ON in their sandboxes and date their fixtures,
+because they test the gate mechanism that sits *below* the policy — with the shipped default
+they would have gated nobody and passed for the wrong reason. The gate suite gained a block
+asserting the shipped default holds nobody.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — the policy can
+only ever relax who is asked; it cannot make anyone verified. **Breaking changes:** none.
+
+**Tests:** policy 92/92 (5 mutation controls), gate 125/125, screen 96/96, transitions 100/100,
+challenge 63/63, dispatch 58/58, cart 729/729, wishlist CLEAN.
+
 ## [2026-08-12] — Pre-deployment measurement tool (read-only)
 
 `scripts/measure-email-verification.js` — answers the one question that has to be answered

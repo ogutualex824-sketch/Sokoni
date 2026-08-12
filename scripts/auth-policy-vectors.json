@@ -1,0 +1,106 @@
+{
+  "_comment": [
+    "CROSS-RUNTIME CONTRACT for the verification enforcement policy (Auth Slice 6A).",
+    "",
+    "Every runtime that evaluates the policy MUST produce these verdicts. Today that is the",
+    "browser (sokoni-verify-policy.js as a classic script) and Node (the same file required as",
+    "a CommonJS module). Slice 6B adds a third consumer inside functions/, which must assert",
+    "against THIS FILE rather than against a copied constant.",
+    "",
+    "A byte-identical cutoff string on both sides proves the two sides agree about a string.",
+    "It does not prove they agree about a DATE — different parsing, a timezone assumption, or",
+    "a > where the other has >= all survive that check and diverge exactly at the boundary,",
+    "which is the one place a mistake locks somebody out. These vectors pin the behaviour",
+    "instead of the spelling.",
+    "",
+    "creationTime appears in both formats Firebase actually emits: RFC-1123 from",
+    "UserRecord.metadata.creationTime, and ISO-8601 from anything that has normalised it."
+  ],
+  "cutoffs": {
+    "sentinel": "2099-01-01T00:00:00.000Z",
+    "active": "2026-09-01T00:00:00.000Z"
+  },
+  "vectors": [
+    {
+      "label": "sentinel · account from 2020 · enforcement disabled",
+      "cutoff": "sentinel", "creationTime": "2020-05-01T12:00:00.000Z", "enforced": false
+    },
+    {
+      "label": "sentinel · account created today · still disabled",
+      "cutoff": "sentinel", "creationTime": "2026-08-12T09:00:00.000Z", "enforced": false
+    },
+    {
+      "label": "sentinel · account created AFTER the sentinel date · STILL disabled",
+      "why": "off must mean off at every date, not merely at plausible ones",
+      "cutoff": "sentinel", "creationTime": "2099-06-01T00:00:00.000Z", "enforced": false
+    },
+    {
+      "label": "sentinel · account created exactly AT the sentinel instant · disabled",
+      "cutoff": "sentinel", "creationTime": "2099-01-01T00:00:00.000Z", "enforced": false
+    },
+
+    {
+      "label": "active · one millisecond before the cutoff · grandfathered",
+      "cutoff": "active", "creationTime": "2026-08-31T23:59:59.999Z", "enforced": false
+    },
+    {
+      "label": "active · EXACTLY at the cutoff · ENFORCED",
+      "why": "the cutoff is the instant enforcement begins — half-open [cutoff, infinity)",
+      "cutoff": "active", "creationTime": "2026-09-01T00:00:00.000Z", "enforced": true
+    },
+    {
+      "label": "active · one millisecond after the cutoff · enforced",
+      "cutoff": "active", "creationTime": "2026-09-01T00:00:00.001Z", "enforced": true
+    },
+    {
+      "label": "active · long before · grandfathered (this is the production population)",
+      "cutoff": "active", "creationTime": "2026-07-15T08:30:00.000Z", "enforced": false
+    },
+    {
+      "label": "active · long after · enforced",
+      "cutoff": "active", "creationTime": "2027-01-01T00:00:00.000Z", "enforced": true
+    },
+
+    {
+      "label": "active · RFC-1123 before cutoff · grandfathered",
+      "why": "UserRecord.metadata.creationTime is RFC-1123, not ISO — both must parse",
+      "cutoff": "active", "creationTime": "Fri, 31 Jul 2026 10:00:00 GMT", "enforced": false
+    },
+    {
+      "label": "active · RFC-1123 after cutoff · enforced",
+      "cutoff": "active", "creationTime": "Wed, 02 Sep 2026 10:00:00 GMT", "enforced": true
+    },
+    {
+      "label": "active · RFC-1123 expressing exactly the cutoff instant · ENFORCED",
+      "why": "the boundary must not depend on which of the two formats carried the date",
+      "cutoff": "active", "creationTime": "Tue, 01 Sep 2026 00:00:00 GMT", "enforced": true
+    },
+    {
+      "label": "active · non-UTC offset resolving to before the cutoff · grandfathered",
+      "why": "comparison is on epoch millis; a timezone must not move the boundary",
+      "cutoff": "active", "creationTime": "2026-09-01T02:00:00.000+03:00", "enforced": false
+    },
+    {
+      "label": "active · non-UTC offset resolving to after the cutoff · enforced",
+      "cutoff": "active", "creationTime": "2026-08-31T22:00:00.000-03:00", "enforced": true
+    },
+
+    {
+      "label": "active · creationTime missing · GRANDFATHERED (relaxes, never locks out)",
+      "why": "production holds one account with no provider record; an undateable account must not be locked out",
+      "cutoff": "active", "creationTime": null, "enforced": false
+    },
+    {
+      "label": "active · creationTime empty string · grandfathered",
+      "cutoff": "active", "creationTime": "", "enforced": false
+    },
+    {
+      "label": "active · creationTime unparseable · grandfathered",
+      "cutoff": "active", "creationTime": "not-a-date", "enforced": false
+    },
+    {
+      "label": "active · metadata object absent entirely · grandfathered",
+      "cutoff": "active", "noMetadata": true, "enforced": false
+    }
+  ]
+}

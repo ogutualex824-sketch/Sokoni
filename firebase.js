@@ -12,6 +12,10 @@ import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken }
    every page is deliberate: firebase.js is the one module every authenticated surface
    already loads (directly or through sokoni-init.js), which makes the gate arrive with
    Firebase itself instead of depending on 48 pages each remembering a script tag. */
+/* Auth Slice 6A — the enforcement policy. MUST precede the gate: the gate composes
+   needsVerification() with enforcementApplies(), and a gate loaded first would spend its
+   first evaluations reporting that no policy exists. */
+import "./sokoni-verify-policy.js";
 import "./sokoni-verify-gate.js";
 import {
   getAuth,

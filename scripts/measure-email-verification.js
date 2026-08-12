@@ -98,14 +98,17 @@ function loadGateRule() {
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'sokoni-verify-policy.js'), 'utf8'),
+                  sandbox, { filename: 'sokoni-verify-policy.js' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'sokoni-verify-gate.js'), 'utf8'),
                   sandbox, { filename: 'sokoni-verify-gate.js' });
   const api = sandbox.SokoniVerifyGate;
-  if (!api || typeof api.needsVerification !== 'function') {
-    throw new Error('sokoni-verify-gate.js did not publish needsVerification — refusing to ' +
-                    'guess the rule.');
+  const policy = sandbox.SokoniVerifyPolicy;
+  if (!api || typeof api.needsVerification !== 'function' || typeof api.isGated !== 'function') {
+    throw new Error('sokoni-verify-gate.js did not publish the rule — refusing to guess it.');
   }
-  return api.needsVerification;
+  if (!policy) throw new Error('sokoni-verify-policy.js did not load — refusing to guess the policy.');
+  return { needsVerification: api.needsVerification, isGated: api.isGated, policy };
 }
 
 /* ── credentials ─────────────────────────────────────────────────────────────── */
@@ -126,12 +129,23 @@ const MONTHS = Number(arg('months', 24)) || 24;
 const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
 
 (async function main() {
-  const needsVerification = loadGateRule();
+  const RULE = loadGateRule();
+  const needsVerification = RULE.needsVerification;
+  const isGatedByPolicy = RULE.isGated;
+  const policy = RULE.policy;
 
   const tally = {
     scanned: 0,
     passwordAccounts: 0,        /* has a password provider */
-    gated: 0,                   /* the gate would hold these — the number that matters */
+    /* THREE populations, because they answer three different questions and confusing
+       them is how a rollout decision goes wrong:
+         unverifiedPassword  raw — every password account whose address is unproven
+         eligible            those the VERIFICATION RULE would hold, ignoring policy
+                             (this is the figure the grandfathering decision was made on)
+         gated               those the LIVE POLICY would actually hold today */
+    unverifiedPassword: 0,
+    eligible: 0,
+    gated: 0,
     passwordVerified: 0,
     /* Everything the gate deliberately does not touch, so the totals reconcile and nobody
        has to wonder where the missing accounts went. */
@@ -141,15 +155,15 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
     disabledGated: 0,
   };
 
-  function bucket(rec, isGated) {
+  function bucket(rec, eligible, isGated) {
     const created = rec.metadata && rec.metadata.creationTime
       ? new Date(rec.metadata.creationTime) : null;
     if (!created || isNaN(created)) return;
     const k = monthKey(created);
-    const b = tally.byMonth.get(k) || { total: 0, gated: 0 };
-    b.total++; if (isGated) b.gated++;
+    const b = tally.byMonth.get(k) || { total: 0, gated: 0, enforced: 0 };
+    b.total++; if (eligible) b.gated++; if (isGated) b.enforced = (b.enforced || 0) + 1;
     tally.byMonth.set(k, b);
-    if (isGated) {
+    if (eligible) {
       const t = created.getTime();
       if (!tally.oldestGated || t < tally.oldestGated) tally.oldestGated = t;
       if (!tally.newestGated || t > tally.newestGated) tally.newestGated = t;
@@ -166,19 +180,30 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
       /* Shape the record the way the browser sees a Firebase User, then ask the shipped
          rule. Nothing is copied out of it beyond these three fields. */
       const ids = (rec.providerData || []).map((p) => p && p.providerId).filter(Boolean);
+      /* metadata is carried through DELIBERATELY: the policy layer dates the account,
+         and an undateable account is grandfathered. Omitting it here would silently
+         grandfather the entire population and report zero at risk. */
       const asUser = { email: rec.email || null, emailVerified: !!rec.emailVerified,
-                       providerData: (rec.providerData || []) };
-      const isGated = needsVerification(asUser);
+                       providerData: (rec.providerData || []),
+                       metadata: { creationTime: rec.metadata && rec.metadata.creationTime } };
+      const eligible = needsVerification(asUser);   /* rule only, policy ignored */
+      const isGated = isGatedByPolicy(asUser);      /* rule AND live policy */
 
       const hasPassword = ids.includes('password');
       if (hasPassword) {
         tally.passwordAccounts++;
         if (rec.emailVerified) tally.passwordVerified++;
+        else tally.unverifiedPassword++;
       }
+      if (eligible) tally.eligible++;
       if (isGated) {
         tally.gated++;
         if (rec.disabled) tally.disabledGated++;
-      } else if (!hasPassword) {
+      }
+      /* The "never gated by design" breakdown describes the RULE, so it keys off
+         eligibility. Keying it off the live policy would file all 66 grandfathered
+         accounts under "no provider on record" and invent a data-quality problem. */
+      if (!eligible && !hasPassword) {
         if (ids.includes('phone')) tally.notGated.phone++;
         else if (ids.includes('google.com')) tally.notGated.google++;
         else if (ids.length) tally.notGated.otherFederated++;
@@ -187,7 +212,7 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
         tally.notGated.noEmail++;
       }
 
-      bucket(rec, isGated);
+      bucket(rec, eligible, isGated);
       if (tally.scanned % 5000 === 0) process.stdout.write('.');
     }
     pageToken = page.pageToken;
@@ -206,9 +231,14 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
   console.log('  password/email accounts          ' + tally.passwordAccounts);
   console.log('    verified                       ' + tally.passwordVerified +
               '   (' + pct(tally.passwordVerified, tally.passwordAccounts) + ')');
-  console.log('    WOULD BE GATED                 ' + tally.gated +
+  console.log('    unverified (raw)               ' + tally.unverifiedPassword +
+              '   (' + pct(tally.unverifiedPassword, tally.passwordAccounts) + ')');
+  console.log('    eligible: rule would hold      ' + tally.eligible +
+              '   (' + pct(tally.eligible, tally.passwordAccounts) + ' of password accounts)');
+  console.log('    GATED under the live policy    ' + tally.gated +
               '   (' + pct(tally.gated, tally.passwordAccounts) + ' of password accounts, ' +
               pct(tally.gated, tally.scanned) + ' of all)');
+  console.log('      policy: ' + policy.describe());
   if (tally.disabledGated) {
     console.log('      of which already disabled    ' + tally.disabledGated +
                 '   (cannot sign in anyway)');
@@ -229,13 +259,13 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
   console.log('\n' + line);
   console.log('BY MONTH CREATED (newest first) — is this concentrated in older accounts?');
   console.log(line);
-  console.log('  month      total    gated    gated%   ');
+  console.log('  month      total  eligible   elig%   gated');
   const widest = months.reduce((m, [, b]) => Math.max(m, b.total), 0) || 1;
   for (const [m, b] of months) {
     const bar = '█'.repeat(Math.round((b.gated / widest) * 24));
     console.log('  ' + m + '   ' + String(b.total).padStart(6) + '   ' +
                 String(b.gated).padStart(6) + '   ' + pct(b.gated, b.total).padStart(6) +
-                '   ' + bar);
+                '   ' + String(b.enforced || 0).padStart(5) + '   ' + bar);
   }
 
   /* ── trustworthiness check ──────────────────────────────────────────────────
@@ -284,7 +314,12 @@ const monthKey = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).p
       scanned: tally.scanned,
       passwordAccounts: tally.passwordAccounts,
       passwordVerified: tally.passwordVerified,
+      unverifiedPassword: tally.unverifiedPassword,
+      eligible: tally.eligible,
       gated: tally.gated,
+      policy: policy.describe(),
+      enforcementEnabled: policy.isEnforcementEnabled(),
+      cutoff: policy.CUTOFF_ISO,
       gatedPctOfPasswordAccounts: tally.passwordAccounts ? tally.gated / tally.passwordAccounts : null,
       disabledGated: tally.disabledGated,
       notGated: tally.notGated,

@@ -102,6 +102,31 @@
     return ids.indexOf('password') !== -1;           /* password accounts only */
   }
 
+  /* ── policy composition  (Auth Slice 6A) ─────────────────────────────────────
+     needsVerification() is deliberately UNCHANGED: it still answers "is this account's
+     address unproven?", which is a fact about the account and not a decision about it.
+     Whether we ACT on that fact is a separate question, and it belongs to the policy.
+
+     Keeping the two apart is what lets the measurement tool report both numbers — how many
+     accounts are unverified, and how many the live policy would actually hold — and it
+     keeps every existing assertion about the verification rule meaning what it meant.
+
+     If the policy module is absent, nothing is gated. That direction is chosen on purpose:
+     a missing file must not lock out a platform's entire password population. It is loud
+     rather than silent, and while the sentinel is in place the behaviour is identical to
+     the policy being present anyway. */
+  function isGated(user) {
+    if (!needsVerification(user)) return false;
+    var policy = global.SokoniVerifyPolicy;
+    if (!policy || typeof policy.enforcementApplies !== 'function') {
+      try {
+        console.warn('[SOKONI Verify] policy module missing — no account will be gated.');
+      } catch (e) { }
+      return false;
+    }
+    return policy.enforcementApplies(user);
+  }
+
   /* One in-flight server refresh at a time.
 
      enforce() is called FROM onAuthStateChanged, and reload() refreshes the current user —
@@ -142,6 +167,12 @@
     if (!user)                    return Promise.resolve({ gated: false, reason: 'no-user' });
     if (user.emailVerified === true) return Promise.resolve({ gated: false, reason: 'verified' });
     if (!needsVerification(user)) return Promise.resolve({ gated: false, reason: 'not-applicable' });
+
+    /* POLICY BEFORE NETWORK. A grandfathered account is not going to be gated whatever the
+       server says about its address, so refreshing the token first would spend a round trip
+       to reach a conclusion already determined — on every page load, for the 66 accounts
+       this policy exists to leave alone. */
+    if (!isGated(user)) return Promise.resolve({ gated: false, reason: 'grandfathered' });
 
     var reload = opts.reload === false ? Promise.resolve() : _refresh(user);
 
@@ -343,6 +374,7 @@
     watch: watch,
     recheck: recheck,
     needsVerification: needsVerification,
+    isGated: isGated,
     evaluate: evaluate,
     enforce: enforce,
     denyAppSession: denyAppSession,
