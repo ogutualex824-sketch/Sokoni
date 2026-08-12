@@ -45,21 +45,40 @@ console.log('\nA. No page is left inert for want of the service');
   ck('A', 'the header is on a lot of pages (control)', headerPages.length > 300, headerPages.length);
   ck('A', 'every one of them loads sokoni-cart.js', missing.length === 0,
      missing.slice(0, 6).join(', '));
-  /* EXECUTION order, not source order. A deferred shared-header.js always runs after every
-     non-deferred script, wherever the tags sit; only a NON-deferred header positioned
-     ahead of the service is a real problem. Testing raw source position flagged four
-     correct pages and, usefully, four genuinely broken ones — the four food pages whose
-     header is not deferred. */
+  /* THE REAL DEPENDENCY — corrected with real-browser evidence, not reasoning.
+
+     This asserted that the service must EXECUTE before the header. That is not the
+     dependency. shared-header.js does not read the cart when it executes; it gates on
+     document.readyState and defers _inject() — and therefore the read — to
+     DOMContentLoaded (shared-header.js ~2470, asserted below so the premise cannot rot).
+
+     scripts/test-pos-cart-defer-browser.js measured this in Chromium against the shipped
+     pos.html: the service was defined at readyState "loading", and all four reads happened
+     at readyState "complete". Three Node simulations had failed to answer it first, each
+     disproving the model rather than the code, which is why the answer came from a browser.
+
+     So what must hold is narrower and truer: the service must be DEFINED before the header
+     READS it. Every ordinary <script> tag — blocking or deferred — executes before
+     DOMContentLoaded, so both qualify. What does NOT qualify is `async` (may land after)
+     or no tag at all. Those still fail, and the mutation controls below still bite. */
   const badOrder = headerPages.filter(p => {
     const s = read(p);
     const hm = s.match(/<script[^>]*src="shared-header\.js"[^>]*>/);
     const cm = s.match(/<script[^>]*src="sokoni-cart\.js"[^>]*>/);
-    if (!hm || !cm) return true;
-    if (/\bdefer\b/.test(hm[0])) return false;              /* header runs last regardless */
-    return /\bdefer\b/.test(cm[0]) || s.indexOf(cm[0]) > s.indexOf(hm[0]);
+    if (!hm || !cm) return true;                      /* missing entirely — still a defect */
+    if (/\basync\b/.test(cm[0])) return true;         /* may execute after the read */
+    return false;                                     /* blocking or deferred: both in time */
   });
-  ck('A', 'the service always EXECUTES before the header', badOrder.length === 0,
+  ck('A', 'the service is always DEFINED before the header reads it', badOrder.length === 0,
      badOrder.slice(0, 6).join(', '));
+  /* The premise, pinned. If shared-header ever reads the cart eagerly instead of at
+     DOMContentLoaded, the rule above stops being true — and this fails loudly rather than
+     letting a stale assumption ride. */
+  ck('A', 'shared-header still defers its injection to DOMContentLoaded (the premise)',
+     /if \(document\.readyState === 'loading'\)\s*\{\s*document\.addEventListener\('DOMContentLoaded', _inject\);/
+       .test(read('shared-header.js')));
+  ck('A', 'no page loads the service async', headerPages.every(p =>
+     !/<script[^>]*\basync\b[^>]*src="sokoni-cart\.js"|<script[^>]*src="sokoni-cart\.js"[^>]*\basync\b/.test(read(p))));
   ck('A', 'exactly one service tag per page', headerPages.every(p =>
      (read(p).match(/src="sokoni-cart\.js"/g) || []).length === 1),
      headerPages.filter(p => (read(p).match(/src="sokoni-cart\.js"/g) || []).length !== 1).slice(0, 5).join(', '));

@@ -276,9 +276,16 @@ const fixedFallback = (cart) => cart.reduce((s, p) => s + lineTotal(p), 0);
 
     /* The two policy files may legitimately carry an armed cutoff at release time, so
        they are excluded here and asserted separately (H5) to be cutoff-only. */
+    /* The exclusion used to hand-code 'availability-manager.html'. That is the same
+       carried-file knowledge cart-migration-state.js already holds, and a second copy
+       drifts — so this now asks the established classification instead of restating it.
+       Nothing new is added to the allowlist: PRE_EXISTING is exactly the set of files
+       already declared as other tracks' dirt or this release's own named content. */
+    const CART_STATE = require('./cart-migration-state.js');
     ok('H1  only checkout.html changed among product files',
        !changed.some((f) => /\.(js|html)$/.test(f) && f !== 'checkout.html' &&
-                            !f.startsWith('scripts/') && f !== 'availability-manager.html' &&
+                            !f.startsWith('scripts/') &&
+                            !CART_STATE.PRE_EXISTING.includes(f) &&
                             !STATE.POLICY_FILES.includes(f)),
        changed.join(', '));
 

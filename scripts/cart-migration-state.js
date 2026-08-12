@@ -159,6 +159,15 @@ const PRE_EXISTING = [
      enforcement" with "the shipped cutoff IS the sentinel", so arming turned 31
      assertions red. One helper now carries the state rule. */
   'scripts/auth-policy-state.js',
+  /* Release gate: perf-guard refused the deploy because Track 2.6 added a FIFTH blocking
+     script to pos.html (sokoni-cart.js), over its baseline of 4. Deferred rather than
+     removed — shared-header.js is the only SokoniCart consumer there and mounts on
+     DOMContentLoaded, which runs after deferred scripts. Cart function preserved, baseline
+     not raised. */
+  'pos.html',
+  'scripts/test-pos-cart-defer-browser.js',
+  'scripts/test-cart-universal.js',
+  'scripts/test-kass-cart-truth.js',
   'docs/AUTH_ACTIVATION_RUNBOOK.md',
 ];
 

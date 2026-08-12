@@ -256,10 +256,19 @@ const CATALOGUE_PRICE = 250;
        not have altered any markup or script wiring on the cart page. */
     const cartDiff = cp.execSync('git diff HEAD -- cart.html', { cwd: ROOT, encoding: 'utf8' })
       .split('\n').filter(l => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
-    ck('J', 'cart.html diff is CSS only — no script or markup change from this slice',
-       cartDiff.length > 0 && !cartDiff.some(l => /<script|<div|<button|localStorage/.test(l)),
+    /* RETIRED PREMISE. This required cartDiff.length > 0 because cart.html was dirty from
+       Track 4's CSS overflow fix at the time. That work has since been committed, so the
+       file is clean and the assertion became unsatisfiable — it could only ever fail,
+       which is a guard that has stopped measuring anything.
+
+       The property worth keeping is the one it was really protecting: this slice must not
+       alter markup or script wiring on the cart page. An empty diff satisfies that
+       trivially and correctly; a diff containing a script tag, markup or a storage call
+       still fails. */
+    ck('J', 'no markup or script wiring change on cart.html from this slice',
+       !cartDiff.some(l => /<script|<div|<button|localStorage/.test(l)),
        cartDiff.filter(l => /<script|<div|<button|localStorage/.test(l)).join(' | ') ||
-         (cartDiff.length + ' CSS lines'));
+         (cartDiff.length + ' changed line(s), none of them wiring'));
     ck('J', 'no Track 3 wishlist file was modified',
        !changed.some(f => /wishlist/i.test(f)), changed.filter(f => /wishlist/i.test(f)).join(', '));
     ck('J', 'no new client cart writer was introduced',
