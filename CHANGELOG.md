@@ -1,3 +1,40 @@
+## [2026-08-13] — RELEASE TREE: provisioning is now verified, not assumed
+
+**Status: DONE.** `scripts/make-release-tree.js`.
+
+An authoritative gate must run on committed content, so it runs in a detached worktree — but a
+fresh worktree has no `node_modules`, and that is where this bit. The first release tree was
+provisioned with the **root** `node_modules` only. The gate then reported a healthy-looking
+result and had **silently lost 22 suites**: everything resolving `firebase-admin` from
+`functions/` hit `MODULE_NOT_FOUND`, which `classify()` reads as `ENV`. `ENV` is non-blocking,
+so nothing went red — the suites simply stopped covering the build.
+
+```
+ENV   21 → 39          PASS  123 → 114
+```
+
+Same failure mode as a TIMEOUT: **the dangerous verdicts are the ones that make nothing red.**
+A dependency failure is not an environment gap — it means the suite never ran.
+
+The script links **both** module trees, then **verifies** by resolving `playwright` from the
+root and `firebase-admin` from `functions/`, checks the tree is clean, and **exits non-zero**
+rather than let anyone gate from a crippled tree. It never reuses-and-mutates or force-removes
+an existing directory, because other agents keep worktrees under the same root.
+
+**Effect on the authoritative gate at `347d2bb`:** `PASS 148 · FAIL 6 · QUARANTINE 3 · ENV 5 ·
+TIMEOUT 0` of 162. All 5 `ENV` are exactly the 5 `DECLARED` entries — **no suite lost to
+dependency resolution** — and `nearBudget` is empty.
+
+**Baseline comparison (live `6ac58e6`, run in its own provisioned tree):** all six carried
+failures fail there too, with identical counts for the three named ones —
+`test-landlord-rules` 25/3, `test-seller-products` 23/2, `test-pos-tab-transitions` 3/1.
+Track 2.6's root cause is confirmed pre-existing: `availability-manager.html` has **0**
+occurrences of `sokoni-cart.js` at both `6ac58e6` and `347d2bb`, and 1 in the working tree
+where another process is fixing it.
+
+**Files:** `scripts/make-release-tree.js` (new).
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — MERCHANT: Home is the marketplace, via a declared exit route
 
 **Status: FIXED and proven.** 23/23 real clicks; routes contract 64/64.
