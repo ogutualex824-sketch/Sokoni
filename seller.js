@@ -5520,9 +5520,22 @@ function showDashPage(page, navEl) {
 
    Reading the hash here makes seller.html#products a real, shareable address
    and lets those navs point at something that resolves. Unknown keys fall back
-   to overview rather than rendering nothing. */
+   to overview rather than rendering nothing.
+
+   Both address forms resolve here. `#products` is transient — the deep-link IIFE in
+   seller.html strips it after applying so the browser does not anchor-scroll — so it
+   cannot survive a reload. `?sec=products` is the durable form: it outlives that strip,
+   and it is the vocabulary sokoni-merchant-routes.js already declares for every seller
+   destination (`kind:'seller', sec:'products'`). Until this read it, seller.html?sec=products
+   resolved to overview, which is indistinguishable from a bare seller.html — the merchant
+   asked for Products and was handed the dashboard with no error anywhere. The hash wins
+   when both are present, being the more recent navigation. */
 function _sellerPageFromHash() {
-  const key = (location.hash || "").replace(/^#/, "").trim().toLowerCase();
+  let key = (location.hash || "").replace(/^#/, "").trim().toLowerCase();
+  if (!key) {
+    try { key = (new URLSearchParams(location.search).get("sec") || "").trim().toLowerCase(); }
+    catch (e) { key = ""; }
+  }
   return (key && DASH_PAGES[key]) ? key : "overview";
 }
 

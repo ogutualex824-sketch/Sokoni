@@ -5309,26 +5309,33 @@ class="notification-container"
     more:     [] /* opens drawer */
   };
 
+  /* Returns how many elements were actually revealed. The count is the point: on a phone
+     body.sdm-mobile-mode hides every section[data-sdtab] by default, so a tab name that
+     matches nothing does not fall back to anything — it renders an EMPTY workspace. The
+     caller uses this to tell "showed the wrong section" (recoverable) from "showed no
+     section at all" (a blank screen the merchant cannot get out of). */
   function showSections(tabIds){
     /* Hide all */
     document.querySelectorAll('[data-sdtab], #sdm-home-screen').forEach(function(el){
       el.classList.remove('sdm-visible');
     });
     /* Show matching */
+    var revealed = 0;
     tabIds.forEach(function(tid){
       /* custom home screen */
       if(tid==='home'){
         var hs = document.getElementById('sdm-home-screen');
-        if(hs) hs.classList.add('sdm-visible');
+        if(hs){ hs.classList.add('sdm-visible'); revealed++; }
       }
       /* stat cards have class seller-stats and data-sdtab=home */
       document.querySelectorAll('[data-sdtab="'+tid+'"]').forEach(function(s){
-        s.classList.add('sdm-visible');
+        s.classList.add('sdm-visible'); revealed++;
       });
       /* also match by id fallback */
       var byId = document.getElementById(tid+'-section') || document.getElementById(tid);
-      if(byId) byId.classList.add('sdm-visible');
+      if(byId){ byId.classList.add('sdm-visible'); revealed++; }
     });
+    return revealed;
   }
 
   /* Exposed so the CANONICAL router (seller.js showDashPage) can drive this layer too.
@@ -5391,8 +5398,19 @@ class="notification-container"
       if(panel)  setTimeout(function(){ panel.style.transform='translateY(0)'; },30);
       return;
     }
+    /* `|| [name]` is deliberate and must stay: several real sections (receipts, customers,
+       disputes) are not TABS keys and resolve through showSections' id fallback. So "not in
+       TABS" is NOT the same as "invalid" and cannot be used to reject a name.
+       What IS invalid is a name that reveals nothing — that leaves the merchant on a blank
+       phone screen with no way back, which is strictly worse than the wrong section. Only
+       that case falls back, so valid non-TABS keys are untouched. Reachable from any URL
+       now that ?sec= is honoured, e.g. a mistyped or stale deep link. */
     var tabIds = TABS[name] || [name];
-    showSections(tabIds);
+    if(showSections(tabIds) === 0){
+      console.warn('[seller] sdSwitchTab: "' + name + '" matched no section — falling back to home');
+      name = 'home';
+      showSections(TABS.home);
+    }
     updateTabUI(name);
 
     /* Show/hide the back bar + adjust content padding */
@@ -5507,8 +5525,28 @@ class="notification-container"
       settings:     'settings',
     };
 
+    /* The section to open, from EITHER address form.
+       `#products` is the transient form: it is applied and then stripped below so the
+       browser does not anchor-scroll to a matching id. That strip is why the hash cannot
+       be the durable address — reload a `#products` link and the hash is already gone, so
+       the page comes back on Overview.
+       `?sec=products` is the durable form. It survives the replaceState below (which keeps
+       location.search), so it reloads, shares and bookmarks correctly. It is also the
+       vocabulary the merchant route contract already speaks: sokoni-merchant-routes.js
+       declares `kind:'seller', sec:'products'`. Before this, `seller.html?sec=products`
+       was read by nothing and rendered Overview — indistinguishable from a bare
+       seller.html, which is the silent-wrong-section failure this router exists to prevent.
+       The hash wins when both are present: it is the more recent navigation. */
+    function _sectionFromUrl() {
+      var h = (location.hash || '').slice(1).trim().toLowerCase();
+      if (h) return h;
+      try {
+        return (new URLSearchParams(location.search).get('sec') || '').trim().toLowerCase();
+      } catch (e) { return ''; }
+    }
+
     function _applyHash() {
-      var hash = (location.hash || '').slice(1).toLowerCase();
+      var hash = _sectionFromUrl();
       if (!hash) return;
       var isMobile = window.matchMedia('(max-width:768px)').matches;
       if (isMobile && typeof window.sdSwitchTab === 'function') {
@@ -5518,8 +5556,9 @@ class="notification-container"
         var target = _HASH_DESKTOP[hash] || hash;
         window.showDashPage(target, null);
       }
-      /* Clean hash from URL so browser doesn't anchor-scroll */
-      history.replaceState(null, '', location.pathname + location.search);
+      /* Clean the hash from the URL so the browser doesn't anchor-scroll. location.search
+         is preserved deliberately — that is what makes ?sec= the address that survives. */
+      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     }
 
     if (document.readyState === 'loading') {

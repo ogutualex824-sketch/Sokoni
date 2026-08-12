@@ -1,3 +1,57 @@
+## [2026-08-13] — MERCHANT SELL: `?sec=` was not an address, and a bad one blanked the phone
+
+**Status: FIXED and proven.** Authenticated merchant session, webkit, 393x852.
+
+`sokoni-merchant-routes.js` declares every seller destination as `kind:'seller', sec:'products'`
+— `sec` is the vocabulary the merchant route contract already speaks. **Nothing read it.**
+`seller.html?sec=products` rendered Overview, byte-for-byte the same as a bare `seller.html`:
+the merchant asked for Products and got the dashboard, with no error anywhere. Measured before
+the fix — 2 of the 5 Products sections shown, `seller-stats` still visible:
+
+| URL | result before |
+|---|---|
+| `seller.html#products` | Products (5/5) |
+| `seller.html?sec=products` | **Overview** — identical to no parameter at all |
+| `seller.html?sec=products&shell=merchant` | **Overview** |
+
+This is the same failure that once caused other pages to invent `seller-products.html`: people
+write the URL they wish existed when the real one does nothing.
+
+**Why `?sec=` and not the hash.** `seller.html`'s deep-link IIFE applies `#products` and then
+strips it (`history.replaceState`) so the browser does not anchor-scroll to a matching element
+id. That strip is deliberate and is kept — but it means **the hash cannot survive a reload**.
+`?sec=` outlives it because the strip preserves `location.search`. So the two forms are now
+explicitly different tools: `#x` is a transient jump, `?sec=x` is the durable, reloadable,
+shareable address. Both are asserted, including that the hash still gets stripped, so nobody
+"fixes" the hash into a durable address and reintroduces the anchor-scroll bug.
+
+**Second defect, found by the new suite against the first fix.** `sdSwitchTab` did
+`TABS[name] || [name]`, and on a phone `body.sdm-mobile-mode` hides every `section[data-sdtab]`
+by default — so a name matching nothing revealed **nothing**: a blank workspace with no way
+out, not a fallback. Previously reachable only via `#nonsense`; honouring `?sec=` opened a
+second door to it. `showSections()` now returns how many elements it revealed, and only the
+zero case falls back to home with a warning. The `|| [name]` fallback is kept deliberately —
+`receipts`, `customers` and `disputes` are real sections that are not `TABS` keys, so "not in
+TABS" is not the same as "invalid".
+
+**Verified.** All five sections mount with a working control each (`productName`,
+`sellerProductsContainer`, `inventoryTbody`, `bulkCsvFile`, `aiDescBtn`) — asserted by control,
+not by `display:block`, since a section that mounts empty is still a broken workspace. The only
+page error under the harness comes from `apis.google.com/js/api.js` (the gapi auth iframe;
+127.0.0.1 is not an OAuth-authorised domain) — external, not SOKONI code.
+
+**Files:** `seller.js` (`_sellerPageFromHash`), `seller.html` (deep-link IIFE, `showSections`,
+`sdSwitchTab`), `scripts/test-seller-deeplink.js` (new, 14/14, 43s).
+
+**No regression:** `test-seller-dashboard`, `test-seller-board`, `test-seller-cached-user`,
+`test-nav-routes`, `test-merchant-deep-switch`, `test-merchant-route-gate`,
+`test-merchant-shell-boundary`, `test-merchant-diag` all still pass.
+`test-seller-products` remains failing — pre-existing, untouched by this change.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — `sec` is
+matched against a fixed vocabulary (`DASH_PAGES`) and an unmatched value can only produce
+Overview. **Breaking changes:** none — `#hash` behaviour is unchanged.
+
 ## [2026-08-13] — TEST HARNESS: the browser budget was dropping suites from the gate (test-only)
 
 **Status: FIXED and proven.** No shipping file was modified.
