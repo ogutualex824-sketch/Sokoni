@@ -11310,6 +11310,13 @@ exports.adminResolveDispute     = disputes.adminResolveDispute;
 /* DISPATCH CONSOLIDATION: 75 onCall CFs → 1 commerceDispatch */
 const commerceDispatcher = require('./commerce-dispatch');
 exports.commerceDispatch = commerceDispatcher.commerceDispatch;
+/* ── Auth Dispatcher — email verification challenge (issue / verify / status) ──
+   Separate from commerceDispatch on purpose: authentication is a different blast radius,
+   and keeping it apart keeps its rate limits, secrets and failure modes separable. Only
+   `authDispatch` is re-exported — the module's _h map is for tests and must never become
+   a deployable endpoint. */
+const authDispatcher = require('./auth-dispatch');
+exports.authDispatch = authDispatcher.authDispatch;
 const servicesDisp         = require('./services-dispatch');
 exports.servicesDispatch    = servicesDisp.servicesDispatch;
 

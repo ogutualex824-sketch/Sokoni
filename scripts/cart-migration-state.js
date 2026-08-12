@@ -78,6 +78,14 @@ const PRE_EXISTING = [
   'availability-manager.html',          /* Track 1 — availability schedule projection */
   'version.json',                       /* predeploy artifacts, not authored by this work */
   'docs/release-gates/unknown.json',
+  /* Auth slices 1-2, a separate track running after Track 2 closed. Named here so the
+     cart guards keep failing on anything they do NOT recognise, rather than being widened
+     into uselessness — which is the failure mode this registry exists to prevent.
+       functions/index.js   re-exports authDispatch by name (required for any new CF)
+       firebase.json        gained a local `emulators` block so the Auth emulator starts;
+                            hosting, functions and rules config are byte-identical */
+  'functions/index.js',
+  'firebase.json',
 ];
 
 /* The service, its docs and the suites themselves. */
