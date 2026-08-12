@@ -41,101 +41,16 @@ const AS_JSON = process.argv.includes('--json');
 const GATE = process.argv.includes('--gate');
 const TIMEOUT_MS = 60000;
 
-/* A suite that needs a credential, an emulator or the network is not broken —
-   it is un-runnable here. Classifying those separately is the whole point:
-   folding them into FAIL would make the aggregate red forever and the gate
-   worthless. */
-const ENV_SIGNALS = [
-  /GOOGLE_APPLICATION_CREDENTIALS/i,
-  /could not load the default credentials/i,
-  /permission[- ]denied/i,
-  /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN/i,
-  /emulator/i,
-  /firebase-admin.*initializ/i,
-  /must be authenticated|unauthenticated/i,
-  /API key|api_key|SECRET|secret manager/i,
-  /requires? (a )?(network|internet|deploy|live|browser)/i,
-  /* A browser-driving suite whose browser can't launch is an environment gap, not a
-     defect — it passes wherever webkit/chromium IS installed. These are Playwright's
-     own launch-failure strings + our explicit SKIP marker. */
-  /browserType\.launch|Executable doesn'?t exist|Host system is missing dependencies|Failed to launch the browser|playwright install|not available in this environment/i,
-];
-
-/* ── Declared classifications ─────────────────────────────────────────────
-   STALE is deliberately distinct from FAIL. A stale suite fails because the
-   implementation intentionally moved past it — the code is correct and the test
-   describes an older design. Folding those into FAIL pressures someone to
-   "fix" hardened code back to what the test expects, which is how a security
-   improvement gets reverted by its own test suite.
-
-   QUARANTINE is for genuine assertion failures that have not been triaged yet.
-   They are reported loudly on every run but do not block, because a gate must
-   only contain suites proven to test current intended behaviour. Each entry
-   carries the question that decides where it belongs. */
-const DECLARED = {
-  'test-offline-detection': {
-    verdict: 'ENV',
-    reason: 'Drives a browser against http://localhost:3000 — needs a dev server, not a defect.',
-  },
-  'test-workspace-rules': {
-    verdict: 'ENV',
-    reason: 'Needs the Firestore emulator (JDK 21). Fails with "fetch failed" without it.',
-  },
-  'test-returns-rules': {
-    verdict: 'ENV',
-    reason: 'Needs the Firestore emulator (JDK 21) — same as test-workspace-rules. Run bare it ' +
-            'fails in ~500ms with "fetch failed". NOT a licence to skip it: ci-gates.sh runs it ' +
-            'under `firebase emulators:exec` and FAILS when Java is missing or < 21, because an ' +
-            'unexecuted security suite reads exactly like a passing one. It is the only proof ' +
-            'that the returns rule scopes reads to buyerId/sellerId/admin and nobody else.',
-  },
-  'test-merchant-visual-gate': {
-    verdict: 'ENV',
-    reason: 'Long-running browser acceptance gate — 7 routes x 4 viewports in webkit, ~10 min. ' +
-            'It cannot fit the 60s per-suite budget here and is not a unit suite; this runner ' +
-            'would only ever report it as TIMEOUT. Run it directly: npm run test:merchant-visual-gate.',
-  },
-  'test-minishop-claim-persistence': {
-    verdict: 'ENV',
-    reason: 'Long-running browser suite — 8 sections in webkit, each booting /merchant and ' +
-            'waiting out a deliberately late Auth restoration, several minutes total. It cannot ' +
-            'fit the 60s per-suite budget and this runner would only ever report it as TIMEOUT. ' +
-            'NOT a licence to skip it: it is the only proof that a claimed KassShop survives a ' +
-            'destroyed page and a cleared cache, that ownership comes from shops.sellerUid and ' +
-            'nothing else, and that a non-owner is handed neither a storefront nor the seller ' +
-            'management page. Run it directly: npm run test:claim:persistence.',
-  },
-};
-
-/* Untriaged genuine failures. Visible every run, blocking none, until each is
-   answered: is the code wrong, is the test wrong, is the expectation outdated,
-   or is it intermittent? */
-const QUARANTINE = new Set([
-  'test-auth-email',
-  'test-icons',
-  'test-overlays',
-  'test-search-pipeline',
-]);
-
-function classify(res, out, name) {
-  if (DECLARED[name]) return DECLARED[name].verdict;
-  if (res.error && res.error.code === 'ETIMEDOUT') return 'TIMEOUT';
-  if (ENV_SIGNALS.some((re) => re.test(out))) return 'ENV';
-  if (res.status === 0) return 'PASS';
-  /* A non-zero exit with an explicit assertion count is a real failure; a
-     non-zero exit with a module-load error usually is not. */
-  if (/Cannot find module|MODULE_NOT_FOUND/i.test(out)) return 'ENV';
-  /* A browser-driving suite that exits non-zero WITHOUT printing its final pass/fail
-     summary died mid-session — the webkit process crashed or a navigation was lost under
-     load. That is an environment casualty, not a product defect: the same suite passes
-     run on its own. A REAL assertion failure always prints "N passed, M failed" (or "ALL N
-     PASSED"), so it still returns FAIL below — this never masks a genuine defect. */
-  if (res.status !== 0 && isBrowserSuite(name + '.js') && !/\d+ passed,\s*\d+ failed|ALL \d+ PASSED/i.test(out)) return 'ENV';
-  return QUARANTINE.has(name) ? 'QUARANTINE' : 'FAIL';
-}
+/* Classification lives in gate-classify.js so it can be tested directly. Execution
+   status outranks output text there: a suite that printed assertions and exited
+   non-zero is a FAIL, whatever words its log happens to contain. */
+const { classify, DECLARED, QUARANTINE, META_SUITES } = require('./gate-classify');
 
 const files = fs.readdirSync(path.join(ROOT, 'scripts'))
-  .filter((f) => /^test-.*\.js$/.test(f) && f !== 'test-inventory.js')
+  /* Meta-suites are excluded from the ordinary population on purpose — see
+     META_SUITES in gate-classify.js. test-gate-isolation recursively spawns other
+     suites and would always read as TIMEOUT here while adding its own concurrency. */
+  .filter((f) => /^test-.*\.js$/.test(f) && f !== 'test-inventory.js' && !META_SUITES.has(f))
   .sort();
 
 const results = [];
@@ -165,7 +80,7 @@ function runOne(f) {
     child.on('close', (code) => {
       clearTimeout(timer);
       const res = { status: timedOut ? null : code, error: timedOut ? { code: 'ETIMEDOUT' } : null };
-      const verdict = classify(res, out, f.replace(/.js$/, ''));
+      const verdict = classify(res, out, f.replace(/.js$/, ''), isBrowserSuite(f));
       /* Pull an assertion count when the suite prints one, so a PASS with 0
          assertions is visible rather than counted as coverage it does not have. */
       const m = out.match(/ALL (\d+) PASSED|(\d+)\/(\d+)|(\d+) FAILED/);

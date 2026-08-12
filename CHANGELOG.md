@@ -1,3 +1,38 @@
+## [2026-08-12] — TEST HARNESS: execution status outranks output text (test-only)
+
+**Status: FIXED and proven.** No shipping file was modified.
+
+`classify()` tested `ENV_SIGNALS` against the suite's OUTPUT before consulting its exit
+code, so a printed word decided the verdict. Measured on a clean emulator-backed run:
+
+* `test-seller-products` — exit 1, **23 passed / 2 failed** — labelled `ENV`
+* `test-pos-tab-transitions` — exit 1, **3 passed / 1 failed** — labelled `ENV`
+* 14 further suites exited **0** and were also labelled `ENV`, because they print the
+  words they exist to test ("permission-denied", "unauthenticated", "API key")
+
+Both directions were wrong; the first is dangerous — a real failure landed in a bucket
+that reads as "not a defect".
+
+**Fix.** Classification moved to `scripts/gate-classify.js` with this precedence:
+TIMEOUT → DECLARED → *did-not-execute* → exit 0 = PASS → non-zero = QUARANTINE/FAIL.
+`ENV_SIGNALS` keeps its real job — recognising a suite that never ran — but is now
+subordinate to execution evidence and cannot overrule a non-zero exit from a suite that
+plainly reported assertions. Nothing was deleted from `ENV_SIGNALS`, `DECLARED` or
+`QUARANTINE`.
+
+`test-gate-isolation` is excluded from ordinary auto-discovery (`META_SUITES`): it
+recursively spawns ~15 child suite runs, would always read as TIMEOUT inside the runner,
+and adds its own concurrency. Its proof is unchanged and still must pass, run directly.
+
+**Files:** `scripts/gate-classify.js` (new), `scripts/test-gate-classify.js` (new, 35/35),
+`scripts/test-inventory.js` (uses the module; meta-suite filter).
+
+**Mutation control:** the tests re-implement the OLD precedence and assert the same three
+cases come out wrong under it, so they cannot pass against a quietly reverted classifier.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none.
+
 ## [2026-08-12] — TEST HARNESS: per-suite emulator isolation (test-only, no product change)
 
 **Status: FIXED and proven.** No shipping file was modified.
