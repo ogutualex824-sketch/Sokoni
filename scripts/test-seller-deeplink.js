@@ -106,22 +106,37 @@ server.listen(0, async () => {
     return cs.display !== 'none' && cs.visibility !== 'hidden';
   }, want, { timeout: 15000 }).catch(() => null);   /* null → assert on the real state below */
 
+  /* ONE context and ONE page for every case, reused by navigating.
+     Each case used to build its own context. That is the right instinct when cases need
+     different state — but every case here seeds the IDENTICAL session and differs only in
+     the URL, so the isolation bought nothing and cost a browser context each time. Measured:
+     43s standalone but 120s+ inside the isolated gate, where it tripped this suite's own
+     watchdog and reported FAIL for a suite whose 14 assertions all passed. A test that fails
+     because it is slow teaches the reader to distrust it.
+     Navigation gives the same isolation that matters here: each goto is a fresh document,
+     and the init script re-seeds storage on every one. */
+  const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+  await ctx.addInitScript(() => {
+    try {
+      /* auth-guard.js treats localStorage.loggedIn as the authoritative session flag
+         (sokoniUser is only a profile cache), so this is a real authenticated merchant
+         as far as every client-side gate on the page is concerned. */
+      localStorage.setItem('loggedIn', 'true');
+      localStorage.setItem('sokoniUser', JSON.stringify({
+        uid: 'DEEPLINK_TEST', name: 'Deep Link', roles: ['buyer', 'seller', 'merchant'], isSeller: true }));
+    } catch (e) {}
+  });
+  const shared = await ctx.newPage();
+
   async function open(url, want) {
-    const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
-    await ctx.addInitScript(() => {
-      try {
-        /* auth-guard.js treats localStorage.loggedIn as the authoritative session flag
-           (sokoniUser is only a profile cache), so this is a real authenticated merchant
-           as far as every client-side gate on the page is concerned. */
-        localStorage.setItem('loggedIn', 'true');
-        localStorage.setItem('sokoniUser', JSON.stringify({
-          uid: 'DEEPLINK_TEST', name: 'Deep Link', roles: ['buyer', 'seller', 'merchant'], isSeller: true }));
-      } catch (e) {}
-    });
-    const page = await ctx.newPage();
-    await page.goto(BASE + url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await settle(page, want);
-    return { ctx, page };
+    /* A same-document hash change would not reload, and this suite is specifically about
+       what happens on LOAD — so step off the page first when only the hash differs. */
+    if (new URL(BASE + url).pathname === new URL(shared.url() || BASE).pathname) {
+      await shared.goto('about:blank');
+    }
+    await shared.goto(BASE + url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await settle(shared, want);
+    return { ctx: { close: async () => {} }, page: shared };
   }
 
   head('?sec= is a real address (the defect)');
@@ -178,18 +193,21 @@ server.listen(0, async () => {
 
   head('the merchant shell route still works (regression guard)');
   {
-    const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
-    await ctx.addInitScript(() => {
-      try {
-        localStorage.setItem('loggedIn', 'true');
-        localStorage.setItem('sokoniUser', JSON.stringify({ uid: 'DEEPLINK_TEST', roles: ['seller', 'merchant'] }));
-      } catch (e) {}
-    });
-    const page = await ctx.newPage();
+    const page = shared;   /* same session, same context — only the destination differs */
     await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(4000);
+    /* Wait for the shell's nav to exist rather than sleeping 4s for it. */
+    await page.waitForFunction(() => !!document.querySelector('.mnav-item[data-id="products"]'),
+      null, { timeout: 20000 }).catch(() => null);
     await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="products"]'); if (el) el.click(); });
-    await page.waitForTimeout(8000);
+    /* And for the iframe to have actually switched to Products, rather than a fixed 8s. */
+    await page.waitForFunction(() => {
+      const f = document.querySelector('.mpanel.show iframe') || document.getElementById('mfx-seller');
+      const d = f && f.contentDocument;
+      const el = d && d.getElementById('inventory-section');
+      if (!el) return false;
+      const cs = d.defaultView.getComputedStyle(el);
+      return cs.display !== 'none' && cs.visibility !== 'hidden';
+    }, null, { timeout: 30000 }).catch(() => null);
     const st = await page.evaluate((SECTIONS) => {
       const f = document.querySelector('.mpanel.show iframe') || document.getElementById('mfx-seller');
       const d = f && f.contentDocument;
@@ -207,8 +225,9 @@ server.listen(0, async () => {
     ck('Merchant → Products mounts the Sell workspace in the shell',
        st.ok && Object.keys(SECTIONS).every((s) => st.sections[s] === 'shown') && st.sellerStats === 'hidden',
        st.ok ? 'stats=' + st.sellerStats : 'no panel iframe');
-    await ctx.close();
   }
+
+  await ctx.close();
 
   await browser.close(); server.close(); clearTimeout(wd);
   console.log('\n' + '='.repeat(70));
