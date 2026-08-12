@@ -238,8 +238,110 @@
     });
   }
 
+  /* ── cross-tab and re-entry  (Auth Slice 5) ──────────────────────────────────
+     The gate re-derives its answer on every onAuthStateChanged, which covers every
+     PAGE LOAD: refresh, a typed URL, back/forward, a restored tab. What it does not
+     cover is a tab that is already open and does not reload, because Firebase fires
+     onAuthStateChanged on sign-in and sign-out — NOT when emailVerified flips.
+
+     So a second tab held at the challenge would sit there forever after the user
+     verified in the first one. They would be verified, and still locked out, with no
+     indication that anything had changed. That is the whole reason this section exists.
+
+     Two triggers, both cheap:
+       storage         another tab announced a verification, or cleared the session flag
+       visibilitychange  the user came back to this tab
+
+     Both funnel into recheck(), which asks Firebase — never a cached value. A verified
+     user short-circuits inside evaluate() before any network call, so a tab that is
+     simply being switched to costs nothing. */
+  var EVENT_KEY = 'sokoniVerifyEvent';
+  var _watching = false, _getUser = null;
+
+  /* A localStorage write is the signal; the value is a timestamp so repeated events of
+     the same kind still fire. Storage events reach OTHER tabs only, which is exactly the
+     audience — this tab already knows. */
+  function announce(kind, uid) {
+    try {
+      global.localStorage.setItem(EVENT_KEY, JSON.stringify({
+        kind: kind, uid: uid || null, t: Date.now(),
+      }));
+    } catch (e) { }
+  }
+
+  function _reload() {
+    if (typeof API._reloadOverride === 'function') return API._reloadOverride();
+    try { global.location.reload(); } catch (e) { }
+  }
+
+  /* Re-derive access from Firebase, whatever prompted it. */
+  function recheck(why) {
+    /* No watcher installed means we cannot ask who is signed in — which is NOT the same
+       as knowing nobody is. Returning a verdict shaped like "not gated" would read as an
+       answer, and clearing the pending marker on the strength of it would throw away
+       state we have no basis to discard. Say we don't know, and change nothing. */
+    if (!_getUser) {
+      return Promise.resolve({ gated: false, unknown: true, reason: 'no-watcher', why: why });
+    }
+
+    var user = _getUser();
+    var wasPending = isPending();
+
+    /* Genuinely signed out — in this tab or another. Nothing to gate, and the marker must
+       not outlive the session that produced it. */
+    if (!user) {
+      clearPending();
+      return Promise.resolve({ gated: false, reason: 'no-user', why: why });
+    }
+
+    return enforce(user).then(function (res) {
+      if (!res.gated && wasPending) {
+        /* This tab was being held and is not any more: verification landed elsewhere.
+           Reload rather than trying to assemble a session in place — firebase.js builds
+           it on load by its ordinary path, and an in-place assembly here would be a
+           second, divergent way to start a session. */
+        res.recovered = true;
+        _reload();
+      }
+      res.why = why;
+      return res;
+    });
+  }
+
+  /* Installed once, by firebase.js, with a getter for auth.currentUser. A GETTER, not a
+     user object: an account switch replaces the user, and a captured reference would go
+     on answering for the account that has left. */
+  function watch(getUser) {
+    _getUser = getUser || _getUser;
+    if (_watching) return false;
+    _watching = true;
+
+    try {
+      global.addEventListener('storage', function (e) {
+        if (!e) return;
+        /* EVENT_KEY is a deliberate announcement. `loggedIn` disappearing means another
+           tab signed out or was gated, and this tab should not be the one that carries on
+           as though nothing happened. */
+        if (e.key !== EVENT_KEY && e.key !== 'loggedIn') return;
+        recheck('storage:' + e.key);
+      });
+    } catch (e) { }
+
+    try {
+      global.document.addEventListener('visibilitychange', function () {
+        if (global.document.visibilityState === 'visible') recheck('visible');
+      });
+    } catch (e) { }
+
+    return true;
+  }
+
   var API = {
     PENDING_KEY: PENDING_KEY,
+    EVENT_KEY: EVENT_KEY,
+    announce: announce,
+    watch: watch,
+    recheck: recheck,
     needsVerification: needsVerification,
     evaluate: evaluate,
     enforce: enforce,

@@ -122,6 +122,10 @@ const PRE_EXISTING = [
   'sokoni-verify-screen.js',
   'login.html',
   'scripts/test-auth-verify-screen.js',
+  /* Auth slice 5 — session-transition safety. The gate gained cross-tab awareness
+     (storage + visibilitychange -> recheck) and firebase.js installs the watcher and
+     tears the screen down on sign-out. */
+  'scripts/test-auth-session-transitions.js',
 ];
 
 /* The service, its docs and the suites themselves. */

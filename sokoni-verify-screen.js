@@ -226,6 +226,15 @@
           _msg('That did not complete. Please request a new code and try again.', 'error');
           return false;
         }
+        /* Tell the other tabs, and only now — after the refreshed token agreed. An
+           announcement made on the response alone would release tabs for an account that
+           is not actually verified, turning one tab's false success into several. */
+        try {
+          if (global.SokoniVerifyGate && global.SokoniVerifyGate.announce) {
+            global.SokoniVerifyGate.announce('verified', S.user && S.user.uid);
+          }
+        } catch (e) { }
+
         _msg('Email confirmed. Taking you through…', 'success');
         _navigate();
         return true;
@@ -346,6 +355,26 @@
       });
   }
 
+  /* Auth Slice 5 — the screen must not outlive the session it was opened for.
+
+     Two ways that happens: the user signs out (here or in another tab), or a different
+     account signs in. In both cases the code entry on screen belongs to somebody who is
+     no longer there, and a code typed into it would be verified against whoever IS there.
+     firebase.js calls this from onAuthStateChanged, so the screen follows the same
+     authoritative signal as the gate rather than keeping its own idea of who is present. */
+  function onAuthChange(user) {
+    if (!S.host) return false;                       /* not open — nothing to tear down */
+    var sameUser = user && S.user && user.uid === S.user.uid;
+    if (sameUser) return false;
+    destroy();
+    try {
+      S.host.innerHTML = '';
+      S.host.style.display = 'none';
+    } catch (e) { }
+    S.user = null; S.host = null;
+    return true;
+  }
+
   function destroy() {
     S.destroyed = true;
     try { if (S.card) S.card.classList.remove('skv-active'); } catch (e) { }
@@ -358,6 +387,7 @@
   global.SokoniVerifyScreen = {
     open: open,
     destroy: destroy,
+    onAuthChange: onAuthChange,
     /* exposed for the suite; not part of the page contract */
     _state: S, _copy: _copy, _call: _call, _verify: _verify, _issue: _issue,
     _complete: _complete, _back: _back,

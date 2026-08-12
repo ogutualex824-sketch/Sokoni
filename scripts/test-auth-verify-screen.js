@@ -554,10 +554,26 @@ const msgKind = (dom) => ((dom.byId.get('skvMsg') || {}).className || '').replac
     ok('J19 no removed line performed authentication',
        !removed.some((l) => /signInWith|createUserWith|updateUser|signOut/.test(l)),
        removed.filter((l) => /signInWith|createUserWith/.test(l)).join(' | '));
-    ok('J20 the only removed guard is the sanitiser, and it still exists in the helper',
-       removed.filter((l) => /includes\('\/\/'\)/.test(l)).length === 1 &&
-       /includes\('\/\/'\)/.test(read('auth.js')),
+    /* J20 used to assert "exactly one removed guard line", which only means anything
+       while the slice is uncommitted. Once committed there is no diff, `removed` is
+       empty, and the assertion FAILED rather than passing vacuously — worse than useless.
+
+       So it now checks the durable fact in both states: whatever was removed, auth.js
+       still holds the guard, and it holds it in the shared helper rather than back inline.
+       The removal checks above still apply whenever there IS a working-tree diff. */
+    ok('J20 the redirect guard survives, and lives in the shared helper',
+       /includes\('\/\/'\)/.test(au) &&
+       /function _sokoniLoginRedirect[\s\S]{0,400}?includes\('\/\/'\)/.test(au));
+    ok('J20b nothing removed took the guard away without replacing it',
+       removed.filter((l) => /includes\('\/\/'\)/.test(l)).length <= 1,
        removed.filter((l) => /includes/.test(l)).join(' | '));
+
+    /* And the regression guard that never expires: the login path still authenticates and
+       still writes its sessions. A refactor that quietly dropped one of these would leave
+       every earlier assertion here passing. */
+    eq('J21 auth.js still has its four session writers',
+       (au.match(/setItem\((["'])loggedIn\1,\s*(["'])true\2\)/g) || []).length, 4);
+    ok('J22 ...and still signs users in', /signInWithEmailAndPassword\(/.test(au));
   }
 
   /* ══ K · positive controls ═══════════════════════════════════════════════

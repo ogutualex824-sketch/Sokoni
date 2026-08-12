@@ -1,3 +1,83 @@
+## [2026-08-12] — Auth Slice 5: session-transition safety
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`).
+
+**The invariant:** application access is derived from *current* Firebase Auth state, never
+from cached verification or session state. This slice proves it across every transition, and
+closes the one gap where it did not yet hold.
+
+### The gap: `onAuthStateChanged` does not fire when `emailVerified` flips
+
+Slice 3 put the gate at `onAuthStateChanged`, which covers every page **load** — refresh, a
+typed URL, back/forward, a restored tab. What it cannot cover is a tab that is already open
+and does not reload, because Firebase fires that callback on sign-in and sign-out, **not**
+when the verification flag changes.
+
+So a second tab held at the challenge would sit there forever after the user verified in the
+first one: verified, and still locked out, with nothing on screen suggesting anything had
+changed. Two cheap triggers close it, both funnelling into `recheck()`, which asks Firebase:
+
+* `storage` — another tab announced a verification, or cleared the session flag
+* `visibilitychange` — the user came back to this tab
+
+A verified user short-circuits inside `evaluate()` before any network call, so switching to a
+tab costs nothing. When a held tab discovers it is no longer held, it **reloads** rather than
+assembling a session in place — `firebase.js` already builds one on load, and a second,
+divergent way to start a session is exactly what this track has been removing.
+
+The screen announces **only after the refreshed token agreed**. Announcing on the response
+alone would turn one tab's false success into several.
+
+### Sign-out and account switching
+
+`firebase.js` now clears the challenge marker and tears the screen down when Firebase reports
+signed out, and when a *different* account arrives. A screen left up belongs to somebody who
+is no longer there, and a code typed into it would be verified against whoever is.
+
+The watcher is given a **getter**, not `auth.currentUser`: an account switch replaces the
+user, and a captured reference would go on answering for the account that has left.
+
+### Fixed: unknown reported as "not gated"
+
+`recheck()` with no watcher installed returned a verdict shaped like *not gated* and cleared
+the pending marker on the strength of it. Not knowing who is signed in is not the same as
+knowing nobody is. It now returns `{ unknown: true }` and changes nothing — the same
+unknown-is-not-empty rule the platform applies to business metrics.
+
+### Scenarios proven
+
+Refresh while unverified · refresh after verification · sign-out during verification ·
+switching accounts · expired challenge with a live Firebase session · stale cached
+`emailVerified` · stale `loggedIn` · direct navigation to a protected route · back/forward ·
+multiple tabs · verification completed in another tab · failure in one tab while another is
+open — plus both anti-cases stated explicitly: a verified account is never gated by a stale
+cache, and an unverified account never regains access by restoring cached state (tried three
+times per path, and again through the storage-event route).
+
+The suite builds **real tabs** — separate vm contexts over one `localStorage`, with storage
+events delivered to every tab except the writer, and only when a value actually changed.
+That last detail is load-bearing: the first version of the harness fired on no-op removals
+and two watching tabs ping-ponged forever. A fault in the model, but a browser behaving that
+way would hang the product, so it is stated rather than quietly fixed.
+
+### Files
+
+`sokoni-verify-gate.js` · `sokoni-verify-screen.js` · `firebase.js` ·
+`scripts/test-auth-session-transitions.js` (new) · `scripts/test-auth-verify-screen.js` ·
+`scripts/cart-migration-state.js`
+
+**Database changes:** none. **API changes:** none. **Security changes:** access is
+re-derived on cross-tab events and tab focus, in addition to every page load. **Breaking
+changes:** none.
+
+**Tests:** session-transitions 100/100 (3 mutation controls), verify-screen 96/96,
+verify-gate 117/117, challenge 63/63, dispatch 58/58, cart 729/729, wishlist CLEAN.
+
+One more assertion retired rather than widened: `J20` measured Slice 4's *uncommitted* diff,
+so once committed it failed instead of passing vacuously. It now states the durable fact —
+the redirect guard survives and lives in the shared helper — and the removal checks apply
+only when there is a working-tree diff to check.
+
 ## [2026-08-12] — Auth Slice 4: the email verification screen
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`).

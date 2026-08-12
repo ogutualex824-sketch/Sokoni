@@ -688,6 +688,17 @@ async function _registerSession() {
   }
 }
 
+/* ── AUTH SLICE 5 — cross-tab and re-entry ──────────────────────────────────
+   onAuthStateChanged covers every page LOAD, but Firebase does not fire it when
+   emailVerified flips. Without this a second tab held at the challenge would sit there
+   forever after the user verified in the first one — verified, and still locked out.
+
+   A GETTER is passed, not auth.currentUser: an account switch replaces the user, and a
+   captured reference would go on answering for the account that has left. */
+try { window.SokoniVerifyGate.watch(() => auth.currentUser); } catch (e) {
+  console.warn("[SOKONI Auth] verification watcher not installed:", e && e.message);
+}
+
 onAuthStateChanged(auth, async (user) => {
   /* Expose current UID for framework-agnostic consumers (e.g. sokoni-search-engine.js)
      without requiring them to import Firebase directly. */
@@ -725,6 +736,11 @@ onAuthStateChanged(auth, async (user) => {
       console.warn('[SOKONI Auth] email not verified — application session withheld.');
       return;
     }
+
+    /* ── AUTH SLICE 5 ──
+       Past the gate, so this is a different account than any screen still on the page was
+       opened for. Tear it down before the session is built. */
+    try { window.SokoniVerifyScreen && window.SokoniVerifyScreen.onAuthChange(user); } catch (e) { }
 
     localStorage.setItem("loggedIn", "true");
 
@@ -920,6 +936,16 @@ onAuthStateChanged(auth, async (user) => {
     window.__sokoniAuthReady = false;
     window.__sokoniAuthReadyDetail = null;
     _resetSokoniAuthReadyPromise();
+
+    /* ── AUTH SLICE 5 ──
+       Signed out — here or in another tab. The challenge marker and the verification
+       screen both belong to a session that no longer exists: leaving the screen up would
+       offer a code entry for somebody who has left, and the next person to sign in on
+       this device would be typing into it. */
+    try {
+      window.SokoniVerifyGate && window.SokoniVerifyGate.clearPending();
+      window.SokoniVerifyScreen && window.SokoniVerifyScreen.onAuthChange(null);
+    } catch (e) { }
 
     /* Stop idle timeout when signed out */
     if (window._sokoniStopIdleTimer) window._sokoniStopIdleTimer();

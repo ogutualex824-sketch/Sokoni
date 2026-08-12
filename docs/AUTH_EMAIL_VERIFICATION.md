@@ -1,6 +1,6 @@
 # Email Verification — server-controlled challenge
 
-**Status:** Slices 1–4 complete, **not deployed**. Firestore rules unchanged (`ca9e8924`).
+**Status:** Slices 1–5 complete, **not deployed**. Firestore rules unchanged (`ca9e8924`).
 **Related:** [[Authentication]] · [[Security]] · [[Communication Engine]] · [[Release Roadmap]]
 
 Replaces the old "you are logged in because you typed the right password" model with a
@@ -16,6 +16,7 @@ server-issued code that proves the account's email address belongs to whoever is
 | Transport | `functions/auth-dispatch.js` | `authDispatch` — issue / verify / status, App Check enforced |
 | Gate | `sokoni-verify-gate.js` | whether an unverified account gets an application session |
 | Screen | `sokoni-verify-screen.js` | the challenge the held user actually answers |
+| Transitions | `sokoni-verify-gate.js` (watcher) | keeping every tab on the current answer |
 
 ### Model — Slice 1
 
@@ -105,6 +106,32 @@ path that signs out and returns to a clean login.
 does not exist and was not authorised here; the back path leaves the account instead. A real
 change-email belongs with the R1.1 profile work already on the roadmap.
 
+### Session transitions — Slice 5
+
+**The invariant:** application access is derived from *current* Firebase Auth state, never
+from cached verification or session state.
+
+The gate at `onAuthStateChanged` covers every page LOAD — refresh, typed URL, back/forward,
+restored tab. It cannot cover an already-open tab, because Firebase fires that callback on
+sign-in and sign-out, **not when `emailVerified` flips**. A second tab held at the challenge
+would sit there forever after the user verified in the first one: verified, and still locked
+out, with nothing on screen suggesting otherwise.
+
+Closed with two triggers into `recheck()`, which asks Firebase: `storage` (another tab
+announced a verification, or cleared the session flag) and `visibilitychange`. A verified
+user short-circuits before any network call, so tab-switching costs nothing. A tab that
+discovers it is no longer held **reloads**, so the session is built by the one existing path
+rather than assembled a second, divergent way.
+
+The screen announces only **after the refreshed token agreed** — announcing on the response
+alone would turn one tab’s false success into several. `firebase.js` clears the marker and
+tears the screen down on sign-out and on an account change, and the watcher takes a
+**getter**, not a captured user: an account switch replaces the user, and a captured
+reference would go on answering for the account that has left.
+
+`recheck()` with no watcher installed now reports `{unknown:true}` and changes nothing. Not
+knowing who is signed in is not the same as knowing nobody is.
+
 ---
 
 ## ⚠ Rollout risk — read before deploying
@@ -137,12 +164,13 @@ is what matters:
 | `scripts/test-auth-email-challenge.js` | 62 |
 | `scripts/test-auth-dispatch.js` | 58 |
 | `scripts/test-auth-verify-gate.js` | 117 |
-| `scripts/test-auth-verify-screen.js` | 93 |
+| `scripts/test-auth-verify-screen.js` | 96 |
+| `scripts/test-auth-session-transitions.js` | 100 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still
-made by the real code. The last two run the shipped client files in a `vm` sandbox and carry
-seven **mutation controls** between them — each breaks the code on purpose and requires the
+made by the real code. The last three run the shipped client files in a `vm` sandbox and carry
+ten **mutation controls** between them — each breaks the code on purpose and requires the
 answer to change, because a suite that only ever sees correct code cannot tell "this passes"
 from "this asserts nothing". The sharpest of them deletes the screen`s `emailVerified === true`
 proof and requires the mutant to celebrate a false success.
