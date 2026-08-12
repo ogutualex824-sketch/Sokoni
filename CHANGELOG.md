@@ -1,3 +1,50 @@
+## [2026-08-13] — GATE: per-suite measured budgets; two suites were losing coverage silently
+
+**Status: FIXED and proven.** Classifier 54/54.
+
+The full isolated gate on a clean tree recorded `TIMEOUT 2`. A timeout is not a warning — the
+verdict is non-blocking, so a timed-out suite **leaves the blocking set** and its coverage
+disappears. Both were passing suites:
+
+| suite | measured | old budget | outcome |
+|---|---|---|---|
+| `test-cart-universal` | **47/47 in 65s** | 60s (default) | killed 5s short |
+| `test-merchant-deep-switch` | **15/15 in 42s** | 150s (browser) | exceeded 150s under full gate load |
+
+`merchant-deep-switch` shows a **3.5x spread** between standalone and full-gate — 162 suites,
+an emulator and a browser share one machine.
+
+**Fix: `SUITE_BUDGET_MS`** — a per-suite budget, each entry carrying the measurement that
+justifies it. Raising the global default would be the wrong trade: most suites finish under 10s
+and a genuinely hung one should die quickly. Also budgeted from measurement:
+`test-minishop-claim-firestore` (42s of 60s — 70%, one bad run from lost coverage) and
+`test-shop-setup-hydration` (83s; deliberately long, it waits out late Firestore responses).
+
+**A budget must never launder a failure**, so section I of `test-gate-classify.js` pins it:
+`classify()` takes no budget argument, every budgeted suite still `FAIL`s on a non-zero exit
+and still `TIMEOUT`s when killed, every budgeted name is a real file, and no budget is *smaller*
+than the default it overrides (which would be a coverage cut wearing the same clothes).
+
+### Two defects in the new deeplink suite, both mine
+
+1. **Reported FAIL for hanging in teardown.** It printed all 14 assertions, all passing, then
+   was killed by its own watchdog at 120s — `ctx.close()`/`browser.close()` is intermittently
+   slow when the last case leaves a merchant shell holding a live iframe. Results are now
+   printed **before** teardown, and teardown is raced against a timer so the process always
+   reaches `process.exit()`. A suite that has already answered the question must not be failed
+   because the browser took its time going away.
+2. **A wait that resolved on the wrong state.** On a phone every section is visible by default
+   until `body.sdm-mobile-mode` is applied, so "inventory-section is visible" is briefly true
+   during boot, *before any routing*. The wait returned while the page still showed everything
+   and the assertion then read Overview. Both waits now require the **conjunction**
+   (`inventory-section` shown **and** `seller-stats` hidden) — no default state satisfies both,
+   so it is only true after the router has actually run.
+
+**Files:** `scripts/gate-classify.js`, `scripts/test-inventory.js`, `scripts/test-gate-classify.js`
+(54/54), `scripts/test-seller-deeplink.js` (14/14, 16s, stable over repeated runs).
+
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — ANALYTICS: no duplicate page_view; the ad-network calls were the real defect
 
 **Status: MEASURED, then FIXED.** Consent gate 93/93.

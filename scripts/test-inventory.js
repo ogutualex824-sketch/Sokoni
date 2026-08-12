@@ -79,7 +79,7 @@ const NEAR_BUDGET = 0.5;
 /* Classification lives in gate-classify.js so it can be tested directly. Execution
    status outranks output text there: a suite that printed assertions and exited
    non-zero is a FAIL, whatever words its log happens to contain. */
-const { classify, DECLARED, QUARANTINE, META_SUITES } = require('./gate-classify');
+const { classify, DECLARED, QUARANTINE, META_SUITES, SUITE_BUDGET_MS } = require('./gate-classify');
 
 /* --only <regex> narrows the run to matching suites. Diagnosing the drifting timeout
    list needed exactly this — the browser batch, on its own, with the runner's real
@@ -140,7 +140,9 @@ function runOne(f) {
       return resolve();
     }
 
-    const budget = browser ? BROWSER_TIMEOUT_MS : TIMEOUT_MS;
+    /* A measured per-suite budget wins over the class default — see SUITE_BUDGET_MS in
+       gate-classify.js, where each entry carries the measurement that justifies it. */
+    const budget = SUITE_BUDGET_MS[name] || (browser ? BROWSER_TIMEOUT_MS : TIMEOUT_MS);
     /* Each suite gets its own emulator project namespace. Without this the CLI's
        injected GCLOUD_PROJECT overrides every suite's own declaration and all of
        them share one database — which, under CONCURRENCY, is a race rather than a

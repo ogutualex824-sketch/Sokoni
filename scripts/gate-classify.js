@@ -120,6 +120,37 @@ const DECLARED = {
   },
 };
 
+/* ── Per-suite budgets, each from a measurement ──────────────────────────────
+   A TIMEOUT is not a warning: the verdict is non-blocking, so a timed-out suite silently
+   LEAVES the blocking set and its coverage disappears. Two suites were losing that way in
+   the full isolated gate while passing everywhere else:
+
+     test-cart-universal        47/47 in 65s standalone — 5s over the 60s default
+     test-merchant-deep-switch  15/15 in 42s standalone — over 150s under full gate load
+
+   Raising the global default instead would be the wrong trade: most suites finish in under
+   10s, and a genuinely hung one should die quickly rather than hold the gate for minutes.
+   So the budget is declared per suite, from its measured time, with the measurement written
+   down. The multiplier is deliberately generous because the gate runs 162 suites, an
+   emulator and a browser on one machine: merchant-deep-switch alone showed a 3.5x spread
+   between standalone and full-gate. Headroom here costs nothing when a suite passes and
+   costs one wait when a suite genuinely hangs; too little headroom costs coverage silently,
+   which is strictly worse.
+
+   This is NOT a way to make a failing suite pass — a budget cannot change an assertion. Any
+   suite listed here must already pass when run on its own, and nearBudget in
+   test-inventory.js reports anything still creeping toward its ceiling. */
+const SUITE_BUDGET_MS = {
+  /* measured 65s standalone (47/47) */
+  'test-cart-universal': 180000,
+  /* measured 42s standalone (15/15); exceeded 150s under the full gate */
+  'test-merchant-deep-switch': 300000,
+  /* measured 42s of a 60s budget (70%) inside the gate — one bad run from lost coverage */
+  'test-minishop-claim-firestore': 150000,
+  /* measured 83s (27/27); deliberately long — it waits out late Firestore responses */
+  'test-shop-setup-hydration': 240000,
+};
+
 /* Untriaged genuine failures. Visible every run, blocking none, until each is
    answered: is the code wrong, is the test wrong, is the expectation outdated,
    or is it intermittent? */
@@ -177,5 +208,5 @@ function classify(res, out, name, browser) {
 
 module.exports = {
   classify, executed, isBrowserSuite,
-  ENV_SIGNALS, EXECUTION_EVIDENCE, DECLARED, QUARANTINE, META_SUITES,
+  ENV_SIGNALS, EXECUTION_EVIDENCE, DECLARED, QUARANTINE, META_SUITES, SUITE_BUDGET_MS,
 };

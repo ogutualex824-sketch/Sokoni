@@ -21,6 +21,9 @@
 'use strict';
 
 const { classify, executed, ENV_SIGNALS, QUARANTINE, DECLARED, META_SUITES } = require('./gate-classify');
+const fs = require('fs');
+const path = require('path');
+const ROOT = path.resolve(__dirname, '..');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -211,6 +214,31 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      classify(exit(0), '  ALL 3 PASSED\n', 'test-not-declared', true) === 'PASS' &&
      classify(exit(1), '  1 passed, 2 failed\n', 'test-not-declared', true) === 'FAIL' &&
      classify(timeout, '', 'test-not-declared', true) === 'TIMEOUT');
+
+  /* ══ I. a per-suite budget must not be a way to launder a failure ══
+     SUITE_BUDGET_MS exists because a TIMEOUT silently drops a suite from the blocking set,
+     so a suite that genuinely needs 65s was losing its coverage to a 60s default. That is a
+     legitimate fix and an obvious loophole: "give it more time" must never become "make it
+     pass". A budget only decides how long a suite may run — classify() never sees it. */
+  head('I · a budget changes how long a suite may run, never its verdict');
+  const { SUITE_BUDGET_MS } = require('./gate-classify');
+  ok('classify() takes no budget argument (it cannot be influenced by one)',
+     classify.length === 4, 'arity ' + classify.length);
+  Object.keys(SUITE_BUDGET_MS).forEach((name) => {
+    /* A budgeted suite that exits non-zero is still FAIL, and still TIMEOUT if it is killed. */
+    ok(name + ' still FAILs on a non-zero exit',
+       classify(exit(1), '  40 passed, 2 failed\n', name, false) === 'FAIL',
+       classify(exit(1), '  40 passed, 2 failed\n', name, false));
+    ok(name + ' still TIMEOUTs when killed at its (larger) budget',
+       classify(timeout, '', name, false) === 'TIMEOUT');
+  });
+  ok('every budgeted suite is a real file',
+     Object.keys(SUITE_BUDGET_MS).every((n) => fs.existsSync(path.join(ROOT, 'scripts', n + '.js'))),
+     Object.keys(SUITE_BUDGET_MS).join(', '));
+  /* A budget below the class default would be a silent coverage cut wearing the same clothes. */
+  ok('no budget is smaller than the 60s default it overrides',
+     Object.values(SUITE_BUDGET_MS).every((ms) => ms >= 60000),
+     JSON.stringify(SUITE_BUDGET_MS));
 
   console.log('\n' + '─'.repeat(66));
   if (fail) { console.log('\x1b[31mFAILURES\x1b[0m'); failures.forEach((f) => console.log('  ✗ ' + f)); }

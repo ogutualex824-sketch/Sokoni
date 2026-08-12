@@ -99,12 +99,23 @@ server.listen(0, async () => {
      be read before the router has run. A flat sleep would be both slower and less reliable:
      too short is a flake, too long is the suite drifting toward its budget until the gate
      silently stops running it (see nearBudget in scripts/test-inventory.js). */
+  /* BOTH halves are required, and that is not belt-and-braces — a single-element wait resolves
+     on the WRONG state. On a phone every section is visible by default until seller.html adds
+     body.sdm-mobile-mode, so "inventory-section is visible" is briefly true during boot, before
+     any routing has happened. Waiting on that alone returned while the page was still showing
+     everything, and the assertion then read Overview. The pair is only ever true after the
+     router has actually run, because no default state satisfies both. */
   const settle = (page, want) => page.waitForFunction((want) => {
-    const el = document.getElementById(want === 'products' ? 'inventory-section' : 'seller-stats');
-    if (!el) return false;
-    const cs = getComputedStyle(el);
-    return cs.display !== 'none' && cs.visibility !== 'hidden';
-  }, want, { timeout: 15000 }).catch(() => null);   /* null → assert on the real state below */
+    const shown = (id) => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return cs.display !== 'none' && cs.visibility !== 'hidden';
+    };
+    return want === 'products'
+      ? shown('inventory-section') === true && shown('seller-stats') === false
+      : shown('seller-stats') === true && shown('inventory-section') === false;
+  }, want, { timeout: 20000 }).catch(() => null);   /* null → assert on the real state below */
 
   /* ONE context and ONE page for every case, reused by navigating.
      Each case used to build its own context. That is the right instinct when cases need
@@ -199,14 +210,20 @@ server.listen(0, async () => {
     await page.waitForFunction(() => !!document.querySelector('.mnav-item[data-id="products"]'),
       null, { timeout: 20000 }).catch(() => null);
     await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="products"]'); if (el) el.click(); });
-    /* And for the iframe to have actually switched to Products, rather than a fixed 8s. */
+    /* Same conjunction inside the iframe, for the same reason — and the shell re-asserts the
+       requested section on the iframe's load event and again 350ms later, so a wait that can
+       be satisfied by the boot default would observe Products and then be overtaken. */
     await page.waitForFunction(() => {
       const f = document.querySelector('.mpanel.show iframe') || document.getElementById('mfx-seller');
       const d = f && f.contentDocument;
-      const el = d && d.getElementById('inventory-section');
-      if (!el) return false;
-      const cs = d.defaultView.getComputedStyle(el);
-      return cs.display !== 'none' && cs.visibility !== 'hidden';
+      if (!d) return false;
+      const shown = (id) => {
+        const el = d.getElementById(id);
+        if (!el) return null;
+        const cs = d.defaultView.getComputedStyle(el);
+        return cs.display !== 'none' && cs.visibility !== 'hidden';
+      };
+      return shown('inventory-section') === true && shown('seller-stats') === false;
     }, null, { timeout: 30000 }).catch(() => null);
     const st = await page.evaluate((SECTIONS) => {
       const f = document.querySelector('.mpanel.show iframe') || document.getElementById('mfx-seller');
@@ -227,10 +244,23 @@ server.listen(0, async () => {
        st.ok ? 'stats=' + st.sellerStats : 'no panel iframe');
   }
 
-  await ctx.close();
-
-  await browser.close(); server.close(); clearTimeout(wd);
+  /* REPORT FIRST, THEN TEAR DOWN — and never let teardown decide the verdict.
+     Inside the isolated gate this suite printed every one of its 14 assertions, all passing,
+     and was then killed by its own watchdog at 120s: it had finished testing and hung in
+     ctx.close()/browser.close(). The last case leaves a merchant shell holding a live iframe
+     with in-flight requests, and closing that is intermittently slow — standalone it returns
+     in milliseconds, under a loaded gate it does not.
+     A suite that has already answered the question must not be reported as a failure because
+     the browser took its time going away. The result is printed before teardown, and teardown
+     is raced against a short timer so the process always reaches process.exit(). */
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
+
+  clearTimeout(wd);
+  await Promise.race([
+    (async () => { try { await ctx.close(); await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });
