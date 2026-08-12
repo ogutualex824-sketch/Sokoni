@@ -782,6 +782,18 @@
     }
     id = rid;
     var m = byId[id];
+
+    /* An EXIT leaves the shell, so it returns BEFORE any of the state below runs.
+       That ordering is the whole fix, not a tidiness preference. Handling it further down —
+       after `current` is set, the title is swapped and the route hash is pushed — leaves
+       "#home" in the history of a page we are navigating away from. The merchant then presses
+       Back from the marketplace, lands on /merchant#home, and the boot router resolves that
+       hash and exits again: a bounce loop where Back can never re-enter the shell.
+       Nothing is recorded because there is no module to mount and the next document is a
+       different application. A real navigation is also the point — iframing the marketplace
+       would boot the customer app inside /merchant, the double-shell defect e0dbdca fixed. */
+    if (m.kind === 'exit') { location.assign(m.href); return; }
+
     if (current && current !== 'devices' && current !== id) _lastModule = current;  /* for Devices "Done" */
     current = id;
     setActive(id);
@@ -2343,6 +2355,12 @@
      not assumed. The only gap was an alias arriving when its target route is ALREADY current —
      no navigation, so nothing normalised it; the hashchange listener above now handles that. */
   var boot = CONTRACT.resolve(location.hash.replace('#', ''));
+
+  /* Never BOOT an exit. Landing on /merchant#home means "open the shell", not "leave it
+     again immediately" — obeying it would send the merchant straight back out, and pressing
+     Back from there would re-enter the same hash and bounce forever. An exit is a thing the
+     merchant taps, never a state the shell restores itself into. */
+  if (boot && byId[boot] && byId[boot].kind === 'exit') boot = null;
 
   /* Back must be deterministic, and it was not. go() replaces on the first navigation, so a
      merchant arriving DIRECTLY on a deep link — /merchant#shop from a notification, a

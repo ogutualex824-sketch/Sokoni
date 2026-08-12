@@ -96,13 +96,51 @@ server.listen(0, async () => {
     const mid = await state(page);
     ck('navigated away from Home first', mid.hash === '#products', mid.hash);
 
-    await page.evaluate(() => { const el = document.querySelector('#mbnav .mbnav-item[data-id="dashboard"]'); if (el) el.click(); });
+    /* #mbnav Home is the MARKETPLACE, not the merchant dashboard. Clicked, not inspected:
+       the href was already correct in earlier builds while the click did something else. */
+    await page.evaluate(() => { const el = document.querySelector('#mbnav .mbnav-item[data-id="home"]'); if (el) el.click(); });
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2500);
+    const st = await page.evaluate(() => ({
+      path: location.pathname,
+      shellGone: !document.querySelector('.mshell'),
+      tmpl: (document.querySelector('meta[name="sokoni-page"]') || {}).content || '',
+    }));
+    ck('#mbnav Home leaves /merchant', st.path !== '/merchant.html', st.path);
+    ck('...landing on index.html (the marketplace home)', st.tmpl === 'marketplace-home', st.tmpl || '(no template meta)');
+    ck('...as a real navigation — the merchant shell is gone, not iframed', st.shellGone);
+
+    /* The bounce loop this ordering exists to prevent: if go() had recorded "#home" before
+       navigating, Back would return to /merchant#home, the boot router would resolve the exit
+       and leave again, and the merchant could never get back into the shell. */
+    await page.goBack();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2500);
+    const back = await page.evaluate(() => ({
+      path: location.pathname, hash: location.hash,
+      shell: !!document.querySelector('.mshell'),
+    }));
+    ck('Back from the marketplace re-enters the shell (no #home bounce loop)',
+       back.path === '/merchant.html' && back.shell === true, back.path + back.hash + ' shell=' + back.shell);
+    await ctx.close();
+  }
+
+  head('1b · Merchant Home (the dashboard) is still reachable and still works');
+  {
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="products"]'); if (el) el.click(); });
+    await routed(page, 'products');
+    /* Dashboard left the bottom bar but must remain a first-class destination — it is the
+       Back target below, so losing it would break section 3 silently. */
+    await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="dashboard"]'); if (el) el.click(); });
     await routed(page, 'dashboard');
     const st = await state(page);
-    /* The native panel is the evidence: a hash and a highlighted tab only prove we asked. */
-    ck('Home lands on Merchant Home', st.hash === '#dashboard' && st.nativePanel, st.hash + ' native=' + st.nativePanel);
-    ck('...with the title and the bottom-nav tab agreeing',
-       /dashboard/i.test(st.title) && st.activeBnav === 'dashboard', st.title + ' / ' + st.activeBnav);
+    ck('sidebar/drawer Dashboard still lands on Merchant Home',
+       st.hash === '#dashboard' && st.nativePanel, st.hash + ' native=' + st.nativePanel);
+    ck('...with the title agreeing', /dashboard/i.test(st.title), st.title);
     await ctx.close();
   }
 
@@ -173,6 +211,23 @@ server.listen(0, async () => {
     ck('Back from a DIRECT deep link → Merchant Home (not out of SOKONI)',
        b.path === '/merchant.html' && b.hash === '#dashboard' && b.nativePanel,
        b.path + b.hash + ' native=' + b.nativePanel);
+
+    /* Returning from a route must not leave a SECOND chrome behind. e0dbdca made the shell
+       suppress the customer header/nav for embedded pages (?shell=merchant); a Back that
+       re-mounted the shell while a module's own chrome survived would reintroduce the
+       double-shell without any code claiming to. Counted after the navigation, not before. */
+    const chrome = await page.evaluate(() => ({
+      merchantHeader: document.querySelectorAll('.mtop').length,
+      merchantNav:    document.querySelectorAll('#mbnav').length,
+      customerNav:    document.querySelectorAll('#sk-bottom-nav, .sk-bottom-nav').length,
+      customerHeader: document.querySelectorAll('#sk-top-nav').length,
+      hScroll:        document.documentElement.scrollWidth > window.innerWidth + 2,
+    }));
+    ck('after Back: merchant header = 1', chrome.merchantHeader === 1, String(chrome.merchantHeader));
+    ck('after Back: merchant nav = 1',    chrome.merchantNav === 1,    String(chrome.merchantNav));
+    ck('after Back: customer nav = 0',    chrome.customerNav === 0,    String(chrome.customerNav));
+    ck('after Back: customer header = 0', chrome.customerHeader === 0, String(chrome.customerHeader));
+    ck('after Back: no horizontal overflow', chrome.hScroll === false, String(chrome.hScroll));
     await ctx.close();
   }
   {

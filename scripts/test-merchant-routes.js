@@ -90,9 +90,34 @@ check('shell has no target="_blank"',    !/target\s*=\s*["']_blank/.test(strippe
    (opening My MiniShop navigated the whole tab to /login?next=/merchant#minishop and every route
    after it was gone). A module cannot distinguish "auth not ready" from "signed out", so its
    word must never end the session. Anything here navigating the tab is a shell escape. */
+/* The rule this enforces is "no navigation the MERCHANT did not ask for", and the count was a
+   proxy for it. The proxy stopped fitting once the shell gained a way out: /merchant contained
+   ZERO links to any external destination, so a merchant could reach the marketplace only by
+   editing the URL — the dead-end Navigation Contract rule 2 forbids.
+
+   So the check is now the rule itself rather than the proxy, and it is STRICTER, not looser:
+   the ONLY navigation permitted anywhere in the shell is `location.assign(m.href)` reached
+   through a contract-declared kind:'exit' route. A `location.href = '/login…'` — the exact
+   escalation that was removed — still fails, and now fails by shape rather than by count, so
+   it cannot be reintroduced by deleting an unrelated navigation to keep the total at zero. */
 const navs = [...stripped.matchAll(/location\.(href|assign|replace)\s*[=(]/g)].map(m => m[0]);
-check('shell performs NO top-level navigation (auth-guard owns that decision)',
-      navs.length === 0, navs.length ? navs.length + ' navigation(s) found' : 'clean');
+const EXIT_NAV = /if\s*\(\s*m\.kind\s*===\s*['"]exit['"]\s*\)\s*\{\s*location\.assign\(\s*m\.href\s*\)\s*;\s*return;\s*\}/;
+const exitNavs = [...stripped.matchAll(/location\.assign\(\s*m\.href\s*\)/g)].length;
+check('the only shell navigation is the declared exit route',
+      navs.length === exitNavs, navs.length ? navs.join(' ') : 'clean');
+check('...and it is guarded by kind === "exit" (never a bare navigation)',
+      exitNavs === 0 || EXIT_NAV.test(stripped));
+/* The escalation that actually caused the outage: a module's postMessage ending the session.
+   Assert no navigation reaches an auth destination from anywhere in the shell. */
+check('shell never navigates the tab to login/auth (module word cannot end a session)',
+      !/location\.(href|assign|replace)\s*[=(]\s*['"`][^'"`]*(login|signin|sign-in|auth)/i.test(stripped));
+/* An exit must exist and be declared, or the dead-end is back and nobody notices. */
+const exitRoutes = C.ROUTES.filter(r => r.kind === 'exit');
+check('the contract declares a way out of the shell', exitRoutes.length > 0,
+      exitRoutes.map(r => r.id + '->' + r.href).join(',') || 'NONE — /merchant is a dead-end');
+check('every exit href is root-relative and not .html (cleanUrls 301s)',
+      exitRoutes.every(r => /^\/[^/]*$/.test(r.href || '') && !/\.html$/.test(r.href || '')),
+      exitRoutes.map(r => r.href).join(','));
 
 /* ── 6. Phase 2C — the shell projects the contract, it does not re-declare it ─ */
 console.log('\n6. Sidebar is a projection of the contract (2C)');

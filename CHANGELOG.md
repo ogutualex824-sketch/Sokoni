@@ -1,3 +1,63 @@
+## [2026-08-13] — MERCHANT: Home is the marketplace, via a declared exit route
+
+**Status: FIXED and proven.** 23/23 real clicks; routes contract 64/64.
+
+**M8 — Home → index.html.** `#mbnav` Home was `go('dashboard')`. It now leaves the shell for
+the marketplace. Implemented as a **new route kind, `exit`** rather than a special-cased click
+handler, so the registry does not lie about what a bottom-nav entry does:
+
+```
+{ id:'home', kind:'exit', href:'/', tier:'hidden' }
+```
+
+`kind:'exit'` is validated like every other kind — href required, root-relative only (an
+absolute URL would let a bottom-nav tap leave SOKONI entirely), never `.html` (`cleanUrls:true`
+301-redirects it), and it may not declare `src`/`sec`/`tab` because it mounts nothing. It must
+**never** be expressed as `kind:'page'` — iframing `index.html` would boot the whole customer
+application inside `/merchant`, the double-shell defect `e0dbdca` fixed. The suite asserts
+`.mshell` is *gone* afterwards and the landing page reports `sokoni-page=marketplace-home`.
+
+**The ordering is the fix, not a tidiness preference.** The exit returns from `go()` *before*
+`current` is set, the title swapped, or the route hash pushed. Handled later, it would leave
+`#home` in the history of a page being navigated away from — the merchant presses Back from the
+marketplace, lands on `/merchant#home`, the boot router resolves the exit and leaves again: a
+loop where Back can never re-enter the shell. The boot router additionally refuses to *boot*
+an exit, for the same reason. Both are asserted.
+
+**Dashboard is unchanged as a destination** — still in the sidebar, drawer and ⌘K palette, and
+still what Back resolves to. It simply is not the thing labelled 🏠 Home any more; making it so
+was what hid the dead-end, because the button looked like an exit and behaved like a no-op for
+anyone already on it.
+
+> **Consequence worth naming:** the mobile four-up bar is now Home · Orders · Sell · More, so
+> Dashboard is one tap deeper (drawer) on a phone. That follows directly from the instruction
+> and is a one-line revert if it reads wrong on the device.
+
+**The contract rule was tightened, not weakened.** `test-merchant-routes` asserted *zero*
+top-level navigations. Its documented rationale is a module's postMessage ending a session — an
+escalation that once threw merchants out mid-session. A merchant *tapping* Home is categorically
+different, so the check is now the rule instead of the proxy, and is **stricter**: the only
+navigation permitted anywhere in the shell is `location.assign(m.href)` guarded by
+`kind === 'exit'`; any navigation to a login/auth destination still fails; the contract must
+declare a way out at all; and every exit href must be root-relative and non-`.html`. A
+`location.href = '/login…'` now fails **by shape rather than by count**, so it cannot be
+reintroduced by deleting an unrelated navigation to keep the total at zero.
+
+**M9 — Shop → Back → Merchant Home** holds from both arrivals (internal route and direct deep
+link), and per the release requirement the chrome is counted *after* the navigation: merchant
+header 1, merchant nav 1, customer nav 0, customer header 0, no horizontal overflow.
+
+**Files:** `sokoni-merchant-routes.js`, `merchant.html`, `scripts/test-merchant-routes.js` (64/64),
+`scripts/test-merchant-home-back.js` (23/23).
+
+**No regression:** `test-merchant-deep-switch`, `test-merchant-shell-boundary` (15/15),
+`test-merchant-diag`, `test-merchant-runtime`, `test-merchant-templates`, `test-nav-routes`,
+`test-seller-board`, `test-seller-cached-user`, `test-seller-dashboard`, `test-seller-deeplink`.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — auth-guard
+remains the only authority on ending a session. **Breaking changes:** bottom-nav Home now leaves
+the shell; Dashboard moves to the drawer on mobile.
+
 ## [2026-08-13] — GATE: per-suite measured budgets; two suites were losing coverage silently
 
 **Status: FIXED and proven.** Classifier 54/54.

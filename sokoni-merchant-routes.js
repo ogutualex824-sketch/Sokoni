@@ -159,6 +159,20 @@
            'Replaces the old target (POS settings tab), which was device config masquerading as merchant settings.' },
 
     /* ── MORE: preserved destinations, one tap deeper. Nothing here is lost. ── */
+    /* The way back to the marketplace. Before this, /merchant contained ZERO links to any
+       external destination — measured — so a merchant could reach the shop only by editing
+       the URL. That is the dead-end Navigation Contract rule 2 forbids.
+       Targets '/' rather than 'index.html' because cleanUrls:true 301-redirects the latter.
+       tier:'hidden' keeps it out of the sidebar list while remaining a real, validated route
+       that the bottom nav can point at. */
+    { id:'home', name:'Home', icon:'🏠', tier:'hidden',
+      kind:'exit', href:'/',
+      role:['seller','merchant'], ctx:[],
+      mobile:true, desktop:true, activeKey:'home',
+      note:'Leaves the shell entirely (full-page navigation to the marketplace home). NEVER ' +
+           'express this as kind:page — iframing index.html would boot the customer application ' +
+           'inside the merchant shell, the double-shell defect e0dbdca fixed.' },
+
     { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
       kind:'page', src:'minishop-admin.html', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -275,8 +289,14 @@
   /* Mobile bottom navigation — exactly four, never more. Each MUST be a real route
      id above (or the '__more' drawer sentinel), so the bottom nav can never drift
      out of sync with the registry. */
+  /* Home is the MARKETPLACE (kind:'exit'), not the merchant dashboard.
+     The dashboard is still a first-class route — it remains in the sidebar, the drawer, the
+     ⌘K palette, and it is the destination the shell's Back resolves to — but the 🏠 label in
+     a bottom bar means "the shop", and the merchant had no way back to it at all. Making the
+     dashboard the thing called Home was what hid that: the button looked like an exit and
+     behaved like a no-op for anyone already on it. */
   var BOTTOM_NAV = [
-    { id:'dashboard', icon:'🏠', label:'Home'   },
+    { id:'home',      icon:'🏠', label:'Home'   },
     { id:'orders',    icon:'🧾', label:'Orders' },
     { id:'pos',       icon:'💳', label:'Sell'   },
     { id:'__more',    icon:'☰',  label:'More'   }
@@ -288,7 +308,15 @@
     'messages','marketing','stories','tax','history','store','team','disputes','flash','pos'];
   var POS_TABS = ['pos','inventory','orders','customers','reports','finance','settings',
     'audit','bos','repair','more'];
-  var KINDS = ['native','pos','seller','page'];
+  /* 'exit' is the only kind that LEAVES the shell. Every other kind mounts a destination
+     inside /merchant; an exit performs a real full-page navigation and the shell is gone
+     afterwards. It exists so the marketplace can be a bottom-nav destination without the
+     registry lying about it: the alternative was a bottom-nav entry whose click handler
+     quietly did something no route in this file described.
+     An exit must NEVER be expressed as kind:'page' — that would iframe the destination and
+     boot the entire customer application inside the merchant shell, which is the
+     double-shell defect e0dbdca fixed. */
+  var KINDS = ['native','pos','seller','page','exit'];
   /* 'hidden' = a real, routable destination that is NOT a sidebar row. My MiniShop lives here:
      it is reached from the header button, and having it in BOTH the header and the sidebar gave
      the seller two controls that looked like they might do different things. Still resolvable,
@@ -333,6 +361,15 @@
       if (r.kind === 'page') {
         if (!r.src)                              errs.push(at + ': page route has no src');
         else if (FORBIDDEN_SRC.test(r.src))      errs.push(at + ': src "' + r.src + '" is external or a legacy dashboard target');
+      }
+      if (r.kind === 'exit') {
+        if (!r.href)                             errs.push(at + ': exit route has no href');
+        /* Root-relative only. An absolute URL would let a bottom-nav tap navigate the
+           merchant off SOKONI entirely, and firebase.json sets cleanUrls:true, so a
+           ".html" target 301-redirects on the way out. */
+        else if (!/^\/[^/]*$/.test(r.href))      errs.push(at + ': href "' + r.href + '" must be a root-relative path with no host');
+        else if (/\.html$/.test(r.href))         errs.push(at + ': href "' + r.href + '" ends in .html — cleanUrls:true 301-redirects it');
+        if (r.src || r.sec || r.tab)             errs.push(at + ': exit route must not declare src/sec/tab — it does not mount anything');
       }
       if (r.kind === 'native' && (r.src || r.sec || r.tab))
         errs.push(at + ': native route must not declare src/sec/tab');
