@@ -155,8 +155,12 @@ function isBrowserSuite(file, root) {
 function classify(res, out, name, browser) {
   out = out || '';
 
-  if (res && res.error && res.error.code === 'ETIMEDOUT') return 'TIMEOUT';
+  /* DECLARED outranks TIMEOUT, as it always did. Two entries exist precisely BECAUSE
+     they cannot fit the 60s budget — "this runner would only ever report it as TIMEOUT"
+     is the reason written in them. Letting TIMEOUT win would discard that declaration
+     and re-report the very thing the entry was added to explain. */
   if (DECLARED[name]) return DECLARED[name].verdict;
+  if (res && res.error && res.error.code === 'ETIMEDOUT') return 'TIMEOUT';
 
   /* Only when the suite produced NO assertions may its environment be blamed. */
   if (!executed(out)) {

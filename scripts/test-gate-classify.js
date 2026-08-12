@@ -111,10 +111,20 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      classify(exit(1), 'page crashed\n', 'test-x', true) === 'ENV');
   ok('...but a browser suite that DID report is FAIL',
      classify(exit(1), 'page crashed\n  2 passed, 3 failed\n', 'test-x', true) === 'FAIL');
-  ok('TIMEOUT still outranks everything',
+  ok('TIMEOUT outranks everything except a declaration',
      classify(timeout, ADMIN_CLAIM_OUT, 'test-x', false) === 'TIMEOUT');
   ok('DECLARED outranks a non-zero exit',
      classify(exit(1), NEVER_RAN_OUT, 'test-workspace-rules', false) === 'ENV');
+  /* Two DECLARED entries exist BECAUSE they cannot fit the 60s budget — their written
+     reason is "this runner would only ever report it as TIMEOUT". If TIMEOUT won, the
+     declaration would be discarded and the gate would re-report the very thing the
+     entry was added to explain. Measured: reordering these flipped both to TIMEOUT. */
+  ok('DECLARED outranks TIMEOUT (test-merchant-visual-gate stays ENV)',
+     classify(timeout, '', 'test-merchant-visual-gate', true) === 'ENV',
+     classify(timeout, '', 'test-merchant-visual-gate', true));
+  ok('DECLARED outranks TIMEOUT (test-minishop-claim-persistence stays ENV)',
+     classify(timeout, '', 'test-minishop-claim-persistence', true) === 'ENV',
+     classify(timeout, '', 'test-minishop-claim-persistence', true));
 
   /* ══ E. execution evidence ══ */
   head('E · execution evidence recognises the shapes suites really print');
