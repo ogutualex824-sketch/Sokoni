@@ -1,6 +1,6 @@
 # Email Verification — server-controlled challenge
 
-**Status:** Slices 1–5 + 6A + 6B complete, **not deployed**. Enforcement ships OFF. Firestore rules unchanged (`ca9e8924`).
+**Status:** Slices 1–5 + 6A + 6B + 6C complete, **not deployed**. Enforcement ships OFF. Firestore rules unchanged (`ca9e8924`).
 **Related:** [[Authentication]] · [[Security]] · [[Communication Engine]] · [[Release Roadmap]]
 
 Replaces the old "you are logged in because you typed the right password" model with a
@@ -272,6 +272,7 @@ is what matters:
 | `scripts/test-auth-session-transitions.js` | 100 |
 | `scripts/test-auth-verify-policy.js` | 92 |
 | `scripts/test-auth-policy-server.js` | 78 |
+| `scripts/test-auth-signup-gate.js` | 85 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still

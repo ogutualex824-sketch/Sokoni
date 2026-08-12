@@ -637,8 +637,22 @@ async function _doSignup(name, email, password){
         /* Create Firebase Auth account */
         const cred = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
         await updateProfile(cred.user, { displayName: name });
-        /* Send email verification — non-blocking; failure does not abort signup */
-        sendEmailVerification(cred.user).catch(function(){});
+        /* Send email verification — non-blocking; failure does not abort signup.
+
+           Skipped when this account is going to be held at the code challenge, because
+           sending BOTH a legacy verification link and a six-digit code for the same
+           address gives the user two competing instructions and two things to lose. The
+           screen issues the code moments later.
+
+           isGated() is the SAME composed verdict the gate uses — this is using the policy,
+           not restating it. A brand-new account is unverified by definition, so the answer
+           needs no server refresh here. With the sentinel in place nothing changes: the
+           account is grandfathered and the link goes out exactly as it always has. */
+        let _skvWillGate = false;
+        try {
+            _skvWillGate = !!(window.SokoniVerifyGate && window.SokoniVerifyGate.isGated(cred.user));
+        } catch (_) { _skvWillGate = false; }
+        if (!_skvWillGate) sendEmailVerification(cred.user).catch(function(){});
 
         /* Build the profile object stored in both Firestore and localStorage */
         const dobStr = `${dobYear}-${String(dobMonth).padStart(2,'0')}-${String(dobDay).padStart(2,'0')}`;
@@ -673,6 +687,56 @@ async function _doSignup(name, email, password){
                 privacy: true, terms: true, consentedAt: serverTimestamp(),
             });
         } catch (_) { /* consent snapshot already on the profile; audit row is best-effort */ }
+
+        /* ── AUTH SLICE 6C — signup enforcement ──────────────────────────────
+           The ACCOUNT is now fully created: Firebase Auth record, Firestore profile,
+           consent row. That is deliberate and must not be skipped — an account gated
+           without its user document would be broken the moment it verified.
+
+           What is withheld is the APPLICATION SESSION. Everything below this point is
+           that session — the cached profile, the `loggedIn` flag auth-guard.js reads,
+           the SokoniSecurity session, the welcome-message seed, the success card and
+           its redirect. A gated account gets none of it.
+
+           The verdict comes from SokoniVerifyGate.enforce(), which composes
+           needsVerification() with the enforcement policy. This path deliberately does
+           NOT re-implement either: a second copy of "who is subject to enforcement"
+           living in the signup flow is exactly how signup and login would drift.
+
+           With the shipped sentinel this is a no-op — a new account is grandfathered
+           like every other, and signup behaves precisely as it did before. */
+        {
+            if (!window.SokoniVerifyGate) await import('/sokoni-verify-gate.js');
+            let _sv = { gated: false };
+            try {
+                _sv = await window.SokoniVerifyGate.enforce(cred.user, { redirect: false });
+            } catch (_e) {
+                /* Unknown state. A signup that cannot establish whether it is subject to
+                   enforcement must NOT hand out a session on the strength of not knowing —
+                   the account exists and can sign in once the question is answerable. */
+                _sv = { gated: true, reason: 'gate-error' };
+                try { window.SokoniVerifyGate.denyAppSession(); } catch (_x) { }
+            }
+            if (_sv.gated) {
+                console.warn('[AUTH SIGNUP] new account subject to verification — no session written');
+                if (typeof SokoniAudit !== 'undefined')
+                    SokoniAudit.log('SIGNUP_VERIFICATION_REQUIRED', { email, uid: cred.user.uid });
+
+                if (window.SokoniVerifyScreen && window.SokoniVerifyScreen.open) {
+                    await window.SokoniVerifyScreen.open({ user: cred.user, next: 'index.html' });
+                } else {
+                    /* Wrapped so the phrase stays contiguous: splitting it as
+                       "could not " + "load" made it ungreppable, and the assertion that
+                       this branch speaks up at all silently failed to find it. */
+                    showAuthMsg(
+                        "Your account was created, but the confirmation step could not load. " +
+                        "Please reload the page and sign in to confirm your address.",
+                        "error"
+                    );
+                }
+                return;
+            }
+        }
 
         /* Sync to localStorage for backward-compat */
         _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);

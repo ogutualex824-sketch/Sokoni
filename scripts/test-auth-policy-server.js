@@ -220,10 +220,19 @@ const userFrom = (v) => (v.noMetadata ? { uid: 'u' } : { uid: 'u', metadata: { c
     const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
       .split('\n').map((s) => s.trim()).filter(Boolean);
 
-    /* Signup untouched — that is 6C. */
-    ok('E1  auth.js untouched by 6B', !changed.includes('auth.js'), changed.join(', '));
-    ok('E2  the signup path still writes its own session (6C has not happened)',
-       /localStorage\.setItem\("loggedIn", "true"\)/.test(read('auth.js')));
+    /* RETIRED at 6C — "auth.js untouched by 6B" and "the signup path still writes its own
+       session". Both recorded that the signup work had not started, which was the correct
+       boundary for 6B and is now false by authorisation: 6C IS that work.
+
+       Replaced by the constraint that outlives it — signup may hold a session, but it must
+       reach that decision through the shared verdict rather than a second copy of the
+       policy. That is the thing 6B exists to make possible, and it does not expire. */
+    const au = read('auth.js');
+    ok('E1  signup decides via the shared gate, not its own policy',
+       /SokoniVerifyGate\.enforce\(cred\.user/.test(au));
+    ok('E2  ...and auth.js still declares no cutoff of its own',
+       !/SENTINEL_ISO|CUTOFF_ISO\s*=|enforcementApplies/.test(
+         au.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')));
     ok('E3  firestore.rules untouched', !changed.includes('firestore.rules'));
     ok('E4  no Stories file touched', !changed.some((f) => /stor(y|ies)/i.test(f)));
     ok('E5  the client policy file was NOT edited by this slice',

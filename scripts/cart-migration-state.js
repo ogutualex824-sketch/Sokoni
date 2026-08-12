@@ -139,6 +139,11 @@ const PRE_EXISTING = [
   'functions/auth-policy.js',
   'functions/auth-dispatch.js',
   'scripts/test-auth-policy-server.js',
+  /* Auth slice 6C — signup enforcement. The signup path withholds the application
+     session via the SAME composed verdict the login path uses; signup.html gains the
+     mount + otp + screen, mirroring login.html. */
+  'signup.html',
+  'scripts/test-auth-signup-gate.js',
 ];
 
 /* The service, its docs and the suites themselves. */

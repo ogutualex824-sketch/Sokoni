@@ -65,6 +65,12 @@
 
       <div id="authMsg" class="auth-msg"></div>
 
+      <!-- Auth Slice 6C  the verification screen, mirroring login.html. Empty until a new
+           account is held by the enforcement policy; sokoni-verify-screen.js renders into it
+           and adds .skv-active to the card, which hides the signup form. Never shown by
+           default, and with the 2099 sentinel never shown at all. -->
+      <div id="skvMount" style="display:none"></div>
+
       <div class="auth-field">
         <i class="fas fa-user" aria-hidden="true"></i>
         <input type="text" id="signupName" placeholder="Full Name">
@@ -225,6 +231,10 @@
   <script src="sokoni-alerts.js"></script>
   <script type="module" src="firebase.js"></script>
   <script src="sokoni-audit.js" defer></script>
+  <!-- Must precede auth.js: signup hands off to this screen when the policy holds a new
+       account. sokoni-otp.js is the field the screen mounts  the same one login.html uses. -->
+  <script src="sokoni-otp.js"></script>
+  <script src="sokoni-verify-screen.js"></script>
 <script src="auth.js"></script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>

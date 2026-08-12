@@ -1,3 +1,76 @@
+## [2026-08-12] — Auth Slice 6C: signup enforcement
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`). Both cutoffs still the 2099 sentinel,
+so this slice is a **no-op in production today**.
+
+A new email/password account created while enforcement is enabled no longer receives a usable
+application session until the code is verified.
+
+### The account is created; the session is withheld
+
+The gate sits *after* the Firebase Auth record, the Firestore profile and the consent row, and
+*before* every session write. That ordering is deliberate and asserted from the source: an
+account gated without its user document would be broken the moment it verified. What is
+withheld is the cached profile, the `loggedIn` flag, the `SokoniSecurity` session, the
+welcome-message seed, and the success card with its redirect.
+
+### No second copy of the policy
+
+The verdict comes from `SokoniVerifyGate.enforce()`, which composes `needsVerification()` with
+the enforcement policy. The signup path compares no dates, names no cutoff, and re-states no
+provider rule — asserted by absence, because a second copy of "who is subject to enforcement"
+living in the signup flow is exactly how signup and login would drift apart.
+
+### Fail-safe on unknown
+
+A signup that cannot establish whether it is subject to enforcement does **not** hand out a
+session on the strength of not knowing: the gate error path marks it gated and dismantles the
+app session. The account exists and can sign in once the question is answerable. A failed
+server refresh likewise keeps a new account held.
+
+### One address, one instruction
+
+The legacy `sendEmailVerification()` link is suppressed **only** when the code challenge is
+going to run, so a held user does not receive a verification link and a six-digit code for the
+same address. The decision uses `isGated()` — the same composed verdict, not a restatement —
+and a brand-new account is unverified by definition, so it costs no server refresh. Under the
+sentinel nothing changes: the account is grandfathered and the link goes out as it always has.
+
+### Also fixed, both caught by the suite
+
+* **`signup.html` line-ending corruption.** It is a mixed-EOL file; editing it as text with
+  `\n` orphaned the CRLF on the `authMsg` line — one line rewritten inside a ten-line addition.
+  Re-spliced using the file's own endings; the diff is now identical with and without
+  `--ignore-cr-at-eol`.
+* **An ungreppable message.** The fallback text was wrapped as `"…could not " + "load…"`, so
+  the phrase never appeared contiguously and the assertion that this branch speaks up at all
+  silently found nothing. Rewrapped.
+
+### Files
+
+`auth.js` · `signup.html` · `scripts/test-auth-signup-gate.js` (new) ·
+`scripts/test-auth-policy-server.js` · `scripts/cart-migration-state.js`
+
+`signup.html` gains the mount point plus `sokoni-otp.js` and `sokoni-verify-screen.js` before
+`auth.js`, mirroring `login.html`.
+
+One 6B assertion was retired rather than widened: "auth.js untouched by 6B" recorded that the
+signup work had not started, which 6C makes false by authorisation. It now asserts the thing
+that does not expire — signup decides through the shared gate, and `auth.js` declares no cutoff
+of its own.
+
+**Database changes:** none. **API changes:** none. **Security changes:** signup withholds the
+session for accounts the policy holds; nothing is marked verified. **Breaking changes:** none —
+with the sentinel, signup behaves exactly as before.
+
+**Tests:** signup-gate 85/85 (4 mutation controls), policy-server 78/78, policy 92/92,
+gate 125/125, screen 96/96, transitions 100/100, challenge 63/63, dispatch 67/67, cart 729/729,
+wishlist CLEAN.
+
+**Known minor:** a held account does not get the localStorage welcome-message seed, because
+that write sits after the gate with the rest of the session setup. It is cosmetic and not
+re-seeded after verification.
+
 ## [2026-08-12] — Auth Slice 6B: the server computes the same enforcement verdict
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`). Enforcement still OFF on both sides.
