@@ -50,7 +50,7 @@ const SENTINEL_ISO = '2099-01-01T00:00:00.000Z';
 
 const policy = {
   SENTINEL_ISO,
-  CUTOFF_ISO: '2026-08-12T18:30:00.000Z',
+  CUTOFF_ISO: SENTINEL_ISO,
 };
 
 policy.isEnforcementEnabled = function () {

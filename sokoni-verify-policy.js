@@ -78,7 +78,7 @@
        data protection. Firestore rules, App Check and the server-side checks in
        authDispatch are unaffected by anything written here, and 6B will hold the server's
        own copy which no client can reach. */
-    CUTOFF_ISO: '2026-08-12T18:30:00.000Z',
+    CUTOFF_ISO: SENTINEL_ISO,
   };
 
   API.isEnforcementEnabled = function () {
