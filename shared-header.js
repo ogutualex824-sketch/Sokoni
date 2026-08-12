@@ -554,6 +554,14 @@
     'superadmin', 'monitor', 'moderation', 'verification-admin',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
+  /* The merchant shell announces itself with ?shell=merchant. Kept as one function so
+     there is a single definition of "am I embedded", rather than the string appearing
+     at each place that needs to know. */
+  function _inMerchantShell() {
+    try {
+      return new URLSearchParams(location.search).get('shell') === 'merchant';
+    } catch (e) { return false; }
+  }
   /* firebase.json sets cleanUrls:true, so production serves /messages — never
      /messages.html (that 301-redirects). The page key is therefore ALWAYS extension-free,
      while the lists below are written with .html. Strip it from both sides before
@@ -565,6 +573,21 @@
   const _match = (list) => list.some((e) => e.replace(/\.html$/, '') === pageKey);
   if (_match(EXCLUDED)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
+  /* Inside the merchant shell, /merchant owns the header and the bottom nav; an
+     embedded destination contributes CONTENT ONLY.
+
+     This used to be per-page opt-in — every embedded page had to remember
+     data-no-header="true". plans.html and pos.html did; sell.html and business.html
+     did not, so opening either from /merchant mounted a SECOND complete application
+     inside the merchant shell: two fixed headers and two bottom navs (customer
+     Home/Shop/Services/Orders/Profile on top of merchant Home/Orders/Sell/More).
+
+     The shell already announces itself with ?shell=merchant (sokoni-merchant-routes.js).
+     Reading that here makes suppression a property of BEING EMBEDDED rather than of a
+     page remembering an attribute, so destinations added later cannot regress into the
+     same double-shell. Standalone /sell.html and /business.html are unaffected — no
+     shell parameter, customer shell mounts exactly as before. */
+  if (_inMerchantShell()) return;
   /* NOTE: pages that bake #sk-top-nav as static HTML (e.g. index.html) still need
      the CSS injection and event wiring below — _inject() handles that gracefully
      by checking whether the nav already exists before calling _buildNav(). */
