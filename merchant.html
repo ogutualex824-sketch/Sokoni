@@ -2225,37 +2225,36 @@
       btn.classList.remove('notclaimed');
       st.textContent = _mshop.claimed ? '🟢 Shop Live' : '🏪 Set up storefront';
     }
-    /* TEMPORARY VISIBLE DIAGNOSTIC (item 9 of the claim directive).
-       While the claim fix is being proven on real devices, the seller must be able to READ the
-       resolved identity instead of inferring it from which button appeared. Shows the shop id,
-       the owner uid and whether the claim is persisted in Firestore.
+    /* Claim diagnostic — NO LONGER RENDERED.
 
-       It is a READOUT of window.__miniShopState, never a source of truth, and it renders only
-       for the signed-in owner on their own shell — no other user, no public page. Remove once
-       the on-device reload check is signed off. */
+       This used to inject a monospace strip under the My MiniShop button reading
+       "Shop ID: … · Owner UID: … · Claim: RESOLVING". It was introduced as an explicitly
+       TEMPORARY readout while the claim fix was proven on real devices ("Remove once the
+       on-device reload check is signed off"), and on a 390px viewport it sat in the
+       merchant header as raw ids — internal state in a customer-facing premium surface.
+
+       The STATE is untouched: window.__miniShopState still carries shopId, ownerUid,
+       claimed and handle, and routing/orders/inventory/MiniShop continue to read it. Only
+       the visible strip is gone, and it is removed at the source rather than hidden with
+       CSS, so no empty row or margin is left behind.
+
+       The readout survives for debugging on demand:  window.__miniShopDiag()  */
+    function _diagText () {
+      return !_mshop.resolved
+        ? 'Shop ID: —  ·  Owner UID: —  ·  Claim: RESOLVING (ownership not yet known)'
+        : 'Shop ID: ' + (_mshop.shopId || '—')
+          + '  ·  Owner UID: ' + (_mshop.ownerUid || '—')
+          + '  ·  Claim: ' + (_mshop.claimed ? 'SAVED (' + _mshop.handle + ')'
+                              : _mshop.owner ? 'NOT CLAIMED (shop owned)' : 'NO SHOP');
+    }
+    window.__miniShopDiag = function () { try { return _diagText(); } catch (e) { return String(e); } };
+
     function _diag () {
+      /* A previously rendered strip can survive a soft navigation within the shell, so
+         retire any node this build inherited instead of leaving it stranded on screen. */
       try {
-        var host = document.getElementById('mshop-diag');
-        if (!host) {
-          var anchor = document.getElementById('mshop-btn');
-          if (!anchor || !anchor.parentNode) return;
-          host = document.createElement('div');
-          host.id = 'mshop-diag';
-          host.style.cssText = 'font:11px/1.5 ui-monospace,Menlo,monospace;opacity:.72;padding:6px 10px;'
-            + 'margin:6px 0 0;border-radius:8px;background:rgba(113,255,0,.06);'
-            + 'border:1px solid rgba(113,255,0,.18);word-break:break-all;';
-          anchor.parentNode.insertBefore(host, anchor.nextSibling);
-        }
-        /* textContent, not innerHTML — these values come from Firestore documents.
-           The unresolved case is shown too. "Still resolving" is the honest reading of a state
-           that is neither claimed nor unclaimed, and it is the one a seller most needs to be
-           able to tell apart from "you have no shop". */
-        host.textContent = !_mshop.resolved
-          ? 'Shop ID: —  ·  Owner UID: —  ·  Claim: RESOLVING (ownership not yet known)'
-          : 'Shop ID: ' + (_mshop.shopId || '—')
-            + '  ·  Owner UID: ' + (_mshop.ownerUid || '—')
-            + '  ·  Claim: ' + (_mshop.claimed ? 'SAVED (' + _mshop.handle + ')'
-                                : _mshop.owner ? 'NOT CLAIMED (shop owned)' : 'NO SHOP');
+        var stale = document.getElementById('mshop-diag');
+        if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
       } catch (_) {}
     }
 
