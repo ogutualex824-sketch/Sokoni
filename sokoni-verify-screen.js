@@ -384,10 +384,120 @@
     S.otp = null;
   }
 
+  /* ══ LANDING  (Finding 1 from the auth-flow review) ═══════════════════════════
+     The gate redirects a held user off a protected page to login.html?verify=1&next=…,
+     sets sokoniVerifyPending, and dispatches sokoniVerificationRequired. Until now nothing
+     consumed any of the three: the user arrived at an ordinary login form, still signed in
+     to Firebase, with no explanation, and had to retype the password they had just used.
+
+     THE TRIGGER IS THE EVENT, NOT THE MARKER OR THE URL
+     ---------------------------------------------------
+     sokoniVerificationRequired is dispatched by the gate only AFTER an authoritative
+     evaluation — which for an unverified account includes a server refresh of
+     emailVerified. So reacting to it is reacting to Firebase's answer.
+
+     The marker and ?verify=1 are NOT evidence and are never treated as any. Somebody who
+     writes sokoniVerifyPending by hand, or types ?verify=1, gets nothing: the reconciler
+     below re-runs enforce(), which asks Firebase again, and opens the screen only if the
+     gate says gated. A forged marker cannot produce a challenge, and — more importantly —
+     could never have produced a session anyway, because this file cannot create one.
+
+     WHY THERE IS A RECONCILER AS WELL AS A LISTENER
+     -----------------------------------------------
+     On login.html this script is a classic tag and firebase.js is a module, so the
+     listener is always registered before auth resolves. The reconciler covers the case
+     where that ordering does not hold — a slow module, a bfcache restore, a page that
+     loads the screen late. It re-derives rather than trusting what it finds. */
+  function _nextFromUrl() {
+    var raw = '';
+    try {
+      var m = /[?&]next=([^&]*)/.exec(global.location.search || '');
+      if (m) raw = decodeURIComponent(m[1]);
+    } catch (e) { raw = ''; }
+    if (!raw) return null;
+    /* Sanitised by auth.js's single copy of the rule. If that helper is not present the
+       destination is DROPPED rather than used unchecked — the safe direction, and it keeps
+       the open-redirect guard from being copied into this file. */
+    try {
+      if (typeof global._sokoniLoginRedirect === 'function') {
+        return global._sokoniLoginRedirect(true, raw);
+      }
+    } catch (e) { }
+    return null;
+  }
+
+  function _landIfHeld(user) {
+    if (S.host) return Promise.resolve(false);          /* already open — do not restart */
+    if (!user) return Promise.resolve(false);
+    var mount = _el('skvMount');
+    if (!mount) return Promise.resolve(false);          /* page has no screen to show */
+    return open({ user: user, mount: mount, next: _nextFromUrl() });
+  }
+
+  function _installLanding() {
+    try {
+      global.document.addEventListener('sokoniVerificationRequired', function () {
+        var u = (global.firebaseAuth && global.firebaseAuth.currentUser) || null;
+        _landIfHeld(u);
+      });
+    } catch (e) { }
+
+    /* One late reconciliation, once auth has had a chance to resolve. It re-derives via
+       enforce() — the marker only decides whether it is worth asking, never the answer. */
+    function reconcile() {
+      if (S.host) return;
+      if (!isPending()) return;
+      var u = (global.firebaseAuth && global.firebaseAuth.currentUser) || null;
+      if (!u) { clearPendingIfAny(); return; }
+      var gate = global.SokoniVerifyGate;
+      if (!gate || !gate.enforce) return;
+      gate.enforce(u, { redirect: false }).then(function (res) {
+        if (res && res.gated) _landIfHeld(u);
+      }).catch(function () { });
+    }
+    function clearPendingIfAny() {
+      /* Signed out, so the marker belongs to a session that no longer exists. */
+      try { global.SokoniVerifyGate && global.SokoniVerifyGate.clearPending(); } catch (e) { }
+    }
+    /* WHEN to reconcile. Not at parse time: this script is a classic tag and firebase.js
+       is a module, so at the moment this runs `firebaseAuth` does not exist yet and a
+       reconciliation would look at nothing and conclude nothing. The first version did
+       exactly that on a page whose readyState was already 'complete', which made the
+       reconciler decorative — the suite caught it.
+
+       So it hangs off the signals that mean "Firebase is up": sokoniFirebaseReady, which
+       firebase.js dispatches, and window load as a backstop for a page that loaded the SDK
+       before this script. Both are idempotent — reconcile() returns immediately once the
+       screen is open. */
+    try {
+      global.document.addEventListener('sokoniFirebaseReady', reconcile);
+    } catch (e) { }
+    try {
+      global.addEventListener('load', reconcile);
+    } catch (e) { }
+    try {
+      if (global.__sokoniFirebaseReady) reconcile();   /* already up — reconcile now */
+    } catch (e) { }
+  }
+
+  function isPending() {
+    try {
+      return !!(global.SokoniVerifyGate && global.SokoniVerifyGate.isPending());
+    } catch (e) { return false; }
+  }
+
+  /* Only where a mount exists — i.e. login.html and signup.html. Everywhere else this file
+     is not loaded at all, and the gate's redirect is what applies. */
+  try {
+    if (global.document && global.document.getElementById) _installLanding();
+  } catch (e) { }
+
   global.SokoniVerifyScreen = {
     open: open,
     destroy: destroy,
     onAuthChange: onAuthChange,
+    /* exposed for the suite */
+    _landIfHeld: _landIfHeld, _nextFromUrl: _nextFromUrl,
     /* exposed for the suite; not part of the page contract */
     _state: S, _copy: _copy, _call: _call, _verify: _verify, _issue: _issue,
     _complete: _complete, _back: _back,

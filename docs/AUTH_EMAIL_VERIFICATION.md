@@ -268,11 +268,12 @@ is what matters:
 | `scripts/test-auth-email-challenge.js` | 62 |
 | `scripts/test-auth-dispatch.js` | 67 |
 | `scripts/test-auth-verify-gate.js` | 117 |
-| `scripts/test-auth-verify-screen.js` | 96 |
+| `scripts/test-auth-verify-screen.js` | 97 |
 | `scripts/test-auth-session-transitions.js` | 100 |
 | `scripts/test-auth-verify-policy.js` | 92 |
 | `scripts/test-auth-policy-server.js` | 78 |
 | `scripts/test-auth-signup-gate.js` | 85 |
+| `scripts/test-auth-verify-landing.js` | 58 |
 
 The first two run against **real Firestore and Auth emulators**; only the email transport is
 substituted, and only after module load, so the preference and address decisions are still

@@ -1,3 +1,72 @@
+## [2026-08-12] — Verification landing: the login dead-end (auth-flow review, Finding 1)
+
+**Not deployed.** Rules unchanged (`ca9e8924`). Both cutoffs remain `2099-01-01T00:00:00.000Z`.
+
+The gate redirected a held user to `login.html?verify=1&next=…`, set `sokoniVerifyPending`
+and dispatched `sokoniVerificationRequired`. **Nothing consumed any of the three.** The user
+arrived at an ordinary login form — still signed in to Firebase, with no explanation — and had
+to retype the password they had just used. The screen only ever opened from an active submit.
+
+### The trigger is the gate's verdict, not the marker or the URL
+
+`sokoniVerificationRequired` is dispatched only after an authoritative evaluation, which for an
+unverified account includes a server refresh of `emailVerified`. Reacting to it is reacting to
+Firebase's answer.
+
+The marker and `?verify=1` are never treated as evidence. A hand-written `sokoniVerifyPending`
+or a typed `?verify=1` produces nothing: the reconciler re-runs `enforce()` and opens only if
+the gate still says gated. Asserted for a signed-out visitor, a verified account and a
+grandfathered account — and mutated to prove the check is real: a mutant that opens on the
+marker shows a *verified* user a challenge.
+
+Structurally, the screen cannot mint a session in any case — it writes no `loggedIn`, no
+cached profile, and never assigns `emailVerified`.
+
+### `?next=` goes through the existing sanitiser, not a new copy
+
+`auth.js` already carries several copies of the open-redirect guard (recorded in the Slice 4
+review). Rather than add a sixth in the one file that handles a URL parameter,
+`_sokoniLoginRedirect()` gained an optional raw argument and the landing calls it. **If that
+helper is absent the destination is dropped**, not used unchecked. Absolute URLs,
+protocol-relative `//`, `javascript:` and backslash tricks are all rejected.
+
+### Fixed while building it: the reconciler was decorative
+
+The first version ran at parse time when `readyState` was already `complete` — before
+`firebaseAuth` exists, so it looked at nothing and concluded nothing, leaving the event as the
+only real trigger. It now hangs off `sokoniFirebaseReady` (the signal `firebase.js` actually
+dispatches) plus `load` as a backstop, and returns immediately once the screen is open.
+
+A second harness fault is worth recording: the mutation controls re-ran a mutated screen over a
+context that had already run the real one, so **both** sets of listeners were registered and
+the genuine handler repaired what the mutant was meant to break. That control passed while
+proving nothing. Mutants now get their own page.
+
+### Before / after
+
+| Situation | Before | After |
+|---|---|---|
+| Held user refreshes a protected page | login form, no explanation | challenge screen |
+| Held user types a protected URL | login form | challenge screen |
+| Back/forward into a protected page | login form | challenge screen |
+| Signed-out visitor | login form | login form (unchanged) |
+| Verified user | login form | login form (unchanged) |
+| Grandfathered user | login form | login form (unchanged, no server call) |
+| Account switch | screen could persist | torn down, reopens for the next held user |
+| Sign-out | marker could linger | marker cleared, screen torn down |
+
+### Files
+
+`sokoni-verify-screen.js` · `auth.js` · `scripts/test-auth-verify-landing.js` (new) ·
+`scripts/test-auth-verify-screen.js` · `scripts/cart-migration-state.js`
+
+No change to the gate, the policy, the server policy, the dispatcher, `login.html`,
+`signup.html` or `firestore.rules`.
+
+**Tests:** landing 58/58 (3 mutation controls), screen 97/97, policy 92/92, policy-server
+78/78, gate 125/125, transitions 100/100, signup 85/85, challenge 63/63, dispatch 67/67,
+cart 729/729, wishlist CLEAN.
+
 ## [2026-08-12] — Auth Slice 6C: signup enforcement
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`). Both cutoffs still the 2099 sentinel,

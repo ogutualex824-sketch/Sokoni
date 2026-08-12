@@ -144,6 +144,9 @@ const PRE_EXISTING = [
      mount + otp + screen, mirroring login.html. */
   'signup.html',
   'scripts/test-auth-signup-gate.js',
+  /* Finding 1 from the auth-flow review: the login landing consumed none of the three
+     states the gate created, so a held user met an ordinary login form. */
+  'scripts/test-auth-verify-landing.js',
 ];
 
 /* The service, its docs and the suites themselves. */

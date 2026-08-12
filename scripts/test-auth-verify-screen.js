@@ -561,9 +561,12 @@ const msgKind = (dom) => ((dom.byId.get('skvMsg') || {}).className || '').replac
        So it now checks the durable fact in both states: whatever was removed, auth.js
        still holds the guard, and it holds it in the shared helper rather than back inline.
        The removal checks above still apply whenever there IS a working-tree diff. */
+    /* Read the helper's BODY rather than a character window after its name — the window
+       was a guess, and it went stale the moment the function gained a comment. */
+    const helper = braceBlock(au, 'function _sokoniLoginRedirect');
+    ok('J20a the helper was located', helper.length > 0);
     ok('J20 the redirect guard survives, and lives in the shared helper',
-       /includes\('\/\/'\)/.test(au) &&
-       /function _sokoniLoginRedirect[\s\S]{0,400}?includes\('\/\/'\)/.test(au));
+       /includes\('\/\/'\)/.test(au) && /includes\('\/\/'\)/.test(helper));
     ok('J20b nothing removed took the guard away without replacing it',
        removed.filter((l) => /includes\('\/\/'\)/.test(l)).length <= 1,
        removed.filter((l) => /includes/.test(l)).join(' | '));

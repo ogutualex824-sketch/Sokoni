@@ -223,9 +223,17 @@ window.onunhandledrejection = function(e) {
    `peek` leaves the key in place: a user held at the verification screen has not completed
    login, and consuming their destination would silently drop them at the homepage after
    they verify. */
-function _sokoniLoginRedirect(peek){
-    const raw = sessionStorage.getItem("sokoniLoginRedirect") || "index.html";
-    if (!peek) sessionStorage.removeItem("sokoniLoginRedirect");
+function _sokoniLoginRedirect(peek, rawOverride){
+    /* `rawOverride` lets a caller sanitise a destination it obtained elsewhere — the
+       verification landing path reads ?next= from the URL, which is attacker-controlled by
+       definition. It goes through THIS function rather than growing its own copy of the
+       rule: auth.js already carries several copies of this guard (a finding recorded in
+       the Slice 4 review), and adding a sixth in a file that handles a URL parameter is
+       exactly the wrong direction. */
+    const raw = rawOverride != null && rawOverride !== ''
+        ? String(rawOverride)
+        : (sessionStorage.getItem("sokoniLoginRedirect") || "index.html");
+    if (!peek && rawOverride == null) sessionStorage.removeItem("sokoniLoginRedirect");
     return /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(raw) && !raw.includes('//') ? raw : "index.html";
 }
 
