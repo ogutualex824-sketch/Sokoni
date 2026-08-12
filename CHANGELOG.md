@@ -1,3 +1,56 @@
+## [2026-08-12] — Pre-deployment measurement tool (read-only)
+
+`scripts/measure-email-verification.js` — answers the one question that has to be answered
+before the verification gate can be scheduled: **if the gate were switched on today, how many
+existing accounts would be held, and are they concentrated in older signups?**
+
+Nothing is deployed and nothing is grandfathered. This counts; it does not decide.
+
+### It loads the shipped rule rather than counting `emailVerified`
+
+"Unverified accounts" and "accounts the gate would hold" are different sets. Phone accounts
+have `emailVerified` false forever and are never gated. Google accounts are not gated.
+Password accounts with no email are not gated. Counting `emailVerified === false` would
+report a number far larger than the population at risk, and the grandfathering decision
+would be taken against a figure that means nothing.
+
+So it runs `sokoni-verify-gate.js` — the file that ships — and asks `needsVerification()`
+about each account, exactly as the browser will. One rule, one answer.
+
+### Read-only, and checkable without credentials
+
+`--verify-readonly` prints the Admin surface the file uses and fails if anything is outside
+a read-only allow list. It reports: top-level `initializeApp, auth`; auth methods
+`listUsers`; data handles `(none)`.
+
+An earlier version of that self-audit scanned the whole file body for write-shaped calls and
+flagged the script's own `Map.set()` — a guard that cries wolf until nobody reads it. It now
+inspects the Admin calls specifically.
+
+### No personal data leaves it
+
+Aggregate counts and month buckets only — no address, no uid, no display name, in neither
+the console output nor the JSON. SOKONI is ODPC-registered (`630-8669-F056`); exporting every
+unverified address to make a scheduling decision would create a data-protection problem the
+decision does not need.
+
+### It refuses to be quoted when it cannot classify
+
+Rehearsed against the Auth emulator with a known population — and the first rehearsal seeded
+password accounts whose provider list did not survive the import, so every one came back
+unclassifiable and the report announced **zero accounts at risk**, confidently and wrongly.
+
+A number that is confidently wrong is worse than no number. The script now reports
+unclassifiable accounts explicitly, states the true figure as a **range**, and above 2% of
+the population prints `DO NOT QUOTE THIS NUMBER YET`.
+
+Rehearsal (16 seeded accounts): 11 password / 4 verified / **7 gated**, with the three phone
+and two Google accounts — four of which have `emailVerified` false — correctly excluded, and
+the month table showing 2023-01 at 5/5.
+
+**Files:** `scripts/measure-email-verification.js` (new). **Database changes:** none.
+**API changes:** none. **Security changes:** none — read-only. **Breaking changes:** none.
+
 ## [2026-08-12] — Auth Slice 5: session-transition safety
 
 **Not deployed.** Firestore rules unchanged (`ca9e8924`).
