@@ -1,3 +1,87 @@
+## [2026-08-12] — Auth Slice 3: the login-path verification gate
+
+**Not deployed.** Firestore rules unchanged (`ca9e8924`).
+
+A correct password now proves *authentication*, not *authorisation to use the app*. An email
+account whose Firebase Auth record says `emailVerified === false` enters a verification
+challenge state and holds no application session until the address is proven by the
+server-side challenge built in Slices 1–2.
+
+### The problem the gate had to solve
+
+`auth-guard.js` runs synchronously in `<head>` and decides access from
+`localStorage.getItem('loggedIn')`. It cannot consult Firebase, so it cannot be the gate —
+and the flag it reads was written **unconditionally** by `firebase.js` in
+`onAuthStateChanged`, on every page load, for any user Firebase could restore. Refusing to
+write the flag in the login path alone would therefore have been undone milliseconds later
+by the auth-state handler. The gate had to be an *affirmative check at the point the session
+is created*, not the absence of a write.
+
+### `sokoni-verify-gate.js` (new)
+
+One rule, one choke point. The decision is derived from the Firebase Auth `User` object and
+nothing else — never `localStorage`, never the cached `sokoniUser` profile, never a client
+`verified` flag. `emailVerified` comes from the Firebase-signed ID token and is set only by
+the Admin SDK in `authDispatch`.
+
+* **Server refresh, but only where it can change the answer.** A cached `false` may be stale
+  (the user may have just verified in another tab), so nobody is denied without a
+  `user.reload()` first. A cached `true` needs no reload — the flag only ever moves
+  false → true — so verified users, i.e. almost everybody almost always, pay no round trip on
+  any page load. The cost falls only on the accounts actually being gated.
+* **Fails closed.** A reload that fails offline keeps the gate shut. That cannot lock out a
+  verified user, because a verified user short-circuits before the reload is reached.
+* **Password accounts only.** Google/Facebook/Apple assert the address themselves; for a
+  phone account the SMS *is* the factor and there is often no email at all — without an
+  explicit exclusion the gate would trap every phone user in a challenge for an address they
+  do not have. This agrees with the `user.emailVerified || isPhone` rule `firebase.js` has
+  always used.
+* **Gated is not signed out.** The challenge is an authenticated `onCall` and needs
+  `request.auth.uid`, so the Firebase session stays alive while the *application* session —
+  `loggedIn`, the `SokoniSecurity` session, the cached profile — is dismantled. The gate has
+  no `signOut` call and no `loggedIn` writer: it only ever removes access.
+
+### Wiring
+
+* **`firebase.js`** — enforces the gate in `onAuthStateChanged` *before* the session flag is
+  written, and returns without dispatching `sokoniAuthReady` (surfaces read that event as
+  "a usable session exists"). Because this handler runs on every page load and token refresh,
+  refresh, direct URLs, restored tabs and the back button all stay gated; the verdict is
+  re-derived from Firebase Auth every time rather than set once at login and trusted after.
+  A gate error denies rather than falling through. Imported by `firebase.js` rather than
+  added as a script tag to 48 pages, so it arrives with Firebase itself.
+* **`auth.js`** — the password login path consults the gate before the Firestore profile read
+  and before every session write, and returns without one. It does **not** route through the
+  catch block: that records a failed attempt and can trip the lockout, and punishing a user
+  for the platform's own verification requirement with a correct password would be wrong.
+* **`auth.css`** — added `.auth-msg.info`. The base class is `display:none` and only `.error`
+  and `.success` turned it back on, so any other type wrote its message to the DOM and
+  rendered nothing. A gated sign-in would have reset the button and shown no text at all —
+  indistinguishable from a click that never registered.
+
+### Coverage, measured
+
+46 of 48 `data-require-auth` pages reach the choke point. `dispute-portal.html` and
+`fleet-monitor.html` load no Firebase at all and have therefore never had authoritative auth
+on the page — a pre-existing hole in the localStorage-only guard, not one this slice opens.
+Both are named in the suite so the number cannot drift upward unnoticed. `pos-v2.html`
+carries `data-require-auth` but omits `auth-guard.js`; also pre-existing, also reported.
+
+### Files
+
+`sokoni-verify-gate.js` (new) · `firebase.js` · `auth.js` · `auth.css` ·
+`scripts/test-auth-verify-gate.js` (new) · `scripts/cart-migration-state.js` (names the
+auth-track files so the cart guards keep failing on anything they do not recognise)
+
+**Database changes:** none. **API changes:** none. **Security changes:** access to protected
+pages now requires a server-verified email for password accounts. **Breaking changes:** none
+for verified users; unverified password accounts are held at the challenge, whose screen is
+Slice 4.
+
+**Tests:** 106/106, including four mutation controls that break the gate on purpose and
+require the answer to change — a suite that only ever sees correct code cannot distinguish
+"passes" from "asserts nothing". Regression: cart acceptance 22/22, wishlist sweep CLEAN.
+
 ## [2026-08-11] — FIXED: KASS said "Added to cart" and added nothing
 
 **Track 2, Slice 1. Not deployed.**

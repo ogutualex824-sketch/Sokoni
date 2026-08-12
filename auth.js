@@ -307,6 +307,48 @@ async function loginUser(){
         const cred = await signInWithEmailAndPassword(window.firebaseAuth, email, password);
         console.log('[AUTH STEP 3] Firebase Auth returned — uid:', cred.user.uid, 'email:', cred.user.email);
 
+        /* ── AUTH SLICE 3 — email verification gate ──────────────────────────
+           The password was correct. That is authentication, and it is not yet
+           authorisation to use the app: an unverified address means we cannot show
+           this session to anyone until the address is proven.
+
+           This sits BEFORE the Firestore profile read and before every session write
+           below it. Placing it after any of them would mean a gated user briefly held
+           a real session — and "briefly" is all a redirect needs.
+
+           No redirect from here: we are already on the login surface, and Slice 4
+           renders the challenge in place. The user stays signed in to Firebase (the
+           challenge is an authenticated call) but holds no application session.
+
+           This is NOT a failed login. The catch block below records a failed attempt
+           and can trip the lockout; routing a correct password through it would
+           punish the user for the platform's own verification requirement. */
+        {
+            /* firebase.js imports the gate, but auth.js must not depend on that module
+               having executed first. The import is idempotent — the module map returns
+               the same instance — so asking for it here costs nothing when it is
+               already loaded. Absolute path: with cleanUrls a relative specifier would
+               resolve against /login rather than the site root. */
+            if (!window.SokoniVerifyGate) await import('/sokoni-verify-gate.js');
+            const _verdict = await window.SokoniVerifyGate.enforce(cred.user, { redirect: false });
+            if (_verdict.gated) {
+                console.warn('[AUTH STEP 3b] email not verified — holding at challenge, no session written');
+                if (btn) { btn.disabled = false; btn.textContent = "Sign In →"; }
+                /* States the situation and promises nothing. Slice 3 does not send a
+                   code — Slice 4's screen is what calls authDispatch — so wording this
+                   as "we've sent you a code" would be a claim this code cannot keep,
+                   and the user would sit waiting for mail that was never requested. */
+                showAuthMsg(
+                    "Your email address hasn't been confirmed yet. " +
+                    "It needs to be confirmed before you can continue.",
+                    "info"
+                );
+                if (typeof SokoniAudit !== 'undefined')
+                    SokoniAudit.log('LOGIN_VERIFICATION_REQUIRED', { email, uid: cred.user.uid });
+                return;
+            }
+        }
+
         /* Fetch full profile from Firestore users collection */
         let profile = {
             uid:   cred.user.uid,

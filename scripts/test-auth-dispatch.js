@@ -346,8 +346,23 @@ console.log('\nJ. Wiring, and the slice boundary');
 
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ['auth.js', 'firebase.js', 'login.html', 'firestore.rules'].forEach(f =>
+  /* RETIRED at Slice 3 — 'auth.js' and 'firebase.js' were in this list.
+     They asserted that Slice 2 had not begun the login-path work, which was the right
+     boundary for Slice 2 and is now false by authorisation: Slice 3 is that work. The
+     two names are removed rather than allowlisted, because an allowlist here would
+     silently stop noticing any future change to the login path.
+
+     login.html and firestore.rules stay: Slice 4 owns the verification screen and the
+     rules remain frozen at ca9e8924, so both are still live constraints. What Slice 2
+     itself must not do is reach into the client, which is asserted directly below. */
+  ['login.html', 'firestore.rules'].forEach(f =>
     ck('J', f + ' untouched', !changed.includes(f), changed.join(', ')));
+  /* execSrc, not src: the header comment explains that verification must not depend on
+     "a localStorage value", and matching raw text flagged that explanation as the thing
+     it warns against — the same comment-vs-code trap that first bit the sendOrQueue
+     assertion a few lines up. */
+  ck('J', 'the dispatcher is server-only — it reaches into no client surface',
+     !/\bdocument\.|\bwindow\.|localStorage|sessionStorage/.test(execSrc));
   ck('J', 'no cart or wishlist product file touched',
      !changed.some(f => /cart|wishlist/i.test(f) && !/^scripts\//.test(f)),
      changed.filter(f => /cart|wishlist/i.test(f)).join(', '));

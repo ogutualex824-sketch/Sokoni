@@ -86,6 +86,33 @@ const PRE_EXISTING = [
                             hosting, functions and rules config are byte-identical */
   'functions/index.js',
   'firebase.json',
+  /* Auth slice 3 — the login-path verification gate. Same reasoning as above: these are
+     another track's files, named individually so the cart guards keep failing on
+     anything they do NOT recognise.
+       sokoni-verify-gate.js  new — the gate itself
+       firebase.js            enforces the gate in onAuthStateChanged, before the
+                              session flag is written
+       auth.js                the login path withholds a session for an unverified
+                              password account
+       auth.css               .auth-msg.info — the base class is display:none and only
+                              .error/.success re-enabled it, so a neutral message
+                              rendered nothing at all */
+  'sokoni-verify-gate.js',
+  'firebase.js',
+  'auth.js',
+  'auth.css',
+  'scripts/test-auth-verify-gate.js',
+  /* The Slice 1 and Slice 2 suites each asserted "auth.js and firebase.js untouched" —
+     true when written, and false by authorisation once Slice 3 landed. Both assertions
+     were RETIRED and named in place rather than allowlisted, so these two files are dirty
+     for the same reason this registry exists. */
+  'scripts/test-auth-email-challenge.js',
+  'scripts/test-auth-dispatch.js',
+  /* Documentation for the same track. RELEASE_ROADMAP.md carries the rollout constraint —
+     the gate must not deploy before the Slice 4 screen, or every legacy account that never
+     clicked the old verification link is held at a challenge it cannot answer. */
+  'docs/AUTH_EMAIL_VERIFICATION.md',
+  'docs/RELEASE_ROADMAP.md',
 ];
 
 /* The service, its docs and the suites themselves. */

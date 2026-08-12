@@ -6,6 +6,22 @@
 >
 > **MUST-FIX before untrusted-buyer launch (server-authoritative pricing).** The IntaSend product path currently charges the **client-computed amount** — `initiateSTKPush` accepts a client amount for the `product` category (not in `_enforcedCategories`), and the checkout branch does not route through `createCheckoutSession`/`createPaymentIntent`. A crafted client could pay less than catalogue price while still decrementing stock. Acceptable for the OWNER gate test (owner won't underpay themselves) and pre-launch (≈zero buyer traffic), but this is a real regression versus `darajaSTKPush`'s server re-pricing. **Close before real buyers:** mint `paymentIntents/{ref}` with a server-recomputed amount (re-read catalogue prices + `deliveryConfig`, as `darajaSTKPush` did) and add `"product"` to `initiateSTKPush`'s `_enforcedCategories` (deploy client first). Until then, reconciliation should compare each product `payments/{ref}.confirmedAmount` against the order's catalogue-derived total.
 
+>
+> **Email verification track (2026-08-12) — built, NOT deployed.** Slices 1–3 complete: the
+> server-issued challenge (`authEmailChallenges`), `authDispatch` behind App Check, and the
+> login-path gate that withholds an application session from a password account whose Firebase
+> Auth record says `emailVerified === false`. Rules unchanged (`ca9e8924`). See
+> [[AUTH_EMAIL_VERIFICATION]].
+>
+> **Ordering constraint — do not deploy the gate before the verification screen (Slice 4).**
+> `auth.js:611` has always sent the signup verification mail fire-and-forget with an empty
+> catch, and nothing ever enforced it, so an unknown and probably large share of existing
+> password accounts are unverified purely because no one had to click the link. Enabling the
+> gate first would hold every one of them at a challenge they have no way to answer.
+> **Measure that population before scheduling the deploy**, then decide explicitly whether to
+> grandfather accounts created before a cutoff — a product decision, deliberately not encoded
+> in the gate.
+
 ---
 
 ## Release 1.0 — Day 0 (the moment the acceptance record is signed)

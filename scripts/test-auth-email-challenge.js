@@ -279,11 +279,25 @@ console.log('\nK. Slice 1 is model-only');
 {
   const changed = cp.execSync('git diff --name-only HEAD', { cwd: ROOT, encoding: 'utf8' })
     .split('\n').map(s => s.trim()).filter(Boolean);
-  ck('K', 'auth.js untouched — no login flow change yet', !changed.includes('auth.js'), changed.join(', '));
-  ck('K', 'firebase.js untouched', !changed.includes('firebase.js'));
-  ck('K', 'login.html untouched', !changed.includes('login.html'));
-  ck('K', 'no Cloud Function exports the model yet',
+  /* RETIRED at Slice 3 — "auth.js untouched" and "firebase.js untouched".
+     Those two asserted that the login-path work had not STARTED, which was the correct
+     boundary for Slice 1 and is now false by authorisation: Slice 3 is that work, and it
+     changes both files deliberately. Keeping them would mean this suite could only pass
+     with Slice 3 reverted, and the tempting fix — adding the two names to an allowlist —
+     is how a guard gets taught to pass.
+
+     They are replaced below by the thing they were really protecting: that the Slice 1
+     MODEL stays server-only. That constraint is still true, still meaningful, and does not
+     expire when the next slice lands. */
+  ck('K', 'login.html untouched — Slice 4 owns the verification screen',
+     !changed.includes('login.html'));
+  ck('K', 'index.js does not export the model directly (it is reached only via authDispatch)',
      !/auth-email-challenge/.test(fs.readFileSync(path.join(FN, 'index.js'), 'utf8')));
+  {
+    const model = fs.readFileSync(path.join(FN, 'auth-email-challenge.js'), 'utf8');
+    ck('K', 'the model is server-only — no DOM, no window, no browser storage',
+       !/\bdocument\.|\bwindow\.|localStorage|sessionStorage/.test(model));
+  }
   ck('K', 'no cart or wishlist file was touched',
      !changed.some(f => /cart|wishlist/i.test(f) && !/^scripts\//.test(f)),
      changed.filter(f => /cart|wishlist/i.test(f)).join(', '));

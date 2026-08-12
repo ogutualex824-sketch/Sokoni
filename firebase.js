@@ -5,6 +5,14 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
+
+/* Auth Slice 3 — the email verification gate. Side-effect import: the file is a plain
+   IIFE that publishes window.SokoniVerifyGate, so it also loads as a classic <script>
+   and runs unmodified in the Node suite. Importing it HERE rather than adding a tag to
+   every page is deliberate: firebase.js is the one module every authenticated surface
+   already loads (directly or through sokoni-init.js), which makes the gate arrive with
+   Firebase itself instead of depending on 48 pages each remembering a script tag. */
+import "./sokoni-verify-gate.js";
 import {
   getAuth,
   onAuthStateChanged,
@@ -689,6 +697,34 @@ onAuthStateChanged(auth, async (user) => {
     /* Tell the redirect-result handler a real session exists, so it can suppress
        iOS Safari's false auth/internal-error. Fires once; harmless if never awaited. */
     if (_sokoniUserSeenResolve) { _sokoniUserSeenResolve(user); _sokoniUserSeenResolve = null; }
+
+    /* ── AUTH SLICE 3 — email verification gate ──────────────────────────────
+       This handler is the ONE place an application session is created from
+       authoritative Firebase state, and it runs on every page load and every token
+       refresh — not just at login. Putting the gate here is what makes a refresh, a
+       direct URL, a restored tab and a back-button all stay gated: there is no path
+       into the app that skips this callback.
+
+       Everything below this point IS the application session — the `loggedIn` flag
+       auth-guard.js reads, the cached profile, the device registration. A gated user
+       gets none of it, so the check has to come first.
+
+       sokoniAuthReady is deliberately NOT dispatched when gated. Surfaces treat that
+       event as "a usable session exists"; firing it for someone who is being held at
+       the challenge would hand them exactly the session this gate is refusing. */
+    let _skGate = { gated: false };
+    try {
+      _skGate = await window.SokoniVerifyGate.enforce(user);
+    } catch (e) {
+      /* The gate itself failing must not become a way through it. */
+      console.warn('[SOKONI Auth] verification gate error — denying session:', e && e.message);
+      _skGate = { gated: true, reason: 'gate-error' };
+      try { window.SokoniVerifyGate.denyAppSession(); } catch (_) { }
+    }
+    if (_skGate.gated) {
+      console.warn('[SOKONI Auth] email not verified — application session withheld.');
+      return;
+    }
 
     localStorage.setItem("loggedIn", "true");
 

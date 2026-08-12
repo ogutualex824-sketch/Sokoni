@@ -258,6 +258,19 @@ body{
     color:#71ff00;
 }
 
+/* Neutral state. The base .auth-msg is display:none and ONLY .error and .success
+   turned it back on, so any other type set by showAuthMsg() rendered nothing at all —
+   the message was written to the DOM and stayed invisible. Auth Slice 3 needs a third
+   outcome that is neither: the password was right, so "error" is wrong, and no session
+   was created, so "success" is a lie. Without this rule a gated sign-in would reset the
+   button and display nothing, which looks exactly like a click that did not register. */
+.auth-msg.info{
+    display:block;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.16);
+    color:#e8e8e8;
+}
+
 /* SWITCH */
 
 .auth-switch{
