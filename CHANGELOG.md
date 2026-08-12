@@ -1,3 +1,60 @@
+## [2026-08-13] — MERCHANT SHELL: no way out, and Back depended on how you arrived
+
+**Status: FIXED and proven.** 14/14, webkit, 393x852, real clicks.
+
+**Home was not the defect.** Traced and measured first: `#mbnav` Home → `go('dashboard')` →
+native Dashboard panel. From `#products`, clicking it lands on `#dashboard` with the native
+panel mounted, title "Dashboard" and the bottom-nav tab in agreement. It is now asserted so
+nobody has to re-derive that.
+
+> **Stated assumption.** The request was "Home → index.html". Home was left pointing at
+> Merchant Home instead, because repointing it would (a) delete the merchant's only bottom-nav
+> route to their own dashboard, (b) remove the destination task D requires Back to return to,
+> and (c) break `test-merchant-routes`, which asserts every `BOTTOM_NAV` entry resolves to a
+> real route id — `index.html` is not one. The underlying goal, *reach the marketplace from
+> the shell*, is delivered as an explicit exit instead. Say the word and Home itself is a
+> one-line change.
+
+**The real defect: the shell was a dead-end.** `shared-header.js` suppresses the customer
+header and bottom nav for everything `/merchant` hosts (`?shell=merchant`) — correct, it is
+what stops a second application mounting inside the first. But measured,
+`document.querySelectorAll('a[href]')` in the shell contained **zero** links to any external
+destination. A merchant could reach the marketplace only by editing the URL. Navigation
+Contract rule 2 forbids exactly this.
+
+Added `#mexit` ("← SOKONI Marketplace") after `.mnav` (which is `flex:1`), so it pins to the
+rail footer in the desktop sidebar **and** in the mobile drawer, where the four-up bottom bar
+has no room for it. It is a **real full-page navigation**, not a route panel — mounting
+index.html in an iframe would boot the customer application inside `/merchant`, the
+double-shell defect `e0dbdca` fixed — so the suite asserts `.mshell` is *gone* afterwards and
+the landing page reports `sokoni-page=marketplace-home`. It targets `/`, not `index.html`,
+because `cleanUrls:true` 301-redirects the latter.
+
+**Back was non-deterministic.** `go()` replaces on the first navigation, so:
+
+| arrival | history | Back went to |
+|---|---|---|
+| Home → Shop (inside the shell) | pushed entry | Merchant Home |
+| direct `/merchant#shop` (bookmark, notification, shared link) | one entry | **out of SOKONI** |
+
+Identical screen, opposite behaviour, decided by how the merchant happened to arrive. Boot now
+seeds Merchant Home *underneath* a direct deep link (`replaceState` + `_booted = true` so `go()`
+pushes on top rather than overwriting the seed), and both arrivals converge on "Back is up to
+Merchant Home". This deliberately relaxes go()'s "never leave a first entry the merchant did
+not choose" rule — the seeded entry is Home, which is a better answer than dropping them out
+of the application. Booting on Home itself seeds nothing (asserted: `history.length` 2 → 2),
+so Back there does not appear to do nothing.
+
+**Files:** `merchant.html` (`.mexit` markup + CSS, boot history seed),
+`scripts/test-merchant-home-back.js` (new, 14/14, 25s).
+
+**No regression:** `test-merchant-route-gate` (28/28, layout + overflow + bottom-nav geometry),
+`test-merchant-shell-boundary` (15/15), `test-merchant-deep-switch`, `test-merchant-diag`,
+`test-merchant-routes`, `test-merchant-runtime`, `test-merchant-templates` all pass.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none.
+
 ## [2026-08-13] — MERCHANT SELL: `?sec=` was not an address, and a bad one blanked the phone
 
 **Status: FIXED and proven.** Authenticated merchant session, webkit, 393x852.

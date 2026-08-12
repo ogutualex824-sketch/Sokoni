@@ -67,6 +67,19 @@
     text-transform:uppercase;color:var(--txt3);white-space:nowrap}
   .mshell.collapsed .mnav-head{opacity:0;height:6px;padding:3px 0;overflow:hidden}
 
+  /* Exit to the marketplace. The merchant shell suppresses the customer header and bottom
+     nav for everything it hosts (shared-header.js, ?shell=merchant), which is correct — but
+     it left /merchant with NO link out of itself at all: measured, zero anchors to any
+     external destination. A merchant who opened their shop could reach the marketplace only
+     by editing the URL. That is the dead-end Navigation Contract rule 2 forbids.
+     It sits after .mnav (which is flex:1) so it pins to the rail footer in the desktop
+     sidebar AND in the mobile drawer, where the four-up bottom bar has no room for it. */
+  .mexit{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;
+    border:none;border-top:1px solid var(--line);background:none;color:var(--txt2);
+    font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}
+  .mexit:hover{background:rgba(255,255,255,.04);color:var(--txt)}
+  .mexit .mexit-ico{font-size:15px;flex:0 0 auto;line-height:1}
+  .mshell.collapsed .mexit .mexit-txt{opacity:0;width:0;overflow:hidden}
   .mstatus{border-top:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:7px}
   .mchip{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--txt2);white-space:nowrap}
   .mdot{width:8px;height:8px;border-radius:50%;background:#555;flex:0 0 auto}
@@ -365,6 +378,14 @@
       <span class="mbrand-caret" aria-hidden="true">▾</span>
     </button>
     <nav class="mnav" id="mnav"></nav>
+    <!-- The one way out of the shell. A real full-page navigation, NOT a route panel:
+         mounting index.html in an iframe here would boot the whole customer application
+         inside /merchant — the double-shell defect e0dbdca fixed. Targets "/" rather than
+         "index.html" because firebase.json sets cleanUrls:true, so /index.html 301s. -->
+    <a class="mexit" id="mexit" href="/" title="Leave the merchant workspace and shop on SOKONI">
+      <span class="mexit-ico" aria-hidden="true">←</span>
+      <span class="mexit-txt">SOKONI Marketplace</span>
+    </a>
     <div class="mstatus">
       <div class="mchip"><span class="mdot" id="st-print"></span><span class="ctxt" id="st-print-t">Printer</span></div>
       <div class="mchip"><span class="mdot ok" id="st-sync"></span><span class="ctxt" id="st-sync-t">Online</span></div>
@@ -2322,6 +2343,29 @@
      not assumed. The only gap was an alias arriving when its target route is ALREADY current —
      no navigation, so nothing normalised it; the hashchange listener above now handles that. */
   var boot = CONTRACT.resolve(location.hash.replace('#', ''));
+
+  /* Back must be deterministic, and it was not. go() replaces on the first navigation, so a
+     merchant arriving DIRECTLY on a deep link — /merchant#shop from a notification, a
+     bookmark, a shared link — got a single history entry. Back from there left SOKONI
+     entirely. The same route reached from inside the shell (Home -> Shop) has a pushed entry
+     and Back returns to Home. Identical screen, opposite behaviour, decided by how the
+     merchant happened to arrive: the definition of non-deterministic.
+
+     Seeding Merchant Home UNDERNEATH a direct deep link makes the two arrivals converge —
+     Back is "up to Merchant Home" in both. It deliberately relaxes the "never leave a first
+     entry the merchant did not choose" rule in go(): the seeded entry is Home, the one
+     destination every merchant workspace is entitled to fall back to, which is a better
+     answer than dropping them out of the application.
+
+     _booted is set so go() PUSHES the deep-linked route on top of the seed instead of
+     replacing it — without that, go() would overwrite the entry we just created and nothing
+     would change. */
+  if (boot && boot !== 'dashboard') {
+    try {
+      history.replaceState({ sokoniRoute: 'dashboard' }, '', '#dashboard');
+      _booted = true;
+    } catch (_) { /* history unavailable — boot normally, Back stays as it was */ }
+  }
   go(boot || 'dashboard');
 
   /* (Printer auto-reconnect on app open is now owned by the shell's own engine above — no need

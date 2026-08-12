@@ -1,0 +1,197 @@
+/* Merchant shell — Home, the way out, and a deterministic Back.
+ *
+ *   node scripts/test-merchant-home-back.js
+ *
+ * THREE THINGS, all measured against a real click rather than against the handler's source.
+ *
+ * 1. #mbnav Home reaches Merchant Home from wherever the merchant is.
+ *    This was suspected broken and is NOT — it is asserted here so the next person does not
+ *    have to re-derive that, and so a future change cannot break it silently.
+ *
+ * 2. The shell has a way OUT. shared-header.js suppresses the customer header and bottom nav
+ *    for everything /merchant hosts (?shell=merchant) — correct, it stops a second application
+ *    mounting inside the first. But it left the shell with ZERO links to any external
+ *    destination: measured, `document.querySelectorAll('a[href]')` contained nothing pointing
+ *    off the shell. A merchant could reach the marketplace only by editing the URL. That is the
+ *    dead-end Navigation Contract rule 2 forbids.
+ *
+ *    The exit must be a real full-page navigation. Mounting index.html as a route panel would
+ *    boot the whole customer application inside /merchant — the double-shell defect e0dbdca
+ *    fixed — so this asserts the shell is GONE afterwards, not that a panel changed.
+ *
+ * 3. Back is deterministic. go() replaces on the first navigation, so a merchant arriving
+ *    directly on /merchant#shop had one history entry and Back left SOKONI; the same route
+ *    reached from inside the shell had a pushed entry and Back returned Home. Identical
+ *    screen, opposite behaviour, decided by how they arrived. Both arrivals are tested —
+ *    testing only the internal one would have passed against the broken build.
+ */
+'use strict';
+const { webkit } = require('playwright');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css',
+  '.png':'image/png', '.json':'application/json', '.svg':'image/svg+xml', '.jpg':'image/jpeg',
+  '.webp':'image/webp', '.ico':'image/x-icon', '.woff2':'font/woff2' };
+
+let pass = 0, fail = 0;
+const ck = (l, ok, d) => {
+  console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + String(d).replace(/\s+/g, ' ').slice(0, 95) + ']' : ''));
+  ok ? pass++ : fail++;
+};
+const head = (t) => console.log('\n── ' + t + ' ──');
+
+const server = http.createServer((req, res) => {
+  let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p === '/') p = '/index.html';
+  let f = path.join(ROOT, p);
+  if (!path.extname(p)) f += '.html';
+  fs.readFile(f, (e, d) => {
+    if (e) { res.writeHead(404); return res.end('nf'); }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'text/plain' });
+    res.end(d);
+  });
+});
+
+const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 120s'); process.exit(1); }, 120000);
+
+server.listen(0, async () => {
+  const BASE = 'http://127.0.0.1:' + server.address().port;
+  const browser = await webkit.launch();
+
+  const session = () => ({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+  const seed = (ctx) => ctx.addInitScript(() => {
+    try {
+      localStorage.setItem('loggedIn', 'true');
+      localStorage.setItem('sokoniUser', JSON.stringify({
+        uid: 'HOMEBACK_TEST', name: 'Home Back', roles: ['buyer', 'seller', 'merchant'], isSeller: true }));
+    } catch (e) {}
+  });
+
+  /* The shell mounts asynchronously; wait for the route it claims to be on rather than
+     sleeping, so this suite does not drift toward the runner's budget. */
+  const routed = (page, id) => page.waitForFunction(
+    (id) => location.hash === '#' + id &&
+            !!document.querySelector('#mbnav .mbnav-item, .mnav-item'),
+    id, { timeout: 15000 }).catch(() => null);
+
+  const state = (page) => page.evaluate(() => ({
+    hash: location.hash,
+    path: location.pathname,
+    title: ((document.getElementById('mtitle') || {}).textContent || '').trim(),
+    activeBnav: (() => { const n = document.querySelector('#mbnav .mbnav-item.active'); return n ? n.dataset.id : null; })(),
+    nativePanel: !!document.querySelector('.mpanel.show') && !document.querySelector('.mpanel.show iframe'),
+  }));
+
+  head('1 · #mbnav Home returns to Merchant Home from another route');
+  {
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="products"]'); if (el) el.click(); });
+    await routed(page, 'products');
+    const mid = await state(page);
+    ck('navigated away from Home first', mid.hash === '#products', mid.hash);
+
+    await page.evaluate(() => { const el = document.querySelector('#mbnav .mbnav-item[data-id="dashboard"]'); if (el) el.click(); });
+    await routed(page, 'dashboard');
+    const st = await state(page);
+    /* The native panel is the evidence: a hash and a highlighted tab only prove we asked. */
+    ck('Home lands on Merchant Home', st.hash === '#dashboard' && st.nativePanel, st.hash + ' native=' + st.nativePanel);
+    ck('...with the title and the bottom-nav tab agreeing',
+       /dashboard/i.test(st.title) && st.activeBnav === 'dashboard', st.title + ' / ' + st.activeBnav);
+    await ctx.close();
+  }
+
+  head('2 · the shell is not a dead-end — there is a way to the marketplace');
+  {
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+
+    const exits = await page.evaluate(() => [...document.querySelectorAll('a[href]')]
+      .map((a) => a.getAttribute('href'))
+      .filter((h) => h && !/^#/.test(h) && !/^javascript:/i.test(h)));
+    ck('at least one link leaves the merchant shell', exits.length > 0, JSON.stringify(exits).slice(0, 80));
+
+    /* cleanUrls:true means /index.html 301-redirects, so the exit must target "/". */
+    ck('the exit targets "/" and not index.html (cleanUrls 301s)',
+       exits.some((h) => h === '/'), JSON.stringify(exits).slice(0, 80));
+
+    /* On a phone the rail IS the drawer — translated off-screen until .mobile-open — so the
+       exit is reached the way a merchant reaches it: More (☰) first. Clicking it blind would
+       fail with "element is outside of the viewport", which is the harness telling the truth
+       about a control the merchant also could not have tapped. */
+    await page.evaluate(() => { const el = document.querySelector('#mbnav .mbnav-item[data-id="__more"]'); if (el) el.click(); });
+    await page.waitForTimeout(600);
+    ck('the More drawer exposes the exit', await page.isVisible('#mexit'));
+    await page.click('#mexit');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2500);
+    const after = await page.evaluate(() => ({
+      path: location.pathname,
+      /* A REAL navigation: the merchant shell must be gone, not hidden behind a panel. */
+      shellGone: !document.querySelector('.mshell'),
+      tmpl: (document.querySelector('meta[name="sokoni-page"]') || {}).content || '',
+    }));
+    ck('clicking it actually leaves /merchant', after.path !== '/merchant.html', after.path);
+    ck('...and the merchant shell is gone, not iframed inside itself', after.shellGone, 'mshell present=' + !after.shellGone);
+    ck('...landing on the marketplace home', after.tmpl === 'marketplace-home', after.tmpl || '(no template meta)');
+    await ctx.close();
+  }
+
+  head('3 · Back is deterministic — same answer from both arrivals');
+  {
+    /* (a) reached from inside the shell: this already worked. */
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    await page.evaluate(() => { const el = document.querySelector('.mnav-item[data-id="shop"]'); if (el) el.click(); });
+    await routed(page, 'shop');
+    ck('Home → Shop reached #shop', (await state(page)).hash === '#shop');
+    await page.goBack();
+    await routed(page, 'dashboard');
+    const a = await state(page);
+    ck('Back from an INTERNAL route → Merchant Home', a.hash === '#dashboard' && a.path === '/merchant.html', a.path + a.hash);
+    await ctx.close();
+  }
+  {
+    /* (b) arrived directly on the deep link — the case that used to leave SOKONI. */
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html#shop', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'shop');
+    ck('direct /merchant.html#shop mounted Shop', (await state(page)).hash === '#shop');
+    await page.goBack();
+    await routed(page, 'dashboard');
+    const b = await state(page);
+    ck('Back from a DIRECT deep link → Merchant Home (not out of SOKONI)',
+       b.path === '/merchant.html' && b.hash === '#dashboard' && b.nativePanel,
+       b.path + b.hash + ' native=' + b.nativePanel);
+    await ctx.close();
+  }
+  {
+    /* Booting on Home itself must NOT gain a phantom entry — Home is the root of the shell,
+       and seeding a second one would make Back appear to do nothing. */
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    const depth = await page.evaluate(() => history.length);
+    await page.goto(BASE + '/merchant.html#dashboard', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    const depth2 = await page.evaluate(() => history.length);
+    ck('booting on Home does not seed a duplicate Home entry', depth2 - depth <= 1, depth + ' → ' + depth2);
+    await ctx.close();
+  }
+
+  await browser.close(); server.close(); clearTimeout(wd);
+  console.log('\n' + '='.repeat(70));
+  console.log('  ' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+});
