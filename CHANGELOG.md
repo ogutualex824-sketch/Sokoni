@@ -1,3 +1,35 @@
+## [2026-08-12] — FOLLOW-UP: Track 2.6 universal-cart coverage gap (not fixed in this release)
+
+**Status: OPEN. Deferred, not closed.** No file was modified for it.
+
+`availability-manager.html` qualified for the Track 2.6 universal-cart rollout — it already
+carried `shared-header.js` before `69c4170` — but is **absent from that commit's changed
+set**. At `HEAD` it has no `<script src="sokoni-cart.js">`.
+
+Measured in Chromium against the shipped HEAD version:
+
+* the page renders **no cart UI at all** — no nav, no cart link, no pip
+* `window.SokoniCart` is nevertheless **available at runtime**, and `units()` returns the
+  correct value
+
+**The loader provenance is unexplained.** `sokoni-cart.js` is requested and executes (stack
+at `sokoni-cart.js:272`), but no shipped JS references it by filename except two comments,
+and neither `security.js` nor `shared-header.js` injects it. Until that is understood, the
+absence of visible impact is a reason to DEFER the fix — it is not evidence that the missing
+script is harmless, and it does not close the defect.
+
+**Why it was invisible until now:** `test-cart-readers` asserts every header page loads the
+service. It has been green only because *uncommitted* Track 1 work in the same file happens
+to add the tag. A clean release checkout exposed it — which is the argument for building
+releases from a controlled tree rather than the working tree.
+
+**To close this follow-up:**
+1. explain how `sokoni-cart.js` reaches the page at runtime;
+2. decide whether the page should carry the tag explicitly (one line);
+3. coordinate with the Track 1 owner — the file holds their uncommitted work.
+
+Out of scope here: the file is Track 1's, and this release does not touch carried items.
+
 ## [2026-08-12] — ARMED: enforcement cutoff set to 2026-08-12T18:30:00.000Z
 
 **NOT DEPLOYED.** Rules `ca9e8924`. Phase 2 requires separate authorization.
