@@ -53,7 +53,7 @@ const P = 'landlordProperties';
     const db = ctx.firestore();
     await setDoc(doc(db, P, 'bldg1'), {
       ownerUid: 'landlordA', name: 'Riverside Court', address: '12 Ngong Rd',
-      city: 'Nairobi', status: 'active', createdAt: 1, updatedAt: 1,
+      city: 'Nairobi', status: 'pending', createdAt: 1, updatedAt: 1,
     });
     await setDoc(doc(db, P, 'bldg1', 'units', 'u1'), {
       ownerUid: 'landlordA', tenantUid: 'tenantT', number: 'A1',
