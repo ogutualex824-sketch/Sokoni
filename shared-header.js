@@ -1364,13 +1364,30 @@
           '<span class="sk-badge" id="sk-msg-badge" role="status" aria-label="Unread messages"></span>' +
         '</a>' +
 
-        /* Cart */
-        '<a href="cart.html" id="sk-nav-cart" aria-label="Shopping cart">' +
-          /* `cartCount || 0` would render an unreadable cart as "0 items" in the aria
-             label — a screen reader would announce an empty cart the page cannot verify.
-             Blank text and a neutral label when the count is unknown. */
-          '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount == null ? 'Cart' : cartCount + ' items') + '">' + (cartCount == null ? '' : cartCount) + '</span>' +
-        '</a>' +
+        /* Cart — except ON the cart page, where this slot carries Wishlist instead.
+           A Cart button that navigates to the page you are already on is dead weight;
+           Wishlist is the action a shopper actually wants from there, and it reuses the
+           existing wishlist.html rather than introducing a second implementation.
+
+           The element keeps id="sk-nav-cart" deliberately: every rule that styles this
+           slot is keyed to that id (#sk-nav-cart at 963/970/1168, the scrolled state at
+           919, and the 1213/1228 breakpoints), so reusing it preserves the styling,
+           spacing and responsive behaviour exactly instead of duplicating six CSS rules.
+           The pip is omitted — a cart count is redundant beside the cart itself, and
+           _refresh() null-checks it before writing.
+
+           Matched against both forms because cleanUrls serves this page as /cart in
+           production while it is cart.html locally. */
+        (/^cart(\.html)?$/.test(page)
+          ? '<a href="wishlist.html" id="sk-nav-cart" aria-label="Wishlist" title="Wishlist">' +
+              '<span aria-hidden="true">❤️</span>' +
+            '</a>'
+          : '<a href="cart.html" id="sk-nav-cart" aria-label="Shopping cart">' +
+              /* `cartCount || 0` would render an unreadable cart as "0 items" in the aria
+                 label — a screen reader would announce an empty cart the page cannot verify.
+                 Blank text and a neutral label when the count is unknown. */
+              '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount == null ? 'Cart' : cartCount + ' items') + '">' + (cartCount == null ? '' : cartCount) + '</span>' +
+            '</a>') +
 
         /* Avatar / Profile — opens account dropdown */
         '<div class="sk-acct-wrap" id="sk-acct-wrap">' +
