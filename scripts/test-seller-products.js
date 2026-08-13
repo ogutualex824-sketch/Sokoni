@@ -116,7 +116,7 @@ srv.listen(0, async () => {
     r.hydDedupe = res.canonical === 1;
 
     /* THE DESTRUCTIVE CASE: empty Firestore + non-empty cache must not wipe */
-    localStorage.setItem('sellerProducts', JSON.stringify([{ id: 'x1', title: 'Unsynced' }]));
+    localStorage.setItem('sellerProducts', JSON.stringify([{ id: 'x1', title: 'Unsynced', sellerUid: 'U1' }]));
     res = await M.hydrate({
       uid: 'U1', db: {}, repaint: false,
       fs: fakeFs({ sellerUid: [], uid: [] }),
