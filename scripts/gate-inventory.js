@@ -129,6 +129,36 @@ if (process.env.SOKONI_FORCE_INVENTORY_GATE !== '1') {
    FAIL-CLOSED, consistent with the doctrine above: if the emulator cannot start, this gate
    does NOT fall through to an unguarded run. Absence of evidence is never evidence of
    safety, so it exits non-zero and says why. */
+/* ── ENVIRONMENT-AWARE, NOT UNCONDITIONALLY SELF-EMULATING ──────────────────
+   Two callers, opposite environments:
+
+     DEPLOY HOOK          no emulator exists  → this gate MUST start one
+     AUTHORITATIVE GATE   already inside      → this gate MUST NOT start another
+                          emulators:exec
+
+   The first version started one unconditionally. Inside the authoritative gate that
+   NESTED a second Firestore/Auth emulator on the same ports while test-inventory ran the
+   whole population in the inner one: 16 suites timed out at 150s and two died with raw
+   Node stack output, on a machine that minutes earlier measured deep-switch at 41.6s
+   twice with 43ms variance. That is an environment failure, not variance — and I built it.
+
+   Detection reads the REAL emulator environment rather than a flag of our own invention,
+   because FIRESTORE_EMULATOR_HOST is what the Admin SDK and the suites themselves obey.
+   If it is set, an emulator is already serving us and starting another is the bug. */
+const INSIDE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST;
+
+if (INSIDE_EMULATOR) {
+  console.log('[gate-inventory] emulator already present at ' + process.env.FIRESTORE_EMULATOR_HOST +
+              ' — running the gate directly (no nested emulators:exec).');
+  const direct = spawnSync(process.execPath, [path.join(__dirname, 'test-inventory.js'), '--gate'],
+    { stdio: 'inherit' });
+  if (direct.error) {
+    console.error('[gate-inventory] failed to run test-inventory.js:', direct.error.message);
+    process.exit(1);
+  }
+  process.exit(direct.status == null ? 1 : direct.status);
+}
+
 const EMU_PROJECT = process.env.SOKONI_GATE_PROJECT || 'sokoni-inventory-gate';
 
 /* ONE command string, not an argv array. With shell:true an argv array is re-joined and
