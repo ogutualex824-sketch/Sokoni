@@ -106,6 +106,20 @@ async function _completeDelivery({ orderId, pkgId, riderUid, method, actorUid })
       return { ok: true, alreadyDelivered: true, status: o.status };
     }
 
+    /* The order must be in a state a delivery can legitimately complete FROM. A correct
+       PIN on a cancelled or refunded order is still not a delivery, and letting it through
+       would credit a rider for an order the platform has already unwound — the PIN proves
+       the buyer is present, not that the order is live. Denied rather than treated as
+       inert, because this is a real conflict the caller should see. */
+    const DELIVERABLE_FROM = [
+      "confirmed", "processing", "paid", "shipped", "out_for_delivery",
+      "rider_assigned", "rider_en_route", "picked_up", "in_transit",
+    ];
+    if (!DELIVERABLE_FROM.includes(String(o.status || ""))) {
+      return { ok: false, code: "failed-precondition",
+               reason: "Order is " + o.status + " — a delivery cannot complete from that state." };
+    }
+
     t.set(orderRef, {
       status:              "delivered",
       deliveryStatus:      "delivered",
