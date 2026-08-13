@@ -1,3 +1,55 @@
+## [2026-08-13] — RELEASE: a checklist for the properties the gate cannot see
+
+**Status: DONE.** `scripts/release-candidate-check.js` — 12/13 against `ae464e2`, the single
+failure being Track 2.6, which has not landed.
+
+The test inventory answers *"do the suites pass"*. It cannot answer what decides whether a tree
+is safe to ship, because those are properties of the **tree** and of the **diff against live**:
+is the tree clean and release-only, did another process's uncommitted work leak in, is the
+activation state still disarmed, is the `seller.html` compatibility surface intact, can a rules
+artifact be published, did Track 2.6 actually land in the **committed** tree.
+
+Each of those has already been got wrong once this release — a gate ran against a tree missing
+`functions/node_modules` and silently lost 22 suites; rules artifacts were one working-tree
+deploy from public; a dirty-tree 311/311 was nearly taken as release evidence. This measures
+them from the release tree instead of recalling them from a conversation.
+
+### The dry run corrected the checklist three times, which is the point
+
+- **`firestore.rules.bak` / `.unreleased` flagged as leaked Track 1 work.** They are
+  **committed**. Being in the tree is not the risk — being *published* is, and section 2 owns
+  that. The check was asserting a property nobody had agreed to and would have blocked a
+  correct release.
+- **The tree's own gate artifact counted as dirt.** `--gate` writes
+  `docs/release-gates/<sha>.json` into the tree it measured, so it is legitimately dirty by
+  exactly that file. Excluded by name; excluding more would defeat the check.
+- **"auth/rules unchanged since live" would have failed a correct release candidate** — and,
+  worse, invited someone to "fix" it by dropping the work being shipped.
+
+### That last one is the finding worth stating plainly
+
+**This branch IS the auth release.** Against live `6ac58e6` it changes:
+
+| | |
+|---|---|
+| Cloud Functions | `auth-dispatch.js`, `auth-email-challenge.js`, `auth-policy.js`, `account-purge-spec.js`, `index.js` |
+| Rules | `firestore.rules` |
+| Total files | **419** |
+
+Across the auth slices and an ARM→DISARM pair. So the assertable property is not "unchanged" —
+it is that the **activation state is still safe**: the cutoff is still the sentinel, and no
+armed non-sentinel date is committed. Both are asserted. The payload is **reported**, because
+whoever authorises the deploy needs to see it — and it is precisely why Hosting and Functions
+must go together for this release, which is now asserted rather than remembered.
+
+> My earlier statement that auth/rules/cutoff were "untouched" was true of **my** commits and
+> only those. It was not true of the branch relative to live, and that distinction matters at a
+> deploy boundary.
+
+**Files:** `scripts/release-candidate-check.js` (new).
+**Database changes:** none. **API changes:** none. **Security changes:** none — read-only.
+**Breaking changes:** none.
+
 ## [2026-08-13] — GATE: record whether the machine was quiet when the numbers were taken
 
 **Status: DONE.** Prompted by my own mistake.
