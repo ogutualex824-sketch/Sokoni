@@ -110,7 +110,12 @@ server.listen(0, async () => {
        pos.html loading ONCE with panel-pos active from ~5s onward and never being reset. So
        assert the SELECTION, and treat computed visibility as part of the same environment
        boundary the transitions already declare — rather than failing the product for a missing
-       backend. */
+       backend.
+
+       Which panel is the DEFAULT is viewport-specific. Desktop pos.html loads with panel-pos
+       active. Mobile intentionally uses pos-mobile.js and starts on the dedicated
+       mobile-home-panel (_activeTab='home', boot calls tab('home'), mbn-home ships active), so
+       pos-mobile.js resets panel-pos — the desktop observation above does not hold there. */
     const selected = await page.evaluate(() => {
       const f = document.querySelector('.mpanel.show iframe');
       try {
@@ -119,8 +124,16 @@ server.listen(0, async () => {
         return { active, ready: d.readyState };
       } catch (e) { return { err: e.message }; }
     });
-    ck('POS selects CHECKOUT as its default panel (not Inventory)',
-       !selected.err && selected.active && selected.active.length === 1 && selected.active[0] === 'pos',
+    const expectedDefault = vp.m ? 'mobile-home-panel' : 'pos';
+    const expectedLabel = vp.m
+      ? 'POS selects HOME as its default panel (not Inventory)'
+      : 'POS selects CHECKOUT as its default panel (not Inventory)';
+
+    ck(expectedLabel,
+       !selected.err &&
+       selected.active &&
+       selected.active.length === 1 &&
+       selected.active[0] === expectedDefault,
        selected.err || ('active: ' + JSON.stringify(selected.active) + ' readyState=' + selected.ready));
     if (!st.err && st.shown.length === 0) {
       console.log('      NOTE  no panel COMPUTES visible — the POS app has not finished starting in this');
