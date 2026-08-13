@@ -112,21 +112,35 @@ server.listen(0, async () => {
        boundary the transitions already declare — rather than failing the product for a missing
        backend.
 
-       Which panel is the DEFAULT is viewport-specific. Desktop pos.html loads with panel-pos
-       active. Mobile intentionally uses pos-mobile.js and starts on the dedicated
-       mobile-home-panel (_activeTab='home', boot calls tab('home'), mbn-home ships active), so
-       pos-mobile.js resets panel-pos — the desktop observation above does not hold there. */
+       Which panel is the DEFAULT is ENVIRONMENT-specific, not merely viewport-specific — a
+       viewport-only rule was written first and failed the gate for exactly this reason:
+
+         desktop, any environment  -> panel-pos      (pos.html ships it active)
+         mobile,  SPos unavailable -> mobile-home-panel
+         mobile,  SPos available   -> panel-pos
+
+       pos-mobile.js boots the shell on Home (_activeTab='home', tab('home'), mbn-home ships
+       active). With no SPos that is where it stays, so the shell's own default is what is
+       observable. Once SPos IS up — under the emulators, or on a real device — tab('home')
+       takes its `else if (window.SPos)` branch and the app selects Checkout instead. Both are
+       correct; asserting either one unconditionally is not. */
+    /* SPos is read in THIS SAME evaluate, not a later one: the expected default depends on
+       whether the app booted, so sampling that separately would race against the very
+       thing being measured. One round-trip, one moment in time. */
     const selected = await page.evaluate(() => {
       const f = document.querySelector('.mpanel.show iframe');
       try {
         const d = f && f.contentDocument; if (!d) return { err: 'no pos document' };
         const active = [].slice.call(d.querySelectorAll('.pos-panel.active')).map((p) => (p.id || '').replace(/^panel-/, ''));
-        return { active, ready: d.readyState };
+        const w = f.contentWindow;
+        return { active, ready: d.readyState, hasSPos: !!(w && typeof w.SPos !== 'undefined') };
       } catch (e) { return { err: e.message }; }
     });
-    const expectedDefault = vp.m ? 'mobile-home-panel' : 'pos';
-    const expectedLabel = vp.m
-      ? 'POS selects HOME as its default panel (not Inventory)'
+    /* Only the mobile SHELL default differs, and only while the app has not booted. */
+    const shellDefault  = vp.m && !selected.hasSPos;
+    const expectedDefault = shellDefault ? 'mobile-home-panel' : 'pos';
+    const expectedLabel   = shellDefault
+      ? 'POS shell selects HOME as its default panel (not Inventory)'
       : 'POS selects CHECKOUT as its default panel (not Inventory)';
 
     ck(expectedLabel,
@@ -134,7 +148,8 @@ server.listen(0, async () => {
        selected.active &&
        selected.active.length === 1 &&
        selected.active[0] === expectedDefault,
-       selected.err || ('active: ' + JSON.stringify(selected.active) + ' readyState=' + selected.ready));
+       selected.err || ('active: ' + JSON.stringify(selected.active) +
+                        ' readyState=' + selected.ready + ' SPos=' + selected.hasSPos));
     if (!st.err && st.shown.length === 0) {
       console.log('      NOTE  no panel COMPUTES visible — the POS app has not finished starting in this');
       console.log('            environment (App Check). Selection is asserted above; rendered visibility');
