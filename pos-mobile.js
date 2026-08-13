@@ -97,8 +97,8 @@ const PosMobile = (() => {
   }
 
   function _showMobileHome() {
-    document.getElementById('mobile-home-panel')?.classList.add('active');
     document.querySelectorAll('.pos-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('mobile-home-panel')?.classList.add('active');
   }
 
   function _hideMobileHome() {
