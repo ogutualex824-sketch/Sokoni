@@ -1,3 +1,38 @@
+## [2026-08-13] — GATE: record whether the machine was quiet when the numbers were taken
+
+**Status: DONE.** Prompted by my own mistake.
+
+The gate at `581bf18` reported `test-merchant-deep-switch` **TIMEOUT at a 300s budget** (42s
+standalone) and `test-seller-deeplink` 13/1. Between `34d5ac0` and `581bf18` there are **only
+test and documentation commits — no shipping change**. The cause was that I ran
+`test-merchant-home-back` twice, launching webkit, *while the gate was running*.
+
+`BROWSER_CONCURRENCY = 1` serialises the browser suites **against each other, and nothing else**.
+It cannot see a browser started outside the process, and one is enough to invalidate the run —
+the same lost-coverage failure this runner exists to prevent, arriving from outside.
+
+So the runner now counts live browser processes at start, prints a **measurement-quality**
+line, and records `foreignBrowsersAtStart` in the artifact. Two artifacts are not comparable
+unless that matches. It **warns, never refuses**: the count can be non-zero innocently, and a
+gate that refuses to run is its own kind of useless. `-1` means the check could not run — an
+honest unknown rather than a reassuring zero.
+
+**Getting the signal right took three attempts, each corrected by measurement:**
+
+| attempt | result | why it was wrong |
+|---|---|---|
+| `tasklist /FI … /FI …` | always 0 | repeated `/FI` on one field is **ANDed** — asks for a process that is both names at once |
+| counted `chrome.exe` | 33 on an idle machine | Playwright's chromium and the developer's own browser share the name |
+| counted `WebKitNetworkProcess.exe` | 26 on an idle machine | that is the helper that **orphans**; survivors of earlier crashed runs would warn on every gate |
+
+Final: `Playwright.exe` / `WebKitWebProcess.exe` / `headless_shell.exe` — the browser itself and
+the process that renders a page, neither of which outlives its run in practice. Verified both
+directions: silent on an idle machine carrying 26 orphans, and reporting 2 with a webkit
+deliberately running. **A warning that fires always is not a warning.**
+
+**Files:** `scripts/test-inventory.js`.
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — SECURITY: 1.9 MB of Firestore rules were one working-tree deploy from being public
 
 **Status: FIXED and proven.** 26/26.

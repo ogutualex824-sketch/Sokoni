@@ -201,6 +201,45 @@ async function runBatched(list, conc) {
     await Promise.all(list.slice(i, i + conc).map(runOne));
   }
 }
+/* ── Is another browser already running? ──────────────────────────────────────
+   BROWSER_CONCURRENCY = 1 serialises the browser suites AGAINST EACH OTHER, and nothing
+   else. It cannot see a browser started outside this process, and one is enough to invalidate
+   the run: a suite measured at 42s standalone timed out at a 300s budget while a second
+   webkit was driving pages on the same machine, and a passing suite reported 13/1.
+
+   That is the same lost-coverage failure this runner exists to prevent, arriving from
+   outside — so it is RECORDED rather than assumed away. Not a refusal: the count can be
+   non-zero for innocent reasons (an orphan from an earlier crash), and a gate that refuses
+   to run is its own kind of useless. But a reader of the artifact must be able to tell
+   whether the numbers were measured on a quiet machine. */
+function foreignBrowsers() {
+  try {
+    const { execSync } = require('child_process');
+    if (process.platform === 'win32') {
+      /* NO /FI here. tasklist ANDs repeated filters on the same field, so
+         `/FI "IMAGENAME eq Playwright.exe" /FI "IMAGENAME eq WebKitWebProcess.exe"` asks for a
+         process that is BOTH, matches nothing, and reports a reassuring zero — the exact
+         false-assurance this check exists to prevent. List everything and match here. */
+      const out = execSync('tasklist /NH', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 });
+      /* Count the processes that indicate a LIVE browser, and nothing else. Two exclusions,
+         both learned by measuring rather than guessing:
+           chrome.exe                — Playwright's chromium AND the developer's own browser
+                                       share the name; counting it reported 33 "foreign
+                                       browsers" on an idle machine.
+           WebKitNetworkProcess.exe  — this is the helper that ORPHANS. 26 were alive on an
+                                       idle machine, survivors of earlier crashed runs, so
+                                       counting them would warn on literally every gate.
+         Playwright.exe is the browser itself and WebKitWebProcess.exe renders a page; neither
+         outlives its run in practice, so their presence really does mean someone else is
+         driving a browser right now. A warning that fires always is not a warning. */
+      return out.split('\n').filter((l) => /^(Playwright|WebKitWebProcess|headless_shell)\.exe/i.test(l.trim())).length;
+    }
+    const out = execSync('ps -eo comm= 2>/dev/null', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 });
+    return (out.split('\n').filter((l) => /WebKitWebProcess|Playwright|headless_shell/i.test(l))).length;
+  } catch (_) { return -1; }   /* -1 === could not tell; never guess a reassuring 0 */
+}
+const browsersAtStart = foreignBrowsers();
+
 async function runAll() {
   const browser = files.filter(isBrowserSuite);
   const fast = files.filter((f) => !isBrowserSuite(f));
@@ -275,6 +314,16 @@ if (AS_JSON) {
           Math.round((r.ms / r.budgetMs) * 100) + '%)'));
   }
 
+  if (browsersAtStart > 0) {
+    console.log('\n  ⚠ MEASUREMENT QUALITY: ' + browsersAtStart + ' browser process(es) were already');
+    console.log('  running when this gate started. Browser suites are serialised against each other');
+    console.log('  but not against anything outside this process, so any TIMEOUT or browser-suite');
+    console.log('  failure above may be contention rather than a defect. Re-run on a quiet machine');
+    console.log('  before treating those as real.');
+  } else if (browsersAtStart === 0) {
+    console.log('\n  measurement: no foreign browser processes at start (clean measurement).');
+  }
+
   console.log('\n  GATE-READY TODAY: ' + summary.pass + ' suites pass with no external dependency.');
 }
 
@@ -310,6 +359,11 @@ if (GATE) {
          artifacts with different timeout lists look like a code change when they
          were really a runner change. */
       budgets: { defaultMs: TIMEOUT_MS, browserMs: BROWSER_TIMEOUT_MS },
+      /* Whether the machine was quiet. A gate run alongside another browser measures
+         contention as well as code, and two artifacts are not comparable unless this
+         matches. -1 means the check itself could not run — recorded as unknown rather
+         than as a reassuring zero. */
+      foreignBrowsersAtStart: browsersAtStart,
       blocking: results.filter((r) => r.verdict === 'PASS').map((r) => r.suite),
       /* Passing, but close enough to the budget that a busier machine would drop
          them from `blocking`. This is the early warning for the drift that made
