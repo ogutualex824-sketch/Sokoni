@@ -15643,7 +15643,7 @@ label { font-size:12px !important; font-weight:700 !important; margin-bottom:4px
    'backwards' applies the from-keyframe at start (prevents opacity flash) but does
    NOT freeze the to-state, so <body> gets transform:none restored after 0.38s. */
 body.p9-page-in {
-  animation: p9PageIn 0.38s ease backwards;
+  animation: p9PageIn 0.38s ease;
 }
 @keyframes p9PageIn {
   from { opacity: 0; }
