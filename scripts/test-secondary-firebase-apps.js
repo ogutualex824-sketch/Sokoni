@@ -10,7 +10,7 @@
    reports success.
 
    81ca4f2 fixed business.html ('bizPage') and businesses.html ('bizDir'). A repo-wide
-   scan then found the same pattern in 28 further files, including WRITE paths for
+   scan then found the same pattern in 29 further files, including WRITE paths for
    bookings and leads (cln-write, elc-write, plm-write, cr-write, ch-write, hs-write,
    th-write, mkt-write, dh-wd) — money paths where a silent write failure is worse than
    a visible read failure.
@@ -19,12 +19,12 @@
    rest of the class as "tracked separately, not changed here" — and confirms App Check IS
    enforced on firestore.googleapis.com, so these are live defects, not latent ones.
 
-   THIS SUITE IS A RATCHET, NOT A CLEANUP. The 28 known files are recorded in BASELINE
-   below and do not fail: converting them is a shipping change across 28 public surfaces
-   and is being scheduled deliberately, not smuggled in through a test. What fails is a
-   NEW secondary app, or one appearing in a file not already on the list — so the class
-   can only shrink. Remove a name from BASELINE as each file is converted; the suite
-   fails if a BASELINE entry is stale, so the list cannot rot into fiction.
+   THIS SUITE IS A RATCHET, NOT A CLEANUP. The 29 known files are recorded in BASELINE below
+   and do not fail: converting them is a shipping change across 29 public surfaces, and it is
+   being scheduled deliberately rather than smuggled in through a test. What fails is a NEW
+   secondary app, or one appearing in a file not already on the list — so the class can only
+   shrink. Remove a name from BASELINE as each file is converted; the suite fails if a BASELINE
+   entry is stale, so the list cannot rot into fiction.
 
    Comments are stripped before scanning. business.html and businesses.html both still
    DESCRIBE the removed initializeApp(...) call in a comment explaining the fix, and a
@@ -75,10 +75,44 @@ function stripNonCode(src) {
   return out;
 }
 
-/* Matches modular `initializeApp(cfg, 'name')` and compat `firebase.initializeApp(cfg, 'name')`.
-   A bare initializeApp(cfg) is the DEFAULT app and is correct — only the named form is the
-   defect, because only the named form creates an app App Check was never attached to. */
-const SECONDARY = /(?:firebase\s*\.\s*)?initializeApp\s*\(\s*[^,()]+\s*,\s*['"]([^'"]+)['"]\s*\)/g;
+/* Finds `initializeApp(<config>, 'name')` — modular or compat — where <config> may be an
+   INLINE OBJECT LITERAL, not just an identifier.
+
+   SCANNER BLIND SPOT, found the hard way. The first version required the config argument to
+   match [^,()]+, which cannot match an object literal because one is full of commas and
+   braces. seller.html does exactly that:
+
+       initializeApp({ apiKey:"…", authDomain:"…", … }, "revSnap")
+
+   so it was reported CLEAN while creating a secondary app that reads commissionLedger with no
+   App Check token — the very thing this suite exists to catch. A scanner that silently misses
+   the shapes it was written for is worse than no scanner: it converts an unknown into a
+   false assurance. Argument boundaries are now found by BALANCING brackets rather than by
+   forbidding the characters that make a literal a literal. */
+function findSecondaryApps(code) {
+  const names = [];
+  const CALL = /(?:firebase\s*\.\s*)?initializeApp\s*\(/g;
+  let m;
+  while ((m = CALL.exec(code))) {
+    let i = CALL.lastIndex;
+    let depth = 0, arg = '', args = [];
+    for (; i < code.length; i++) {
+      const c = code[i];
+      if (c === '(' || c === '[' || c === '{') depth++;
+      else if (c === ')' && depth === 0) { args.push(arg); break; }
+      else if (c === ')' || c === ']' || c === '}') depth--;
+      if (c === ',' && depth === 0) { args.push(arg); arg = ''; continue; }
+      arg += c;
+    }
+    /* Two arguments and a quoted second one === a NAMED (secondary) app.
+       initializeApp(cfg) alone is the DEFAULT app and is correct — App Check attaches there. */
+    if (args.length >= 2) {
+      const q = args[1].trim().match(/^['"]([^'"]+)['"]$/);
+      if (q) names.push(q[1]);
+    }
+  }
+  return names;
+}
 
 /* Known, accepted-for-now instances. file → sorted app names. */
 const BASELINE = {
@@ -103,6 +137,14 @@ const BASELINE = {
   'release-readiness.html':    ['release-readiness'],
   'revenue.html':              ['revenue-dash'],
   'security-center.html':      ['security-center'],
+  /* Found only after the scanner blind spot above was fixed — its config is an inline object
+     literal, which the first regex could not match. Identical at live 6ac58e6, so pre-existing
+     and deferred with the rest, not an RC change. Worth flagging when this list is worked:
+     seller.html loads the Firebase SDK TWICE (10.12.0 for this block, 10.12.2 via firebase.js),
+     so revSnap is created on a different SDK instance from the one App Check initialises — two
+     app registries in one document. It reads commissionLedger, so under enforcement the
+     revenue snapshot silently renders nothing (the block ends in an empty catch). */
+  'seller.html':               ['revSnap'],
   'sokoni-b2b.js':             ['b2b-fs'],
   'sokoni-featured.js':        ['sokoni-featured'],
   'sokoni-recommendations.js': ['sk-recs'],
@@ -127,10 +169,7 @@ for (const f of files) {
   let src;
   try { src = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch (_) { continue; }
   const code = stripNonCode(src);
-  const names = new Set();
-  let m;
-  SECONDARY.lastIndex = 0;
-  while ((m = SECONDARY.exec(code))) names.add(m[1]);
+  const names = new Set(findSecondaryApps(code));
   if (names.size) found[f] = [...names].sort();
 }
 

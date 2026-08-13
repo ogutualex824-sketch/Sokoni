@@ -1,3 +1,55 @@
+## [2026-08-13] — MERCHANT SELL: verified under a real auth attempt; two scanner/SDK findings
+
+**Status: WORKSPACE PROVEN. Attested session BLOCKED BY ENVIRONMENT (documented, not faked).**
+
+`scripts/test-merchant-sell-authenticated.js` drives `seller.html?sec=products&shell=merchant`
+with the Auth emulator attached at the **network boundary** — Playwright rewrites
+identitytoolkit/securetoken to the emulator's proxy paths, so the page runs the **shipped,
+unmodified** Firebase SDK. Adding `connectAuthEmulator` to `firebase.js` would have been a
+shipping change to the auth bootstrap during an RC freeze; a test does not get to buy itself that.
+
+**Proven (deterministic):** all five sections visible **with a usable control each**
+(`productName`, `sellerProductsContainer`, `inventoryTbody`, `bulkCsvFile`, `aiDescBtn`);
+`seller-stats` hidden; content rendered; **no renderer crash**; no SOKONI page or console errors;
+customer nav 0, customer header 0, no horizontal overflow.
+
+**Not proven, and stated rather than implied:** an *attested* Firebase session. App Check gates
+Auth itself, so without a debug token — excluded by policy — sign-in returns
+`auth/network-request-failed` with `__sokoniAppCheckState = 'rejected'`. This is
+`docs/AUTH_GATE_VALIDATION.md` **row G4**, verbatim: *"App Check on localhost without pinned
+token → auth/network-request-failed surfaces correctly"*. The emulator **did** mint the account;
+what is unreachable is the attested client exchange.
+
+The session attempt therefore **reports** and the workspace **gates**. That split is a
+measurement, not a concession: run against an unchanged tree it reported BLOCKED once and four
+failures the next, because attestation availability is decided outside this repo. Gating on it
+would make the verdict a coin toss — the same class of defect as a suite silently dropping out
+on a timeout. Blocked-ness is now read from `window.__sokoniAppCheckState` (deterministic)
+rather than by catching a 403 on the wire (racy).
+
+### Two findings the suite produced
+
+1. **Scanner blind spot in my own ratchet — corrected.** `test-secondary-firebase-apps.js`
+   required the config argument to match `[^,()]+`, which *cannot* match an inline object
+   literal. `seller.html` does exactly that:
+   `initializeApp({ apiKey:"…", … }, "revSnap")` — so it was reported **clean** while creating
+   a secondary app that reads `commissionLedger` with no App Check token. Argument boundaries
+   are now found by **balancing brackets**. A scanner that silently misses the shapes it was
+   written for is worse than no scanner: it converts an unknown into a false assurance.
+   The class is **29 files / 33 apps**, not 28/32. `revSnap` is identical at live `6ac58e6`, so
+   it is baselined with the rest, not fixed during RC.
+2. **`seller.html` loads the Firebase SDK twice** — 10.12.0 for the revenue-snapshot block and
+   10.12.2 via `firebase.js`. ES modules are singletons *per URL*, so those are two registries
+   in one document, and `revSnap` lives on the one App Check never initialised. This also cost
+   a debugging cycle: probing 10.12.0 reported "No Firebase App '[DEFAULT]'" when the app
+   existed — in the other registry.
+
+**Files:** `scripts/test-merchant-sell-authenticated.js` (new),
+`scripts/test-secondary-firebase-apps.js` (balanced-bracket scanner, `seller.html` baselined).
+
+**Database changes:** none. **API changes:** none. **Security changes:** none — no debug token,
+no emulator wiring in shipped code. **Breaking changes:** none.
+
 ## [2026-08-13] — CART: moving an item to the wishlist could delete a DIFFERENT line
 
 **Status: FIXED and proven.** `test-wishlist-phase47` 60/60 (was 55/4).
