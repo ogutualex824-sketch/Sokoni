@@ -99,8 +99,64 @@ function makeGlobal(uid, opts) {
    property of the global object — reading g.cart returns undefined and would have made
    every "item still in the cart" assertion vacuously pass against nothing. It is reached
    through the context instead, so the tests observe the module's real state. */
+/* ── SokoniCart double — the cart is a SERVICE now (Track 2) ──────────────────
+   This suite used to seed and read cart.js's module-scope `cart` array directly. That was
+   correct when the array WAS the cart. Track 2 moved ownership to window.SokoniCart and left
+   `cart` as a render projection refilled by _syncCart() — cart.js:21 says so in as many words —
+   and removeFromCart() now delegates to the service.
+
+   With no service in the sandbox, _cartSvc() returned null and removeFromCart() took its
+   "Cart is still loading" branch and removed nothing. Four assertions then failed against
+   code that is behaving exactly as designed: the suite was describing an obsolete design.
+
+   The fix is to give the sandbox the collaborator the shipped code expects, NOT to relax the
+   assertions. This makes them STRONGER — they now prove the service is actually called and
+   that the correct line is removed through it, rather than that a local array was spliced.
+   Only the methods cart.js really calls are implemented (list/lines/removeAt/removeByCartId/
+   setQty/clear), so a new dependency on this service shows up as a TypeError here rather than
+   being silently absorbed by a permissive stub. */
+function makeCartService(items) {
+  let lines = items.map((i) => ({ ...i }));
+  return {
+    list:  () => lines.map((i) => ({ ...i })),   /* a COPY, like the real service — callers must not mutate the cart by reference */
+    lines: () => lines.length,
+    removeAt: (i) => {
+      if (!Number.isInteger(i) || i < 0 || i >= lines.length) return false;
+      lines.splice(i, 1);
+      return true;
+    },
+    removeByCartId: (cartId) => {
+      const want = String(cartId || '');
+      const i = lines.findIndex((l) => String((l && l.cartId) || '') === want);
+      if (i === -1) return false;
+      lines.splice(i, 1);
+      return true;
+    },
+    /* Mirrors the real removeById: matches on id||productId and removes exactly ONE line,
+       not every line sharing the id — duplicate rows carry independent quantities. */
+    removeById: (id) => {
+      const want = String(id || '');
+      if (!want) return false;
+      const i = lines.findIndex((l) => String((l && (l.id || l.productId)) || '') === want);
+      if (i === -1) return false;
+      lines.splice(i, 1);
+      return true;
+    },
+    setQty: (i, q) => {
+      if (!lines[i]) return false;
+      if (q <= 0) { lines.splice(i, 1); return true; }
+      lines[i].qty = q; return true;
+    },
+    clear: () => { lines = []; return true; },
+    /* Test-only window onto the service's own state, so assertions can read what the CART
+       holds rather than what the projection happens to have been refilled with. */
+    __lines: () => lines,
+  };
+}
+
 function makeCart(uid, cartItems, opts) {
   const g = makeGlobal(uid, opts);
+  g.SokoniCart = makeCartService(cartItems || []);
   vm.createContext(g);
   vm.runInContext(read('cart.js'), g);
   /* AFTER the module runs, never before: cart.js declares its own showNotif(), and a
@@ -108,10 +164,13 @@ function makeCart(uid, cartItems, opts) {
      nothing and every toast assertion reads an empty array (i.e. passes the negative
      ones for the wrong reason). */
   g.showNotif = (msg, type) => { g.toasts.push({ msg: msg, type: type }); };
-  g.__seed = cartItems;
-  vm.runInContext('cart.length = 0; __seed.forEach(function (i) { cart.push(i); });', g);
-  g.getCart = () => vm.runInContext('cart', g);
-  if (!Array.isArray(g.getCart())) throw new Error('cart not reachable in sandbox');
+  /* Read the SERVICE, not the projection. `cart` in cart.js is refilled by _syncCart() only
+     when renderCart() runs, so asserting on it would test when the view last refreshed rather
+     than what the cart contains — and would pass or fail on render timing. */
+  g.getCart = () => g.SokoniCart.__lines();
+  if (!Array.isArray(g.getCart())) throw new Error('cart service not reachable in sandbox');
+  /* The projection must still be wired, or cart.js is not running the code we think it is. */
+  if (!Array.isArray(vm.runInContext('cart', g))) throw new Error('cart projection missing in cart.js');
   return g;
 }
 
@@ -241,8 +300,21 @@ const ITEM = { id: 'fs1', name: 'Kettle', price: 1200, image: 'k.png', shopId: '
   const prof = scanner.stripComments(read('profile.js'));
   ck('J', 'no localStorage wishlist read survives', !/localStorage[\s\S]{0,24}["']wishlist["']/.test(prof));
   ck('J', 'no fabricated wishlist count is rendered', !/wishlistCount["']\s*\)[\s\S]{0,80}\.length/.test(prof));
-  ck('J', 'the cart read (a different key, Track 2) is untouched',
-     /getItem\("cart"\)/.test(prof));
+  /* This asserted that profile.js STILL contained getItem("cart") — the point being that the
+     wishlist migration must not collaterally damage the cart read, which was Track 2's
+     business and not 4.7's. Correct at the time; obsolete now. Track 2.3.7 (8b785ba) removed
+     that read DELIBERATELY, and profile.js records why: it fed #cartItemsCount, which
+     profile.html has not contained for some time, and it counted LINES while every badge on
+     the platform counts units — so rerouting it mechanically would have silently changed a
+     number an owner reads.
+     Keeping the old assertion would demand the reintroduction of a legacy localStorage read
+     that the file's own contract forbids in writing. The property worth holding is the one
+     profile.js actually states, and it is the same rule as its wishlist twin: no localStorage
+     cart read, of any shape. That is strictly stronger than the string-presence check. */
+  ck('J', 'no localStorage cart read survives (Track 2.3.7 removed it deliberately)',
+     !/localStorage[\s\S]{0,24}["']cart["']/.test(prof));
+  ck('J', 'and no cart count is fabricated from a local array length',
+     !/cartItemsCount["']\s*\)[\s\S]{0,80}\.length/.test(prof));
 
   /* ══ K. wishlist.js is gone ══ */
   console.log('\nK. Orphaned wishlist.js deleted');

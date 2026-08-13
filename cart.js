@@ -219,6 +219,34 @@ function renderCart(){
    three duplicate rows of one product who taps ✖ on one expects two to remain. The
    product-level removal (removeAllById) belongs to the marketplace card toggle, where
    "remove from cart" means the product is gone. Two different intents, two methods. */
+/* Remove the line an ITEM came from, resolving identity INSIDE the service.
+   -----------------------------------------------------------------------------
+   moveToWishlist() used `cart.indexOf(item)` and passed the result to removeFromCart(),
+   i.e. it derived an index from the PROJECTION and applied it to the SERVICE. Those two
+   agree only while they are in sync, and the whole reason that line exists is the await
+   before it — a window in which they need not be.
+
+   Measured, with a real cart service and the cart mutated during the await: the shopper
+   saved "Kettle" and a DIFFERENT row was deleted, while Kettle stayed in the cart. Both
+   halves are wrong, and the destructive half is silent data loss on a money path.
+
+   The intent of the original line was right — re-locate rather than reuse a stale index —
+   but identity has to be resolved by the component that owns the data. `cartId` first,
+   because food lines are keyed by it and the same dish can legitimately appear twice with
+   different notes; product id otherwise, and removeById deliberately removes ONE line, not
+   every line sharing that id. */
+function _removeCartLineByIdentity(item){
+    const c = _cartSvc();
+    if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return false; }
+    const cid = String((item && item.cartId) || "");
+    const pid = String((item && (item.productId || item.id)) || "");
+    const ok  = cid ? c.removeByCartId(cid) : (pid ? c.removeById(pid) : false);
+    if(!ok){ showNotif("Couldn't update your cart — please try again", "error"); return false; }
+    showNotif("Item removed from cart", "success");
+    renderCart();
+    return true;
+}
+
 function removeFromCart(index){
     const c = _cartSvc();
     if(!c){ showNotif("Cart is still loading — try again in a moment", "error"); return; }
@@ -283,7 +311,7 @@ function moveToWishlist(index){
        the cart line still goes. Nothing is lost: canonical state already holds it. */
     if(W.isWishlisted(pid)){
         showNotif("Already in wishlist", "success");
-        removeFromCart(index);
+        _removeCartLineByIdentity(item);
         return Promise.resolve(true);
     }
 
@@ -292,10 +320,12 @@ function moveToWishlist(index){
                    image: item.image || item.imageUrl || null })
       .then(() => {
           showNotif("Moved to wishlist ❤️", "success");
-          /* Re-locate by identity rather than reusing `index`: the await gave other
-             handlers a window to mutate the cart, and a stale index removes the wrong row. */
-          const now = cart.indexOf(item);
-          if(now !== -1) removeFromCart(now);
+          /* Re-locate by identity rather than reusing `index`: the await gave other handlers
+             a window to mutate the cart, and a stale index removes the wrong row. The
+             re-location happens INSIDE the service — see _removeCartLineByIdentity — because
+             resolving it against the render projection and then indexing the service is the
+             same stale-index bug wearing different clothes. */
+          _removeCartLineByIdentity(item);
           return true;
       })
       .catch(e => {

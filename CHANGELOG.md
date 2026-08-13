@@ -1,3 +1,62 @@
+## [2026-08-13] — CART: moving an item to the wishlist could delete a DIFFERENT line
+
+**Status: FIXED and proven.** `test-wishlist-phase47` 60/60 (was 55/4).
+
+**This defect was found by repairing a test, not by reading code.** `test-wishlist-phase47` was
+carried as a "harness-model issue". It was not. Traced to the contract, all four failures had
+one root cause — **Track 2 cart semantics changed and the suite still modelled the old design**
+— and fixing the suite exposed a real production bug underneath it.
+
+### The suite was describing an obsolete design
+
+`cart` in `cart.js` is no longer the cart. Track 2 moved ownership to `window.SokoniCart` and
+left `cart` as a **render projection** refilled by `_syncCart()` (`cart.js:21` says so), and
+`removeFromCart()` delegates to the service. The suite seeded and read that array directly and
+provided **no service at all**, so `_cartSvc()` returned `null`, `removeFromCart()` took its
+"Cart is still loading" branch, and the cart line correctly survived. Groups B/F/G were failing
+against code behaving exactly as designed.
+
+Group J asserted `profile.js` still contains `getItem("cart")`. Track 2.3.7 (`8b785ba`) removed
+that read **deliberately** — it fed `#cartItemsCount`, which `profile.html` no longer contains,
+and it counted LINES while every badge counts units. The assertion demanded the reintroduction
+of a legacy read the file's own comment forbids in writing.
+
+> **Correction to the release matrix.** This is *not* comparable to live: `test-wishlist-phase47`,
+> `test-cart-readers` and `test-cart-universal` **do not exist at `6ac58e6`**. An earlier run
+> reported them "failing at baseline"; that was `MODULE_NOT_FOUND` misread as a failure. Only
+> `test-landlord-rules` (25/3), `test-seller-products` (23/2) and `test-pos-tab-transitions`
+> (3/1) are confirmed pre-existing with identical counts.
+
+### The real defect the repair uncovered
+
+The suite was given a faithful `SokoniCart` double — implementing **only** the methods `cart.js`
+actually calls, so a new dependency surfaces as an error instead of being absorbed by a
+permissive stub. Group G then failed for a new and correct reason:
+
+```
+saved "Kettle"  →  Kettle STAYED in the cart, and a DIFFERENT row was deleted
+```
+
+`moveToWishlist()` did `cart.indexOf(item)` and passed the result to `removeFromCart()` —
+deriving an index from the **projection** and applying it to the **service**. Those agree only
+while in sync, and the entire reason that line exists is the `await` before it, which is
+precisely a window in which they need not be. Both halves are wrong and the destructive half is
+**silent data loss on a money path**.
+
+The original intent was right — re-locate rather than reuse a stale index — but identity must be
+resolved by the component that owns the data. `_removeCartLineByIdentity()` now resolves it
+**inside the service**: `cartId` first (food lines are keyed by it, and the same dish can appear
+twice with different notes), product id otherwise via `removeById`, which removes exactly one
+line rather than every line sharing that id. No index crosses the boundary any more.
+
+**Files:** `cart.js` (`_removeCartLineByIdentity`, both call sites in `moveToWishlist`),
+`scripts/test-wishlist-phase47.js` (service double + J rewritten to the real contract).
+
+**No regression:** the whole `test-cart-*` family re-run; `test-cart-service-contract` 3/3.
+
+**Database changes:** none. **API changes:** none. **Security changes:** none.
+**Breaking changes:** none — the toasts and render path are unchanged.
+
 ## [2026-08-13] — RELEASE TREE: provisioning is now verified, not assumed
 
 **Status: DONE.** `scripts/make-release-tree.js`.
