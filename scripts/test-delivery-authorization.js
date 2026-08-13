@@ -91,7 +91,25 @@ async function buyerConfirm({ orderId, uid }) {
   return _completeDelivery({ orderId, pkgId: o.packageRequestId, riderUid: rider, method: 'buyer_confirmation', actorUid: uid });
 }
 
+/* Same preflight as test-delivery-sequence, and for the same reason: without it this suite
+   throws against a missing emulator and exits 1, which aborts a production deploy because
+   gate-inventory.js runs the suite population as a predeploy hook. A security suite must not
+   be the reason a release cannot ship. Exit 0 with no assertions → classify() reads ENV. */
+function emulatorReachable(hostPort) {
+  const [host, port] = String(hostPort).split(':');
+  return new Promise((resolve) => {
+    const sock = require('net').connect({ host, port: Number(port) }, () => { sock.destroy(); resolve(true); });
+    sock.on('error', () => resolve(false));
+    sock.setTimeout(2000, () => { sock.destroy(); resolve(false); });
+  });
+}
+
 (async () => {
+  if (!(await emulatorReachable(process.env.FIRESTORE_EMULATOR_HOST))) {
+    console.log('\nSKIP — the Firestore emulator is not running at ' + process.env.FIRESTORE_EMULATOR_HOST + '.');
+    console.log('Run it with: firebase emulators:exec --only firestore "node scripts/test-delivery-authorization.js"');
+    process.exit(0);
+  }
   console.log('\nDELIVERY AUTHORIZATION — server-verified completion\n');
 
   head('1 · correct PIN from the assigned rider → delivered');

@@ -50,7 +50,31 @@ const PKG   = 'pkg_seq';
 const ORDER = 'ord_seq';
 const PIN   = '135790';
 
+/* Is the Firestore emulator actually there? Without this the suite threw
+   "TypeError: fetch failed" and exited 1 — which ABORTED A PRODUCTION DEPLOY, because
+   scripts/gate-inventory.js runs the suite population as a predeploy hook and no emulator
+   exists in that context. A security suite must not be the reason a release cannot ship.
+   Skipping is honest here and not a licence to ignore it: the authoritative gate runs under
+   `firebase emulators:exec`, where this executes for real. Exit 0 with no assertions, which
+   classify() reads as ENV — the same treatment test-returns-rules and test-workspace-rules
+   carry for exactly this reason. */
+function emulatorReachable(hostPort) {
+  const [host, port] = String(hostPort).split(':');
+  return new Promise((resolve) => {
+    const sock = require('net').connect({ host, port: Number(port) }, () => { sock.destroy(); resolve(true); });
+    sock.on('error', () => resolve(false));
+    sock.setTimeout(2000, () => { sock.destroy(); resolve(false); });
+  });
+}
+
 (async () => {
+  if (!(await emulatorReachable(process.env.FIRESTORE_EMULATOR_HOST))) {
+    console.log('\nSKIP — the Firestore emulator is not running at ' + process.env.FIRESTORE_EMULATOR_HOST + '.');
+    console.log('This suite drives the REAL firestore.rules through @firebase/rules-unit-testing,');
+    console.log('so it cannot run without one. Run it with:');
+    console.log('  firebase emulators:exec --only firestore "node scripts/test-delivery-sequence.js"');
+    process.exit(0);
+  }
   const PROJECT = 'sokoni-deliv-seq-' + Date.now().toString(36);
   process.env.GCLOUD_PROJECT = PROJECT;
 
