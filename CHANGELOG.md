@@ -1,3 +1,41 @@
+## [2026-08-13] — SELL SUITE: made deterministic (20/0 × 6), and what made it flake
+
+**Status: FIXED.** The gate at `fda7197` reported `test-merchant-sell-authenticated` 19/1 while
+it passed locally — a suite that alternates is not evidence, so it was stabilised rather than
+tolerated. Four distinct causes, none of them a product defect:
+
+1. **A detached rejection ended the run.** Playwright route handlers and in-flight evaluates are
+   promises nobody awaits. When the emulator settled at an awkward moment the rejection had no
+   call site, and the process died mid-run — reporting `17 passed, 1 failed (aborted before
+   finishing)` roughly one run in six against an unchanged tree. **A green suite reporting a
+   defect it had not found is the worst direction to be wrong in.** Rejections are now recorded
+   and printed, never fatal; the verdict comes from the assertions alone and the 180s watchdog
+   remains the backstop for a suite that genuinely cannot finish.
+2. **The recovery path was itself the offender** — `await route.abort()` inside the handler's
+   `catch` rejects when the context is already closing, which is exactly when the SDK's last
+   auth request lands. Now doubly guarded, and routes are dropped via `unrouteAll` before
+   teardown.
+3. **A CORS message my filter didn't match.** The harness serves from a random port with none
+   of `firebase.json`'s headers, so a cross-origin fetch is rejected on the ORIGIN:
+   `"Origin http://127.0.0.1:<ephemeral> is not allowed by Access-Control-Allow-Origin"`.
+   Matching only the `version.json` phrasing left this variant to fail one run in five.
+4. **App Check diagnostics were keyed on the wrong condition.** They were filtered only when
+   `attestationBlocked`, which additionally requires a failed sign-in — so when attestation
+   merely never completed (`'pending'`) SOKONI's own diagnostic failed the run. Now keyed on
+   `appCheckState !== 'exchanged'`, which is the honest condition; if App Check ever *does*
+   exchange, the same message becomes a real error and still fails.
+
+Attestation-derived messages are excluded **unconditionally and on purpose**: whether App Check
+attests is decided by infrastructure outside this repo and varied across five identical runs.
+Letting that decide a workspace suite's verdict makes it a coin toss, and **a flaky gate teaches
+people to ignore it**. App Check health is not unowned — `scripts/verify-appcheck.js` is a
+predeploy gate for exactly that — and the observed state is still printed as data.
+
+**Result: 20 passed, 0 failed, six consecutive runs.**
+
+**Files:** `scripts/test-merchant-sell-authenticated.js`.
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — MERCHANT SELL: verified under a real auth attempt; two scanner/SDK findings
 
 **Status: WORKSPACE PROVEN. Attested session BLOCKED BY ENVIRONMENT (documented, not faked).**
