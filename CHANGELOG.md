@@ -1,3 +1,53 @@
+## [2026-08-13] — TRACK 2.6 CLOSED: the one header page without the cart service
+
+**Status: FIXED and proven from the clean committed tree.** `9840ca9`.
+
+Track 2.6 asserts that every page carrying `shared-header.js` also loads `sokoni-cart.js` —
+the header reads the cart badge through `SokoniCart`, so without the tag the pip cannot render a
+count. `availability-manager.html` was **310 of 311**: the one page that did not.
+
+`test-cart-readers` and `test-cart-universal` had been failing on exactly this at live `6ac58e6`
+and at every commit since — a pre-existing defect, not a regression, and the sole remaining
+blocker on the release candidate.
+
+### Converged surgically, from someone else's uncommitted work
+
+The fix was authored by the concurrent process and left uncommitted. **Only its first hunk was
+taken.** The rest of that working-tree diff is a separate, in-progress workstream — a `_SAS`
+shape adapter, `_repairCanonicalProjection()`, `_syncOverrideMap()` — which references
+`sokoni-availability-schedule.js`, an **untracked** file. Committing it would have shipped a
+`<script>` tag resolving to **404** plus unreviewed Firestore-writing code, turning "finish the
+RC" into "ship a stranger's work in progress".
+
+It was converged **through the index, never the working tree**, so the concurrent process keeps
+every one of its remaining edits — `_repairCanonicalProjection` (×2) and `_syncOverrideMap` (×3)
+are still in their working copy, nothing reverted, staged or overwritten.
+
+> A first attempt via a PowerShell round-trip rewrote **all 1549 lines** through BOM and
+> line-ending normalisation. It was caught in `git diff --cached` *before* committing and redone
+> by reading the blob from git as a buffer and matching the file's own LF endings. **Committed
+> diff: exactly +3 lines**, byte-identical to their hunk.
+
+### Proven from the committed tree, not the dirty one
+
+```
+availability-manager.html → sokoni-cart.js   PRESENT
+sokoni-availability-schedule.js               absent (correctly — untracked)
+test-cart-readers     42 passed, 0 failed   →  311 of 311
+test-cart-universal   47 passed, 0 failed
+```
+
+**Final authoritative gate at `9840ca9`** — 164 suites: **PASS 153 · FAIL 3 · QUARANTINE 3 ·
+ENV 5 · TIMEOUT 0**, `nearBudget` empty, ENV exactly the five DECLARED entries, and
+`foreignBrowsersAtStart: 0` — a clean measurement on a quiet machine.
+
+The three remaining failures are the carried baseline set, unchanged and unhidden:
+`test-landlord-rules` (25/3), `test-pos-tab-transitions` (3/1), `test-seller-products` (23/2) —
+all identical at live `6ac58e6`.
+
+**Files:** `availability-manager.html` (+3).
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — RELEASE: a checklist for the properties the gate cannot see
 
 **Status: DONE.** `scripts/release-candidate-check.js` — 12/13 against `ae464e2`, the single
