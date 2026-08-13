@@ -99,15 +99,52 @@ head('3 · activation state, and what this release actually ships');
    enforcement is still off. What this release CHANGES is reported, not asserted — it is the
    payload, and whoever authorises the deploy needs to see it, which is exactly why Hosting
    and Functions must go together for this release. */
-const policy = read('functions/auth-policy.js');
-ck('cutoff sentinel 2099-01-01T00:00:00.000Z intact',
-   !!policy && policy.includes('2099-01-01T00:00:00.000Z'));
-/* An armed cutoff is a real ISO date in place of the sentinel. Catch that here rather than
-   discovering it after a deploy. */
-const armed = policy && (policy.match(/20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d\d\dZ/g) || [])
-  .filter((d) => d !== '2099-01-01T00:00:00.000Z');
-ck('no armed (non-sentinel) cutoff date is committed', !armed || armed.length === 0,
-   (armed || []).join(', '));
+/* The activation state must be asserted against the state INTENDED for this run, not against
+   a hardcoded assumption of "disarmed".
+     (default)        expect the sentinel — enforcement off
+     --armed <iso>    expect exactly that cutoff, on BOTH files, identical
+
+   The first version asserted "no armed cutoff is committed" unconditionally. That is right up
+   until the moment activation is authorised, and then it fails a correct armed candidate —
+   which would train an operator to ignore the one check that guards the most dangerous edit in
+   the release. A check that must be waved through at the moment it matters is worse than none.
+
+   Read from the CUTOFF_ISO declaration itself rather than by scanning the file for any ISO
+   string: both files contain other dates in prose, and the sentinel is still *defined* in
+   auth-policy.js after arming — so "the file contains 2099-01-01" stayed true while the shipped
+   cutoff was a real date. That check passed for the wrong reason and would have kept passing. */
+const ai = argv.indexOf('--armed');
+const EXPECT = ai >= 0 ? argv[ai + 1] : null;
+const SENTINEL = '2099-01-01T00:00:00.000Z';
+const DECL = /CUTOFF_ISO:\s*(SENTINEL_ISO|'([^']*)')/;
+const cutoffOf = (rel) => {
+  const m = DECL.exec(read(rel) || '');
+  if (!m) return null;
+  return m[1] === 'SENTINEL_ISO' ? SENTINEL : m[2];
+};
+const clientCut = cutoffOf('sokoni-verify-policy.js');
+const serverCut = cutoffOf('functions/auth-policy.js');
+
+ck('client cutoff is readable', !!clientCut, String(clientCut));
+ck('server cutoff is readable', !!serverCut, String(serverCut));
+/* Divergence is the failure mode the activation script exists to prevent: a client enforcing
+   from Tuesday while the server thinks Thursday. */
+ck('client and server ship the SAME cutoff', clientCut === serverCut, clientCut + ' vs ' + serverCut);
+
+if (EXPECT) {
+  ck('ARMED to the expected cutoff ' + EXPECT, clientCut === EXPECT && serverCut === EXPECT,
+     'client=' + clientCut + ' server=' + serverCut);
+  ck('...and it is genuinely in the future', Date.parse(EXPECT) > Date.now(),
+     'now ' + new Date().toISOString());
+  /* A stale cutoff is a hard rule: deploying one activates enforcement retroactively for every
+     account created between the cutoff and the deploy. */
+  const hoursLeft = (Date.parse(EXPECT) - Date.now()) / 3600000;
+  ck('...with enough headroom left to deploy and verify (>2h)', hoursLeft > 2,
+     hoursLeft.toFixed(1) + 'h remaining');
+} else {
+  ck('cutoff is the SENTINEL (enforcement off)', clientCut === SENTINEL && serverCut === SENTINEL,
+     'client=' + clientCut + ' server=' + serverCut);
+}
 
 const changed = git(TREE, 'diff', '--name-only', BASELINE + '..HEAD').split('\n').filter(Boolean);
 const fns = changed.filter((f) => f.startsWith('functions/'));
