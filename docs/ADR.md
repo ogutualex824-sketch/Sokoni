@@ -847,3 +847,98 @@ wallet credit, transfers, replay) were deliberately not started: they sit downst
 of a request that never arrives, so results would be uninterpretable.
 
 Note the callback destination remains the open question in **ADR-0014**.
+
+---
+
+## ADR-0017 — One canonical geospatial platform; the map never authorizes money
+
+**Status:** ACCEPTED (direction). Convergence is POST-RELEASE; only the ratchet lands now.
+**Date:** 2026-08-13
+**Related:** ADR-0011/0012 (delivery pricing authority), `docs/CANONICAL_COLLECTIONS.md`,
+`scripts/test-map-engine-ratchet.js`, `scripts/test-delivery-authorization.js`
+
+### Context
+
+A rider-map requirement prompted a proposal for a new `sokoni-map.js` power module. A survey
+first found the opposite of a missing engine — **eleven already exist**:
+
+| Module | Lines | Self-described role |
+|---|---|---|
+| `sokoni-gip.js` (+ `gip-api`, `gip-router`, `gip-dispatch`, `gip-fleet`, `gip-analytics`) | 1036 | "Geo Intelligence Platform — central geospatial" |
+| `sokoni-nav-engine.js` | 798 | "SOKONI Navigation Engine v2.0 — role-based" |
+| `sokoni-navigation.js` | 755 | "SOKONI Navigation Engine v2.0 — real-time GPS" |
+| `sokoni-map-manager.js` | 159 | Leaflet lifecycle / tiles |
+| `sokoni-geo.js` | 183 | Cross-browser geolocation wrapper |
+| `sokoni-gps-manager.js` | 210 | Marker interpolation / GPS smoothing |
+
+Two distinct files both call themselves **"Navigation Engine v2.0"**. Fifteen HTML pages
+additionally construct their own `L.map(...)` or call `getCurrentPosition` directly.
+
+The disease is not absence, it is proliferation. Adding a canonical module to a repository that
+already has eleven produces **engine #12** — which is precisely what the Platform Constitution's
+*"26 engines, extend don't rebuild"* exists to prevent.
+
+### Decision
+
+1. **One canonical geospatial platform. `sokoni-map.js` will NOT be created.**
+2. **Candidate roles, to be confirmed by evaluation — not by size or by the word "central":**
+   - `sokoni-gip.js` — candidate canonical geo-intelligence / location-orchestration layer
+   - `sokoni-nav-engine.js` + `sokoni-navigation.js` — existing navigation capabilities to be
+     **evaluated and consolidated**, never duplicated. Two v2.0 engines is the open question.
+   - `sokoni-map-manager.js` — map rendering / lifecycle capability
+   - `sokoni-geo.js` — geolocation capability
+   - `sokoni-gps-manager.js` — GPS smoothing / marker interpolation capability
+3. **No new independent map, GPS, routing, geocoding, ETA or navigation engine** may be added
+   while the capability exists in one of the above.
+4. **Canonical location object.** Positions: `{ lat, lng, accuracy, source, timestamp }`.
+   Destinations: `{ orderId, lat, lng, address, label, source }`.
+5. **Explicit missing/invalid states**, never a substituted value:
+   `LOCATION_UNAVAILABLE` · `INVALID_COORDINATES` · `LOCATION_PERMISSION_DENIED` ·
+   `DESTINATION_NOT_FOUND`.
+6. **No fabricated coordinates.** Never `0,0`, never a city centroid, never the previous order's
+   destination, never the seller's location standing in for the buyer's. Geocoding a stored
+   *address* is legitimate; inventing a *coordinate* is not.
+7. **The map informs; it never authorizes.** Geofence and arrival detection are **advisory**.
+   Server-side delivery authorization remains the sole authority for `delivered` and for rider
+   payout — `completeDeliveryWithPin` (buyer PIN verified against the keyed HMAC) or
+   `buyerConfirmDelivery`. Proximity is not proof of delivery.
+8. **Offline data may serve navigation UI and must never authorize anything.** Cache the route,
+   the last position and the destination; never cache authority.
+9. **Provider abstraction.** Routing/geocoding/tiles sit behind an interface
+   (`geocode`, `reverseGeocode`, `route`, `distance`, `map`) so the provider can change without
+   rewriting SOKONI.
+
+### Why rule 7 is stated so bluntly
+
+A rider could recently pay themselves: `driver.html` compared the typed PIN against a plaintext
+value the rider's own client had already fetched, then wrote `status:'delivered'`, which
+credited their wallet. The map is the next most tempting place to reintroduce exactly that shape
+— "the rider is within 50 m, so the delivery must have happened" is a *plausible-looking value
+standing in for an unverified one*, which is the same defect wearing a different coat.
+
+### Consequences
+
+- **Now:** a ratchet (`scripts/test-map-engine-ratchet.js`) baselines the 15 pages that hold
+  their own map/GPS code and **fails on the 16th**. It does not reduce the 15 — that is a
+  refactor, and this is an armed release candidate.
+- **Post-release:** choose the canonical owner by **objective comparison** — API quality, real
+  consumers, security boundaries, duplication, performance, actual production usage — *not*
+  because `sokoni-gip.js` is the largest or says "central". Then migrate consumers incrementally.
+- Every convergence removes a name from the ratchet baseline, so the list can only shrink.
+
+### Explicitly out of scope for this change
+
+`firestore.rules`, delivery authorization, `auth-*`, the enforcement cutoff, Cloud Functions, the
+existing navigation engines, the rider navigation implementation, and production map behaviour
+are all untouched. This ADR and one test are the entire change.
+
+### Postscript — the ratchet corrected this ADR on its first run
+
+The survey above was done by hand and globbed the map, geo, nav and gip prefixes. It missed
+`sokoni-gps-manager.js` entirely: **eleven engines, not ten.** A count maintained by memory
+drifts; a count maintained by a test does not. The ratchet also flagged
+`sokoni-gip-dispatch.markDelivered`, which sets `otpVerified` from a **client-supplied**
+argument on `gipDispatch/{jobId}` — the same client-asserted-proof shape as the delivery PIN
+defect. It authorises no payout today because that collection does not feed
+`onOrderStatusChange`, so it is reported as a standing NOTE rather than a breach; it must be
+reviewed before `gipDispatch` is ever wired to `orders`.
