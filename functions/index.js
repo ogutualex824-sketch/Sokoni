@@ -11344,6 +11344,14 @@ exports.processDriverEarning      = navigation.processDriverEarning;
 const _deliveryPin = require("./delivery-pin");
 exports.deliveryPinOnAccept       = _deliveryPin.deliveryPinOnAccept;
 exports.deliveryVerifyShadow      = _deliveryPin.deliveryVerifyShadow;
+
+/* PHASE 1 — the ENFORCING delivery completion path. Phase 0 above issues the PIN and
+   observes; these two are the only writers of `delivered` on an order now that
+   firestore.rules no longer lets the assigned rider set that status from the client.
+   New Cloud Functions must be re-exported by name here or they are not deployed. */
+const _deliveryComplete = require("./delivery-complete");
+exports.completeDeliveryWithPin   = _deliveryComplete.completeDeliveryWithPin;
+exports.buyerConfirmDelivery      = _deliveryComplete.buyerConfirmDelivery;
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;

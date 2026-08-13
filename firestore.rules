@@ -596,10 +596,22 @@ service cloud.firestore {
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
 
+                    /* The assigned rider drives the delivery FORWARD, but cannot declare it
+                       finished. `delivered` is what onOrderStatusChange pays them for, so a
+                       client write of that status was the rider authorising their own payout —
+                       and the PIN "check" was a comparison in the rider's own browser against
+                       a plaintext value their client had already fetched.
+                       Completion now goes through completeDeliveryWithPin (server-verifies the
+                       buyer's PIN against the keyed HMAC) or buyerConfirmDelivery (the buyer
+                       acting as themselves). Both use the Admin SDK, which bypasses these
+                       rules, so closing the client door here does not close theirs.
+                       En-route statuses stay client-writable: they move the tracking screen and
+                       pay nobody. */
                     || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
                         && uidUnchanged() && validOrderStatus()
+                        && !(request.resource.data.status in ['delivered','completed'])
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','driverNote','updatedAt','pickedUpAt','deliveredAt','etaMin']));
+                             .hasOnly(['status','driverNote','updatedAt','pickedUpAt','etaMin']));
       allow delete: if isAdmin();
       match /events/{eventId} {
 

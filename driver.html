@@ -2334,36 +2334,43 @@ window._drvCompleteDelivery = async function(dRef) {
       } else { _drvDeliveryShadow(dRef, _pinS, null, null); }
     } catch (_) {}
 
-    /* PIN verification (if PIN was set at creation) */
-    if (data.proofPin) {
-      const entered = (inputEl?.value || '').trim();
-      if (entered !== String(data.proofPin)) {
-        window.toast('❌ Wrong delivery PIN. Ask the buyer for the 4-digit code.');
-        return;
-      }
+    /* ── COMPLETION IS A SERVER DECISION (Phase 1) ──────────────────────────────
+       This block used to compare the typed PIN against data.proofPin — a PLAINTEXT
+       value this very client had just fetched — and then write status:'delivered'
+       straight onto the order. That write is what onOrderStatusChange pays the rider
+       for, so the rider was authorising their own payout and the PIN was decoration.
+
+       Now the PIN goes to completeDeliveryWithPin, which verifies it against the keyed
+       HMAC the rider cannot read, confirms the caller IS the assigned rider, and makes
+       the `delivered` transition itself with the Admin SDK. firestore.rules no longer
+       permits a rider to write that status from the client, so there is no fallback
+       path to regress into — and deliberately so: a "if the call fails, write it
+       anyway" fallback would reopen exactly the hole this closes. A failure here must
+       surface to the rider, not be worked around. */
+    const entered = (inputEl && inputEl.value || '').trim();
+    if (!/^\d{4,8}$/.test(entered)) {
+      window.toast('❌ Enter the delivery PIN from the customer.');
+      return;
     }
 
-    const now        = new Date().toISOString();
-    const fee        = Number(data.deliveryFee || 0);
-    const driverNet  = Math.round(fee * 0.88);
+    const fee       = Number(data.deliveryFee || 0);
+    const driverNet = Math.round(fee * 0.88);
 
-    await SokoniDB.updatePackageRequest(dRef, {
-      status:'delivered', deliveredAt:now,
-      proofNote:'Delivered — PIN verified', payoutDue:true,
-    }).catch(e => console.warn(e.message));
-
-    /* Update linked order — Gap 4: go through the CANONICAL transition (validated, timeline-
-       projected, audited) instead of a raw status write. Falls back to the raw update only if
-       SokoniOrders isn't loaded, so the legacy card never regresses. */
-    if (data.orderId) {
-      var _rDrvUid = (typeof _drvUid === 'function' ? _drvUid() : null);
-      var _routed = false;
-      if (window.SokoniOrders && window.SokoniOrders.riderDelivered) {
-        try { var _r = await window.SokoniOrders.riderDelivered(data.orderId, _rDrvUid, { note: 'Delivered — PIN verified' }); _routed = !!(_r && _r.ok); } catch(_) { _routed = false; }
-      }
-      if (!_routed) await SokoniDB.updateOrder(data.orderId, {
-        status:'delivered', deliveryStatus:'delivered', deliveredAt:now,
-      }).catch(()=>{});
+    try {
+      const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
+        ? window.firebaseFunctions.httpsCallable('completeDeliveryWithPin')
+        : null;
+      if (!_fn) { window.toast('❌ Cannot reach the server. Check your connection and try again.'); return; }
+      const _res = await _fn({ deliveryRef: dRef, pin: entered });
+      const _ok  = _res && _res.data && _res.data.ok;
+      if (!_ok) { window.toast('❌ Delivery could not be confirmed. Try again.'); return; }
+      window.toast(_res.data.alreadyDelivered ? '✅ Already confirmed.' : '✅ Delivery confirmed.');
+    } catch (e) {
+      /* The server's message is the useful one — wrong PIN, not your delivery, locked
+         out after too many attempts. Show it rather than a generic failure. */
+      const _m = (e && (e.message || e.code)) || 'Delivery could not be confirmed.';
+      window.toast('❌ ' + _m);
+      return;
     }
 
     /* Update driver earnings */

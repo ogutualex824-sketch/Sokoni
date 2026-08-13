@@ -120,6 +120,18 @@
     <div style="font-size:12px;letter-spacing:.08em;color:rgba(255,255,255,.6);text-transform:uppercase">🔐 Delivery PIN</div>
     <div id="pinCode" style="font-size:34px;font-weight:900;letter-spacing:.24em;color:#71ff00;margin:6px 0 2px">— — — — — —</div>
     <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.5">Give this PIN to your rider <strong>only after</strong> you've received your package.</div>
+    <!-- Forgotten-PIN fallback. The rider CANNOT complete a delivery on their own word, so
+         a buyer who cannot read out the PIN would otherwise be stuck. The escape hatch is
+         deliberately the BUYER's, not the rider's: the party owed the goods is the party who
+         confirms receipt. buyerConfirmDelivery verifies server-side that the caller is the
+         order's buyer (and refuses if they are also the assigned rider), so this is an
+         authorisation, not a bypass. -->
+    <button id="buyerConfirmBtn" type="button"
+            style="margin-top:14px;width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
+                   background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:13px;cursor:pointer">
+      Can't read the PIN? Confirm you received it
+    </button>
+    <div id="buyerConfirmMsg" style="font-size:12px;margin-top:8px;color:rgba(255,255,255,.6)"></div>
   </div>
 </div>
 
@@ -379,6 +391,27 @@ function _watchOrder(orderId){
         _pinBox.style.display='';
       } else {
         _pinBox.style.display='none';
+      }
+      /* Wire the fallback once. It calls the server, which re-checks that this caller is
+         the buyer — the button is a convenience, never the authorisation. */
+      var _bcBtn=document.getElementById('buyerConfirmBtn');
+      if(_bcBtn && !_bcBtn.__wired){
+        _bcBtn.__wired=true;
+        _bcBtn.onclick=async function(){
+          var _msg=document.getElementById('buyerConfirmMsg');
+          _bcBtn.disabled=true; _msg.textContent='Confirming…';
+          try{
+            var _fn=(window.firebaseFunctions&&window.firebaseFunctions.httpsCallable)
+              ? window.firebaseFunctions.httpsCallable('buyerConfirmDelivery') : null;
+            if(!_fn){ _msg.textContent='Cannot reach the server. Check your connection.'; _bcBtn.disabled=false; return; }
+            var _r=await _fn({orderId:orderId});
+            if(_r&&_r.data&&_r.data.ok){ _msg.textContent='✅ Thank you — delivery confirmed.'; }
+            else { _msg.textContent='Could not confirm. Please try again.'; _bcBtn.disabled=false; }
+          }catch(e){
+            _msg.textContent=(e&&(e.message||e.code))||'Could not confirm. Please try again.';
+            _bcBtn.disabled=false;
+          }
+        };
       }
     }
 
