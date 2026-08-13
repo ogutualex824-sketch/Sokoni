@@ -85,6 +85,31 @@ server.listen(0, async () => {
     nativePanel: !!document.querySelector('.mpanel.show') && !document.querySelector('.mpanel.show iframe'),
   }));
 
+  /* The shell invariants, counted the same way for every route. e0dbdca made /merchant suppress
+     the customer header and bottom nav for everything it hosts; a route that reintroduced
+     either would mount a second application inside the first, and nothing in the code would
+     claim to be doing it. Counted AFTER the route has mounted, never before. */
+  const chrome = (page) => page.evaluate(() => ({
+    merchantHeader: document.querySelectorAll('.mtop').length,
+    merchantNav:    document.querySelectorAll('#mbnav').length,
+    customerNav:    document.querySelectorAll('#sk-bottom-nav, .sk-bottom-nav').length,
+    customerHeader: document.querySelectorAll('#sk-top-nav').length,
+    shells:         document.querySelectorAll('.mshell').length,
+    hScroll:        document.documentElement.scrollWidth > window.innerWidth + 2,
+    /* A route that mounted nothing is a dead button — the panel is the evidence, not the hash. */
+    shownPanels:    document.querySelectorAll('.mpanel.show').length,
+  }));
+
+  const assertShell = (label, c) => {
+    ck(label + ': exactly 1 merchant header',   c.merchantHeader === 1, String(c.merchantHeader));
+    ck(label + ': exactly 1 merchant bottom nav', c.merchantNav === 1,  String(c.merchantNav));
+    ck(label + ': 0 customer headers',          c.customerHeader === 0, String(c.customerHeader));
+    ck(label + ': 0 customer bottom navs',      c.customerNav === 0,    String(c.customerNav));
+    ck(label + ': no duplicate shell',          c.shells === 1,         String(c.shells));
+    ck(label + ': no horizontal overflow',      c.hScroll === false,    String(c.hScroll));
+    ck(label + ': mounted something (not a dead button)', c.shownPanels >= 1, String(c.shownPanels));
+  };
+
   head('1 · #mbnav Home returns to Merchant Home from another route');
   {
     const ctx = await browser.newContext(session()); await seed(ctx);
@@ -242,6 +267,105 @@ server.listen(0, async () => {
     await routed(page, 'dashboard');
     const depth2 = await page.evaluate(() => history.length);
     ck('booting on Home does not seed a duplicate Home entry', depth2 - depth <= 1, depth + ' → ' + depth2);
+    await ctx.close();
+  }
+
+  /* ── 4. Acceptance matrix — every primary flow, same invariants ──────────────
+     The earlier sections prove specific behaviours (Home, the exit, Back). This proves the
+     SHELL PROPERTY holds on every route a merchant actually reaches, which is the thing that
+     regresses quietly: one route mounting a second header is invisible until someone opens
+     that route on a phone. Sharing one context is deliberate — routes are visited in sequence
+     the way a merchant visits them, so a shell that degrades only after navigation is caught. */
+  head('4 · acceptance matrix — one shell on every route');
+  {
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+    assertShell('dashboard', await chrome(page));
+
+    /* Reached the way a merchant reaches them: sidebar/drawer for modules, the four-up bar for
+       the primary tabs. `minishop` is the KASS Shop entry and is a HIDDEN-tier route — it has
+       no sidebar row by design, so it is opened through its header button, which is the only
+       control a merchant has for it. */
+    const ROUTES = [
+      { id: 'orders',   label: 'Orders',     how: 'bnav' },
+      { id: 'pos',      label: 'Sell (POS)', how: 'bnav' },
+      { id: 'products', label: 'Products',   how: 'nav'  },
+      /* KASS Shop needs a longer budget, and the reason is deliberate design rather than
+         slowness: __openMiniShop() resolves ownership BEFORE navigating, and _resolve()
+         waits up to 15s for auth (_awaitAuth(15000)) so that an unresolved read is reported
+         as LOADING and never as "unclaimed" — which would invite a seller to re-claim a shop
+         they already own. With no live auth here that full 15s elapses, then it routes.
+         A 15s wait raced it and read #products, which looks exactly like a dead button. */
+      { id: 'minishop', label: 'KASS Shop',  how: 'minishop', waitMs: 30000 },
+    ];
+
+    for (const r of ROUTES) {
+      const clicked = await page.evaluate((r) => {
+        if (r.how === 'minishop') {
+          const b = document.getElementById('mshop-btn');
+          if (!b) return 'no #mshop-btn';
+          b.click(); return 'clicked #mshop-btn';
+        }
+        const sel = r.how === 'bnav'
+          ? '#mbnav .mbnav-item[data-id="' + r.id + '"]'
+          : '.mnav-item[data-id="' + r.id + '"]';
+        const el = document.querySelector(sel);
+        if (!el) return 'NO CONTROL ' + sel;
+        el.click(); return 'clicked ' + sel;
+      }, r);
+      ck(r.label + ': the control exists and was clicked', !/^NO CONTROL|^no #/.test(clicked), clicked);
+      await page.waitForFunction((id) => location.hash === '#' + id, r.id,
+        { timeout: r.waitMs || 15000 }).catch(() => null);
+      /* Panels mount asynchronously (iframes especially) — wait for one to be shown rather
+         than sleeping, so a slow module is not mistaken for a dead button. */
+      await page.waitForFunction(() => document.querySelectorAll('.mpanel.show').length >= 1,
+        null, { timeout: 20000 }).catch(() => null);
+      const st = await state(page);
+      ck(r.label + ': landed on #' + r.id, st.hash === '#' + r.id, st.hash);
+      assertShell(r.label, await chrome(page));
+    }
+
+    /* KASS Shop → Back → Merchant Home. The route before it was Products, so a Back that
+       merely undid one step would land there; Merchant Home is the required destination. */
+    head('5 · KASS Shop → Back → Merchant Home');
+    await page.goBack();
+    await page.waitForTimeout(1500);
+    const afterBack = await state(page);
+    ck('Back leaves KASS Shop', afterBack.hash !== '#minishop', afterBack.hash);
+    ck('...and stays inside /merchant (no bounce out)', afterBack.path === '/merchant.html', afterBack.path);
+    assertShell('after Back from KASS Shop', await chrome(page));
+
+    /* Then Home, from wherever Back landed — the merchant must always be one control away
+       from the marketplace. */
+    const wentHome = await page.evaluate(() => {
+      const el = document.querySelector('#mbnav .mbnav-item[data-id="home"]');
+      if (!el) return false; el.click(); return true;
+    });
+    ck('Home is reachable from there', wentHome === true);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+    const home = await page.evaluate(() => ({
+      path: location.pathname,
+      tmpl: (document.querySelector('meta[name="sokoni-page"]') || {}).content || '',
+      shellGone: !document.querySelector('.mshell'),
+    }));
+    ck('...and lands on the marketplace home', home.tmpl === 'marketplace-home', home.tmpl || home.path);
+    ck('...as a real navigation, shell gone', home.shellGone === true);
+
+    /* The drawer is not a route — it is chrome. Opening it must not disturb the invariants. */
+    head('6 · More drawer');
+    await page.goBack();
+    await page.waitForTimeout(1500);
+    const opened = await page.evaluate(() => {
+      const el = document.querySelector('#mbnav .mbnav-item[data-id="__more"]');
+      if (!el) return 'no More control';
+      el.click();
+      return document.querySelector('.mshell').classList.contains('mobile-open') ? 'open' : 'did not open';
+    });
+    ck('More opens the drawer', opened === 'open', opened);
+    assertShell('More drawer open', await chrome(page));
     await ctx.close();
   }
 

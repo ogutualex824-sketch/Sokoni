@@ -1,3 +1,32 @@
+## [2026-08-13] — MERCHANT NAV: acceptance matrix across every primary route (86/86)
+
+**Status: DONE and proven.** Extended `test-merchant-home-back.js` rather than rewriting the
+working navigation.
+
+The earlier sections proved specific behaviours (Home, the exit, Back). This proves the **shell
+property** on every route a merchant actually reaches — the thing that regresses quietly, since
+one route mounting a second header is invisible until someone opens that route on a phone.
+Every route is asserted for: exactly 1 merchant header, exactly 1 merchant bottom nav, 0
+customer headers, 0 customer bottom navs, 0 duplicate shells, no horizontal overflow, and
+**mounted something** (a panel, not a hash — that is the dead-button check).
+
+Covered: **dashboard · Orders · Sell (POS) · Products · KASS Shop**, then **KASS Shop → Back →
+inside /merchant**, **Home → marketplace** from wherever Back landed, and the **More drawer**
+(chrome, not a route — opening it must not disturb the invariants). Routes are visited in one
+shared context, in sequence, the way a merchant visits them, so a shell that degrades only
+*after* navigation is caught.
+
+**One finding, and it was not a dead button.** KASS Shop initially read `#products` after the
+click, which looks exactly like a dead control. `__openMiniShop()` resolves ownership *before*
+navigating, and `_resolve()` waits up to 15s for auth (`_awaitAuth(15000)`) specifically so an
+unresolved read reports **LOADING** and never "unclaimed" — the latter would invite a seller to
+re-claim a shop they already own. With no live auth in the harness that full 15s elapses, then
+it routes. A 15s test budget raced it. Given the documented budget it lands on `#minishop`
+correctly, and the reason is recorded next to the wait so nobody re-diagnoses it as a defect.
+
+**Files:** `scripts/test-merchant-home-back.js` (86/86, 61s).
+**Database changes:** none. **API changes:** none. **Security changes:** none. **Breaking changes:** none.
+
 ## [2026-08-13] — SELL SUITE: made deterministic (20/0 × 6), and what made it flake
 
 **Status: FIXED.** The gate at `fda7197` reported `test-merchant-sell-authenticated` 19/1 while
