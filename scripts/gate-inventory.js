@@ -113,11 +113,46 @@ if (process.env.SOKONI_FORCE_INVENTORY_GATE !== '1') {
   }
 }
 
-const res = spawnSync(
-  process.execPath,
-  [path.join(__dirname, 'test-inventory.js'), '--gate'],
-  { stdio: 'inherit' }
-);
+/* ── RUN IT WITH THE EMULATOR IT SAYS IT NEEDS ──────────────────────────────
+   The SCOPE note above states plainly that this gate needs the Firestore emulator, and
+   then this line used to spawn test-inventory.js WITHOUT one. In the hosting predeploy
+   chain there is no emulator, so ~12 emulator-backed cart/checkout suites failed or timed
+   out and the hook exited 1 — aborting the deploy. Measured: the same cart family run under
+   `firebase emulators:exec` is 15/15 PASS. The suites were never the problem; the execution
+   model was.
+
+   Launching the emulator here keeps them BLOCKING, which is the point. The alternative —
+   teaching each suite to skip — would convert a large part of the release's coverage into
+   ENV at exactly the moment it matters most, on a release that changes firestore.rules and
+   Cloud Functions.
+
+   FAIL-CLOSED, consistent with the doctrine above: if the emulator cannot start, this gate
+   does NOT fall through to an unguarded run. Absence of evidence is never evidence of
+   safety, so it exits non-zero and says why. */
+const EMU_PROJECT = process.env.SOKONI_GATE_PROJECT || 'sokoni-inventory-gate';
+
+/* ONE command string, not an argv array. With shell:true an argv array is re-joined and
+   re-split by the shell, so the inner `--gate` arrived as an option to `firebase` itself
+   ("error: unknown option '--gate'") rather than staying inside the quoted script. Quoting
+   the inner command in a single string keeps it one argument to emulators:exec. */
+const cmd = 'firebase emulators:exec --only firestore,auth --project ' + EMU_PROJECT +
+            ' "node scripts/test-inventory.js --gate"';
+
+const res = spawnSync(cmd, {
+  stdio: 'inherit',
+  shell: true,                         /* Windows resolves firebase.cmd only via the shell */
+  cwd: path.resolve(__dirname, '..'),  /* so scripts/test-inventory.js resolves */
+  env: { ...process.env, CLOUDSDK_PYTHON: process.env.CLOUDSDK_PYTHON || 'bundled' },
+});
+
+if (res.error || res.status === null) {
+  console.error('\n[gate-inventory] could not run the gate under the Firestore emulator.');
+  console.error('  ' + ((res.error && res.error.message) || 'emulator exited abnormally'));
+  console.error('  This gate needs the Firebase CLI and JDK 21. It fails CLOSED rather than');
+  console.error('  running the inventory suites without the emulator they require — an');
+  console.error('  unguarded run would report failures that are not defects.');
+  process.exit(1);
+}
 
 /* Propagate the gate's verdict verbatim. A spawn error (res.status === null)
    must fail closed, not silently pass. */
