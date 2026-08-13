@@ -13,6 +13,29 @@
  * assertions that matter are the failure ones: block D proves the cart line survives a
  * rejected save, which the pre-migration code could not have done and the post-migration
  * code would silently get wrong if the remove were left outside the .then().
+ *
+ * ── RESOLUTION, 2026-08-13 — read this before reclassifying anything here ──────────────
+ * This suite was carried in the release gate as 55/4, labelled a "harness-model issue".
+ * That label was wrong, and the four failures were NOT independent:
+ *
+ *   B, F, G  the suite seeded and read cart.js's module-scope `cart` array and supplied no
+ *            cart service. Track 2 made `cart` a RENDER PROJECTION of window.SokoniCart, so
+ *            _cartSvc() returned null and removeFromCart() correctly took its "Cart is still
+ *            loading" branch. The suite was describing a design the code had moved past.
+ *   J        asserted profile.js still contains getItem("cart"), which Track 2.3.7 (8b785ba)
+ *            removed deliberately. It demanded the reintroduction of a legacy read that
+ *            profile.js's own comment forbids in writing.
+ *
+ * Giving the sandbox a faithful SokoniCart double then exposed a REAL production defect that
+ * the old model had been hiding: moveToWishlist() re-located the item in the PROJECTION and
+ * removed it by index from the SERVICE, so with the cart mutated during the await the saved
+ * item stayed and a DIFFERENT line was deleted. Fixed in cart.js by resolving identity inside
+ * the service (_removeCartLineByIdentity).
+ *
+ * So: the test model was wrong AND the shipping code was wrong, and the second was only
+ * findable once the first was corrected. Neither was reclassified away. 60/60.
+ *
+ * NOT comparable to live 6ac58e6 — this file does not exist there.
  */
 'use strict';
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
