@@ -1,5 +1,11 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
+<!-- data-no-header: the buyer tracking page carries its own in-page chrome (back
+     control, reference, status timeline) and a full-bleed map, so the global top nav
+     was a second, redundant band above it. This is shared-header.js's documented
+     opt-out (read at shared-header.js:575) — Phase 1 design tokens and the component
+     library still load; only the fixed nav is suppressed. Scoped to THIS page:
+     seller-delivery.html and the rider surfaces are untouched. -->
+<html lang="en" data-splash="1" data-require-auth="true" data-no-header="true">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -24,6 +30,14 @@
   :root { --green:#71ff00; --blue:#00aaff; --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08); }
   *{box-sizing:border-box;}
   body { background:#050505; color:white; font-family:system-ui,-apple-system,sans-serif; margin:0; min-height:100vh; }
+  /* shared-header.js publishes `body { padding-top: var(--sk-header-h) !important }` in
+     Phase 1 — BEFORE the data-no-header opt-out returns — so suppressing the nav leaves
+     its reserved band behind (measured: 64px mobile and desktop). Reclaim it so the
+     tracking content occupies the freed space. The attribute selector outranks the bare
+     `body` rule, so this wins regardless of injection order, and it is scoped to pages
+     that actually opted out rather than to all of them. */
+  html[data-no-header="true"] body,
+  html[data-no-header="true"] body.sk-has-search { padding-top: 0 !important; }
 
   /* ── page wrapper ── */
   .dt-wrap { max-width:520px; margin:0 auto; padding:20px 16px 100px; }
