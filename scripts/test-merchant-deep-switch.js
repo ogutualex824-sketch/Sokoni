@@ -129,8 +129,24 @@ server.listen(0, async () => {
   for (const id of ['receipts', 'messages', 'stories', 'customers', 'products']) {
     const cfg = SELLER[id];
     await page.evaluate((rid) => { const e = document.querySelector('.mnav-item[data-id="' + rid + '"]'); if (e) e.click(); }, id);
-    await page.waitForTimeout(5000);
-    st = await sellerState(page);
+    /* Wait for the CONDITION being asserted, not a fixed span of time.
+       A flat 5s sample raced under load: measured 12/3 with three "shows its own
+       section" failures (seller-dms, customers-section, bulk-upload-section all
+       false) while every "is not the seller home page" assertion passed — the route
+       had resolved and the panel simply had not rendered yet. The same suite passes
+       15/15 given more time, and ran 601s under six concurrent webkit suites against
+       a 300s gate budget, so it was also silently leaving the blocking set.
+
+       Polls the SAME sellerState() the assertions read, so the wait and the assertion
+       can never diverge. Bounded, and on timeout it falls through and asserts anyway —
+       a genuine regression still fails with real evidence rather than being masked. */
+    const _deadline = Date.now() + 20000;
+    for (;;) {
+      st = await sellerState(page);
+      if (st.ok && st.vis[cfg.show] === true) break;
+      if (Date.now() >= _deadline) break;
+      await page.waitForTimeout(250);
+    }
     ck(id + ' shows its own section', st.ok && st.vis[cfg.show] === true,
        st.ok ? cfg.show + '=' + st.vis[cfg.show] : st.why);
     ck(id + ' is not the seller home page', st.ok && st.vis[cfg.hide] === false,
