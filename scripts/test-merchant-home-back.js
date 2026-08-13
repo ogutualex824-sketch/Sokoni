@@ -147,6 +147,12 @@ server.listen(0, async () => {
     }));
     ck('Back from the marketplace re-enters the shell (no #home bounce loop)',
        back.path === '/merchant.html' && back.shell === true, back.path + back.hash + ' shell=' + back.shell);
+    /* RE-ENTRY is the case most likely to leave two of something. The merchant left for the
+       marketplace — a full document with its own header and bottom nav — and came back through
+       the browser's own history rather than through the shell's router. Asserting only that
+       .mshell exists would miss a customer nav restored from bfcache alongside the merchant
+       one, which is the double-shell e0dbdca fixed arriving by a different door. */
+    assertShell('after returning from the marketplace', await chrome(page));
     await ctx.close();
   }
 
