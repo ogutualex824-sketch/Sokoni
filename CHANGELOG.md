@@ -1,3 +1,42 @@
+## [2026-08-13] — AUTH: enforcement cutoff ARMED to 2026-08-20T12:00:00.000Z (not deployed)
+
+**Status: ARMED, dry-run clean, NOT DEPLOYED.**
+
+Client (`sokoni-verify-policy.js`) and server (`functions/auth-policy.js`) set together by
+`scripts/auth-activate-cutoff.js` — one input, both files, or neither. One line changed in each.
+
+**Why this instant.** 7 days out, **15:00 EAT** — Kenyan business hours, so someone is present if
+activation misbehaves. The headroom is deliberate and the asymmetry is the reason: a cutoff that
+passes *before* deployment finishes makes enforcement instantly retroactive for every account
+created in the gap, while a later cutoff merely delays the benefit. Deployment authorisation is
+an unbounded wait, so the safe direction is later. If it is not deployed before the 20th, the
+correct action is to **re-arm, never to deploy a stale cutoff**.
+
+**Dry-run: CLEAN** (`auth-cutoff-dry-run.js`, exit 0)
+
+- **3204 instants** compared around the candidate — **zero** client/server disagreements
+- both `SENTINEL` and both shipped `CUTOFF` constants identical; `describe()` matches word for word
+- **all 87 existing accounts grandfathered** — and shown to be grandfathered for *every* candidate
+  later than the newest existing account, which is what makes the exact instant an operational
+  choice rather than a policy one
+- no mutation by the dry-run itself; shipped state confirmed **ARMED**
+
+**Auth suites against the armed cutoff: 10 PASS, 0 FAIL.** `auth-policy-server` 80/80,
+`auth-session-transitions` 100/100, `auth-signup-gate` 85/85, `auth-verify-policy` 94/94,
+`auth-verify-screen` 97/97, `auth-verify-landing` 58/58, plus `auth-dispatch` and
+`auth-email-challenge` on the emulators. `test-auth-email` remains **QUARANTINE** — untouched,
+per its documented reason.
+
+> `test-auth-verify-gate` prints "46/48" and exits 0. That is a **coverage statement**, not a
+> failure: `dispute-portal.html` and `fleet-monitor.html` sit outside the verify gate. Checked
+> rather than assumed, because an x/y next to a green suite is exactly where a healthy-looking
+> failure hides.
+
+**Files:** `sokoni-verify-policy.js` (1 line), `functions/auth-policy.js` (1 line).
+**Database changes:** none. **API changes:** none. **Security changes:** arms email-verification
+enforcement — inert until Hosting **and** Functions are deployed together. **Breaking changes:**
+none until deployed.
+
 ## [2026-08-13] — TRACK 2.6 CLOSED: the one header page without the cart service
 
 **Status: FIXED and proven from the clean committed tree.** `9840ca9`.
