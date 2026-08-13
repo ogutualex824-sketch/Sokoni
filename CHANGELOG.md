@@ -1,3 +1,57 @@
+## [2026-08-13] — SECURITY: 1.9 MB of Firestore rules were one working-tree deploy from being public
+
+**Status: FIXED and proven.** 26/26.
+
+`firebase.json` hosting is `"public": "."` — the repository root **is** the site, so anything
+not matched by an `ignore` pattern is published. The ignore list named three files **exactly**:
+
+```
+"firestore.rules", "firestore.indexes.json", "storage.rules"
+```
+
+The working tree holds **nine further rules artifacts and two further index files**, none of
+which matched:
+
+| file | size |
+|---|---|
+| `firestore.rules.bak` | 265 KB |
+| `firestore.rules.release-candidate` | 262 KB |
+| `firestore.rules.unreleased` | 261 KB |
+| `firestore.rules.live` / `.minimal` | 256 KB each |
+| `firestore.rules.build` | 164 KB |
+| `firestore.rules.sokoni-ops` | the real sokoni-ops ruleset |
+| `firestore.indexes.json.full`, `firestore.indexes.sokoni-ops.json` | — |
+
+Firestore rules are not secret in the cryptographic sense — they are enforced server-side — but
+publishing them hands an attacker the complete data model and every authorization condition: a
+map of exactly where to push. It is also a stated hard rule for this release that rules
+artifacts must never become public Hosting content.
+
+**Why it was live-safe but not safe.** Deploys are made from the **working tree, not HEAD**.
+Most of these files are untracked, so a clean release worktree never contained them and
+production 404s all of them today (verified against `mysokoni.co.ke`). The exposure was one
+working-tree deploy away, not already shipped.
+
+**Fix.** The three exact entries are now globs — `firestore.rules*`, `firestore.indexes*`,
+`storage.rules*` — so present *and future* variants are covered.
+
+**`scripts/test-hosting-ignores-rules.js`** pins it: every rules/index artifact **actually
+present in the tree** (tracked or not — untracked is exactly how these arrive) must be ignored;
+the globs must remain globs, because tidying them back to exact names reopens the hole without
+touching a rules file; hypothetical future artifacts must also be covered; and a **control**
+asserts `index.html`, `merchant.html`, `seller.js`, `firebase.js` and `sokoni-cart.js` are still
+published — otherwise an over-broad ignore would make every other assertion pass for entirely
+the wrong reason.
+
+> **`firebase.json` was changed deliberately.** The standing instruction was not to alter it
+> casually during the release; this is not that. The RC's own hard rule requires it, the change
+> is additive to an ignore list, and it cannot affect what the emulators do or what real content
+> is served — the control assertions prove the latter.
+
+**Files:** `firebase.json` (three ignore patterns), `scripts/test-hosting-ignores-rules.js` (new, 26/26).
+**Database changes:** none. **API changes:** none. **Security changes:** removes a potential
+disclosure of production authorization logic. **Breaking changes:** none.
+
 ## [2026-08-13] — MERCHANT NAV: acceptance matrix across every primary route (86/86)
 
 **Status: DONE and proven.** Extended `test-merchant-home-back.js` rather than rewriting the
