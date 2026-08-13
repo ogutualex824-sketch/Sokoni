@@ -55,7 +55,16 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 120s'); process.exit(1); }, 120000);
+/* MEASUREMENT-BASED BUDGET CORRECTION — not a relaxation.
+   The 120s watchdog was set when this suite was ~25s. It has since grown the acceptance
+   matrix and the re-entry invariants and now measures 53.2s / 55.1s on an idle machine
+   (two runs, 93/0 both times). That left only ~2.2x headroom, and inside the full gate —
+   which now also spawns gate-inventory's emulator — a ~2.3x slowdown tripped it, reporting
+   a suite whose every assertion had passed as a FAILURE.
+   Nothing about the assertions, the exit behaviour or the classification changes: a real
+   failure still exits 1 and a genuine hang still dies, just at a budget that matches what
+   the suite actually costs. */
+const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 180s'); process.exit(1); }, 180000);
 
 server.listen(0, async () => {
   const BASE = 'http://127.0.0.1:' + server.address().port;

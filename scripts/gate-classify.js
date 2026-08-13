@@ -149,6 +149,11 @@ const SUITE_BUDGET_MS = {
   'test-minishop-claim-firestore': 150000,
   /* measured 83s (27/27); deliberately long — it waits out late Firestore responses */
   'test-shop-setup-hydration': 240000,
+  /* measured 53.2s and 55.1s idle (93/0 both runs, 43ms variance on the neighbouring
+     deep-switch — this machine is repeatable). The 150s browser default gave under 3x,
+     and the gate now also runs gate-inventory's emulator, so the box carries more than
+     when that default was set. Same reasoning as merchant-deep-switch above. */
+  'test-merchant-home-back': 300000,
 };
 
 /* Untriaged genuine failures. Visible every run, blocking none, until each is
