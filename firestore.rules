@@ -1585,6 +1585,12 @@ service cloud.firestore {
                       || (isAuthed() && resource.data.tenantUid == request.auth.uid);
         allow create: if isAuthed()
                       && request.resource.data.ownerUid == request.auth.uid
+                      /* The denormalised ownerUid cannot DRIFT (no hasOnly admits it), but
+                         nothing established that the FIRST copy was true: any landlord could
+                         create a unit inside another's building simply by naming themselves
+                         owner. Resolve ownership from the parent on create only — reads,
+                         updates and deletes keep using the cheap copy. */
+                      && get(/databases/$(database)/documents/landlordProperties/$(propertyId)).data.ownerUid == request.auth.uid
                       && request.resource.data.keys().hasAll(['ownerUid','number','createdAt']);
         allow update: if isAdmin()
                       || (isAuthed() && resource.data.ownerUid == request.auth.uid
@@ -1605,6 +1611,11 @@ service cloud.firestore {
                         || (isAuthed() && resource.data.tenantUid == request.auth.uid);
           allow create: if isAuthed()
                         && request.resource.data.ownerUid == request.auth.uid
+                        /* Same forged-first-copy hole as units, and money-adjacent: a TENANT
+                           could post a negative 'discount' already marked 'paid' into their own
+                           ledger, because naming themselves owner satisfied the check. The
+                           landlord of record is the parent unit's, not the writer's claim. */
+                        && get(/databases/$(database)/documents/landlordProperties/$(propertyId)/units/$(unitId)).data.ownerUid == request.auth.uid
                         && request.resource.data.keys().hasAll(['ownerUid','type','period','amount','status','createdAt'])
                         && request.resource.data.type in ['rent','water','deposit','refund','adjustment','penalty','discount']
                         && request.resource.data.amount is number
