@@ -405,7 +405,25 @@ server.listen(0, async () => {
   /* Drop the auth routes BEFORE closing. A route handler is a detached promise, so one that
      fires while the context is tearing down has nothing left to answer and its rejection has
      no call site — which aborted the run after every assertion had already passed. */
-  try { await ctx.unrouteAll({ behavior: 'ignoreErrors' }); } catch (_) {}
+  /* BOUNDED — this is where the suite hung. Twice in the gate it printed every assertion,
+     reached here, and sat for 135s until the watchdog killed it, with free memory HIGHER
+     than the session baseline (584MB median vs a 221MB session minimum) and the renderer's
+     working set flat at ~283MB for two minutes. Not starvation: idle, waiting.
+     `unrouteAll({ behavior: 'ignoreErrors' })` ignores handler ERRORS but still WAITS for
+     handlers already in flight, so a route handler that never settles blocks here forever.
+     It was the only unbounded await between the last assertion and the teardown — everything
+     else in this range is synchronous filtering and ck() calls.
+     The assertions are already done by this point, so nothing is hidden by capping it: a
+     stuck handler now costs 10s and says so, instead of costing 135s and taking the gate
+     with it. */
+  const _unrouted = await Promise.race([
+    (async () => { try { await ctx.unrouteAll({ behavior: 'ignoreErrors' }); } catch (_) {} return 'settled'; })(),
+    new Promise((r) => setTimeout(() => r('TIMEOUT'), 10000)),
+  ]);
+  if (_unrouted === 'TIMEOUT') {
+    console.log('\n  NOTE  ctx.unrouteAll() did not settle within 10s — a route handler is still' +
+                '\n        in flight. Teardown continues; the result above stands.');
+  }
   await Promise.race([
     (async () => { try { await ctx.close(); await browser.close(); } catch (_) {} })(),
     new Promise((r) => setTimeout(r, 8000)),
