@@ -1,3 +1,47 @@
+## [2026-08-14] — FIXED: competing deep-switch loops made the merchant panel thrash
+
+**Status: mechanism captured, fixed.** deep-switch 15/15 · route-gate 138/0 · home-back 93/0 ·
+shell-boundary 15/15 · runtime 5/0.
+
+`_deepSwitch` started a retry loop per navigation and **never cancelled a superseded one**.
+Each loop re-posts its OWN section every 250ms for up to 10s, so walking four routes quickly
+left four loops fighting over one panel. Captured from the merchant side in a full gate run:
+
+```
+t=18944 -> messages   t=19202 -> messages   t=19463 -> messages
+t=18946 -> receipts   t=19202 -> receipts   t=19463 -> receipts
+t=18992 -> stories    t=19248 -> stories    t=19509 -> stories
+t=19054 -> customers  t=19310 -> customers  t=19575 -> customers
+```
+
+with the module obeying each in turn, its visible section flipping every ~60ms:
+
+```
+19509 [receipts-section]  19570 [stories-section]  19632 [customers-section]
+19770 [receipts-section]  ...
+```
+
+Every loop's `verify()` then failed — a rival had just overwritten its section — so none could
+confirm, all retried to MAX, and the panel never settled. **The merchant saw a section that
+would not stay put.** The suite saw whichever route happened to be on screen when its 20s cap
+expired, which is exactly why the failing route moved between runs.
+
+### Fix
+
+One live switch per frame: a generation token per `frameId`, incremented on each call and
+checked in `attempt()` and in both async continuations, so a superseded loop stops immediately
+and silently. No timeout raised, no assertion touched, `MAX`/`STEP` unchanged.
+
+### Two earlier hypotheses this disproves
+
+- **budget starvation** — it hit the route cap, never the walk ceiling
+- **seller-side throw swallowing (`f0de77b`)** — the stall survived that fix unchanged.
+  `f0de77b` remains a valid independent correction; it was never the cause of this.
+
+It needs a previous loop still inside its 10s window when the next click lands, which is why it
+surfaced under full-population load and never standalone.
+
+**Files:** `merchant.html`. **Rules/Functions/Hosting:** unchanged, not deployed.
 ## [2026-08-14] — FIXED: the seller module recorded a failed section switch as a success
 
 **Status: FIXED.** deep-switch 15/15; seller-deeplink 16/0; seller-dashboard 22/22; route-gate 138/0.
