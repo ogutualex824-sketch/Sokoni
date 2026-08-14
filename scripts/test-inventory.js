@@ -196,6 +196,10 @@ function runOne(f) {
           fs.writeFileSync(_p,
             'suite      : ' + name + '\nverdict    : ' + verdict +
             '\nexit code  : ' + res.status + '\ntimedOut   : ' + timedOut +
+            /* Wall-clock bounds, so a failure can be lined up against an external
+               environment sample. Elapsed alone cannot be correlated with anything. */
+            '\nstartedAt  : ' + new Date(started).toISOString() +
+            '\nendedAt    : ' + new Date().toISOString() +
             '\nelapsed    : ' + (Date.now() - started) + 'ms\nbudget     : ' + budget + 'ms' +
             '\nbrowser    : ' + browser + '\nconcurrency: ' + CONCURRENCY +
             '\nGCLOUD_PROJECT: ' + (suiteEnv(f, process.env).GCLOUD_PROJECT || '') +
