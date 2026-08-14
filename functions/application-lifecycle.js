@@ -65,6 +65,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
+/* Canonical role vocabulary (Roles Phase 1). The single definition of what an
+   application may declare; see functions/role-vocabulary.js. */
+const VOCAB = require('./role-vocabulary');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -179,6 +182,29 @@ function splitLocation(raw) {
    unrecognised intake vocabulary surfaces as an admin alert rather than as a
    silently mis-filed applicant. */
 function resolveRole(app) {
+  /* ── EXPLICIT FIRST (Roles Phase 1) ───────────────────────────────────────
+     A surface that knows which role it is submitting says so. When it does, the
+     keyword pattern below is not consulted at all — inference exists to read
+     documents written before this field, not to second-guess a declaration.
+
+     An unrecognised declaration is NOT resolved. It returns role:null, and the
+     caller quarantines the application for a reviewer. That is the whole point
+     of the change: the old code answered `provider` to every question it did not
+     understand, so a landlord, a mechanic and a typo were indistinguishable
+     once they reached the registry. A stalled application is visible and
+     fixable; a silently mis-filed one is neither. */
+  if (app.requestedRole !== undefined && app.requestedRole !== null && app.requestedRole !== '') {
+    const canon = VOCAB.normalizeRole(app.requestedRole);
+    if (canon) {
+      return {
+        role: canon,
+        by: VOCAB.isCanonicalRole(app.requestedRole) ? 'explicit' : 'explicit-alias',
+        requested: String(app.requestedRole),
+      };
+    }
+    return { role: null, by: 'invalid-requested-role', requested: String(app.requestedRole) };
+  }
+
   const hay = [
     app.role, app.type, app.applicationType, app.category, app.categoryLabel,
     app.hub, app.professionalType, app.businessType, app.serviceType,
@@ -186,22 +212,31 @@ function resolveRole(app) {
 
   const test = (re) => re.test(hay);
 
+  /* LEGACY PATH ONLY. Everything below reads documents written before
+     `requestedRole` existed. `by` is stamped 'legacy-*' so a reviewer can tell a
+     derived role from a declared one at a glance, and so the migration's progress
+     is measurable: when no application resolves by a legacy path any more, the
+     inference can be deleted. Behaviour is deliberately UNCHANGED — an existing
+     pending application must decide exactly as it would have yesterday. */
   if (test(/\b(driver|rider|boda|bodaboda|courier|dispatch|delivery\s*(guy|partner|person))\b/)) {
-    return { role: 'driver', by: 'keyword' };
+    return { role: 'driver', by: 'legacy-keyword' };
   }
-  if (test(/\b(law|legal|advocate|lawyer|attorney|notary)\b/)) return { role: 'legal', by: 'keyword' };
+  if (test(/\b(law|legal|advocate|lawyer|attorney|notary)\b/)) return { role: 'legal', by: 'legacy-keyword' };
   if (test(/\b(health|healthcare|clinic|doctor|hospital|pharmac|dentist|nurse)\b/)) {
-    return { role: 'health', by: 'keyword' };
+    return { role: 'health', by: 'legacy-keyword' };
   }
   if (test(/\b(seller|merchant|vendor|shop|store|retail|stockist|wholesal)\b/)) {
-    return { role: 'seller', by: 'keyword' };
+    return { role: 'seller', by: 'legacy-keyword' };
   }
   if (test(/\b(provider|professional|service|business|company|cleaning|housekeep|laundry|mama\s*fua|moving|relocat|salon|barber|dj|mc|plumb|electric|carpent|paint|tutor|photograph|caterer|mechanic)\b/)) {
-    return { role: 'provider', by: 'keyword' };
+    return { role: 'provider', by: 'legacy-keyword' };
   }
-  /* Unrecognised vocabulary. `provider` is the platform's broadest listing
-     class and the safest landing place, but the caller is told it was a guess. */
-  return { role: 'provider', by: 'default' };
+  /* Unrecognised LEGACY vocabulary. `provider` remains the landing place for a
+     document written before `requestedRole` existed — changing that would
+     re-file applicants who are already in the registry under it. New
+     applications never reach here: an unrecognised declaration is quarantined
+     above rather than defaulted. */
+  return { role: 'provider', by: 'legacy-default' };
 }
 
 /* Dispatch capacity keys (sokoni-dispatch.js VEHICLE_CAPACITY). The driver
@@ -302,8 +337,13 @@ async function buildIntakePatch(app, appId) {
      server-stamped `receivedAt` becomes the ordering key and the original value
      is preserved untouched for the audit trail. */
   const r = resolveRole(app);
-  patch.role = r.role;
+  /* A role is only stamped when one was actually resolved. An unrecognised
+     declaration leaves `role` untouched and records WHAT was asked for, so the
+     admin card shows the applicant's own word instead of a null — and so nothing
+     downstream reads a null as "no role yet" and re-derives it. */
+  if (r.role) patch.role = r.role;
   patch.roleResolvedBy = r.by;
+  if (r.by === 'invalid-requested-role') patch.requestedRoleInvalid = _san(r.requested || '', 60);
   patch.statusCanonical = canonStatus(app.status);
   if (!app.receivedAt) patch.receivedAt = _ts();
   if (!app.applicationId) patch.applicationId = appId;
@@ -619,7 +659,13 @@ async function applyDecision(appId, app, opts = {}) {
   const db = _db();
   const status = canonStatus(app.status);
   const approved = status === 'approved';
-  const role = app.role || resolveRole(app).role;
+  /* An EXPLICIT declaration outranks every legacy field. `app.role` keeps its old
+     precedence for legacy documents so an application already in the queue decides
+     exactly as it would have before Phase 1. */
+  const _resolved = resolveRole(app);
+  const role = _resolved.by === 'explicit' || _resolved.by === 'explicit-alias'
+    ? _resolved.role
+    : (app.role || _resolved.role);
   const uid = app.uid;
 
   if (!uid) {
@@ -634,6 +680,36 @@ async function applyDecision(appId, app, opts = {}) {
     }, { merge: true });
     logger.warn('[appLifecycle] application has no uid', { appId });
     return { ok: false, reason: 'no_uid', appId };
+  }
+
+  /* ── QUARANTINE, NEVER GUESS (Roles Phase 1) ──────────────────────────────
+     The application declared a role this platform does not recognise. Nothing is
+     provisioned: no registry record, no account role, no claim. Before Phase 1
+     this could not happen, because every unrecognised vocabulary resolved to
+     `provider` — which is exactly how a landlord ended up in the service
+     directory with nothing reporting it.
+     Reported the same way as the no-uid case above, so a reviewer finds it on the
+     application rather than in a log they were never going to read. */
+  if (role === null) {
+    const bad = _san(_resolved.requested || '', 60);
+    await db.collection('applications').doc(appId).set({
+      projectionStatus: 'blocked_unknown_role',
+      projectionError: 'requestedRole "' + bad + '" is not a canonical role. '
+        + 'Valid roles: ' + VOCAB.CANONICAL_ROLES.join(', ') + '.',
+      decisionAppliedFor: status,
+      decisionAppliedAt: _ts(),
+    }, { merge: true });
+    await db.collection('adminAlerts').add({
+      kind: 'application_role_invalid',
+      severity: 'medium',
+      message: 'Application ' + appId + ' declared requestedRole "' + bad
+             + '", which is not canonical. It was NOT provisioned and needs a reviewer.',
+      appId, uid, requestedRole: bad,
+      validRoles: VOCAB.CANONICAL_ROLES,
+      createdAt: _ts(),
+    }).catch(() => {});
+    logger.warn('[appLifecycle] unknown requestedRole — quarantined', { appId, requested: bad });
+    return { ok: false, reason: 'unknown_role', appId, requestedRole: bad };
   }
 
   const receipt = { appId, uid, role, status, writes: [] };
@@ -880,7 +956,9 @@ exports.applicationList = onCall(
         applicationId: a.applicationId || d.id,
         uid: a.uid || null,
         name: a.name || a.businessName || a.fullName || '',
-        role: a.role || resolveRole(a).role,
+        /* null when the application declared a role we do not recognise — the list
+           shows it as unresolved rather than inventing one. */
+        role: a.role || resolveRole(a).role || null,
         rawType: a.type || '',
         category: a.category || '',
         categoryLabel: a.categoryLabel || '',

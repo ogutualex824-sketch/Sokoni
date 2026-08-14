@@ -503,8 +503,22 @@
           var _e164 = /^0[17]\d{8}$/.test(_rawPhone) ? '+254' + _rawPhone.slice(1)
                     : /^254[17]\d{8}$/.test(_rawPhone) ? '+' + _rawPhone : null;
           if(_e164){ proData.phoneNumber = _e164; proData.phone = '0' + _e164.slice(4); }
+          /* ── Declared role (Roles Phase 1) ────────────────────────────────
+             This wizard offers eight professional types and they are NOT all the
+             same role. Before this, all eight were pooled into free text and the
+             server keyword-matched them: "Doctor / Healthcare" and "Lawyer /
+             Legal" happened to land on health and legal, and the other six on
+             provider — but only by accident of wording, and a renamed option
+             would have silently re-filed the applicant.
+             The mapping is stated here, at the surface that owns the choice.
+             Anything not named maps to `provider`, which is what a consultant,
+             contractor, educator, IT professional or property agent genuinely
+             is on this platform. */
+          var _PRO_ROLE = { 'Doctor / Healthcare': 'health', 'Lawyer / Legal': 'legal' };
+          var _requestedRole = _PRO_ROLE[proData.professionalType] || 'provider';
           /* Save to applications */
-          await fs.addDoc(fs.collection(db,'applications'), Object.assign({type:'professional', uid:uid}, proData));
+          await fs.addDoc(fs.collection(db,'applications'),
+            Object.assign({type:'professional', requestedRole:_requestedRole, uid:uid}, proData));
           /* Save stub to the canonical providers registry.
 
              Two defects fixed here, both of which made this write useless:

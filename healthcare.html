@@ -1095,7 +1095,10 @@ function submitRegFac(){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
       const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
       return Promise.all([
-        fs.addDoc(fs.collection(window.firebaseDB,'applications'), Object.assign({},fac,{uid,createdAt:Date.now()})),
+        /* requestedRole declares the role instead of leaving the server to infer
+           it from facility wording (Roles Phase 1). Every application from this
+           hub is a health provider. */
+        fs.addDoc(fs.collection(window.firebaseDB,'applications'), Object.assign({},fac,{uid,requestedRole:'health',createdAt:Date.now()})),
         fs.addDoc(fs.collection(window.firebaseDB,'providers'), Object.assign({},fac,{uid,verified:false,createdAt:Date.now()}))
       ]);
     }).catch(function(e){console.warn('[SOKONI] hc save:',e.message);});
@@ -1620,7 +1623,9 @@ function submitProviderReg(){
   if(window.firebaseDB){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
       const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
-      const base=Object.assign({},fac,{uid,category:'Healthcare Facility',createdAt:Date.now()});
+      /* requestedRole declares the role rather than leaving it to be inferred
+         from the category wording (Roles Phase 1). */
+      const base=Object.assign({},fac,{uid,category:'Healthcare Facility',requestedRole:'health',createdAt:Date.now()});
       return Promise.all([
         fs.addDoc(fs.collection(window.firebaseDB,'applications'),base),
         fs.addDoc(fs.collection(window.firebaseDB,'providers'),Object.assign({},base,{verified:false}))

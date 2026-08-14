@@ -383,12 +383,28 @@
     var digits = phone.replace(/\D/g, '');
     var e164 = /^0[17]\d{8}$/.test(digits) ? '+254' + digits.slice(1) : null;
 
+    /* ── Declared role (Roles Phase 1) ──────────────────────────────────────
+       This surface knows more than any keyword matcher can recover: the operator
+       picked one of 103 categories by id, and the id says exactly what they are.
+       Before this, `category`, `categoryLabel` and `hub` were pooled into free
+       text server-side and pattern-matched — so "Auto Mechanic / Garage" matched
+       the word `mechanic` INSIDE the provider pattern and every garage on the
+       platform became a generic provider, and "Landlord / Long-Term Rental"
+       matched nothing at all and fell through to provider by default.
+       The choice is mapped here, at the surface that owns it. Specific category
+       ids win; then the hub; then provider, which is what an unmapped service
+       category genuinely is. */
+    var _ROLE_BY_CATEGORY = { mechanic: 'mechanic', landlord: 'landlord' };
+    var _ROLE_BY_HUB = { delivery: 'rider', healthcare: 'health', legal: 'legal', shopping: 'seller' };
+    var _requestedRole = _ROLE_BY_CATEGORY[cat] || _ROLE_BY_HUB[catObj.hub] || 'provider';
+
     var data = {
       id:          'APP' + Date.now(),
       name:        name,
       category:    cat,
       categoryLabel: catObj.label,
       hub:         catObj.hub,
+      requestedRole: _requestedRole,
       phone:       phone,
       phoneNumber: e164,
       email:       email || (user && user.email ? user.email : ''),

@@ -588,8 +588,11 @@
         var auth = window.firebaseAuth;
         if(!db) throw new Error('Database unavailable. Check your connection and try again.');
         var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        /* requestedRole is the DECLARATION (Roles Phase 1). `type:'driver'` stays
+           for every existing reader, but the role is no longer inferred from it:
+           this wizard only ever produces riders, so it says so. */
         await fs.addDoc(fs.collection(db,'applications'),
-          Object.assign({type:'driver'}, driverData, {uid: auth.currentUser.uid}));
+          Object.assign({type:'driver', requestedRole:'rider'}, driverData, {uid: auth.currentUser.uid}));
       } catch(err){
         console.error('[DriverOnboarding] submit failed', err);
         if(btn){ btn.disabled = false; btn.textContent = _label || 'Submit Application →'; }
