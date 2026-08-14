@@ -2872,6 +2872,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-auth-state.js"></script>
 <script src="sokoni-identity-guard.js"></script>
 <script src="sokoni-permissions.js"></script>
+<!-- Roles Phase 4. THE authority on which roles this account actually holds.
+     sokoni-permissions.js resolves seller-tier roles from cache for fast first
+     paint, which is right for a nav bar and wrong for entering a workspace; this
+     module answers only from a verified ID token and never from storage. -->
+<script src="sokoni-role-authority.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>
 <script type="module" src="session-manager.js"></script>
@@ -3002,11 +3007,33 @@ var ROLES = [
   { key:'driver',   label:'Driver',           emoji:'&#128664;', chipClass:'chip-driver',   hub:'driver.html',   hubLabel:'Driver Hub' },
   { key:'agent',    label:'Property Agent',   emoji:'&#127968;', chipClass:'chip-agent',    hub:'property.html', hubLabel:'Property Hub' },
   { key:'business', label:'Business Owner',   emoji:'&#127970;', chipClass:'chip-business', hub:'seller.html',   hubLabel:'Business Hub' },
+  /* Roles Phase 4 — the canonical vocabulary the SERVER grants. `rider` is the
+     canonical spelling of the legacy `driver` above; both are listed so an older
+     cached value still renders a correct label instead of silently falling back to
+     Buyer. mechanic, health, legal, landlord and tenant had no definition at all,
+     so an approved mechanic would have been drawn as a buyer.
+     `agent` and `business` are legacy keys that no approval grants — once the token
+     is verified the switcher lists only approved roles, so they simply stop
+     appearing rather than being deleted out from under any cached account. */
+  { key:'rider',    label:'Rider',            emoji:'&#128664;', chipClass:'chip-driver',   hub:'driver.html',   hubLabel:'Driver Hub' },
+  { key:'mechanic', label:'Mechanic',         emoji:'&#128295;', chipClass:'chip-provider', hub:'car-hub.html',  hubLabel:'Car Hub' },
+  { key:'health',   label:'Healthcare',       emoji:'&#9877;',   chipClass:'chip-provider', hub:'healthcare.html', hubLabel:'Health Hub' },
+  { key:'legal',    label:'Legal',            emoji:'&#9878;',   chipClass:'chip-provider', hub:'legal-hub.html', hubLabel:'Legal Hub' },
+  { key:'landlord', label:'Landlord',         emoji:'&#127968;', chipClass:'chip-agent',    hub:'landlord.html', hubLabel:'Landlord Hub' },
+  { key:'tenant',   label:'Tenant',           emoji:'&#128273;', chipClass:'chip-buyer',    hub:'property.html', hubLabel:'Property Hub' },
 ];
 
 function getRoleDef(key){
   return ROLES.find(function(r){ return r.key===key; }) || ROLES[0];
 }
+
+/* Re-render once the ID token has been verified: a role approved since the last
+   sign-in only becomes visible after the refresh, and a revoked one only
+   disappears then. Without this the switcher would keep showing whatever the
+   stored array said until the next full page load. */
+document.addEventListener('sokoniRoleAuthorityReady', function(){
+  try{ renderRoleSwitcher(); renderRoleChips(); }catch(_){}
+});
 
 /* ── Auth guard ──
    BUGFIX 2026-07-26: this required the sokoniUser CACHE (_user.uid). An empty or
@@ -3754,10 +3781,27 @@ function saveInlineEdit(){
 /* ══════════════════════════════════════════════════════════════
    2. ROLE SWITCHER
 ══════════════════════════════════════════════════════════════ */
+/* Roles Phase 4. The switcher offers the roles the SERVER granted, read from the
+   verified ID token — not from sokoniUser.roles, which the client can edit. Until
+   verification completes the stored array still drives first paint (it is only a
+   list of buttons), but every button press goes through setActiveRole, where the
+   claim and then the Firestore rule decide. A forged array therefore renders a
+   button that cannot be used. */
+function _approvedRolesOrCached(cached){
+  try{
+    var RA = window.SokoniRoleAuthority;
+    if(RA && RA.isVerified()) return RA.getApprovedRoles();
+  }catch(_){}
+  return cached;
+}
+
 function renderRoleSwitcher(){
   _user = getUser();
   var roles = _user.roles && _user.roles.length ? _user.roles : ['buyer'];
-  var activeRole = _user.activeRole || roles[0] || 'buyer';
+  roles = _approvedRolesOrCached(roles);
+  var activeRole = (window.SokoniRoleAuthority && window.SokoniRoleAuthority.isVerified())
+    ? window.SokoniRoleAuthority.getActiveRole()
+    : (_user.activeRole || roles[0] || 'buyer');
   var rd = getRoleDef(activeRole);
 
   var emojiEl = document.getElementById('rsActiveEmoji');
@@ -3776,14 +3820,45 @@ function renderRoleSwitcher(){
   }).join('') + '<button type="button" class="rs-add-btn" onclick="openRoleModal()">&#43; Add Role</button>';
 }
 
+/* Roles Phase 4. The switch is PERSISTED through the server-authorized path:
+   SokoniRoleAuthority writes users/{uid}.activeRole, and the live rule
+   activeRoleApproved() allows it only when the caller's own claim grants the role.
+   So the server has the final say whatever this page believes.
+
+   Phase 3 removed the old persistence because it was a self-grant — the whole
+   roles array was rewritten from client input. This restores persistence without
+   restoring the grant: selection is now constrained to what was already approved.
+
+   The success toast fires only after the write lands. Announcing a switch the
+   server refused is exactly the fabricated-success defect the UI rules forbid. */
 function switchRole(roleKey){
-  _user = getUser();
-  _user.activeRole = roleKey;
-  setUser(_user);
-  renderRoleSwitcher();
-  window.dispatchEvent(new CustomEvent('sokoniRoleChanged', {detail:{role:roleKey}}));
   var rd = getRoleDef(roleKey);
-  upToast('Switched to ' + rd.label, true);
+  var RA = window.SokoniRoleAuthority;
+  if(!RA){
+    /* No authority module (very old cache): do not fake a switch. */
+    upToast('Cannot switch roles right now — please refresh.', false);
+    return;
+  }
+  RA.setActiveRole(roleKey).then(function(res){
+    if(res && res.ok){
+      _user = getUser();
+      _user.activeRole = roleKey;
+      setUser(_user);
+      renderRoleSwitcher();
+      window.dispatchEvent(new CustomEvent('sokoniRoleChanged', {detail:{role:roleKey}}));
+      upToast('Switched to ' + rd.label, true);
+      return;
+    }
+    var why = (res && res.reason) || 'failed';
+    if(why === 'not-approved' || why === 'rejected-by-server'){
+      upToast(rd.label + ' needs approval — apply from the ' + rd.label + ' hub.', false);
+    } else if(why === 'not-verified'){
+      upToast('Still confirming your account — try again in a moment.', false);
+    } else {
+      upToast('Could not switch to ' + rd.label + '. Please try again.', false);
+    }
+    renderRoleSwitcher();
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════

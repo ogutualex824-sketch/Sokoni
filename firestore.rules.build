@@ -1170,6 +1170,14 @@ service cloud.firestore {
   allow read, write: if isAuthed() && request.auth.uid == uid;
   allow read: if isAdmin();
   }
+  match /landlordProfiles/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
+  }
+  match /tenantProfiles/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
+  }
   match /follows/{followId} {
   allow read:   if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
   allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');

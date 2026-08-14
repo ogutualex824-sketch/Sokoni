@@ -1,3 +1,74 @@
+## [2026-08-15] — Roles Phase 4: claims are the client's only authority
+
+**Status: implemented, tested, NOT deployed.** role-authority 79/0 · role-rules 57/0 (source **and**
+deployable artifact) · landlord-rules 28/0 · returns-rules 20/0 · delivery-tracking-rules 22/0 ·
+workspace-rules 12/0 · role-vocabulary 66/0 · role-provisioning 57/0 · legal-projection 96/0 ·
+lifecycle-parity 53/0 · search-pipeline 15/0 · canonical-collections 2/2.
+
+Phase 3 closed the WRITE path — the rules stopped a client granting itself a role. This closes the
+READ path: what the client *believes* it may do.
+
+### The rules gap Phase 4 uncovered
+
+`landlordProfiles` and `tenantProfiles` — the uid-keyed profiles Phase 2 created — had **no `match`
+block at all**. Firestore default-denies anything unmatched, so the documents existed, were correct,
+and **not even their owner could read them**. It stayed invisible because the only writer is
+`grantAccountRole` through the Admin SDK, which bypasses rules entirely.
+
+Both now allow **owner-or-admin read and no client write of any kind** — the same shape
+`drivers/{uid}` uses. Approval is the only writer, so a client that could write these could assert a
+role the lifecycle never granted. `tenantProfiles` is a rental tenant's personal data: never public,
+never indexed, readable only by that tenant and an admin. `mechanics/{uid}` deliberately keeps its
+public read — a mechanic is a discoverable service provider.
+
+**Measured, not estimated:** +292 B source, headroom **1,800 B → 1,450 B**.
+
+### `sokoni-role-authority.js` (new)
+
+The client counterpart of `functions/role-vocabulary.js` — the same canonical vocabulary, never a
+second one. **A role is authoritative only when it comes from a verified ID token.**
+
+`sokoni-permissions.js` is unchanged and still owns the administrative RBAC hierarchy. It
+deliberately resolves seller/provider/driver-tier roles from cache for fast first paint and requires
+verification only for moderator-and-above. That trade is right for painting a nav bar and wrong for
+entering a workspace, because the cache is attacker-writable. This module makes no such trade: its
+state is in-memory only, never serialised, never restored from any storage.
+
+* **ID-token refresh** — `getIdTokenResult(true)` round-trips for claims minted since sign-in, the
+  only way a newly approved role becomes visible without signing out. A revoked role disappears by
+  the same path, because the set is rebuilt rather than merged.
+* **Failure is classified, not lumped.** A *transient* failure (offline, App Check delay) says
+  nothing about entitlement and must not sign a legitimate user out of their own workspace, so the
+  last verified set survives. An *auth-invalidating* failure — expired, revoked, disabled, deleted —
+  is a statement about entitlement and drops to baseline immediately, taking the acting role with
+  it. Treating these alike is a security bug in one direction and a usability bug in the other.
+* **`activeRole` persistence** restored without restoring the grant. Phase 3 removed the old
+  persistence because it rewrote the whole roles array from client input; selection is now
+  constrained to already-approved roles and persisted through the rule `activeRoleApproved()`, so
+  the server decides whatever the page believes.
+* **Workspace isolation fails closed.** An unverified token means *unknown*, and unknown is not
+  approval — the opposite trade from first-paint rendering, deliberately.
+* **Not `sokoni-workspace.js`.** That module is the employment layer (one person, many businesses).
+  A role workspace is a different axis; conflating them would break the multi-business model.
+
+### UI
+
+`profile.html` consumes the authority instead of the stored array. `ROLES` gained the six canonical
+definitions it lacked — `rider`, `mechanic`, `health`, `legal`, `landlord`, `tenant` — so an approved
+mechanic is no longer drawn as a buyer. Legacy `agent`/`business` keys are left in place rather than
+deleted; no approval grants them, so they stop appearing once the token is verified. `switchRole()`
+toasts success only after the write lands.
+
+### Files
+
+`firestore.rules` · `firestore.rules.build` · `firestore.rules.phase4-candidate` (new) ·
+`sokoni-role-authority.js` (new) · `profile.html` · `scripts/test-role-authority.js` (new) ·
+`scripts/test-role-rules.js`
+
+**Database:** none. **API:** none. **Breaking:** none. **Security:** closes the read/limit side of
+role authority; forged `users.roles`, forged `activeRole` and a forged permissions cache all grant
+nothing. **Deployment:** none — rules `9d17e91e` and Hosting `47dcdd8`/v523 remain live and
+untouched.
 ## [2026-08-15] — Roles Phase 3: `users.roles` and `activeRole` become server-owned
 
 **Status: implemented, tested, NOT deployed.** role-rules 42/0 (repo source) · 42/0 (deployable

@@ -242,6 +242,70 @@ const RULES_FILE = process.env.RULES_FILE || 'firestore.rules';
   await denied('uid still cannot be reassigned',
     docOf(plainUser()).set({ uid: OTHER }, { merge: true }));
 
+  /* ══ 10 · approval-provisioned role profiles (Roles Phase 4) ══
+     These had NO match block at all, which Firestore default-denies — the
+     documents existed and were correct, and not even their owner could read them.
+     It stayed invisible because the only writer is the Admin SDK, which bypasses
+     rules entirely. */
+  head('10 · landlordProfiles / tenantProfiles — owner-or-admin read, no client write');
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    /* Exactly how grantAccountRole provisions them. */
+    await ctx.firestore().collection('landlordProfiles').doc(UID)
+      .set({ role: 'landlord', ownerUid: UID, name: 'Alpha Properties', status: 'active', approved: true });
+    await ctx.firestore().collection('tenantProfiles').doc(UID)
+      .set({ role: 'tenant', ownerUid: UID, name: 'Alpha', status: 'active', approved: true, _noIndex: true });
+  });
+
+  await allowed('the landlord owner may read their own profile',
+    plainUser().firestore().collection('landlordProfiles').doc(UID).get());
+  await allowed('the tenant owner may read their own profile',
+    plainUser().firestore().collection('tenantProfiles').doc(UID).get());
+  await allowed('an admin may read a landlord profile',
+    adminUser().firestore().collection('landlordProfiles').doc(UID).get());
+  await allowed('an admin may read a tenant profile',
+    adminUser().firestore().collection('tenantProfiles').doc(UID).get());
+
+  const other = () => env.authenticatedContext(OTHER, {});
+  await denied('another authenticated user cannot read a landlord profile',
+    other().firestore().collection('landlordProfiles').doc(UID).get());
+  await denied('another authenticated user cannot read a TENANT profile (personal data)',
+    other().firestore().collection('tenantProfiles').doc(UID).get());
+  await denied('an unauthenticated reader cannot read a tenant profile',
+    env.unauthenticatedContext().firestore().collection('tenantProfiles').doc(UID).get());
+  /* A landlord claim does not make someone every landlord. */
+  await denied('holding the landlord CLAIM does not grant another landlord\'s profile',
+    env.authenticatedContext(OTHER, { landlord: true }).firestore()
+      .collection('landlordProfiles').doc(UID).get());
+
+  /* Writes are closed to every client — approval is the only writer. */
+  await denied('the owner cannot WRITE their own landlord profile',
+    plainUser().firestore().collection('landlordProfiles').doc(UID).set({ approved: true }, { merge: true }));
+  await denied('the owner cannot WRITE their own tenant profile',
+    plainUser().firestore().collection('tenantProfiles').doc(UID).set({ approved: true }, { merge: true }));
+  await denied('a client cannot CREATE a landlord profile for itself',
+    env.authenticatedContext('newLandlord', {}).firestore()
+      .collection('landlordProfiles').doc('newLandlord').set({ role: 'landlord', approved: true }));
+  await denied('even an ADMIN client cannot write these (Admin SDK only)',
+    adminUser().firestore().collection('landlordProfiles').doc(UID).set({ name: 'x' }, { merge: true }));
+  await denied('a client cannot delete a role profile',
+    plainUser().firestore().collection('landlordProfiles').doc(UID).delete());
+
+  /* Provisioning must still work — the Admin SDK bypasses rules. */
+  await allowed('Admin SDK provisioning still writes both profiles',
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('landlordProfiles').doc(UID).set({ status: 'active' }, { merge: true });
+      await ctx.firestore().collection('tenantProfiles').doc(UID).set({ status: 'active' }, { merge: true });
+    }));
+
+  /* mechanics is a DISCOVERABLE service directory and keeps its public read —
+     asserted so this change cannot quietly privatise it. */
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection('mechanics').doc(UID).set({ uid: UID, name: 'Alpha Garage', status: 'active' });
+  });
+  await allowed('a mechanic profile is still publicly readable',
+    env.unauthenticatedContext().firestore().collection('mechanics').doc(UID).get());
+
   await env.cleanup();
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed   (rules: ' + RULES_FILE + ')');
