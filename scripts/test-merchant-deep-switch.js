@@ -64,7 +64,12 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 600000);
+/* SHORTER THAN THE RUNNER'S BUDGET (300s for this suite, see SUITE_BUDGET_MS in
+   gate-classify.js) ON PURPOSE. At 600s it could never fire: the runner always killed the
+   suite first, at 300s, and a killed suite is TIMEOUT — a non-blocking verdict, so it left
+   the blocking set silently rather than saying it had hung. A watchdog that cannot outlive
+   its own executioner is not a watchdog. */
+const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 240000);
 wd.unref && wd.unref();
 
 async function sellerState(page) {
@@ -149,15 +154,24 @@ server.listen(0, async () => {
        Polls the SAME sellerState() the assertions read, so the wait and the assertion
        can never diverge. Bounded, and on timeout it falls through and asserts anyway —
        a genuine regression still fails with real evidence rather than being masked. */
-    const _routeCap = Math.min(Date.now() + 20000, _walkDeadline);
+    /* Report how long the route took AND which bound ended the wait. Without this the
+       failure reads as "customers-section=false" and looks like a routing defect, when the
+       route that fails is simply whichever one is running when time runs out — it moved
+       from `customers` to `products` between two runs of the same commit. A per-route
+       elapsed plus the reason distinguishes "this section never renders" from "this walk
+       ran out of budget three routes ago", which are opposite bugs with opposite fixes. */
+    const _routeStart = Date.now();
+    const _routeCap = Math.min(_routeStart + 20000, _walkDeadline);
+    let _why = 'rendered';
     for (;;) {
       st = await sellerState(page);
       if (st.ok && st.vis[cfg.show] === true) break;
-      if (Date.now() >= _routeCap) break;
+      if (Date.now() >= _routeCap) { _why = Date.now() >= _walkDeadline ? 'WALK CEILING' : 'route cap 20s'; break; }
       await page.waitForTimeout(250);
     }
+    const _took = Date.now() - _routeStart;
     ck(id + ' shows its own section', st.ok && st.vis[cfg.show] === true,
-       st.ok ? cfg.show + '=' + st.vis[cfg.show] : st.why);
+       (st.ok ? cfg.show + '=' + st.vis[cfg.show] : st.why) + ' after ' + _took + 'ms (' + _why + ')');
     ck(id + ' is not the seller home page', st.ok && st.vis[cfg.hide] === false,
        st.ok ? 'seller-stats=' + st.vis[cfg.hide] : st.why);
   }
@@ -190,8 +204,24 @@ server.listen(0, async () => {
     ck(id + ' title is correct', title === want, title);
   }
 
-  await browser.close(); server.close(); clearTimeout(wd);
+  /* REPORT FIRST, THEN TEAR DOWN — and never let teardown decide the verdict.
+     Measured: every assertion here passes (15/15) under the Firestore emulator and the
+     process then hangs in browser.close() until something outside kills it — 400s with no
+     summary line, which is the "same commit passes in ~17s or hangs for 300s+" divergence.
+     The suite had finished testing; the browser would not go away. This last case leaves a
+     merchant shell holding live panel iframes with in-flight requests, and closing that is
+     intermittently slow — milliseconds standalone, unbounded under a loaded gate.
+     A suite that has already answered the question must not be reported as lost coverage
+     because teardown took its time, so the result is printed before teardown and teardown
+     is raced against a short timer. Same fix, same reason, as test-seller-deeplink. */
   console.log('\n' + '='.repeat(72));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
+
+  clearTimeout(wd);
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });

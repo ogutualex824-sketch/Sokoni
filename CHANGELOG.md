@@ -1,3 +1,49 @@
+## [2026-08-14] — FIXED: two merchant suites let teardown erase a finished result
+
+**Status: FIXED and proven.** deep-switch 15/15, route-gate 138/0, both under 4-way load.
+
+Gate C at `eca1f04` reported `test-merchant-route-gate` as **TIMEOUT** and
+`test-merchant-deep-switch` as **FAIL**. Both diagnoses were wrong, and the new capture
+(`02ed6e8`) is what showed it.
+
+`route-gate` had printed **all 28 assertions PASS** through its final section and was then
+SIGKILLed at exactly its 150s budget. `deep-switch` passes **15/15 under the Firestore
+emulator** and then hangs — measured at 400s with no summary line. Both do:
+
+```js
+await browser.close();     // <- never returns
+console.log(pass + ' passed, ' + fail + ' failed');
+process.exit(fail ? 1 : 0);
+```
+
+The summary is printed *after* teardown, so a browser that will not close erases a result
+that was already known. This is the "same commit passes in ~17s or hangs for 300s+"
+divergence: the suites were never slow at testing, only at going away.
+
+TIMEOUT is **not a defect verdict** — it lands in `notBlocking`. So a run that had just
+proved the entire route matrix silently left the blocking set instead of counting as
+coverage. Worse, **both watchdogs were longer than the budget they run under** (600s vs a
+300s budget; 300s vs 150s), so neither could ever fire: the runner always killed them first.
+A watchdog that cannot outlive its own executioner is not a watchdog.
+
+### Fixes
+
+- **Report before teardown**, then race teardown against an 8s timer and always reach
+  `process.exit()`. Same fix, same reason, as `test-seller-deeplink`.
+- **Watchdogs shortened below their budgets** (240s and 120s) so a genuine hang self-reports
+  instead of being killed and recorded as lost coverage.
+- **`deep-switch` walk instrumented** with per-route elapsed and which bound ended the wait.
+  This is what disproved the obvious reading: the failing route *moved* between runs
+  (`customers` → `products`), and the walk is normally **sub-second** — 13/17/14/277/43ms
+  against a 20s route cap. So "customers-section=false" was never a routing defect, and the
+  60s walk ceiling was never reached. The remaining flake is a route stalling under load.
+
+**Suspected knock-on:** a hung `browser.close()` keeps a full WebKit process set alive until
+SIGKILL, so up to two zombie browsers contended with every suite for minutes. 14 orphaned
+`WebKitNetworkProcess` helpers were found still running from earlier sessions.
+
+**Files:** `scripts/test-merchant-deep-switch.js`, `scripts/test-merchant-route-gate.js`
+**Database/API/security changes:** none. **Breaking:** none. **Product code:** unchanged.
 ## [2026-08-14] — FIXED: the seller deep link stripped the address before honouring it
 
 **Status: FIXED and proven.** 16/16 standalone; 12/12 under 4-way parallel load; desktop 9/9.

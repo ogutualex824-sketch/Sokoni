@@ -79,7 +79,11 @@ const server = http.createServer((req, res) => {
        deliberate no-op and firebase.json serves an ENFORCED (not report-only) CSP. */
 const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon|net::ERR|Failed to load resource|frame-ancestors|report-only/i;
 
-const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 300000);
+/* SHORTER THAN THE RUNNER'S BUDGET (150s for this suite, see SUITE_BUDGET_MS in
+   gate-classify.js) ON PURPOSE. At 300s it could never fire — the runner killed this suite
+   at 150s and recorded TIMEOUT, a non-blocking verdict, so a run in which all 28 assertions
+   had already passed left the blocking set without saying anything. */
+const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 120000);
 wd.unref && wd.unref();
 
 server.listen(0, async () => {
@@ -302,13 +306,24 @@ server.listen(0, async () => {
     await ctx.close();
   }
 
-  await browser.close();
-  server.close();
-  clearTimeout(wd);
-
+  /* REPORT FIRST, THEN TEAR DOWN — and never let teardown decide the verdict.
+     Measured in the gate: all 28 assertions printed PASS through the last section, then
+     browser.close() never returned and the runner SIGKILLed the suite at its 150s budget.
+     It was recorded as TIMEOUT, which is NOT a defect verdict — so a suite that had just
+     proved the whole route matrix silently left the blocking set instead of counting as
+     the coverage it is. Printing the matrix and the tally first, then racing teardown
+     against a short timer, means a slow browser teardown can no longer erase a finished
+     result. Same fix, same reason, as test-seller-deeplink. */
   console.log('\n' + '='.repeat(74));
   console.log('  ROUTE MATRIX');
   rows.forEach(r => console.log('    ' + (r.ok ? '✓' : '✗') + '  ' + r.vp.padEnd(14) + r.id.padEnd(12) + r.route));
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
+
+  clearTimeout(wd);
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });
