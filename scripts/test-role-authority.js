@@ -272,6 +272,165 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
      !/getItem\('sokoniUser'\)[^;]*roles/.test(RASRC));
   ck('role authority never reads the permissions cache', !/sokoniPermissionsCache/.test(RASRC));
 
+  /* ══ 12 · setActiveRole SUCCESS path — the actual persistence, not just the rule ══
+     Previously only the refusal branches were exercised, because the module
+     hard-coded a URL import the runner cannot resolve. The loader seam lets the
+     real write path run against a recording fake, so "it persisted" is observed
+     rather than inferred from the rules passing. */
+  head('12 · setActiveRole persists through the server-authorized path');
+  const writes = [];
+  let writeError = null;
+  RA.__setFirestoreLoader(async () => ({
+    doc: (db, col, id) => ({ col, id }),
+    setDoc: async (ref, data, opts) => {
+      if (writeError) throw Object.assign(new Error('denied'), { code: writeError });
+      writes.push({ ref, data, opts });
+    },
+    getDoc: async (ref) => ({
+      exists: () => ref.id === 'u_test' && ref.col === 'tenantProfiles',
+      data: () => ({ name: 'Alpha Tenant', location: 'Nairobi', approved: true, _noIndex: true }),
+    }),
+  }));
+  global.window.firebaseDB = { __fake: true };
+
+  setToken({ seller: true, rider: true });
+  await RA.refresh(true);
+  writes.length = 0;
+  const ok1 = await RA.setActiveRole('seller');
+  ck('an approved role persists', ok1.ok === true, ok1.reason || 'ok');
+  ck('...to users/{uid}', writes.length === 1 && writes[0].ref.col === 'users' && writes[0].ref.id === 'u_test',
+     writes[0] && writes[0].ref.col + '/' + writes[0].ref.id);
+  ck('...writing ONLY activeRole — never the roles array',
+     writes[0] && Object.keys(writes[0].data).join(',') === 'activeRole', writes[0] && Object.keys(writes[0].data).join(','));
+  ck('...with the canonical value', writes[0] && writes[0].data.activeRole === 'seller');
+  ck('...as a merge (never clobbering the document)', writes[0] && writes[0].opts && writes[0].opts.merge === true);
+  ck('the acting role is now seller', RA.getActiveRole() === 'seller', RA.getActiveRole());
+
+  writes.length = 0;
+  const ok2 = await RA.setActiveRole('provider');
+  ck('an UNapproved role never reaches the network', writes.length === 0 && !ok2.ok, ok2.reason);
+  ck('...and does not change the acting role', RA.getActiveRole() === 'seller');
+
+  /* The server having the final say is the point: even if the local check were
+     bypassed, a rules refusal must not be papered over locally. */
+  writeError = 'permission-denied';
+  const ok3 = await RA.setActiveRole('rider');
+  ck('a server refusal is reported honestly', !ok3.ok && ok3.reason === 'rejected-by-server', ok3.reason);
+  ck('...and the acting role does NOT move to the refused role',
+     RA.getActiveRole() === 'seller', RA.getActiveRole());
+  writeError = null;
+
+  /* ══ 13 · fetchRoleProfile ══ */
+  head('13 · role profiles are read through the authority');
+  setToken({ tenant: true });
+  await RA.refresh(true);
+  const prof = await RA.fetchRoleProfile('tenant');
+  ck('an approved tenant reads its own profile', prof.ok === true && prof.exists === true, prof.reason);
+  ck('...from tenantProfiles/{uid}', prof.path === 'tenantProfiles/u_test', prof.path);
+  ck('...and the profile is flagged non-indexable at rest', prof.data && prof.data._noIndex === true);
+  const profDenied = await RA.fetchRoleProfile('landlord');
+  ck('an UNapproved role cannot read that role\'s profile',
+     !profDenied.ok && profDenied.reason === 'not-approved', profDenied.reason);
+  const profNone = await RA.fetchRoleProfile('buyer');
+  ck('buyer has no profile to fetch', !profNone.ok && profNone.reason === 'no-profile-for-role', profNone.reason);
+
+  /* ══ 14 · page guard ══ */
+  head('14 · workspace page guard');
+  ck('only true workspaces are routed', Object.keys(RA.WORKSPACE_ROUTES).sort().join(',') ===
+     'driver.html,landlord.html,provider.html,seller.html', Object.keys(RA.WORKSPACE_ROUTES).join(','));
+  ck('driver.html maps to the CANONICAL rider, not legacy driver',
+     RA.WORKSPACE_ROUTES['driver.html'] === 'rider');
+  ck('landlord.html maps to landlord, NOT collapsed to business',
+     RA.WORKSPACE_ROUTES['landlord.html'] === 'landlord');
+  ['healthcare.html', 'legal-hub.html', 'car-hub.html', 'property.html', 'index.html'].forEach((p) => {
+    ck('public hub ' + p + ' is NOT gated', !RA.WORKSPACE_ROUTES[p]);
+  });
+
+  setToken({ seller: true });
+  await RA.refresh(true);
+  global.window.__replaced = null;
+  const g1 = await RA.guardWorkspace('seller');
+  ck('an approved seller passes the guard', g1.ok === true);
+  ck('...with no redirect', !global.window.__replaced);
+
+  const g2 = await RA.guardWorkspace('landlord');
+  ck('an unapproved role is denied', !g2.ok && g2.reason === 'not-approved', g2.reason);
+  ck('...and IS redirected somewhere useful', global.window.__replaced === '/profile', global.window.__replaced);
+
+  /* THE REDIRECT-LOOP GUARD: "cannot verify" must never bounce. */
+  global.window.__replaced = null;
+  TOKEN_THROWS = 'unavailable';
+  TOKEN = null;
+  global.window.firebaseAuth.currentUser = null;
+  await RA.refresh(true);
+  const g3 = await RA.guardWorkspace('seller');
+  ck('an unverifiable session is denied', !g3.ok && g3.reason === 'not-verified', g3.reason);
+  ck('...but is NOT redirected (no bounce loop on "don\'t know")',
+     global.window.__replaced === null, String(global.window.__replaced));
+  TOKEN_THROWS = null;
+  global.window.firebaseAuth.currentUser = { uid: 'u_test',
+    getIdTokenResult: async () => { if (!TOKEN) throw Object.assign(new Error('x'), { code: 'unauthenticated' }); return TOKEN; } };
+
+  /* ══ 15 · declarative gating ══ */
+  head('15 · [data-require-approved-role] hides until the token proves it');
+  const made = [];
+  const mkEl = (attr) => {
+    const el = { style: {}, _attrs: { 'data-require-approved-role': attr },
+      getAttribute: (k) => el._attrs[k], setAttribute: (k, v) => { el._attrs[k] = v; } };
+    made.push(el); return el;
+  };
+  const elLandlord = mkEl('landlord');
+  const elTenant = mkEl('tenant');
+  const elEither = mkEl('seller,landlord');
+  global.document.querySelectorAll = () => made;
+
+  setToken({ landlord: true });
+  await RA.refresh(true);
+  RA.applyDeclarativeGates();
+  ck('an approved landlord sees the landlord block', elLandlord.style.display === '');
+  ck('...and the block records that it opened', elLandlord.getAttribute('data-approved-gate') === 'open');
+  ck('an unapproved tenant block stays hidden', elTenant.style.display === 'none');
+  ck('a multi-role attribute opens on ANY approved role', elEither.style.display === '');
+
+  setToken({});
+  await RA.refresh(true);
+  RA.applyDeclarativeGates();
+  ck('revoking the role closes the block again', elLandlord.style.display === 'none');
+  ck('...and it records that it closed', elLandlord.getAttribute('data-approved-gate') === 'closed');
+  global.document.querySelectorAll = () => [];
+
+  /* ══ 16 · legacy agent/business are RETIRED BY AUTHORITY, not deleted ══
+     Deleting them was considered and rejected on evidence:
+       `business` is still consumed — admin.html renders a role badge for it,
+       profile.html gates product display on it, and sokoni-permissions.js maps
+       landlord.html/property.html onto it in GUARDED_ROUTES and MANAGEMENT_PAGES.
+       `agent` survives only inside profile.html (the hubAgent checkbox and the
+       ROLES entry), but removing the ROLES entry would make getRoleDef() fall back
+       to Buyer for any cached account still carrying it.
+     So neither is deleted. Instead they are made UNREACHABLE: no approval grants
+     them, so they can never enter the approved set, never open a workspace and
+     never be selected. That is retirement without breaking compatibility. */
+  head('16 · legacy agent/business cannot be granted');
+  ['agent', 'business', 'business_owner', 'professional'].forEach((r) => {
+    ck(r + ' is not canonical', RA.CANONICAL_ROLES.indexOf(r) < 0);
+    ck(r + ' does not normalise to a canonical role', RA.canonicalise(r) === null);
+  });
+  setToken({ agent: true, business: true, professional: true });
+  await RA.refresh(true);
+  ck('a token claiming agent grants nothing', !RA.isApproved('agent'));
+  ck('a token claiming business grants nothing', !RA.isApproved('business'));
+  ck('the approved set stays baseline', RA.getApprovedRoles().join(',') === 'buyer',
+     RA.getApprovedRoles().join(','));
+  ck('neither can open a workspace', !(await RA.canEnterWorkspace('agent')) && !(await RA.canEnterWorkspace('business')));
+  const legacySel = await RA.setActiveRole('agent');
+  ck('neither can be selected as the acting role', !legacySel.ok, legacySel.reason);
+  /* Compatibility preserved: the definitions are still THERE for cached accounts. */
+  const PROF = fs.readFileSync(path.join(ROOT, 'profile.html'), 'utf8');
+  ck("profile.html still defines `agent` (cached accounts render correctly)", /key:'agent'/.test(PROF));
+  ck("profile.html still defines `business`", /key:'business'/.test(PROF));
+  const PERMS = fs.readFileSync(path.join(ROOT, 'sokoni-permissions.js'), 'utf8');
+  ck('sokoni-permissions.js was NOT modified by Phase 4', /GUARDED_ROUTES/.test(PERMS) && /MANAGEMENT_PAGES/.test(PERMS));
+
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

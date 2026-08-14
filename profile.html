@@ -1881,6 +1881,22 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
   </div>
 
+  <!-- Roles Phase 4 — the rental tenant's own profile (tenantProfiles/{uid}).
+       PRIVATE by design: owner-or-admin read, never indexed by Algolia or Typesense,
+       and it carries _noIndex:true so a future index registration would still skip
+       it. It lives here rather than on a hub page precisely because it is personal
+       data with no public surface. Hidden until the token proves the tenant role. -->
+  <div id="tenantProfileCard" data-require-approved-role="tenant"
+       style="display:none;margin:14px 0;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <span style="font-size:18px;">&#128273;</span>
+      <span style="font-weight:800;color:#e8e8e8;font-size:14px;">My tenancy</span>
+      <span style="margin-left:auto;font-size:10px;font-weight:800;color:#9aa;letter-spacing:.04em;">PRIVATE</span>
+    </div>
+    <div id="tenantProfileName" style="color:#ddd;font-size:13px;font-weight:700;">—</div>
+    <div id="tenantProfileMeta" style="color:#8d8d8d;font-size:12px;margin-top:2px;">Checking your tenancy profile…</div>
+  </div>
+
   <!-- 3. Activity Tabs -->
   <div class="up-tabs" id="upTabs" role="tablist">
     <button type="button" class="up-tab active" data-tab="overview" onclick="switchTab('overview')" role="tab">Overview</button>
@@ -3033,7 +3049,33 @@ function getRoleDef(key){
    stored array said until the next full page load. */
 document.addEventListener('sokoniRoleAuthorityReady', function(){
   try{ renderRoleSwitcher(); renderRoleChips(); }catch(_){}
+  try{ renderTenantProfile(); }catch(_){}
 });
+
+/* Reads tenantProfiles/{uid} through SokoniRoleAuthority, which owns the path, the
+   approval check and the permission-failure handling. Shows a neutral state when the
+   projection has not landed — never an invented tenancy. */
+function renderTenantProfile(){
+  var RA = window.SokoniRoleAuthority;
+  if(!RA || !RA.isApproved('tenant')) return;
+  var nameEl = document.getElementById('tenantProfileName');
+  var metaEl = document.getElementById('tenantProfileMeta');
+  RA.fetchRoleProfile('tenant').then(function(res){
+    if(!res || !res.ok){
+      if(metaEl) metaEl.textContent = 'Tenancy profile unavailable right now.';
+      return;
+    }
+    if(!res.exists){
+      if(nameEl) nameEl.textContent = 'Tenant';
+      if(metaEl) metaEl.textContent = 'Your tenancy profile is being set up.';
+      return;
+    }
+    var d = res.data || {};
+    if(nameEl) nameEl.textContent = d.name || 'Tenant';
+    if(metaEl) metaEl.textContent = [d.location, (d.approved === true ? 'Approved' : d.status)]
+      .filter(Boolean).join(' · ') || 'Approved tenant';
+  }).catch(function(){});
+}
 
 /* ── Auth guard ──
    BUGFIX 2026-07-26: this required the sokoniUser CACHE (_user.uid). An empty or

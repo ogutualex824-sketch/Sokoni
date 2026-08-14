@@ -1,3 +1,65 @@
+## [2026-08-15] — Roles Phase 4b: workspace guards wired, role profiles consumed
+
+**Status: implemented, tested, NOT deployed.** role-authority **130/0** (was 79).
+
+Phase 4 built the authority; this wires it to the surfaces.
+
+### The page guard was dead code
+
+`sokoni-permissions.js` defines `guardCurrentPage()` and a `GUARDED_ROUTES` registry — and
+**nothing in the codebase ever calls it**. `seller.html`, `driver.html` and `landlord.html` had no
+client-side role guard at all; only the Firestore rules stopped anything. That registry also maps
+those pages onto the OLD vocabulary, where `landlord` collapses to `business` and `health`/`legal`
+both collapse to `professional` — the exact collapse Phases 1–2 removed on the server.
+
+`sokoni-role-authority.js` now carries a canonical `WORKSPACE_ROUTES` registry and a `guardPage()`
+that runs automatically once auth resolves. It is deliberately **short**: only true workspaces
+appear (`seller`, `driver`→**rider**, `provider`, `landlord`). Public hubs — healthcare, legal-hub,
+car-hub, property — stay browsable by everyone, because gating them would break the public browsing
+CLAUDE.md requires. Management UI *inside* a hub uses the new declarative attribute instead.
+
+**`not-approved` and `not-verified` no longer share a consequence.** An unapproved user is
+redirected somewhere useful; a session we merely *cannot verify* is reported and **never**
+redirected. Bouncing on "don't know" is precisely the guard↔login redirect loop documented in
+`sokoni-auth-state.js`. This is not a hole: the rules are the security boundary and deny the data
+either way. The guard is UX.
+
+### New surface
+
+* `[data-require-approved-role="landlord"]` — the claim-verified counterpart of
+  `[data-require-role]`, which resolves from the attacker-writable cache. Hidden until proven, so a
+  slow token cannot flash privileged UI; re-applied when authority changes, so a revoked role closes
+  its UI without a reload.
+* `fetchRoleProfile(role)` — reads the caller's **own** approval-provisioned profile. Uid-scoped with
+  no "whose" parameter, because owner-or-admin rules would deny anything else anyway.
+* `landlord.html` consumes `landlordProfiles/{uid}`; `profile.html` consumes `tenantProfiles/{uid}`,
+  which lives there precisely because it is personal data with no public surface. Both render a
+  neutral state when the projection has not landed — never an invented profile.
+
+### Legacy `agent` / `business`: retired by authority, not deleted
+
+Deletion was considered and **rejected on evidence**. `business` is still consumed by
+`admin.html`'s role badge, `profile.html`'s product gate, and both `GUARDED_ROUTES` and
+`MANAGEMENT_PAGES`. `agent` survives only inside `profile.html`, but dropping its `ROLES` entry
+would make `getRoleDef()` render Buyer for any cached account still carrying it. Both are instead
+made **unreachable**: no approval grants them, so they can never enter the approved set, open a
+workspace, or be selected. `sokoni-permissions.js` is unmodified.
+
+### Testability
+
+`setActiveRole()`'s success path could previously only be *inferred* from the rules, because the
+module hard-coded a URL import no runner can resolve. A documented loader seam now lets the real
+write path run against a recording fake: the test observes that it writes **only** `activeRole`, to
+`users/{uid}`, as a merge, with the canonical value — and that a server refusal never moves the
+acting role locally.
+
+### Files
+
+`sokoni-role-authority.js` · `profile.html` · `landlord.html` · `seller.html` · `driver.html` ·
+`scripts/test-role-authority.js`
+
+**Database:** none. **API:** none. **Rules:** unchanged since Phase 4. **Breaking:** none.
+**Deployment:** none — rules `9d17e91e`, Hosting `47dcdd8`/v523 untouched.
 ## [2026-08-15] — Roles Phase 4: claims are the client's only authority
 
 **Status: implemented, tested, NOT deployed.** role-authority 79/0 · role-rules 57/0 (source **and**

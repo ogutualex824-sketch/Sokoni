@@ -16,6 +16,13 @@
   <script src="sokoni-auth-state.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
+  <!-- Roles Phase 4. Claim-verified workspace authority: guardPage() gates this
+       workspace on the SIGNED token, not on sokoniUser.roles or the permissions
+       cache, both of which the client can edit. An unverifiable session is
+       reported rather than redirected — the Firestore rules deny the data
+       regardless, and bouncing on "cannot verify" is what caused the old
+       guard/login redirect loop. -->
+  <script src="sokoni-role-authority.js"></script>
 
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="landlord.css">
@@ -49,6 +56,60 @@
     <a href="/" class="ll-nav-link">← Sokoni</a>
   </div>
 </nav>
+
+<!-- Roles Phase 4 — the approval-provisioned landlord profile (landlordProfiles/{uid}).
+     Owner-or-admin read; the Admin SDK is the only writer, so nothing here can be
+     edited from the page. Hidden until the token proves the landlord role, so a slow
+     or forged client state cannot flash it. Renders a neutral state when the profile
+     has not projected yet — never a fabricated one. -->
+<div id="llRoleProfile" data-require-approved-role="landlord" style="display:none;max-width:1400px;margin:12px auto 0;padding:0 16px;">
+  <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.22);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="font-size:20px;">🔑</span>
+    <div style="flex:1;min-width:180px;">
+      <div id="llRoleProfileName" style="font-weight:800;color:#e8ffd0;font-size:14px;">—</div>
+      <div id="llRoleProfileMeta" style="color:#9fb98a;font-size:12px;">Checking your landlord profile…</div>
+    </div>
+    <span id="llRoleProfileStatus" style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:rgba(113,255,0,0.12);color:#71ff00;">—</span>
+  </div>
+</div>
+
+<script>
+/* Reads through SokoniRoleAuthority so the path, the approval check and the
+   permission failure are handled in ONE place rather than restated per surface. */
+(function(){
+  function render(){
+    var RA = window.SokoniRoleAuthority;
+    var box = document.getElementById('llRoleProfile');
+    if(!RA || !box) return;
+    RA.fetchRoleProfile('landlord').then(function(res){
+      var nameEl = document.getElementById('llRoleProfileName');
+      var metaEl = document.getElementById('llRoleProfileMeta');
+      var stEl   = document.getElementById('llRoleProfileStatus');
+      if(!res || !res.ok){
+        /* Not approved / not verified / denied — the gate above already hides the
+           block for an unapproved account; say nothing misleading otherwise. */
+        if(metaEl) metaEl.textContent = 'Landlord profile unavailable right now.';
+        if(stEl) stEl.textContent = '—';
+        return;
+      }
+      if(!res.exists){
+        /* Approved a moment before the projection landed. A neutral state, not a 0
+           and not an invented profile. */
+        if(nameEl) nameEl.textContent = 'Landlord';
+        if(metaEl) metaEl.textContent = 'Your landlord profile is being set up.';
+        if(stEl) stEl.textContent = 'Pending';
+        return;
+      }
+      var d = res.data || {};
+      if(nameEl) nameEl.textContent = d.name || 'Landlord';
+      if(metaEl) metaEl.textContent = [d.location, d.category].filter(Boolean).join(' · ') || 'Approved landlord';
+      if(stEl) stEl.textContent = d.approved === true ? 'Approved' : (d.status || '—');
+    }).catch(function(){});
+  }
+  document.addEventListener('sokoniRoleAuthorityReady', render);
+  if(window.SokoniRoleAuthority && window.SokoniRoleAuthority.isVerified()) render();
+})();
+</script>
 
 <div class="ll-layout">
 

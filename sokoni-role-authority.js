@@ -74,6 +74,15 @@
     buyer:    null,
   };
 
+  /* Firestore is loaded lazily so a page that never switches roles never pays for
+     the SDK. Behind a seam because a hard-coded URL import cannot be exercised in a
+     test runner — without this, the SUCCESS path of setActiveRole/fetchRoleProfile
+     could only ever be inferred from the rules, never actually run. Test-only
+     override; production always uses the real loader. */
+  var _fsLoader = function () {
+    return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  };
+
   /* ── State. In-memory ONLY. ─────────────────────────────────────────────────
      Never written to localStorage, sessionStorage, IndexedDB or a cookie, and
      never restored from any of them. That is the whole security property: there
@@ -235,7 +244,7 @@
     if (!user) return { ok: false, reason: 'signed-out' };
 
     try {
-      var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var m = await _fsLoader();
       var db = window.firebaseDB;
       if (!db) return { ok: false, reason: 'db-unavailable' };
       await m.setDoc(m.doc(db, 'users', user.uid), { activeRole: r }, { merge: true });
@@ -266,6 +275,35 @@
   /* A tenant profile is personal data: owner-or-admin read, never indexed. */
   function isPrivateRole(role) { return _canonical(role) === 'tenant'; }
 
+  /* Read the caller's OWN approval-provisioned profile.
+     Deliberately uid-scoped with no argument for whose: landlordProfiles and
+     tenantProfiles are owner-or-admin read, so a call for anyone else would be
+     denied by the rules anyway — offering the parameter would only invite a
+     caller to write code that fails in production.
+
+     Returns {exists:false} rather than throwing when the document is absent: a
+     role can be approved a moment before its profile projection lands, and an
+     empty profile is a state to render, not an error to swallow. */
+  async function fetchRoleProfile(role) {
+    var r = _canonical(role);
+    if (!r) return { ok: false, reason: 'unknown-role' };
+    await ready();
+    if (!isApproved(r)) return { ok: false, reason: _verified ? 'not-approved' : 'not-verified' };
+    var loc = getProfilePath(r);
+    if (!loc) return { ok: false, reason: 'no-profile-for-role' };
+    try {
+      var m = await _fsLoader();
+      var db = window.firebaseDB;
+      if (!db) return { ok: false, reason: 'db-unavailable' };
+      var snap = await m.getDoc(m.doc(db, loc.collection, loc.id));
+      return { ok: true, exists: snap.exists(), data: snap.exists() ? snap.data() : null, path: loc.path };
+    } catch (err) {
+      var code = (err && err.code) || '';
+      if (/permission-denied/.test(code)) return { ok: false, reason: 'denied' };
+      return { ok: false, reason: code || 'read-failed' };
+    }
+  }
+
   /* ── Workspace isolation ────────────────────────────────────────────────────
      A workspace is entered on the strength of a CLAIM. Editing sokoniUser.roles,
      the permissions cache, or any other client state changes nothing: this waits
@@ -279,17 +317,86 @@
     return isApproved(role);
   }
 
+  /* NOT-APPROVED and CANNOT-VERIFY are different answers and must not share a
+     consequence.
+
+       not-approved  the token was read and the role is genuinely absent. Sending
+                     them somewhere useful is correct.
+       not-verified  we could not read a token at all — offline, App Check delay,
+                     mid-refresh. We do NOT know whether they are approved, and
+                     bouncing on "don't know" is how the redirect loop in
+                     sokoni-auth-state.js's header comment happened: a guarded page
+                     redirected on a timing artefact, login bounced back on the
+                     cached flag, and the two ping-ponged.
+
+     So an unverifiable session is reported, never redirected. That is not a hole:
+     the Firestore rules are the security boundary and they deny the DATA
+     regardless. This guard is UX — it puts an unauthorised person somewhere
+     sensible instead of on an empty dashboard. Failing it closed for someone we
+     merely could not classify would lock out legitimate users on a bad connection
+     while protecting nothing the rules were not already protecting. */
   async function guardWorkspace(role, opts) {
     var o = opts || {};
-    var ok = await canEnterWorkspace(role);
-    if (ok) return { ok: true, role: _canonical(role) };
-    var reason = !_verified ? 'not-verified' : 'not-approved';
-    if (o.redirect !== false && typeof o.onDenied !== 'function') {
+    await ready();
+    var canonical = _canonical(role);
+    if (isApproved(role)) return { ok: true, role: canonical };
+
+    var reason = _verified ? 'not-approved' : 'not-verified';
+    if (typeof o.onDenied === 'function') { try { o.onDenied(reason); } catch (_) {} }
+    if (reason === 'not-approved' && o.redirect !== false) {
       try { window.location.replace(o.deniedUrl || '/profile'); } catch (_) {}
-    } else if (typeof o.onDenied === 'function') {
-      try { o.onDenied(reason); } catch (_) {}
     }
     return { ok: false, reason: reason };
+  }
+
+  /* ── Declarative gating ─────────────────────────────────────────────────────
+     The claim-verified counterpart of sokoni-permissions.js's [data-require-role],
+     which resolves from the attacker-writable cache. Hides an element until the
+     TOKEN says the role is held:
+
+       <div data-require-approved-role="landlord"> … management UI … </div>
+
+     Hidden until proven otherwise, so a slow token cannot flash privileged UI.
+     Never applied to <html>/<body> — blanking a whole document over one attribute
+     is the failure mode _filterNav() already had to guard against. */
+  function applyDeclarativeGates(root) {
+    var scope = root || document;
+    var nodes;
+    try { nodes = scope.querySelectorAll('[data-require-approved-role]'); } catch (_) { return; }
+    Array.prototype.forEach.call(nodes, function (el) {
+      if (el === document.documentElement || el === document.body) return;
+      var wanted = (el.getAttribute('data-require-approved-role') || '')
+        .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      var ok = wanted.some(function (r) { return isApproved(r); });
+      el.style.display = ok ? '' : 'none';
+      el.setAttribute('data-approved-gate', ok ? 'open' : 'closed');
+    });
+  }
+
+  /* ── Canonical workspace routes ─────────────────────────────────────────────
+     sokoni-permissions.js's GUARDED_ROUTES maps these same pages onto the OLD
+     8-role vocabulary, where landlord collapses to `business` and health/legal
+     both collapse to `professional` — the exact collapse Phases 1-2 removed on the
+     server. This registry is the canonical one. It is deliberately SHORT: only
+     true workspaces appear. Public hubs (healthcare, legal-hub, car-hub, property)
+     stay browsable by everyone — gating them would break public browsing, which
+     CLAUDE.md requires. Management UI inside a hub uses the declarative attribute
+     above instead. */
+  var WORKSPACE_ROUTES = {
+    'seller.html':   'seller',
+    'driver.html':   'rider',
+    'provider.html': 'provider',
+    'landlord.html': 'landlord',
+  };
+
+  async function guardPage(opts) {
+    var page = (window.location.pathname.split('/').pop() || 'index.html');
+    if (page && page.indexOf('.') < 0) page = page + '.html';   /* cleanUrls */
+    var role = WORKSPACE_ROUTES[page];
+    if (!role) return { ok: true, role: null, guarded: false };
+    var res = await guardWorkspace(role, opts);
+    res.guarded = true;
+    return res;
   }
 
   window.SokoniRoleAuthority = {
@@ -303,22 +410,42 @@
     getActiveRole: getActiveRole,
     setActiveRole: setActiveRole,
     getProfilePath: getProfilePath,
+    fetchRoleProfile: fetchRoleProfile,
     isPrivateRole: isPrivateRole,
     canEnterWorkspace: canEnterWorkspace,
     guardWorkspace: guardWorkspace,
+    guardPage: guardPage,
+    applyDeclarativeGates: applyDeclarativeGates,
+    WORKSPACE_ROUTES: WORKSPACE_ROUTES,
     getSnapshot: _snapshot,
     /* Exposed for tests and for consumers that need to normalise a legacy value. */
     canonicalise: _canonical,
+    /* TEST ONLY. Swaps the Firestore loader so the write/read paths can be exercised. */
+    __setFirestoreLoader: function (fn) { _fsLoader = fn; },
   };
 
   /* Verify as soon as auth is authoritative. Not on script load — before the first
      onAuthStateChanged there is no token to read, and concluding "no roles" then
      would be the same class of bug sokoni-auth-state.js exists to prevent. */
+  function _boot() {
+    refresh(false).then(function () {
+      applyDeclarativeGates();
+      /* Guard the page only where a workspace route is declared. Everything else
+         is a no-op, so loading this module can never gate a public page. */
+      guardPage();
+    });
+  }
   try {
     if (window.SokoniAuthState && window.SokoniAuthState.whenResolved) {
-      window.SokoniAuthState.whenResolved(function () { refresh(false); });
+      window.SokoniAuthState.whenResolved(_boot);
     } else {
-      document.addEventListener('sokoniAuthReady', function () { refresh(false); }, { once: true });
+      document.addEventListener('sokoniAuthReady', _boot, { once: true });
     }
+  } catch (_) {}
+
+  /* Re-apply declarative gates whenever authority changes, so a role revoked
+     mid-session closes its UI without a reload. */
+  try {
+    document.addEventListener('sokoniRoleAuthorityReady', function () { applyDeclarativeGates(); });
   } catch (_) {}
 })(window);

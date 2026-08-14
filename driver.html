@@ -17,6 +17,13 @@
   <script src="sokoni-auth-state.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
+  <!-- Roles Phase 4. Claim-verified workspace authority: guardPage() gates this
+       workspace on the SIGNED token, not on sokoniUser.roles or the permissions
+       cache, both of which the client can edit. An unverifiable session is
+       reported rather than redirected — the Firestore rules deny the data
+       regardless, and bouncing on "cannot verify" is what caused the old
+       guard/login redirect loop. -->
+  <script src="sokoni-role-authority.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
