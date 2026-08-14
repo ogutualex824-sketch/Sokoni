@@ -54,7 +54,12 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 900000);
+/* SHORTER THAN THE RUNNER'S BUDGET (240s for this suite, see SUITE_BUDGET_MS in
+   gate-classify.js) ON PURPOSE. At 900s it could never fire: the runner killed the suite
+   first, at 240s, and a killed suite is TIMEOUT — non-blocking, so it left the blocking set
+   silently rather than saying it had hung. A watchdog that cannot outlive its own
+   executioner is not a watchdog. */
+const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 180000);
 wd.unref && wd.unref();
 
 /* Stub Auth + the callable bridge. getShopProfile answers after `delayMs`, modelling the real
@@ -281,9 +286,22 @@ server.listen(0, async () => {
     ck('A\'s KRA PIN did not survive', !form.kraPin, JSON.stringify(form.kraPin));
   }
 
-  await browser.close(); server.close(); clearTimeout(wd);
+  /* REPORT FIRST, THEN TEAR DOWN — and never let teardown decide the verdict.
+     In the deploy gate this suite printed its last four assertions PASS and was then
+     SIGKILLed at its 240s budget, recording TIMEOUT — a non-blocking verdict, so a suite
+     that had finished testing silently left the blocking set and its coverage was lost
+     without anything failing. It had answered the question; browser.close() simply did not
+     return. Same fix, same reason, as test-seller-deeplink, test-merchant-deep-switch and
+     test-merchant-route-gate. */
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
+
+  clearTimeout(wd);
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   console.log('\n  SCOPE: the browser half only — whether the canonical response reaches and holds');
   console.log('         the form. The server half is covered by test-kasshop-boundary.js. A pass');
   console.log('         here means a device that still loses values is losing them BEFORE the');
