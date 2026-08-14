@@ -126,6 +126,15 @@ server.listen(0, async () => {
 
   /* The bug only reproduces on an ALREADY-LOADED panel — walk between shared routes. */
   console.log('\n  switching between routes that share the panel (already loaded)');
+  /* ONE readiness budget for the whole walk, not an independent one per route.
+     A per-route 20s bound MULTIPLIES: five routes here plus the earlier walk reached
+     ~200s under the full 164-suite population and pushed this suite past its 300s gate
+     budget into a TIMEOUT — worse than the flat 5s sleep it replaced, which capped at
+     ~50s. Routes are NOT uniformly fast — an 8s per-route cap failed `customers` even
+     standalone (customers-section=false, 14/15), so the per-route allowance stays 20s.
+     The shared 60s ceiling is what stops five of those compounding: each route breaks as
+     soon as its section renders, and the walk as a whole cannot exceed the ceiling. */
+  const _walkDeadline = Date.now() + 60000;
   for (const id of ['receipts', 'messages', 'stories', 'customers', 'products']) {
     const cfg = SELLER[id];
     await page.evaluate((rid) => { const e = document.querySelector('.mnav-item[data-id="' + rid + '"]'); if (e) e.click(); }, id);
@@ -140,11 +149,11 @@ server.listen(0, async () => {
        Polls the SAME sellerState() the assertions read, so the wait and the assertion
        can never diverge. Bounded, and on timeout it falls through and asserts anyway —
        a genuine regression still fails with real evidence rather than being masked. */
-    const _deadline = Date.now() + 20000;
+    const _routeCap = Math.min(Date.now() + 20000, _walkDeadline);
     for (;;) {
       st = await sellerState(page);
       if (st.ok && st.vis[cfg.show] === true) break;
-      if (Date.now() >= _deadline) break;
+      if (Date.now() >= _routeCap) break;
       await page.waitForTimeout(250);
     }
     ck(id + ' shows its own section', st.ok && st.vis[cfg.show] === true,
