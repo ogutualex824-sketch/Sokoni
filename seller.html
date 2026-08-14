@@ -7420,10 +7420,31 @@ document.addEventListener('DOMContentLoaded', function() {
   function apply (sec) {
     want = sec || 'overview';
     if (applying) return; applying = true;
-    var tries = 0;
+    var tries = 0, reported = false;
     (function attempt () {
       if (!want) { applying = false; return; }
-      if (typeof showDashPage === 'function') { try { showDashPage(want); } catch (_) {} want = null; applying = false; return; }
+      if (typeof showDashPage === 'function') {
+        try {
+          showDashPage(want);
+          want = null; applying = false; return;      /* applied — and only then */
+        } catch (err) {
+          /* A THROW IS NOT AN APPLICATION.
+             This used to read `try { showDashPage(want); } catch (_) {}` and then run
+             `want = null; applying = false` REGARDLESS — so a router that threw was
+             recorded exactly like one that succeeded. The section never rendered, and
+             because the request had been discarded, each of the shell's 40 re-posts over
+             the next 10s hit the same throw and discarded it again. The route simply never
+             appeared, the module said nothing, and _deepSwitch eventually logged that the
+             switch "was never confirmed" without anyone able to see why.
+             Keeping the request lets the bounded loop below retry, so a transient throw
+             self-heals on the next tick; reporting it once means a persistent one is
+             visible instead of presenting as a dead navigation item. */
+          if (!reported) {
+            reported = true;
+            console.error('[seller] showSection("' + want + '") threw — retrying.', err);
+          }
+        }
+      }
       if (++tries > 120) { applying = false; return; }
       setTimeout(attempt, 100);
     })();

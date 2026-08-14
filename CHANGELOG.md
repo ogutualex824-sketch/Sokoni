@@ -1,3 +1,49 @@
+## [2026-08-14] — FIXED: the seller module recorded a failed section switch as a success
+
+**Status: FIXED.** deep-switch 15/15; seller-deeplink 16/0; seller-dashboard 22/22; route-gate 138/0.
+
+`test-merchant-deep-switch` failed intermittently with one route — a different one each time —
+never rendering inside its 20s cap while the other four rendered in ~270ms:
+
+```
+receipts 269ms · messages 268ms · stories 270ms · customers 275ms   (rendered)
+products bulk-upload-section=false after 20250ms (route cap 20s)    FAIL
+```
+
+It reached the **route cap, not the 60s walk ceiling**, so this was never budget starvation —
+the earlier hypothesis — and raising a timeout would only have hidden it.
+
+### Mechanism
+
+`seller.html`'s shell-message handler read:
+
+```js
+try { showDashPage(want); } catch (_) {} want = null; applying = false; return;
+```
+
+A router that **threw** was recorded exactly like one that succeeded: the error was swallowed
+and the request discarded. `merchant.html`'s `_deepSwitch` then re-posted the message 40 times
+over 10s, and every retry hit the same throw and discarded it again. So the section never
+appeared, the module reported nothing, and the shell eventually logged that the switch "was
+never confirmed" — with no way to see why. Which route lost was chance, which is why it moved.
+
+### Fix
+
+`want` and `applying` are cleared **only on an actual application**. On a throw the request is
+kept so the existing bounded loop (120 × 100ms) retries — a transient failure now self-heals —
+and the error is reported once so a persistent one is visible rather than presenting as a dead
+navigation item. No assertion weakened, no timeout raised, no budget changed.
+
+Observed recovering in the wild: a `messages` switch rendered at **10,522ms**, after
+`_deepSwitch` had already stopped re-posting — the handler's own retry completed it. Under the
+old code that request had been discarded and the route would have died at the cap.
+
+**Honest limit:** the throw was never caught in the act. 15 instrumented switches across 3
+concurrent probes stayed clean, and 5-way suite runs produced load artifacts (watchdog SKIPs,
+a browser dying mid-`evaluate`) rather than the stall. The fix rests on the code path and an
+exact symptom match, not on a captured stack.
+
+**Files:** `seller.html`. **Rules/Functions/deploy config:** unchanged.
 ## [2026-08-14] — FIXED: two merchant suites let teardown erase a finished result
 
 **Status: FIXED and proven.** deep-switch 15/15, route-gate 138/0, both under 4-way load.
