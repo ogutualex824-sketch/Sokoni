@@ -1,3 +1,96 @@
+## [2026-08-15] — Roles Phase 3: `users.roles` and `activeRole` become server-owned
+
+**Status: implemented, tested, NOT deployed.** role-rules 42/0 (repo source) · 42/0 (deployable
+artifact) · landlord-rules 28/0 · returns-rules 20/0 · delivery-tracking-rules 22/0 ·
+workspace-rules 12/0 · Phase 2 set 394/0.
+
+Phase 2 made approval the authority on roles — `grantAccountRole` writes `users.roles` and
+`users.activeRole` through the Admin SDK. That was only half a control. `firestore.rules`
+guarded the `role` **string** and had never guarded the `roles` **array** or `activeRole`, and
+`roles` is what the platform actually authorizes on: `sokoni-nav-engine`, `shared-header`, the
+analytics gate and every workspace read it.
+
+**An authority the client can overwrite is not an authority.**
+
+### What was open (full audit: `docs/ROLE_AUTHORITY_AUDIT.md`)
+
+| Path | Severity | Shape |
+|---|---|---|
+| `profile.html` Settings → Linked hubs | HIGH | rebuilt the whole `roles` array from four checkboxes and wrote it to the user's own document — self-grant of seller + provider + driver + agent, and **removal** of a server-granted role by unticking a box |
+| `profile.html` `addRole()` | HIGH | pushed **any** role key, persisted it, and toasted success regardless of whether the write landed |
+| `driver.html` ×2 (shift toggle) | MEDIUM | `roles: arrayUnion('driver')` — additive, but still a client granting itself a role |
+| `profile.html` `_healRolesOnce()` | LOW | client deduping a server-owned field |
+
+`saveToFirestore` also classified `permission-denied` as **transient** and retried it twice.
+
+### Rules
+
+Two new guards on `users/{userId}`, wired into the existing `noPrivilegeEscalation()`:
+
+* **`rolesUnchanged()`** — `roles` is immutable from the client. On CREATE the baseline is
+  permitted (`hasOnly(['buyer','user'])`), because `auth.js`, `firebase.js` and
+  `sokoni-user-bootstrap.js` all write it at signup and denying that would break every account
+  creation. On UPDATE, any change to the key is refused.
+* **`activeRoleApproved()`** — the client may select a role, but only one it has actually been
+  approved for. Approval is read from the **custom claim**, never from the user document: a claim
+  is signed into the ID token by the server and is the one role signal a client cannot forge.
+  `'buyer'` is always selectable — it is the baseline every account holds and the role revocation
+  demotes to.
+
+The decisive property: a `roles[]` entry in the *document* does **not** authorize a switch, only
+the *claim* does. A forged claim-shaped field on the document does not either.
+
+`arrayUnion` of a role the user already holds produces an identical array, so it is absent from
+`affectedKeys()` and still passes — **an approved rider's shift toggle is unaffected**, while an
+unapproved one is denied.
+
+### Client
+
+Server-owned fields are no longer sent, so a denial cannot silently swallow an unrelated write:
+
+* Settings persists `phone` only; the checkboxes drive the local view. Turning them into a
+  *request* rather than an assertion is Phase 4.
+* `addRole()` no longer grants or claims to. It says the role needs approval.
+* Both `driver.html` shift writes drop `roles` and keep the `driverProfile.shiftStatus` mirror —
+  which the rejected write would have taken down with it.
+* `_healRolesOnce()` heals locally only.
+* `permission-denied` is no longer retried: the rules layer has decided, and retrying twice only
+  delays the failure and makes a rejected write look flaky. `unauthenticated` is still retried —
+  a token can genuinely be mid-refresh.
+
+### Size — measured, not assumed
+
+The repo's `firestore.rules` is a **documented source**; `scripts/build-firestore-rules.js`
+produces the deployed artifact by stripping comments (~38%). Measurement found three things:
+
+1. `getExecutable` returns **404 for every release in this project**, so compiled bytes cannot be
+   read directly. Headroom was measured by **ballast bisection** — inert compiled match blocks
+   added until the release is refused.
+2. The repo file at HEAD — **before** Phase 3 — already **cannot be released** (HTTP 400). A tiny
+   ruleset and the live ruleset both release with HTTP 200 from the same code path, so the refusal
+   is size, not request shape. Accumulated un-promoted divergence, not this change.
+3. Against the **live** ruleset (`6bb5df22`), which is the real baseline:
+
+```
+live                       255,034 B source   headroom 2,550 B
+live + Phase 3 hunk        255,703 B source   headroom 1,800 B
+Phase 3 consumes                                        750 B
+```
+
+**Within budget**, with 1,800 B remaining. The deployable artifact is
+`firestore.rules.phase3-candidate` — live source plus the Phase 3 hunk — and it releases with
+HTTP 200. This preserves the repo/live divergence already accepted at the v1.0 release.
+
+### Files
+
+`firestore.rules` · `firestore.rules.build` · `firestore.rules.phase3-candidate` (new) ·
+`profile.html` · `driver.html` · `scripts/test-role-rules.js` (new) ·
+`docs/ROLE_AUTHORITY_AUDIT.md` (new)
+
+**Database:** none. **API:** none. **Breaking:** a client can no longer change its own roles —
+which was the defect. **Security:** closes self-grant of every role including `admin` and
+`superAdmin`, on both create and update. **Deployment:** none — nothing deployed; production
+rules remain `6bb5df22`.
 ## [2026-08-15] — Roles Phase 2: canonical role provisioning + the legal single lifecycle
 
 **Status: implemented, tested, NOT deployed.** role-vocabulary 66/0 · role-provisioning 57/0 ·

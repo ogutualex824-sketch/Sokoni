@@ -1107,7 +1107,11 @@ function toggleOnline(){
          mirror to users/{uid}.driverProfile so `shiftStatus` is never an independent, drift-prone
          toggle. Additive (arrayUnion) so a multi-role account keeps every role. */
       firebase.firestore().collection('users').doc(_ru).set({
-        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        /* `roles` is NOT written here. It is server-owned (Roles Phase 3): approval
+           grants `driver`/`rider` via grantAccountRole, and a shift toggle is not an
+           approval. Sending arrayUnion('driver') would be rejected for exactly the
+           account that should not have it, and — inside this one merged set() — would
+           take the shiftStatus mirror down with it. */
         isDriver: true, isRider: true,
         driverProfile: {
           shiftStatus: isOnline ? 'online' : 'offline',
@@ -3110,7 +3114,8 @@ window.toggleOnline = async function() {
          account (buyer+driver) keeps every role. Vehicle stays in the dispatch layer
          (rideDrivers/dispatch) per ADR-012 — only driver IDENTITY/shift lives here. */
       firebase.firestore().collection('users').doc(_riderUid).set({
-        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        /* `roles` is NOT written here — server-owned (Roles Phase 3). See the note on
+           the other shift-toggle write above. */
         isDriver: true, isRider: true,
         driverProfile: {
           shiftStatus: onBreak ? 'break' : (online ? 'online' : 'offline'),

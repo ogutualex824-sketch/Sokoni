@@ -85,8 +85,23 @@ service cloud.firestore {
   'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
   'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
   }
+  function rolesUnchanged() {
+  return resource == null
+  ? request.resource.data.get('roles', ['buyer']).hasOnly(['buyer','user'])
+  : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles']);
+  }
+  function activeRoleApproved() {
+  let next = request.resource.data;
+  return (resource != null
+  && !next.diff(resource.data).affectedKeys().hasAny(['activeRole']))
+  || !next.keys().hasAny(['activeRole'])
+  || next.activeRole == 'buyer'
+  || request.auth.token.get(next.activeRole, false) == true;
+  }
   function noPrivilegeEscalation() {
   return noSelfGrant()
+  && rolesUnchanged()
+  && activeRoleApproved()
   && (resource == null
   ? (!request.resource.data.keys().hasAny(['registeredAs'])
   || !request.resource.data.registeredAs.keys()
@@ -355,8 +370,9 @@ service cloud.firestore {
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
+  && !(request.resource.data.status in ['delivered','completed'])
   && request.resource.data.diff(resource.data).affectedKeys()
-  .hasOnly(['status','driverNote','updatedAt','pickedUpAt','deliveredAt','etaMin']));
+  .hasOnly(['status','driverNote','updatedAt','pickedUpAt','etaMin']));
   allow delete: if isAdmin();
   match /events/{eventId} {
   allow create: if isAdmin()
@@ -1121,6 +1137,7 @@ service cloud.firestore {
   || (isAuthed() && resource.data.tenantUid == request.auth.uid);
   allow create: if isAuthed()
   && request.resource.data.ownerUid == request.auth.uid
+  && get(/databases/$(database)/documents/landlordProperties/$(propertyId)).data.ownerUid == request.auth.uid
   && request.resource.data.keys().hasAll(['ownerUid','number','createdAt']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.ownerUid == request.auth.uid
@@ -1135,6 +1152,7 @@ service cloud.firestore {
   || (isAuthed() && resource.data.tenantUid == request.auth.uid);
   allow create: if isAuthed()
   && request.resource.data.ownerUid == request.auth.uid
+  && get(/databases/$(database)/documents/landlordProperties/$(propertyId)/units/$(unitId)).data.ownerUid == request.auth.uid
   && request.resource.data.keys().hasAll(['ownerUid','type','period','amount','status','createdAt'])
   && request.resource.data.type in ['rent','water','deposit','refund','adjustment','penalty','discount']
   && request.resource.data.amount is number

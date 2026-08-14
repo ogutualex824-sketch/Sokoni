@@ -3455,7 +3455,9 @@ function _healRolesOnce(){
     if(clean.length !== raw.roles.length){
       window.__rolesHealed = true;
       raw.roles = clean; setUser(raw);
-      if(typeof saveToFirestore==='function'){ saveToFirestore({roles:clean}).catch(function(){}); }
+      /* Local only. `roles` is server-owned (Roles Phase 3) — a client deduping it is
+         indistinguishable at the rules layer from a client rewriting it, so the write
+         is rejected. Duplicates in the stored array are a server-side repair. */
     }
   }catch(_){}
 }
@@ -4336,7 +4338,15 @@ function saveSettings(){
   _user.roles = roles;
   if(roles.indexOf(_user.activeRole||'buyer')<0) _user.activeRole = 'buyer';
   setUser(_user);
-  saveToFirestore({phone:phone||null, roles:roles, activeRole:_user.activeRole});
+  /* roles and activeRole are SERVER-OWNED (Roles Phase 3) and are deliberately NOT
+     sent here. This write used to rebuild the whole roles array from four checkboxes,
+     so any signed-in account could grant itself seller/provider/driver/agent — and
+     drop a server-granted role by unticking a box. A role now comes from approval
+     (grantAccountRole) and nowhere else; the hardened users rule rejects the field,
+     so sending it would only produce a silent permission-denied.
+     The checkboxes still drive the LOCAL view. Making them request a role instead of
+     asserting one is Phase 4 (Profile UI) — tracked in docs/ROLE_AUTHORITY_AUDIT.md. */
+  saveToFirestore({phone:phone||null});
   renderRoleSwitcher();
   renderRoleChips();
   renderRoleModal();
@@ -4502,19 +4512,21 @@ function closeRoleModal(){
   document.body.style.overflow = '';
 }
 
+/* A role is GRANTED BY APPROVAL, never by asking for it here (Roles Phase 3).
+   This used to push any role key onto the array and write it to the user's own
+   document — the most direct self-grant on the platform — then toast "Role added"
+   whether or not anything reached the server. The hardened users rule rejects the
+   field, so the write can no longer land; telling the user it did would be a lie.
+
+   Phase 3 makes the refusal honest rather than silent. Turning this modal into a
+   real application flow is Phase 4 — see docs/ROLE_AUTHORITY_AUDIT.md. */
 function addRole(roleKey){
   _user = getUser();
   var roles = _user.roles || ['buyer'];
   if(roles.indexOf(roleKey)>-1){ closeRoleModal(); return; }
-  roles.push(roleKey);
-  _user.roles = roles;
-  setUser(_user);
-  saveToFirestore({roles:roles, updatedAt: new Date().toISOString()});
-  renderRoleSwitcher();
-  renderRoleChips();
   closeRoleModal();
   var rd = getRoleDef(roleKey);
-  upToast('Role added: '+rd.label, true);
+  upToast(rd.label + ' needs approval — apply from the ' + rd.label + ' hub.', false);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -4545,7 +4557,11 @@ function saveToFirestore(fields){
     function attempt(n){
       return m.setDoc(ref, fields, {merge:true}).catch(function(err){
         var code = (err && err.code) || '';
-        var transient = /unavailable|deadline|internal|permission-denied|unauthenticated/.test(code);
+        /* `permission-denied` is NOT transient — it is the rules layer deciding.
+           Retrying it twice cannot change the answer; it only delays the failure and
+           makes a rejected write look like a flaky one. `unauthenticated` is kept:
+           a token can genuinely be mid-refresh. (Roles Phase 3) */
+        var transient = /unavailable|deadline|internal|unauthenticated/.test(code);
         if(n < 2 && transient){
           return new Promise(function(r){ setTimeout(r, 1200); }).then(function(){ return attempt(n+1); });
         }
