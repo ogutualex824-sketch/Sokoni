@@ -76,7 +76,7 @@ const post = (url, body) => new Promise((resolve, reject) => {
   r.on('error', reject); r.write(data); r.end();
 });
 
-const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 180s'); process.exit(1); }, 135000);
+const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 135s'); process.exit(1); }, 135000);
 
 /* An exception must not swallow the results. Without this, a Playwright timeout anywhere
    below became an unhandled rejection that killed the process before a single line was
