@@ -1,3 +1,90 @@
+## [2026-08-15] — Roles Phase 2: canonical role provisioning + the legal single lifecycle
+
+**Status: implemented, tested, NOT deployed.** role-vocabulary 66/0 · role-provisioning 57/0 ·
+legal-projection 96/0 · lifecycle-parity 53/0 · publication-contract 36/36 · fulfilment-scan 69/0 ·
+search-pipeline 15/0 · canonical-collections 2/2.
+
+Phase 1 taught the intake to **declare** a role. The account then threw the declaration away:
+`grantAccountRole` mapped five roles behind a `|| 'provider'` fallback, so an approved mechanic,
+landlord or rental tenant silently became a `provider`. A declared role discarded one step later
+is not a role model.
+
+### Canonical provisioning
+
+* `ROLE_KEY` covers all 11 canonical roles. **The silent fallback is gone** — an unmapped role
+  throws and names the canonical set, rather than filing an applicant as a provider.
+* `activeRole` is **server-authoritative**: approval writes it with `activeRoleSetBy:'approval'`,
+  and revoking the active role demotes the account to `buyer`.
+* Canonical claims (`claims[key]`) are set alongside the legacy `provider`/`driver` claims, so no
+  existing reader breaks.
+* New uid-keyed profiles for the three roles that had none: `mechanics/{uid}` (**alongside** the
+  legacy self-registered `mechanics/{arbitraryId}` documents, which are not read, rewritten or
+  deleted), `landlordProfiles/{uid}`, and `tenantProfiles/{uid}`.
+
+### Indexing — deliberately narrow
+
+`landlordProfiles` is registered with the **existing** Algolia pipeline. Nothing else is:
+
+* **`tenantProfiles` is never indexed.** A rental tenant is personal data. It also carries
+  `_noIndex: true`, so the pipeline's own skip guard would drop it even if a future edit added it.
+* **Riders are never indexed.** `drivers/{uid}` is admin-or-self by design; a public rider
+  directory is a privacy decision nobody has taken.
+* No replacement pipeline was built. Algolia and Typesense are untouched apart from the one
+  `landlordProfiles` registration.
+
+### Legal: one lifecycle, one authority, one search surface
+
+`legal` sat in `DELEGATED_ROLES`, which meant approval wrote **nothing** — an approved advocate
+got an account role, no profile, and no search presence.
+
+The reconciliation of `legalProviders` vs `lawyers` was settled by production evidence, not by
+assumption. Both collections hold **the same one firm** under **the same uid**, both written by
+`scripts/onboard-batch2.js` in a single pass, commented *"legalProviders (shown on legal-hub) and
+lawyers (global search)"*. They are not rival registries — they are authority and projection:
+
+| | |
+|---|---|
+| `legalProviders/{uid}` | authority / profile — `legal-hub.html`, `getLegalProviders` |
+| `lawyers/{uid}` | search projection — `sokoni-firestore-search.js`, `sokoni-search-pro.js`, the existing Algolia + Typesense `lawyers` triggers |
+
+New `projectLegal()` maintains both in one commit, keyed by uid so approval and **re-approval
+converge on one entity instead of forking a second**. Search terms are built with the **shared**
+`functions/search-terms.js` generator that `projectProvider` already uses — no second
+transformation was invented.
+
+* **`legalProviders` is NOT registered with Algolia or Typesense.** Indexing the authority would
+  create a second searchable record of the same firm — the duplicate this design prevents.
+* **`rating` is seeded on creation.** `getLegalProviders` runs `.orderBy('rating','desc')`, and
+  Firestore omits documents lacking the ordered field — approving a firm without it would file it
+  into an invisible directory.
+* **Registry-owned values are never clobbered.** Licence number, specialisations, consultation fee,
+  rating and consultation history belong to the legal registry; an application does not carry them,
+  so approval must not blank them. A practising-certificate number is left blank rather than
+  fabricated.
+* **Legacy and self-registered `lawyers` records are preserved**, not replaced or migrated. When
+  that uid is later approved, the projection brings it into sync.
+* Revocation **retracts** both documents rather than deleting them — and `searchable:false` makes
+  the existing index trigger remove the firm from search, so a retraction reaches search and not
+  just the directory. Reinstatement restores the same documents.
+* Only a free-text specialisation matching the registry's own `LEGAL_SPECIALIZATIONS` vocabulary
+  reaches the filterable array; anything else records as `other` rather than being invented into a
+  filter that would never match.
+
+`DEMO_LAWYERS` was already removed on 2026-07-19 (P0) and is unrelated; the suite asserts it cannot
+return alongside a real projection.
+
+### Files
+
+`functions/application-lifecycle.js` (+326/−11) · `functions/algolia-sync.js` (+11) ·
+`scripts/test-role-provisioning.js` (new) · `scripts/test-legal-projection.js` (new)
+
+**Database:** new `landlordProfiles/{uid}`, `tenantProfiles/{uid}`; `mechanics/{uid}` written
+alongside existing documents; `legalProviders/{uid}` + `lawyers/{uid}` now written by approval.
+**API:** none. **Breaking:** none — legacy claims, collections and search clients unchanged.
+**Security:** `activeRole` is written only by approval; closing the client's `users.roles`
+self-write is **Phase 3** and is not in this change. **Deployment:** none — nothing deployed,
+Firestore rules untouched.
+
 ## [2026-08-14] — FIXED: competing deep-switch loops made the merchant panel thrash
 
 **Status: mechanism captured, fixed.** deep-switch 15/15 · route-gate 138/0 · home-back 93/0 ·

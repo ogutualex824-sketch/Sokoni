@@ -599,20 +599,286 @@ async function projectDriver(db, app, uid, approved) {
   };
 }
 
+/* ── LEGAL (Roles Phase 2) ───────────────────────────────────────────────────
+   ONE lifecycle, two documents, both keyed by uid:
+
+     legalProviders/{uid}  authority / profile — what legal-hub.html and the
+                           getLegalProviders CF read.
+     lawyers/{uid}         SEARCH PROJECTION — what sokoni-firestore-search.js,
+                           sokoni-search-pro.js and the existing Algolia +
+                           Typesense `lawyers` triggers read.
+
+   This is not a new architecture; it is the one the platform already uses.
+   scripts/onboard-batch2.js writes BOTH documents for the same uid in the same
+   pass, commented "legalProviders (shown on legal-hub) and lawyers (global
+   search)". Approval was the only entry point that did not: `legal` sat in
+   DELEGATED_ROLES and wrote nothing at all, so an approved advocate got an
+   account role and no profile and no search presence.
+
+   legalProviders is deliberately NOT registered with Algolia or Typesense.
+   Indexing it would create a SECOND searchable record of the same firm — the
+   duplicate this design exists to prevent. `lawyers` stays the single search
+   surface and its pipeline is untouched.
+
+   Registry-owned values are never clobbered. licenceNumber, specializations,
+   consultationFee, rating and the consultation history belong to the legal
+   registry (registerLegalProvider / approveLegalProvider / the operator script);
+   an application does not carry them, so an approval must not blank them.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Kept in sync with LEGAL_SPECIALIZATIONS in functions/legal-hub.js — the
+   getLegalProviders `array-contains` filter only matches these values, so a
+   free-text speciality from an application is recorded but never invented into
+   the filterable field. */
+const LEGAL_SPECS = ['family_law', 'property_law', 'employment_law', 'corporate_law', 'criminal_law',
+  'immigration', 'intellectual_property', 'tax_law', 'conveyancing', 'debt_recovery',
+  'drafting', 'notary', 'mediation', 'litigation', 'other'];
+
+async function projectLegal(db, app, uid, approved) {
+  const provRef = db.collection('legalProviders').doc(uid);
+  const lawRef  = db.collection('lawyers').doc(uid);
+  const [provSnap, lawSnap] = await Promise.all([provRef.get(), lawRef.get()]);
+  const prov = provSnap.exists ? provSnap.data() : {};
+  const law  = lawSnap.exists  ? lawSnap.data()  : {};
+
+  if (!approved) {
+    /* Retraction, not deletion — the same shape projectProvider uses. The firm
+       disappears from the directory AND from search (searchable:false makes the
+       existing update trigger delete it from the index), and every field the
+       registry owns survives for reinstatement. */
+    const w = [];
+    if (provSnap.exists) {
+      await provRef.set({ status: 'suspended', isOnline: false, suspendedAt: _ts(), updatedAt: _ts() }, { merge: true });
+      w.push({ collection: 'legalProviders', id: uid, action: 'retracted' });
+    } else w.push({ collection: 'legalProviders', id: uid, action: 'noop_absent' });
+    if (lawSnap.exists) {
+      await lawRef.set({ status: 'suspended', searchable: false, searchIndexed: false, updatedAt: _ts() }, { merge: true });
+      w.push({ collection: 'lawyers', id: uid, action: 'retracted' });
+    } else w.push({ collection: 'lawyers', id: uid, action: 'noop_absent' });
+    return w;
+  }
+
+  const name = _sanText(app.name || app.businessName || app.firmName || app.fullName, 160);
+  const firmName = _sanText(app.firmName || app.businessName || name, 160);
+  const bio = _sanText(app.description || app.bio || app.about, 2000);
+  /* An application's free-text speciality is kept for display, but only a value
+     from the registry's own vocabulary may reach the filterable array. */
+  const declaredSpec = _san(app.specialization || app.practiceArea || '', 60).toLowerCase().replace(/[\s-]+/g, '_');
+  const specs = Array.isArray(prov.specializations) && prov.specializations.length
+    ? prov.specializations
+    : (LEGAL_SPECS.indexOf(declaredSpec) > -1 ? [declaredSpec] : ['other']);
+
+  /* ── 1 · AUTHORITY ── */
+  const provDoc = {
+    providerId: prov.providerId || uid,
+    uid,
+    name,
+    firmName,
+    specializations: specs,
+    bio: bio || prov.bio || '',
+    location: _sanText(app.location || app.city || app.county, 200) || prov.location || '',
+    county: _sanText(app.county || app.city, 100) || prov.county || '',
+    country: prov.country || 'Kenya',
+    phone: _san(app.phoneNumber || app.phone, 24) || prov.phone || '',
+    email: _san(app.email, 200) || prov.email || '',
+    status: 'active',
+    approved: true,
+    approvedAt: _ts(),
+    sourceApplicationId: app.applicationId || null,
+    updatedAt: _ts(),
+  };
+  /* Seed ONLY on first creation. `rating` is not decoration: getLegalProviders
+     runs .orderBy('rating','desc'), and Firestore omits documents that lack the
+     ordered field — approving a firm without it would file it into an invisible
+     directory. Re-approval must never reset a live firm's history. */
+  if (!provSnap.exists) {
+    provDoc.rating = 0; provDoc.ratingCount = 0; provDoc.totalConsultations = 0;
+    provDoc.consultationFee = 0; provDoc.currency = 'KES';
+    provDoc.languages = ['English', 'Swahili'];
+    provDoc.isOnline = false;
+    provDoc.yearsOfExperience = 0;
+    /* NEVER fabricated. A practising certificate number is supplied by the firm;
+       an empty string here is honest, an invented one is a compliance problem. */
+    provDoc.licenseNumber = '';
+    provDoc.verified = false;
+    provDoc.profilePending = ['licenseNumber', 'specializations', 'bio', 'phone', 'consultationFee'];
+    provDoc.createdAt = _ts();
+  }
+  await provRef.set(provDoc, { merge: true });
+
+  /* ── 2 · SEARCH PROJECTION ──
+     Built through the SHARED generator (functions/search-terms.js) — the same
+     one projectProvider uses — so no second transformation exists to drift.
+     buildSearchTerms reads name/category/categories/description/location/city/
+     county/tags, so the legal vocabulary is carried in `categories` and `tags`;
+     `specialty`, `practice` and `firm` are display fields the search clients
+     read directly and are NOT term sources on their own. */
+  const specialty = _sanText(app.specialization || app.practiceArea || law.specialty, 120) || 'Legal Services';
+  const categories = ['legal', specialty, ...specs.map((s) => String(s).replace(/_/g, ' '))]
+    .map((c) => _sanText(c, 120)).filter(Boolean)
+    .filter((c, i, a) => a.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i);
+
+  const lawDoc = {
+    id: uid, uid, sellerUid: uid,
+    name,
+    firm: firmName,
+    specialty,
+    practice: _sanText(law.practice || specialty, 120),
+    category: 'legal',
+    categories,
+    description: bio || law.description || '',
+    location: provDoc.location,
+    city: _sanText(app.city || app.county, 100) || law.city || '',
+    email: provDoc.email,
+    status: 'active',
+    verified: prov.verified === true || law.verified === true,
+    searchable: true,
+    searchIndexed: true,
+    nameLower: name.toLowerCase(),
+    updatedAt: _ts(),
+    sourceApplicationId: app.applicationId || null,
+  };
+  /* Swahili and the words a client actually types. `wakili` is how most Kenyan
+     clients search for an advocate and appears in no structured field. */
+  lawDoc.tags = ['lawyer', 'advocate', 'wakili', 'legal', 'law firm'];
+  lawDoc.searchableTerms = buildProviderTerms({ ...law, ...lawDoc });
+  if (!lawSnap.exists) lawDoc.createdAt = _ts();
+
+  await lawRef.set(lawDoc, { merge: true });
+
+  return [
+    { collection: 'legalProviders', id: uid, action: provSnap.exists ? 'updated' : 'created' },
+    { collection: 'lawyers',        id: uid, action: lawSnap.exists  ? 'updated' : 'created' },
+  ];
+}
+
 /* Roles the platform already owns elsewhere. Projecting them from here would
    duplicate an existing pipeline (sellers has its own onboarding + ade trigger;
-   healthProviders and legalProviders have their own registries), so the role is
-   recorded, the account is granted its role, and the projection is reported as
-   delegated instead of being silently skipped. */
-const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders', legal: 'legalProviders' };
+   healthProviders has its own registry), so the role is recorded, the account is
+   granted its role, and the projection is reported as delegated instead of being
+   silently skipped.
+
+   `legal` GRADUATED out of this map in Roles Phase 2: "delegated" meant nobody
+   wrote the document, so approving an advocate produced no profile and no search
+   presence. It now runs projectLegal above. */
+const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders' };
+
+/* ── CANONICAL ROLE PROFILES (Roles Phase 2) ────────────────────────────────
+   One uid-keyed profile per canonical role that had none. These are the account's
+   record of "you are approved as X", separate from the listing registries that
+   already exist (providers, sellers, drivers …).
+
+   mechanic  mechanics/{uid}. The collection ALREADY EXISTS and is written
+             client-side by provider-wiring.js as mechanics/{arbitraryId} for
+             self-registered garages. That path is untouched: this adds a
+             uid-keyed document ALONGSIDE it so approval has a record it owns,
+             and no legacy document is read, rewritten or deleted.
+   landlord  landlordProfiles/{uid}. New. `landlordData/{uid}` is a write-only
+             localStorage mirror with no reader and is deliberately NOT reused.
+   tenant    tenantProfiles/{uid}. New, and PRIVATE — a rental tenant is personal
+             data, so it is never registered with any search engine. The name
+             avoids `tenants/`, which is inventory multi-tenancy (isTenantMember /
+             sellerId claim) and completely unrelated.
+
+   `indexable` is stamped so the indexing generators need no per-role special
+   case: the pipeline's existing skip guard already honours documents that say
+   they must not be indexed. */
+const ROLE_PROFILES = {
+  mechanic: { collection: 'mechanics',        indexable: true  },
+  landlord: { collection: 'landlordProfiles', indexable: true  },
+  tenant:   { collection: 'tenantProfiles',   indexable: false },
+};
+
+/* Write the uid-keyed role profile. Idempotent: a re-approval or a retried
+   trigger converges on the same document rather than creating a second one. */
+async function projectRoleProfile(db, app, uid, role, approved) {
+  const spec = ROLE_PROFILES[role];
+  if (!spec) return null;
+  const ref = db.collection(spec.collection).doc(uid);
+
+  if (!approved) {
+    /* Withdrawn, not deleted. The profile stops being discoverable and stops
+       claiming the role, but the record of the decision survives — the same
+       retraction shape projectProvider uses. */
+    await ref.set({
+      role, ownerUid: uid, status: 'inactive', visibility: 'private',
+      approved: false, updatedAt: _ts(),
+    }, { merge: true });
+    return { collection: spec.collection, id: uid, action: 'retracted' };
+  }
+
+  const patch = {
+    /* Canonical index fields, stamped on every role profile so the search
+       document builder needs no per-role knowledge. */
+    entityType: role,
+    role,
+    ownerUid: uid,
+    name: _san(app.name || app.businessName || app.fullName || '', 140),
+    description: _sanText(app.description || app.bio || app.about || '', 600),
+    category: _san(app.category || '', 80),
+    hub: _san(app.hub || '', 40),
+    location: _san(app.location || app.city || app.county || '', 120),
+    phone: app.phoneNumber || app.phone || null,
+    status: 'active',
+    visibility: spec.indexable ? 'public' : 'private',
+    approved: true,
+    approvedAt: _ts(),
+    sourceCollection: 'applications',
+    sourceId: app.applicationId || null,
+    updatedAt: _ts(),
+  };
+  /* A tenant profile carries NO discoverable content and says so explicitly, so
+     an indexer that ever sees it skips it on the document's own terms rather
+     than on a rule someone has to remember. */
+  if (!spec.indexable) patch._noIndex = true;
+
+  const snap = await ref.get();
+  if (!snap.exists) patch.createdAt = _ts();
+
+  await ref.set(patch, { merge: true });
+  return { collection: spec.collection, id: uid, action: snap.exists ? 'updated' : 'created' };
+}
 
 /* Account roles. `roles` must be written as an ARRAY — a provider whose account
    carries only `isProvider: true` lands in the app as a buyer, and the analytics
    gate reads `roles` (array), not a `role` string. Both the array and the
    legacy booleans are maintained so no existing reader breaks. */
 async function grantAccountRole(db, uid, role, approved) {
-  const ROLE_KEY = { provider: 'provider', driver: 'rider', seller: 'seller', health: 'provider', legal: 'provider' };
-  const key = ROLE_KEY[role] || 'provider';
+  /* ── CANONICAL ROLE KEYS (Roles Phase 2) ──────────────────────────────────
+     This map used to read
+       { provider:'provider', driver:'rider', seller:'seller',
+         health:'provider', legal:'provider' }
+     with `|| 'provider'` behind it, and that fallback was the whole problem: a
+     mechanic, a landlord and a rental tenant all became `provider` on the
+     account, and health and legal were mapped there deliberately. Phase 1 taught
+     the intake to DECLARE a role; without this, the declaration was recorded on
+     the application and then discarded at the account.
+     Every canonical role now keeps its own key, and there is NO fallback — an
+     unmapped role throws rather than quietly becoming a provider. `driver` is
+     retained as the legacy spelling of `rider` because existing applications and
+     `registeredAs.rider` already use both. */
+  const ROLE_KEY = {
+    buyer:    'buyer',
+    seller:   'seller',
+    provider: 'provider',
+    mechanic: 'mechanic',
+    driver:   'rider',      /* legacy spelling → canonical key */
+    rider:    'rider',
+    health:   'health',
+    legal:    'legal',
+    landlord: 'landlord',
+    tenant:   'tenant',
+    admin:    'admin',
+    staff:    'staff',
+  };
+  const key = ROLE_KEY[role];
+  if (!key) {
+    /* Fail loudly. Silently defaulting is what this phase exists to remove, and
+       a role that reaches here unmapped is a bug in the caller, not an applicant
+       problem to be smoothed over. */
+    throw new Error('grantAccountRole: unmapped role "' + role + '". '
+      + 'Canonical roles: ' + Object.keys(ROLE_KEY).join(', ') + '.');
+  }
   const ref = db.collection('users').doc(uid);
   const patch = { updatedAt: _ts() };
 
@@ -622,14 +888,42 @@ async function grantAccountRole(db, uid, role, approved) {
     patch.approved = true;
     patch.approvedAt = _ts();
     if (role === 'provider') patch.isProvider = true;
-    if (role === 'driver') { patch.isDriver = true; patch.isRider = true; }
+    /* Both spellings set the legacy flags: `role` is now `rider` for a Phase 1
+       declaration and still `driver` for a legacy application, and driver.html,
+       dispatch and profile.html all read isDriver/isRider. */
+    if (key === 'rider') { patch.isDriver = true; patch.isRider = true; }
+    /* ── activeRole is SERVER-SET (Roles Phase 2) ───────────────────────────
+       Until now nothing on the server ever wrote it: profile.html:4339 persisted
+       whatever the client held, so the workspace a merchant landed in was decided
+       by the browser. Approval is the event that grants a capability, so approval
+       is what selects it — the applicant lands in the workspace they were just
+       approved for instead of having to find it.
+       This does not yet PREVENT a client writing something else; that is Phase 3,
+       where the rules stop trusting the field. What it establishes now is that
+       the server is the authority that sets it. */
+    patch.activeRole = key;
+    patch.activeRoleSetBy = 'approval';
+    patch.activeRoleSetAt = _ts();
   } else {
     /* The role is removed but the account is untouched otherwise — a rejected
        provider is still a customer. */
     patch.roles = FieldValue.arrayRemove(key);
     patch[`registeredAs.${key}`] = false;
     if (role === 'provider') patch.isProvider = false;
-    if (role === 'driver') { patch.isDriver = false; patch.isRider = false; }
+    if (key === 'rider') { patch.isDriver = false; patch.isRider = false; }
+    /* A revoked role must not remain the active workspace. Reading the account
+       first would be a race against the same write, so the demotion is applied
+       only when the stored activeRole is the role being revoked. */
+    try {
+      const snap = await ref.get();
+      if (snap.exists && snap.data() && snap.data().activeRole === key) {
+        patch.activeRole = 'buyer';
+        patch.activeRoleSetBy = 'revocation';
+        patch.activeRoleSetAt = _ts();
+      }
+    } catch (e) {
+      logger.warn('[appLifecycle] activeRole demotion skipped', { uid, key, error: e.message });
+    }
   }
   await ref.set(patch, { merge: true });
 
@@ -640,9 +934,17 @@ async function grantAccountRole(db, uid, role, approved) {
     const auth = getAuth();
     const user = await auth.getUser(uid);
     const claims = { ...(user.customClaims || {}) };
+    /* One claim per canonical role, keyed the same way as users.roles.
+       Previously health and legal set `claims.provider`, so a claim could not
+       tell a clinic from a cleaning company — the same collapse this phase
+       removes from the account. The legacy `provider` claim is still set for
+       provider/health/legal because live rules and client gates read it; the
+       canonical claim is added ALONGSIDE it, never instead of it, so nothing
+       that reads the old shape breaks. */
+    claims[key] = !!approved;
     if (role === 'provider' || role === 'health' || role === 'legal') claims.provider = !!approved;
-    if (role === 'driver') { claims.driver = !!approved; claims.rider = !!approved; }
-    if (role === 'seller') claims.seller = !!approved;
+    if (key === 'rider') { claims.driver = !!approved; claims.rider = !!approved; }
+    if (key === 'seller') claims.seller = !!approved;
     await auth.setCustomUserClaims(uid, claims);
   } catch (e) {
     logger.warn('[appLifecycle] claim update skipped', { uid, role, error: e.message });
@@ -715,8 +1017,20 @@ async function applyDecision(appId, app, opts = {}) {
   const receipt = { appId, uid, role, status, writes: [] };
 
   try {
-    if (role === 'driver') {
+    if (role === 'driver' || role === 'rider') {
+      /* Both spellings reach the same projection: `rider` is the Phase 1
+         declaration, `driver` the legacy application's word. */
       receipt.writes.push(await projectDriver(db, app, uid, approved));
+    } else if (role === 'legal') {
+      /* legalProviders (authority) + lawyers (search projection), one commit.
+         Returns TWO receipt entries, so push them individually. */
+      (await projectLegal(db, app, uid, approved)).forEach((w) => receipt.writes.push(w));
+    } else if (ROLE_PROFILES[role]) {
+      /* mechanic / landlord / tenant — a uid-keyed profile this approval owns.
+         Before Phase 2 these fell through to projectProvider and were filed in
+         the service directory, which is exactly how a landlord ended up listed
+         as a cleaning company. */
+      receipt.writes.push(await projectRoleProfile(db, app, uid, role, approved));
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {
@@ -1010,5 +1324,6 @@ exports.applicationList = onCall(
 exports._internal = {
   toE164KE, toLocalKE, splitLocation, resolveRole, canonStatus, normVehicle, _san, _sanText,
   buildIntakePatch, applyDecision, projectProvider, projectDriver,
+  projectLegal, projectRoleProfile, LEGAL_SPECS, ROLE_PROFILES, DELEGATED_ROLES,
   INTAKE_VERSION, KE_COUNTIES,
 };
