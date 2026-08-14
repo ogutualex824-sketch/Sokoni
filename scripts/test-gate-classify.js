@@ -26,6 +26,15 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 let pass = 0, fail = 0;
+/* Shorter than this suite's runner budget (150000ms) ON PURPOSE. Without one, a hang is
+   SIGKILLed by the runner and recorded as TIMEOUT -- not a defect verdict -- so the suite leaves
+   the blocking set silently. Measured cost of this suite is far below the value chosen, so this
+   fires only when the runner was going to kill it anyway. */
+const _wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 135s'); process.exit(1); }, 135000);
+/* unref: the watchdog must never be the reason the process stays alive. A suite that
+   finishes normally exits immediately; one that is genuinely stuck still has a live event
+   loop, so the timer still fires and self-reports instead of being SIGKILLed silently. */
+if (_wd && _wd.unref) _wd.unref();
 const failures = [];
 const ok = (label, cond, detail) => {
   if (cond) { pass++; console.log('  PASS  ' + label); return true; }

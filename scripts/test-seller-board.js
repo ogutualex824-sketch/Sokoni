@@ -21,6 +21,15 @@ const server = http.createServer((req, res) => {
 });
 
 let pass = 0, fail = 0;
+/* Shorter than this suite's runner budget (150000ms) ON PURPOSE. Without one, a hang is
+   SIGKILLed by the runner and recorded as TIMEOUT -- not a defect verdict -- so the suite leaves
+   the blocking set silently. Measured cost of this suite is far below the value chosen, so this
+   fires only when the runner was going to kill it anyway. */
+const _wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 135s'); process.exit(1); }, 135000);
+/* unref: the watchdog must never be the reason the process stays alive. A suite that
+   finishes normally exits immediately; one that is genuinely stuck still has a live event
+   loop, so the timer still fires and self-reports instead of being SIGKILLed silently. */
+if (_wd && _wd.unref) _wd.unref();
 const check = (l, ok, d) => { console.log('  ' + (ok?'PASS  ':'FAIL  ') + l + (d?'   ['+d+']':'')); ok?pass++:fail++; };
 
 /* Orders spanning every vocabulary, including ones only the timeline engine writes. */
@@ -133,7 +142,15 @@ server.listen(0, async () => {
   await roleCase('registeredAs.seller allowed', { registeredAs: { seller: true } },                 true);
   await roleCase('roles[] seller allowed',      { roles: ['buyer', 'seller'] },                     true);
 
-  await browser.close(); server.close();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
+  /* REPORT FIRST, THEN TEAR DOWN — teardown must never decide the verdict.
+     Measured in the gate: suites printed every assertion PASS and were then SIGKILLed
+     at their budget because close() never returned, so a finished result was recorded
+     as TIMEOUT -- a non-blocking verdict -- and its coverage vanished silently. */
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });

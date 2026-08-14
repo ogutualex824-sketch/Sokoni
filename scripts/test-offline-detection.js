@@ -22,6 +22,15 @@ const ORIGIN = 'http://localhost:3000';
 const PAGE = '/index.html';
 
 let failures = 0;
+/* Shorter than this suite's runner budget (150s) ON PURPOSE. Without a watchdog a hang is
+   SIGKILLed by the runner and recorded as TIMEOUT — not a defect verdict — so the suite
+   leaves the blocking set silently. This suite's measured cost is far below 135s, so this
+   only ever fires when the runner was about to kill it anyway. */
+const _wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 135s'); process.exit(1); }, 135000);
+/* unref: the watchdog must never be the reason the process stays alive. A suite that
+   finishes normally exits immediately; one that is genuinely stuck still has a live event
+   loop, so the timer still fires and self-reports instead of being SIGKILLed silently. */
+if (_wd && _wd.unref) _wd.unref();
 const ok   = (m) => console.log('  pass  ' + m);
 const bad  = (m) => { console.error('  FAIL  ' + m); failures++; };
 
@@ -167,7 +176,14 @@ async function browserChecks() {
     await ctx.close();
   }
 
-  await browser.close();
+  /* Bounded, and never allowed to decide the verdict. Measured across the gate: browser
+     suites printed every assertion and were then SIGKILLed at their budget because close()
+     did not return, so a finished result was recorded as TIMEOUT — a non-blocking verdict —
+     and its coverage vanished with nothing failing. */
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
 }
 
 (async () => {

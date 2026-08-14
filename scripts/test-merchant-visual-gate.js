@@ -88,7 +88,7 @@ const server = http.createServer((req, res) => {
   next();
 });
 
-const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 900000);
+const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 135000);
 wd.unref && wd.unref();
 
 /* ── Deterministic module lifecycle wait ─────────────────────────────────────
@@ -625,7 +625,6 @@ server.listen(0, async () => {
     await ctx.close();
   }
 
-  await browser.close(); server.close(); clearTimeout(wd);
 
   console.log('\n' + '='.repeat(78));
   console.log('  PER-ROUTE MATRIX');
@@ -636,5 +635,15 @@ server.listen(0, async () => {
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
   console.log('  Screenshots: ' + SHOTS);
   console.log('\n  BATCH 1 = ' + (fail ? 'FAIL' : 'PASS'));
+  /* REPORT FIRST, THEN TEAR DOWN — teardown must never decide the verdict.
+     Measured in the gate: suites printed every assertion PASS and were then SIGKILLed
+     at their budget because close() never returned, so a finished result was recorded
+     as TIMEOUT -- a non-blocking verdict -- and its coverage vanished silently. */
+  try { clearTimeout(wd); } catch (_) {}
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });

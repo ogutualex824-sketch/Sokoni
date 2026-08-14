@@ -57,7 +57,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 600000);
+const wd = setTimeout(() => { console.log('SKIP — watchdog'); process.exit(0); }, 135000);
 wd.unref && wd.unref();
 
 /* Stub Auth + Firestore INSIDE the page, before any shell script runs.
@@ -360,7 +360,6 @@ server.listen(0, async () => {
     await ctx.close();
   }
 
-  await browser.close(); server.close(); clearTimeout(wd);
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   console.log('\n  SCOPE: proves the resolver survives page destruction, a cleared cache and late');
@@ -369,5 +368,15 @@ server.listen(0, async () => {
   console.log('         nor the seller management page.');
   console.log('         The claim WRITE is covered by test-minishop-claim-firestore.js.');
   console.log('         NOT VERIFIED here: the on-device reload.');
+  /* REPORT FIRST, THEN TEAR DOWN — teardown must never decide the verdict.
+     Measured in the gate: suites printed every assertion PASS and were then SIGKILLed
+     at their budget because close() never returned, so a finished result was recorded
+     as TIMEOUT -- a non-blocking verdict -- and its coverage vanished silently. */
+  try { clearTimeout(wd); } catch (_) {}
+  await Promise.race([
+    (async () => { try { await browser.close(); } catch (_) {} })(),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+  try { server.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });

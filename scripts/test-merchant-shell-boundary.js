@@ -31,6 +31,15 @@ const PORT = 8795;
 const IPHONE = { width: 390, height: 844 };
 
 let pass = 0, fail = 0;
+/* Shorter than this suite's runner budget (150000ms) ON PURPOSE. Without one, a hang is
+   SIGKILLed by the runner and recorded as TIMEOUT -- not a defect verdict -- so the suite leaves
+   the blocking set silently. Measured cost of this suite is far below the value chosen, so this
+   fires only when the runner was going to kill it anyway. */
+const _wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 135s'); process.exit(1); }, 135000);
+/* unref: the watchdog must never be the reason the process stays alive. A suite that
+   finishes normally exits immediately; one that is genuinely stuck still has a live event
+   loop, so the timer still fires and self-reports instead of being SIGKILLed silently. */
+if (_wd && _wd.unref) _wd.unref();
 const failures = [];
 const ok = (l, c, d) => {
   if (c) { pass++; console.log('  PASS  ' + l); return true; }
@@ -139,12 +148,19 @@ const COUNT = () => ({
     fail++; failures.push('probe error: ' + (e && e.message));
     console.error('  probe error: ' + (e && e.message));
   } finally {
-    await browser.close();
     server.close();
   }
 
   console.log('\n' + '─'.repeat(70));
   if (fail) { console.log('\x1b[31mFAILURES\x1b[0m'); failures.forEach((f) => console.log('  ✗ ' + f)); }
   console.log((fail ? '\x1b[31m' : '\x1b[32m') + 'merchant shell boundary: ' + pass + '/' + (pass + fail) + '\x1b[0m\n');
+    /* REPORT FIRST, THEN TEAR DOWN — teardown must never decide the verdict.
+       Measured in the gate: suites printed every assertion PASS and were then SIGKILLed
+       at their budget because close() never returned, so a finished result was recorded
+       as TIMEOUT -- a non-blocking verdict -- and its coverage vanished silently. */
+    await Promise.race([
+      (async () => { try { await browser.close(); } catch (_) {} })(),
+      new Promise((r) => setTimeout(r, 8000)),
+    ]);
   process.exit(fail ? 1 : 0);
 })();
