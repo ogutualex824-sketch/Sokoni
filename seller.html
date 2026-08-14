@@ -4344,6 +4344,15 @@ if(typeof window.showDashPage !== 'function') {
       var m = document.querySelector('.main-content');
       if(m) m.scrollTop = 0;
     };
+    /* Publish the page→sections map for the deep-link router's verification step.
+       It needs to answer "is the requested section ACTUALLY on screen?" before it strips
+       #hash from the URL, and this is the only such map available to it at runtime:
+       seller.js declares DASH_PAGES with `const`, so it is not reachable on window.
+       Reusing this one rather than inventing a third copy is deliberate — the two that
+       already exist drifted once and silently rendered Overview for every POS user
+       (scripts/test-seller-dashboard.js now fails the build on divergence). Assigned
+       here rather than restructured because that guard matches `var PAGES = {` by regex. */
+    window.__SELLER_PAGE_SECTIONS = PAGES;
     /* Call immediately so sections are hidden before deferred seller.js loads */
     window.showDashPage('overview', document.querySelector('#sidebarNav .active-nav'));
   })();
@@ -5545,26 +5554,142 @@ class="notification-container"
       } catch (e) { return ''; }
     }
 
-    function _applyHash() {
-      var hash = _sectionFromUrl();
-      if (!hash) return;
-      var isMobile = window.matchMedia('(max-width:768px)').matches;
-      if (isMobile && typeof window.sdSwitchTab === 'function') {
-        var target = _HASH_MOBILE[hash] || hash;
-        window.sdSwitchTab(target);
-      } else if (typeof window.showDashPage === 'function') {
-        var target = _HASH_DESKTOP[hash] || hash;
-        window.showDashPage(target, null);
-      }
-      /* Clean the hash from the URL so the browser doesn't anchor-scroll. location.search
-         is preserved deliberately — that is what makes ?sec= the address that survives. */
-      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    /* How long to keep waiting for the router to appear and for the section to actually
+       come up. This clock starts AFTER DOMContentLoaded, and both selectors are measurably
+       in place well before that — ~1.1-1.8s against a DCL of ~1.7-2.9s on a loaded machine
+       — so the budget is not sizing a normal boot, it is sizing how long to keep hoping on
+       an abnormal one. Six seconds is many times the observed worst case while staying far
+       inside the deep-link suite's 120s watchdog, which the negative case has to sit
+       through. Running out costs nothing but a retained #hash. */
+    var _DEEPLINK_DEADLINE_MS = 6000;
+
+    /* Did the router ACTUALLY put the requested section on screen?
+       "The selector returned" is not the same claim: showDashPage() falls back to Overview
+       for a page it does not know, and returns just as quietly as it does on success. The
+       strip below destroys the only copy of the request, so it must be gated on the page
+       having really changed — not on having asked it to. */
+    function _sectionIsActive(pageKey) {
+      var map = window.__SELLER_PAGE_SECTIONS;
+      var want = map && map[pageKey];
+      if (!want || !want.length) return null;      /* unknown page — unverifiable, see below */
+      var visible = function (id) {
+        var el = document.getElementById(id);
+        if (!el) return false;
+        var cs = getComputedStyle(el);
+        return cs.display !== 'none' && cs.visibility !== 'hidden';
+      };
+      /* Every section this page owns is up... */
+      for (var i = 0; i < want.length; i++) { if (!visible(want[i])) return false; }
+      /* ...AND the dashboard it replaces is down. Both halves are required: Products shares
+         upload-section and products-section with Overview, so the first check alone is
+         satisfied while the dashboard is still on screen — which is precisely the
+         indistinguishable-from-Overview failure this router exists to prevent. */
+      if (want.indexOf('seller-stats') === -1 && visible('seller-stats')) return false;
+      return true;
     }
 
+    /* Deep-link routing, dependency-aware.
+       This used to be `setTimeout(_applyHash, 150)` and the 150 was doing real work: it kept
+       the strip AFTER seller.js's own DOMContentLoaded router, which reads the same hash
+       (_sellerPageFromHash) and would resolve to Overview if the hash were already gone.
+       But 150ms is a guess about how long a page takes to boot, and the strip was
+       unconditional — it ran whether or not either selector existed, so a slow boot removed
+       #products having routed nowhere, and the deep link was simply lost with no error.
+       Measured: the selectors do not exist until ~1.1-1.8s and DOMContentLoaded lands at
+       ~1.7-2.9s under load, so the fixed delay was never long enough to be a guarantee.
+       It also left the section visibly active up to 150ms before the URL was cleaned, and
+       anything observing "the section is up" — a test, or a router keying off location —
+       could read the stale address in that window.
+       Now: wait for the selector, invoke it once, wait for the section to actually come up,
+       and only then clean the URL. Nothing is removed until the request has been honoured. */
+    function _applyHash() {
+      var requested = _sectionFromUrl();
+      if (!requested) { _mark('none'); return; }
+
+      var isMobile   = window.matchMedia('(max-width:768px)').matches;
+      var deskKey    = _HASH_DESKTOP[requested] || requested;
+      var mobileKey  = _HASH_MOBILE[requested]  || requested;
+      var started    = Date.now();
+      var invoked    = false;
+      var expired    = function () { return Date.now() - started > _DEEPLINK_DEADLINE_MS; };
+      /* setTimeout, not requestAnimationFrame. rAF is throttled under load and stops
+         entirely while the tab is hidden, so a frame-driven loop never reaches its own
+         deadline there — the router would wait forever instead of giving up, on exactly
+         the slow or backgrounded boot this budget exists for. Measured: with the selector
+         permanently unavailable, an rAF loop failed to resolve within 25s under parallel
+         load and hung the suite; a timer resolves on schedule regardless of frames. */
+      var again      = function (fn) { setTimeout(fn, 25); };
+
+      (function step() {
+        var ready = isMobile ? typeof window.sdSwitchTab === 'function'
+                             : typeof window.showDashPage === 'function';
+
+        if (!ready) {
+          /* The selector may still be loading. Keep the hash — it is the request. */
+          if (expired()) { _mark('unresolved'); return; }
+          return void again(step);
+        }
+
+        /* Invoke ONCE. Re-invoking every frame would re-run the router (and its lazy
+           iframe mounts) hundreds of times while we wait for a section that may never
+           come up, and would fight seller.js's router rather than settle with it. */
+        if (!invoked) {
+          invoked = true;
+          try {
+            if (isMobile) window.sdSwitchTab(mobileKey);
+            else          window.showDashPage(deskKey, null);
+          } catch (e) {
+            /* A throwing router is exactly when the hash must survive: the request was
+               never honoured, so removing it would strand the user on Overview with no
+               way back to the section they asked for. */
+            console.error('[seller] deep link "' + requested + '" — router threw.', e);
+            _mark('unresolved');
+            return;
+          }
+        }
+
+        var active = _sectionIsActive(deskKey);
+        if (active === null) {
+          /* An address for a page no map knows (a stale or mistyped link). Both routers
+             fall back to Overview, which is the correct, documented behaviour — but there
+             is nothing to verify, so the URL is left exactly as it is rather than cleaned
+             on the strength of a route that did not happen. */
+          _mark('unresolved');
+          return;
+        }
+        if (!active) {
+          if (expired()) { _mark('unresolved'); return; }
+          return void again(step);
+        }
+
+        /* Verified on screen. Only now is the hash redundant, so only now is it safe to
+           drop. location.search is preserved deliberately — that is what makes ?sec= the
+           address that survives a reload while #hash does not. */
+        if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+        _mark('done');
+      })();
+    }
+
+    /* A completion signal for anything that needs to know the deep-link router has finished
+       rather than guess with a sleep — notably scripts/test-seller-deeplink.js, which
+       otherwise races it: the section goes up when seller.js's router runs, but the URL is
+       not cleaned until this one has verified, and an observer waiting on "the section is
+       up" can read the address in between. This reports only that routing SETTLED; whether
+       it settled correctly is still for the observer to assert. */
+    function _mark(state) {
+      try { document.documentElement.setAttribute('data-seller-deeplink', state); } catch (e) {}
+    }
+
+    /* Run after seller.js's DOMContentLoaded router, not before it: it reads this same hash
+       and would resolve to Overview if the strip had already happened. seller.js is
+       deferred, so its listener is registered AFTER this inline one and would otherwise run
+       second; a timeout re-queues this work into a later task, behind every DCL listener.
+       Zero, not 150 — the waiting is now done by the loop above, against real conditions. */
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () { setTimeout(_applyHash, 150); });
+      document.addEventListener('DOMContentLoaded', function () { setTimeout(_applyHash, 0); });
     } else {
-      setTimeout(_applyHash, 150);
+      /* Already loaded: seller.js's router has run, so there is nothing to queue behind. */
+      setTimeout(_applyHash, 0);
     }
   })();
 </script>

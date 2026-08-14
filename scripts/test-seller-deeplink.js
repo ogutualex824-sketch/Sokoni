@@ -105,7 +105,20 @@ server.listen(0, async () => {
      any routing has happened. Waiting on that alone returned while the page was still showing
      everything, and the assertion then read Overview. The pair is only ever true after the
      router has actually run, because no default state satisfies both. */
+  /* The section coming up is only HALF the router's outcome, and waiting on it alone made
+     the URL assertions read mid-flight. seller.js's DOMContentLoaded router puts the section
+     on screen; seller.html's deep-link router is what cleans #hash off the address, and it
+     only does so after verifying the section really came up. So there is a window in which
+     Products is up and the hash is still there — ~150ms before the fix, and it is why
+     "the hash is stripped" failed 13/1 in the full gate population while passing standalone
+     eight times: under load the strip drifted past the read, and this suite discarded child
+     output, so the assertion was never seen.
+     seller.html therefore publishes data-seller-deeplink when routing SETTLES. Waiting for it
+     is a synchronisation fix, not a weaker test: the attribute says only that the router
+     finished, never that it was right, and every assertion below still checks the real
+     address and the real section visibility for itself. */
   const settle = (page, want) => page.waitForFunction((want) => {
+    if (!document.documentElement.hasAttribute('data-seller-deeplink')) return false;
     const shown = (id) => {
       const el = document.getElementById(id);
       if (!el) return null;
@@ -200,6 +213,48 @@ server.listen(0, async () => {
     const st = await readState(page);
     ck(label + ' shows Overview (seller-stats visible)', st.sellerStats === 'shown', 'stats=' + st.sellerStats);
     await ctx.close();
+  }
+
+  /* The failure mode the strip must never have. The old router stripped #products
+     unconditionally — whether or not either selector existed and whether or not anything
+     had been routed — so a boot slow enough to miss the fixed 150ms delay removed the only
+     copy of the request and left the merchant on Overview, silently. The hash IS the
+     request; if it cannot be honoured it must survive, because a retained hash still routes
+     on the next hashchange or reload, and a discarded one is gone.
+     sdSwitchTab is blocked before any page script runs, so on this mobile viewport the
+     selector genuinely never becomes available — the real condition, not a simulated one. */
+  head('a route that cannot be honoured keeps the address (negative case)');
+  {
+    const nctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
+    await nctx.addInitScript(() => {
+      try {
+        localStorage.setItem('loggedIn', 'true');
+        localStorage.setItem('sokoniUser', JSON.stringify({
+          uid: 'DEEPLINK_TEST', name: 'Deep Link', roles: ['buyer', 'seller', 'merchant'], isSeller: true }));
+      } catch (e) {}
+      /* Swallow the page's own assignment so typeof stays 'undefined' throughout. */
+      try {
+        Object.defineProperty(window, 'sdSwitchTab', {
+          get() { return undefined; }, set() {}, configurable: false,
+        });
+      } catch (e) {}
+    });
+    const npage = await nctx.newPage();
+    await npage.goto(BASE + '/seller.html#products', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    /* Wait for the router to give up on its own terms rather than sleeping past its budget. */
+    await npage.waitForFunction(
+      () => document.documentElement.getAttribute('data-seller-deeplink') === 'unresolved',
+      null, { timeout: 15000 }).catch(() => null);
+    const nst = await npage.evaluate(() => ({
+      url: location.pathname + location.search + location.hash,
+      state: document.documentElement.getAttribute('data-seller-deeplink'),
+      sdSwitchTab: typeof window.sdSwitchTab,
+    }));
+    ck('selector never available → #products is NOT stripped',
+       /#products$/.test(nst.url) && nst.sdSwitchTab === 'undefined',
+       'url=' + nst.url + ' selector=' + nst.sdSwitchTab);
+    ck('...and the router reports it never resolved', nst.state === 'unresolved', 'state=' + nst.state);
+    await nctx.close();
   }
 
   head('the merchant shell route still works (regression guard)');

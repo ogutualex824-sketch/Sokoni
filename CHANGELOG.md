@@ -1,3 +1,63 @@
+## [2026-08-14] — FIXED: the seller deep link stripped the address before honouring it
+
+**Status: FIXED and proven.** 16/16 standalone; 12/12 under 4-way parallel load; desktop 9/9.
+
+`test-seller-deeplink` failed **13/1 at CONCURRENCY 6, 4 and 2** — three consecutive full-population
+runs with an identical signature — while passing standalone eight times. The runner accumulated
+child output and discarded it, so the failing assertion had never been seen; the recorded reason
+was a truncated separator line. Captured, it was:
+
+```
+PASS  #products selects Products on first load   [/seller.html#products]
+FAIL  ...and the hash is stripped from the URL   [/seller.html#products]
+```
+
+### Mechanism — two routers read one hash, and only the slower one strips it
+
+`seller.html` deep-links via **two independent DOMContentLoaded routers**:
+
+| | fires | selects | strips |
+|---|---|---|---|
+| `seller.js` `_sellerPageFromHash` | at DCL | yes | no |
+| `seller.html` deep-link IIFE | DCL **+150ms** | yes | yes |
+
+The section goes up at DCL; the URL is not cleaned until 150ms later. Anything observing *"the
+section is up"* can read the stale address in between. Measured under load: the selectors do not
+exist until ~1.1–1.8s and DCL lands at ~1.7–2.9s, so **the fixed 150ms was never a guarantee** —
+`replaceState` had not been called *once* at the moment the suite read, in every reproduction.
+
+The strip was also **unconditional**: it ran whether or not either selector existed. A boot slower
+than 150ms therefore removed `#products` having routed nowhere, and the deep link was lost with no
+error anywhere — the silent-wrong-section class this router exists to prevent.
+
+### The fix — wait for the dependency, verify the outcome, only then discard the request
+
+- **Dependency-aware**: waits boundedly (6s, timer-driven) for the selector the viewport actually
+  needs — `sdSwitchTab` on mobile, `showDashPage` on desktop — invokes it **once**, then waits for
+  the section to genuinely come up before touching the URL.
+- **Verified, not assumed**: `_sectionIsActive()` requires every section the page owns to be
+  visible *and* `seller-stats` hidden. `showDashPage` falls back to Overview for a page it does not
+  know and returns as quietly as it does on success, so "the selector returned" is not the claim.
+- **Fails safe**: selector never available, router throws, or section never active → `#products`
+  is **kept**. A retained hash still routes on the next hashchange or reload; a discarded one is gone.
+- **Ordering preserved**: still queued behind `seller.js`'s DCL router (`setTimeout 0`, not 150),
+  which reads the same hash and would resolve to Overview if the strip had already happened.
+- `setTimeout`, **not `requestAnimationFrame`** — rAF is throttled under load and stops entirely in
+  a hidden tab, so a frame-driven loop never reaches its own deadline there. Caught by the new
+  negative test: it hung 10 of 12 parallel runs into the 120s watchdog.
+
+### Test — synchronised on the router, not on a sleep
+
+`seller.html` publishes `data-seller-deeplink` when routing **settles**. The suite waits for it
+instead of racing the strip. This is synchronisation, not a weaker test: the attribute says only
+that the router finished, never that it was right, and every assertion still checks the real
+address and real section visibility itself. **No existing assertion was weakened or removed.**
+
+Added: selector-unavailable negative case (2 assertions) — proves the address survives a route
+that cannot be honoured. 14 → 16 assertions.
+
+**Files:** `seller.html`, `scripts/test-seller-deeplink.js`
+**Database/API/security changes:** none. **Breaking:** none.
 ## [2026-08-13] â€” SECURITY: the rider was authorizing their own payout
 
 **Status: FIXED and proven.** 36/36. **Release blocker â€” this is the money path.**
