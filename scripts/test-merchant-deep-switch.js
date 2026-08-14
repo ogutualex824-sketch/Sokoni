@@ -105,6 +105,65 @@ server.listen(0, async () => {
         uid: 'deep-switch-uid', name: 'Deep Switch', roles: ['seller', 'merchant'], role: 'seller',
       }));
     } catch (e) {}
+
+    /* ── TEMPORARY DIAGNOSTIC — the products-route stall ──────────────────────────
+       One route out of five, a different one each run, never renders inside its 20s cap
+       while the others render in ~270ms. It reaches the ROUTE CAP, not the walk ceiling,
+       so it is not budget starvation; and it survived the seller-side throw fix (f0de77b),
+       so the handler discarding a thrown switch was NOT the cause.
+       This traces the MERCHANT side — the half never instrumented. It records every
+       postMessage the shell sends to the module and samples what the shell's own verify()
+       would see, so a failure can be classified rather than guessed:
+         A never rendered   B rendered then reverted   C rendered but verify disagrees
+         D another message overwrote it                E the page stopped responding
+       Injected by the suite, printed only on failure. No product code is modified. */
+    window.__dsTrace = { posts: [], samples: [], t0: Date.now() };
+    var _T = function () { return Date.now() - window.__dsTrace.t0; };
+    var _lastKey = '';
+    setInterval(function () {
+      var f = document.getElementById('mfx-seller');
+      if (!f) return;
+      /* Re-hook whenever the iframe navigates and gives us a fresh contentWindow. */
+      try {
+        var cw = f.contentWindow;
+        if (cw && !cw.__dsHooked) {
+          var orig = cw.postMessage.bind(cw);
+          cw.postMessage = function (msg, origin) {
+            try {
+              if (msg && msg.__sokoniShell) {
+                window.__dsTrace.posts.push({ t: _T(), action: msg.action, section: msg.section });
+              }
+            } catch (e) {}
+            return orig(msg, origin);
+          };
+          cw.__dsHooked = true;
+          window.__dsTrace.posts.push({ t: _T(), action: '(iframe contentWindow (re)hooked)', section: '' });
+        }
+      } catch (e) { /* cross-doc during navigation */ }
+
+      /* Sample exactly what the shell's verify() reads: the module's own section DOM. */
+      try {
+        var d = f.contentDocument;
+        if (!d) { return; }
+        var vis = function (id) {
+          var el = d.getElementById(id); if (!el) return 'MISSING';
+          var cs = d.defaultView.getComputedStyle(el);
+          return (cs.display !== 'none' && cs.visibility !== 'hidden') ? 'shown' : 'hidden';
+        };
+        var shown = [];
+        ['bulk-upload-section', 'receipts-section', 'seller-dms', 'stories-section',
+         'customers-section', 'seller-stats'].forEach(function (id) {
+          if (vis(id) === 'shown') shown.push(id);
+        });
+        var key = shown.join(',') + '|' + (d.documentElement.getAttribute('data-seller-deeplink') || '');
+        if (key !== _lastKey) {
+          _lastKey = key;
+          window.__dsTrace.samples.push({ t: _T(), shown: shown.slice(), marker:
+            d.documentElement.getAttribute('data-seller-deeplink') || '',
+            ready: d.readyState });
+        }
+      } catch (e) { /* cross-doc during navigation */ }
+    }, 50);
   });
   const page = await ctx.newPage();
 
@@ -170,7 +229,26 @@ server.listen(0, async () => {
       await page.waitForTimeout(250);
     }
     const _took = Date.now() - _routeStart;
-    ck(id + ' shows its own section', st.ok && st.vis[cfg.show] === true,
+    const _ok = st.ok && st.vis[cfg.show] === true;
+    /* TEMPORARY DIAGNOSTIC — dump the merchant-side trace for the route that stalled, so the
+       runner's capture preserves it from a real full-population run. Printed only on failure,
+       and only reads, so it cannot change a verdict. */
+    if (!_ok) {
+      try {
+        const tr = await page.evaluate(() => {
+          const t = window.__dsTrace || { posts: [], samples: [] };
+          return { posts: t.posts.slice(-45), samples: t.samples.slice(-25) };
+        });
+        console.log('\n  ── MERCHANT-SIDE TRACE for "' + id + '" (expects ' + cfg.show + ') ──');
+        console.log('     postMessages the shell sent (' + tr.posts.length + '):');
+        tr.posts.forEach((p) => console.log('       t=' + String(p.t).padStart(6) + 'ms  ' + p.action + (p.section ? ' -> ' + p.section : '')));
+        console.log('     module section state, on change (' + tr.samples.length + '):');
+        tr.samples.forEach((s) => console.log('       t=' + String(s.t).padStart(6) + 'ms  ready=' + s.ready +
+          '  marker=' + (s.marker || '-') + '  shown=[' + s.shown.join(', ') + ']'));
+        console.log('  ── END TRACE ──\n');
+      } catch (e) { console.log('  (trace unavailable: ' + e.message + ')'); }
+    }
+    ck(id + ' shows its own section', _ok,
        (st.ok ? cfg.show + '=' + st.vis[cfg.show] : st.why) + ' after ' + _took + 'ms (' + _why + ')');
     ck(id + ' is not the seller home page', st.ok && st.vis[cfg.hide] === false,
        st.ok ? 'seller-stats=' + st.vis[cfg.hide] : st.why);
