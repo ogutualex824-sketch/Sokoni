@@ -64,7 +64,16 @@ const server = http.createServer((req, res) => {
    Nothing about the assertions, the exit behaviour or the classification changes: a real
    failure still exits 1 and a genuine hang still dies, just at a budget that matches what
    the suite actually costs. */
-const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 180s'); process.exit(1); }, 180000);
+/* BELOW the runner's budget, but above a legitimately slow run.
+   This suite measures ~50s (48.7s / 48.5s / 50.0s across three gate runs, 51.8s / 53.6s at
+   CONCURRENCY=2, 55s standalone) against a 300s budget — but the watchdog sat at 180s and
+   exits 1, so a single slow run under the full 168-suite population became a hard FAIL with
+   120s of its allowance unused, having printed every assertion PASS. That is the same
+   watchdog/budget mismatch corrected in the sibling merchant suites, in the other direction:
+   there the watchdog could never fire, here it fired on a run that was merely slow.
+   240s still self-reports a genuine hang well before the runner would SIGKILL it at 300s —
+   which is the point of having one — while tolerating a ~4x slowdown under load. */
+const wd = setTimeout(() => { console.log('\n  WATCHDOG — suite exceeded 240s'); process.exit(1); }, 240000);
 
 server.listen(0, async () => {
   const BASE = 'http://127.0.0.1:' + server.address().port;
