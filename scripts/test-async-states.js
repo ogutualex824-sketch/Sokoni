@@ -134,10 +134,6 @@ srv.listen(0, async () => {
     (async () => { try { await br.close(); } catch (_) {} })(),
     new Promise((r) => setTimeout(r, 8000)),
   ]);
-  /* A close that lost the race above is still RUNNING. Abandoning it leaks the browser:
-     measured at 32 orphaned WebKit processes after one gate, which starves the renderers
-     of later suites and crashes them. Kill what did not close. */
-  try { const _p = br.process && br.process(); if (_p) _p.kill('SIGKILL'); } catch (_) {}
   try { srv.close(); } catch (_) {}
   process.exit(fail ? 1 : 0);
 });
