@@ -49,6 +49,11 @@ const AS_JSON = process.argv.includes('--json');
 const GATE = process.argv.includes('--gate');
 const TIMEOUT_MS = 60000;
 
+/* Where a non-passing suite's child output is kept — see the capture in runOne().
+   One directory per run so a re-run cannot be read as the previous run's evidence,
+   and outside the repo so the gate leaves `git status` clean. */
+const CAPTURE_DIR = path.join(require('os').tmpdir(), 'sokoni-gate-' + process.pid);
+
 /* ── Why browser suites get their own budget ──────────────────────────────────
    TIMEOUT is not a defect verdict — it lands in notBlocking. So when a suite times
    out it does not turn the gate red, it SILENTLY LEAVES THE BLOCKING SET. A real
@@ -168,24 +173,31 @@ function runOne(f) {
       clearTimeout(timer);
       const res = { status: timedOut ? null : code, error: timedOut ? { code: 'ETIMEDOUT' } : null };
       const verdict = classify(res, out, name, browser);
-      /* TEMPORARY DIAGNOSTIC — test-seller-deeplink only, non-PASS only.
-         It fails 13/1 at CONCURRENCY 6, 4 AND 2, so it is a real defect in the full
-         population, not contention — yet it passes standalone and under six-suite load,
-         and this runner discards `out`, so its failing assertion has never been seen.
-         The recorded reason is a truncated separator line.
-
-         COMMITTED deliberately: left uncommitted it trips the cart blast-radius guard and
-         fails ten cart suites for an unrelated reason. Runs after classify() and only
-         reads, so it cannot change a verdict. Remove once the assertion is captured. */
-      if (name === 'test-seller-deeplink' && verdict !== 'PASS') {
+      /* Keep the child's output when a suite does not pass.
+         This runner accumulated `out`, classified it, and then dropped it. So a suite that
+         fails ONLY in the full population — the hardest kind to fix, and the only kind this
+         gate exists to catch — recorded a one-line `reason` sliced out of whatever happened
+         to be near the failure, in practice a truncated separator. test-seller-deeplink
+         failed 13/1 three gate runs in a row with nobody able to see WHICH assertion, and
+         was diagnosed only after a suite-specific capture was committed just to read it;
+         test-pos-tab-transitions passes standalone and under this gate's own environment,
+         so it has the same problem. Reproducing by hand cannot help when the trigger is the
+         population itself.
+         Written to the OS temp dir, not the repo: a gate run must leave `git status` clean,
+         because a dirty tree fails the release gate and trips the cart blast-radius guard.
+         Runs after classify() and only reads, so it cannot change a verdict.
+         PASS is skipped for volume; QUARANTINE and ENV are skipped because they are expected
+         every run and their reasons are already declared — FAIL, TIMEOUT and STALE are the
+         verdicts that block a release or silently cost coverage. */
+      if (verdict === 'FAIL' || verdict === 'TIMEOUT' || verdict === 'STALE') {
         try {
-          const _p = require('path').join(require('os').tmpdir(),
-            'sokoni-deeplink-' + verdict + '-' + Date.now() + '.log');
+          fs.mkdirSync(CAPTURE_DIR, { recursive: true });
+          const _p = path.join(CAPTURE_DIR, name + '.' + verdict + '.log');
           fs.writeFileSync(_p,
-            'suite     : ' + name + '\nverdict   : ' + verdict +
-            '\nexit code : ' + res.status + '\ntimedOut  : ' + timedOut +
-            '\nelapsed   : ' + (Date.now() - started) + 'ms\nbudget    : ' + budget + 'ms' +
-            '\nconcurrency: ' + CONCURRENCY +
+            'suite      : ' + name + '\nverdict    : ' + verdict +
+            '\nexit code  : ' + res.status + '\ntimedOut   : ' + timedOut +
+            '\nelapsed    : ' + (Date.now() - started) + 'ms\nbudget     : ' + budget + 'ms' +
+            '\nbrowser    : ' + browser + '\nconcurrency: ' + CONCURRENCY +
             '\nGCLOUD_PROJECT: ' + (suiteEnv(f, process.env).GCLOUD_PROJECT || '') +
             '\n\n--- FULL CHILD STDOUT/STDERR ---\n' + out + '\n--- END ---\n');
           console.log('  [capture] ' + name + ' ' + verdict + ' -> ' + _p);
