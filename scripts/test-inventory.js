@@ -168,6 +168,29 @@ function runOne(f) {
       clearTimeout(timer);
       const res = { status: timedOut ? null : code, error: timedOut ? { code: 'ETIMEDOUT' } : null };
       const verdict = classify(res, out, name, browser);
+      /* TEMPORARY DIAGNOSTIC — test-seller-deeplink only, non-PASS only.
+         It fails 13/1 at CONCURRENCY 6, 4 AND 2, so it is a real defect in the full
+         population, not contention — yet it passes standalone and under six-suite load,
+         and this runner discards `out`, so its failing assertion has never been seen.
+         The recorded reason is a truncated separator line.
+
+         COMMITTED deliberately: left uncommitted it trips the cart blast-radius guard and
+         fails ten cart suites for an unrelated reason. Runs after classify() and only
+         reads, so it cannot change a verdict. Remove once the assertion is captured. */
+      if (name === 'test-seller-deeplink' && verdict !== 'PASS') {
+        try {
+          const _p = require('path').join(require('os').tmpdir(),
+            'sokoni-deeplink-' + verdict + '-' + Date.now() + '.log');
+          fs.writeFileSync(_p,
+            'suite     : ' + name + '\nverdict   : ' + verdict +
+            '\nexit code : ' + res.status + '\ntimedOut  : ' + timedOut +
+            '\nelapsed   : ' + (Date.now() - started) + 'ms\nbudget    : ' + budget + 'ms' +
+            '\nconcurrency: ' + CONCURRENCY +
+            '\nGCLOUD_PROJECT: ' + (suiteEnv(f, process.env).GCLOUD_PROJECT || '') +
+            '\n\n--- FULL CHILD STDOUT/STDERR ---\n' + out + '\n--- END ---\n');
+          console.log('  [capture] ' + name + ' ' + verdict + ' -> ' + _p);
+        } catch (_e) { console.log('  [capture] failed: ' + _e.message); }
+      }
       /* Pull an assertion count when the suite prints one, so a PASS with 0
          assertions is visible rather than counted as coverage it does not have. */
       const m = out.match(/ALL (\d+) PASSED|(\d+)\/(\d+)|(\d+) FAILED/);
