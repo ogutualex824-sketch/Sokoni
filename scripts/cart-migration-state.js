@@ -77,6 +77,16 @@ function survivorFor(file) {
 const PRE_EXISTING = [
   'availability-manager.html',          /* Track 1 — availability schedule projection */
   'version.json',                       /* predeploy artifacts, not authored by this work */
+  /* Same predeploy step, same reason. The hosting predeploy bumps CACHE_VERSION here and
+     rewrites version.json, and only version.json was named — so a `firebase deploy` dirtied
+     a file its own gate could not explain, failed eleven cart suites on it, and aborted the
+     deploy. The pipeline could not complete while the pipeline's own cleanliness guard did
+     not know the pipeline owns this file.
+     Naming it does not widen the perimeter this registry protects: service-worker.js is not
+     a cart surface — it appears in no MIGRATED/FROZEN/DEFERRED/BLOCKED list and contains no
+     cart access at all — so it cannot hide a cart regression. Never hand-edit CACHE_VERSION;
+     the predeploy bump owns it. */
+  'service-worker.js',
   'docs/release-gates/unknown.json',
   /* Auth slices 1-2, a separate track running after Track 2 closed. Named here so the
      cart guards keep failing on anything they do NOT recognise, rather than being widened
