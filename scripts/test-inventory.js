@@ -34,7 +34,15 @@ const { suiteEnv } = require('./gate-namespace');
    processes, so running a bounded number concurrently collapses wall-clock to
    roughly the slowest suite without changing any individual result. Kept modest
    so browser-driving suites do not starve each other into false timeouts. */
-const CONCURRENCY = Math.max(2, Math.min(6, (require('os').cpus() || [{}]).length - 1));
+/* Overridable so the level can be MEASURED rather than assumed. Seven gate runs at the
+   default produced a different casualty every time — merchant-deep-switch, nav-routes,
+   shop-setup-hydration, seller-deeplink, auth-email, cart-universal — and twice returned
+   opposite verdicts for the identical commit. That is the contention signature this file's
+   own header describes, not a defect in any suite. The default is unchanged, so setting
+   nothing behaves exactly as before. */
+const CONCURRENCY = Math.max(1,
+  parseInt(process.env.SOKONI_GATE_CONCURRENCY, 10) ||
+  Math.max(2, Math.min(6, (require('os').cpus() || [{}]).length - 1)));
 
 const ROOT = path.resolve(__dirname, '..');
 const AS_JSON = process.argv.includes('--json');
