@@ -86,7 +86,9 @@
       'position:fixed;',
       'top:max(16px,var(--sk-safe-top,0px));',
       'right:max(16px,var(--sk-safe-right,0px));',
-      'z-index:var(--sk-z-toast,800);',
+      /* Fallback must outrank .bottom-nav (9996) and the FAB/chat layer — the old
+         800 put the toast BEHIND both whenever sokoni-tokens.css had not loaded. */
+      'z-index:var(--sk-z-toast,200002);',
       'display:flex;',
       'flex-direction:column;',
       'gap:8px;',
@@ -123,11 +125,18 @@
       'border:1px solid rgba(113,255,0,0.5);background:rgba(113,255,0,0.12);color:#71ff00;',
       'font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}',
     '.sk-toast-action:active{background:rgba(113,255,0,0.22);}',
-    '@media(max-width:480px){',
+    /* 600px, not 480px: at 481-600px (landscape phones, small tablets, split-view)
+       the desktop corner placement collided with the fixed bottom nav. The mobile
+       treatment is correct for every viewport that has the bottom nav. */
+    '@media(max-width:600px){',
       '#sk-toast-root{',
         'top:auto;',
-        'bottom:max(calc(var(--sk-bottom-nav-h,0px) + 12px),var(--sk-safe-bottom,0px));',
-        'right:12px;left:12px;max-width:none;',
+        /* Sum, not max(): the nav and the home indicator stack, so clearing only
+           the larger of the two still left the toast sitting on the nav on iPhone. */
+        'bottom:calc(var(--sk-bottom-nav-h,0px) + var(--sk-safe-bottom,0px) + 12px);',
+        'left:max(12px,var(--sk-safe-left,0px));',
+        'right:max(12px,var(--sk-safe-right,0px));',
+        'max-width:none;',
       '}',
       '.sk-toast{font-size:12px;}',
       '.sk-toast-action{min-height:38px;padding:8px 14px;}',   /* touch-sized on phone */

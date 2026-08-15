@@ -947,9 +947,21 @@
   const spFollowers = spFollowerData[sellerName] || 0;
   const spIsFollowing = !!spMyFollowing[sellerName];
 
-  /* update UI */
-  qs("spStatFollowers").textContent = spFollowers;
-  qs("spFollowerCount").textContent = spFollowers.toLocaleString() + " follower" + (spFollowers!==1?"s":"");
+  /* Renders a follower count, or a NEUTRAL state when the count is unknown.
+     SokoniDB.getFollowerCount/listenFollowerCount now resolve to null when there
+     is no canonical figure (followerCounts has no read rule). Printing "0
+     followers" for an unknown is a fabricated metric — CLAUDE.md forbids it —
+     and it also crashed here, because null has no .toLocaleString(). */
+  function _spPaintFollowers(cnt){
+    const known = typeof cnt === "number";
+    qs("spStatFollowers").textContent = known ? cnt.toLocaleString() : "—";
+    qs("spFollowerCount").textContent = known
+      ? cnt.toLocaleString() + " follower" + (cnt !== 1 ? "s" : "")
+      : "Followers not available yet";
+  }
+
+  /* Unknown until Firestore answers — never seed the UI with a local guess. */
+  _spPaintFollowers(null);
 
   const spFollowBtn  = qs("spFollowBtn");
   const spFollowIcon = qs("spFollowIcon");
@@ -970,40 +982,69 @@
 
   /* Load real follower count from Firestore */
   if(window.SokoniDB){
-    SokoniDB.getFollowerCount('seller', sellerName).then(cnt => {
-      qs("spFollowerCount").textContent = cnt.toLocaleString() + " follower" + (cnt!==1?"s":"");
-      qs("spStatFollowers").textContent = cnt;
-    });
+    SokoniDB.getFollowerCount('seller', sellerName).then(_spPaintFollowers);
     SokoniDB.isFollowing('seller', sellerName).then(f => _setFollowUI(f));
-    SokoniDB.listenFollowerCount('seller', sellerName, cnt => {
-      qs("spFollowerCount").textContent = cnt.toLocaleString() + " follower" + (cnt!==1?"s":"");
-      qs("spStatFollowers").textContent = cnt;
-    });
+    SokoniDB.listenFollowerCount('seller', sellerName, _spPaintFollowers);
   }
 
   /* expose toggle */
+  /* Follow / unfollow.
+
+     Two defects fixed here:
+
+     1. The old localStorage FALLBACK (taken whenever SokoniDB had not loaded)
+        wrote `sokoniFollowing[sellerName]`. The canonical cache is keyed
+        `{type}--{entityId}`, so those entries corrupted the shared map that
+        sokoni-social.js's isFollowing() reads — the button said "Following"
+        while nothing had persisted and no other page agreed. A follow that
+        cannot reach the backend is a FAILURE and is now reported as one.
+
+     2. Failures were unhandled: `await` on a rejected write threw out of the
+        handler, leaving btn.disabled = true — the button died silently. */
   window.toggleFollow = async function(){
     const btn = qs("spFollowBtn");
-    btn.disabled = true;
+    if(btn.disabled) return;                       /* double-tap guard */
     const isNow = btn.classList.contains("following");
-    if(window.SokoniDB){
-      if(isNow){ await SokoniDB.unfollow('seller', sellerName); _setFollowUI(false); }
-      else      { await SokoniDB.follow('seller', sellerName, sellerName); _setFollowUI(true); }
-    } else {
-      /* localStorage fallback */
-      let myF={},allF={};
-      try{myF=JSON.parse(localStorage.getItem("sokoniFollowing"))||{};}catch(e){}
-      try{allF=JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{};}catch(e){}
-      if(isNow){ delete myF[sellerName]; allF[sellerName]=Math.max(0,(allF[sellerName]||1)-1); _setFollowUI(false); }
-      else      { myF[sellerName]={followedAt:Date.now()}; allF[sellerName]=(allF[sellerName]||0)+1; _setFollowUI(true); }
-      localStorage.setItem("sokoniFollowing",JSON.stringify(myF));
-      localStorage.setItem("sokoniStoreFollowers",JSON.stringify(allF));
-      const cnt=allF[sellerName]||0;
-      qs("spFollowerCount").textContent=cnt.toLocaleString()+" follower"+(cnt!==1?"s":"");
-      qs("spStatFollowers").textContent=cnt;
+
+    if(!window.SokoniDB){
+      _spToast("Still loading — try again in a moment.", "info");
+      return;
     }
-    btn.disabled = false;
+
+    btn.disabled = true;
+    btn.setAttribute("aria-busy","true");
+    _setFollowUI(!isNow);                          /* optimistic */
+    try {
+      if(isNow) await SokoniDB.unfollow('seller', sellerName);
+      else      await SokoniDB.follow('seller', sellerName, sellerName);
+      _spToast(isNow ? "Unfollowed" : "Following this shop", "success");
+    } catch(err) {
+      _setFollowUI(isNow);                         /* ROLLBACK — write did not land */
+      console.warn("[seller-public] follow failed:", (err && (err.code || err.message)) || err);
+      _spToast(_spFollowErr(err), "error");
+    } finally {
+      btn.disabled = false;
+      btn.removeAttribute("aria-busy");
+    }
   };
+
+  /* Meaningful state, not one generic string. Technical detail stays in the log. */
+  function _spFollowErr(err){
+    const c = ((err && (err.code || err.message)) || "").toString();
+    if(/permission-denied/i.test(c))  return "You don't have permission to follow this shop.";
+    if(/unauthenticated/i.test(c))    return "Please sign in to follow this shop.";
+    if(/not-found/i.test(c))          return "This shop is no longer available.";
+    if(/unavailable|network|offline|Failed to fetch/i.test(c))
+                                      return "You appear to be offline — that was not saved.";
+    return "Could not update follow — please try again.";
+  }
+
+  /* Route through the CANONICAL toast engine so it inherits sokoni-toast.css. */
+  function _spToast(msg, type){
+    try { if(window.SokoniUI && SokoniUI.toast) return SokoniUI.toast(msg, type || "info"); } catch(e){}
+    try { if(window._sokoniToast) return window._sokoniToast(msg, type || "info", 3500); } catch(e){}
+    console.warn("[seller-public]", msg);
+  }
 
   /* ── achievement badge in hero ── */
   const spAch = computeAchievement(totalSales, avgRating, deliveryRate||0, spFollowers);

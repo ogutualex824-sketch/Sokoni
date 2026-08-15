@@ -459,41 +459,46 @@ const SokoniDB = {
     return `${uid}--${type}--${entityId.replace(/[^a-zA-Z0-9]/g,'_')}`;
   },
 
+  /* The follow doc is the ONLY write that may fail the operation.
+     followerCounts has no Firestore rule, so its write is always denied; running
+     it inside the same Promise.all() meant that denial REJECTED the whole call
+     and every SokoniDB-backed follow (seller-public, providers) reported failure
+     even though the follow document had been written successfully.
+     The counter is best-effort and is now fired-and-caught separately. */
   async follow(type, entityId, entityName) {
     const fid    = this._followDocId(type, entityId);
     const uid    = _uid();
-    const cntRef = doc(db, 'followerCounts', `${type}--${entityId}`);
     const fRef   = doc(db, 'follows', fid);
-    await Promise.all([
-      setDoc(fRef, { uid, type, entityId, entityName, createdAt: serverTimestamp() }, { merge: true }),
-      setDoc(cntRef, { count: increment(1), type, entityId, entityName }, { merge: true }),
-    ]);
-    /* optimistic localStorage update */
     try {
-      const key = type === 'seller' ? 'sokoniStoreFollowers' : 'sokoniProviderFollowers';
-      const all = JSON.parse(localStorage.getItem(key) || '{}');
-      all[entityId] = (all[entityId] || 0) + 1;
-      localStorage.setItem(key, JSON.stringify(all));
-      const myKey = 'sokoniFollowing';
-      const my = JSON.parse(localStorage.getItem(myKey) || '{}');
+      await setDoc(fRef, { uid, type, entityId, entityName, createdAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+      /* The rule grants create/delete but not update, so re-writing an EXISTING
+         follow is denied. If the document is already there we are in the intended
+         end state — converge instead of reporting a permission error the user
+         cannot act on. See scripts/test-follow-rules.js. */
+      const code = String((e && (e.code || e.message)) || '');
+      if (!/permission-denied/i.test(code)) throw e;
+      const snap = await getDoc(fRef).catch(() => null);
+      if (!snap || !snap.exists()) throw e;
+    }
+    setDoc(doc(db, 'followerCounts', `${type}--${entityId}`),
+           { count: increment(1), type, entityId, entityName }, { merge: true }).catch(() => {});
+    /* UI cache only — same canonical `sokoniFollowing` map sokoni-social.js reads.
+       No local follower TALLY is kept: that tally was rendered as a real count. */
+    try {
+      const my = JSON.parse(localStorage.getItem('sokoniFollowing') || '{}');
       my[`${type}--${entityId}`] = { type, entityId, entityName, followedAt: Date.now() };
-      localStorage.setItem(myKey, JSON.stringify(my));
+      localStorage.setItem('sokoniFollowing', JSON.stringify(my));
     } catch(e) {}
   },
 
   async unfollow(type, entityId) {
-    const fid    = this._followDocId(type, entityId);
-    const cntRef = doc(db, 'followerCounts', `${type}--${entityId}`);
-    const fRef   = doc(db, 'follows', fid);
-    await Promise.all([
-      deleteDoc(fRef).catch(()=>{}),
-      setDoc(cntRef, { count: increment(-1) }, { merge: true }),
-    ]);
+    const fid  = this._followDocId(type, entityId);
+    const fRef = doc(db, 'follows', fid);
+    await deleteDoc(fRef);
+    setDoc(doc(db, 'followerCounts', `${type}--${entityId}`),
+           { count: increment(-1) }, { merge: true }).catch(() => {});
     try {
-      const key = type === 'seller' ? 'sokoniStoreFollowers' : 'sokoniProviderFollowers';
-      const all = JSON.parse(localStorage.getItem(key) || '{}');
-      all[entityId] = Math.max((all[entityId] || 1) - 1, 0);
-      localStorage.setItem(key, JSON.stringify(all));
       const my = JSON.parse(localStorage.getItem('sokoniFollowing') || '{}');
       delete my[`${type}--${entityId}`];
       localStorage.setItem('sokoniFollowing', JSON.stringify(my));
@@ -506,18 +511,22 @@ const SokoniDB = {
     return snap ? snap.exists() : !!JSON.parse(localStorage.getItem('sokoniFollowing')||'{}')[`${type}--${entityId}`];
   },
 
+  /* Returns null when there is no canonical count — callers must render a neutral
+     state, NOT 0. Previously fell back to a per-device localStorage tally, which
+     is a fabricated business metric (CLAUDE.md, UI Data Integrity). */
   async getFollowerCount(type, entityId) {
     const snap = await getDoc(doc(db, 'followerCounts', `${type}--${entityId}`)).catch(() => null);
-    if (snap && snap.exists()) return snap.data().count || 0;
-    const key = type === 'seller' ? 'sokoniStoreFollowers' : 'sokoniProviderFollowers';
-    return JSON.parse(localStorage.getItem(key) || '{}')[entityId] || 0;
+    if (snap && snap.exists() && typeof snap.data().count === 'number') return snap.data().count;
+    return null;
   },
 
+  /* Emits null for "unknown" (missing doc / denied read) so subscribers can show a
+     neutral state. It used to emit 0, which is indistinguishable from a real zero. */
   listenFollowerCount(type, entityId, callback) {
     return onSnapshot(
       doc(db, 'followerCounts', `${type}--${entityId}`),
-      snap => callback(snap.exists() ? (snap.data().count || 0) : 0),
-      ()   => callback(0)
+      snap => callback(snap.exists() && typeof snap.data().count === 'number' ? snap.data().count : null),
+      ()   => callback(null)
     );
   },
 

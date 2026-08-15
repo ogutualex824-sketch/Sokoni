@@ -390,10 +390,35 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     setTimeout(function(){ t.classList.remove('show'); }, 3000);
   }
 
-  /* ── SEED FALLBACK (used when no real orders exist yet) ── */
-  function seededRand(seed){
-    var x = Math.sin(seed + 1) * 10000;
-    return x - Math.floor(x);
+  /* The seededRand(seed) generator that used to live here is GONE, together with
+     every "fallback" that used it. It existed to make an empty merchant's
+     dashboard look populated; what it actually did was report a business that
+     does not exist as if it had been measured — and because the values were
+     seeded rather than random they were stable across reloads, so they never
+     looked like placeholders.
+
+     CLAUDE.md: "No demo/seed fallback on production data paths" and "When
+     canonical data is unavailable, show a neutral state — not 0 and not an
+     extrapolated guess." A new merchant now sees "No sales yet", which is both
+     true and more useful than an invented KES 240,000 month.
+
+     Helper for that neutral state. */
+  var NO_DATA = '—';
+
+  /* Hide a chart that has no canonical source and say what it needs in its place.
+     A canvas cannot explain itself, and an empty one reads as a loading failure. */
+  function chartUnavailable(canvasId, requirement){
+    var c = document.getElementById(canvasId);
+    if(!c || !c.parentNode) return;
+    c.style.display = 'none';
+    var host = c.parentNode;
+    if(host.querySelector('[data-unavailable="'+canvasId+'"]')) return;   /* idempotent on resize */
+    var note = document.createElement('div');
+    note.setAttribute('data-unavailable', canvasId);
+    note.style.cssText = 'padding:24px 16px;text-align:center;color:var(--sub);font-size:12px;line-height:1.6;';
+    note.innerHTML = '<strong style="color:#fff;display:block;margin-bottom:5px;">Not available yet</strong>Needs ' +
+      escapeHTML(requirement);
+    host.appendChild(note);
   }
 
   /* ── REAL ORDER DATA: Firestore (seller's sales) with localStorage fallback ── */
@@ -457,14 +482,8 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
       });
       days.push(Math.round(dayTotal));
     }
-    /* Fallback seed data if no orders yet */
-    if(!days.some(function(d){ return d > 0; })){
-      var base = 8000;
-      return days.map(function(_, i){
-        base = Math.max(1000, base + (seededRand(i*7+3) - 0.45) * 2000);
-        return Math.round(base);
-      });
-    }
+    /* A merchant with no orders gets a flat, honest zero series — NOT a
+       manufactured 30-day revenue curve that trended upward from KES 8,000. */
     return days;
   }
 
@@ -479,55 +498,93 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
       });
     });
     var result = Object.values(agg);
-    if(!result.length){
-      /* fallback: stored products with estimated metrics */
-      if(storedProducts.length){
-        return storedProducts.map(function(p, i){
-          var views = Math.floor(seededRand(i*13+7) * 900) + 50;
-          var ords  = Math.floor(views * (seededRand(i*5+2) * 0.15 + 0.02));
-          var price = parseFloat(p.price) || (seededRand(i*3+1) * 4000 + 200);
-          var conv  = ords > 0 ? ((ords/views)*100).toFixed(1) : '0.0';
-          return { name: p.name || p.title || ('Product '+(i+1)), views: views, orders: ords, revenue: Math.round(ords*price), conv: conv };
-        }).sort(function(a,b){ return b.revenue - a.revenue; });
-      }
-      return [
-        { name: 'Wireless Earbuds Pro',    views: 842, orders: 67, revenue: 134000, conv: '7.9' },
-        { name: 'Leather Handbag Classic', views: 612, orders: 44, revenue:  96800, conv: '7.2' },
-        { name: 'Running Shoes X2',        views: 503, orders: 38, revenue:  76000, conv: '7.6' },
-        { name: 'Cotton Dress Set',        views: 389, orders: 29, revenue:  43500, conv: '7.5' },
-        { name: 'Smart Watch Series 3',    views: 751, orders: 22, revenue: 110000, conv: '2.9' },
-      ];
-    }
-    result.forEach(function(p, i){
-      p.views   = Math.max(p.orders * (8 + (i % 5)), 50);
-      p.conv    = ((p.orders / p.views) * 100).toFixed(1);
+
+    /* No orders → no product performance. The two fallbacks that used to sit here
+       (seeded metrics over the merchant's real product list, then a hard-coded
+       "Wireless Earbuds Pro / Leather Handbag Classic / …" list) both reported
+       sales that never happened, on a page merchants use to decide what to
+       restock. Returning empty lets renderProductTable() say so. */
+    if(!result.length) return [];
+
+    /* Units sold and revenue are REAL — they come from order items above.
+       VIEWS are not: `p.views = p.orders * (8 + i % 5)` invented a view count
+       from a magic multiplier, and the "conversion rate" badge was then computed
+       from that invention, so it always landed in a plausible 8-12% band no
+       matter how the product actually performed. There is no product-view
+       counter in the data model, so views and conversion are reported as
+       unavailable rather than derived from orders they cannot be derived from. */
+    result.forEach(function(p){
+      p.views   = null;    /* needs a product-view counter — none exists */
+      p.conv    = null;    /* undefined without views */
       p.revenue = Math.round(p.revenue);
     });
     return result.sort(function(a,b){ return b.revenue - a.revenue; });
   }
 
   /* ── KPI POPULATION ── */
+  /* Every KPI below is now either MEASURED from the merchant's real orders or
+     shown as '—'. What each one used to be:
+
+       totalSales  fell back to summing the FABRICATED trend series
+       orderCount  `orders.length || Math.floor(totalSales / 2800)` — with no
+                   orders it divided invented revenue by a magic 2,800 and
+                   presented the quotient as an order count
+       conv        seededRand(42)*5+2.5 — a random 2.5-7.5%
+       topCat      a RANDOM PICK from a hard-coded five-category list; the
+                   merchant's actual catalogue was never consulted
+       growth      seededRand(55) — a random "% vs last month", complete with
+                   an up/down sign, on a card labelled "vs last month"
+       weeklyNew   orderCount * 0.28 — a magic ratio, not a date filter
+  */
   function populateKPIs(trends, products, orders){
     var totalSales = orders.reduce(function(a,o){ return a + (parseFloat(o.total)||0); }, 0);
-    if(totalSales === 0) totalSales = trends.reduce(function(a,b){ return a+b; }, 0);
-    var orderCount = orders.length || Math.floor(totalSales / 2800);
-    var aov  = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
-    var conv = products.length > 0
-      ? (products.reduce(function(s,p){ return s + parseFloat(p.conv||0); }, 0) / products.length).toFixed(1)
-      : (seededRand(42)*5+2.5).toFixed(1);
-    var cats   = ['Electronics','Fashion','Food','Beauty','Sports'];
-    var topCat = cats[Math.floor(seededRand(77)*cats.length)];
-    var growth = ((seededRand(55)-0.4)*30).toFixed(0);
-    var sign   = growth >= 0 ? '+' : '';
-    var weeklyNew = Math.max(0, Math.floor(orderCount * 0.28));
+    var orderCount = orders.length;
+    var aov = orderCount > 0 ? Math.round(totalSales / orderCount) : null;
 
-    document.getElementById('kpiTotalSales').innerHTML = numberFmt(Math.round(totalSales))+'<span>KES</span>';
-    document.getElementById('kpiSalesGrowth').textContent = sign+growth+'% vs last month';
-    document.getElementById('kpiOrders').textContent = orderCount;
+    /* Real 30-day-over-previous-30-day growth, computed only when BOTH periods
+       carry orders — otherwise a first-month merchant shows "+100%" against a
+       period they did not trade in. */
+    var now = Date.now(), D = 86400000;
+    function _sumWindow(fromAgo, toAgo){
+      return orders.reduce(function(sum, o){
+        var t = o.createdAt || new Date(o.date || 0).getTime();
+        return (t >= now - fromAgo*D && t < now - toAgo*D)
+          ? sum + (parseFloat(o.total) || 0) : sum;
+      }, 0);
+    }
+    var cur = _sumWindow(30, 0), prev = _sumWindow(60, 30);
+    var growthTxt = (prev > 0 && cur > 0)
+      ? ((cur - prev) / prev * 100 >= 0 ? '+' : '') + ((cur - prev) / prev * 100).toFixed(0) + '% vs previous 30 days'
+      : 'No comparable previous period';
+
+    /* Orders in the last 7 days — counted, not extrapolated from a ratio. */
+    var weeklyNew = orders.filter(function(o){
+      var t = o.createdAt || new Date(o.date || 0).getTime();
+      return t >= now - 7*D;
+    }).length;
+
+    /* Top category from the merchant's OWN sold items. '—' when unknown. */
+    var catTotals = {};
+    orders.forEach(function(o){
+      (o.items || []).forEach(function(it){
+        var c = it.category || it.cat;
+        if(!c) return;
+        catTotals[c] = (catTotals[c] || 0) + ((parseFloat(it.price)||0) * (it.qty||1));
+      });
+    });
+    var topCat = Object.keys(catTotals).sort(function(a,b){ return catTotals[b]-catTotals[a]; })[0] || NO_DATA;
+
+    document.getElementById('kpiTotalSales').innerHTML =
+      orderCount > 0 ? numberFmt(Math.round(totalSales))+'<span>KES</span>' : NO_DATA;
+    document.getElementById('kpiSalesGrowth').textContent = growthTxt;
+    document.getElementById('kpiOrders').textContent = orderCount > 0 ? orderCount : NO_DATA;
     document.getElementById('kpiOrdersSub').textContent = weeklyNew+' new this week';
-    document.getElementById('kpiAOV').innerHTML = numberFmt(aov)+'<span>KES</span>';
-    document.getElementById('kpiConv').innerHTML = conv+'<span>%</span>';
-    document.getElementById('kpiTopCat').textContent = escapeHTML(topCat);
+    document.getElementById('kpiAOV').innerHTML =
+      aov != null ? numberFmt(aov)+'<span>KES</span>' : NO_DATA;
+    /* Conversion needs product views, which nothing records. Not a zero. */
+    document.getElementById('kpiConv').innerHTML = NO_DATA;
+    document.getElementById('kpiConv').title = 'Needs a product-view counter — not currently recorded';
+    document.getElementById('kpiTopCat').textContent = topCat;
   }
 
   function numberFmt(n){
@@ -538,19 +595,30 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
   function renderProductTable(products){
     var tbody = document.getElementById('productTableBody');
     if(!products || !products.length){
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:24px;">No products found in your store</td></tr>';
+      /* Says WHY it is empty. "No products found in your store" was misleading
+         for the common case: the merchant has products, but none have sold yet. */
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:24px;">' +
+        '<strong style="color:#fff;">No sales yet</strong><br>' +
+        '<span style="font-size:12px;">Product performance appears here once your first order is placed.</span>' +
+        '</td></tr>';
       return;
     }
     var html = '';
     products.forEach(function(p){
-      var conv = parseFloat(p.conv);
-      var badgeClass = conv >= 7 ? 'badge-green' : conv >= 3 ? 'badge-amber' : 'badge-red';
+      /* Views and conversion are null by design (no view counter exists). Render
+         the neutral em-dash and a plain badge — a red "0.0%" conversion badge
+         would accuse a product of converting badly on evidence nobody collected. */
+      var conv = (p.conv == null) ? null : parseFloat(p.conv);
+      var badgeClass = conv == null ? 'badge-amber'
+                     : conv >= 7 ? 'badge-green' : conv >= 3 ? 'badge-amber' : 'badge-red';
       html += '<tr>' +
         '<td>'+escapeHTML(p.name)+'</td>' +
-        '<td>'+p.views.toLocaleString()+'</td>' +
+        '<td title="Needs a product-view counter — not currently recorded">' +
+          (p.views == null ? NO_DATA : p.views.toLocaleString()) + '</td>' +
         '<td>'+p.orders+'</td>' +
         '<td>KES '+numberFmt(p.revenue)+'</td>' +
-        '<td><span class="badge '+badgeClass+'">'+p.conv+'%</span></td>' +
+        '<td><span class="badge '+badgeClass+'" title="Needs product views to compute">' +
+          (conv == null ? NO_DATA : conv+'%') + '</span></td>' +
         '</tr>';
     });
     tbody.innerHTML = html;
@@ -633,63 +701,57 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
   }
 
   /* ── FUNNEL CHART (Horizontal bars) ── */
+  /* ── FUNNEL CHART ────────────────────────────────────────────────────────
+     The four stages were the literals 100 / 42 / 28 / 18 %. Every merchant on
+     SOKONI saw the same funnel, and it never moved. A funnel is a measurement
+     claim about how buyers behave in THIS shop; nothing was measured.
+
+     Real stage counts need view / add-to-cart / checkout events, which the
+     platform does not currently record — the same gap that makes the conversion
+     KPI unavailable above. */
   function drawFunnel(){
-    var canvas = document.getElementById('funnelChart');
-    var dpr = window.devicePixelRatio || 1;
-    var W = canvas.parentElement.clientWidth - 40;
-    var H = 180;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W+'px';
-    canvas.style.height = H+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var stages = [
-      { label:'Viewed', pct: 100, color:'#71ff00' },
-      { label:'Added to Cart', pct: 42, color:'#4dcc00' },
-      { label:'Checkout', pct: 28, color:'#2ea300' },
-      { label:'Paid', pct: 18, color:'#1a6600' },
-    ];
-
-    var padL = 110, padR = 60, padT = 10, barH = 28, gap = 12;
-    var maxW = W - padL - padR;
-
-    stages.forEach(function(s, i){
-      var y = padT + i * (barH + gap);
-      var bW = (s.pct / 100) * maxW;
-
-      /* bar background */
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
-      ctx.beginPath();
-      ctx.roundRect(padL, y, maxW, barH, 6);
-      ctx.fill();
-
-      /* bar fill */
-      ctx.fillStyle = s.color;
-      ctx.globalAlpha = 0.85;
-      ctx.beginPath();
-      ctx.roundRect(padL, y, bW, barH, 6);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      /* label */
-      ctx.fillStyle = 'rgba(255,255,255,0.65)';
-      ctx.font = '12px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(s.label, padL - 8, y + barH/2 + 4);
-
-      /* pct */
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(s.pct+'%', padL + bW + 8, y + barH/2 + 4);
-    });
+    chartUnavailable('funnelChart',
+      'view, add-to-cart and checkout events per product. Orders record what was ' +
+      'bought, not what was browsed and abandoned.');
   }
 
-  /* ── DONUT CHART ── */
-  function drawDonut(){
+  /* ── REVENUE BREAKDOWN DONUT ─────────────────────────────────────────────
+     Was the literals Products 68 / Delivery 22 / Commission 10 — again identical
+     for every merchant. Unlike the funnel, this one IS derivable: order records
+     carry item prices and a deliveryFee, and the commission rate is known. So it
+     is now computed from the merchant's own orders, and only falls back to the
+     unavailable state when there are no orders to compute from. */
+  function drawDonut(orders){
+    orders = orders || [];
+
+    var productRev = 0, deliveryRev = 0, commission = 0, sawAny = false;
+    orders.forEach(function(o){
+      var items = (o.items || []).reduce(function(s, it){
+        return s + (parseFloat(it.price) || 0) * (it.qty || 1);
+      }, 0);
+      var fee  = parseFloat(o.deliveryFee) || 0;
+      var comm = parseFloat(o.commission != null ? o.commission : o.commissionAmount) || 0;
+      if (items > 0 || fee > 0 || comm > 0) sawAny = true;
+      productRev  += items;
+      deliveryRev += fee;
+      commission  += comm;
+    });
+
+    if(!sawAny){
+      chartUnavailable('donutChart',
+        'at least one order carrying item prices, a delivery fee and a commission amount.');
+      return;
+    }
+
+    var segments = [
+      { label:'Products',            value: Math.round(productRev),  color:'#71ff00' },
+      { label:'Delivery Fees',       value: Math.round(deliveryRev), color:'#00ccff' },
+      { label:'Commission Deducted', value: Math.round(commission),  color:'#ff6b6b' },
+    ].filter(function(s){ return s.value > 0; });
+
     var canvas = document.getElementById('donutChart');
+    if(!canvas) return;
+    canvas.style.display = '';
     var size = 200;
     var dpr = window.devicePixelRatio || 1;
     canvas.width = size * dpr;
@@ -697,57 +759,78 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     canvas.style.width = size+'px';
     canvas.style.height = size+'px';
     var ctx = canvas.getContext('2d');
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,size*dpr,size*dpr);
     ctx.scale(dpr, dpr);
 
-    var segments = [
-      { label:'Products', value: 68, color:'#71ff00' },
-      { label:'Delivery Fees', value: 22, color:'#00ccff' },
-      { label:'Commission Deducted', value: 10, color:'#ff6b6b' },
-    ];
-
     var cx = size/2, cy = size/2, r = 80, innerR = 50;
-    var total = segments.reduce(function(a,s){return a+s.value;},0);
+    var total = segments.reduce(function(a,s){ return a+s.value; }, 0);
+    if(total <= 0){
+      chartUnavailable('donutChart', 'orders with a non-zero value.');
+      return;
+    }
     var start = -Math.PI/2;
-
     segments.forEach(function(s){
       var angle = (s.value / total) * 2 * Math.PI;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, start, start+angle);
+      ctx.arc(cx, cy, r, start, start + angle);
       ctx.closePath();
       ctx.fillStyle = s.color;
       ctx.fill();
       start += angle;
     });
-
     /* inner cutout */
     ctx.beginPath();
     ctx.arc(cx, cy, innerR, 0, 2*Math.PI);
     ctx.fillStyle = '#111';
     ctx.fill();
-
-    /* center text */
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px Segoe UI,system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '11px Segoe UI,system-ui,sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Revenue', cx, cy);
-
-    /* legend */
-    var legend = document.getElementById('donutLegend');
-    var html = '';
-    segments.forEach(function(s){
-      html += '<div class="legend-item"><div class="legend-dot" style="background:'+s.color+'"></div>'+
-        escapeHTML(s.label)+' <strong style="color:var(--text);margin-left:4px;">'+s.value+'%</strong></div>';
-    });
-    legend.innerHTML = html;
+    ctx.fillText('Revenue', cx, cy - 7);
+    ctx.fillText('Split', cx, cy + 9);
   }
 
   /* ── CUSTOMER INSIGHTS ── */
-  function renderInsights(){
-    document.getElementById('insightNewReturn').textContent = '3:2';
-    document.getElementById('insightSessions').textContent = '2.4';
-    document.getElementById('insightPeakHour').textContent = '8 PM';
+  /* These three "insights" were the string literals '3:2', '2.4' and '8 PM' —
+     identical for every merchant on the platform, and unchanged whether the shop
+     had a thousand orders or none. Two of them genuinely have no data source.
+     One of them — peak selling hour — is derivable from order timestamps, so it
+     is now actually computed instead of asserted. */
+  function renderInsights(orders){
+    orders = orders || [];
+
+    /* New vs returning: needs a stable customer identifier across orders. Order
+       records do not reliably carry one yet. */
+    document.getElementById('insightNewReturn').textContent = NO_DATA;
+    document.getElementById('insightNewReturn').title =
+      'Needs a customer identifier on orders to separate new from returning buyers';
+
+    /* Sessions per user: needs session analytics, which this platform does not record. */
+    document.getElementById('insightSessions').textContent = NO_DATA;
+    document.getElementById('insightSessions').title =
+      'Needs session tracking — not currently recorded';
+
+    /* Peak selling hour — REAL: the modal hour of this merchant's own orders. */
+    var byHour = {}, best = null;
+    orders.forEach(function(o){
+      var t = o.createdAt || new Date(o.date || 0).getTime();
+      if(!t) return;
+      var h = new Date(t).getHours();
+      byHour[h] = (byHour[h] || 0) + 1;
+      if(best === null || byHour[h] > byHour[best]) best = h;
+    });
+    var peakEl = document.getElementById('insightPeakHour');
+    if(best === null){
+      peakEl.textContent = NO_DATA;
+      peakEl.title = 'Appears once you have orders';
+    } else {
+      var h12 = best % 12 === 0 ? 12 : best % 12;
+      peakEl.textContent = h12 + (best < 12 ? ' AM' : ' PM');
+      peakEl.title = byHour[best] + ' order(s) placed in this hour';
+    }
   }
 
   /* ── SALES ALERT PREF ── */
@@ -835,10 +918,10 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
 
     populateKPIs(trends, products, orders);
     renderProductTable(products);
-    renderInsights();
+    renderInsights(orders);   /* peak selling hour is computed from these */
     drawSalesTrend(trends);
     drawFunnel();
-    drawDonut();
+    drawDonut(orders);   /* revenue split is computed from these */
   }
 
   /* ── BOOTSTRAP ── */

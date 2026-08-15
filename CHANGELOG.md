@@ -1,3 +1,265 @@
+## [2026-08-15] — Follow was denied by the rules, toasts overflowed the viewport, analytics were invented
+
+Three separate reports — "Follow says *Action failed — try again*", "toasts run off the right edge
+on mobile", "the Shop page wastes a screen of space" — plus an analytics audit. Root causes below;
+none of them were the thing they looked like.
+
+### 1. Follow — the doc ID could never satisfy the deployed rule
+
+`business.html` wrote **`follows/{uid}_{BIZ_ID}`** (underscore). The deployed rule is
+
+```
+match /follows/{followId} {
+  allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');
+}
+```
+
+so **every** follow from that page was rejected `permission-denied`, 100% of the time, and the
+catch-all reported the generic *"Action failed — try again"*. It was not flaky and not a network
+problem. Two further writes in the same handler were also denied: `businesses/{id}.followerCount`
+(only the owner may write that doc) and the unfollow, which soft-deleted via `{deleted:true}`
+merge — an `update`, which the rule does not grant at all.
+
+**A second rail was equally broken:** `sokoni-minishop.js` called the callable
+**`toggleShopFollow`, which does not exist anywhere in `functions/`**. MiniShop's Follow button
+failed on every tap. Follow needs no privileged backend — the rule already permits a user to
+create and delete their own follow doc — so it now writes the canonical document directly.
+
+**A third:** `sokoni-db.js` issued the follow doc and the `followerCounts` doc in one
+`Promise.all()`. `followerCounts` has **no rule at all**, so its write always denied and rejected
+the whole call — every SokoniDB-backed follow (seller-public, providers) reported failure even
+though the follow document had been written successfully.
+
+Converged onto the canonical `follows/{uid}--{type}--{entityId}` with canonical fields
+`{uid,type,entityId,entityName,createdAt}`:
+
+| file | was | now |
+|---|---|---|
+| `business.html` | `{uid}_{id}`, soft-delete, owner-only count write | canonical id, real delete, no count write |
+| `sokoni-minishop.js` | non-existent Cloud Function | direct canonical write + refresh-safe hydration |
+| `community.html` (business) | `--biz--` id but `type:'business'` body, `followerId`/`followingId` | canonical id + fields |
+| `community.html` (user) | two-segment `{uid}--{otherUid}`, no type | canonical `--user--` |
+| `sokoni-db.js` | count write could fail the follow | count is best-effort, caught |
+| `profile.html` | `where('followerUid','==')` — wrong field **and** a list query the rule denies | per-doc delete by deterministic id |
+
+`sokoni-social.js` (the canonical engine) also gained what it never had: it wrote the localStorage
+cache **before** the Firestore write and swallowed every error into `console.warn`, so a denied
+write left the button reading "Following" forever. Now the cache is committed only after Firestore
+accepts, failures roll the button back, an in-flight guard makes rapid double-taps idempotent, and
+the sign-in prompt is a canonical toast with a **Sign in** action preserving `?next=` instead of a
+`confirm()` that discarded the user's intent when dismissed.
+
+**Error states are now specific** — sign-in required / permission denied / offline / target gone /
+rate-limited — instead of one generic string. Technical detail stays in the console.
+
+### 1b. Proven against the real rules — and it found one more defect
+
+`scripts/test-follow-rules.js` (new, emulator-backed, house pattern) runs the sequence a user
+actually performs — follow → refresh → unfollow → refresh → refollow → repeat-follow → logged-out →
+cross-user → all 17 entity types — and asserts the **backend result** (does the document exist?)
+after each step, against the real `firestore.rules`. A UI test cannot tell "the button is wired
+wrong" from "the document ID is unrepresentable", which is exactly how the original bug survived
+behind one generic toast.
+
+**40 passed, 0 failed.** It also caught a defect the code review had missed:
+
+> **re-follow an existing document is an UPDATE, and the rule has no `allow update`.**
+
+The rule grants create/read/delete only. So `setDoc(..., {merge:true})` on a follow that already
+exists is rejected `permission-denied`. That is not a rare path — it is precisely the cross-device
+case: follow on phone A, open the page on phone B whose cache still reads "Follow", tap it. With
+the new error handling this would have shown *"You don't have permission to follow this"* to a user
+who **is** following. The old code hid it (every error went to `console.warn`); the new specific
+error messages would have surfaced it as a confident lie.
+
+Fixed by **converging rather than accusing**: on a denied *follow*, re-read the document once — if
+it exists we are already in the intended end state, so commit the UI and succeed silently; anything
+else re-throws. Applied to all four rails (`sokoni-social.js`, `sokoni-db.js`, `business.html`,
+`sokoni-minishop.js`). Unfollow needs no equivalent branch: deleting an absent document is
+permitted, so it converges on its own — also asserted.
+
+Deliberately **not** fixed by adding `allow update`: that would let a client rewrite a follow's
+fields, and the ruleset has no room for it anyway (below).
+
+Run: `firebase emulators:exec --only firestore "node scripts/test-follow-rules.js"`
+
+### 1c. Production integration verification — BLOCKED by App Check attestation
+
+**This is not a Follow failure. No Follow defect was found at this gate.** The automated
+environment cannot exercise the production client, which is a property of the test environment, not
+of the code under test. Recording it precisely matters: "blocked" and "failed" carry very different
+release meanings, and this is the former.
+
+`tests/rc/suites/rc-11-follow.js` (new, registered in the RC runner) implements the 12-step
+authenticated walkthrough — follow → refresh → unfollow → refresh → re-follow → rapid double-tap →
+cross-device re-follow → second entity → MiniShop → logged-out. **Every step asserts the Firestore
+document**; the button label is recorded as supporting evidence and is never the verdict, because
+the original defect produced a button that read "Following" while nothing had persisted.
+
+Run against production (`--backend=production --suite=rc-11 --allow-privileged`,
+evidence in `docs/rc-runs/follow-prod/`):
+
+| | |
+|---|---|
+| Production sign-in | **PASS** — RC buyer authenticated, uid `uKV3G82KOUWxXDsgnEUb3CfEJet1` |
+| First client Firestore read | **permission-denied** on the user's OWN `users/{uid}` doc |
+| Result | 0 passed · 0 failed · **10 BLOCKED** |
+| Production data | untouched — the suite makes zero Admin-SDK writes |
+
+The denial is **App Check**, not the rules: headless Chromium cannot satisfy reCAPTCHA v3
+attestation, so Firestore refuses every client operation *before* rules are evaluated. Documented
+in `docs/APP_CHECK.md`; `rc-09-rules.js` carries the same warning. Pre-existing environment limit,
+unrelated to this work.
+
+**Why the suite reports BLOCKED instead of PASS.** Its negative control — a signed-in user reading
+their own `users/{uid}` document, which the rules explicitly permit — must pass before any Follow
+result counts. Without it a blanket denial is indistinguishable from a correct one: all ten steps
+would have "passed" with every follow denied and every document absent, a green result that a
+completely broken implementation would also produce. `BLOCKED` is never counted as a pass.
+
+**Deliberately NOT done to unblock it:** registering an App Check debug token for the headless
+browser. That changes the live security posture of the production project to make a test go green.
+An emulator fallback was also declined — `firebase.js` has no `connectFirestoreEmulator` wiring, so
+it would have required changing production code for a test.
+
+**Remaining gate — manual, in a real browser** (real browsers pass reCAPTCHA attestation natively,
+so no configuration change is needed). The decisive evidence is the document at
+`follows/{uid}--{type}--{entityId}`, watched in DevTools: appears on Follow, survives refresh,
+disappears on Unfollow, reappears on re-follow, converges silently on a second browser profile, and
+MiniShop writes `follows/{uid}--shop--{shopId}` instead of calling the Cloud Function that never
+existed.
+
+**Release gate:**
+> RC: integrity fixed · premium analytics: R1.1 outstanding
+> Follow: rules/data layer proven → production end-to-end verification **BLOCKED by App Check
+> attestation** (not a Follow failure)
+
+### 2. Follower counts were a per-device fiction
+
+`getFollowerCount()` read a localStorage tally bumped by +1 whenever *this device* followed, and
+rendered it as "1 followers". Two phones disagreed. `followerCounts/{type}--{id}` has no rule, so
+neither reads nor writes work — **there is no canonical follower count today**. Per CLAUDE.md
+(UI Data Integrity) an unknown now renders as `—`, not an invented number, in `sokoni-social.js`,
+`sokoni-db.js`, `seller-public.html`, `business.html` and `sokoni-minishop.js`.
+
+> **BLOCKED, deliberately not fixed here:** the `followerCounts` rule. The compiled ruleset sits
+> ~72 B under Firestore's 256 KB cap (`firestore.rules` is 261,713 B raw). An over-size ruleset
+> uploads fine and then **cannot be activated**. Do not add the rule until that headroom is
+> reclaimed. The same ceiling blocks a `list` rule on `follows/`, which is why the profile
+> "Following" list is per-device.
+
+### 3. Toasts — one canonical containment sheet, no repositioning
+
+New **`sokoni-toast.css`**, injected for all 313 shared-header pages in `shared-header.js` PHASE 1
+and linked directly on the four user-facing pages that do not load it.
+
+The obvious fix (force `left`/`right`) was **rejected after auditing the markup**: SOKONI has two
+anchoring conventions in production — ~35 corner-anchored toasts and ~46 centre-anchored
+(`left:50%; transform:translateX(-50%)`). Forcing `left`/`right` leaves the transform in place and
+throws those 46 off-screen by half their own width. The sheet therefore never touches the anchor;
+it constrains **width**, which is sufficient for both:
+
+```
+max-width: min(420px, calc(100vw - 2*gutter - safe-left - safe-right))
+```
+
+Bottom-nav clearance is applied as `margin-bottom`, not `bottom`: for a bottom-anchored fixed box
+it lifts it above the nav, and for a top-anchored one (`#notificationContainer` is `top:24px`)
+`bottom` is auto so the margin is inert. One rule, correct for both, no per-page knowledge.
+
+Selector `body > [id*="toast" i]` reaches all 40+ naming variants (`toast`, `toastWrap`, `msToast`,
+`carHubToast`, `wal-toast`, `inv-toast-container`, …) because every toast root is a direct child of
+`<body>`, while never hitting inner parts (`.toast-icon`, `.toast-body`) that must not get overlay
+geometry.
+
+`sokoni-ui.js` also fixed: the mobile breakpoint was **480px**, so at 481–600px (landscape phones,
+small tablets, split-view) the desktop corner placement collided with the bottom nav — now 600px;
+clearance is nav **+** safe-area (was `max()` of the two, which still sat on the nav on iPhone);
+and the `--sk-z-toast` fallback was **800**, *below* `.bottom-nav` (9996), so without tokens the
+toast rendered behind the nav — now 200002.
+
+### 4. Analytics — **RC: integrity fixed · premium analytics: R1.1 OUTSTANDING**
+
+> This section removed fabricated numbers. It did **not** deliver the premium analytics suite, and
+> that work must not be treated as finished. Every panel now names the data source it requires;
+> those requirements are the R1.1 specification, recorded in `docs/RELEASE_ROADMAP.md`. R1.1 starts
+> by defining and shipping the event/data model (product-view counter first — it alone unblocks
+> conversion, product-to-cart and the pre-checkout funnel), not by building charts.
+
+
+`customer-analytics.html` (**admin-gated**) used Firebase *only* to check the admin claim; not one
+figure came from Firestore. A `sr(seed)` generator produced cohort retention, county heatmap,
+funnel, LTV and engagement numbers — and `renderChurnTable()` invented **named individual
+customers** ("K. Wanjiku · 18 days ago · KES 48,200 LTV · High risk") each with a working
+"Re-engage" button. Because the values were *seeded* they were stable across reloads, so they read
+as measurements. All seven panels now state that they are unavailable **and name the data
+requirement**.
+
+`business-analytics.html` — top-products sales/revenue from `sr()` (and invented product *names*
+when the merchant had none), a hard-coded 72/28 B2C-vs-B2B donut, and three invented staff members
+with order counts and ratings. All replaced with requirement-stating empty states; `sr()` deleted.
+
+`seller-analytics.html` (**merchant-facing, highest stakes**) — removed `seededRand` and every
+fallback that used it:
+
+- 30-day revenue trend fell back to a manufactured upward curve from KES 8,000
+- `orders.length || Math.floor(totalSales / 2800)` — invented an order count by dividing invented
+  revenue by a magic 2,800
+- conversion rate was `seededRand(42)*5+2.5`; "% vs last month" was `seededRand(55)`
+- top category was a **random pick** from a hard-coded five-item list
+- `p.views = p.orders * (8 + i % 5)` invented product views from a multiplier, then computed the
+  conversion badge from that invention
+- a hard-coded 100/42/28/18 funnel and a 68/22/10 revenue donut, identical for every merchant
+
+**Made real** where the data genuinely supports it: growth is now period-over-period from actual
+order timestamps (and says "No comparable previous period" rather than "+100%" for a first-month
+merchant); "new this week" is counted, not a 0.28 ratio; top category is derived from the
+merchant's own sold items; peak selling hour is the modal hour of real orders; the revenue donut is
+computed from item prices, `deliveryFee` and commission. Views/conversion report `—` with a tooltip
+naming the missing product-view counter.
+
+### 5. Shop page
+
+The page-local `<nav class="navbar">` was **already invisible** — `style.css:24` hides every
+`body > nav` that is not the bottom nav or `#sk-top-nav`, platform-wide. It was dead markup
+carrying a second cart pip (`category.js` still described the two badges "sitting on screen
+disagreeing"). Removed.
+
+The band actually consuming the screen was the `.cat-page-header` hero: a background image, a 52px
+emoji on its own line, a 40px `<h1>` and the count stacked above the pills, restating what the
+fixed global header and the bottom nav's "Shop" tab already say. Recomposed into a single
+icon · title · count rail; the `<h1>` is kept and restyled (this page ships schema.org
+`CollectionPage` and is an SEO landing page).
+
+**Measured, 1440px:** header band **214px → 129px (−40%)**; grid top 333 → 306.
+**Measured, 390px:** grid top 366 → 343, *while also* promoting search from a 140px sliver inside a
+horizontally-scrolling row to a full-width 366px field.
+
+Search had been the first child of `.cat-sort-bar`, which the page sets `flex-wrap:nowrap;
+overflow-x:auto` — so on a 390px phone the Shop page's primary control could be **scrolled
+sideways out of sight**. It now has its own row; only the sort chips scroll.
+
+Also: sort chips and pills raised to ≥40px (were ~35px, under WCAG 2.5.8); search input set to
+16px on mobile so iOS Safari stops zooming the page on focus; pill scroll-arrows hidden on touch
+(32px targets, redundant where the strip scrolls natively); decorative `.cat-page-bg` image dropped
+(one fewer full-width request, invisible at `brightness(0.18)`).
+
+**Verified in a headless browser at 390 / 844 / 1440:** no horizontal scroll, exactly one cart pip,
+no interactive target under 40px, `sokoni-toast.css` loaded. Toasts: three simultaneous, long
+message with a "Try again" button — all fully inside the viewport at every width, z-index 200002,
+clearing the bottom nav, page scrollWidth unchanged.
+
+**Files:** `sokoni-toast.css` (new), `shared-header.js`, `sokoni-ui.js`, `sokoni-social.js`,
+`sokoni-db.js`, `sokoni-minishop.js`, `business.html`, `community.html`, `profile.html`,
+`seller-public.html`, `category.html`, `category.js`, `customer-analytics.html`,
+`business-analytics.html`, `seller-analytics.html`, `my-orders.html`, `provider-profile.html`,
+`sfos-wallet.html`, `checkout-2-preview.html`, `scripts/test-follow-rules.js` (new),
+`docs/RELEASE_ROADMAP.md` (R1.1 items recorded).
+**Database:** none. **API:** none. **Security:** no rule changes (see the 256 KB ceiling above).
+**Breaking:** none.
+
+---
+
 ## [2026-08-15] — Gate 3: register the 14 live indexes the governance registry had lost
 
 `verify-index-governance` was RED on the release lineage, reporting 14 ORPHAN indexes across 8

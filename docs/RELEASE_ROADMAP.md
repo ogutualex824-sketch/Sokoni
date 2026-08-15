@@ -41,10 +41,97 @@ Only after v1.0.0 is tagged and archived does the freeze lift and the versioned 
 
 ---
 
+## KNOWN PRE-EXISTING RELEASE-LINEAGE DEFECT (carried, not waived)
+
+### Receipt-field migration debt — `verify-receipt-naming` is RED and stays red
+
+**Status: CARRIED into the release by explicit decision, 2026-08-15.** `npm run predeploy`
+fails on this gate alone (10 of 11 green). It is **not** a stale ratchet and must not be
+recorded as one — an earlier classification said so and was wrong. The ratchet is working
+correctly; the alias really is spreading.
+
+**Exact current measurement**
+
+| | |
+|---|---|
+| Scanner hits total | **117** (baseline 109, set at `5b49150` / ADR-009) |
+| Object-key **writes** (`receiptNo:` / `invoiceNo:`) | **52** |
+| Property **reads** (`.receiptNo` / `.invoiceNo`) | **65** |
+| Of the writes, **server-side** (`functions/**`, `etims.js`) | **17** |
+
+The scanner correctly excludes local variables and parameters — `function downloadReceipt(receiptNo)`
+and `${receiptNo}` match neither of its patterns. What it cannot do is distinguish a **Firestore
+document field** from a **function-parameter object key** (`PosAudit.log('sale', { receiptNo })`),
+so the 52 writes mix persisted schema with internal call payloads and test fixtures. Separating
+them requires per-site judgement.
+
+**Critical server-side locations (persisted or public API — preserve this list)**
+
+```
+etims.js:55                        await fs.setDoc(ref, { invoiceNo: next }, { merge: true });   <- Firestore write
+etims.js:146, :162                 invoiceNo: invoiceNo
+functions/financial-engine.js:177  logger.info(... { invoiceNo: existing.data().invoiceNo })
+functions/financial-engine.js:178  return { ok:true, replay:true, invoiceNo: …, receiptNo: … }
+functions/fulfilment-scan.js:136   receiptNo: order.receiptNo || null
+functions/impact.js:250            receiptNo: _txnId('RCP')
+functions/payment-trust.js:62      receiptNo: existingNo
+functions/payment-trust.js:326     receiptNo: _num          <- PUBLIC QR-scan response, DUAL-writes
+                                                              receiptNo AND receiptNumber
+functions/payment-trust.js:597     receiptNo: receiptNo.trim().toUpperCase()
+functions/payment-trust.js:605     return { voided:true, receiptNo: … }
+functions/pos-cash-drawer.js:95    receiptNo: _san(receiptNo, 32)
+functions/pos-intelligence.js:617  receiptNo: s.receiptNo || ''
+functions/pos-zero-friction.js:361 receiptNo: saleId.slice(-8).toUpperCase()   <- receipt built for persistence
+functions/redis-layer.js:149       receiptNo: _san(state?.receiptNo, 50)
+functions/sasos-billing.js:238     invoiceNo: _generateInvoiceNo(...)
+```
+
+**Required resolution (R1.x — its own change, never bundled with a feature release)**
+
+Migrate deliberately from the deprecated `receiptNo` / `invoiceNo` aliases to canonical
+`receiptNumber` / `invoiceNumber`, covering **payment, eTIMS, POS and QR-scan compatibility**,
+with regression coverage before any rename lands. `payment-trust.js:326` deliberately emits both
+names on a public endpoint — external QR-scan consumers may depend on the deprecated key, so that
+one needs a deprecation window, not a rename.
+
+**Do NOT resolve this by weakening the verifier or by raising the baseline.** Both were considered
+and rejected: the verifier is not the thing that is broken, and raising the baseline converts a
+working ratchet into a blind one.
+
+**This release does not alter any of these payment / eTIMS / POS paths.** The three commits it
+carries touch `driver.html`, `docs/index-registry.json`, and the Follow/Shop/Toast/analytics
+surfaces — none of which appear in the list above.
+
+**Owner:** Alex Ogutu (ADR-009 author). **Blocks:** `--strict` mode and closing ADR-009.
+
+---
+
 ## Versioned sequence (each builds on the certified 1.0 baseline)
 
 ### Release 1.1 — Merchant Growth  ([[project_merchant_growth]])
 Acquisition → Success → Growth → B2B. Activation milestone = **First Successful Sale** (onboarding progress tracker: profile → catalogue → payments → delivery → publish → first order). Reuse existing loyalty/analytics engines; extend, don't rebuild.
+
+**Premium analytics — define the event/data model FIRST** (surfaced 2026-08-15 during the analytics integrity audit; RC fixed the *integrity*, the *capability* is R1.1). RC removed every fabricated figure from `customer-analytics.html`, `business-analytics.html` and `seller-analytics.html` — seeded-random cohorts, invented named customers with LTVs, a magic `totalSales / 2800` order count, product "views" derived from an `orders * (8 + i%5)` multiplier, hard-coded funnels and donuts. Each panel now names the data it would need. **That is the specification for this work.** Do not start by building charts: start by defining and shipping the event/data model, then render it.
+
+Required sources, none of which exist today:
+- **Product-view counter** — blocks conversion rate, product-to-cart rate, and every funnel stage before checkout. This is the single highest-leverage gap: it unblocks the most requested merchant metrics.
+- **Funnel events** (view → product → cart → checkout → paid) with stage transitions aggregated server-side — blocks cart abandonment and the journey funnel.
+- **Weekly cohort aggregate** (first-order week per customer + repeat-order weeks) — blocks retention, cohorts, and returning-vs-new.
+- **Stable customer identifier on orders** — blocks new-vs-returning, LTV, churn risk, and customer counts.
+- **Per-county aggregate over orders** (orders already carry a delivery county; the aggregate must be scheduled, not computed in the browser).
+- **Session analytics** — blocks sessions-per-user. Lowest value; consider dropping the metric rather than building the pipeline.
+- **Staff attribution on orders** (POS operator / fulfilment owner) — blocks staff performance.
+
+Two constraints carried from RC: (1) aggregates must be **server-computed**, because a client cannot read across other users' orders and must not try; (2) listing **named customers** with lifetime values needs a privacy review under the Kenya Data Protection Act (ODPC `630-8669-F056`) before it ships — the removed churn table did exactly that. Metrics that ARE already real and should be preserved: revenue/orders/AOV from delivered orders, period-over-period growth, top category from sold items, peak selling hour, and the revenue split from item prices + `deliveryFee` + commission.
+
+**Follow identity — replace the shop-NAME entity id with an immutable id** (surfaced 2026-08-15 during the Follow repair; deliberately deferred because it is a data migration, not a code fix). Follow converged platform-wide onto `follows/{uid}--{type}--{entityId}` and is proven against the deployed rules (`scripts/test-follow-rules.js`, 40/40). One entity id is still wrong: `seller-public.html` passes the seller's **display name** as `entityId` (`SokoniDB.follow('seller', sellerName, …)`). Two consequences: a shop **rename orphans every follower**, and two shops sharing a name share followers. `window._spSellerUid` is already available on that page, so the code change is one line — the work is the **migration**:
+- Enumerate existing `follows` docs of `type:'seller'` and resolve each `entityId` (a name) to the owning uid.
+- Write the new `{uid}--seller--{sellerUid}` doc and delete the old one **per user**, server-side (the rule permits only per-doc client access, and the compiled-ruleset ceiling forbids adding a `list` rule — see below).
+- Ambiguous names (two sellers, one name) must be reported, not guessed.
+- Do this **before** the follow system accumulates more production relationships; the cost grows with adoption.
+Consider unifying `type:'seller'` (seller-public) and `type:'shop'` (MiniShop) in the same pass if they denote the same entity — decide deliberately, and migrate rather than dual-write.
+
+**Follower counts + cross-device following list — blocked on the ruleset size ceiling.** `followerCounts/{type}--{entityId}` has no rule, so both reads and writes are denied; counts therefore render `—` rather than a per-device fiction (proven: `scripts/test-follow-rules.js`). The same ceiling blocks a `list` rule on `follows/`, which is why the profile "Following" list is per-device. `firestore.rules` is **261,713 B raw ≈ 72 B under Firestore's 256 KB compiled cap**; an over-size ruleset uploads successfully and then **cannot be activated**. Reclaim headroom before adding either rule. A Cloud Function aggregator is the correct owner of the count regardless — a client-writable counter is not a trustworthy metric.
 
 **First onboarding capability — Canonical MiniShop Provisioning** (surfaced 2026-08-04 during RC checkout diagnosis; deliberately deferred out of RC). The MiniShop *readers* are live — `/shop/**` + `/@**` route to the `minishopPage` CF, which reads `shopHandles → shops → minishopConfig` — but there is **no writer**: the `shops` collection is empty platform-wide and no code (client or server) creates a `shops` doc. Provisioning one merchant by hand during RC would establish an undocumented precedent future merchants can't reproduce, so it is R1.1 work, not a hotfix. Scope:
 - Build a **seller → shop provisioning pipeline** (part of merchant onboarding) that atomically creates `shops`, `shopHandles`, and `minishopConfig` (normalized via `minishop-config-schema.js`) and allocates a unique handle.

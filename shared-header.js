@@ -244,6 +244,11 @@
 
   /* Design tokens (CSS) — load first; tokens referenced by all CSS */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
+  /* Canonical toast containment — makes every toast on the page viewport-safe
+     (width clamp + safe-area + bottom-nav clearance) WITHOUT rewriting the ~81
+     page-local toast implementations. Must load after the tokens it reads
+     (--sk-safe-*, --sk-bottom-nav-h, --sk-z-toast). See sokoni-toast.css. */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-toast.css' }, 'sk-toast-link');
   /* Premium component library — .sk-card, .sk-btn-*, .sk-badge, .sk-stat, etc. */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-components.css' }, 'sk-components-link');
   /* Quality design system — --so-* tokens, focus-visible ring, WCAG touch targets, skip links */

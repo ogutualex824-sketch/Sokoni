@@ -43,6 +43,12 @@ window.SokoniMiniShop = (() => {
   // ─── Toast ───────────────────────────────────────────────────────────────────
   function _toast(msg, type) {
     type = type || 'info';
+    /* Prefer the CANONICAL engine so this inherits the shared responsive
+       containment (sokoni-toast.css) and the 4-toast cap. The bespoke renderer
+       below stays only as the fallback for before SokoniUI has loaded — its
+       container is a direct child of <body> and centre-anchored, so the same
+       containment rules apply to it too. */
+    try { if (window.SokoniUI && typeof SokoniUI.toast === 'function') return SokoniUI.toast(msg, type); } catch (e) {}
     const toastId = _state.adminMode ? 'msaToasts' : 'msToasts';
     let container = document.getElementById(toastId);
     if (!container) {
@@ -693,11 +699,19 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     }
 
     // Stats bar
-    _setEl('msFollowerCount', Number(shop.followerCount || 0).toLocaleString());
+    /* Server-maintained counter. Absent means UNKNOWN, not zero — matching how
+       msRating already renders '—' rather than inventing a 0.0. */
+    _setEl('msFollowerCount', typeof shop.followerCount === 'number'
+      ? shop.followerCount.toLocaleString() : '—');
     _setEl('msProductCount', Number(totalProducts || products.length).toLocaleString());
     _setEl('msRating', shop.rating ? Number(shop.rating).toFixed(1) : '—');
     _setEl('msReviewCount', '(' + Number(shop.reviewCount || (reviews && reviews.length) || 0).toLocaleString() + ' reviews)');
-    _state.followerCount = shop.followerCount || 0;
+    _state.followerCount = shop.followerCount;
+
+    /* Hydrate the Follow button from Firestore so its state SURVIVES A REFRESH.
+       Nothing did this before — the button always rendered "Follow", even for a
+       shop the signed-in user already followed. */
+    _hydrateFollowState();
 
     // Years active
     const createdTs = shop.createdAt?._seconds || shop.createdAt?.seconds;
@@ -1278,22 +1292,98 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
   }
 
   // ─── Follow ───────────────────────────────────────────────────────────────────
-  async function toggleFollow() {
-    if (typeof firebase === 'undefined') { _toast('Please log in to follow shops', 'info'); return; }
-    const user = firebase.auth().currentUser;
-    if (!user) { location.href = 'login.html?redirect=' + encodeURIComponent(location.href); return; }
-    if (!_state.shopId) return;
+  /* This called the callable `toggleShopFollow`, which DOES NOT EXIST — there is
+     no such export anywhere in functions/. Every tap therefore came back
+     functions/not-found and the shop's Follow button failed 100% of the time.
+
+     Follow is not a privileged operation: the deployed rule already lets a signed-in
+     user create and delete their OWN follows/{uid}--{type}--{entityId} document.
+     So this now writes the canonical doc directly, exactly like every other
+     followable entity, and no new Cloud Function is needed. */
+  const MS_FOLLOW_TYPE = 'shop';
+
+  function _msAuthUser() {
+    try { if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; } catch (e) {}
+    try { if (typeof firebase !== 'undefined' && firebase.auth) return firebase.auth().currentUser; } catch (e) {}
+    return null;
+  }
+
+  function _msFollowErr(err) {
+    const c = ((err && (err.code || err.message)) || '').toString();
+    if (/permission-denied/i.test(c)) return "You don't have permission to follow this shop.";
+    if (/unauthenticated/i.test(c))   return 'Please sign in to follow this shop.';
+    if (/not-found/i.test(c))         return 'This shop is no longer available.';
+    if (/unavailable|network|offline|Failed to fetch/i.test(c))
+                                      return 'You appear to be offline — that was not saved.';
+    return 'Could not update follow — please try again.';
+  }
+
+  let _msFollowBusy = false;
+
+  /* Read the canonical follow doc for (this user, this shop) and paint the button.
+     Per-doc get() — NOT a prefix query — because the deployed rule allows the
+     single-document read but denies a list over follows/. */
+  async function _hydrateFollowState() {
+    const user = _msAuthUser();
+    if (!user || !_state.shopId || !window.firebaseDB) return;
     try {
-      const action = _state.following ? 'unfollow' : 'follow';
-      await _callCF('toggleShopFollow', { shopId: _state.shopId, action });
-      _state.following = !_state.following;
-      _state.followerCount += _state.following ? 1 : -1;
-      _setEl('msFollowerCount', Math.max(0, _state.followerCount).toLocaleString());
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const fid = user.uid + '--' + MS_FOLLOW_TYPE + '--' + String(_state.shopId).replace(/[^a-zA-Z0-9]/g, '_');
+      const snap = await m.getDoc(m.doc(window.firebaseDB, 'follows', fid));
+      _state.following = snap.exists();
       _updateFollowBtn();
+    } catch (e) { /* leave the button on its default state */ }
+  }
+
+  async function toggleFollow() {
+    const user = _msAuthUser();
+    if (!user) {
+      location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+    if (!_state.shopId || _msFollowBusy) return;    /* rapid double-tap guard */
+
+    const wasFollowing = _state.following;
+    _msFollowBusy = true;
+    _state.following = !wasFollowing;               /* optimistic */
+    _updateFollowBtn();
+
+    try {
+      const db = window.firebaseDB;
+      if (!db) throw { code: 'unavailable' };
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const fid = user.uid + '--' + MS_FOLLOW_TYPE + '--' + String(_state.shopId).replace(/[^a-zA-Z0-9]/g, '_');
+      const ref = m.doc(db, 'follows', fid);
+      if (wasFollowing) {
+        await m.deleteDoc(ref);
+      } else {
+        try {
+          await m.setDoc(ref, {
+            uid: user.uid, type: MS_FOLLOW_TYPE, entityId: String(_state.shopId),
+            entityName: (_state.shop && _state.shop.name) || '', createdAt: m.serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          /* No `allow update` on follows/ — re-writing an existing follow is
+             denied. Already following is the intended end state, so converge
+             rather than surface a permission error. scripts/test-follow-rules.js */
+          if (!/permission-denied/i.test(String((e && (e.code || e.message)) || ''))) throw e;
+          const existing = await m.getDoc(ref).catch(() => null);
+          if (!existing || !existing.exists()) throw e;
+        }
+      }
       _toast(_state.following ? 'Following this shop' : 'Unfollowed', 'success');
     } catch (err) {
-      _toast('Could not update follow: ' + (err.message || ''), 'error');
+      _state.following = wasFollowing;              /* ROLLBACK — nothing persisted */
+      _updateFollowBtn();
+      console.warn('[minishop] follow failed:', (err && (err.code || err.message)) || err);
+      _toast(_msFollowErr(err), 'error');
+    } finally {
+      _msFollowBusy = false;
     }
+    /* The follower COUNT is deliberately not adjusted here. It is a
+       server-maintained field on the shop config (minishop-config-schema.js);
+       incrementing a local copy produced a number that disagreed with the
+       backend and with every other device. */
   }
 
   // ─── Business Card Download ──────────────────────────────────────────────────

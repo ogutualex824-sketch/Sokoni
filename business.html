@@ -658,7 +658,7 @@
 
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
-  getFirestore, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, increment,
+  getFirestore, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, increment,
   collection, query, where, orderBy, limit, serverTimestamp, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 /* The app-wide Firebase app, already carrying App Check. See the note at _db below. */
@@ -826,7 +826,10 @@ function renderHeader() {
   }
 
   /* stats strip */
-  document.getElementById('bsFollowers').textContent = (b.followerCount || 0).toLocaleString();
+  /* Neutral '—' for an absent count, matching the three siblings below. `|| 0`
+     rendered an UNKNOWN follower count as a hard 0 (CLAUDE.md, UI Data Integrity). */
+  document.getElementById('bsFollowers').textContent =
+    typeof b.followerCount === 'number' ? b.followerCount.toLocaleString() : '—';
   document.getElementById('bsProducts').textContent  = b.productCount  != null ? b.productCount  : '—';
   document.getElementById('bsServices').textContent  = b.serviceCount  != null ? b.serviceCount  : '—';
   document.getElementById('bsReviews').textContent   = b.reviewCount   != null ? b.reviewCount   : '—';
@@ -909,22 +912,47 @@ async function trackView() {
   } catch (e) { /* silent */ }
 }
 
-/* ── Follow ── */
+/* ── Follow ────────────────────────────────────────────────────────────────
+   CANONICAL follow identity: follows/{uid}--{type}--{entityId}.
+
+   This page used to write follows/{uid}_{BIZ_ID} — an underscore, not the
+   canonical '--'. The deployed rule is
+
+       match /follows/{followId} {
+         allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');
+       }
+
+   so EVERY follow from this page was rejected with permission-denied, and the
+   catch-all handler reported the generic "Action failed — try again". That was
+   the reported bug: not a flaky network, a doc ID that could never satisfy the
+   rule. The read above used the same wrong ID, so the button also never showed
+   "Following" after a refresh.
+
+   Keep this in step with sokoni-social.js `_fDocId()` — same shape, same
+   sanitiser — so a business followed here is the same relationship everywhere. */
+const BIZ_FOLLOW_TYPE = 'business';
+function _bizFollowId(uid) {
+  return uid + '--' + BIZ_FOLLOW_TYPE + '--' + String(BIZ_ID).replace(/[^a-zA-Z0-9]/g, '_');
+}
+
 async function loadFollowState() {
   const user = _currentUser();
   if (!user) return;
   try {
-    const snap = await getDoc(doc(_db, 'follows', user.uid + '_' + BIZ_ID));
+    const snap = await getDoc(doc(_db, 'follows', _bizFollowId(user.uid)));
     _setFollowUI(snap.exists());
-  } catch { /* silent */ }
+  } catch { /* silent — button simply stays on "Follow" */ }
 
-  /* live follower count */
+  /* Live follower count. businesses/{id}.followerCount is only ever written by
+     the owner (the client increment below was denied for everyone else), so it
+     is authoritative when present and UNKNOWN when absent — render the neutral
+     em-dash rather than a 0 the page cannot substantiate (CLAUDE.md). */
   try {
     _bizFollowerUnsub = onSnapshot(doc(_db, 'businesses', BIZ_ID), snap => {
-      if (snap.exists()) {
-        const cnt = snap.data().followerCount || 0;
-        document.getElementById('bsFollowers').textContent = cnt.toLocaleString();
-      }
+      const el = document.getElementById('bsFollowers');
+      if (!el) return;
+      const cnt = snap.exists() ? snap.data().followerCount : undefined;
+      el.textContent = (typeof cnt === 'number') ? cnt.toLocaleString() : '—';
     });
   } catch { /* silent */ }
 }
@@ -944,32 +972,77 @@ function _setFollowUI(following) {
   }
 }
 
+/* Error → user-facing sentence. The single generic string used here before was
+   masking a 100%-reproducible permission-denied; technical detail belongs in the
+   console, but the USER still needs to know which of these actually happened. */
+function _bizFollowErr(e) {
+  const c = ((e && (e.code || e.message)) || '').toString();
+  if (/permission-denied/i.test(c)) return "You don't have permission to follow this business.";
+  if (/unauthenticated/i.test(c))   return 'Please sign in to follow.';
+  if (/not-found/i.test(c))         return 'This business is no longer available.';
+  if (/resource-exhausted|quota/i.test(c)) return 'Too many requests — try again in a moment.';
+  if (/unavailable|network|offline|Failed to fetch/i.test(c))
+                                    return 'You appear to be offline — that was not saved.';
+  return 'Could not update follow — please try again.';
+}
+
 window.bizToggleFollow = async function () {
   const user = _currentUser();
-  if (!user) { location.href = 'login.html'; return; }
-  const btn = document.getElementById('bizFollowBtn');
-  btn.disabled = true;
-  const isFollowing = btn.classList.contains('following');
-  const ref = doc(_db, 'follows', user.uid + '_' + BIZ_ID);
-  const bizRef = doc(_db, 'businesses', BIZ_ID);
-  try {
-    if (isFollowing) {
-      await setDoc(ref, { deleted: true, updatedAt: serverTimestamp() }, { merge: true });
-      await updateDoc(bizRef, { followerCount: increment(-1) });
-      _setFollowUI(false);
-      showToast('Unfollowed');
-    } else {
-      await setDoc(ref, {
-        followerUid: user.uid, businessId: BIZ_ID, ts: serverTimestamp()
-      }, { merge: true });
-      await updateDoc(bizRef, { followerCount: increment(1) });
-      _setFollowUI(true);
-      showToast('Now following!');
-    }
-  } catch (e) {
-    showToast('Action failed — try again');
+  if (!user) {
+    /* Preserve the destination so the user lands back HERE after signing in,
+       instead of on the generic home page having lost their intent. */
+    location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+    return;
   }
-  btn.disabled = false;
+  const btn = document.getElementById('bizFollowBtn');
+  if (btn.disabled) return;                       /* rapid double-tap guard */
+
+  const wasFollowing = btn.classList.contains('following');
+  const ref = doc(_db, 'follows', _bizFollowId(user.uid));
+
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  _setFollowUI(!wasFollowing);                    /* optimistic */
+
+  try {
+    if (wasFollowing) {
+      /* A real delete. The old soft-delete ({deleted:true} merge) needed an
+         `update` permission the rule does not grant, so unfollow was denied
+         too — and even had it worked, the doc would still exist, so every
+         other surface would keep reading the user as a follower. */
+      await deleteDoc(ref);
+    } else {
+      try {
+        await setDoc(ref, {
+          uid: user.uid,                          /* canonical field names — */
+          type: BIZ_FOLLOW_TYPE,                  /* profile.html and         */
+          entityId: String(BIZ_ID),               /* sokoni-social.js both    */
+          entityName: (_biz && _biz.name) || '',  /* read these, not          */
+          createdAt: serverTimestamp()            /* followerUid/businessId.  */
+        }, { merge: true });
+      } catch (e) {
+        /* The rule has no `allow update`, so re-writing an EXISTING follow is
+           denied — which is what a stale cross-device button state produces.
+           If the follow is already there, that IS the intended end state.
+           See scripts/test-follow-rules.js. */
+        if (!/permission-denied/i.test(String((e && (e.code || e.message)) || ''))) throw e;
+        const existing = await getDoc(ref).catch(() => null);
+        if (!existing || !existing.exists()) throw e;
+      }
+    }
+    /* businesses/{id}.followerCount is NOT incremented here. Only the owner may
+       write that document, so the increment was denied for every visitor and
+       took the whole follow down with it. Aggregation belongs in a Cloud
+       Function — see CHANGELOG. */
+    showToast(wasFollowing ? 'Unfollowed' : 'Now following!');
+  } catch (e) {
+    _setFollowUI(wasFollowing);                   /* ROLLBACK — nothing persisted */
+    console.warn('[business] follow failed:', (e && (e.code || e.message)) || e);
+    showToast(_bizFollowErr(e));
+  } finally {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+  }
 };
 
 /* ── Share ── */
@@ -1411,15 +1484,17 @@ async function loadAnalytics() {
     .reduce((s, o) => s + (o.total || o.amount || 0), 0);
   const totalOrders  = orders.length;
 
-  /* follower count from business doc */
-  const followerCount = _biz ? (_biz.followerCount || 0) : 0;
+  /* Follower / view counts come from the business doc and may simply not be
+     there yet. An analytics card must not turn "we don't know" into "0" — that
+     reads as a real, measured zero to the merchant. */
+  const _num = (v) => (typeof v === 'number' ? v.toLocaleString() : '—');
 
   /* cards */
   document.getElementById('anlCards').innerHTML = [
-    { label: 'Total Views',       val: (viewData.viewCount || 0).toLocaleString(), icon: '👁️' },
+    { label: 'Total Views',       val: _num(viewData.viewCount),                   icon: '👁️' },
     { label: 'Total Orders',      val: totalOrders.toLocaleString(),               icon: '📦' },
     { label: 'Revenue (Delivered)',val: 'KES ' + totalRevenue.toLocaleString(),    icon: '💰' },
-    { label: 'Followers',         val: followerCount.toLocaleString(),             icon: '👥' },
+    { label: 'Followers',         val: _num(_biz && _biz.followerCount),           icon: '👥' },
   ].map(c => `
     <div class="biz-analytics-card">
       <div style="font-size:28px;margin-bottom:8px;">${c.icon}</div>

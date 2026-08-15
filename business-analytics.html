@@ -392,11 +392,11 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     setTimeout(function(){ t.classList.remove('show'); }, 3000);
   }
 
-  /* ── SEEDED RANDOM ── */
-  function sr(seed){
-    var x = Math.sin(seed + 1) * 10000;
-    return x - Math.floor(x);
-  }
+  /* The sr(seed) seeded pseudo-random generator that used to live here has been
+     REMOVED along with its last caller. It produced stable-looking numbers that
+     survived reloads, which is exactly what made the fabricated sales and revenue
+     figures read as measurements. Do not reintroduce it: a metrics surface has no
+     legitimate use for a random number generator. */
 
   /* ── HEALTH GAUGE (Canvas circular) ── */
   var healthTarget = 0;
@@ -552,97 +552,68 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     document.getElementById('cacTrend').innerHTML = '<span class="trend-down">↓ 12%</span>';
   }
 
-  /* ── TOP PRODUCTS ── */
+  /* ── TOP PRODUCTS ────────────────────────────────────────────────────────
+     This ranked six products by units sold and revenue. BOTH figures came from
+     sr() — the seeded pseudo-random generator below — and when the merchant had
+     no products at all it invented the PRODUCTS too ("Wireless Earbuds Pro",
+     "Leather Handbag", …). A merchant reading "#1 Leather Handbag — Sales 147,
+     Revenue KES 483,000" was reading Math.sin().
+
+     Worse than a wrong number: the ranking is the page's whole point, so the
+     merchant's restocking and promotion decisions keyed off noise.
+
+     Ranking by units sold needs per-product sales totals, which only the orders
+     collection has. Until that aggregate exists, this panel says so.
+     CLAUDE.md: identify the data requirement rather than display a fake number. */
   function renderTopProducts(){
-    var products = [];
-    try{ var r=localStorage.getItem('sellerProducts'); if(r) products=JSON.parse(r); }catch(e){}
-    if(!products.length){
-      products = [
-        {name:'Wireless Earbuds Pro'},{name:'Leather Handbag'},
-        {name:'Running Shoes X2'},{name:'Smart Watch'},
-        {name:'Cotton Dress Set'},{name:'Phone Case Bundle'},
-      ];
-    }
-    var html = '';
-    products.slice(0,6).forEach(function(p,i){
-      var sales = Math.round(sr(i*7+3)*200)+20;
-      var rev = sales * (Math.round(sr(i*3+1)*4000)+300);
-      html += '<div class="prod-card">' +
-        '<div class="prod-rank">#'+(i+1)+'</div>' +
-        '<div class="prod-name">'+escapeHTML(p.name || p.title || 'Product')+'</div>' +
-        '<div class="prod-stat">Sales: <strong>'+sales+'</strong></div>' +
-        '<div class="prod-stat">Revenue: <strong>KES '+rev.toLocaleString('en-KE')+'</strong></div>' +
-        '</div>';
-    });
-    document.getElementById('topProductsGrid').innerHTML = html;
+    document.getElementById('topProductsGrid').innerHTML =
+      '<div style="grid-column:1/-1;padding:26px 18px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));">' +
+        '<div style="font-size:26px;margin-bottom:8px;opacity:.5;">&#128230;</div>' +
+        '<div style="font-weight:800;color:#fff;margin-bottom:6px;">Product ranking not available yet</div>' +
+        '<div style="font-size:12px;line-height:1.6;max-width:420px;margin:0 auto;">' +
+          'Needs per-product units-sold and revenue totals aggregated from delivered orders. ' +
+          'Product records alone cannot say what sold.' +
+        '</div>' +
+      '</div>';
   }
 
-  /* ── B2B PIE ── */
+  /* ── B2B PIE ────────────────────────────────────────────────────────────
+     The 72 / 28 B2C-vs-B2B split was a literal, identical for every merchant on
+     the platform, and the legend beside it printed "72%" / "28%" as static HTML.
+     A donut chart is a strong claim to have measured something; this one had
+     measured nothing. Hidden until order records can be classified B2C vs B2B. */
   function drawB2BChart(){
     var canvas = document.getElementById('b2bChart');
-    var size = 180;
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    canvas.style.width = size+'px';
-    canvas.style.height = size+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var b2c = 72, b2b = 28;
-    var cx = size/2, cy = size/2, r = 76;
-    var start = -Math.PI/2;
-
-    /* B2C slice */
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.arc(cx,cy,r,start,start+(b2c/100)*2*Math.PI);
-    ctx.closePath();
-    ctx.fillStyle = '#71ff00';
-    ctx.fill();
-
-    /* B2B slice */
-    var b2bStart = start + (b2c/100)*2*Math.PI;
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.arc(cx,cy,r,b2bStart,b2bStart+(b2b/100)*2*Math.PI);
-    ctx.closePath();
-    ctx.fillStyle = '#00ccff';
-    ctx.fill();
-
-    /* inner cutout */
-    ctx.beginPath();
-    ctx.arc(cx,cy,48,0,2*Math.PI);
-    ctx.fillStyle = '#111';
-    ctx.fill();
-
-    /* label */
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '11px Segoe UI,system-ui,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Customer', cx, cy-7);
-    ctx.fillText('Split', cx, cy+9);
+    if(canvas){
+      canvas.style.display = 'none';
+      var host = canvas.parentNode;
+      if(host && !host.querySelector('[data-unavailable="b2b"]')){
+        var note = document.createElement('div');
+        note.setAttribute('data-unavailable','b2b');
+        note.style.cssText = 'padding:18px 12px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));font-size:12px;line-height:1.6;';
+        note.innerHTML = '<strong style="color:#fff;display:block;margin-bottom:4px;">Customer split not available yet</strong>' +
+          'Needs orders classified as B2C or B2B.';
+        host.appendChild(note);
+      }
+    }
+    var b2cEl = document.getElementById('b2cPct'), b2bEl = document.getElementById('b2bPct');
+    if(b2cEl) b2cEl.textContent = '—';
+    if(b2bEl) b2bEl.textContent = '—';
   }
 
-  /* ── STAFF TABLE ── */
+  /* ── STAFF TABLE ────────────────────────────────────────────────────────
+     Invented three named employees with order counts, ratings and an
+     Active/Away status. Nothing here came from the staff registry — a merchant
+     with no staff at all still saw "Amara Njoroge · 142 orders · ⭐4.8".
+     Fabricated PEOPLE are worse than fabricated totals: they invite a real
+     management decision about someone who does not exist. */
   function renderStaffTable(){
-    var staff = [
-      { name:'Amara Njoroge', orders:142, rating:4.8, status:'Active' },
-      { name:'Brian Omondi', orders:97,  rating:4.5, status:'Active' },
-      { name:'Ciku Waweru',  orders:64,  rating:4.2, status:'Away'   },
-    ];
-    var html = '';
-    staff.forEach(function(s){
-      var badgeClass = s.status === 'Active' ? 'badge-green' : 'badge-amber';
-      html += '<tr>'+
-        '<td>'+escapeHTML(s.name)+'</td>'+
-        '<td>'+s.orders+'</td>'+
-        '<td>⭐ '+s.rating+'</td>'+
-        '<td><span class="badge '+badgeClass+'">'+escapeHTML(s.status)+'</span></td>'+
-        '</tr>';
-    });
-    document.getElementById('staffTableBody').innerHTML = html;
+    document.getElementById('staffTableBody').innerHTML =
+      '<tr><td colspan="4" style="padding:26px 18px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));">' +
+        '<strong style="color:#fff;">Staff performance not available yet</strong><br>' +
+        '<span style="font-size:12px;">Needs staff records joined to orders attributed to each ' +
+        'staff member (POS operator / fulfilment owner).</span>' +
+      '</td></tr>';
   }
 
   /* ── SUBSCRIPTION STATUS ── */

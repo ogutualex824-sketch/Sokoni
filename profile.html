@@ -4302,45 +4302,81 @@ function loadFollowing(){
         +'<div class="up-follow-avatar">'+icon+'</div>'
         +'<div><div class="up-follow-name">'+escHtml(e.entityName||e.entityId||'Unknown')+'</div>'
         +'<div class="up-follow-type">'+escHtml(label)+'</div></div>'
-        +'<button type="button" class="up-unfollow-btn" onclick="unfollowEntity(event,\''+escHtml(e.entityId||'')+'\')">Unfollow</button>'
+        +'<button type="button" class="up-unfollow-btn" onclick="unfollowEntity(event,\''+escHtml(e.entityId||'')+'\',\''+escHtml(e.type||'store')+'\')">Unfollow</button>'
         +'</a>';
     }).join('');
   }
 
   _render(entries);
 
-  /* Firestore follows */
-  if(window.firebaseDB && _user && _user.uid){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var db = window.firebaseDB;
-      var q = m.query(m.collection(db,'follows'), m.where('followerUid','==',_user.uid), m.limit(50));
-      _profFollowingUnsub = m.onSnapshot(q, function(snap){
-        var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        if(list.length) _render(list);
-      }, function(){});
-    }).catch(function(){});
-  }
+  /* NO Firestore query here — deliberately.
+
+     This used to run
+         query(collection(db,'follows'), where('followerUid','==',uid))
+     which was broken twice over:
+       1. the canonical follow document has no `followerUid` field (it is `uid`),
+          so the filter could never match anything, and
+       2. the deployed rule
+              allow read: if isAuthed() && followId.matches(request.auth.uid + '--.*')
+          grants PER-DOCUMENT reads only. A collection query leaves {followId}
+          unbound, so a list over follows/ is denied outright.
+     Both failures were swallowed by the empty error callback, so the panel looked
+     like it had a live backend and in fact never received a single document.
+
+     The list below therefore renders `sokoniFollowing`, which is now written ONLY
+     after Firestore has ACCEPTED the write (sokoni-social.js _writeFollow), so it
+     reflects confirmed server state rather than optimistic guesses.
+
+     KNOWN LIMITATION: this list is per-device — a follow made on another phone
+     will not appear here. Individual buttons elsewhere DO hydrate cross-device via
+     per-doc get() (_hydrateFollows). Making the whole list cross-device needs a
+     `list` rule on follows/ constrained to the caller's own uid prefix; that is
+     blocked on the 256KB compiled-ruleset ceiling. See CHANGELOG. */
 }
 
-function unfollowEntity(evt, entityId){
+function unfollowEntity(evt, entityId, type){
   evt.preventDefault();
   evt.stopPropagation();
   if(!entityId) return;
-  /* local */
+  type = type || 'store';
+
+  /* Two bugs fixed here.
+
+     1. The local delete used `my[entityId]`, but the canonical cache is keyed
+        `{type}--{entityId}`. So the entry was never removed and the card came
+        straight back on re-render.
+     2. The Firestore delete ran a where() query which, as above, is denied for
+        list operations — so the follow document SURVIVED. The row vanished from
+        this page, then reappeared as soon as _hydrateFollows() re-read the real
+        document. Unfollow simply did not work from the profile.
+
+     The canonical document ID is deterministic, so the correct operation is a
+     single per-doc delete — which the rule DOES allow. */
+  var key = type + '--' + String(entityId);
   var my = {};
   try{ my = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); }catch(e){}
-  delete my[entityId];
-  localStorage.setItem('sokoniFollowing', JSON.stringify(my));
-  /* Firestore */
+
   if(window.firebaseDB && _user && _user.uid){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var db = window.firebaseDB;
-      var q = m.query(m.collection(db,'follows'), m.where('followerUid','==',_user.uid), m.where('entityId','==',entityId));
-      m.getDocs(q).then(function(snap){ snap.forEach(function(d){ m.deleteDoc(d.ref); }); }).catch(function(){});
-    }).catch(function(){});
+      var fid = _user.uid + '--' + type + '--' + String(entityId).replace(/[^a-zA-Z0-9]/g,'_');
+      return m.deleteDoc(m.doc(window.firebaseDB,'follows',fid));
+    }).then(function(){
+      /* Only drop the cache entry once the backend has confirmed the delete. */
+      delete my[key];
+      localStorage.setItem('sokoniFollowing', JSON.stringify(my));
+      upToast('Unfollowed', true);
+      loadFollowing();
+    }).catch(function(e){
+      console.warn('[profile] unfollow failed:', (e && (e.code||e.message)) || e);
+      upToast(/permission-denied/i.test(String(e && (e.code||e.message)))
+        ? "You don't have permission to unfollow this."
+        : 'Could not unfollow — please try again.', false);
+    });
+    return;
   }
-  upToast('Unfollowed', true);
-  loadFollowing();
+
+  /* No backend on this page — do not pretend the unfollow persisted. */
+  upToast('You appear to be offline — that was not saved.', false);
 }
 
 /* ══════════════════════════════════════════════════════════════
