@@ -114,27 +114,71 @@ So `pushStock` is **redundant, not load-bearing**. `pos-v2.html` does not call i
 > Offline is reported as `deferred`; canonical reconcile is the recovery path. If a replay
 > queue is ever wanted, it needs a deterministic key first — that is not this change.
 
-### 2. Inventory anti-drift gate  ← **NEXT** (now unblocked)
+### 2. Inventory anti-drift gate  ✅ **DONE**
 
-- [ ] Match `updateDoc` / `setDoc` calls targeting `products/{id}` — **not** bare
-      `stock:` object keys
-- [ ] Distinguish legitimate product create/update payloads (`_trimPayload` is one)
-- [ ] Mutation-prove by restoring the `pushStock` absolute write **and** its queue
+`scripts/gate-inventory-writers.js` + `scripts/test-gate-inventory-writers.js`
+(**PASS 39 / FAIL 0**). Wired into `firebase.json` hosting predeploy and `ci-gates.sh`.
+It is a pure static scan — no emulator, unlike `gate-inventory.js` — so it runs
+unconditionally rather than being scoped to changed paths.
 
-> A first attempt at this grepped `stock:` keys and flagged **14 files**, nearly all
-> false positives. It was reverted, not shipped. Write it *after* the fix.
+- [x] Match `updateDoc` / `setDoc` calls targeting `products/{id}` — **not** bare
+      `stock:` keys. Structural: it locates a write CALL, resolves the TARGET to a
+      collection, resolves the PAYLOAD, and only then asks whether an authority field
+      (`stock` · `sold` · `inventoryVersion` · `stockQty`) is written. An error message
+      containing the word cannot match — proven against the real
+      `functions/inventory-engine.js` text that produced the original false positive.
+- [x] Distinguish legitimate product create/update payloads — a `{name, price, images}`
+      create carries no authority field and is invisible to the gate.
+- [x] Mutation-prove by restoring the `pushStock` absolute write **and** its queue.
+      Both retired forms are reconstructed and detected, plus the `seller-wiring`
+      increment form and `SokoniDB.updateProductStock`. A *renamed* replay queue is
+      caught at its write site, which is the only place a queue can do harm.
 
-**Step 1B leaves two pieces to reuse rather than reinvent** — see
-`scripts/test-pos-canonical-stock.js`:
+**Corrections to this item as written.** Two of its assumptions were wrong:
 
-- the **negative-control pattern**: the retired source is replayed through every detector
-  and each must fire, so a rule that matches nothing fails loudly instead of reading green;
-- the **mutation harness**: `pushStock`'s absolute write is already reconstructed there
-  (proof M2, `7 → 9`), which is exactly the mutation this gate has to catch repo-wide.
+- *"the three legitimate server writers"* — there are **eight server files, 14 write
+  sites**. The "three" came from my own earlier `sold:` grep and was never verified.
+  The register is now **derived** (`--derive` mode), not assumed.
+- The gate keys on **file + site count**, not function name. Name attribution was wrong
+  on 8 of 15 sites because the writes sit inside anonymous `runTransaction` callbacks,
+  and a key that breaks under refactoring makes the gate fail for the wrong reason.
 
-The gate must also allow the three writers that are *legitimate*: the canonical server
-paths (`functions/pos-marketplace-sync.js`, `functions/pos-zero-friction.js`,
-`functions/index.js`) and the single client writer `_posSyncCanonicalStock`.
+**A blind spot the gate found in itself.** The first matcher understood only
+`collection('products').doc(id)`. `warehouse-scanner.html:818` writes canonical stock
+through ``db.doc(`products/${product.id}`)`` — a path-form template literal — and was
+invisible. Fixing that surfaced two more client writers. Path and concatenated forms are
+now covered and regression-tested.
+
+**Declared blind spots** (a gate that cannot see a construct cannot certify its absence,
+so these fail as REVIEW rather than passing quietly): a runtime-built collection name;
+a write reaching Firestore through an un-registered helper wrapper; and source-only
+analysis, which cannot distinguish a reachable writer from dead code.
+
+### 2b. Quarantined client-side writers — **3 files, 5 sites, OPEN**
+
+The gate found genuine third-party writers. They are recorded in `QUARANTINE`, which is
+**not** an allow-list: the count may only fall, and the gate prints *"QUARANTINE is not a
+pass"* on every run. None of these is fixed.
+
+| file | sites | what it does |
+|---|---|---|
+| `sokoni-wap-definitions.js` | 2 | `wap.register('inventory.reserve'/'inventory.release')` writes canonical `products/{id}.stock` **from the browser** |
+| `warehouse-scanner.html` | 2 | cycle count + adjustment write an **absolute** `stockQty`, computed client-side |
+| `pos-boss.js` | 1 | `marketplace.pushProducts` publishes an absolute `stockQty` from local POS state |
+
+> **`sokoni-wap-definitions.js` is the significant one.** It duplicates
+> `_svcInventoryReserve` / `_svcInventoryRelease` in `functions/wap.js:759-760` — the same
+> operation implemented on both sides of the trust boundary, which is the pushStock defect
+> class exactly. It is *not* the pushStock overwrite bug: the write is transactional and
+> guarded against going negative. But it bumps **no `inventoryVersion`**, so every
+> `onSnapshot` listener and the `indexProductUpdate` movement trail miss the change.
+> Reachability **measured, not assumed**: loaded by `wap.html`, precached by
+> `service-worker.js`.
+
+**Field divergence, noted not fixed.** `functions/pos-retail.js` and
+`functions/pos-retail-engine.js` mirror sales to `soldCount`, while `functions/index.js`,
+`pos-marketplace-sync.js`, `pos-zero-friction.js` and now `pos.js` use `sold`. Analytics
+reconciliation reads one of them. This is a convergence item, not a Step 1B/P0-2 item.
 
 ### 3. Live checkout P0 — fixed in candidate, **still live on production**
 
@@ -212,6 +256,24 @@ Step 1B. Correct the wording when that sweep passes.
 
 **Status after Step 1B.** The counterexample is now removed, so the pair of commits earns
 *the buyer checkout path and the POS terminal each have exactly one canonical inventory
-writer* — two named paths, verified. It still does **not** earn the unqualified
-platform-wide sentence: nothing yet proves no *third* writer exists elsewhere in the repo.
-That remains P0-2's to prove, and the wording stays scoped until it does.
+writer* — two named paths, verified.
+
+**Status after P0-2 — and this is the part not to get wrong.** The gate does **not**
+promote that to the platform-wide sentence. It answers a narrower question:
+
+> *can a retired client-side inventory writer reappear without the repository gate
+> detecting it, while legitimate server writers remain allowed?* — **No.**
+
+That is a statement about **future drift**, enforced going forward. It is not a statement
+that only one writer exists today. In fact the gate proved the opposite: it found **three
+client-side writers across five sites** (§2b), all still open. The honest wording is now:
+
+> Canonical `products/{id}` stock has one sanctioned writer per path — server-side
+> Cloud Functions, and `_posSyncCanonicalStock` on the client — plus **five quarantined
+> client-side writes that are known defects**, and a gate that prevents a sixth.
+
+The unqualified *"the platform has exactly one inventory writer"* still requires the
+repo-wide **writer inventory**, and the gate's own declared blind spots are precisely why
+it cannot substitute for one: a runtime-built collection name, a write behind an
+unregistered helper, and dead-vs-reachable code are all invisible to source analysis.
+Retire the overclaim only when the quarantine reaches zero *and* the inventory is complete.

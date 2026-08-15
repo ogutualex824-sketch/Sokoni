@@ -1,3 +1,102 @@
+## [2026-08-15] — Anti-drift gate for canonical inventory authority (P0-2)
+
+**Files:** `scripts/gate-inventory-writers.js` (new),
+`scripts/test-gate-inventory-writers.js` (new), `firebase.json`, `scripts/ci-gates.sh`,
+`docs/LAUNCH_TODO.md`. No runtime, server, rules or payment changes — this adds a gate and
+changes no product behaviour.
+
+### What it does
+
+Two client-side inventory writers have already been retired (`0e13db2` seller-wiring,
+`6daec0b` `PosOmni.pushStock`). Nothing stopped a third. This gate makes a resurrection
+fail the build: no write to canonical `products/{id}` touching an authority field
+(`stock` · `sold` · `inventoryVersion` · `stockQty`) may exist outside a derived register.
+
+It is **structural, not textual** — which is what the first attempt got wrong. That
+attempt grepped bare `stock:` keys, flagged 14 files, was nearly all false positives, and
+was reverted rather than shipped. This one locates a write **call**, resolves its
+**target** to a collection, resolves its **payload**, and only then asks whether an
+authority field is written. `functions/inventory-engine.js`'s *"Insufficient stock: …"*
+error message — the original false positive — is now a regression test.
+
+It is a pure static scan with no emulator dependency, so unlike `gate-inventory.js` it
+runs unconditionally in the hosting predeploy chain rather than being scoped to changed
+paths.
+
+### The register is derived, not assumed
+
+The previous note in `docs/LAUNCH_TODO.md` claimed **three** legitimate server writers.
+That number came from an earlier `sold:` grep and was never verified. The real figure is
+**eight server files across 14 write sites**. `--derive` mode prints every hit so the
+register is built from the tree rather than from memory.
+
+Three tiers, deliberately kept apart:
+
+* **SERVER** (8 files / 14 sites) — canonical by architecture. Listing one records that it
+  exists; it does not audit it.
+* **CLIENT** (1 site) — `_posSyncCanonicalStock`, the single sanctioned client writer.
+* **QUARANTINE** (3 files / 5 sites) — client-side writers that are **known defects, not
+  yet fixed**. Listing one is not permission. The count may only fall, and the gate prints
+  *"QUARANTINE is not a pass"* on every run.
+
+Keyed on **file + site count**, not function name: name attribution was wrong on 8 of 15
+sites because the writes sit inside anonymous `runTransaction` callbacks, and a key that
+breaks under refactoring makes a gate fail for the wrong reason.
+
+### What the gate found
+
+A blind spot in itself, first. The initial matcher understood only
+`collection('products').doc(id)`, so ``db.doc(`products/${product.id}`)`` at
+`warehouse-scanner.html:818` was invisible. Fixing the path form surfaced two more client
+writers — a reminder that a detector's silence is only as good as its coverage.
+
+Three client-side writers, now quarantined and **open**:
+
+| file | sites | what it does |
+|---|---|---|
+| `sokoni-wap-definitions.js` | 2 | `inventory.reserve` / `inventory.release` write canonical stock **from the browser** |
+| `warehouse-scanner.html` | 2 | cycle count + adjustment write an absolute `stockQty` |
+| `pos-boss.js` | 1 | `pushProducts` publishes an absolute `stockQty` from local POS state |
+
+`sokoni-wap-definitions.js` is the significant one: it duplicates `_svcInventoryReserve` /
+`_svcInventoryRelease` in `functions/wap.js:759-760` — the same operation implemented on
+both sides of the trust boundary, the pushStock defect class exactly. It is *not* the
+pushStock overwrite bug (the write is transactional and guarded against going negative),
+but it bumps **no `inventoryVersion`**, so every listener and the `indexProductUpdate`
+movement trail miss the change. Reachability was **measured**: loaded by `wap.html`,
+precached by `service-worker.js`.
+
+Also noted, not fixed: `functions/pos-retail.js` and `pos-retail-engine.js` mirror sales to
+`soldCount` while `index.js`, `pos-marketplace-sync.js`, `pos-zero-friction.js` and `pos.js`
+use `sold`. A convergence item.
+
+### Evidence
+
+`scripts/test-gate-inventory-writers.js` — **PASS 39 / FAIL 0**. The gate is required as a
+module and fed synthetic sources; nothing is written into the repository, because another
+process writes this repo and a test that drops a decoy file can leave debris.
+
+* **Resurrection** — both retired `pushStock` forms, the `seller-wiring` increment form and
+  `SokoniDB.updateProductStock` are reconstructed and detected. A *renamed* replay queue is
+  caught at its write site, the only place a queue can do harm.
+* **False positives** — the constructs that sank the first attempt stay silent: an error
+  message naming stock, a comment describing the retired write, a `{name, price}` create
+  payload, `posProducts`, a tenant-scoped `col()` helper, and a plain read.
+* **Evasion** — path and concatenated `products/` forms, `batch.update`, admin
+  `ref.update`, and a payload behind one level of indirection are all detected.
+* **Declared blind spot** — a runtime-built collection name is reported as REVIEW and
+  **fails** the gate. Unresolved is never a pass.
+
+### Scope of the claim — unchanged
+
+This gate governs **future drift**. It does not establish *"the platform has exactly one
+inventory writer"*; it proved the opposite by finding five open client-side writes. That
+sentence still needs the repo-wide writer inventory, and the gate's declared blind spots
+are exactly why it cannot substitute for one. See the *Correction owed* section of
+`docs/LAUNCH_TODO.md`.
+
+---
+
 ## [2026-08-15] — The POS terminal has exactly one canonical inventory writer
 
 **Synchronisation fix #4 (Step 1B).** Files: `pos.js`, `pos-omni.js`, `pos-modules.js`,

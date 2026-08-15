@@ -33,6 +33,13 @@ echo "SOKONI CI GATES"
 run "Financial safety audit (static)"      node scripts/audit-financial-safety.js --ci
 run "Financial idempotency suite (25)"     node scripts/test-financial-idempotency.js
 
+# ── INVENTORY AUTHORITY ────────────────────────────────────────────────────
+# Anti-drift: no canonical products/{id} stock write outside the register.
+# Its own suite runs first — a detector nobody has tried to evade is untested.
+run "Inventory anti-drift gate (self-test)" node scripts/test-gate-inventory-writers.js
+run "Inventory writer register"             node scripts/gate-inventory-writers.js
+run "POS canonical stock writer (55)"       node scripts/test-pos-canonical-stock.js
+
 # ── PLATFORM ───────────────────────────────────────────────────────────────
 run "Legal compliance suite (29)"          node scripts/test-legal-compliance.js
 run "Architecture invariants"              node scripts/verify-architecture.js
