@@ -383,7 +383,49 @@ function renderProducts(list){
                          handler (checkout with just this item). */
                       + '<button type="button" ' + dis + ' aria-label="Buy ' + _esc(p.name) + ' now" '
                       +   'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')" '
-                      +   'style="' + btn + 'width:100%;margin-top:6px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050505;border:none;">⚡ Buy Now</button>';
+                      +   'style="' + btn + 'width:100%;margin-top:6px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050505;border:none;">⚡ Buy Now</button>'
+
+                      /* ── MOBILE ACTION STRIP ──────────────────────────────────
+                         Everything above is the DESKTOP row, and compact-grid.css
+                         carries `@media (max-width:600px) .pcard-actions{display:none
+                         !important}` — the mobile grid is two 120px columns, which a
+                         three-button desktop row cannot fit.
+
+                         So on a phone this page rendered add-to-cart controls that
+                         were display:none. All 50 buttons measured 0x0 and the Shop
+                         page had NO way to add to cart at all below 600px. That is
+                         the whole of the reported "Add to Cart is unresponsive":
+                         not a dead handler, not an overlay stealing the click — no
+                         clickable box existed.
+
+                         compact-grid.css already ships the designed replacement
+                         (.pcard-mobile-strip + .pcard-m-wish/-cart/-buy, 40px round
+                         tap targets) and styles it globally, not scoped to the
+                         homepage grid — with `.pcard-mobile-strip{display:none}` at
+                         top level, so exactly one of the two rows is visible at any
+                         width. The homepage renders it; this page never did, because
+                         ab6e2fa added the desktop row without a mobile counterpart.
+
+                         Rendering the SAME canonical markup here therefore fixes the
+                         page with no new CSS, and the buttons call the SAME
+                         addToCart / addToWishlistCat / buyNowCat handlers the
+                         desktop row uses — no second cart implementation, no
+                         duplicated delegated-handler logic. Exactly one of the two
+                         rows is ever visible, so a tap can only ever fire once. */
+                      + '<div class="pcard-mobile-strip" data-stop-prop="1">'
+                      +   '<div class="pcard-m-btns">'
+                      +     '<button type="button" class="pcard-m-wish" ' + dis + ' '
+                      +       'data-wish-pid="' + _esc(pid) + '" '
+                      +       'aria-label="Save ' + _esc(p.name) + ' to wishlist" '
+                      +       'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')">❤</button>'
+                      +     '<button type="button" class="pcard-m-cart" ' + dis + ' '
+                      +       'aria-label="Add ' + _esc(p.name) + ' to cart" '
+                      +       'onclick="event.stopPropagation();addToCart(\'' + pid + '\')">🛒</button>'
+                      +     '<button type="button" class="pcard-m-buy" ' + dis + ' '
+                      +       'aria-label="Buy ' + _esc(p.name) + ' now" '
+                      +       'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')">⚡ Buy</button>'
+                      +   '</div>'
+                      + '</div>';
                 })()}
             </div>
         </div>
