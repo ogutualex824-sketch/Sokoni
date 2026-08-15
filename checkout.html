@@ -2099,12 +2099,53 @@ async function _placeOrderCore(){
 
         const _buyerName = document.getElementById('coName')?.value?.trim() || '';
         const _buyerAddr = document.getElementById('coAddress')?.value?.trim() || '';
+
+        /* SERVER-AUTHORITATIVE AMOUNT (B1).
+           The amount below used to be `orderTotal`, computed in this browser, and
+           the server accepted it — so a crafted client could pay under catalogue
+           price while the webhook still decremented stock.
+
+           createPaymentIntent now derives the amount from the catalogue, the
+           merchant's deliveryConfig and the shared delivery engine, and mints the
+           intent AT the deterministic order id, so paymentRef === orderId and the
+           existing payments/{ref} ↔ orders/{ref} linkage is unchanged. A retry
+           replays the same intent rather than minting a second identity.
+
+           `_authTotal` is what the buyer is charged. `orderTotal` stays only for
+           display and for the mismatch check below. */
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Confirming price…');
+        const { getFunctions: _gf, httpsCallable: _hc } =
+          await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+        const _mkIntent = _hc(_gf(undefined, 'us-central1'), 'createPaymentIntent');
+        const _intentRes = await _mkIntent({
+          purpose:         'product_order',
+          orderId:         _ordId,
+          items:           _items,
+          sellerUid:       _sUid,
+          fulfillmentType: fulfillmentType,
+          phone:           phone,
+        });
+        const _intent = (_intentRes && _intentRes.data) || {};
+        const _authTotal = Number(_intent.amount);
+        if (!(_authTotal > 0)) throw new Error('Could not confirm the order total. Please try again.');
+
+        /* A divergence is the server correcting the browser, not an error to hide.
+           Telling the buyer keeps the amount they approve equal to the amount they
+           are charged — silently substituting a higher figure would charge a total
+           they never saw. */
+        if (Math.round(Number(orderTotal)) !== Math.round(_authTotal)) {
+          console.warn('[checkout] client/server total differ — using server figure',
+            { client: orderTotal, server: _authTotal });
+          if (window._skToast) window._skToast('Updated total: KES ' + _authTotal.toLocaleString());
+        }
+
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Sending M-PESA prompt…');
         /* Seller + order linkage ride in meta so the webhook credits the right
            seller (meta.sellerUid, since the buyer is the caller) and creates/finalises
            the right order (meta.orderId + meta.items + buyer name/address). */
-        await window.SokoniIntaSend.initiateSTKPush(phone, orderTotal, _ordId, {
+        await window.SokoniIntaSend.initiateSTKPush(phone, _authTotal, _ordId, {
           category:    'product',
+          intentRef:   _ordId,   /* === orderId; lets the webhook resolve the intent without the id-fallback */
           orderId:     _ordId,
           sellerUid:   _sUid,
           sellerName:  _sName,
@@ -2117,7 +2158,7 @@ async function _placeOrderCore(){
         });
 
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('waiting', 'M-PESA prompt sent — enter your PIN on your phone…');
-        await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: orderTotal, phone }, (status) => {
+        await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: _authTotal, phone }, (status) => {
           if (window._checkoutSetTrustStatus && status === 'PENDING') {
             _checkoutSetTrustStatus('waiting', 'Waiting for M-PESA confirmation…');
           }

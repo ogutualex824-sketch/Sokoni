@@ -117,13 +117,29 @@ console.log('\nPayment integrity — the money path\n');
        legacy   — saveAndRedirect(receipt.mpesaCode, 'mpesa', _ordId, …)
        IntaSend — _ordId is the initiateSTKPush ref AND the pre-created order id AND
                   the id passed to saveAndRedirect, binding order ↔ payment. */
+  /* The amount argument is deliberately NOT pinned to a variable name here. It
+     was `orderTotal`; B1 changed it to `_authTotal`, the server-derived figure
+     from createPaymentIntent, and matching the old name made this assertion fail
+     on an improvement. What matters is that `_ordId` is the ref binding order to
+     money — asserted here, with the amount's provenance checked separately. */
   const _mpesaOrderIdBound =
     /saveAndRedirect\(\s*receipt\.mpesaCode[^\n]*_ordId/.test(code) ||
-    (/initiateSTKPush\(\s*phone\s*,\s*orderTotal\s*,\s*_ordId\b/.test(code) &&
+    (/initiateSTKPush\(\s*phone\s*,\s*[A-Za-z_$][\w$]*\s*,\s*_ordId\b/.test(code) &&
      /saveAndRedirect\([^\n]*\b_ordId\b/.test(code));
   _mpesaOrderIdBound
     ? ok('the M-Pesa order uses the payment-bound orderId (no client-side order-ID forgery)')
     : bad('the M-Pesa path no longer passes the server orderId — client could forge an order id');
+
+  /* B1 — the charged amount must originate on the server, not in this browser.
+     A crafted client could otherwise pay below catalogue price while the webhook
+     still decremented stock. */
+  const _amountServerAuthoritative =
+    /purpose:\s*'product_order'/.test(code) &&
+    /initiateSTKPush\(\s*phone\s*,\s*_authTotal\s*,/.test(code) &&
+    !/initiateSTKPush\(\s*phone\s*,\s*orderTotal\s*,/.test(code);
+  _amountServerAuthoritative
+    ? ok('the charged amount comes from createPaymentIntent, not from the browser (B1)')
+    : bad('product checkout charges a client-computed amount — a buyer could underpay while stock decrements');
 }
 
 /* ── 5. An order is only "paid" when a PROVIDER said so ──────────────────────

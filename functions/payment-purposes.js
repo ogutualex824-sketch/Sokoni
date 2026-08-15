@@ -20,7 +20,7 @@
  * Related: functions/entitlement-engine.js · functions/entitlement-adapters.js
  */
 
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldPath } = require('firebase-admin/firestore');
 const { HttpsError }   = require('firebase-functions/v2/https');
 
 const db = () => getFirestore();
@@ -166,6 +166,146 @@ const PURPOSES = {
      Replaces the localStorage grant. The tier price is read from the hub
      catalogue so a merchant cannot register for an Enterprise hub at the
      Starter price by editing a request. */
+  /* MARKETPLACE PRODUCT ORDER — the B1 fix.
+     `initiateSTKPush` accepted a client-computed `orderTotal` for category
+     'product', so a crafted client could pay below catalogue price while the
+     webhook still decremented stock. This pricer makes the amount originate on
+     the server.
+
+     It deliberately REUSES the authorities that already exist rather than
+     inventing a parallel one — availability-enforce for shop/product gating, the
+     catalogue for price, and shared/delivery-engine for the fee. A second
+     implementation of "what does this cost" is how the two would drift, which is
+     the same class of defect as the subscription plan-field divergence.
+
+     `data.amount` / `orderTotal` are IGNORED. Nothing here reads a price from
+     the request; that is the registry's contract. */
+  product_order: {
+    resourceType: 'order',
+    async price(uid, data) {
+      const orderId = String(data.orderId || '').trim();
+      if (!orderId) fail('invalid-argument', 'orderId required.');
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (!items.length) fail('invalid-argument', 'Cart is empty.');
+      if (items.length > 100) fail('invalid-argument', 'Too many line items.');
+
+      const ids = [...new Set(items
+        .map((i) => String((i && (i.productId || i.id)) || '').trim())
+        .filter(Boolean))];
+      if (!ids.length) fail('invalid-argument', 'No valid products in cart.');
+
+      /* Catalogue read. Firestore caps documentId() `in` queries, so chunk. */
+      const prods = {};
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10);
+        const snap = await db().collection('products')
+          .where(FieldPath.documentId(), 'in', chunk).get();
+        snap.forEach((d) => { prods[d.id] = d.data() || {}; });
+      }
+
+      /* Shop state for availability — fail OPEN on read error, matching
+         createCheckoutSession: availability is a merchant convenience, not a
+         security control, and the PRICE is what this function protects. */
+      const sellerUids = [...new Set(Object.values(prods)
+        .map((p) => p.sellerUid).filter(Boolean))];
+      const shopState = {};
+      try {
+        for (let i = 0; i < sellerUids.length; i += 10) {
+          const chunk = sellerUids.slice(i, i + 10);
+          const snap = await db().collection('shopState')
+            .where(FieldPath.documentId(), 'in', chunk).get();
+          snap.forEach((d) => { shopState[d.id] = d.data() || {}; });
+        }
+      } catch (_) { /* default open */ }
+
+      const avail = require('./availability-enforce');
+      const lines = [];
+      let subtotal = 0;
+
+      for (const raw of items) {
+        const pid = String((raw && (raw.productId || raw.id)) || '').trim();
+        const prod = prods[pid];
+        /* An item missing from the catalogue is REJECTED, not skipped.
+           createCheckoutSession skips (it is building a session the buyer will
+           still confirm); here the buyer is about to be charged, so silently
+           dropping a line would charge a total for a different cart than the one
+           they saw. */
+        if (!prod) fail('failed-precondition', `Product ${pid} is no longer available.`);
+        if (!avail.itemAvailability(prod, shopState[prod.sellerUid]).available)
+          fail('failed-precondition', `${prod.name || pid} is not currently available.`);
+
+        const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
+        if (prod.outOfStock === true || (stockQty !== null && stockQty <= 0))
+          fail('failed-precondition', `${prod.name || pid} is out of stock.`);
+
+        const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
+        if (stockQty !== null && qty > stockQty)
+          fail('failed-precondition',
+            `Only ${stockQty} of ${prod.name || pid} remain. Please update your cart.`);
+
+        const unitPrice = Number(prod.salePrice || prod.price || 0);
+        if (!(unitPrice > 0)) fail('failed-precondition', `${prod.name || pid} has no price.`);
+
+        subtotal += unitPrice * qty;
+        lines.push({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null });
+      }
+
+      /* One seller per order — the webhook credits a single seller wallet. */
+      const orderSellers = [...new Set(lines.map((l) => l.sellerUid).filter(Boolean))];
+      if (orderSellers.length > 1)
+        fail('failed-precondition', 'Cart spans multiple sellers; check out one shop at a time.');
+      const sellerUid = orderSellers[0] || String(data.sellerUid || '') || null;
+
+      /* DELIVERY — server-recomputed from the merchant's own config through the
+         same engine the client uses, so the two cannot drift. Where a merchant
+         has no deliveryConfig the server has nothing to recompute from; charge
+         zero rather than trusting a client figure. That is stricter than
+         darajaSTKPush's legacy clamp, and deliberately so: this path is new, so
+         there is no existing behaviour to preserve. */
+      let deliveryFee = 0;
+      let deliverySource = 'none';
+      const wantsDelivery = String(data.fulfillmentType || '').toLowerCase() === 'delivery';
+
+      if (wantsDelivery && sellerUid) {
+        const sSnap = await db().collection('sellers').doc(sellerUid).get().catch(() => null);
+        const cfg = sSnap && sSnap.exists ? sSnap.data().deliveryConfig : null;
+        if (cfg && cfg.enabled !== undefined) {
+          const calc = require('./shared/delivery-engine.js').calculateDelivery(cfg, {
+            subtotal, distanceKm: data.distanceKm, zone: data.deliveryZone,
+          });
+          if (calc.deliverable === false)
+            fail('failed-precondition', calc.reason || 'This address cannot be delivered to.');
+          deliveryFee = Math.round(Number(calc.fee) || 0);
+          deliverySource = 'delivery-engine';
+        } else {
+          deliverySource = 'unconfigured';
+        }
+      }
+
+      const total = Math.round(subtotal + deliveryFee);
+      if (!(total > 0)) fail('failed-precondition', 'Order has no payable amount.');
+
+      return {
+        amountCents: Math.round(total * 100),
+        currency: 'KES',
+        resourceType: 'order',
+        resourceId: orderId,
+        /* The intent is minted AT the order id so paymentRef === orderId and the
+           existing payments/{ref} ↔ orders/{ref} linkage — and the deterministic
+           retry identity that depends on it — survive unchanged. */
+        preferredRef: orderId,
+        metadata: {
+          orderId, sellerUid,
+          subtotal, deliveryFee, deliverySource,
+          itemCount: lines.length,
+          items: lines,
+          pricingSource: 'server_recomputed',
+        },
+      };
+    },
+  },
+
   hub_registration: {
     resourceType: 'hubApplication',
     async price(uid, data) {
