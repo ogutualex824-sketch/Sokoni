@@ -1504,14 +1504,9 @@ service cloud.firestore {
   && resource != null
   && request.resource.data.total <= resource.data.total);
   }
-  match /verifications/{sellerUid} {
-  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
-  allow create: if isAuthed()
-  && request.auth.uid == sellerUid
-  && request.resource.data.status == 'pending'
-  && !request.resource.data.keys().hasAny(['verifiedAt','approvedBy']);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  match /verifications/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
   }
   match /homeServiceBookings/{bookingId} {
   allow read:   if isAdmin()
@@ -1656,13 +1651,23 @@ service cloud.firestore {
   || (isAuthed() && resource.data.ownerUid == request.auth.uid);
   }
   match /verificationRequests/{reqId} {
-  allow create: if isAuthed()
-  && request.resource.data.applicantUid == request.auth.uid
-  && request.resource.data.status == 'pending';
-  allow read:   if isAdmin()
+  allow read:  if isAdmin()
   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
+  allow write: if false;
+  }
+  match /userDocuments/{uid} {
+  allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow write: if false;
+  match /docs/{docId} {
+  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+  allow create: if isAuthed() && request.auth.uid == uid
+  && !request.resource.data.keys()
+  .hasAny(['isVerified','verifiedAt','verifiedBy']);
+  allow update, delete: if isAdmin()
+  || (isAuthed() && request.auth.uid == uid
+  && !request.resource.data.diff(resource.data).affectedKeys()
+  .hasAny(['isVerified','verifiedAt','verifiedBy']));
+  }
   }
   match /adminLog/{logId} {
   allow create: if isAdmin();

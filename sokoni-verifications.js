@@ -41,15 +41,22 @@ const SokoniVerifications = (function () {
   const CACHE_KEY = 'skVerif_';
   const TTL = 10 * 60 * 1000;
 
+  /* The 10 canonical facets — keys match functions/verification-vocabulary.js
+     exactly. This is a LABEL map only: the display string lives here and never in
+     Firestore, which is what let three incompatible vocabularies drift apart
+     before. `seller` and `premium` are gone: a seller's business standing is the
+     `business` facet, and premium membership was never a verification. */
   const TYPE_CFG = {
-    seller:         { label: 'Verified Seller',     icon: '✅', color: '#71ff00', bg: 'rgba(113,255,0,0.1)',  border: 'rgba(113,255,0,0.25)' },
-    business:       { label: 'Verified Business',   icon: '🏢', color: '#00d4ff', bg: 'rgba(0,212,255,0.1)',  border: 'rgba(0,212,255,0.25)' },
-    professional:   { label: 'Professional',        icon: '🎓', color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.25)' },
-    driver:         { label: 'Verified Driver',     icon: '🛵', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)' },
-    doctor:         { label: 'Licensed Doctor',     icon: '🩺', color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)' },
-    lawyer:         { label: 'Licensed Lawyer',     icon: '⚖️', color: '#818cf8', bg: 'rgba(129,140,248,0.1)',border: 'rgba(129,140,248,0.25)' },
-    property_agent: { label: 'Licensed Agent',      icon: '🏠', color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.25)' },
-    premium:        { label: 'Premium Member',      icon: '👑', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)' },
+    doctor:         { label: 'Licensed Doctor',      icon: '🩺', color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)' },
+    lawyer:         { label: 'Licensed Lawyer',      icon: '⚖️', color: '#818cf8', bg: 'rgba(129,140,248,0.1)',border: 'rgba(129,140,248,0.25)' },
+    property_agent: { label: 'Licensed Agent',       icon: '🏠', color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.25)' },
+    driver:         { label: 'Verified Driver',      icon: '🛵', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)' },
+    business:       { label: 'Verified Business',    icon: '🏢', color: '#00d4ff', bg: 'rgba(0,212,255,0.1)',  border: 'rgba(0,212,255,0.25)' },
+    professional:   { label: 'Verified Professional',icon: '🎓', color: '#a855f7', bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.25)' },
+    kra:            { label: 'KRA Verified',         icon: '🧾', color: '#22d3ee', bg: 'rgba(34,211,238,0.1)', border: 'rgba(34,211,238,0.25)' },
+    identity:       { label: 'Identity Verified',    icon: '✅', color: '#71ff00', bg: 'rgba(113,255,0,0.1)',  border: 'rgba(113,255,0,0.25)' },
+    address:        { label: 'Address Verified',     icon: '📍', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)',border: 'rgba(148,163,184,0.25)' },
+    bank:           { label: 'Payment Verified',     icon: '🏦', color: '#34d399', bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.25)' },
   };
 
   /* ── Firestore lazy-loader ── */
@@ -96,21 +103,25 @@ const SokoniVerifications = (function () {
     const cached = _cacheGet(uid);
     if (cached !== null) return cached;
 
+    /* Reads the PUBLIC projection, not Firestore.
+       `verifications/{uid}` is owner-or-admin read (and now CF-write only), so the
+       old direct getDoc returned PERMISSION_DENIED for every visitor looking at
+       somebody else — swallowed by the catch below, which is why no badge ever
+       appeared. /profile/{uid} is the one public projection, edge-cached, and it
+       exposes badge NAMES without the underlying documents. */
     try {
-      const [{ doc, getDoc }, db] = await Promise.all([
-        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
-        _getDB(),
-      ]);
-      const snap = await getDoc(doc(db, 'verifications', uid));
-      if (!snap.exists()) { _cacheSet(uid, null); return null; }
-      const data = snap.data();
-      if (data.status !== 'approved') { _cacheSet(uid, null); return null; }
+      const res = await fetch('/profile/' + encodeURIComponent(uid) + '?format=json',
+                              { credentials: 'omit' });
+      if (!res.ok) { _cacheSet(uid, null); return null; }
+      const p = await res.json();
+      if (!p || !p.found || !Array.isArray(p.verifiedTypes) || !p.verifiedTypes.length) {
+        _cacheSet(uid, null);
+        return null;
+      }
       const result = {
         uid,
-        type:       data.type || 'seller',
-        status:     data.status,
-        verifiedAt: data.verifiedAt?.toDate?.() || null,
-        level:      data.level || 'standard',
+        facets:  p.verifiedTypes,                      /* ALL active facets */
+        primary: p.primaryBadge || p.verifiedTypes[0], /* for single-badge surfaces */
       };
       _cacheSet(uid, result);
       return result;
@@ -128,7 +139,12 @@ const SokoniVerifications = (function () {
 
   function _badgeHTML(v, opts) {
     opts = opts || {};
-    const cfg = TYPE_CFG[v.type] || TYPE_CFG.seller;
+    /* Single-badge surface: precedence already resolved server-side into
+       `primary`. An unknown facet renders nothing rather than silently
+       mislabelling — the old `|| TYPE_CFG.seller` fallback is what would have
+       shown every doctor and lawyer as a "Verified Seller". */
+    const cfg = TYPE_CFG[v.primary];
+    if (!cfg) return '';
     const size = opts.size || 'sm'; /* sm | md | lg */
     const sizes = {
       sm: { font: '9px',  pad: '2px 7px',  gap: '4px', iconSize: '10px' },
@@ -199,21 +215,11 @@ const SokoniVerifications = (function () {
     }
   }
 
-  /* ── Admin: submit a verification request ── */
-  async function submitRequest(uid, type, docs) {
-    if (!uid || !type) throw new Error('uid and type are required');
-    const [{ doc, setDoc, serverTimestamp }, db] = await Promise.all([
-      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
-      _getDB(),
-    ]);
-    await setDoc(doc(db, 'verifications', uid), {
-      uid,
-      type,
-      status: 'pending',
-      submittedAt: serverTimestamp(),
-      docs: docs || [],
-    }, { merge: true });
-  }
+  /* submitRequest() removed. It wrote straight to `verifications/{uid}` — the
+     CANONICAL STATE collection — bypassing the request log entirely, and did so
+     from the client. Applications now go through the verificationSubmit Cloud
+     Function, which validates facet eligibility against approved claims and is
+     the only path that can create a request. See verification.html. */
 
   /* ── Public API ── */
   return Object.freeze({
@@ -222,7 +228,6 @@ const SokoniVerifications = (function () {
     badge,
     checkBatch,
     wireAll,
-    submitRequest,
     TYPE_CFG,
   });
 

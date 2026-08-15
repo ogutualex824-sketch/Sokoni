@@ -829,10 +829,15 @@ else{
             var db  = getFirestore(app);
 
             /* Verification badge */
+            /* Reads the public projection. The old getDoc on verifications/
+               was owner-or-admin only, so a shopper always got PERMISSION_DENIED
+               and the badge silently never showed. */
             var isVerified = false;
             if(sellerUid){
-                var vSnap = await getDoc(doc(db,'verifications',sellerUid));
-                isVerified = vSnap.exists() && vSnap.data().status === 'approved';
+                var _vr = await fetch('/profile/' + encodeURIComponent(sellerUid) + '?format=json',
+                                      { credentials: 'omit' }).catch(function(){ return null; });
+                var _vp = (_vr && _vr.ok) ? await _vr.json().catch(function(){ return null; }) : null;
+                isVerified = !!(_vp && _vp.found && _vp.verifiedTypes && _vp.verifiedTypes.length);
                 var badge = document.getElementById('sellerVerifiedBadge');
                 if(badge && isVerified) badge.style.display = '';
                 var trustBadge = document.getElementById('prdTrustVerified');

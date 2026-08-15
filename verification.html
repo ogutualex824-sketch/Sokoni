@@ -670,12 +670,16 @@
             <label class="vf-label" for="vfVerifyType">Verification Tier <span>*</span></label>
             <select class="vf-select" id="vfVerifyType" required>
               <option value="" disabled selected>Select a tier…</option>
-              <option value="Verified Business">✅ Verified Business</option>
-              <option value="Verified Professional">🎓 Verified Professional</option>
-              <option value="Verified Driver">🚗 Verified Driver</option>
-              <option value="Verified Doctor">🏥 Verified Doctor</option>
-              <option value="Verified Lawyer">⚖️ Verified Lawyer</option>
-              <option value="Verified Property Agent">🏘️ Verified Property Agent</option>
+              <!-- Values are CANONICAL FACET SLUGS (verification-vocabulary.js).
+                   The label is presentation; only the slug is ever stored. -->
+              <option value="business">✅ Verified Business</option>
+              <option value="professional">🎓 Verified Professional</option>
+              <option value="driver">🚗 Verified Driver</option>
+              <option value="doctor">🏥 Verified Doctor</option>
+              <option value="lawyer">⚖️ Verified Lawyer</option>
+              <option value="property_agent">🏘️ Verified Property Agent</option>
+              <option value="identity">🪪 Identity Verification</option>
+              <option value="kra">🧾 KRA Verification</option>
             </select>
           </div>
           <div class="vf-field">
@@ -1211,39 +1215,30 @@
 
     try {
       const db = await getDB();
-      const { collection, addDoc, getDocs, query, where, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
 
-      /* Prevent duplicate requests: one active/pending request per email */
-      const existing = await getDocs(query(
-        collection(db, "verificationRequests"),
-        where("email", "==", email),
-        where("status", "in", ["pending", "under_review"])
-      ));
-      if (!existing.empty) {
-        btn.disabled = false;
-        btn.innerHTML = 'Submit Application';
-        return showErr("You already have a pending application. Please wait for it to be reviewed before submitting another.");
-      }
+      /* Submitted through verificationSubmit, not written directly.
+         The old client path could never work: it omitted applicantUid, which the
+         create rule requires, and its duplicate check queried on `email` — a
+         filter the read rule cannot satisfy, so the query was rejected before the
+         write was even attempted. Both checks now run server-side, where the
+         applicant is taken from auth and the facet is validated against approved
+         claims rather than trusted from this form. */
       btn.innerHTML = '<span class="vf-spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;"></span> Submitting…';
 
-      await addDoc(collection(db, "verificationRequests"), {
-        refNumber,
-        fullName,
-        idNumber,
-        phone,
-        email,
-        practiceName,
-        verifyType,
-        kraPin:      get("vfKraPin"),
-        address,
-        county,
-        description,
-        links:       get("vfLinks"),
-        status:      "pending",
-        createdAt:   serverTimestamp()
+      const { getFunctions, httpsCallable } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
+      const fns = getFunctions(db.app, 'us-central1');
+
+      const { data: submitted } = await httpsCallable(fns, 'verificationSubmit')({
+        facet: verifyType,                       /* canonical slug from the select */
+        fields: {
+          fullName, idNumber, phone, email, practiceName,
+          kraPin: get("vfKraPin"), address, county, description,
+          links:  get("vfLinks"),
+        },
       });
 
-      document.getElementById("vfRefDisplay").textContent = refNumber;
+      document.getElementById("vfRefDisplay").textContent = submitted.requestId;
       document.getElementById("vfForm").style.display = "none";
       document.getElementById("vfSuccess").classList.add("show");
 

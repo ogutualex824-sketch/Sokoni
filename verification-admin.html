@@ -433,18 +433,30 @@
   }
 
   /* ─── TIER CONFIG ─── */
+  /* Keyed by CANONICAL FACET — matches functions/verification-vocabulary.js.
+     Display strings live here only; they are never stored. */
   const TIER_CFG = {
-    "Verified Business":       { color: "#71ff00", border: "rgba(113,255,0,0.3)",  bg: "rgba(113,255,0,0.08)",  emoji: "✅" },
-    "Verified Professional":   { color: "#00aaff", border: "rgba(0,170,255,0.3)",  bg: "rgba(0,170,255,0.08)",  emoji: "🎓" },
-    "Verified Driver":         { color: "#f97316", border: "rgba(249,115,22,0.3)", bg: "rgba(249,115,22,0.08)", emoji: "🚗" },
-    "Verified Doctor":         { color: "#ef4444", border: "rgba(239,68,68,0.3)",  bg: "rgba(239,68,68,0.08)",  emoji: "🏥" },
-    "Verified Lawyer":         { color: "#a855f7", border: "rgba(168,85,247,0.3)", bg: "rgba(168,85,247,0.08)", emoji: "⚖️" },
-    "Verified Property Agent": { color: "#eab308", border: "rgba(234,179,8,0.3)",  bg: "rgba(234,179,8,0.08)",  emoji: "🏘️" }
+    business:       { label: "Verified Business",     color: "#71ff00", border: "rgba(113,255,0,0.3)",  bg: "rgba(113,255,0,0.08)",  emoji: "✅" },
+    professional:   { label: "Verified Professional", color: "#00aaff", border: "rgba(0,170,255,0.3)",  bg: "rgba(0,170,255,0.08)",  emoji: "🎓" },
+    driver:         { label: "Verified Driver",       color: "#f97316", border: "rgba(249,115,22,0.3)", bg: "rgba(249,115,22,0.08)", emoji: "🚗" },
+    doctor:         { label: "Licensed Doctor",       color: "#ef4444", border: "rgba(239,68,68,0.3)",  bg: "rgba(239,68,68,0.08)",  emoji: "🏥" },
+    lawyer:         { label: "Licensed Lawyer",       color: "#a855f7", border: "rgba(168,85,247,0.3)", bg: "rgba(168,85,247,0.08)", emoji: "⚖️" },
+    property_agent: { label: "Licensed Agent",        color: "#eab308", border: "rgba(234,179,8,0.3)",  bg: "rgba(234,179,8,0.08)",  emoji: "🏘️" },
+    identity:       { label: "Identity Verified",     color: "#71ff00", border: "rgba(113,255,0,0.3)",  bg: "rgba(113,255,0,0.08)",  emoji: "🪪" },
+    kra:            { label: "KRA Verified",          color: "#22d3ee", border: "rgba(34,211,238,0.3)", bg: "rgba(34,211,238,0.08)", emoji: "🧾" },
+    address:        { label: "Address Verified",      color: "#94a3b8", border: "rgba(148,163,184,0.3)",bg: "rgba(148,163,184,0.08)",emoji: "📍" },
+    bank:           { label: "Payment Verified",      color: "#34d399", border: "rgba(52,211,153,0.3)", bg: "rgba(52,211,153,0.08)", emoji: "🏦" }
   };
 
-  function tierBadgeHtml(type) {
-    const t = TIER_CFG[type] || { color: "#71ff00", border: "rgba(113,255,0,0.3)", bg: "rgba(113,255,0,0.08)", emoji: "?" };
-    return `<span class="va-tier-badge" style="color:${t.color};border-color:${t.border};background:${t.bg};">${t.emoji} ${escHtml(type)}</span>`;
+  /* Facets whose decision MUST carry an expiry — mirrors FACET_EXPIRY.required. */
+  const EXPIRY_REQUIRED = ["driver"];
+
+  function tierBadgeHtml(facet) {
+    const t = TIER_CFG[facet];
+    /* An unrecognised facet shows the raw slug rather than a confident wrong
+       label — the old fallback rendered every unknown type as a green tick. */
+    if (!t) return `<span class="va-tier-badge">${escHtml(facet || "unknown")}</span>`;
+    return `<span class="va-tier-badge" style="color:${t.color};border-color:${t.border};background:${t.bg};">${t.emoji} ${escHtml(t.label)}</span>`;
   }
   function statusBadgeHtml(status) {
     const labels = { pending: "Pending", under_review: "Under Review", approved: "Approved", rejected: "Rejected" };
@@ -545,9 +557,29 @@
     try {
       const db = await getDB();
       const { collection, query, orderBy, getDocs } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
-      const q = query(collection(db, "verificationRequests"), orderBy("createdAt", "desc"));
+      const q = query(collection(db, "verificationRequests"), orderBy("submittedAt", "desc"));
       const snap = await getDocs(q);
-      allApps = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      /* Presentation adapter at the load boundary. Stored data uses the canonical
+         vocabulary (`state`, `facet`, `submittedAt`); this page's ~12 render sites
+         were written against the old names. Adapting once here keeps ONE stored
+         vocabulary without rewriting the whole view layer in a security release.
+         Renaming those render sites is a follow-up, not a data change. */
+      allApps = snap.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          status:     d.state  || d.status,
+          verifyType: d.facet  || d.verifyType,
+          fullName:     (d.fields && d.fields.fullName)     || d.fullName     || '',
+          practiceName: (d.fields && d.fields.practiceName) || d.practiceName || '',
+          county:       (d.fields && d.fields.county)       || d.county       || '',
+          description:  (d.fields && d.fields.description)  || d.description  || '',
+          email:        (d.fields && d.fields.email)        || d.email        || '',
+          phone:        (d.fields && d.fields.phone)        || d.phone        || '',
+          refNumber:    d.refNumber || doc.id.slice(0, 8).toUpperCase(),
+        };
+      });
       renderApps();
     } catch(err) {
       console.error("Load apps error:", err);
@@ -629,44 +661,37 @@
       const { doc, updateDoc, setDoc, addDoc, collection, serverTimestamp } =
         await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
 
-      const now = serverTimestamp();
-      const adminUser = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}"); } catch { return {}; } })();
-      const adminEmail = adminUser.email || "admin";
+      /* ONE atomic call replaces five sequential un-transacted writes.
+         The old sequence marked the request approved, then threw on the second
+         write (a CREATE on verifications/{uid}, which the rules had no admin
+         branch for), aborting the remaining three — leaving an approved request
+         with no badge, no notification and no audit entry.
 
-      // 1. Update request
-      await updateDoc(doc(db, "verificationRequests", docId), {
-        status: "approved", approvedAt: now, approvedBy: adminEmail,
-        adminNotes: adminNotes || ""
-      });
+         Note there is no uid here. verificationDecide reads applicantUid from
+         the request document, so it cannot be pointed at another account. The
+         old code's `a.uid || docId` fallback silently keyed the record by the
+         REQUEST id, because no uid was ever stored. */
+      const { getFunctions, httpsCallable } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
+      const fns = getFunctions(db.app, 'us-central1');
 
-      // 2. Write verifications record
-      const uid = a.uid || docId;
-      await setDoc(doc(db, "verifications", uid), {
-        name: a.fullName, business: a.practiceName, tier: a.verifyType,
-        verifyType: a.verifyType, county: a.county, description: a.description,
-        approvedAt: now, approvedBy: adminEmail, status: "approved", uid
-      });
-
-      // 3. Update user record
-      if (a.uid) {
-        await updateDoc(doc(db, "users", a.uid), {
-          verifiedTier: a.verifyType, verifiedAt: now, isVerified: true
-        }).catch(() => {});
+      /* Facets backed by a dated credential must carry an expiry. The date comes
+         from the evidence in front of the reviewer — no duration is invented. */
+      let expiresAt = null;
+      if (EXPIRY_REQUIRED.includes(a.verifyType)) {
+        const entered = window.prompt(
+          'This verification requires an expiry date from the credential.\nEnter as YYYY-MM-DD:');
+        if (!entered) { showToast('Approval cancelled — an expiry date is required.', true); return; }
+        const ms = Date.parse(entered);
+        if (isNaN(ms)) { showToast('That is not a valid date. Use YYYY-MM-DD.', true); return; }
+        expiresAt = new Date(ms).toISOString();
       }
 
-      // 4. Send notification
-      await addDoc(collection(db, "notifications"), {
-        userId: a.uid || uid, type: "verification_approved",
-        title: "You're Verified!",
-        body: `Your ${a.verifyType} verification has been approved. Your badge is now live on SOKONI.`,
-        read: false, createdAt: now
-      });
-
-      // 5. Admin log
-      await addDoc(collection(db, "adminLog"), {
-        action: `verify_approved: ${a.refNumber}`,
-        adminEmail, targetUser: a.fullName, tier: a.verifyType,
-        docId, createdAt: now
+      await httpsCallable(fns, 'verificationDecide')({
+        requestId: docId,
+        decision:  'approved',
+        reason:    adminNotes || null,
+        expiresAt,
       });
 
       // Update local state
@@ -692,30 +717,25 @@
       const { doc, updateDoc, addDoc, collection, serverTimestamp } =
         await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
 
-      const now = serverTimestamp();
-      const adminUser = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}"); } catch { return {}; } })();
-      const adminEmail = adminUser.email || "admin";
+      /* Same single atomic call. Rejection previously touched only the request,
+         leaving any already-approved facet standing — there was no way to say
+         "this was true and no longer is". Revocation is now its own operation
+         (verificationRevoke); rejection decides an OPEN request. */
+      const { getFunctions, httpsCallable } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-functions.js`);
+      const fns = getFunctions(db.app, 'us-central1');
 
-      await updateDoc(doc(db, "verificationRequests", docId), {
-        status: "rejected", rejectionReason: reason,
-        rejectedAt: now, rejectedBy: adminEmail
+      await httpsCallable(fns, 'verificationDecide')({
+        requestId: docId,
+        decision:  'rejected',
+        reason,
       });
 
-      await addDoc(collection(db, "notifications"), {
-        userId: a.uid || docId, type: "verification_rejected",
-        title: "Verification Update",
-        body: `Your ${a.verifyType} verification was not approved. Reason: ${reason}. You may re-apply after addressing the issue.`,
-        read: false, createdAt: now
-      });
-
-      await addDoc(collection(db, "adminLog"), {
-        action: `verify_rejected: ${a.refNumber}`,
-        adminEmail, targetUser: a.fullName, reason,
-        docId, createdAt: now
-      });
+      /* adminLog is written inside the same transaction as the decision, so the
+         audit trail can no longer go missing when a later write fails. */
 
       const idx = allApps.findIndex(x=>x.id===docId);
-      if (idx !== -1) { allApps[idx].status = "rejected"; allApps[idx].rejectionReason = reason; }
+      if (idx !== -1) { allApps[idx].state = "rejected"; allApps[idx].reason = reason; }
       renderApps();
       showToast("Application rejected", false);
       closeModal();

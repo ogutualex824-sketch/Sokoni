@@ -12510,6 +12510,16 @@ exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;
 exports.profileGetProfessional        = _profEng.profileGetProfessional;
 exports.profileSaveProfessional       = _profEng.profileSaveProfessional;
 
+/* ── Verification engine — the ONE authoritative decision path ────────────────
+   verificationDecide takes NO uid parameter: the applicant is read from
+   verificationRequests/{requestId}.applicantUid, so this cannot be repurposed
+   into a generic document writer. Both verification collections are
+   `write: if false` for clients; these three are the only writers. */
+const _verEng = require('./verification-engine');
+exports.verificationSubmit            = _verEng.verificationSubmit;
+exports.verificationDecide            = _verEng.verificationDecide;
+exports.verificationRevoke            = _verEng.verificationRevoke;
+
 /* ── Routing diagnostics receiver ──────────────────────────────────────────────
    POST /api/diag — the endpoint sokoni-root-guard.js has been beaconing to since it
    shipped. It had no rewrite and no function, so every anomaly report 404d and was

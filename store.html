@@ -1010,12 +1010,22 @@ async function _stLoadFirestore(uid) {
     stRenderHours(sd);
     stRenderPolicies(sd);
 
-    /* Verification badge */
-    var vSnap = await getDoc(doc(db, "verifications", uid));
-    if (vSnap.exists() && vSnap.data().status === "approved") {
+    /* Verification badge — read from the public projection. A direct read of
+       verifications/{uid} is owner-or-admin only, so this always denied for a
+       visitor and the badge never rendered. */
+    var _vres = await fetch('/profile/' + encodeURIComponent(uid) + '?format=json',
+                            { credentials: 'omit' }).catch(function(){ return null; });
+    var _vpub = (_vres && _vres.ok) ? await _vres.json().catch(function(){ return null; }) : null;
+    if (_vpub && _vpub.found && _vpub.primaryBadge) {
       var be = document.getElementById("stBadges");
       if (be && !be.innerHTML.includes("Verified")) {
-        be.innerHTML = '<span class="st-badge">✅ Verified Seller</span>' + be.innerHTML;
+        var _lbl = { business: 'Verified Business', doctor: 'Licensed Doctor',
+                     lawyer: 'Licensed Lawyer', property_agent: 'Licensed Agent',
+                     driver: 'Verified Driver', professional: 'Verified Professional',
+                     kra: 'KRA Verified', identity: 'Identity Verified',
+                     address: 'Address Verified', bank: 'Payment Verified'
+                   }[_vpub.primaryBadge];
+        if (_lbl) be.innerHTML = '<span class="st-badge">✅ ' + _lbl + '</span>' + be.innerHTML;
       }
     }
 
