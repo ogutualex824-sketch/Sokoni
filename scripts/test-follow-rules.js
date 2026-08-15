@@ -91,7 +91,9 @@ const followDoc = (uid, type, entityId, name) => ({
      The four rejected shapes are the ones that were actually in the codebase. */
   await check('canonical  {uid}--{type}--{entityId}  ACCEPTED',
     assertSucceeds(setDoc(doc(dbA, 'follows', followId(UID, 'business', 'biz1')),
-      followDoc(UID, 'business', 'biz1', 'Bravilex'))));
+      /* Canonical legal name — scripts/verify-company-identity.js flags any file that
+         says "Bravilex" without it. A fixture is still a file the brand gate reads. */
+      followDoc(UID, 'business', 'biz1', 'Bravilex International Co. Limited'))));
 
   await check('business.html shape  {uid}_{entityId}  DENIED  <- the reported bug',
     assertFails(setDoc(doc(dbA, 'follows', UID + '_biz1'),
