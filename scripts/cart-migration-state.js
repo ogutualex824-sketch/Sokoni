@@ -130,6 +130,30 @@ const PRE_EXISTING = [
                                 unexpected() would have excused it without anyone
                                 deciding to, which is not the same as being explained. */
   'sokoni-verify-screen.js',
+  /* Roles Phase 4 — the claim-verified workspace authority. Another track again,
+     named individually for the same reason as the auth slices above: so the cart
+     guards keep failing on anything they do NOT recognise.
+
+     Each of these four gained exactly ONE tag, <script src="sokoni-role-authority.js">,
+     which assertion B reads as overreach because the only gain it knows about is
+     sokoni-cart.js.
+
+     What naming them costs, precisely: assertion B's "tags unchanged since BASE",
+     assertion B's "trailing bytes unchanged since BASE", and inclusion in
+     test-checkout-fallback-total's H1 overreach list. PRE_EXISTING is consumed in
+     those three places and nowhere else — it gates no cart BEHAVIOUR assertion, so
+     the cart readers, the service contract and the wishlist suites still cover
+     these pages in full. That is the whole cost, and it is why the entry is four
+     named files rather than a widened rule.
+
+       seller.html    workspace guard (seller)
+       driver.html    workspace guard (rider — canonical; the old registry said driver)
+       landlord.html  workspace guard (landlord) + landlordProfiles/{uid} consumption
+       profile.html   role switcher reads approved claims; tenantProfiles/{uid} consumption */
+  'seller.html',
+  'driver.html',
+  'landlord.html',
+  'profile.html',
   'login.html',
   'scripts/test-auth-verify-screen.js',
   /* Auth slice 5 — session-transition safety. The gate gained cross-tab awareness
