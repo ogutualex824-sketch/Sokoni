@@ -1,3 +1,36 @@
+## [2026-08-15] — Retire the client-side review write path
+
+**Files:** `sokoni-db.js`, `sokoni-test-suite.js`. No behaviour change — the function
+had no production callers.
+
+`SokoniDB.saveReview()` wrote `reviews/{id}` straight from the client, bypassing the
+canonical `submitReview` Cloud Function and every guarantee it carries: the 3/day rate
+limit, ban and account-age checks, one-review-per-user-per-target, purchase
+verification, HTML sanitisation, and the `ratingsSummary` recompute.
+
+It could not even produce a readable review. It set no `status`, and the `/reviews`
+read rule gates on `status == 'approved'`, so every document it wrote was invisible to
+every reader — including its own author.
+
+**Caller proof before removal.** The only apparent caller,
+`sokoni-test-suite.js`, resolves `db` via `getDB() → global.SokoniDB`, and
+`sokoni-dev-mock.js:690` replaces `global.SokoniDB` wholesale with a mock supplying its
+own `saveReview` shim. So that test never exercised the production function — and would
+have kept passing after its removal, certifying a phantom API. It is removed rather
+than ported; review submission is covered by `scripts/test-reviews-canonical.js`
+against the real rules. Its last real caller went in `214f3c8`.
+
+Retiring the function rather than leaving it uncalled removes the alternate write path
+entirely, so a future surface cannot pick it up looking for a convenient client-side
+review write.
+
+Verified: `test-product-reviews` 32/32, `test-sellability-contract` 74/74,
+`test-catalogue-authority` 41/41, `test-age-classification` 39/39,
+`test-product-revalidation` 21/21, `test-availability-enforcement` 27/27, and
+`test-reviews-canonical` 18/0 under the emulator (`GATE_EXIT=0`).
+
+---
+
 ## [2026-08-15] — Every product page was showing two invented reviews
 
 **Reviews completion.** Files: `product.js`, `functions/reviews.js`,

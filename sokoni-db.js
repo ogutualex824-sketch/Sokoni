@@ -394,13 +394,25 @@ const SokoniDB = {
      REVIEWS  (platform / seller / product / provider)
   ════════════════════════════════════════ */
 
-  async saveReview(review) {
-    const id = review.id || ('REV-' + Date.now());
-    await setDoc(doc(db, 'reviews', id), {
-      ...review, id, uid: _uid(), createdAt: serverTimestamp()
-    }, { merge: true });
-    return id;
-  },
+  /* saveReview() IS RETIRED — deliberately not replaced.
+
+     It wrote reviews/{id} straight from the client, bypassing the canonical
+     `submitReview` Cloud Function and therefore ALL of its guarantees: the 3/day
+     rate limit, the ban and account-age checks, one-review-per-user-per-target,
+     purchase verification, HTML sanitisation, and the ratingsSummary recompute.
+
+     It could not even produce a readable review. It set no `status`, and the
+     /reviews read rule gates on status == 'approved', so every document it wrote
+     was invisible to every reader — including its own author — while still
+     counting against nothing and aggregating into nothing.
+
+     Its last caller was removed from reviews.html in 214f3c8. Retiring the
+     function rather than leaving it uncalled removes the alternate write path
+     entirely, so it cannot be picked up again by a future surface looking for a
+     convenient client-side review write.
+
+     Reviews are submitted ONE way: the submitReview callable in functions/reviews.js.
+     Reads go through getReviews, which returns only approved documents. */
 
   /* Approved reviews only — /reviews gates reads on status, so the previous
      unfiltered listener was denied for every caller and delivered nothing.

@@ -207,18 +207,19 @@ async function runBuyerSuite() {
       unsub();
     });
 
-    await test("Submit review for product", async () => {
-      const id = await db.saveReview({
-        productId: "prod-001",
-        buyerId: "mock-buyer-001",
-        buyerName: "Test Buyer",
-        rating: 5,
-        comment: "Excellent product!"
-      });
-      assert(id, "saveReview failed");
-      const data = getMock().getData("reviews", id);
-      assert(data.rating === 5);
-    });
+    /* The "Submit review for product" test is REMOVED, not ported.
+
+       It exercised SokoniDB.saveReview(), a client-side write to reviews/{id} that
+       bypassed the canonical submitReview Cloud Function and every guarantee it
+       carries. That function is now retired (see sokoni-db.js).
+
+       The test would have kept passing after the retirement, because
+       sokoni-dev-mock.js replaces global.SokoniDB wholesale and supplies its own
+       saveReview shim — so it would have been asserting against the mock's own
+       stub rather than any production API, and reporting green for a code path
+       that no longer exists. A test that certifies a phantom API is worse than no
+       test. Review submission is covered where it actually lives:
+       scripts/test-reviews-canonical.js (emulator, against the real rules). */
 
     await test("Follow and unfollow a seller", async () => {
       await db.follow("mock-buyer-001", "mock-seller-001");
