@@ -265,7 +265,20 @@ const DEMO_REVIEWS = [
   {id:"d42",type:"product",rating:4,name:"Quincy Achieng",   comment:"Good gaming headset. Slight delay in shipping but sound quality is great.",date:"4 Mar 2025",helpful:10},
 ];
 
-function getReviews(){ try{ return JSON.parse(localStorage.getItem("sokoniReviews")) || []; }catch(e){ return []; } }
+/* ── DEV-ONLY demo gate, defined ONCE ───────────────────────────────────────
+   Was inlined inside updatePlatformStats() only, which is exactly why
+   renderReviews() shipped without it. One definition, both call sites. */
+function _demoAllowed(){
+  try{ if(localStorage.getItem('sokoniDemoData') === 'true') return true; }catch(e){}
+  return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+}
+
+/* Renamed from _localReviews() — that name SHADOWED the canonical getReviews Cloud
+   Function (functions/reviews.js). Any future code on this page that reasonably
+   expected the canonical per-target reader would silently have got this page's
+   private localStorage list instead. These testimonials are page-local by design
+   (see the note at the top of submitReview); the name must not pretend otherwise. */
+function _localReviews(){ try{ return JSON.parse(localStorage.getItem("sokoniReviews")) || []; }catch(e){ return []; } }
 function saveReviews(r){ localStorage.setItem("sokoniReviews", JSON.stringify(r)); }
 
 const tabTitles = {
@@ -326,7 +339,7 @@ function submitReview(){
     date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
     helpful: 0
   };
-  const reviews = getReviews();
+  const reviews = _localReviews();
   reviews.unshift(review);
   saveReviews(reviews);
   /* Push to Firestore so all devices see it */
@@ -368,9 +381,14 @@ function _buildCard(r, idx){
 }
 
 function renderReviews(){
-  const userRevs = getReviews().filter(r => r.type === activeRevTab);
-  const demoRevs = DEMO_REVIEWS.filter(r => r.type === activeRevTab);
-  /* user reviews first, then demo reviews to fill the grid */
+  const userRevs = _localReviews().filter(r => r.type === activeRevTab);
+  /* Demo reviews are DEV-ONLY. updatePlatformStats() already applied this guard —
+     "never inflate real platform stats with fabricated reviews" — but the LIST did
+     not, so production visitors were shown all 42 invented reviews, complete with
+     invented names ("Alice Wanjiru", "Patrick Oduya") and invented dates, as if
+     they were real customer testimonials. The stats were fixed and the list was
+     missed; the same rule has to hold for both. */
+  const demoRevs = _demoAllowed() ? DEMO_REVIEWS.filter(r => r.type === activeRevTab) : [];
   const all = [...userRevs, ...demoRevs];
   const list = document.getElementById("reviewsList");
   if(!all.length){
@@ -382,7 +400,7 @@ function renderReviews(){
 
 function markHelpful(id){
   /* check user reviews first */
-  const revs = getReviews();
+  const revs = _localReviews();
   const rev  = revs.find(r => r.id === id);
   if(rev){ rev.helpful = (rev.helpful||0)+1; saveReviews(revs); }
   else {
@@ -394,10 +412,12 @@ function markHelpful(id){
 }
 
 function updatePlatformStats(){
-  const userRevs = getReviews().filter(r => r.type === "platform");
-  /* Demo reviews are dev-only — never inflate real platform stats with fabricated reviews. */
-  const _revDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
-  const all      = [...userRevs, ...(_revDemoAllowed?DEMO_REVIEWS.filter(r => r.type === "platform"):[])];
+  const userRevs = _localReviews().filter(r => r.type === "platform");
+  /* Demo reviews are dev-only — never inflate real platform stats with fabricated
+     reviews. Now uses the shared _demoAllowed() gate, so this and renderReviews()
+     cannot disagree again. The inline copy that used to live here is exactly why
+     the list shipped ungated while the stats were correct. */
+  const all      = [...userRevs, ...(_demoAllowed()?DEMO_REVIEWS.filter(r => r.type === "platform"):[])];
   const total    = all.length;
   const avg      = total > 0 ? (all.reduce((s,r)=>s+r.rating,0)/total).toFixed(1) : "—";
   const pct      = total > 0 ? Math.round((all.filter(r=>r.rating>=4).length/total)*100)+"%" : "—";
