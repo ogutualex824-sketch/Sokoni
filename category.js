@@ -599,17 +599,52 @@ function showNotif(msg, type){
    widgets exist. */
 function _cartSvc(){ return window.SokoniCart || null; }
 
+/* ── 18+ ACTION GUARD (Shop/Marketplace) ────────────────────────────────────
+   Classification is canonical (isProductAgeRestricted, adult-gate.js). This adds
+   the FAIL-SAFE boundary: adult-gate.js carries the category list, so without it
+   the fallback cannot run -- but the product's OWN flag is readable regardless,
+   and that is exactly the case where a bypass is a legal problem rather than an
+   inconvenience.
+
+     ageRestricted:true + module unavailable  ->  DENY (with a visible reason)
+     ordinary product   + module unavailable  ->  ALLOW
+
+   A missing optional script must not take the unrestricted catalogue offline,
+   nor become a purchase bypass for an item deliberately flagged 18+. */
+function _explicitlyAgeRestricted(p){
+    if (!p) return false;
+    if (p.ageRestricted === true) return true;
+    return typeof p.ageRestriction === "string" && /^\s*18\s*\+?\s*$/.test(p.ageRestriction);
+}
+async function _shopAgeGuard(p){
+    try{
+        const gateReady = typeof isProductAgeRestricted === "function"
+                       && typeof requireAgeVerification === "function";
+        if(!gateReady){
+            if(_explicitlyAgeRestricted(p)){
+                showNotif("Age verification is unavailable right now — this 18+ item cannot be purchased. Please reload and try again.", "error");
+                return false;
+            }
+            return true;
+        }
+        if(!isProductAgeRestricted(p)) return true;
+        if(typeof isAgeVerified === "function" && isAgeVerified()) return true;
+        return !!(await requireAgeVerification());
+    }catch(e){
+        if(_explicitlyAgeRestricted(p)){
+            try{ showNotif("Age verification failed to load — this 18+ item cannot be purchased right now.", "error"); }catch(_){}
+            return false;
+        }
+        return true;
+    }
+}
+
 /* CART */
 async function addToCart(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
-        if(typeof requireAgeVerification === "function"){
-            const ok = await requireAgeVerification();
-            if(!ok) return;
-        }
-    }
+    if(!(await _shopAgeGuard(product))) return;
 
     const cart = _cartSvc();
     /* Fails closed. Writing localStorage directly as a fallback is what this migration
@@ -647,12 +682,7 @@ async function addToWishlistCat(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
-        if(typeof requireAgeVerification === "function"){
-            const ok = await requireAgeVerification();
-            if(!ok) return;
-        }
-    }
+    if(!(await _shopAgeGuard(product))) return;
 
     /* Canonical: wishlistItems/{uid}_{productId} via SokoniWishlist → commerceDispatch.
        This read and wrote localStorage['wishlist'] directly, so saved items belonged to
@@ -700,12 +730,7 @@ async function buyNowCat(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
-        if(typeof requireAgeVerification === "function"){
-            const ok = await requireAgeVerification();
-            if(!ok) return;
-        }
-    }
+    if(!(await _shopAgeGuard(product))) return;
 
     /* Buy Now = express-checkout THIS item only — REPLACE the cart, don't append to
        stale/accumulated entries (appending charged the whole cart instead of 1 unit).

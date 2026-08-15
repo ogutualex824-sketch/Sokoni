@@ -97,5 +97,53 @@ ck('product.html loads adult-gate.js (was the bypass)',
 ck('category.js no longer defines a duplicate category list',
    !/const\s+ADULT_CATS_CAT\s*=/.test(fs.readFileSync(path.join(ROOT, 'category.js'), 'utf8')));
 
+/* ── FAIL-SAFE BOUNDARY ─────────────────────────────────────────────────────
+   adult-gate.js carries the category list, so if it is missing the fallback
+   cannot run. The product's OWN flag is still readable, and that is exactly the
+   case where a bypass would be a legal problem rather than an inconvenience.
+
+     ageRestricted:true + module unavailable  ->  DENY
+     ordinary product   + module unavailable  ->  ALLOW
+
+   Each surface implements this as _explicitlyAgeRestricted(); the three copies
+   are deliberate — the fallback exists precisely for when the shared module is
+   absent, so it cannot itself live in that module. This pins all three. */
+console.log('\nFail-safe boundary when adult-gate.js is unavailable');
+
+function explicitOnly(p){                      /* mirrors _explicitlyAgeRestricted */
+  if (!p) return false;
+  if (p.ageRestricted === true) return true;
+  return typeof p.ageRestriction === 'string' && /^\s*18\s*\+?\s*$/.test(p.ageRestriction);
+}
+ck('flagged product is refused when the gate module is missing',
+   explicitOnly({ id: 'X', category: 'food', ageRestricted: true }) === true);
+ck('"18+" enum is refused when the gate module is missing',
+   explicitOnly({ id: 'X', category: 'food', ageRestriction: '18+' }) === true);
+ck('ordinary product still transacts when the gate module is missing',
+   explicitOnly({ id: 'X', category: 'electronics' }) === false);
+ck('a legacy alcohol row (category-only) does NOT block commerce without the module',
+   explicitOnly({ id: 'X', category: 'alcohol' }) === false,
+   'category fallback needs the module; only explicit flags fail safe');
+
+const surfaceGuards = {
+  'script.js':   ['_homeAgeGuard', '_explicitlyAgeRestricted'],
+  'category.js': ['_shopAgeGuard', '_explicitlyAgeRestricted'],
+  'product.js':  ['_ageGuard',     '_explicitlyAgeRestricted'],
+};
+Object.entries(surfaceGuards).forEach(([f, needles]) => {
+  const body = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  needles.forEach(n => ck(f + ' defines/uses ' + n + '()', body.includes(n)));
+});
+
+/* Every protected action must route through its guard — no direct call left. */
+[['script.js', 'isProductAgeRestricted(selectedProduct)'],
+ ['category.js', 'isProductAgeRestricted(product)']].forEach(([f, direct]) => {
+  const body = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const guardName = f === 'script.js' ? '_homeAgeGuard' : '_shopAgeGuard';
+  const inHelper = new RegExp('function\\s+' + guardName + '[\\s\\S]{0,900}?isProductAgeRestricted\\(p\\)').test(body);
+  ck(f + ': no protected action calls the predicate directly (guard only)',
+     !body.includes(direct) && inHelper);
+});
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

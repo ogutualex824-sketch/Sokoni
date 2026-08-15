@@ -1263,15 +1263,50 @@ async function buyProduct(productId, _trigBtn){
         return;
     }
 
-    /* 18+ age gate */
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
-        if(typeof requireAgeVerification === "function"){
-            const verified = await requireAgeVerification();
-            if(!verified) {
-                if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
-                return;
+/* ── 18+ ACTION GUARD (Home) ────────────────────────────────────────────────
+   Classification is canonical (isProductAgeRestricted, adult-gate.js). This adds
+   the FAIL-SAFE boundary: adult-gate.js carries the category list, so without it
+   the fallback cannot run -- but the product's OWN flag is readable regardless,
+   and that is exactly the case where a bypass is a legal problem rather than an
+   inconvenience.
+
+     ageRestricted:true + module unavailable  ->  DENY (with a visible reason)
+     ordinary product   + module unavailable  ->  ALLOW
+
+   A missing optional script must not take the unrestricted catalogue offline,
+   nor become a purchase bypass for an item deliberately flagged 18+. */
+function _explicitlyAgeRestricted(p){
+    if (!p) return false;
+    if (p.ageRestricted === true) return true;
+    return typeof p.ageRestriction === "string" && /^\s*18\s*\+?\s*$/.test(p.ageRestriction);
+}
+async function _homeAgeGuard(p){
+    try{
+        const gateReady = typeof isProductAgeRestricted === "function"
+                       && typeof requireAgeVerification === "function";
+        if(!gateReady){
+            if(_explicitlyAgeRestricted(p)){
+                if(typeof showNotification === "function") showNotification("Age verification is unavailable right now — this 18+ item cannot be purchased. Please reload and try again.", "error");
+                return false;
             }
+            return true;
         }
+        if(!isProductAgeRestricted(p)) return true;
+        if(typeof isAgeVerified === "function" && isAgeVerified()) return true;
+        return !!(await requireAgeVerification());
+    }catch(e){
+        if(_explicitlyAgeRestricted(p)){
+            try{ if(typeof showNotification === "function") showNotification("Age verification failed to load — this 18+ item cannot be purchased right now.", "error"); }catch(_){}
+            return false;
+        }
+        return true;
+    }
+}
+window._homeAgeGuard = _homeAgeGuard;
+    /* 18+ age gate */
+    if(!(await _homeAgeGuard(selectedProduct))){
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
     }
 
     const _svc = _cartSvc();
@@ -1332,14 +1367,9 @@ async function buyNow(productId, _trigBtn){
     }
 
     /* 18+ age gate */
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
-        if(typeof requireAgeVerification === "function"){
-            const verified = await requireAgeVerification();
-            if(!verified) {
-                if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
-                return;
-            }
-        }
+    if(!(await _homeAgeGuard(selectedProduct))){
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
     }
 
     /* This APPENDS and then goes to checkout — deliberately unlike the Buy Now on Product
@@ -1405,12 +1435,7 @@ async function addToWishlist(productId){
     if(!selectedProduct) return;
 
     /* 18+ age gate */
-    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
-        if(typeof requireAgeVerification === "function"){
-            const verified = await requireAgeVerification();
-            if(!verified) return;
-        }
-    }
+    if(!(await _homeAgeGuard(selectedProduct))) return;
 
     /* Canonical: wishlistItems/{uid}_{productId} via SokoniWishlist → commerceDispatch.
        This read and wrote localStorage['wishlist'], so the homepage owned a different

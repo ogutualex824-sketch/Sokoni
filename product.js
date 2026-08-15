@@ -1239,15 +1239,54 @@ function _cartItem(){
 
    Uses the SAME canonical predicate as Home and Shop, so one product cannot be
    restricted on one surface and open on another. Returns a promise-aware guard;
-   callers await it before touching the cart. */
+   callers await it before touching the cart.
+
+   ── FAIL-SAFE, NOT FAIL-OPEN, WHERE IT MATTERS ──────────────────────────────
+   If adult-gate.js is missing the guard cannot run the category fallback — that
+   list lives inside the module. But the product's OWN flag is readable without
+   it, and that is precisely the case where a bypass would be a legal problem
+   rather than an inconvenience. So:
+
+     ageRestricted:true  + module unavailable  →  DENY, with an actionable error
+     ordinary product    + module unavailable  →  ALLOW
+
+   A missing optional script must not take the unrestricted 96% of the catalogue
+   offline; equally it must not become a purchase bypass for an item somebody
+   deliberately flagged 18+. The two cases get different answers on purpose. */
+function _explicitlyAgeRestricted(p){
+    if (!p) return false;
+    if (p.ageRestricted === true) return true;
+    return typeof p.ageRestriction === "string" && /^\s*18\s*\+?\s*$/.test(p.ageRestriction);
+}
+
 async function _ageGuard(){
     try{
-        if (typeof isProductAgeRestricted !== "function") return true;   /* gate script absent — do not block commerce */
+        const gateReady = typeof isProductAgeRestricted === "function"
+                       && typeof requireAgeVerification === "function";
+
+        if (!gateReady){
+            /* Enforcement module unavailable. Deny only what is explicitly flagged. */
+            if (_explicitlyAgeRestricted(product)){
+                _showProductNotif(
+                    "Age verification is unavailable right now — this 18+ item cannot be purchased. Please reload and try again.",
+                    "error");
+                return false;
+            }
+            return true;
+        }
+
         if (!isProductAgeRestricted(product)) return true;
         if (typeof isAgeVerified === "function" && isAgeVerified()) return true;
-        if (typeof requireAgeVerification === "function") return !!(await requireAgeVerification());
+        return !!(await requireAgeVerification());
+    }catch(e){
+        /* An exception inside the gate is itself an enforcement failure. Same rule:
+           protect the flagged item, let ordinary commerce through. */
+        if (_explicitlyAgeRestricted(product)){
+            try{ _showProductNotif("Age verification failed to load — this 18+ item cannot be purchased right now.", "error"); }catch(_){}
+            return false;
+        }
         return true;
-    }catch(e){ return true; }
+    }
 }
 
 async function addToCart(){
