@@ -536,11 +536,27 @@ async function _hydrateCardRatings(list){
 renderProducts(filtered);
 
 /* OPEN PRODUCT — whole-card tap */
+/* Open the product detail page by CANONICAL PRODUCT ID.
+
+   This used to navigate to a bare `product.html` and hand the product over
+   through localStorage['selectedProduct']. Three consequences:
+
+     * the detail page rendered a FROZEN SNAPSHOT taken at click time, so price,
+       stock and availability could be arbitrarily stale;
+     * the URL identified nothing, so a product page could not be shared,
+       bookmarked, deep-linked or attributed in analytics;
+     * product.js already contained a canonical Firestore re-read keyed on ?id=,
+       and this route never triggered it — the correct code existed and was
+       simply unreachable from the main path.
+
+   The id goes in the URL, encoded. The localStorage handoff is KEPT, but only as
+   a fast-first-paint cache and offline fallback — product.js now revalidates it
+   against the canonical document. It is no longer the authority. */
 function openProductCat(id){
-    const p = allProducts.find(x => x.id === id);
+    const p = allProducts.find(x => String(x.id) === String(id));
     if(!p) return;
-    localStorage.setItem("selectedProduct", JSON.stringify(p));
-    window.location.href = "product.html";
+    try { localStorage.setItem("selectedProduct", JSON.stringify(p)); } catch(e) {}
+    window.location.href = "product.html?id=" + encodeURIComponent(String(id));
 }
 window.openProductCat = openProductCat;
 

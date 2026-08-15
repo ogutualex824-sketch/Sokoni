@@ -81,6 +81,76 @@ if(_urlId && String(product && product.id) !== String(_urlId)){
     })();
 }
 
+/* ── CANONICAL REVALIDATION ────────────────────────────────────────────────
+   The block above only consults Firestore when the cached product MISMATCHES the
+   ?id= in the URL. So when the cache happened to match — the normal case after a
+   tap from the grid — the page rendered the snapshot and never checked the
+   canonical record. That meant:
+
+     * a price or stock change since the snapshot was taken was invisible;
+     * a product DELETED or unpublished server-side was still resurrected from
+       localStorage and shown as a live, purchasable product.
+
+   With an explicit ?id= the canonical document is the authority. The cached copy
+   is still rendered first so the page paints immediately, then this revalidates:
+
+     canonical missing  ->  drop the cache and show the unavailable state; never
+                            keep selling a product the server no longer has
+     canonical differs  ->  refresh the cache and re-render once
+     canonical same     ->  nothing happens
+     read failed        ->  keep the cached render; offline must not blank the page
+
+   Only MATERIAL fields are compared. The cached copy may come from the catalogue
+   API and the fresh copy from the Firestore document, so their shapes differ and
+   a whole-object comparison would reload on every visit. A one-shot session guard
+   backs that up so no combination can produce a reload loop. */
+if(_urlId && product && String(product.id) === String(_urlId)){
+    (async function(){
+        var _guardKey = 'sokoniPrdRevalidated:' + String(_urlId);
+        try{
+            var _wt = 0;
+            while(!window.firebaseDB && _wt++ < 80){ await new Promise(function(r){ setTimeout(r,150); }); }
+            if(window.__sokoniAppCheckReady && typeof window.__sokoniAppCheckReady.then === 'function'){ try{ await window.__sokoniAppCheckReady; }catch(_){} }
+            var _m2  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+            var _db2 = window.firebaseDB || _m2.getFirestore();
+            var _s2  = await _m2.getDoc(_m2.doc(_db2, 'products', String(_urlId)));
+
+            if(!_s2.exists()){
+                /* Deleted or unpublished. The stale cache must not outlive it. */
+                try{ localStorage.removeItem('selectedProduct'); }catch(_){}
+                var _c2 = document.getElementById('productPageContainer');
+                if(_c2) _c2.innerHTML =
+                    '<div style="text-align:center;padding:80px 24px;">'
+                  + '<h1 style="color:white;font-size:20px;margin:0 0 10px;">This product is no longer available</h1>'
+                  + '<p style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;max-width:320px;margin:0 auto 22px;">It may have been removed or unpublished by the seller.</p>'
+                  + '<a href="category.html?cat=all" style="display:inline-block;padding:12px 26px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:12px;text-decoration:none;font-size:13px;">Browse Products</a>'
+                  + '</div>';
+                var _sk2 = document.getElementById('productSkeleton'); if(_sk2) _sk2.remove();
+                return;
+            }
+
+            var _fresh = Object.assign({ id: _s2.id }, _s2.data());
+            var _material = ['price','stock','outOfStock','name','status','isVisible','ageRestricted','deliveryCost'];
+            var _changed = _material.some(function(k){
+                return JSON.stringify(_fresh[k] === undefined ? null : _fresh[k])
+                    !== JSON.stringify(product[k] === undefined ? null : product[k]);
+            });
+            if(_changed && !sessionStorage.getItem(_guardKey)){
+                try{ sessionStorage.setItem(_guardKey, '1'); }catch(_){}
+                try{ localStorage.setItem('selectedProduct', JSON.stringify(_fresh)); }catch(_){}
+                location.reload();
+                return;
+            }
+            try{ sessionStorage.removeItem(_guardKey); }catch(_){}   /* converged */
+        }catch(e){
+            /* Offline or denied — the cached render stays. Better a slightly old
+               page than a blank one; the missing-product branch above is the only
+               case that must override the cache. */
+            try{ console.warn('[product] revalidation skipped:', (e && e.code) || (e && e.message)); }catch(_){}
+        }
+    })();
+}
+
 /* Set page title, meta and JSON-LD dynamically */
 if(product){
     document.title = `${product.name} — KES ${Number(product.price).toLocaleString()} | SOKONI`;
