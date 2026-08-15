@@ -401,16 +401,15 @@ const PosOmni = (() => {
     if (_unsub) { _unsub(); _unsub = null; }
   }
 
-  async function pushStock(productId) {
-    const product = await PosDB.products.get(productId);
-    if (!product?.marketplaceId) return;
-    const { getFirestore, doc, updateDoc } =
-      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    const db = getFirestore(window.firebaseApp);
-    await updateDoc(doc(db, 'products', product.marketplaceId), { stock: product.stock });
-  }
+  /* pushStock() is RETIRED. It wrote an absolute local stock level straight onto canonical
+     products/{marketplaceId} with no transaction, no flooring, no inventoryVersion and a
+     swallowed result — so a marketplace sale that landed between the read and the push was
+     erased. This file loads AFTER pos-omni.js and overwrote window.PosOmni, so this was the
+     implementation that actually ran. Canonical stock now converges through exactly one
+     writer: PosDB.products.adjustStock() → window._posSyncCanonicalStock() in pos.js, which
+     applies a signed delta inside a Firestore transaction. Do not reintroduce it. */
 
-  return { startSync, stopSync, pushStock };
+  return { startSync, stopSync };
 })();
 window.PosOmni = PosOmni;
 

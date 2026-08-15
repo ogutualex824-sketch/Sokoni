@@ -606,28 +606,98 @@ const SPos = (function () {
   /* Back-compat alias — existing boot call site (and any others) keep working. */
   async function _seedCatalogueFromCanonical () { return refreshInventoryFromCanonical(); }
 
-  /* Push a POS stock change to the CANONICAL products.stock so in-store sales/edits reflect on
+  /* Push a POS stock DELTA to the CANONICAL products.stock so in-store sales/edits reflect on
      the marketplace + seller dashboard (interim inventory convergence). Proper transaction —
-     read → floor at 0 → write stock + inventoryVersion + updatedAt together (the inventory
-     guardrail) — best-effort + online-only, never blocks the sale. Full convergence (routing
-     the terminal through posCompleteCheckout) is planned separately. */
+     read → floor at 0 → write stock + sold + inventoryVersion + updatedAt together (the
+     inventory guardrail) — online-only, never blocks the sale. Full convergence (routing the
+     terminal through posCompleteCheckout) is planned separately.
+
+     This is the terminal's ONLY writer of canonical products/{id}.stock. The legacy
+     PosOmni.pushStock — which wrote an ABSOLUTE local level with no transaction and replayed
+     stale absolute values from an offline queue — was retired alongside this change, because
+     canonical 10 → buyer orders 3 → server sets 7 → POS pushes local 9 erased the sale.
+
+     A failure here is REPORTED, never swallowed: see the catch block. */
+
+  let _canonDenyToastAt = 0;
+
+  function _posCanonicalOutcome (status, detail) {
+    try { window.dispatchEvent(new CustomEvent('pos:canonical-stock', { detail: { status, ...detail } })); } catch (_) {}
+    return status;
+  }
+
   window._posSyncCanonicalStock = async function (id, delta, reason) {
+    delta = Number(delta) || 0;
+    const r = String(reason || '');
+    if (!id || !delta)      return _posCanonicalOutcome('skipped',     { id, delta, reason: r });
+    if (!window.firebaseDB) return _posCanonicalOutcome('unavailable', { id, delta, reason: r });
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      /* Offline is a DEFERRED write, not a success — and deliberately NOT queued. A queue that
+         replays a delta double-counts it; the absolute-value queue that used to exist erased
+         concurrent marketplace sales. Canonical reconcile is the recovery path, not replay. */
+      return _posCanonicalOutcome('deferred', { id, delta, reason: r });
+    }
+
+    /* Marketplace-linked rows carry the canonical doc id in `marketplaceId`; catalogue-seeded
+       rows reuse the canonical id as their local id. Resolving both preserves exactly the
+       linkage pushStock provided, so retiring it removes a defect, not a capability. */
+    let canonicalId = String(id);
     try {
-      if (!id || !delta || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      const local = await PosDB.products.get(id);
+      if (local && local.marketplaceId) canonicalId = String(local.marketplaceId);
+    } catch (_) {}
+
+    /* `sold` mirrors a sale and its reversals only. Receiving stock or correcting a count is
+       not a sale, so it must not inflate the figure analytics and the seller dashboard read. */
+    const soldDelta = /^sale:/.test(r)                      ? -delta   /* delta < 0 on a sale     */
+                    : /^(refund|void|rollback):/.test(r)    ? -delta   /* delta > 0 on a reversal */
+                    : 0;
+
+    try {
       const m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const ref = m.doc(window.firebaseDB, 'products', String(id));
-      await m.runTransaction(window.firebaseDB, async (tx) => {
+      const ref = m.doc(window.firebaseDB, 'products', canonicalId);
+      const applied = await m.runTransaction(window.firebaseDB, async (tx) => {
         const snap = await tx.get(ref);
-        if (!snap.exists()) return;                        /* not a canonical product — skip */
-        const next = Math.max(0, Number(snap.data().stock || 0) + Number(delta));   /* floored at zero */
-        tx.update(ref, {
-          stock: next,
+        if (!snap.exists()) return null;                   /* not a canonical product — skip */
+        const d     = snap.data() || {};
+        const patch = {
+          stock:            Math.max(0, Number(d.stock || 0) + delta),   /* floored at zero */
           inventoryVersion: m.increment(1),
-          lastStockSource: 'pos:' + (reason || 'adjust'),
-          updatedAt: m.serverTimestamp(),
-        });
+          lastStockSource:  'pos:' + (r || 'adjust'),
+          updatedAt:        m.serverTimestamp(),
+        };
+        if (soldDelta) patch.sold = Math.max(0, Number(d.sold || 0) + soldDelta);
+        tx.update(ref, patch);
+        return { stock: patch.stock, sold: patch.sold };
       });
-    } catch (_) { /* best-effort — local IndexedDB stock stays authoritative for the session */ }
+
+      if (!applied) return _posCanonicalOutcome('not-canonical', { id, canonicalId, delta, reason: r });
+      if (window.PosHealth) PosHealth.recordMetric('canonical_stock_sync', 1);
+      return _posCanonicalOutcome('synced', { id, canonicalId, delta, reason: r, ...applied });
+
+    } catch (err) {
+      /* A DENIED write is a correctness defect, not a logging gap. A cashier or branch till
+         whose uid is not the product's sellerUid is rejected by the products `allow update`
+         rule, and swallowing that leaves the merchant believing the marketplace converged —
+         the same class of defect as a success toast shown before the write lands. */
+      const code   = (err && (err.code || err.message)) || 'unknown';
+      /* Denial does not always surface as a code — some SDK paths carry it only in the
+         message ("Missing or insufficient permissions."). Match both, or a real denial
+         degrades to a generic 'failed' and the cashier is never told. */
+      const denied = /permission[-_ ]denied|insufficient permissions/i
+        .test(String(code) + ' ' + String((err && err.message) || ''));
+      console.error('[POS] canonical stock sync failed:', canonicalId, code, err);
+      if (window.PosHealth) {
+        PosHealth.recordError(denied ? 'canonical_stock_denied' : 'canonical_stock_failed',
+          String((err && err.message) || code), { id, canonicalId, delta, reason: r });
+      }
+      /* One toast per minute — a five-line sale on an unauthorised till must inform, not spam. */
+      if (denied && Date.now() - _canonDenyToastAt > 60000) {
+        _canonDenyToastAt = Date.now();
+        toast('Marketplace stock NOT updated — this till is not authorised to change this product. Sale saved locally.', 'error');
+      }
+      return _posCanonicalOutcome(denied ? 'denied' : 'failed', { id, canonicalId, delta, reason: r, code: String(code) });
+    }
   };
 
   /* Checkout-convergence SHADOW (Phase 1) — dry-run the canonical posCompleteCheckout and store a
@@ -1351,12 +1421,10 @@ const SPos = (function () {
       /* Recommendations invalidation */
       if (window.PosAIEngine) PosAIEngine.recommendations.invalidate();
 
-      /* Omnichannel stock push for marketplace-linked products */
-      if (window.PosOmni) {
-        for (const item of txn.items) {
-          if (item.marketplaceId) PosOmni.pushStock(item.id).catch(() => {});
-        }
-      }
+      /* Canonical stock for marketplace-linked products already converged in Step 2 above:
+         adjustStock() → _posSyncCanonicalStock() applies the true signed delta in one
+         transaction. The former PosOmni.pushStock() loop here wrote an absolute local level
+         a second time and is retired — see _posSyncCanonicalStock for why. */
 
       /* Check for low stock and notify */
       for (const item of txn.items) {

@@ -1,6 +1,6 @@
 # SOKONI — Launch TODO (current release candidate)
 
-> **Scope:** the operational to-do for the undeployed candidate that ends at `0e13db2`.
+> **Scope:** the operational to-do for the undeployed candidate on `rc/combined`.
 > It supersedes nothing. Standing standards live in [[LAUNCH_READINESS]]
 > (*Engineering Complete ≠ Production Proven*), the checklist in [[LAUNCH_CHECKLIST]],
 > and the historical record in [[LAUNCH_CERTIFICATION]].
@@ -14,11 +14,14 @@
 
 ```
 LIVE       8290102     ← carries a known production checkout P0 (see P0-3)
-CANDIDATE  0e13db2     ← 16 commits, all reviewed + mutation-tested
+CANDIDATE  rc/combined HEAD   ← 0e13db2 + Step 1B; all commits reviewed + mutation-tested
 TREE       clean
 DEPLOYED   nothing from the candidate
 WORKTREE   C:/temp/sokoni-follow-rc      (a second worktree C:/temp/sokoni-beta also exists)
 ```
+
+> The candidate is named by branch, not by SHA, because it advances. The **deploy** is what
+> gets pinned to one exact SHA, and the combined gate must pass against that same SHA.
 
 **No deployment until the combined gate passes against one exact SHA.**
 
@@ -26,7 +29,18 @@ WORKTREE   C:/temp/sokoni-follow-rc      (a second worktree C:/temp/sokoni-beta 
 
 ## P0 — money / inventory
 
-### 1. `pushStock` — legacy absolute inventory authority  ← **NEXT**
+### 1. `pushStock` — legacy absolute inventory authority  ✅ **DONE — Step 1B**
+
+> **Evidence:** `scripts/test-pos-canonical-stock.js` → **PASS 53 / FAIL 0**, function
+> lifted verbatim from `pos.js` and run against a mock Firestore. Full matrix below green,
+> plus 7 negative controls (every removal detector fires on the replayed retired code) and
+> 5 mutation proofs (each guard proven load-bearing). Files: `pos.js`, `pos-omni.js`,
+> `pos-modules.js`. **Not deployed** — ships with the candidate.
+>
+> One correction to the audit above: `pos-modules.js` loads *after* `pos-omni.js`
+> (`pos.html:1562` → `1587`) and overwrote `window.PosOmni`, so the implementation that
+> actually ran in production was the bare `updateDoc` at `pos-modules.js:410` — the one
+> with **no** offline queue and **no** error handling. Both are retired.
 
 `PosOmni.pushStock` writes an **absolute** local stock level to canonical
 `products/{id}`: no transaction, no `inventoryVersion`, no `sold`, no flooring, sourced
@@ -48,11 +62,27 @@ So `pushStock` is **redundant, not load-bearing**. `pos-v2.html` does not call i
 
 **Step 1B change set — no scope expansion:**
 
-- [ ] Remove the `PosOmni.pushStock` call at `pos.js:1357`
-- [ ] Retire `pushStock`, `_queuePush`, `_pendingPushIds`, `_flushPendingPushes` in
+- [x] Remove the `PosOmni.pushStock` call at `pos.js:1357`
+- [x] Retire `pushStock`, `_queuePush`, `_pendingPushIds`, `_flushPendingPushes` in
       `pos-omni.js` **and** `pos-modules.js` (two implementations, same global)
-- [ ] Add `sold: increment(qty)` atomically inside `_posSyncCanonicalStock`'s transaction
-- [ ] Replace the swallowed `catch (_) {}` with an observable failure
+- [x] Add `sold` atomically inside `_posSyncCanonicalStock`'s transaction — *classified by
+      reason*: `sale:` increments, `refund:`/`void:`/`rollback:` reverse,
+      `purchase_order:`/manual correction leave it alone. Receiving stock is not a sale.
+      Written as a floored absolute inside the transaction rather than `increment(qty)`,
+      because `sold` must not be able to go negative on a reversal.
+- [x] Replace the swallowed `catch (_) {}` with an observable failure — every call returns
+      a classified outcome (`synced`/`denied`/`failed`/`deferred`/`unavailable`/
+      `not-canonical`/`skipped`), emits `pos:canonical-stock`, records to `PosHealth`, and
+      toasts the cashier on a denial (throttled 1/min). The sale is still never blocked.
+
+**Two things the change set did not list, both required to keep it honest:**
+
+- [x] `_posSyncCanonicalStock` now resolves the canonical doc via `marketplaceId || id`.
+      It previously used the local id only, so marketplace-linked rows — the exact class
+      `pushStock` existed to serve — would have silently stopped converging. Removing a
+      defect must not remove a capability.
+- [x] `PosOmni.getStatus()` drops `pushCount` / `lastPush`. A permanent `0` reads as
+      "pushes happen and none succeeded", which is not what is true.
 
 > **The swallowed denial is a correctness defect, not a logging gap.** A cashier or
 > branch till whose uid is not the product's `sellerUid` is denied by
@@ -60,22 +90,31 @@ So `pushStock` is **redundant, not load-bearing**. `pos-v2.html` does not call i
 > believes the marketplace converged. Same class as a success toast before the write
 > lands.
 
-**Regression matrix (all required before commit):**
+**Regression matrix — all green in `scripts/test-pos-canonical-stock.js`:**
 
-| scenario | expected |
-|---|---|
-| sale qty 1 | stock −1, sold +1 |
-| sale qty 3 | stock −3, sold +3 (one transaction, not three) |
-| multi-line | exact aggregate delta |
-| refund / void / receive | stock +qty |
-| rollback | original delta reversed |
-| stock 0 | stays 0 |
-| stock 2, sale qty 5 | floors at 0, existing oversell contract |
-| concurrent marketplace sale | no stale absolute overwrite |
-| retry | idempotent, no duplicate mutation |
-| permission deny | explicit failure, never false success |
+| scenario | expected | result |
+|---|---|---|
+| sale qty 1 | stock −1, sold +1 | ✅ |
+| sale qty 3 | stock −3, sold +3 (one transaction, not three) | ✅ |
+| multi-line | exact aggregate delta | ✅ |
+| refund / void | stock +qty, `sold` reversed | ✅ |
+| receive (`purchase_order:`) | stock +qty, **`sold` unchanged** | ✅ |
+| rollback | original delta reversed | ✅ |
+| stock 0 | stays 0 | ✅ |
+| stock 2, sale qty 5 | floors at 0, existing oversell contract | ✅ |
+| `sold` on over-reversal | floors at 0, never negative | ✅ |
+| concurrent marketplace sale | no stale absolute overwrite | ✅ |
+| retry | no duplicate mutation | ✅ — *by construction* |
+| permission deny | explicit failure, never false success | ✅ |
+| offline / no db / non-canonical | reported distinctly, never as success | ✅ |
 
-### 2. Inventory anti-drift gate
+> **On "retry".** A delta write is *not* idempotent, so this line is satisfied by there
+> being **no replay path at all** — not by an idempotency key. The offline queue was
+> removed rather than converted, because a queue that re-sends a delta double-counts it.
+> Offline is reported as `deferred`; canonical reconcile is the recovery path. If a replay
+> queue is ever wanted, it needs a deterministic key first — that is not this change.
+
+### 2. Inventory anti-drift gate  ← **NEXT** (now unblocked)
 
 - [ ] Match `updateDoc` / `setDoc` calls targeting `products/{id}` — **not** bare
       `stock:` object keys
@@ -84,6 +123,18 @@ So `pushStock` is **redundant, not load-bearing**. `pos-v2.html` does not call i
 
 > A first attempt at this grepped `stock:` keys and flagged **14 files**, nearly all
 > false positives. It was reverted, not shipped. Write it *after* the fix.
+
+**Step 1B leaves two pieces to reuse rather than reinvent** — see
+`scripts/test-pos-canonical-stock.js`:
+
+- the **negative-control pattern**: the retired source is replayed through every detector
+  and each must fire, so a rule that matches nothing fails loudly instead of reading green;
+- the **mutation harness**: `pushStock`'s absolute write is already reconstructed there
+  (proof M2, `7 → 9`), which is exactly the mutation this gate has to catch repo-wide.
+
+The gate must also allow the three writers that are *legitimate*: the canonical server
+paths (`functions/pos-marketplace-sync.js`, `functions/pos-zero-friction.js`,
+`functions/index.js`) and the single client writer `_posSyncCanonicalStock`.
 
 ### 3. Live checkout P0 — fixed in candidate, **still live on production**
 
@@ -158,3 +209,9 @@ sync verification.
 **buyer checkout path only** — `pushStock` was already a counterexample when it was
 written. The platform-wide claim is earned by the repo-wide sweep in P0-2, not by
 Step 1B. Correct the wording when that sweep passes.
+
+**Status after Step 1B.** The counterexample is now removed, so the pair of commits earns
+*the buyer checkout path and the POS terminal each have exactly one canonical inventory
+writer* — two named paths, verified. It still does **not** earn the unqualified
+platform-wide sentence: nothing yet proves no *third* writer exists elsewhere in the repo.
+That remains P0-2's to prove, and the wording stays scoped until it does.

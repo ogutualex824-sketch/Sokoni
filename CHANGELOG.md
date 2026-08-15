@@ -1,3 +1,97 @@
+## [2026-08-15] — The POS terminal has exactly one canonical inventory writer
+
+**Synchronisation fix #4 (Step 1B).** Files: `pos.js`, `pos-omni.js`, `pos-modules.js`,
+`scripts/test-pos-canonical-stock.js` (new), `docs/LAUNCH_TODO.md`.
+No server, rules, payment or schema changes.
+`sold` is an existing canonical field (`functions/pos-marketplace-sync.js:99`,
+`functions/index.js:4005`) — this change starts maintaining it from the terminal, it does
+not introduce it.
+
+### `PosOmni.pushStock` — a legacy absolute inventory authority, retired
+
+`pushStock` read the terminal's **local IndexedDB** stock level and wrote it as an
+**absolute value** onto canonical `products/{marketplaceId}`:
+
+    await updateDoc(doc(db, 'products', product.marketplaceId), { stock: product.stock });
+
+No transaction, no flooring at zero, no `inventoryVersion`, no `sold`, and the result was
+discarded. The race it created is a lost sale, not a stale read:
+
+    canonical 10 → buyer orders 3 → server sets 7 → POS pushes local 9
+    → the three-unit sale is ERASED
+
+There were **two** implementations behind the same global. `pos-modules.js` loads after
+`pos-omni.js` (`pos.html:1562` then `pos.html:1587`) and overwrites `window.PosOmni`, so
+the version that actually ran in production was the bare `updateDoc` above — the one with
+no error handling at all. `pos-omni.js`'s richer variant additionally kept an **offline
+queue that replayed the stale absolute value** once connectivity returned. Both are gone,
+along with `_queuePush`, `_pendingPushIds`, `_flushPendingPushes` and the `online` flush
+listener.
+
+`pushStock` was redundant, not load-bearing: the correct path already ran on every sale —
+`pos.js` `adjustStock(item.id, -item.qty, 'sale:'+txn.id)` → `pos-db.js`
+`_posSyncCanonicalStock` → a Firestore transaction. `pos-v2.html` never called it (it uses
+`posCompleteCheckout` with an idempotency key); only the legacy `pos.js` terminal did.
+
+### The surviving writer, hardened
+
+`window._posSyncCanonicalStock` (`pos.js`) is now the terminal's only writer of canonical
+`products/{id}.stock`:
+
+* **`sold` is maintained atomically** in the same transaction as `stock`, and is
+  *classified by reason*: `sale:` increments it, `refund:` / `void:` / `rollback:` reverse
+  it, and `purchase_order:` / manual count corrections leave it alone. Receiving stock is
+  not a sale and must not inflate the figure analytics and the seller dashboard read.
+  Both `stock` and `sold` are floored at zero.
+* **`marketplaceId` linkage preserved.** Marketplace-linked rows carry the canonical doc id
+  in `marketplaceId` while catalogue-seeded rows reuse the canonical id as their local id.
+  The writer now resolves both, so retiring `pushStock` removes a defect without removing
+  the capability it provided.
+* **No replay queue.** Deliberately. A queue that re-sends a *delta* double-counts it; the
+  absolute-value queue that used to exist erased concurrent sales. Offline is reported as
+  `deferred`, and canonical reconcile — not replay — is the recovery path.
+
+### A swallowed denial is a correctness defect, not a logging gap
+
+The old `catch (_) {}` made a **rejected** write indistinguishable from a successful one.
+A cashier or branch till whose uid is not the product's `sellerUid` is denied by the
+`products` `allow update` rule (`firestore.rules:936`), and the merchant was left believing
+the marketplace had converged — the same class of defect as a success toast shown before
+the write lands.
+
+Every call now returns a classified outcome (`synced` · `denied` · `failed` · `deferred` ·
+`unavailable` · `not-canonical` · `skipped`), emits a `pos:canonical-stock` event, and
+records failures to `PosHealth`. A denial additionally toasts the cashier — throttled to
+one per minute, so a five-line sale on an unauthorised till informs rather than spams. The
+sale is still never blocked: local IndexedDB stock remains authoritative for the session.
+
+`PosOmni.getStatus()` no longer reports `pushCount` / `lastPush`. A permanent `0` would
+read as "pushes happen and none succeeded", which is not what is true.
+
+### Evidence
+
+`scripts/test-pos-canonical-stock.js` — **PASS 53 / FAIL 0**. The function under test is
+lifted verbatim from `pos.js` by brace matching and executed against a mock Firestore, so
+the assertions run shipped source rather than a re-implementation.
+
+* Full Step 1B matrix: sale qty 1 · sale qty 3 in one transaction · multi-line aggregate ·
+  refund · void · receive · rollback · stock 0 stays 0 · stock 2 vs sale 5 floors at 0 ·
+  `sold` never negative · concurrent marketplace sale not erased · permission deny.
+* **Negative controls** — the retired code is replayed through every removal detector and
+  each one fires. A grep that matches nothing proves nothing.
+* **Mutation proofs** — five guards, each proven load-bearing: remove the zero floor and
+  stock goes to −3; restore the absolute write and the marketplace sale is erased 7 → 9;
+  swallow the denial and it reports `synced` while nothing was written; drop the `sold`
+  classifier and a receive corrupts `sold` 9 → 4; drop the `marketplaceId` resolution and
+  linked sales stop reaching canonical.
+
+**Scope of the claim.** This earns *the POS terminal has exactly one canonical inventory
+writer*, together with the buyer-checkout result below. It does **not** yet earn the
+platform-wide statement — that is earned by the repo-wide anti-drift sweep (P0-2 in
+`docs/LAUNCH_TODO.md`), not by this change.
+
+---
+
 ## [2026-08-15] — Inventory has exactly one writer
 
 **Synchronisation fix #3.** Files: `seller-wiring.js`, `sokoni-db.js`,

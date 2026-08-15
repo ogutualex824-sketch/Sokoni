@@ -1,22 +1,23 @@
 /**
  * SOKONI SmartPOS — Omnichannel Sync Engine v1.0
  *
- * Bidirectional sync between SmartPOS and the Sokoni Marketplace:
- *   • pushStock(productId)  — updates Firestore products/{marketplaceId}.stock after each sale
- *   • startSync(bizPin)     — subscribes to new marketplace orders for this seller
+ * Marketplace → SmartPOS sync (the push direction was retired — see below):
+ *   • startSync(bizPin)     — subscribes to new marketplace orders + product changes
  *   • pullOrders(bizPin)    — one-shot fetch of pending marketplace orders
  *   • stopSync()            — unsubscribes all listeners
  *   • getStatus()           — returns current sync state
  *
  * Products become "marketplace-linked" when their local PosDB record carries a
  * `marketplaceId` field containing the corresponding Firestore products/{id}.
- * When a sale deducts stock, pushStock() propagates the new level to the marketplace
- * so buyers see accurate availability in real time.
+ *
+ * STOCK PUSH IS NOT PART OF THIS ENGINE. A sale deducts canonical stock through the single
+ * transactional writer — PosDB.products.adjustStock() → window._posSyncCanonicalStock() in
+ * pos.js. The absolute-value pushStock() that lived here erased concurrent marketplace sales
+ * and was removed; do not reintroduce it.
  *
  * Security model:
- *   All writes go under the authenticated seller's Firebase UID.
- *   Products: seller may update own product via Firestore rules (uid == auth.uid).
- *   Orders:   seller reads own pending orders (sellerId == auth.uid).
+ *   With pushStock retired this engine performs NO Firestore writes — it is read-only.
+ *   Orders: seller reads own pending orders (sellerId == auth.uid).
  */
 (function () {
   'use strict';
@@ -49,72 +50,28 @@
     bizPin:       null,
     ordersSub:    null,   // Firestore unsubscribe function
     productsSub:  null,   // Firestore unsubscribe function
-    lastPush:     0,
-    pushCount:    0,
-    pullCount:    0,
+    pullCount:    0,      // push counters removed with pushStock — a permanent 0 reads as
+                          // "pushes happen and none succeeded", which is not what is true
     errors:       0,
   };
 
-  /* ── Stock Push ──────────────────────────────────────────────── */
-  /**
-   * Called by pos.js after every sale for items that carry a marketplaceId.
-   * Reads current stock from PosDB → writes to Firestore products/{marketplaceId}.
+  /* ── Stock Push — RETIRED ────────────────────────────────────
+   *
+   * pushStock() and its offline queue (_queuePush / _pendingPushIds /
+   * _flushPendingPushes) are gone. pushStock wrote an ABSOLUTE local stock level onto
+   * canonical products/{marketplaceId}: no transaction, no flooring, no inventoryVersion,
+   * no `sold`, sourced from IndexedDB — so canonical 10 → buyer orders 3 → server sets 7 →
+   * POS pushes local 9 ERASED the three-unit sale. The offline queue made it worse by
+   * replaying that stale absolute value once connectivity returned.
+   *
+   * Canonical stock now has exactly one writer in the terminal:
+   *   PosDB.products.adjustStock() → window._posSyncCanonicalStock()  (pos.js)
+   * which applies the signed delta inside a Firestore transaction, floors at zero, bumps
+   * inventoryVersion, keeps `sold` in step, and reports a denied write instead of
+   * swallowing it. Do not reintroduce an absolute-value push.
+   *
+   * Marketplace → POS pull (_subscribeProducts below) is unaffected.
    */
-  async function pushStock(posProductId) {
-    if (!posProductId) return;
-
-    const db = _db();
-    if (!db) return;
-    if (!navigator.onLine) {
-      _queuePush(posProductId);
-      return;
-    }
-
-    const fs = await _ensureFS();
-    if (!fs) return;
-
-    try {
-      const product = await PosDB.products.getById(posProductId);
-      if (!product?.marketplaceId) return; // not linked to marketplace
-
-      const uid = _authUid();
-      const ref = fs.doc(db, 'products', product.marketplaceId);
-
-      /* Seller-authenticated write — Firestore rules: uid == auth.uid */
-      await fs.updateDoc(ref, {
-        stock:      product.stock ?? 0,
-        updatedAt:  fs.serverTimestamp(),
-        posLastSync: new Date().toISOString(),
-      });
-
-      _state.lastPush = Date.now();
-      _state.pushCount++;
-      _emit('stock:pushed', { posProductId, marketplaceId: product.marketplaceId, stock: product.stock });
-      if (window.PosHealth) PosHealth.recordMetric('omni_stock_push', 1);
-
-    } catch (err) {
-      _state.errors++;
-      console.error('[PosOmni] pushStock failed:', err);
-      if (window.PosHealth) PosHealth.recordError('omni_push_fail', err.message, { posProductId });
-      _queuePush(posProductId); // retry via offline queue
-    }
-  }
-
-  /* ── Offline push queue (survives connectivity loss) ─────────── */
-  const _pendingPushIds = new Set();
-
-  function _queuePush(posProductId) {
-    _pendingPushIds.add(posProductId);
-  }
-
-  async function _flushPendingPushes() {
-    if (!_pendingPushIds.size || !navigator.onLine) return;
-    const ids = Array.from(_pendingPushIds);
-    _pendingPushIds.clear();
-    for (const id of ids) {
-      await pushStock(id).catch(() => _pendingPushIds.add(id));
-    }
-  }
 
   /* ── Marketplace Orders Subscription ────────────────────────── */
   /**
@@ -360,11 +317,8 @@
     return {
       running:       _state.running,
       bizPin:        _state.bizPin,
-      pushCount:     _state.pushCount,
       pullCount:     _state.pullCount,
       errors:        _state.errors,
-      lastPush:      _state.lastPush,
-      pendingPushes: _pendingPushIds.size,
     };
   }
 
@@ -373,16 +327,10 @@
     window.dispatchEvent(new CustomEvent('pos:omni:' + event, { detail }));
   }
 
-  /* ── Connectivity recovery: flush pending stock pushes ───────── */
-  window.addEventListener('online', () => {
-    setTimeout(_flushPendingPushes, 2000);
-  });
-
   /* ── Public API ──────────────────────────────────────────────── */
   window.PosOmni = {
     startSync,
     stopSync,
-    pushStock,
     pullOrders,
     getStatus,
   };
