@@ -1,3 +1,69 @@
+## [2026-08-15] — Inventory has exactly one writer
+
+**Synchronisation fix #3.** Files: `seller-wiring.js`, `sokoni-db.js`,
+`scripts/test-inventory-single-writer.js` (new), `scripts/test-cart-readers.js`,
+`scripts/cart-migration-state.js`. No server, rules or payment changes.
+
+### Two client-side inventory writers, both removed
+
+`seller-wiring.js` patched checkout's `saveAndRedirect` and ran, from the browser, on
+every order:
+
+    updateDoc(doc(db, 'products', item.id), {
+      stock: increment(-1),      // per LINE ITEM, ignoring item.qty
+      sold:  increment(1),
+    }).catch(() => {});          // fire-and-forget
+
+Three defects, all on the money path:
+
+1. **Quantity-blind.** An order for 3 units decremented 1 on the client and 3 on the
+   server — **stock −4, sold +4**.
+2. **Fires before payment.** It ran at cart-save time, so an abandoned or failed
+   checkout permanently consumed stock with no order behind it.
+3. **Duplicate authority.** `_finalizeMarketplacePayment` already deducts the true
+   quantity in ONE transaction, floored at zero, with `inventoryVersion`,
+   `inventoryApplied` idempotency and `oversoldAlerts`. This writer had none of it.
+
+Reachability was **measured in a real browser**, not assumed:
+`seller-wiring loaded=true, scriptTag=true, saveAndRedirect.__sw=true`. Whether each
+write landed depended only on the App Check token, which is valid for a real user.
+
+The wrapper existed solely to call it, so it is removed rather than emptied.
+
+A repo-wide sweep then found a **second** writer: `SokoniDB.updateProductStock()`, also
+incrementing `stock`/`sold` from the client. Same caller proof as `saveReview()` — its
+only caller is `sokoni-test-suite.js`, which runs against the dev mock that replaces
+`global.SokoniDB` wholesale, so it had **zero production callers**. Removed rather than
+made safe: there is no correct client-side stock mutation to fall back to.
+
+### No production App Check bypass
+
+A debug token was **not** registered. The app in the 403s is the production web app, so
+a debug token there would be a standing production attestation bypass, not a test-only
+affordance. The removal is safe under both hypotheses: if the write never landed,
+removing it changes nothing; if it did, it fixes a double decrement.
+
+### Verification
+
+`scripts/test-inventory-single-writer.js` — **40/40**. qty 1 → −1; qty 3 → −3 (not −1);
+multi-line 1+3+2 → −6; failed payment → 0; retry → applied once with stock/sold/version
+unchanged; oversell floors at 0 with the shortfall recorded. Anti-drift sweeps every
+client file for a `products/{id}` stock/sold increment.
+
+Proven by mutation: reintroducing the client decrement failed **6** assertions.
+
+`test-cart-readers` 43/43 — two assertions inverted, since they previously *required*
+the decrement to exist. `seller-wiring.js` and `sokoni-db.js` are named in
+`cart-migration-state.js` per its own convention; neither can hide a cart regression
+(seller-wiring now has no cart access at all, asserted positively).
+
+Regression: `test-checkout-summary` 31/31 · `test-catalogue-authority` 67/67 ·
+`test-product-tombstone` 34/34 · `test-sellability-contract` 74/74 ·
+`test-product-reviews` 32/32 · `test-age-classification` 39/39 ·
+`test-product-revalidation` 21/21 · `test-availability-enforcement` 27/27.
+
+---
+
 ## [2026-08-15] — P0: checkout threw on every non-empty cart
 
 **Slice #3a — isolated live-defect fix.** Files: `checkout.html`,

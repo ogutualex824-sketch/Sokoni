@@ -75,6 +75,15 @@ function survivorFor(file) {
 /* Dirty in the working tree for reasons that predate Track 2 — other tracks and build
    artifacts. Named so "unexpected" means unexpected. */
 const PRE_EXISTING = [
+  /* INVENTORY SINGLE-WRITER track, not cart migration. seller-wiring.js's saveAndRedirect
+     patch and SokoniDB.updateProductStock were retired so inventory has exactly ONE writer
+     (the server transaction in _finalizeMarketplacePayment). Both are named here rather
+     than widening a rule, per this file's convention.
+     Naming them cannot hide a cart regression: the seller-wiring change REMOVES its only
+     cart access (the SokoniCart snapshot the decrement needed), which the suite now asserts
+     positively in section F, and sokoni-db.js holds no cart surface at all. */
+  'seller-wiring.js',
+  'sokoni-db.js',
   'availability-manager.html',          /* Track 1 — availability schedule projection */
   'version.json',                       /* predeploy artifacts, not authored by this work */
   /* Same predeploy step, same reason. The hosting predeploy bumps CACHE_VERSION here and

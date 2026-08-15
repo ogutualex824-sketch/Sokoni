@@ -915,12 +915,23 @@ const SokoniDB = {
     }
   },
 
-  async updateProductStock(productId, delta) {
-    await setDoc(doc(db, 'products', String(productId)), {
-      stock: increment(delta),
-      sold:  increment(-delta > 0 ? -delta : 0),
-    }, { merge: true });
-  },
+  /* updateProductStock() IS RETIRED — the client is not an inventory writer.
+
+     It wrote products/{id}.stock and .sold by increment from the browser, outside any
+     transaction, with no inventoryVersion, no idempotency key and no oversell guard —
+     a second inventory authority alongside the server transaction in
+     functions/index.js::_finalizeMarketplacePayment.
+
+     CALLER PROOF BEFORE REMOVAL, the same check that retired saveReview(): the only
+     caller was sokoni-test-suite.js, which resolves db via getDB() -> global.SokoniDB,
+     and sokoni-dev-mock.js:690 replaces global.SokoniDB wholesale with a mock supplying
+     its own updateProductStock. That test therefore never exercised this function and
+     would have kept passing after its removal.
+
+     Retired alongside seller-wiring's _decrementStock so that inventory has exactly ONE
+     writer. Unlike deleteProduct(), this is removed rather than made safe: there is no
+     correct client-side stock mutation to fall back to, so a future caller should fail
+     loudly rather than quietly write. Stock changes go through the server. */
 
   /* ══ SELLER BROADCASTS ══════════════════════════════════════
      sellerBroadcasts/{sellerUid}/broadcasts/{docId}

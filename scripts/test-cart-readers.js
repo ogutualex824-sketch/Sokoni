@@ -188,9 +188,17 @@ console.log('\nF. seller-wiring.js was unblocked by 2.4 and is now migrated');
   const src = stripComments(read('seller-wiring.js'));
   ck('F', 'no direct cart read remains',
      !/localStorage\s*\.\s*getItem\s*\(\s*['"]cart['"]/.test(src));
-  ck('F', 'it reaches the cart through the service', /window\.SokoniCart/.test(src));
-  ck('F', 'the read still feeds post-order stock decrements', /_decrementStock/.test(src));
-  ck('F', 'it still only runs by patching saveAndRedirect', /saveAndRedirect/.test(src));
+  /* Was: seller-wiring must reach the cart THROUGH SokoniCart. Its only cart access was
+     the snapshot feeding the client stock decrement, now retired — so the stronger
+     statement is that it touches the cart NOT AT ALL. */
+  ck('F', 'seller-wiring no longer touches the cart in any form', !/SokoniCart/.test(src));
+  /* The client stock decrement is REMOVED — inventory has exactly one writer, the
+     server transaction. This assertion previously required _decrementStock to exist;
+     it now requires the opposite, so the second authority cannot return. */
+  ck('F', 'the client no longer decrements stock at all', !/_decrementStock/.test(src));
+  ck('F', 'no client increment(-1) inventory write', !/increment(-1)/.test(src));
+  ck('F', 'saveAndRedirect is no longer wrapped by seller-wiring',
+     !/window.saveAndRedirects*=s*function/.test(src));
   ck('F', 'saveAndRedirect is still defined on checkout.html',
      /function saveAndRedirect|saveAndRedirect\s*=/.test(read('checkout.html')));
   ck('F', 'checkout.html now loads the service — the change 2.4 authorised',

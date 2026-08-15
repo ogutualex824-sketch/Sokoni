@@ -7,9 +7,14 @@
    WHAT IT DOES
    • Patches addProduct()      → writes new product to products/{id}
    • Patches saveEditProduct() → updates product in products/{id}
-   • Patches deleteProduct()   → deletes from products/{id}
-   • Patches saveAndRedirect() → decrements stock in products/{id}
+   • Patches deleteProduct()   → archives products/{id} (tombstone, never a hard delete)
    • Patches loadProducts()    → merges all sellers' Firestore products
+   ─────────────────────────────────────────────────────────────────
+   WHAT IT DELIBERATELY DOES **NOT** DO
+   • It does NOT touch inventory. The saveAndRedirect patch that decremented
+     products/{id}.stock from the browser is removed — see _decrementStock below.
+     Inventory has exactly ONE writer: the server transaction in
+     functions/index.js::_finalizeMarketplacePayment.
    • On login: syncs any local sellerProducts to Firestore
 ================================================================ */
 
@@ -111,25 +116,38 @@
     }
   }
 
-  /* ── Decrement stock for items purchased ────────────────────── */
-  async function _decrementStock(cartItems) {
-    const db = _getDb();
-    if (!db || !cartItems || !cartItems.length) return;
-    try {
-      const { doc, updateDoc, increment } = await import(FS_URL);
-      for (const item of cartItems) {
-        if (!item.id) continue;
-        /* Skip services & digital — unlimited stock */
-        if (item.isService || item.isDigital) continue;
-        updateDoc(doc(db, 'products', String(item.id)), {
-          stock: increment(-1),
-          sold:  increment(1),
-        }).catch(() => {});
-      }
-    } catch(e) {
-      console.warn('[SellerWiring] stock decrement failed:', e.message);
-    }
-  }
+  /* ── _decrementStock IS REMOVED — the client is not an inventory writer ──────
+     It did, from the browser, on every checkout:
+
+         updateDoc(doc(db, 'products', item.id), {
+           stock: increment(-1),          // per LINE ITEM, ignoring item.qty
+           sold:  increment(1),
+         }).catch(() => {});              // fire-and-forget
+
+     Three demonstrated defects, all on the money path:
+
+       1. QUANTITY-BLIND. `increment(-1)` per line regardless of qty. An order for 3
+          units decremented 1 on the client and 3 on the server — stock -4, sold +4.
+       2. FIRES BEFORE PAYMENT. It ran from the saveAndRedirect wrapper at cart-save
+          time, so an abandoned or failed checkout permanently consumed stock with no
+          order behind it.
+       3. DUPLICATE AUTHORITY. _finalizeMarketplacePayment already deducts the true
+          quantity inside ONE transaction, floored at zero, with inventoryVersion,
+          inventoryApplied idempotency and oversoldAlerts. This second writer had none
+          of that: no transaction, no version, no idempotency, and errors swallowed.
+
+     Reachability was measured in a real browser on checkout.html, not assumed:
+     seller-wiring loaded=true, scriptTag=true, saveAndRedirect.__sw=true — the wrapper
+     was installed and would have invoked this on every order. Whether each write LANDED
+     depended only on the App Check token, which is valid for a real user.
+
+     The saveAndRedirect wrapper existed solely to call this, so it is removed too rather
+     than left as an empty patch waiting to be refilled.
+
+     INVENTORY HAS EXACTLY ONE WRITER: the server transaction in
+     functions/index.js::_finalizeMarketplacePayment. Quantity reaches it through
+     createCheckoutSession, which already re-reads every price and clamps every quantity
+     server-side. Pinned by scripts/test-inventory-single-writer.js. */
 
   /* ── Pull all products from Firestore → merge into display ─── */
   /* NOTE: realtime.js now sets up onSnapshot for index/category.
@@ -218,35 +236,18 @@
      PATCH: checkout.html  saveAndRedirect → decrement Firestore stock
   ═══════════════════════════════════════════════════════════════ */
 
-  function _patchCheckout() {
-    if (window.saveAndRedirect && !window.saveAndRedirect.__sw) {
-      const orig = window.saveAndRedirect;
-      window.saveAndRedirect = function(...a) {
-        /* Canonical (Track 2.4). Snapshotting BEFORE the original runs is load-bearing:
-           saveAndRedirect clears the cart, so reading after it would always decrement
-           nothing. That ordering is unchanged.
+  /* _patchCheckout IS REMOVED, not emptied.
 
-           A missing service is NOT an empty cart. Returning [] here would skip
-           _decrementStock silently and leave sold stock on the shelf — a stock-integrity
-           failure with no symptom until someone oversells. checkout.html loads
-           sokoni-cart.js (this patch only ever runs there), so absence means something is
-           actually wrong, and it says so instead of quietly doing nothing. */
-        const C = window.SokoniCart;
-        let cartItems = null;
-        if (C) {
-          cartItems = C.list();
-        } else {
-          console.error('[SOKONI] seller-wiring: SokoniCart unavailable on the checkout ' +
-                        'path — stock was NOT decremented for this order. This needs ' +
-                        'manual reconciliation.');
-        }
-        const result = orig.apply(this, a);
-        if (cartItems && cartItems.length) _decrementStock(cartItems);
-        return result;
-      };
-      window.saveAndRedirect.__sw = true;
-    }
-  }
+     Its wrapper existed for exactly one purpose: to snapshot the cart before
+     saveAndRedirect cleared it and hand that snapshot to _decrementStock. With the
+     client no longer an inventory writer there is nothing for it to do, and leaving an
+     empty patch behind would be an invitation to refill it.
+
+     saveAndRedirect is therefore left UNWRAPPED. Nothing else depended on the wrapper:
+     it returned the original result unchanged and its only side effect was the stock
+     write. Quantity reaches the server through createCheckoutSession, which re-reads
+     every price and clamps every quantity server-side. */
+  function _patchCheckout() { /* intentionally does nothing — see above */ }
 
   /* ═══════════════════════════════════════════════════════════════
      PATCH: script.js  loadProducts → merge Firestore products
