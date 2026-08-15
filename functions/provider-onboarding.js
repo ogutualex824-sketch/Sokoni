@@ -321,6 +321,25 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   if (!draft.coverage) throw new HttpsError('failed-precondition', 'Coverage step incomplete.');
   if (!d.plan)         throw new HttpsError('failed-precondition', 'Subscription not activated.');
 
+  /* A retracted listing must not be restorable by its own owner. applyDecision()
+     writes status:'suspended' onto providers/{uid} but deliberately leaves
+     providerProfiles intact so an admin can reinstate without the provider
+     re-entering anything — which is exactly what allowed a suspended provider to
+     re-publish themselves, since every precondition above still passes.
+
+     providers/{uid}.status is the authoritative state: it is written
+     synchronously in the same decision commit. The custom claim is NOT checked
+     here — grantAccountRole() mirrors claims best-effort ("a claim failure must
+     not abort a projection that already succeeded") and a client ID token caches
+     for up to an hour, so a claim check would be neither sufficient nor timely.
+
+     Absent document = first publish, which must still succeed. */
+  const pubSnap = await _db().collection('providers').doc(uid).get();
+  if (pubSnap.exists && pubSnap.data().status === 'suspended') {
+    throw new HttpsError('permission-denied',
+      'This provider listing is suspended. Contact support to be reinstated.');
+  }
+
   const providerId = d.providerId || await _genProviderId();
   /* /provider/{providerId} has no hosting rewrite — firebase.json routes
      /shop, /@, /card and /pay, but not /provider — so every QR code and

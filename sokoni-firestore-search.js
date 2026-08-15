@@ -651,7 +651,11 @@ function toRow(spec, entry, tokens, full, matchedCount, strength) {
     price:     spec.price ? spec.price(d) : null,
     link:      spec.link(d, d._id),
     thumbnail: spec.thumb ? spec.thumb(d) : null,
-    verified:  Boolean(d.verified || d.isVerified),
+    /* Admin-granted `verified` only. `isVerified` is client-writable on
+       sellers/{uid} (not covered by noAdminFields()), so ORing it in let a
+       seller award themselves a Verified badge in public search results.
+       Matches sokoni-providers.js, which has always read `verified === true`. */
+    verified:  d.verified === true,
     _source:   'firestore',
     _matched:  matchedCount,
     _score:    score(String(title).toLowerCase(), entry, tokens, full, strength),

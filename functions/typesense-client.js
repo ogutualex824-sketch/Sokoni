@@ -944,7 +944,9 @@ const TRANSFORMERS = {
     deliveryOptions: _strArr(data.deliveryOptions),
     isFeatured:      data.isFeatured === true   || undefined,
     featuredLevel:   _int32(data.featuredLevel) || undefined,
-    verified:        Boolean(data.verified || data.isVerified),
+    /* Admin-granted `verified` only — see the note in algolia-indexer.js.
+       `isVerified` is client-writable and must not become a trust signal. */
+    verified:        data.verified === true,
     tags:            _strArr(data.tags).slice(0, 20),
     status:          _str(data.status, 'active'),
     joinedAt:        _unix(data.createdAt || data.joinedAt),

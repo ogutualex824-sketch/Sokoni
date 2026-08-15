@@ -108,7 +108,11 @@ exports.generatePOSPaymentQR = onCall(
     const seller     = sellerSnap.exists ? sellerSnap.data() : {};
     const sellerName = _san(seller.shopName || seller.businessName || seller.displayName || 'SOKONI Merchant', 80);
     const sellerLogo = seller.logoUrl || seller.logo || '';
-    const sellerVerified = !!(seller.verified || seller.isVerified);
+    /* `verified` is admin-granted and blocked from client writes by
+       noAdminFields(); `isVerified` is NOT in that blocklist, so a seller could
+       set it on their own sellers/{uid} document and have this badge rendered to
+       the buyer on the payment page. Only the admin-granted field counts. */
+    const sellerVerified = seller.verified === true;
 
     const txnId    = _txnId();
     const sig      = _sign(txnId, QR_SIGNING_SECRET.value());
