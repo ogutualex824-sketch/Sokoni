@@ -1,3 +1,89 @@
+## [2026-08-15] — FIXED: a platform-funded discount was being paid for by the seller
+
+**Status: implemented, tested, NOT deployed.** Checkpoint `bfdb8c7`. discount-funding **44/0** ·
+financial-engine 21/0 · financial-idempotency 25/0 · payment-authority 22/0 · payment-integrity
+19/19 · payout-idempotency 11/11 · admin-bulk-payout 14/0 · analytics-parity 17/17.
+
+The settlement engine has always accepted `discountCents` + `discountFundedBy` and handled them
+correctly. **Neither production caller ever passed them:**
+
+```
+order-settlement.js:59      computeSettlement(db, { grossCents, category, sellerId, hubId })
+settlement-executor.js:186  computeSettlement(db, { grossCents, category, sellerId,
+                                                    gatewayFeeCents, deliveryFeeCents, riderId })
+```
+
+So `discountCents` defaulted to 0, the platform-funded branch was unreachable, and no
+`PLATFORM_PROMOS` entry was ever written. Because `grossCents` is derived from the order total
+**after** the discount, **the seller absorbed every discount** — including loyalty points SOKONI
+issued and then charged to the merchant, with no ledger record that a promotion had occurred.
+
+### Funding model
+
+| Discount | Funder | Seller basis | Ledger |
+|---|---|---|---|
+| Loyalty redemption | **always platform** — SOKONI issued the points | full | `PLATFORM_PROMOS` |
+| Promo `fundedBy:'platform'` | platform | full | `PLATFORM_PROMOS` |
+| Promo `fundedBy:'seller'` | seller | discounted | none |
+| Delivery fee | — | excluded | `deliveryFees` |
+
+An unrecognised funder resolves to **platform, never seller**: a missing or malformed value must
+not quietly move money off a merchant.
+
+### The engine change was proven necessary, not assumed
+
+The test was written first and run against the **unchanged** engine:
+
+```
+FAIL  the seller is MADE WHOLE   [KES 8,730 vs KES 9,700]
+CRASH grossCents: 0 → "computeSettlement: grossCents required"
+```
+
+The promotion entry and ledger balance already worked. The missing piece was the settlement
+**basis** — passing `discountCents` alone still left the seller short by the whole discount:
+
+```js
+basisCents = grossCents + platformFundedDiscountCents;
+```
+
+Commission and `sellerNetCents` use the basis; **`payment_received` still uses `grossCents`**, so
+the ledger never claims the gateway handed over more than it did. The `grossCents: 0` case now
+settles — a 100% platform-funded order pays the seller in full instead of throwing.
+
+### A negative platform net is a fact, not a bug
+
+`platformNetCents` no longer runs through `_int()`, which floors at zero and reported **KES 0 for
+an order that actually cost SOKONI KES 700** — understating campaign cost in exactly the place
+someone would look to price one. Unreachable before, since `discountCents` was always 0. Every
+other figure keeps `_int()`: a negative commission or a negative seller payout would be a bug; a
+negative platform net is real.
+
+### No money from nothing
+
+Verified concretely: `payment_received` equals the actual gateway cash; the seller basis rises
+**only** for platform-funded discounts; `PLATFORM_PROMOS` records the obligation; and the seller's
+uplift (KES 1,000) is **exactly equal** to the funding entry, with the ledger netting to zero.
+
+### Forward-only, and the rider is untouched
+
+An order with no `discount` block resolves to 0 and settles **byte-identically** to before —
+asserted directly, not assumed. Historical settlements are never recalculated; they are completed
+financial events.
+
+Delivery splits on a separate path (`onOrderStatusChange` → `deliveryFees`) from
+`order.deliveryFee`, never from the discounted total. **Free delivery to the buyer is not free
+delivery to the rider.** Pinned across platform-funded, seller-funded and no-discount cases.
+
+### Files
+
+`functions/settlement-engine.js` · `functions/order-settlement.js` ·
+`functions/settlement-executor.js` · `functions/index.js` ·
+`scripts/test-discount-funding.js` (new)
+
+**Database:** orders gain an additive `discount` block. **API:** none. **Breaking:** none.
+**Deployment:** none yet — **Functions-only** when authorized; no rules, no Hosting. Production
+remains rules `e66d77a4` / Hosting `02faf36` v524 / 7 Functions ACTIVE.
+
 ## [2026-08-15] — Roles Phase 4b: workspace guards wired, role profiles consumed
 
 **Status: implemented, tested, NOT deployed.** role-authority **130/0** (was 79).
