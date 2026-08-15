@@ -1,3 +1,73 @@
+## [2026-08-15] — A stale catalogue may display, but it may not delete
+
+**Synchronisation fix #2 of 4** (CDN authority). Files: `sokoni-db.js`, `category.js`,
+`functions/index.js`, `scripts/test-catalogue-authority.js`. No rules, inventory or
+payment changes.
+
+### The hazard Slice 2 created
+
+`20dfcd2` established that an authoritative catalogue response may **remove** products.
+`/api/catalogue` is CDN-cacheable for up to 120s (`s-maxage=120`), and the fallback
+marked every successful fetch `authoritative: true`.
+
+A cached response is indistinguishable from a fresh one by content. So a snapshot that
+**predates a newly published product** could erase it — and precisely when the system is
+already degraded, because the fallback exists for the case where App Check has denied
+the Firestore listener. Being successfully fetched is not the same as being current
+enough to delete by.
+
+### Three states, decided in one place
+
+`listenProducts` now emits `meta.authority`:
+
+| authority | display | remove | persist |
+|---|---|---|---|
+| `fresh` — server-confirmed and current | ✅ | ✅ | ✅ |
+| `stale` — real data, but old | ✅ | ❌ | ❌ |
+| `unconfirmed` — cannot vouch for it | ✅ | ❌ | ❌ |
+
+Age is measured from **server-side values only**, never a client clock: the CDN `Age`
+header when present, otherwise the response `Date` header minus a new `generatedAt`
+stamp in the body. **Unknown age is stale** — freshness must be proven, not assumed.
+`FRESH_MAX_AGE_S = 5`, so an origin miss (`Age: 0`) can still remove while a cached hit
+cannot.
+
+A server-confirmed Firestore snapshot is `fresh`; a non-empty snapshot from the local
+SDK cache is `unconfirmed`. An empty cached snapshot is still dropped entirely
+(`20dfcd2`), so **App Check rejection still cannot blank the catalogue**.
+
+`category.js` **obeys** this and never recomputes freshness — it cannot see the `Age`
+header, and a second freshness calculation is exactly how five definitions of
+"sellable" happened. A test asserts the consumer contains no age arithmetic.
+
+### Verification
+
+`scripts/test-catalogue-authority.js` — **67/67**, no emulator, no network, covering all
+ten required scenarios: fresh removes; stale does not remove and does not persist;
+stale-then-fresh removes; a product published inside the CDN window survives a stale
+response; a tombstoned product lingers only until the next fresh answer; the age
+boundary at 0 / 5 / 6 / 120 / unknown; and fresh-empty, stale-empty and failed-read
+remaining three distinguishable outcomes.
+
+Proven by mutation: hardcoding the fallback to `fresh` failed 2 assertions; treating
+unknown age as fresh failed 2; recomputing freshness in the consumer failed 2; letting
+`stale` be destructive failed 1.
+
+**Browser — partial, stated honestly.** With a route-intercepted `/api/catalogue`
+returning `Age: 118` and omitting a cached product, the run that delivered emitted
+`http-fallback-ok:stale:118` and the product was **not** removed and the cache was
+**not** overwritten — the exact safety property. The `fresh`-removes case could **not**
+be confirmed in-browser: the HTTP fallback's delivery races the Firestore listener's
+retry timing under local App Check rejection and did not fire on every run. That path
+is covered at unit level only. In production the primary `fresh` source is the
+server-confirmed Firestore snapshot, not the fallback.
+
+Regression: `test-product-tombstone` 34/34 · `test-sellability-contract` 74/74 ·
+`test-product-reviews` 32/32 · `test-age-classification` 39/39 ·
+`test-product-revalidation` 21/21 · `test-availability-enforcement` 27/27.
+
+---
+
 ## [2026-08-15] — Delete means delist: the canonical product is never destroyed
 
 **Synchronisation fix #1 of 4** (deletion semantics). Files: `sokoni-sellability.js`,

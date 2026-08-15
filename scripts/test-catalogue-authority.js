@@ -55,7 +55,12 @@ const DEMO_IDS = ['D1', 'D2'];
    contract, since an unconfirmed write bakes a transient failure into next load. */
 function applyCatalogue(cached, fsProducts, scope, meta) {
   if (!Array.isArray(fsProducts)) return { list: cached.slice(), persisted: false };
-  const authoritative = meta === undefined ? true : !!(meta && meta.authoritative);
+  /* Mirrors category.js: authority is OBEYED, never recomputed. Only `fresh` is
+     destructive. Legacy `authoritative` is honoured for callers predating the
+     tri-state; an absent meta is unconfirmed. */
+  const authority = meta === undefined ? 'fresh'
+    : ((meta && meta.authority) || (meta && meta.authoritative ? 'fresh' : 'unconfirmed'));
+  const authoritative = authority === 'fresh';
   const inScope = (p) => scope === 'all' || String((p && p.category) || '').toLowerCase() === scope;
   const fsIds = new Set(fsProducts.map(p => String(p.id)));
   const dropDemo = authoritative || fsProducts.length > 0;
@@ -163,6 +168,90 @@ console.log('\nAn UNCONFIRMED read is not authority');
      !applyCatalogue([A, B, C], [A, C], 'all', AUTH).list.some(p => p.id === 'B'));
 }
 
+/* ── CDN AGE MUST NEVER BECOME DESTRUCTIVE AUTHORITY ──────────────────────────
+   /api/catalogue is CDN-cacheable for up to 120s (s-maxage). A cached copy is
+   indistinguishable from a fresh one by CONTENT, yet since 20dfcd2 an authoritative
+   response can REMOVE products. So a response that predates a newly published
+   product would erase it. Age decides removal rights; it never decides display. */
+console.log('\nCDN age: stale data displays, only fresh data deletes');
+{
+  const FRESH = { source: 'http', authority: 'fresh',       ageSeconds: 0 };
+  const STALE = { source: 'http', authority: 'stale',       ageSeconds: 118 };
+  const UNCONF= { source: 'firestore', authority: 'unconfirmed', ageSeconds: null };
+
+  /* 1. Fresh API [A,B] → canonical [A] → B disappears. */
+  ck('fresh API removes a product the server no longer returns',
+     ids(applyCatalogue([A, B], [A], 'all', FRESH).list) === 'A');
+
+  /* 2. Stale API [A,B], canonical unavailable → B remains. */
+  ck('stale API does NOT remove an absent product',
+     ids(applyCatalogue([A, B], [A], 'all', STALE).list) === 'A,B');
+  ck('stale API is not persisted as the canonical cache',
+     applyCatalogue([A, B], [A], 'all', STALE).persisted === false);
+
+  /* 3. Stale API first, then a fresh answer → B disappears. */
+  {
+    const afterStale = applyCatalogue([A, B], [A], 'all', STALE);
+    ck('a later FRESH answer still removes B',
+       ids(applyCatalogue(afterStale.list, [A], 'all', FRESH).list) === 'A');
+  }
+
+  /* 4. Stale API [A] with B only in cache → B is neither invented nor removed. */
+  {
+    const out = applyCatalogue([A, B], [A], 'all', STALE);
+    ck('stale API neither removes nor invents rows', ids(out.list) === 'A,B');
+  }
+
+  /* 5. A product PUBLISHED inside the CDN window survives a stale response. */
+  {
+    const justPublished = { id: 'NEW', category: 'electronics', price: 10 };
+    const out = applyCatalogue([A, justPublished], [A], 'all', STALE);
+    ck('a product published during the CDN window is not erased by a stale response',
+       out.list.some(p => p.id === 'NEW'));
+  }
+
+  /* 6. A tombstoned product does not linger once a fresh answer arrives. */
+  {
+    const stillThere = applyCatalogue([A, B], [A], 'all', STALE).list;
+    ck('a delisted product lingers only until the next fresh answer',
+       stillThere.some(p => p.id === 'B') &&
+       !applyCatalogue(stillThere, [A], 'all', FRESH).list.some(p => p.id === 'B'));
+  }
+
+  /* 7. Unconfirmed Firestore is non-destructive too. */
+  ck('unconfirmed Firestore data displays but never deletes',
+     ids(applyCatalogue([A, B], [A], 'all', UNCONF).list) === 'A,B');
+
+  /* 8. A genuinely EMPTY fresh catalogue is still distinguishable from stale/failed. */
+  ck('fresh empty empties the grid',   ids(applyCatalogue([A, B], [], 'all', FRESH).list) === '');
+  ck('stale empty does NOT empty it',  ids(applyCatalogue([A, B], [], 'all', STALE).list) === 'A,B');
+  ck('failed read does NOT empty it',  ids(applyCatalogue([A, B], null, 'all', FRESH).list) === 'A,B');
+  ck('all three empties are distinguishable',
+     new Set([
+       ids(applyCatalogue([A, B], [], 'all', FRESH).list),
+       ids(applyCatalogue([A, B], [], 'all', STALE).list),
+       ids(applyCatalogue([A, B], null, 'all', FRESH).list),
+     ]).size === 2);   /* fresh-empty differs; stale-empty and failed both preserve */
+
+  /* 9. App Check rejection must not blank the catalogue (the 20dfcd2 guarantee). */
+  ck('App Check rejection (unconfirmed empty) never blanks the grid',
+     ids(applyCatalogue([A, B], [], 'all', UNCONF).list) === 'A,B');
+}
+
+console.log('\nThe age boundary itself');
+{
+  /* Mirrors sokoni-db.js: fresh iff age is KNOWN and <= FRESH_MAX_AGE_S. */
+  const FRESH_MAX_AGE_S = 5;
+  const authorityFor = (age) => (age !== null && age <= FRESH_MAX_AGE_S) ? 'fresh' : 'stale';
+  ck('age 0 (origin miss) is fresh',        authorityFor(0)   === 'fresh');
+  ck('age exactly at the bound is fresh',   authorityFor(5)   === 'fresh');
+  ck('one second past the bound is stale',  authorityFor(6)   === 'stale');
+  ck('a 120s CDN hit is stale',             authorityFor(120) === 'stale');
+  ck('UNKNOWN age is stale, never fresh',   authorityFor(null)=== 'stale');
+  ck('an unknown-age response still displays (stale is usable)',
+     ids(applyCatalogue([A], [A, B], 'all', { authority: authorityFor(null) }).list) === 'A,B');
+}
+
 console.log('\nWiring assertions');
 {
   const fs = require('fs'), path = require('path');
@@ -179,7 +268,11 @@ console.log('\nWiring assertions');
      /const scope\s*=\s*\(new URLSearchParams\(location\.search\)\.get\('cat'\)/.test(src));
   ck('the authoritative snapshot is persisted', /localStorage\.setItem\('sellerProducts'/.test(src));
   ck('authority is read from meta, not inferred from invocation',
-     /const authoritative = !!\(meta && meta\.authoritative\)/.test(src));
+     /const authority = \(meta && meta\.authority\)/.test(src));
+  ck('removals require FRESH specifically, not merely a non-empty meta',
+     /const authoritative = authority === 'fresh'/.test(src));
+  ck('the consumer does NOT recompute freshness itself',
+     !/ageSeconds|FRESH_MAX_AGE|headers\.get\('age'\)/.test(src));
   ck('removals are gated on authority', /authoritative \? !inScope\(p\) : true/.test(src));
   ck('persistence is gated on authority',
      /if \(authoritative\) \{[\s\S]{0,200}?localStorage\.setItem\('sellerProducts'/.test(src));
@@ -195,9 +288,20 @@ console.log('\nWiring assertions');
   ck('an undeliverable empty leaves the HTTP fallback armed (_delivered stays false)',
      /drop-unconfirmed-empty/.test(dbSrc));
   ck('snapshot deliveries state their authority',
-     /authoritative: !snap\.metadata\.fromCache/.test(dbSrc));
-  ck('the Admin-SDK fallback is marked authoritative',
-     /source: 'http', fromCache: false, authoritative: true/.test(dbSrc));
+     /authority: _authority/.test(dbSrc));
+  ck('a server-confirmed snapshot is fresh, a cached one unconfirmed',
+     /snap\.metadata\.fromCache \? 'unconfirmed' : 'fresh'/.test(dbSrc));
+  ck('the Admin-SDK fallback authority is COMPUTED from age, not asserted',
+     /const authority = \(age !== null && age <= FRESH_MAX_AGE_S\) \? 'fresh' : 'stale'/.test(dbSrc));
+  ck('the fallback no longer hardcodes authoritative:true',
+     !/source: 'http', fromCache: false, authoritative: true/.test(dbSrc));
+  ck('age is measured from SERVER values only (Age header / generatedAt)',
+     /headers\.get\('age'\)/.test(dbSrc) && /body\.generatedAt|body && body\.generatedAt/.test(dbSrc));
+  ck('unknown age is treated as stale, never fresh',
+     /return null;/.test(dbSrc) && /age !== null &&/.test(dbSrc));
+  ck('/api/catalogue stamps generatedAt so age is knowable',
+     /generatedAt: new Date\(\)\.toISOString\(\)/.test(
+       fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8')));
 
   /* The bridge between them. Dropping `meta` here would make every delivery look
      unconfirmed and silently disable the deletion path — the invariant would

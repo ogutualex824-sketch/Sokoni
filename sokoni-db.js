@@ -690,6 +690,41 @@ const SokoniDB = {
        permission-denied, so a single hiccup permanently broke the load — see the
        error handler below and fix 5d21705. One retry, then the error state.
        Neither weakens App Check. */
+    /* ── CATALOGUE AUTHORITY ──────────────────────────────────────────────────
+       Three states, decided HERE and nowhere else. A consumer must never compute
+       its own freshness — that is how five definitions of "sellable" happened.
+
+         fresh        server-confirmed, current  → display + update + REMOVE + persist
+         stale        real data, but old         → display + update only
+         unconfirmed  cannot vouch for it        → display + update only
+
+       Only `fresh` may drive a destructive decision. 20dfcd2 established that an
+       authoritative response can remove products; this establishes that being
+       successfully fetched is not the same as being current enough to delete by.
+       /api/catalogue is CDN-cacheable for up to 120s (s-maxage), so a response can
+       predate a product that has since been published — applying it destructively
+       would erase that product.
+
+       Age is measured from SERVER-side values only, never a client clock: the CDN's
+       `Age` header when present, otherwise the response `Date` header minus the
+       body's `generatedAt`. If neither is available the age is UNKNOWN, which is
+       treated as stale — freshness must be proven, not assumed. */
+    const FRESH_MAX_AGE_S = 5;
+
+    const _responseAgeSeconds = (res, body) => {
+      /* CDN-computed seconds this response has been cached. Most reliable. */
+      const hdr = Number(res && res.headers && res.headers.get('age'));
+      if (Number.isFinite(hdr) && hdr >= 0) return hdr;
+      /* Both server-side timestamps, so their difference is clock-skew free. */
+      const dateHdr = res && res.headers && res.headers.get('date');
+      const gen     = body && body.generatedAt;
+      if (dateHdr && gen) {
+        const d = Date.parse(dateHdr), g = Date.parse(gen);
+        if (Number.isFinite(d) && Number.isFinite(g)) return Math.max(0, (d - g) / 1000);
+      }
+      return null;   /* unknown */
+    };
+
     const t0 = Date.now();
     const emit = (phase, detail) => {
       const payload = { phase, ...detail, appCheck: (typeof window !== 'undefined' && window.__sokoniAppCheckState) || 'unknown', ms: Date.now() - t0 };
@@ -713,12 +748,24 @@ const SokoniDB = {
       setTimeout(() => {
         if (_delivered || typeof fetch !== 'function') return;
         fetch('/api/catalogue?' + qs.toString(), { cache: 'no-store' })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => {
-            if (_delivered || !j || !j.ok || !Array.isArray(j.products)) return;
-            emit('http-fallback-ok', { count: j.products.length });
-            /* Admin SDK, server-side, no App Check — a confirmed read. */
-            callback(j.products, { source: 'http', fromCache: false, authoritative: true });
+          .then(r => (r.ok ? r.json().then(j => ({ res: r, body: j })) : null))
+          .then(p => {
+            if (_delivered || !p || !p.body || !p.body.ok || !Array.isArray(p.body.products)) return;
+            const j   = p.body;
+            const age = _responseAgeSeconds(p.res, j);
+            /* Admin SDK, server-side, no App Check — the DATA is trustworthy. Whether
+               it is CURRENT is a separate question, and only a provably-recent answer
+               earns removal rights. Unknown age is stale, not fresh. */
+            const authority = (age !== null && age <= FRESH_MAX_AGE_S) ? 'fresh' : 'stale';
+            emit('http-fallback-ok', { count: j.products.length, ageSeconds: age, authority });
+            callback(j.products, {
+              source: 'http',
+              authority,
+              ageSeconds: age,
+              fromCache: false,
+              /* Legacy boolean kept in step with the tri-state for older consumers. */
+              authoritative: authority === 'fresh',
+            });
           })
           .catch(() => {});
       }, 2000);
@@ -790,9 +837,21 @@ const SokoniDB = {
             return;
           }
           _delivered = true;   /* real-time read landed — the HTTP fallback stands down */
+          /* A server-confirmed snapshot is the strongest answer available: current by
+             construction, so it is `fresh` and may remove. A non-empty snapshot served
+             from the local cache carries real rows but the server has not confirmed
+             them, so it is `unconfirmed` — useful for display, never for deletion.
+             (An EMPTY cached snapshot never reaches here; it is dropped above.) */
+          const _authority = snap.metadata.fromCache ? 'unconfirmed' : 'fresh';
           callback(
             snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }),
-            { source: 'firestore', fromCache: snap.metadata.fromCache, authoritative: !snap.metadata.fromCache }
+            {
+              source: 'firestore',
+              authority: _authority,
+              ageSeconds: snap.metadata.fromCache ? null : 0,
+              fromCache: snap.metadata.fromCache,
+              authoritative: _authority === 'fresh',
+            }
           );
         },
         err  => {

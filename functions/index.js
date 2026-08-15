@@ -7191,8 +7191,22 @@ exports.catalogue = onRequest(
       /* Newest first — product ids are Date.now() timestamps. */
       products.sort((a, b) => String(b.id).localeCompare(String(a.id)));
       products = products.slice(0, cap);
+      /* `generatedAt` is stamped so a CONSUMER can tell how old this answer is.
+         The response is CDN-cacheable for up to 120s (s-maxage), and a cached copy
+         is indistinguishable from a fresh one by content alone — yet since 20dfcd2
+         an authoritative catalogue response can REMOVE products. A two-minute-old
+         snapshot must therefore be usable for display but never for deletion, or a
+         product published inside the CDN window would be erased by a response that
+         predates it. Server-generated, so freshness never depends on a client clock
+         (the client compares this against the response `Date`/`Age` headers, both
+         also server-side values). */
       res.set("Cache-Control", "public, max-age=60, s-maxage=120");
-      res.status(200).json({ ok: true, count: products.length, products });
+      res.status(200).json({
+        ok: true,
+        count: products.length,
+        products,
+        generatedAt: new Date().toISOString(),
+      });
     } catch (e) {
       console.error("[catalogue] failed:", e.message);
       res.status(500).json({ ok: false, error: "catalogue_unavailable" });

@@ -972,9 +972,21 @@ window._catMergeFirestore = function(fsProducts, meta) {
     /* Only a malformed call is ignored. An empty array is authoritative. */
     if (!Array.isArray(fsProducts)) return;
 
-    /* Absent meta = a legacy caller that cannot vouch for the read. Treat it as
-       unconfirmed: additive only. Nothing may delete without saying so. */
-    const authoritative = !!(meta && meta.authoritative);
+    /* AUTHORITY IS OBEYED HERE, NEVER RECOMPUTED. SokoniDB.listenProducts is the one
+       place that decides freshness (it is the only layer that can see the CDN `Age`
+       header and the snapshot metadata); this consumer just applies the contract:
+
+         fresh        → updates + additions + REMOVALS + persistence
+         stale        → updates + additions only
+         unconfirmed  → updates + additions only
+
+       A second freshness calculation here is exactly how five definitions of
+       "sellable" happened, so there is none. Absent meta = a caller that cannot
+       vouch for the read, which is treated as unconfirmed: nothing may delete
+       without saying so. `authoritative` is still honoured for legacy callers. */
+    const authority = (meta && meta.authority)
+        || (meta && meta.authoritative ? 'fresh' : 'unconfirmed');
+    const authoritative = authority === 'fresh';
 
     const scope   = (new URLSearchParams(location.search).get('cat') || 'all').toLowerCase();
     const inScope = (p) => scope === 'all'
