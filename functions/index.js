@@ -2486,7 +2486,12 @@ exports.createCheckoutSession = onCall(
             Math.round((_res.discountCents || 0) / 100),
             Math.round(serverSubtotal)
           );
-          promoApplied = { code: _res.promoCode, promoId: _res.promoId, discount: promoDiscount };
+          /* Capture the promo's OWN funding decision. validatePromoCode already
+             returns it (finos-utils: promo.fundedBy || 'platform'); without carrying it
+             here the settlement engine cannot tell a discount SOKONI funded from one
+             the merchant funded, and the merchant absorbed both. */
+          promoApplied = { code: _res.promoCode, promoId: _res.promoId, discount: promoDiscount,
+                           fundedBy: _res.fundedBy === 'seller' ? 'seller' : 'platform' };
         } else {
           promoError = _res.error || "Promo code could not be applied";
         }
@@ -2569,6 +2574,7 @@ exports.createCheckoutSession = onCall(
       promoCode:   promoApplied ? promoApplied.code : null,
       promoId:     promoApplied ? promoApplied.promoId : null,
       promoDiscount,
+      promoFundedBy: promoApplied ? promoApplied.fundedBy : null,
       /* Settled by verifyPayment when this session is consumed — never here, or an
          abandoned checkout would burn the buyer's points. */
       loyaltyPoints,
@@ -2827,6 +2833,23 @@ exports.verifyIntasendPayment = onRequest(
            → previously 0), AND settlement gross (order-settlement `_grossCents` = total − deliveryFee,
            previously over-settled the seller by the delivery amount). Server-authoritative. */
         deliveryFee:     Number((sessionDoc && sessionDoc.deliveryFee) || 0),
+        /* Discount funding, carried from the session the same way deliveryFee is.
+           `orderTotal` is the amount AFTER the discount, so settlement derives the
+           seller's gross from a reduced figure — without this block the merchant
+           absorbed every discount, including loyalty points SOKONI issued.
+           order-settlement reads `discount.loyaltyCents` / `discount.promoCents` /
+           `discount.promoFundedBy` to decide what SOKONI funds. Purely additive:
+           orders written before this carry no `discount` and settle unchanged. */
+        discount: {
+          totalCents:     Math.round((Number((sessionDoc && sessionDoc.promoDiscount) || 0)
+                                    + Number((sessionDoc && sessionDoc.loyaltyDiscount) || 0)) * 100),
+          promoCents:     Math.round(Number((sessionDoc && sessionDoc.promoDiscount) || 0) * 100),
+          /* The promo's own funding decision, from validatePromoCode. */
+          promoFundedBy:  (sessionDoc && sessionDoc.promoFundedBy) || null,
+          /* Loyalty is ALWAYS platform-funded — SOKONI issued the points. */
+          loyaltyCents:   Math.round(Number((sessionDoc && sessionDoc.loyaltyDiscount) || 0) * 100),
+          loyaltyFundedBy: 'platform',
+        },
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
         items:           resolvedItems,

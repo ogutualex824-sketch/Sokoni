@@ -41,6 +41,28 @@ function _grossCents(order) {
   return Math.max(0, Math.round((total - delivery) * 100));
 }
 
+/* The PLATFORM-funded slice of an order's discount, in cents.
+
+   Funding model:
+     loyalty redemption  ALWAYS platform-funded — SOKONI issued the points, so
+                         redeeming them must not reduce what the merchant earns.
+     promo code          the promo record's own `fundedBy`, captured onto the order
+                         at checkout from validatePromoCode.
+
+   Anything unrecognised is treated as platform-funded, never seller-funded: a
+   missing or malformed funder must not quietly move money off a merchant.
+
+   Orders placed before this shipped carry no discount block and yield 0, which is
+   exactly right — they settle as they always did. */
+function _platformFundedDiscountCents(order) {
+  const d = order && order.discount;
+  if (!d || typeof d !== 'object') return 0;
+  const loyalty = Math.max(0, Math.round(Number(d.loyaltyCents) || 0));
+  const promo   = Math.max(0, Math.round(Number(d.promoCents) || 0));
+  const promoIsSellerFunded = d.promoFundedBy === 'seller';
+  return loyalty + (promoIsSellerFunded ? 0 : promo);
+}
+
 /* Settle ONE fulfilled product order exactly once. Reuses the canonical engine for the
    breakdown, credits the seller's withdrawable wallet, writes settlement + wallet txn +
    balanced ledger, and advances the state machine. Idempotent + replay-safe. */
@@ -56,7 +78,17 @@ async function settleOrder(db, adminSdk, orderId) {
   /* Compute OUTSIDE the txn (reads commission rules from Firestore); the txn re-guards state. */
   let breakdown = null;
   if (sellerId && grossCents > 0) {
-    breakdown = await SE.computeSettlement(db, { grossCents, category: 'marketplace', sellerId, hubId: 'marketplace' });
+    /* Discount funding. `grossCents` is the cash collected, i.e. AFTER the discount,
+       so without these the seller absorbed every discount — including loyalty points
+       SOKONI itself issued. Only the PLATFORM-funded portion is passed: a
+       seller-funded discount is already reflected in the reduced gross and needs no
+       adjustment. Absent on orders placed before this shipped, which is correct —
+       the fix is forward-only and settled orders are never recalculated. */
+    breakdown = await SE.computeSettlement(db, {
+      grossCents, category: 'marketplace', sellerId, hubId: 'marketplace',
+      discountCents:    _platformFundedDiscountCents(order),
+      discountFundedBy: 'platform',
+    });
   }
 
   const settleRef = db.collection('settlements').doc(orderId);   /* deterministic → exactly-once */
@@ -266,4 +298,7 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   return confirmed;
 }
 
-module.exports = { STATES, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents };
+module.exports = { STATES, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents,
+  /* Exposed so the funding resolver can be tested directly — it decides real money,
+     and inferring it from a full settlement run would prove less. */
+  _internal: { _platformFundedDiscountCents } };

@@ -68,14 +68,43 @@ const DEFAULT_RIDER_PCT = 0.88;
 ──────────────────────────────────────────────────────────────── */
 async function computeSettlement(db, input = {}) {
   const grossCents = _int(input.grossCents);
-  if (!grossCents) throw new Error('computeSettlement: grossCents required');
+
+  /* ── Discount funding decides the SETTLEMENT BASIS ─────────────────────────
+     `grossCents` is the cash actually collected, i.e. AFTER the discount. Who
+     funded that discount decides whether the seller should feel it.
+
+       seller-funded    the merchant chose to discount their own goods. The basis
+                        is the discounted amount; they earn less. Nothing to add.
+       platform-funded  SOKONI gave the buyer money — a promo SOKONI funds, or
+                        loyalty points SOKONI issued. The merchant sold at full
+                        price as far as they are concerned, so the basis is
+                        restored and SOKONI funds the gap out of PLATFORM_PROMOS.
+
+     Before this, both callers omitted these fields entirely, `discountCents`
+     defaulted to 0, and the seller absorbed EVERY discount — including loyalty
+     points the platform itself issued, with no ledger record that a promotion had
+     happened. The engine already knew how to fund a discount; nothing ever told it
+     one had occurred.
+
+     An unrecognised funder resolves to 'platform', never 'seller': a typo must not
+     quietly move money off a merchant. */
+  const discountCents          = _int(input.discountCents);
+  const discountFundedBy       = input.discountFundedBy === 'seller' ? 'seller' : 'platform';
+  const platformFundedDiscountCents = discountFundedBy === 'platform' ? discountCents : 0;
+
+  /* Commission and the seller's earning are computed on the basis, not on the cash.
+     Every ledger line that represents MONEY THAT MOVED still uses the real figures —
+     payment_received stays at grossCents, so the ledger never claims the gateway
+     handed over more than it did. */
+  const basisCents = _int(grossCents + platformFundedDiscountCents);
+  if (!basisCents) throw new Error('computeSettlement: grossCents required');
 
   const category = input.category || 'marketplace';
   const sellerId = input.sellerId || null;
 
   /* 1 ── Platform commission (canonical rule engine) */
   const comm = await U.calculateCommission(db, {
-    orderAmountCents: grossCents, category, sellerId, hubId: input.hubId,
+    orderAmountCents: basisCents, category, sellerId, hubId: input.hubId,
   });
   const commissionCents = _int(comm.commissionCents);
   const effectiveRate   = comm.effectiveRate;
@@ -86,8 +115,10 @@ async function computeSettlement(db, input = {}) {
   /* 3 ── Taxes: VAT on commission (platform), WHT withheld at payout */
   const vatCents = _int(U.calculateVAT(commissionCents, category).taxCents);
 
-  /* 4 ── Seller gross earning (faithful to finos: gross − commission) */
-  const sellerNetCents = _int(grossCents - commissionCents);
+  /* 4 ── Seller gross earning (faithful to finos: basis − commission).
+         Basis, not cash: a platform-funded discount must not reduce what the
+         merchant earns. With no discount the two are identical. */
+  const sellerNetCents = _int(basisCents - commissionCents);
 
   /* 5 ── WHT applied when the seller cashes out (surfaced here, deducted at payout) */
   const whtCents           = _int(U.calculateWHT(sellerNetCents).whtCents);
@@ -99,18 +130,29 @@ async function computeSettlement(db, input = {}) {
   const riderNetCents    = _int(deliveryFeeCents * riderPct);
   const platformDelivCents = _int(deliveryFeeCents - riderNetCents);
 
-  /* 7 ── Discounts / promos, rewards, referral, affiliate, service charge (surfaced) */
-  const discountCents          = _int(input.discountCents);
-  const discountFundedBy       = input.discountFundedBy === 'seller' ? 'seller' : 'platform';
+  /* 7 ── Rewards, referral, affiliate, service charge (surfaced).
+         `discountCents` / `discountFundedBy` are resolved at the top, because the
+         settlement BASIS depends on them. */
   const referralBonusCents     = _int(input.referralBonusCents);
   const affiliateCommissionCents = _int(input.affiliateCommissionCents);
   const serviceChargeCents     = _int(input.serviceChargeCents);
 
-  /* 8 ── Platform net earnings (what Bravilex retains) */
+  /* 8 ── Platform net earnings (what Bravilex retains).
+         Deliberately NOT run through _int(): that floors at zero, and the platform's
+         net on a single order can legitimately be NEGATIVE — a promo SOKONI funds
+         generously, or loyalty redeemed against a low-commission category, can cost
+         more than the commission earned. Flooring it reported KES 0 for an order
+         that actually lost KES 700, which understates the cost of a campaign in
+         exactly the place someone would look to price one.
+
+         This was unreachable before discount funding was wired: `discountCents` was
+         always 0, so the subtraction could not go negative. Every other figure keeps
+         _int() — a negative commission or a negative payout would be a bug, whereas
+         a negative platform net is a fact. */
   const platformGrossCents = _int(commissionCents + platformDelivCents);
-  const platformNetCents   = _int(
+  const platformNetCents   = Math.round(
     platformGrossCents - gatewayFeeCents - referralBonusCents - affiliateCommissionCents
-    - (discountFundedBy === 'platform' ? discountCents : 0),
+    - platformFundedDiscountCents,
   );
 
   /* 9 ── Balanced ledger plan (each pair: 1 debit acct, 1 credit acct, equal amount).

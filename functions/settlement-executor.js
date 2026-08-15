@@ -183,7 +183,22 @@ exports.settlementPreviewMethod = onCall(
     _assertAdmin(req);
     const { grossCents, category, sellerId, provider, sellerPayoutAccount, gatewayFeeCents, deliveryFeeCents, riderId } = req.data || {};
     if (!provider) throw new HttpsError('invalid-argument', 'provider required');
-    const breakdown = await SE.computeSettlement(_db(), { grossCents, category, sellerId, gatewayFeeCents, deliveryFeeCents, riderId });
+    /* Same discount-funding contract as order-settlement, but this call site is a
+       callable driven by req.data — it has no order document to read, so the caller
+       supplies the already-resolved PLATFORM-funded slice. Only that slice is ever
+       passed: a seller-funded discount is already reflected in the reduced gross and
+       needs no adjustment.
+
+       Omitted by every existing caller → 0 → this settles exactly as it does today.
+       An unrecognised funder resolves to 'platform', never 'seller', so a malformed
+       value cannot quietly move money off a merchant. */
+    const _platformFundedDiscountCents = Math.max(0, Math.round(Number(
+      (req.data && req.data.discountFundedBy) === 'seller' ? 0 : (req.data && req.data.discountCents) || 0,
+    ) || 0));
+    const breakdown = await SE.computeSettlement(_db(), {
+      grossCents, category, sellerId, gatewayFeeCents, deliveryFeeCents, riderId,
+      discountCents: _platformFundedDiscountCents, discountFundedBy: 'platform',
+    });
     const decision  = await resolveSettlementMethod(_db(), { provider, breakdown, sellerPayoutAccount });
     const ledgerPlan = buildLedgerPlan(breakdown, decision.method, { sellerId, riderId });
     let splitMasked = null;
