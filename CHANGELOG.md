@@ -1,3 +1,83 @@
+## [2026-08-15] — Writer inventory: the anti-drift gate was under-counting
+
+**Files:** `scripts/gate-inventory-writers.js`, `scripts/test-gate-inventory-writers.js`,
+`docs/LAUNCH_TODO.md`. No runtime, server, rules or payment changes.
+
+### The gate treated "I cannot read this payload" as "this payload is safe"
+
+That is the swallowed-denial defect in detector form — the same mistake Step 1B fixed in
+`_posSyncCanonicalStock`, reappearing in the tool built to police it. `authorityFieldsIn`
+returned "no authority field" for any payload it could not parse, so three shapes were
+dropped in silence:
+
+| shape | example | hidden writer |
+|---|---|---|
+| spread | `{ ...product, sellerUid }` | `sokoni-db.js:614 saveProduct` |
+| function result | `.set(canonical, {merge})` | `sokoni-inventory.js:513 saveProduct` |
+| `Object.assign` | `Object.assign({}, patch, …)` | `seller.js:4275 _persistStockToFirestore` |
+
+A helper-derived collection (`productsCol().doc(id)`, where
+`function productsCol(){ return _fs.collection('products') }`) was invisible too; the gate
+now resolves helper bodies. One **false** positive was also removed: `sokoni-sync.js`
+writes `userSync/{uid}/products/{id}`, a per-user subcollection that an "anywhere in the
+ref" match read as canonical. Canonical `products` is a root collection, so the first
+quoted segment must be it.
+
+**Result: 20 sites / 12 files → 30 sites / 16 files.** The gap was not more writers of the
+same kind; it was a whole class the detector could not see.
+
+### Authoring vs transactional — the distinction that makes the census usable
+
+A seller *setting* the stock of their own product is how stock comes to exist at all. It is
+not a duplicate authority. Stock mutated as a *side effect* of a sale is the class that
+must have exactly one writer, and the class `pushStock` belonged to. Nine authoring sites
+across four files are now a tier of their own, kept out of `CLIENT` so the "one sanctioned
+client writer" statement stays true. `seller.js:4275` is the well-built example — it bumps
+`inventoryVersion`, stamps `lastStockSource: 'seller-edit'`, and rolls back the local cache
+on failure instead of reporting a false success.
+
+Recorded, not fixed: authoring writes are still *absolute* client writes, so a seller edit
+landing concurrently with a sale can overwrite the deduction. Real, but a convergence
+problem — retiring an authoring path would remove the only way a seller can set stock.
+
+### Disposition of the five quarantined writers
+
+`sokoni-wap-definitions.js` is worse than a duplicated handler. The client engine executes
+workflow steps in the browser (`wap.html:780` → `sokoni-wap.js:536`) and persists instance
+state to `workflowInstances` — **the same collection** `functions/wap.js:118`
+`wapAdvanceWorkflow` triggers on. A browser-executed step therefore fires the server
+executor on the same instance. Same-step double execution is mitigated only by ordering
+(the client marks a step `running` and awaits the persist before invoking the handler),
+which is timing-dependent, not an idempotency key, and does not stop the two engines racing
+on later steps. Exposure is currently narrow: `marketplace_order` is startable only from the
+admin dropdown at `wap.html:288`.
+
+The correct fix is that the browser should not execute inventory steps at all — the server
+implementation already exists. Bumping `inventoryVersion` in the client write would be the
+*wrong* fix, legitimising a client inventory authority. That is an architectural change to
+the WAP engine, so under RC freeze it is flagged, not done. `warehouse-scanner.html` should
+convert to the existing server cycle-count path (deleting it would remove cycle counting);
+`pos-boss.js` should route through the normal publish path. **All five remain OPEN.**
+
+### Evidence
+
+`scripts/test-gate-inventory-writers.js` — **PASS 52 / FAIL 0** (was 39). New coverage: each
+unreadable-payload shape is reported; helper-derived collections resolve; an unreadable
+payload aimed at a *non*-products target stays silent (reporting those flooded the gate with
+~200 irrelevant hits); `userSync/{uid}/products/{id}` is not canonical; and `AUTHORING` is
+asserted to be a distinct tier that never overlaps `CLIENT` or `QUARANTINE`.
+
+### Scope of the claim — weakened, deliberately
+
+The inventory moved the answer *further away*, which is the outcome to trust. What is now
+supportable is a **census with a ratchet**, not a single-writer proof: 15 server sites, one
+sanctioned client transactional writer, nine legitimate-but-absolute authoring sites, five
+quarantined defects, and a gate that stops a sixth appearing unnoticed. The honest summary:
+**the inventory found that the previous inventory was wrong**, and any future claim of
+completeness should be assumed to share that fate until a differently-shaped check disagrees.
+
+---
+
 ## [2026-08-15] — Anti-drift gate for canonical inventory authority (P0-2)
 
 **Files:** `scripts/gate-inventory-writers.js` (new),

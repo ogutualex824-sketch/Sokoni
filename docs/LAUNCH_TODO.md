@@ -154,6 +154,62 @@ so these fail as REVIEW rather than passing quietly): a runtime-built collection
 a write reaching Firestore through an un-registered helper wrapper; and source-only
 analysis, which cannot distinguish a reachable writer from dead code.
 
+### 2c. Writer inventory — **the 20-site figure was an undercount**
+
+Running the inventory closed two of the gate's declared blind spots and changed the
+answer. `5c03b57` reported **20 sites / 12 files**. The true figure is **30 sites / 16
+files**, and the gap was not more writers of the same kind — it was a *class* of writer
+the detector could not see.
+
+**Root cause: the gate treated "I cannot read this payload" as "this payload is safe."**
+That is the swallowed-denial defect in detector form — the same mistake Step 1B fixed in
+`_posSyncCanonicalStock`, reappearing in the tool built to police it. Three payload shapes
+were silently dropped:
+
+| shape | example | hidden writer |
+|---|---|---|
+| spread | `{ ...product, sellerUid }` | `sokoni-db.js:614 saveProduct` |
+| function result | `.set(canonical, {merge})` | `sokoni-inventory.js:513 saveProduct` |
+| `Object.assign` | `Object.assign({}, patch, {…})` | `seller.js:4275 _persistStockToFirestore` |
+
+A helper-derived collection (`productsCol().doc(id)`) was also invisible; helper-body
+resolution now covers it. And one **false** positive was removed: `sokoni-sync.js` writes
+`userSync/{uid}/products/{id}`, a per-user subcollection, which an "anywhere in the ref"
+match wrongly read as canonical.
+
+**The distinction that makes the inventory usable: authoring vs transactional.**
+
+- **Authoring** — a seller *setting* the stock of their own product. This is how stock
+  comes to exist at all; it is legitimate by design, not a duplicate authority.
+- **Transactional** — stock mutated as a *side effect* of a sale, reservation or sync.
+  This is the class that must have exactly one writer, and the class `pushStock` belonged
+  to.
+
+Nine authoring sites across four files are now registered as their own tier. Notably
+`seller.js:4275` is the well-built one: it bumps `inventoryVersion`, stamps
+`lastStockSource: 'seller-edit'`, and rolls back the local cache on failure rather than
+reporting a false success.
+
+> **Residual hazard, recorded not fixed.** Authoring writes are still *absolute* client
+> writes. A seller edit landing concurrently with a sale can overwrite the sale's
+> deduction — last-write-wins. That is a real convergence problem, but it is **not** the
+> pushStock defect and must not be folded into it: retiring an authoring path would remove
+> the only way a seller can set stock.
+
+**Current register — 30 sites / 16 files:**
+
+| tier | sites / files | meaning |
+|---|---|---|
+| SERVER | 15 / 8 | canonical by architecture |
+| CLIENT | 1 / 1 | the single sanctioned transactional client writer |
+| AUTHORING | 9 / 4 | seller-owned stock edits — legitimate, absolute |
+| QUARANTINE | 5 / 3 | known client-side defects, ratchet-down only |
+
+**Remaining blind spots, unchanged and still declared:** a runtime-assembled collection
+name (reported, never passed); source-not-behaviour, so reachability is measured per
+writer rather than inferred; and the per-file count key, which traps *growth* but not
+*substitution* of one writer for another in the same file.
+
 ### 2b. Quarantined client-side writers — **3 files, 5 sites, OPEN**
 
 The gate found genuine third-party writers. They are recorded in `QUARANTINE`, which is
@@ -179,6 +235,48 @@ pass"* on every run. None of these is fixed.
 `functions/pos-retail-engine.js` mirror sales to `soldCount`, while `functions/index.js`,
 `pos-marketplace-sync.js`, `pos-zero-friction.js` and now `pos.js` use `sold`. Analytics
 reconciliation reads one of them. This is a convergence item, not a Step 1B/P0-2 item.
+
+#### Disposition — what each quarantined writer needs
+
+**1. `sokoni-wap-definitions.js` — the WAP engine runs on BOTH sides of the boundary.**
+This is worse than a duplicated handler, and the reachability trace is the reason:
+
+```
+wap.html:468        imports sokoni-wap-definitions.js  → registers the handlers
+wap.html:780        wap.start(defId, …)                → executes steps IN THE BROWSER
+sokoni-wap.js:536   this._handlers.get(stepDef.handler)→ the client inventory.reserve
+sokoni-wap.js:80    INSTANCES = 'workflowInstances'    → persists instance state
+functions/wap.js:39 COLL.INSTANCES = "workflowInstances"   ← the SAME collection
+functions/wap.js:118 wapAdvanceWorkflow = onDocumentUpdated(`${COLL.INSTANCES}/{id}`)
+functions/wap.js:759 _dispatchHandler("inventory.reserve") → _svcInventoryReserve
+```
+
+So a browser-executed step **persists the instance, which fires the server executor on the
+same instance**. Two engines advance one workflow. Same-step double execution is mitigated
+only by ordering — the client marks a step `running` and awaits the persist
+(`sokoni-wap.js:439-441`) *before* invoking the handler (`:451`), so the server's
+`_findReadySteps` sees it claimed. That is a timing-dependent mitigation, **not** an
+idempotency key, and it does not stop the two engines racing on *subsequent* steps.
+
+*Exposure is currently narrow:* `marketplace_order` is startable only from the admin
+dropdown at `wap.html:288`. No production path starts it automatically.
+
+**Correct disposition: the browser should not execute inventory steps at all** — the
+server implementation already exists. Making the client write bump `inventoryVersion`
+would be the wrong fix: it would legitimise a client inventory authority. This is an
+architectural change to the WAP engine, so under RC freeze it is **flagged, not done**.
+
+**2. `warehouse-scanner.html`** — a physical count legitimately supersedes the running
+total, so this is closer to *authoring* than to the pushStock class. It needs the same
+treatment `functions/pos-completeness.js` gets server-side (that path exists), plus an
+`inventoryVersion` bump. Convert, do not simply delete — deleting removes cycle counting.
+
+**3. `pos-boss.js`** — a merchant-initiated publish of documents it owns
+(`products/pos_{biz}_{id}`), not a sale side effect. Lowest risk of the three. It should
+route through the same publish path as the rest of the catalogue rather than writing an
+absolute `stockQty` from local POS state.
+
+None of the three is fixed. All three remain OPEN.
 
 ### 3. Live checkout P0 — fixed in candidate, **still live on production**
 
@@ -277,3 +375,18 @@ repo-wide **writer inventory**, and the gate's own declared blind spots are prec
 it cannot substitute for one: a runtime-built collection name, a write behind an
 unregistered helper, and dead-vs-reachable code are all invisible to source analysis.
 Retire the overclaim only when the quarantine reaches zero *and* the inventory is complete.
+
+**Status after the writer inventory (§2c).** The inventory ran and *moved the answer
+further away*, which is the outcome to trust rather than the reassuring one. The gate's
+20 sites were an undercount; the real figure is 30 across 16 files, because the detector
+was silently dropping payloads it could not read. The claim is now:
+
+> Canonical `products/{id}` stock is written by **15 server sites** (canonical by
+> architecture), **one** sanctioned client transactional writer, **nine** seller-authoring
+> sites that are legitimate but absolute, and **five quarantined client-side defects**.
+> A gate prevents a sixth from appearing unnoticed.
+
+That is a *census with a ratchet*, not a single-writer proof — and it is the strongest
+statement the evidence supports. The honest summary of this phase: **the inventory found
+that the previous inventory was wrong.** Any future claim of completeness should assume
+the same is true of this one until a differently-shaped check disagrees.

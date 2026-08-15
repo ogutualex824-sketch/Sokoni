@@ -28,19 +28,28 @@
    collection, resolves its PAYLOAD, and only then asks whether an authority
    field is being written. A string that merely contains the word cannot match.
 
-   BLIND SPOTS (declared, not discovered later)
-     1. Target/payload resolution is textual plus ONE level of local variable
-        indirection. A collection name assembled at runtime
-        (`db.collection(x)`) is UNRESOLVED, never silently allowed.
-     2. A write reaching Firestore through a helper wrapper is attributed to the
-        wrapper, not the caller. The wrapper still has to be allow-listed.
-     3. It reads source, not behaviour. It cannot tell a reachable writer from
-        dead code — that is what the reachability measurement in 0e13db2 was for.
-     4. Cloud Functions are in scope, but a server writer is canonical BY
-        ARCHITECTURE. Allow-listing one records that it exists; it does not
-        assert it is correct.
+   AN UNREADABLE PAYLOAD IS NOT A SAFE ONE
+   The first version returned "no authority field" for any payload it could not
+   parse — treating *I cannot see it* as *it is safe*. That is the swallowed-denial
+   mistake in detector form, and it hid two real writers: sokoni-db.js merges a
+   caller's object by SPREAD, and sokoni-inventory.js passes a function RESULT.
+   An unreadable payload written to a products target is now reported, not dropped.
 
-   EXIT 0 = no violations, no unresolved authority writes.
+   BLIND SPOTS (declared, not discovered later)
+     1. Resolution is textual plus one level of local variable indirection, plus
+        the body of a named helper function. A collection name assembled at
+        runtime is UNRESOLVED — reported, never silently allowed.
+     2. It reads source, not behaviour. It cannot tell a reachable writer from
+        dead code; reachability is measured separately, per writer, and recorded
+        in docs/LAUNCH_TODO.md.
+     3. Cloud Functions are in scope, but a server writer is canonical BY
+        ARCHITECTURE. Registering one records that it exists; it does not assert
+        it is correct.
+     4. The register is per-file COUNTS. Replacing one writer in a file with a
+        different one of the same tier is invisible. Counts trap growth, not
+        substitution.
+
+   EXIT 0 = every authority write is registered, and no count has drifted.
    ──────────────────────────────────────────────────────────────────────────── */
 'use strict';
 const fs   = require('fs');
@@ -54,28 +63,30 @@ const AUTHORITY_FIELDS = ['stock', 'sold', 'inventoryVersion', 'stockQty'];
 
 /* ── REGISTER ──────────────────────────────────────────────────────────────
    Derived by running this gate over the tree and classifying EVERY hit — not
-   assumed. The first draft of this file guessed "three legitimate server
-   writers" from an earlier `sold:` grep; the real number is nine files. The
-   guess is why the register is derived, and why `--derive` exists.
+   assumed. The first draft guessed "three legitimate server writers" from an
+   earlier `sold:` grep; the real figure is EIGHT server files. That guess is why
+   the register is derived, and why `--derive` exists.
 
-   Keyed on FILE + SITE COUNT, deliberately, not on function name. Attribution
-   by nearest-name was wrong on eight of fifteen sites (writes sit inside
-   anonymous runTransaction callbacks), and a key that breaks under refactoring
-   makes the gate fail for the wrong reason. A count is stable and still traps a
-   NEW writer: adding one changes the count.
+   Keyed on FILE + SITE COUNT, deliberately, not on function name. Attribution by
+   nearest-name was wrong on eight of fifteen sites (writes sit inside anonymous
+   runTransaction callbacks), and a key that breaks under refactoring makes the
+   gate fail for the wrong reason. A count is stable and still traps a NEW writer.
 
-   THREE TIERS, kept apart on purpose:
+   FOUR TIERS, kept apart on purpose:
 
      SERVER    canonical by architecture. The server IS the inventory authority;
                listing one records that it exists, it does not audit it.
-     CLIENT    the single sanctioned client writer.
+     CLIENT    the single sanctioned client TRANSACTIONAL writer.
+     AUTHORING seller-owned stock edits — how stock comes to exist at all.
+               Legitimate, but still absolute client writes (see that block).
      QUARANTINE  client-side writers that are KNOWN DEFECTS and not yet fixed.
                Listing one is not permission. This count may only FALL. */
 
 const SERVER = [
-  { file: 'functions/index.js',                sites: 3,
+  { file: 'functions/index.js',                sites: 4,
     why: '_finalizeMarketplacePayment and the daraja path — THE canonical checkout deduction. ' +
-         'Transactional, floored at zero, bumps inventoryVersion, records oversoldAlerts.' },
+         'Transactional, floored at zero, bumps inventoryVersion, records oversoldAlerts. ' +
+         'The fourth site is executeTool, the KASS admin agent applying a delist tombstone.' },
   { file: 'functions/pos-marketplace-sync.js', sites: 2,
     why: 'Click-and-collect reserve + cancel restore. TOCTOU-safe re-read inside the txn.' },
   { file: 'functions/pos-zero-friction.js',    sites: 2,
@@ -123,9 +134,44 @@ const QUARANTINE = [
          'documents it writes — but it is still a client writing absolute canonical stock.' },
 ];
 
-const REGISTER = [...SERVER, ...CLIENT, ...QUARANTINE];
+/* ── AUTHORING ─────────────────────────────────────────────────────────────
+   A seller SETTING the stock of their own product is not a duplicate inventory
+   authority — it is how stock comes to exist at all. These writes are legitimate
+   by design, and they are a different class from the QUARANTINE writers, which
+   mutate stock as a side effect of a transaction.
+
+   They are registered rather than ignored because they are still ABSOLUTE client
+   writes to canonical products/{id}: a seller edit landing concurrently with a
+   sale can overwrite the sale's deduction (last-write-wins). That hazard is real
+   but is NOT the pushStock defect, and closing it is a convergence exercise, not
+   a writer retirement.
+
+   Every one of these was invisible to the first version of this gate — their
+   payloads are spreads, Object.assign results, or plain variables. They are the
+   reason the "20 sites" figure in commit 5c03b57 was an undercount. */
+const AUTHORING = [
+  { file: 'seller.js', sites: 4,
+    why: 'Seller product create (1008), edit (1792), bulk upload (2058) and the stock editor ' +
+         '_persistStockToFirestore (4275). The stock editor is the well-built one: it bumps ' +
+         'inventoryVersion, stamps lastStockSource "seller-edit", and rolls back the local ' +
+         'cache on failure rather than reporting a false success.' },
+  { file: 'seller-wiring.js', sites: 2,
+    why: '_writeProduct / _deleteProduct — the listing write and tombstone helpers that ' +
+         'survived 0e13db2 (which removed only the stock-mutating checkout wrapper).' },
+  { file: 'sokoni-db.js', sites: 2,
+    why: 'saveProduct merges a caller-supplied product object into products/{id} via SPREAD, ' +
+         'so it writes stock whenever the caller supplies it — the write that had no literal ' +
+         '`stock:` key for the detector to find. deleteProduct applies the delist tombstone.' },
+  { file: 'sokoni-inventory.js', sites: 1,
+    why: 'The merchant inventory editor: productsCol().doc(id).set(canonical, {merge}). Both ' +
+         'the collection (helper call) and the payload (function result) are indirect, which ' +
+         'is why it was invisible until helper-body resolution was added.' },
+];
+
+const REGISTER = [...SERVER, ...CLIENT, ...AUTHORING, ...QUARANTINE];
 const TIER = new Map([...SERVER.map((e) => [e.file, 'SERVER']),
                       ...CLIENT.map((e) => [e.file, 'CLIENT']),
+                      ...AUTHORING.map((e) => [e.file, 'AUTHORING']),
                       ...QUARANTINE.map((e) => [e.file, 'QUARANTINE'])]);
 
 /* ── SCOPE ────────────────────────────────────────────────────────────────
@@ -213,6 +259,23 @@ function splitArgs(text) {
 
 const lineOf = (src, idx) => src.slice(0, idx).split('\n').length;
 
+/* Body of a helper FUNCTION named IDENT, so a collection reached through a wrapper
+   is still resolvable. sokoni-inventory.js writes via productsCol().doc(id).set(…),
+   where productsCol() is `function productsCol(){ return _fs.collection('products') }`
+   — invisible to declaration-only resolution, and a real writer. */
+function resolveHelperBody(code, ident) {
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident)) return null;
+  const re = new RegExp('(?:async\\s+)?function\\s+' + ident + '\\s*\\([^)]*\\)\\s*\\{', 'g');
+  const m = re.exec(code);
+  if (!m) return null;
+  let depth = 0;
+  for (let i = m.index + m[0].length - 1; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}') { depth--; if (depth === 0) return code.slice(m.index, i + 1); }
+  }
+  return null;
+}
+
 /* Nearest preceding declaration of IDENT, so `const ref = doc(db,'products',id)`
    and `const patch = { stock: ... }` both resolve. One level only, by design. */
 function resolveIdent(code, ident, beforeIdx) {
@@ -238,7 +301,18 @@ function resolveIdent(code, ident, beforeIdx) {
    The path form was a real blind spot: warehouse-scanner.html:818 writes canonical
    stock through db.doc(`products/${product.id}`) and the segment-only matcher could
    not see it. A detector that cannot see a form cannot certify its absence. */
-const looksLikeProducts = (t) => !!t && (/['"`]products['"`]/.test(t) || /['"`]products\//.test(t));
+function looksLikeProducts(t) {
+  if (!t) return false;
+  /* Path form: `products/{id}` — must START the path, so `userSync/{uid}/products/{id}`
+     does not qualify. */
+  if (/['"`]products\//.test(t)) return true;
+  /* Segment form: the FIRST quoted segment must be `products`. Canonical products is a
+     ROOT collection; sokoni-sync.js writes doc(_db,'userSync',_uid,'products',id) — a
+     per-user SUBCOLLECTION, an entirely different document that an "anywhere" match
+     wrongly flagged as canonical. */
+  const first = t.match(/['"`]([A-Za-z_][\w]*)['"`]/);
+  return !!first && first[1] === 'products';
+}
 
 /* True when the target names a collection that is NOT `products`. Guarded so
    `posProducts` / `sellerProducts` / `inventory_variants` cannot be mistaken for it.
@@ -251,18 +325,34 @@ function namesOtherCollection(t) {
       || /['"`]([A-Za-z_][\w]*)\//.test(t);
 }
 
-/* Does this payload text write an authority field as a top-level key? */
+/* What does this payload write?
+     { fields }            — authority fields written as literal top-level keys
+     { unknown: true }     — the payload cannot be read, so it MIGHT write one
+
+   `unknown` is the important half, and the first version of this gate got it wrong
+   by returning [] for anything it could not parse — treating "I cannot see it" as
+   "it is safe", which is the swallowed-denial mistake in detector form. Two real
+   client writers hid in that gap:
+
+     sokoni-db.js:614   setDoc(doc(db,'products',id), { ...product, … }, {merge})
+                        — SPREAD: no literal `stock:` key, but writes stock whenever
+                          the caller's object carries it.
+     sokoni-inventory.js:513  productsCol().doc(id).set(canonical, {merge})
+                        — payload is a function RESULT, not an object literal.       */
 function authorityFieldsIn(payloadText) {
-  if (!payloadText) return [];
+  if (!payloadText) return { fields: [], unknown: false };
   const body = payloadText.trim();
-  if (!body.startsWith('{')) return [];
+  /* Not an object literal — a variable, a call, a spread of something else. */
+  if (!body.startsWith('{')) return { fields: [], unknown: true };
   const inner = body.slice(1, body.lastIndexOf('}'));
   const found = [];
+  let unknown = false;
   for (const part of splitArgs(inner)) {
+    if (/^\s*\.\.\./.test(part)) { unknown = true; continue; }   /* spread: contents unreadable */
     const key = part.match(/^\s*(?:\[?\s*['"`]?)([A-Za-z_$][\w$]*)/);
     if (key && AUTHORITY_FIELDS.includes(key[1])) found.push(key[1]);
   }
-  return found;
+  return { fields: found, unknown };
 }
 
 /* Enclosing function, found by BRACE DEPTH rather than "nearest preceding name".
@@ -344,14 +434,23 @@ function scanSource(rel, raw) {
       if (/^[A-Za-z_$][\w$]*$/.test(payloadText.trim())) {
         payloadResolved = resolveIdent(code, payloadText.trim(), m.index) || payloadText;
       }
-      const fields = authorityFieldsIn(payloadResolved);
-      if (!fields.length) continue;                 /* not an inventory write at all */
+      const { fields, unknown } = authorityFieldsIn(payloadResolved);
+      /* No authority field AND the payload was fully readable → provably not an
+         inventory write. Anything else has to be resolved against the target. */
+      if (!fields.length && !unknown) continue;
 
       /* Resolve target to a collection. A target naming SOME OTHER collection is
          resolved-and-irrelevant, not "unknown" — `inventoryMovements` and
          `posProducts` are different documents and must not clog REVIEW. */
       let targetText = (refText || '').trim().replace(/^await\s+/, '');
       let resolved = looksLikeProducts(targetText);
+      if (!resolved) {
+        /* A helper call — productsCol().doc(id) — resolves through the helper body. */
+        const callee = (targetText.match(/^([A-Za-z_$][\w$]*)\s*\(/) || [])[1];
+        const body   = callee ? resolveHelperBody(code, callee) : null;
+        if (looksLikeProducts(body)) resolved = true;
+        else if (namesOtherCollection(body)) continue;
+      }
       if (!resolved) {
         if (namesOtherCollection(targetText)) continue;
         const bare = targetText.replace(/\[[^\]]*\]$/, '');          /* refs[i] -> refs */
@@ -360,6 +459,8 @@ function scanSource(rel, raw) {
         const decl = ident ? resolveIdent(code, ident, m.index) : null;
         if (looksLikeProducts(decl)) resolved = true;
         else if (namesOtherCollection(decl)) continue;
+        else if (!fields.length && unknown) continue;  /* unknown payload AND unknown target
+                                                          is too weak a signal to action */
         else {
           review.push({ rel, line: lineOf(code, m.index), fn: enclosingFn(code, m.index),
                         fields, target: targetText.slice(0, 60),
@@ -368,13 +469,21 @@ function scanSource(rel, raw) {
         }
       }
 
+      /* Target IS products. If we could not read the payload, this is an authority
+         write we cannot rule out — report it, never drop it. */
+      if (!fields.length && unknown) {
+        review.push({ rel, line: lineOf(code, m.index), fn: enclosingFn(code, m.index),
+                      fields: ['?'], target: targetText.slice(0, 60),
+                      reason: 'payload not statically readable (spread or computed)' });
+        continue;
+      }
       hits.push({ rel, line: lineOf(code, m.index), fn: enclosingFn(code, m.index), fields, resolved: true });
     }
   }
   return { hits, review };
 }
 
-module.exports = { scanSource, SERVER, CLIENT, QUARANTINE, REGISTER, AUTHORITY_FIELDS };
+module.exports = { scanSource, SERVER, CLIENT, AUTHORING, QUARANTINE, REGISTER, AUTHORITY_FIELDS };
 
 /* Everything below is the CLI. Requiring this file must not scan or exit. */
 if (require.main !== module) return;
@@ -427,6 +536,7 @@ if (DERIVE) {
 const count = (tier) => all.filter((h) => TIER.get(h.rel) === tier).length;
 console.log(`  SERVER   (canonical by architecture) : ${count('SERVER')} sites / ${SERVER.length} files`);
 console.log(`  CLIENT   (the single writer)         : ${count('CLIENT')} site(s)`);
+console.log(`  AUTHORING (seller-owned stock edits) : ${count('AUTHORING')} sites / ${AUTHORING.length} files`);
 console.log(`  QUARANTINE (known client defects)    : ${count('QUARANTINE')} sites / ${QUARANTINE.length} files`);
 console.log(`  unregistered                         : ${unregistered.length} file(s)`);
 console.log(`  count drift                          : ${drifted.length} file(s)`);

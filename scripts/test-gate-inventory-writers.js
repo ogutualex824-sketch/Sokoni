@@ -193,6 +193,49 @@ ok('stockQty counts as an authority field', detected(`
      `hits=${r.hits.length} review=${r.review.length}`);
 }
 
+/* ── The unreadable-payload class ─────────────────────────────────────────
+   These three hid real writers. "I cannot read the payload" must never be
+   reported as "the payload is safe". */
+console.log('\nPART C2 — an unreadable payload is not a safe one');
+
+ok('SPREAD payload into products is reported (the sokoni-db.js:614 shape)', detected(`
+  await setDoc(doc(db, 'products', String(product.id)), {
+    ...product, sellerUid: uid, _syncedAt: serverTimestamp(),
+  }, { merge: true });
+`));
+
+ok('payload that is a function RESULT is reported (the sokoni-inventory.js:513 shape)', detected(`
+  function productsCol() { return _fs.collection('products'); }
+  const canonical = _toCanonical(product);
+  await productsCol().doc(product.id).set(canonical, { merge: true });
+`));
+
+ok('Object.assign payload is reported (the seller.js:4275 shape)', detected(`
+  await m.updateDoc(m.doc(window.firebaseDB, 'products', String(productId)),
+    Object.assign({}, patch, { inventoryVersion: m.increment(1) }));
+`));
+
+ok('a helper-derived products collection resolves through the helper body', detected(`
+  function productsCol() { return _fs.collection('products'); }
+  await productsCol().doc(id).set(payload, { merge: true });
+`));
+
+/* The complement: an unreadable payload aimed at a NON-products target is noise,
+   not signal. Reporting those flooded the gate with ~200 irrelevant hits. */
+ok('unreadable payload to a different collection stays silent', !detected(`
+  await setDoc(doc(db, 'orders', id), { ...order, updatedAt: serverTimestamp() });
+`));
+
+/* A SUBCOLLECTION named products is a different document. Matching 'products'
+   anywhere in the ref wrongly flagged sokoni-sync.js's per-user mirror. */
+ok('userSync/{uid}/products/{id} is NOT canonical products', !detected(`
+  batch.set(doc(_db, 'userSync', _uid, 'products', String(p.id)), stripped);
+`));
+
+ok('canonical products/{id} is still matched in segment form', detected(`
+  await updateDoc(doc(db, 'products', id), { stock: 1 });
+`));
+
 /* ═══════════════════════════════════════════════════════════════════════════
    PART D — register integrity
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -208,10 +251,18 @@ ok('no file is registered in two tiers at once',
 
 /* The single-writer claim: exactly one SANCTIONED client writer. Quarantine is
    explicitly NOT sanctioned, so it must not be counted toward this. */
-ok('exactly one sanctioned client writer', gate.CLIENT.length === 1 && gate.CLIENT[0].file === 'pos.js');
+ok('exactly one sanctioned client TRANSACTIONAL writer',
+   gate.CLIENT.length === 1 && gate.CLIENT[0].file === 'pos.js');
 ok('the sanctioned client writer allows exactly one site', gate.CLIENT[0].sites === 1);
 ok('quarantine is non-empty and therefore NOT a clean bill of health',
    gate.QUARANTINE.length > 0);
+
+/* AUTHORING must stay a separate tier. Folding seller stock edits into CLIENT
+   would silently promote "one sanctioned client writer" into a false claim. */
+ok('AUTHORING is a distinct tier, not folded into CLIENT',
+   gate.AUTHORING.length > 0 && !gate.AUTHORING.some((e) => gate.CLIENT.some((c) => c.file === e.file)));
+ok('AUTHORING does not overlap QUARANTINE',
+   !gate.AUTHORING.some((e) => gate.QUARANTINE.some((q) => q.file === e.file)));
 
 /* The gate itself must currently pass — otherwise the register is stale. */
 {
