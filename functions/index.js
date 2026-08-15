@@ -650,13 +650,33 @@ async function executeTool(name, input) {
       }
 
       case "delete_product": {
-        await db.collection("products").doc(input.productId).delete();
+        /* DELETE MEANS DELIST. This physically deleted the canonical document and
+           wrote its record to a SEPARATE `deleted_products` collection — an audit
+           trail for the deletion, but not a tombstone anything reads. A product id
+           is a foreign key (reviews/{}.targetId, ratingsSummary/{id},
+           orders[].items[].productId, inventoryMovements, every cached client copy),
+           so destroying the document orphaned all of them while the buyer surfaces
+           simply lost the referent.
+
+           It is now the canonical tombstone from shared/sellability.js. `archived`
+           is in HIDDEN_STATUSES, so every buyer surface classifies it `unavailable`,
+           every list filters it out, and createCheckoutSession refuses it — no
+           consumer logic changed. The deleted_products audit record is KEPT: who
+           delisted what and why is still worth recording, and an admin-agent action
+           especially so. */
+        await db.collection("products").doc(input.productId).set({
+          ..._availability.tombstonePatch(),
+          archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
         await db.collection("deleted_products").doc(input.productId).set({
           deletedAt: admin.firestore.FieldValue.serverTimestamp(),
           deletedBy: "kass-admin-agent",
           reason: input.reason || "",
+          /* The canonical document is retained and delisted, not destroyed. */
+          method: "tombstone",
         });
-        return { success: true, productId: input.productId };
+        return { success: true, productId: input.productId, method: "tombstone" };
       }
 
       case "get_rides": {

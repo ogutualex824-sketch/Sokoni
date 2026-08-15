@@ -1,3 +1,91 @@
+## [2026-08-15] — Delete means delist: the canonical product is never destroyed
+
+**Synchronisation fix #1 of 4** (deletion semantics). Files: `sokoni-sellability.js`,
+`functions/shared/sellability.js`, `sokoni-db.js`, `functions/index.js`,
+`scripts/test-product-tombstone.js` (new). No rules, inventory-transaction or payment
+changes.
+
+### Why a hard delete is not a delete
+
+A canonical product id is a **foreign key**:
+
+```
+reviews/{}.targetId          ratingsSummary/{id}
+orders[].items[].productId   inventoryMovements
+localStorage.sellerProducts  localStorage.selectedProduct
+```
+
+Physically removing `products/{id}` orphans all of them at once — the reviews survive
+but address nothing, the ratings summary becomes unreachable, and an order line can no
+longer resolve what was sold.
+
+### Two hard-delete paths, and the second was the dangerous one
+
+```
+sokoni-db.js:624     deleteDoc(doc(db,'products',id))              client, physical
+functions/index.js   products/{id}.delete() + deleted_products/{id}  KASS admin agent
+```
+
+The first raced the soft-archive `seller.js` / `seller-wiring.js` already perform, so
+the same user action produced a tombstone or a hole depending on which path ran.
+
+The second was only found because the first was audited properly, and it is the worse
+shape: it **looked** safe because it wrote a `deleted_products` audit row — but that is
+a different collection nothing reads, so the buyer surfaces and every foreign key still
+lost their referent. An AI-agent-invocable tool that permanently destroys catalogue
+documents.
+
+### The fix
+
+Both now write the canonical tombstone from `sokoni-sellability.js`:
+
+```js
+{ status: 'archived', isVisible: false }
+```
+
+`archived` is already in `HIDDEN_STATUSES`, so **no consumer logic changed**: every
+buyer surface classifies it `unavailable`, every list filters it out, and
+`createCheckoutSession` refuses it. The client write is a `merge`, so `name`, `price`,
+`sellerUid` and images survive for order lines and review cards. The
+`deleted_products` audit record is kept — who delisted what and why still matters,
+especially for an agent action — and now records `method: "tombstone"`.
+
+`SokoniDB.deleteProduct()` is **kept rather than removed**, unlike
+`saveReview()`: a future caller should get the safe behaviour, not a `ReferenceError`.
+
+### All five delete/unpublish paths now converge
+
+| path | status | |
+|---|---|---|
+| `seller-wiring.js` merchant retire | `archived` | unchanged |
+| `admin.html` → `adminUpdateProductStatus` | `removed` | unchanged |
+| `sokoni-inventory.js` deactivate | `inactive` | unchanged |
+| `SokoniDB.deleteProduct` | `archived` | **was physical** |
+| KASS admin agent `delete_product` | `archived` | **was physical** |
+
+The statuses differ deliberately — a merchant archiving, an admin removing and an
+inventory deactivation are different events. What must not differ is that all five
+delist, which the test now pins.
+
+### Verification
+
+`scripts/test-product-tombstone.js` — **34/34**, no emulator, no network. Proven by
+mutation: reintroducing the client `deleteDoc` failed 2 assertions, reintroducing the
+server-side `.delete()` failed 1, and removing `archived` from the hidden vocabulary
+failed 5. A repo-wide sweep asserts no client file can physically delete
+`products/{id}`.
+
+Regression: `test-sellability-contract` 74/74 · `test-product-reviews` 32/32 ·
+`test-catalogue-authority` 41/41 · `test-age-classification` 39/39 ·
+`test-product-revalidation` 21/21 · `test-availability-enforcement` 27/27.
+
+Browser, rendered DOM: a tombstoned product is absent from Shop (`1 product found`)
+and absent from Home, while `product.html?id=TB_dead` keeps its canonical id, renders,
+and says *unavailable* — a bookmark gets an explanation, not a blank page. Zero page
+errors.
+
+---
+
 ## [2026-08-15] — Retire the client-side review write path
 
 **Files:** `sokoni-db.js`, `sokoni-test-suite.js`. No behaviour change — the function

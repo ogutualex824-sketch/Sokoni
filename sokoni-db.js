@@ -620,8 +620,35 @@ const SokoniDB = {
     return product.id;
   },
 
+  /* DELETE MEANS DELIST. This called deleteDoc() and destroyed the canonical
+     document outright — the only client-side physical delete on products/.
+
+     A product id is a foreign key: reviews/{}.targetId, ratingsSummary/{id},
+     orders[].items[].productId, inventoryMovements and every cached client copy
+     point at it. Destroying the document orphans all of them — the reviews survive
+     but address nothing, the ratings summary becomes unreachable, and an order line
+     can no longer resolve what was sold.
+
+     It also raced the soft-archive that seller.js and seller-wiring.js already
+     perform, so the same user action produced a tombstone or a hole depending on
+     which path ran (see seller-wiring.js:97).
+
+     The tombstone shape is the canonical one from sokoni-sellability.js, not a
+     local literal: `archived` is in HIDDEN_STATUSES, so every buyer surface already
+     classifies it `unavailable`, every list already filters it out, and checkout
+     already refuses it. No consumer needed changing.
+
+     The function is kept rather than removed so that any caller — including one
+     added later — gets the safe behaviour instead of a ReferenceError. */
   async deleteProduct(productId) {
-    await deleteDoc(doc(db, 'products', String(productId)));
+    const patch = (typeof window !== 'undefined' && window.SokoniSellability)
+      ? window.SokoniSellability.tombstonePatch()
+      : { status: 'archived', isVisible: false };
+    await setDoc(doc(db, 'products', String(productId)), {
+      ...patch,
+      archivedAt: serverTimestamp(),
+      updatedAt:  serverTimestamp(),
+    }, { merge: true });
     _invalidateProductSearchCache();
   },
 

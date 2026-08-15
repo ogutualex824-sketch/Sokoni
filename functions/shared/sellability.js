@@ -94,6 +94,27 @@
   /* Matches pos-db.js, pos-scanner.js, pos.js and logistics-plus.js. */
   var DEFAULT_LOW_STOCK = 5;
 
+  /* ── THE CANONICAL TOMBSTONE ────────────────────────────────────────────────
+     Deleting a buyer-facing product means DELISTING it, never destroying the
+     document. A canonical product id is referenced by reviews/{}.targetId,
+     ratingsSummary/{id}, orders[].items[].productId, inventoryMovements and every
+     cached client copy. Physically removing the document orphans all of them: the
+     reviews survive but address nothing, the ratings summary is unreachable, and an
+     order line can no longer resolve what was sold.
+
+     Two paths used to hard-delete. `SokoniDB.deleteProduct()` called deleteDoc()
+     outright. The KASS admin agent's `delete_product` tool deleted the canonical
+     document and wrote its record to a SEPARATE `deleted_products` collection —
+     an audit trail for the deletion, but not a tombstone anything reads, so every
+     buyer surface and every foreign key still lost its referent.
+
+     Both now write these fields instead. `archived` is in HIDDEN_STATUSES, so every
+     surface already classifies it `unavailable` and every list already filters it
+     out — the tombstone needs no new consumer logic. Callers add their own
+     timestamps/attribution; this stays pure. */
+  var TOMBSTONE = { status: 'archived', isVisible: false };
+  function tombstonePatch() { return { status: TOMBSTONE.status, isVisible: TOMBSTONE.isVisible }; }
+
   var STATES = ['in_stock', 'low_stock', 'out_of_stock', 'unavailable'];
 
   function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
@@ -272,6 +293,8 @@
     STATES:             STATES,
     HIDDEN_STATUSES:    HIDDEN_STATUSES,
     DEFAULT_LOW_STOCK:  DEFAULT_LOW_STOCK,
+    TOMBSTONE:          TOMBSTONE,
+    tombstonePatch:     tombstonePatch,
     normalizeShop:      normalizeShop,
     isPubliclyListed:   isPubliclyListed,
     listingBlockReason: listingBlockReason,
