@@ -678,7 +678,8 @@ const SokoniDB = {
           .then(j => {
             if (_delivered || !j || !j.ok || !Array.isArray(j.products)) return;
             emit('http-fallback-ok', { count: j.products.length });
-            callback(j.products);
+            /* Admin SDK, server-side, no App Check — a confirmed read. */
+            callback(j.products, { source: 'http', fromCache: false, authoritative: true });
           })
           .catch(() => {});
       }, 2000);
@@ -723,16 +724,37 @@ const SokoniDB = {
             fromCache: snap.metadata.fromCache,
             pendingWrites: snap.metadata.hasPendingWrites,
           });
-          /* An empty snapshot from cache with the App Check token not yet
-             exchanged is a not-ready read, not an authoritative empty catalogue
-             — retry once rather than accept it as the real state. */
-          if (snap.size === 0 && snap.metadata.fromCache && attempt < 2) {
-            emit('retry-empty-cache', { attempt });
-            setTimeout(() => attach(attempt + 1), 1500);
+          /* An empty snapshot from cache is NOT an authoritative empty catalogue.
+             `fromCache` means the server has not confirmed this result — with App
+             Check rejected (it 403s intermittently on this project) the SDK serves
+             a cold, empty local cache that looks identical to "the seller has no
+             products". A genuinely empty catalogue always arrives with
+             fromCache:false, so gating on it cannot suppress a real empty.
+
+             This used to retry once and then DELIVER the cached empty anyway. That
+             was survivable only because consumers ignored an empty array. Now that
+             an empty response is authoritative (products absent from it are removed
+             — see category.js::_catMergeFirestore), delivering it would wipe the
+             buyer's grid on any App Check hiccup, and would also clobber the good
+             /api/catalogue fallback result that lands ~1s earlier. So: retry once,
+             and if it is still unconfirmed, do not call back at all. `_delivered`
+             deliberately stays false, leaving the App-Check-independent Admin-SDK
+             fallback as the authority. A read we cannot confirm is a failed read,
+             and a failed read never calls back. */
+          if (snap.size === 0 && snap.metadata.fromCache) {
+            if (attempt < 2) {
+              emit('retry-empty-cache', { attempt });
+              setTimeout(() => attach(attempt + 1), 1500);
+            } else {
+              emit('drop-unconfirmed-empty', { attempt });
+            }
             return;
           }
           _delivered = true;   /* real-time read landed — the HTTP fallback stands down */
-          callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }));
+          callback(
+            snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }),
+            { source: 'firestore', fromCache: snap.metadata.fromCache, authoritative: !snap.metadata.fromCache }
+          );
         },
         err  => {
           const code = err && err.code || 'unknown';

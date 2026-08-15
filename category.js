@@ -871,22 +871,90 @@ window.addEventListener('popstate', e => {
 /* ── Firestore bridge ──
    Module script in category.html calls this after Firestore products load.
    Merges real products in, removes DEMO_PRODUCTS stubs, re-renders. */
-window._catMergeFirestore = function(fsProducts) {
-    if (!fsProducts || !fsProducts.length) return;
+/* ── AUTHORITATIVE CATALOGUE APPLY ─────────────────────────────────────────
+   THE INVARIANT: a product absent from the authoritative catalogue must never be
+   resurrected into the buyer-facing grid from localStorage.
+
+   This used to MERGE rather than apply:
+
+       if (!fsProducts || !fsProducts.length) return;          // (1)
+       const localOnly = allProducts.filter(p => !fsIds.has(p.id));
+       allProducts = [...fsProducts, ...localOnly];            // (2)
+
+   (1) An authoritative EMPTY catalogue was treated as "nothing happened", so a
+       seller who unpublished their last product left the buyer looking at a grid
+       of items that no longer exist.
+   (2) Anything the server did NOT return was reclassified as "local-only, not yet
+       synced" and kept — then written back to localStorage, so a deleted or
+       unpublished product survived every future session. There was no deletion
+       path at all.
+
+   SUCCESS vs FAILURE — and why BEING CALLED IS NOT ENOUGH. The first cut of this
+   function assumed SokoniDB.listenProducts() only ever calls back on an
+   authoritative success, so invocation itself was the success signal. Measurement
+   disproved it: with App Check rejected, onSnapshot serves a zero-doc snapshot out
+   of a cold local cache (`fromCache:true`), and the old code delivered it once the
+   single retry was exhausted. Under the merge semantics that was inert; under
+   these semantics it emptied the whole grid and persisted [] over the cache — and
+   it landed ~1s AFTER the good /api/catalogue fallback, so it clobbered real data.
+
+   So authority is now stated, not inferred. listenProducts passes
+   `meta.authoritative`, true only for a server-confirmed snapshot (fromCache:false)
+   or the Admin-SDK /api/catalogue response. REMOVALS require it. A non-authoritative
+   delivery is still useful — it carries fresher field values than the cache — so it
+   updates in place and adds, but never deletes and never persists. A failed read
+   still never calls back at all, and the cached grid simply stays.
+
+   SCOPE. The listener is category-scoped when the page is (category.html?cat=X
+   attaches a where('category','==',X) query), so the authoritative answer covers
+   only that category. Removing everything absent from the response would delete
+   every OTHER category from the cache. Products outside the authoritative scope
+   are therefore preserved untouched; only in-scope absences are removals. */
+window._catMergeFirestore = function(fsProducts, meta) {
+    /* Only a malformed call is ignored. An empty array is authoritative. */
+    if (!Array.isArray(fsProducts)) return;
+
+    /* Absent meta = a legacy caller that cannot vouch for the read. Treat it as
+       unconfirmed: additive only. Nothing may delete without saying so. */
+    const authoritative = !!(meta && meta.authoritative);
+
+    const scope   = (new URLSearchParams(location.search).get('cat') || 'all').toLowerCase();
+    const inScope = (p) => scope === 'all'
+        || String((p && p.category) || '').toLowerCase() === scope;
+
     const fsIds = new Set(fsProducts.map(p => String(p.id)));
-    /* Keep local-only products (not yet synced to FS) */
-    const localOnly = allProducts.filter(p =>
-        !DEMO_PRODUCTS.some(d => d.id === p.id) && !fsIds.has(String(p.id))
+
+    /* What survives the response. An AUTHORITATIVE answer speaks for its whole
+       scope, so an in-scope product it omits has been deleted or unpublished and
+       is dropped; only out-of-scope rows (which it never covered) are kept. An
+       UNCONFIRMED answer speaks for nothing it did not return, so every existing
+       row is kept and the response only refreshes/adds.
+
+       Demo stubs are dropped once a real answer exists — a confirmed read (even an
+       empty one) or any response carrying products. They are NOT dropped by an
+       unconfirmed empty, which tells us nothing and would otherwise blank the
+       local dev grid. */
+    const dropDemo = authoritative || fsProducts.length > 0;
+    const preserved = allProducts.filter(p =>
+        !fsIds.has(String(p.id))
+        && (authoritative ? !inScope(p) : true)
+        && !(dropDemo && DEMO_PRODUCTS.some(d => String(d.id) === String(p.id)))
     );
-    allProducts = [...fsProducts, ...localOnly];
-    /* Persist merged set to localStorage so future loads are fast */
-    try { localStorage.setItem('sellerProducts', JSON.stringify(allProducts)); } catch(e) {}
-    /* Re-render current category view */
-    const currentCat = new URLSearchParams(location.search).get('cat') || 'all';
+
+    allProducts = [...fsProducts, ...preserved];
+
+    /* Persist ONLY a confirmed read. The previous version persisted the resurrected
+       set; persisting an unconfirmed one would bake a transient App Check failure
+       into the next session's first paint. */
+    if (authoritative) {
+        try { localStorage.setItem('sellerProducts', JSON.stringify(allProducts)); } catch(e) {}
+    }
+
+    /* Re-render the current view */
     const countEl = document.getElementById('catCount');
-    let refiltered = currentCat === 'all'
+    let refiltered = scope === 'all'
         ? allProducts
-        : allProducts.filter(p => p.category && p.category.toLowerCase() === currentCat.toLowerCase());
+        : allProducts.filter(p => p.category && p.category.toLowerCase() === scope);
     if (countEl) countEl.textContent = refiltered.length + ' product' + (refiltered.length !== 1 ? 's' : '') + ' found';
     renderProducts(refiltered);
 };

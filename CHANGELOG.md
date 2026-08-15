@@ -1,3 +1,83 @@
+## [2026-08-15] — The catalogue now deletes: an absent product leaves the grid
+
+**Catalogue synchronisation, slice 2 of the merchant→Shop→Marketplace convergence.**
+Files: `category.js`, `category.html`, `sokoni-db.js`, `scripts/test-catalogue-authority.js` (new).
+No database, API, rules, checkout, inventory or payment changes.
+
+### The defect
+
+`_catMergeFirestore` merged; it never applied.
+
+```js
+if (!fsProducts || !fsProducts.length) return;              // (1)
+const localOnly = allProducts.filter(p => !fsIds.has(p.id));
+allProducts = [...fsProducts, ...localOnly];                // (2)
+```
+
+1. An authoritative **empty** catalogue was read as "nothing happened", so a seller who
+   unpublished their last product left buyers looking at items that no longer exist.
+2. Anything the server did not return was reclassified *local-only, not yet synced* and kept —
+   then written back to `localStorage`, so a deleted or unpublished product survived every
+   future session. **There was no deletion path at all.**
+
+The grid now applies the authoritative answer: an in-scope product absent from it is removed.
+The listener is category-scoped when the page is, so out-of-scope rows — which the answer never
+spoke for — are preserved rather than wiped.
+
+### Being called is not the same as succeeding
+
+The first cut assumed `SokoniDB.listenProducts()` only calls back on an authoritative success, so
+invocation was treated as the success signal. **A browser run disproved it.** With App Check
+rejected, `onSnapshot` serves a zero-doc snapshot out of a cold local cache, and `listenProducts`
+delivered it once its single retry was exhausted:
+
+```
+snapshot attempt 1  docs:0  fromCache:true   -> retry-empty-cache
+snapshot attempt 2  docs:0  fromCache:true   -> DELIVERED as if authoritative
+_catMergeFirestore([])      -> 0 cards, "0 products found", cache overwritten with []
+```
+
+Under the old merge semantics that was inert. Under these semantics it wipes the buyer's grid on
+any App Check hiccup — and App Check 403s intermittently on this project. Worse, it lands roughly
+a second **after** the `/api/catalogue` Admin-SDK fallback has already filled the grid with real
+products, so it clobbers a good result.
+
+Authority is therefore **stated, not inferred**:
+
+* `listenProducts` no longer delivers an empty snapshot that came `fromCache`. A genuinely empty
+  catalogue always arrives `fromCache:false`, so this cannot suppress a real empty. `_delivered`
+  stays false, leaving the App-Check-independent fallback as the authority.
+* Deliveries carry `meta.authoritative` — true only for a server-confirmed snapshot or the
+  Admin-SDK response. `category.html` forwards it verbatim.
+* **Removals and cache persistence require it.** An unconfirmed delivery still refreshes fields
+  and adds rows, but deletes nothing and is never persisted, so a transient failure cannot be
+  baked into the next session's first paint. Absent `meta` fails safe, not open.
+
+A failed read still never calls back at all, and the cached grid simply stays.
+
+Two other consumers improve for free: `admin.html` no longer renders a false empty product table
+from an unconfirmed read, and `index.html` is unchanged in behaviour.
+
+### Security / performance
+
+No new reads or writes; one fewer callback on the App-Check-denied path. No rules change — the
+deletion path is client-side rendering of a server-owned answer, not a privileged operation.
+
+### Verification
+
+`scripts/test-catalogue-authority.js` — **41/41**, no emulator, no network. Covers the decisive
+`cache [A,B,C] → server [A,C] → B disappears`, confirmed-empty vs failed-read vs *unconfirmed*
+empty, category scoping, exact id preservation, and wiring assertions across all three files
+(including that `category.html` forwards `meta`, without which the invariant would regress with
+every unit test still green).
+
+Browser, local, App Check rejected: `drop-unconfirmed-empty`, zero merge calls, **25 cards**,
+cache not poisoned. Home page **20 cards**, no page errors. Add-to-Cart unchanged at 390/844/1440
+— 25 buttons at each, mobile strip at 390, desktop row at 844/1440, add → dedupe → persist →
+badge `1` → cart page.
+
+---
+
 ## [2026-08-15] — Follow was denied by the rules, toasts overflowed the viewport, analytics were invented
 
 Three separate reports — "Follow says *Action failed — try again*", "toasts run off the right edge

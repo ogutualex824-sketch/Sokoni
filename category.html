@@ -655,9 +655,13 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
 import SokoniDB from './sokoni-db.js';
 const _cat = new URLSearchParams(location.search).get('cat') || 'all';
 const _opts = (_cat !== 'all') ? { category: _cat } : {};
-SokoniDB.listenProducts(_opts, function(fsProducts) {
+/* Forward `meta` verbatim. It carries whether the read was server-confirmed, and
+   _catMergeFirestore removes products and overwrites the cache ONLY when it was.
+   Dropping this argument would make every delivery look unconfirmed and silently
+   disable the deletion path. */
+SokoniDB.listenProducts(_opts, function(fsProducts, meta) {
   if (typeof window._catMergeFirestore === 'function') {
-    window._catMergeFirestore(fsProducts);
+    window._catMergeFirestore(fsProducts, meta);
   }
 });
 </script>
