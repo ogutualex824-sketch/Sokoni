@@ -2654,33 +2654,66 @@ window._ordInTransit = async function(oId) {
   } catch(e) { window.toast?.(e.message, false); }
 };
 
-window._ordDeliver = async function(oId) {
-  const uid       = _drvUid();
-  const otpInput  = document.getElementById('drvOTP_' + oId);
-  const otp       = (otpInput?.value || '').trim();
-  const photoData = window._drvProofPhotoData || null;
+/* ── COMPLETION IS A SERVER DECISION (order-based surface) ─────────────────────
+   This is the SECOND rider completion path. f9b7951 converted the packageRequest
+   surface; this one kept the original shape and was left behind:
 
-  /* Verify OTP against order */
+     · it compared the typed PIN to ordSnap.proofPin — plaintext this client had
+       just fetched — and `if (ordSnap?.proofPin)` meant no PIN, no check at all;
+     · it then called riderDelivered() → transitionOrder() → a CLIENT write of
+       status:'delivered', which is what onOrderStatusChange pays the rider for.
+
+   firestore.rules now refuses that write, so the button could not succeed: a rider
+   on an in_transit order reached "Mark as Delivered" and got a raw permission-denied.
+   A live order (SKN0SWYXPD) was sitting in exactly that state. So this was a
+   functional dead end rather than an open hole — the rules had already closed it.
+
+   It now uses the same authoritative callable as the other surface:
+   completeDeliveryWithPin verifies the PIN against the keyed HMAC on the
+   packageRequest, confirms the caller IS the assigned rider, and makes the
+   `delivered` transition with the Admin SDK.
+
+   There is deliberately NO "if the call fails, write it anyway" fallback — that
+   would reopen precisely the hole the rules close. A failure surfaces to the rider.
+
+   The order's own `proofPin` is NOT consulted. It is a legacy plaintext value the
+   rider can read, and reading it proves nothing: the server checks
+   deliveryPinHash, which is derived from a PIN only the BUYER holds. */
+window._ordDeliver = async function(oId) {
+  const otpInput = document.getElementById('drvOTP_' + oId);
+  const otp      = (otpInput?.value || '').trim();
+
+  /* The delivery this order is being completed against. The callable is keyed on
+     the packageRequest, so without it there is nothing to verify — say so rather
+     than failing obscurely at the server. */
   const ordSnap = await new Promise(res => {
     const unsub = SokoniOrders.listenOrder(oId, data => { unsub(); res(data); });
     setTimeout(() => res(null), 5000);
   });
+  const dRef = ordSnap && (ordSnap.deliveryRef || ordSnap.deliveryId || null);
+  if (!dRef) {
+    window.toast?.('❌ No delivery record for this order — ask support to check it.', false);
+    return;
+  }
 
-  if (ordSnap?.proofPin && otp !== String(ordSnap.proofPin)) {
-    window.toast?.('❌ Wrong delivery PIN. Ask the buyer for the code.', false);
+  if (!/^\d{4,8}$/.test(otp)) {
+    window.toast?.('❌ Enter the delivery PIN from the customer.', false);
     if (otpInput) { otpInput.style.borderColor = 'rgba(255,61,61,0.6)'; }
     return;
   }
 
   try {
-    const r = await SokoniOrders.riderDelivered(oId, uid, {
-      pin:      otp || null,
-      photoUrl: photoData ? 'base64_proof_' + Date.now() : null,
-      note:     'Delivered — OTP verified',
-    });
-    if (!r.ok) { window.toast?.(r.error, false); return; }
+    const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
+      ? window.firebaseFunctions.httpsCallable('completeDeliveryWithPin')
+      : null;
+    if (!_fn) { window.toast?.('❌ Cannot reach the server. Check your connection and try again.', false); return; }
 
-    /* Record earnings in driver obj */
+    const _res = await _fn({ deliveryRef: dRef, pin: otp });
+    const _ok  = _res && _res.data && _res.data.ok;
+    if (!_ok) { window.toast?.('❌ Delivery could not be confirmed. Try again.', false); return; }
+
+    /* Local earnings mirror only — the authoritative credit is onOrderStatusChange's
+       exactly-once walletTransactions/{rider}_{order}_delivery write. */
     const drv = window.currentDriver;
     if (drv && ordSnap?.driverNet > 0) {
       drv.earnings       = (drv.earnings||0) + Number(ordSnap.driverNet||0);
@@ -2689,8 +2722,16 @@ window._ordDeliver = async function(oId) {
     }
     _clearOrderDelivery();
     delete window._drvProofPhotoData;
-    window.toast?.('🎉 Delivered! KES ' + Number(ordSnap?.driverNet||0).toLocaleString() + ' earned.');
-  } catch(e) { window.toast?.(e.message, false); }
+    window.toast?.(_res.data.alreadyDelivered
+      ? '✅ Already confirmed.'
+      : '🎉 Delivered! KES ' + Number(ordSnap?.driverNet||0).toLocaleString() + ' earned.');
+  } catch(e) {
+    /* The server's message is the useful one — wrong PIN, not your delivery, locked
+       out after too many attempts. Show it rather than a generic failure. */
+    const _m = (e && (e.message || e.code)) || 'Delivery could not be confirmed.';
+    window.toast?.('❌ ' + _m, false);
+    if (otpInput) { otpInput.style.borderColor = 'rgba(255,61,61,0.6)'; }
+  }
 };
 
 /* ── Init: start Firestore listeners once driver UID is known ── */
