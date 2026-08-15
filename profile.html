@@ -707,6 +707,18 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
   border-color:rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);
   color:rgba(255,255,255,0.25);animation:none;
 }
+/* Owner-only, informational. Deliberately NOT green: a pending or expired
+   credential must never read as a granted one at a glance. */
+.pi-badge--pending{
+  border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);
+  color:rgba(255,255,255,0.62);
+}
+.pi-badge--rejected{
+  border-color:rgba(255,90,90,0.35);background:rgba(255,90,90,0.08);color:#ff8a8a;
+}
+.pi-badge--expired{
+  border-color:rgba(255,166,41,0.35);background:rgba(255,166,41,0.08);color:#ffb454;
+}
 @keyframes piBadgeIn{
   from{opacity:0;transform:scale(.8) translateY(4px);}
   to{opacity:1;transform:scale(1) translateY(0);}
@@ -1704,7 +1716,8 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
              brand mark, so the avatar and the app icon disagreed. onerror keeps the old
              file as a last-resort fallback rather than rendering a broken image. -->
         <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}">
-        <div class="up-verified-badge" id="upVerifiedBadge" style="display:none;" title="Verified">&#10003;</div>
+        <!-- The generic ✓ badge was removed: it named no facet, and verification
+             is multi-facet. #piVerifBadges below names each active facet. -->
         <input type="file" id="avatarUpload" class="up-avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
       </div>
 
@@ -1737,23 +1750,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
                   background:rgba(249,115,22,0.14);border-color:rgba(249,115,22,0.4);color:#f97316;">
           &#128296; My Services
         </a>
-        <!-- My Shops & Branches — the seller's shop (business identity, distinct
-             from the person's name above) and each of its branches, every one a
-             separate shareable storefront (store.html?id=<uid>&branch=<id>).
-             Populated only for sellers by _renderMyBranches() from the seller's
-             own Firestore doc (sellers/{uid}.branches). Hidden otherwise. -->
-        <div id="upBranchesWrap" style="display:none;width:100%;margin-top:12px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#127978; My Shops &amp; Branches</div>
-          <div id="upBranchesList" style="display:flex;flex-direction:column;gap:8px;"></div>
-        </div>
-        <!-- My Services — the provider's bookable services, the service equivalent of "My Shops".
-             ADDITIVE-role-aware: renders independently of My Shops (a user can be seller AND
-             provider). Populated by _renderMyServices() from providerServices where providerId==uid;
-             "Manage" opens the existing service management surface (provider-dashboard.html). -->
-        <div id="upServicesWrap" style="display:none;width:100%;margin-top:12px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#128296; My Services</div>
-          <div id="upServicesList" style="display:flex;flex-direction:column;gap:8px;"></div>
-        </div>
+        <!-- Shop/branch and service listings moved to their operational surfaces.
+             The personal profile links OUT to them; it does not manage them.
+             Populated by _renderBusinessHub(). -->
       </div>
 
       <!-- Meta info -->
@@ -1901,9 +1900,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
   <div class="up-tabs" id="upTabs" role="tablist">
     <button type="button" class="up-tab active" data-tab="overview" onclick="switchTab('overview')" role="tab">Overview</button>
     <button type="button" class="up-tab" data-tab="orders" onclick="switchTab('orders')" role="tab">Orders</button>
-    <button type="button" class="up-tab" data-tab="listings" onclick="switchTab('listings')" role="tab">Listings</button>
+    <!-- Listings and Reviews moved to seller.html: product and reputation
+         management are merchant operations, not personal-profile destinations.
+         Legacy #listings / #reviews links redirect — see _openTabFromHash(). -->
     <button type="button" class="up-tab" data-tab="bookings" onclick="switchTab('bookings')" role="tab">Bookings</button>
-    <button type="button" class="up-tab" data-tab="reviews" onclick="switchTab('reviews')" role="tab">Reviews</button>
     <button type="button" class="up-tab" data-tab="following" onclick="switchTab('following')" role="tab">Following</button>
     <button type="button" class="up-tab" data-tab="wallet" onclick="switchTab('wallet')" role="tab">Wallet</button>
     <button type="button" class="up-tab" data-tab="identity" onclick="switchTab('identity')" role="tab">Identity</button>
@@ -2163,24 +2163,27 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
-    <!-- ANALYTICS shortcut (for sellers) -->
+    <!-- YOUR IDENTITIES — entry points into the operational surfaces.
+         This is a doorway, not a dashboard: an analytics GRID inside the personal
+         profile is how merchant operations ended up here in the first place.
+         Shown only to accounts holding the corresponding role. -->
     <div id="upAnalyticsCard" class="up-card" style="margin-top:12px;display:none;">
-      <div class="up-card-title">Your Analytics</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <a href="seller-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:10px;text-decoration:none;color:white;font-size:11px;font-weight:800;">
-          <span style="font-size:18px;">&#128200;</span>Seller Analytics
+      <div class="up-card-title">Your SOKONI identities</div>
+      <div id="upIdentityLinks" style="display:flex;flex-direction:column;gap:8px;">
+        <a href="seller.html" id="upIdBusiness" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+          <span style="font-size:20px;">&#127978;</span>
+          <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Business</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your shop &amp; products</span></span>
+          <span style="color:#71ff00;font-size:16px;">&#8250;</span>
         </a>
-          <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:8px;padding:10px 12px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:10px;text-decoration:none;color:#e040fb;font-size:11px;font-weight:800;">
-            <span style="font-size:18px;">&#x1F451;</span> Super Admin Portal
-          </a>
-        <a href="business-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
-          <span style="font-size:18px;">&#128203;</span>Business
+        <a href="provider-dashboard.html" id="upIdServices" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+          <span style="font-size:20px;">&#128296;</span>
+          <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Services</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your services &amp; bookings</span></span>
+          <span style="color:#00d4ff;font-size:16px;">&#8250;</span>
         </a>
-        <a href="growth-dashboard.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
-          <span style="font-size:18px;">&#128202;</span>Growth
-        </a>
-        <a href="revenue.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
-          <span style="font-size:18px;">&#128181;</span>Revenue
+        <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:12px;text-decoration:none;color:#e040fb;">
+          <span style="font-size:20px;">&#x1F451;</span>
+          <span style="flex:1;min-width:0;font-size:13px;font-weight:800;">Super Admin Portal</span>
+          <span style="font-size:16px;">&#8250;</span>
         </a>
       </div>
     </div>
@@ -2196,25 +2199,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
   </div>
 
-  <!-- LISTINGS panel -->
-  <div id="panel-listings" class="up-panel">
-    <div class="up-card">
-      <div class="up-card-title">My Listings <a href="seller.html" class="up-card-link">Manage All</a></div>
-      <div id="listingsPanel">
-        <div class="up-empty"><div class="up-empty-icon">&#128230;</div>Loading listings...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- BOOKINGS panel -->
+  <!-- BOOKINGS panel — the buyer's OWN bookings (bookings.userId == uid).
+       The provider-side service-bookings card moved to the provider dashboard;
+       managing jobs is a provider operation, booking a service is a buyer one. -->
   <div id="panel-bookings" class="up-panel">
-    <!-- WS4b — canonical service bookings (providerBookings). Own card + own listener +
-         own render, deliberately NOT interwoven with the legacy sources below, so Phase F
-         retirement of the legacy list is a deletion, not a refactor. -->
-    <div class="up-card" id="myServiceBookingsCard" style="display:none">
-      <div class="up-card-title">Service Bookings <a href="services.html" class="up-card-link">Book More</a></div>
-      <div id="myServiceBookingsPanel"></div>
-    </div>
     <div class="up-card">
       <div class="up-card-title">My Bookings <a href="services.html" class="up-card-link">Book More</a></div>
       <div id="bookingsPanel">
@@ -2224,15 +2212,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
   </div>
 
   <!-- REVIEWS panel -->
-  <div id="panel-reviews" class="up-panel">
-    <div class="up-card">
-      <div class="up-card-title">Reviews About Me</div>
-      <div id="reviewsPanel">
-        <div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>
-      </div>
-    </div>
-  </div>
-
   <!-- FOLLOWING panel -->
   <div id="panel-following" class="up-panel">
     <div class="up-card">
@@ -3166,18 +3145,14 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
 })();
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
-var _profSellerProductsUnsub = null;
+/* Four handles since the seller-products, provider-bookings and seller-reviews
+   listeners moved to their own surfaces. Pattern unchanged. */
 var _profBookingsUnsub = null;
-var _myServiceBookingsUnsub = null;   /* WS4b — canonical providerBookings listener (its own source) */
-var _profReviewsUnsub = null;
 var _profFollowingUnsub = null;
 var _profWalletUnsub = null;
 var _profUserDataUnsub = null;
 window.addEventListener('beforeunload', function() {
-  if (_profSellerProductsUnsub) _profSellerProductsUnsub();
   if (_profBookingsUnsub) _profBookingsUnsub();
-  if (_myServiceBookingsUnsub) _myServiceBookingsUnsub();
-  if (_profReviewsUnsub) _profReviewsUnsub();
   if (_profFollowingUnsub) _profFollowingUnsub();
   if (_profWalletUnsub) _profWalletUnsub();
   if (_profUserDataUnsub) _profUserDataUnsub();
@@ -3195,12 +3170,11 @@ function _initGrowthCards(){
   var ptsEl = document.getElementById('upLoyaltyPts');
   if(ptsEl) ptsEl.textContent = lp.toLocaleString() + ' pts';
 
-  /* Show analytics card for sellers and admins */
-  var role = localStorage.getItem('userRole') || '';
-  var isSeller = role === 'seller' || role === 'admin' ||
-                 (localStorage.getItem('sokoniShopName') || '').length > 0;
-  var acEl = document.getElementById('upAnalyticsCard');
-  if(acEl && isSeller) acEl.style.display = '';
+  /* The identity-links card is revealed by _renderBusinessHub(), which already
+     computes the role set. The previous gate here read localStorage 'userRole'
+     and 'sokoniShopName' — a weaker signal than the predicates the same page
+     already uses, and it could reveal the card for an account with no links in
+     it. Removed rather than carried forward. */
 }
 
 /* ── Init ── */
@@ -3212,9 +3186,7 @@ function initProfile(){
   renderRoleSwitcher();
   loadOverview();
   loadOrders();
-  loadListings();
   loadBookings();
-  loadReviews();
   loadFollowing();
   loadWallet();
   loadSettingsForm();
@@ -3238,66 +3210,56 @@ function initProfile(){
 /* ══════════════════════════════════════════════════════════════
    1. HEADER CARD
 ══════════════════════════════════════════════════════════════ */
-/* Show the My Store shortcut only to sellers. Mirrors the seller test used by
-   sokoni-nav-engine.js (roles[] 'seller'/'vendor', isSeller, or registeredAs.seller) so
-   the button and the workspace switcher can never disagree about who is a merchant. */
+/* Show the My Store shortcut only to sellers. Resolves through _isSellerUser(),
+   so this button, the Business card and the workspace switcher all answer from
+   the same authority and can never disagree about who is a merchant. */
 function _syncMyStoreBtn(u){
   var btn = document.getElementById('upMyStoreBtn');
   if(!btn) return;
-  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
-  var isSeller = roles.indexOf('seller') > -1 || roles.indexOf('vendor') > -1 ||
-                 !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
-  btn.style.display = isSeller ? 'inline-flex' : 'none';
+  /* Was an inline copy of the seller test — a fifth decision site that would have
+     kept the old authority while every other card moved to claims, so two buttons
+     in this same header could disagree. One predicate now. */
+  btn.style.display = _isSellerUser(u) ? 'inline-flex' : 'none';
 }
 
-/* List the seller's shop + branches, each linking to its own storefront URL.
-   The shop name (business identity) is deliberately shown separately from the
-   person's name in the header above — they are independent fields. */
-function _isSellerUser(u){
-  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
-  return roles.indexOf('seller') > -1 || roles.indexOf('vendor') > -1 ||
-         !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
+/* ── Role resolution ─────────────────────────────────────────────────────────
+   Signed CLAIMS are the authority (SokoniRoleAuthority). The user document is a
+   PRE-RESOLUTION FALLBACK ONLY and never an authorization source.
+
+   Why a fallback exists at all: isApproved() answers false until the ID token is
+   read — "unverified" means UNKNOWN, and RA is deliberately strict about not
+   treating unknown as yes. But _renderBusinessHub() runs synchronously at
+   DOMContentLoaded, so a claims-only read would blank every role card on first
+   paint and, with no re-render, leave it blank. renderHeaderCard() is re-run from
+   RA.ready() below, so the document's influence ends the moment claims land.
+
+   Mirrors the shape _approvedRolesOrCached() already uses for the workspace
+   switcher, rather than inventing a second pattern. */
+function _cachedRole(role, u){
+  var r = (u && Array.isArray(u.roles)) ? u.roles : [];
+  if(role === 'seller')   return r.indexOf('seller') > -1 || r.indexOf('vendor') > -1 ||
+                                 !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
+  if(role === 'provider') return r.indexOf('provider') > -1 ||
+                                 !!(u && u.isProvider) || !!(u && u.registeredAs && u.registeredAs.provider);
+  if(role === 'rider')    return r.indexOf('rider') > -1 || r.indexOf('driver') > -1 ||
+                                 !!(u && u.isDriver) || !!(u && u.registeredAs && u.registeredAs.driver);
+  return false;
 }
-async function _renderMyBranches(u){
-  var wrap = document.getElementById('upBranchesWrap');
-  var list = document.getElementById('upBranchesList');
-  if(!wrap || !list) return;
-  var uid = u && (u.uid || u.id);
-  if(!uid || !_isSellerUser(u)){ wrap.style.display = 'none'; return; }
-  /* firebase.js (module) may not have published window.firebaseDB yet. */
-  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
-  var db = window.firebaseDB;
-  if(!db){ wrap.style.display = 'none'; return; }
-  try {
-    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    var snap = await m.getDoc(m.doc(db, 'sellers', String(uid)));
-    var sd = (snap.exists && snap.exists()) ? (snap.data() || {}) : {};
-    var shopName = sd.shopName || sd.name || sd.storeName || sd.businessName || 'My Shop';
-    var branches = Array.isArray(sd.branches) && sd.branches.length ? sd.branches
-                 : [{ id:'main', name:'', isMain:true }];   /* single-shop seller */
-    list.innerHTML = branches.map(function(b){
-      var isMain = b.isMain || String(b.id) === 'main';
-      var label  = shopName + (b.name && !isMain ? ' &mdash; ' + escHtml(b.name) : '');
-      var url    = 'store.html?id=' + encodeURIComponent(uid) +
-                   (b.id && !isMain ? '&branch=' + encodeURIComponent(b.id) : '');
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
-        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>'
-        + (b.address ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&#128205; ' + escHtml(b.address) + '</div>' : '')
-        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
-        + '<a href="' + url + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
-        + '<a href="seller.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
-        + '</div></div>';
-    }).join('');
-    wrap.style.display = 'block';
-  } catch(e){ wrap.style.display = 'none'; }
+function _hasRole(role, u){
+  try{
+    var RA = window.SokoniRoleAuthority;
+    /* Verified means the claim set is KNOWN — trust it, including its noes. */
+    if(RA && RA.isVerified()) return RA.isApproved(role);
+  }catch(_){}
+  return _cachedRole(role, u);
 }
 
-/* Is the user a service provider? (additive roles — independent of seller/vendor). */
-function _isProviderUser(u){
-  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
-  return roles.indexOf('provider') > -1 || roles.indexOf('freelancer') > -1 ||
-         !!(u && u.isProvider) || !!(u && u.registeredAs && u.registeredAs.provider);
-}
+function _isSellerUser(u){   return _hasRole('seller', u); }
+/* Additive and independent of seller — a user can be both. Note: 'freelancer'
+   was dropped with the old predicate. It maps to no canonical role in either
+   sokoni-role-authority.js or functions/role-vocabulary.js, and a live census
+   returned 0 accounts carrying it (control: 69 users readable, 66 with 'buyer'). */
+function _isProviderUser(u){ return _hasRole('provider', u); }
 /* Show the My Services shortcut only to service providers. Mirrors _syncMyStoreBtn()
    (seller → seller.html) exactly, using the same provider test as the Services section
    and the workspace switcher, so they can never disagree about who is a provider. */
@@ -3307,8 +3269,21 @@ function _syncMyServicesBtn(u){
   btn.style.display = _isProviderUser(u) ? 'inline-flex' : 'none';
 }
 /* Additive role predicates for the Business Hub (rider/admin, and any-business). */
-function _isRiderUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('driver')>-1||r.indexOf('rider')>-1||!!(u&&u.isDriver)||!!(u&&u.registeredAs&&u.registeredAs.driver); }
-function _isAdminUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('admin')>-1||r.indexOf('superAdmin')>-1||!!(u&&u.isAdmin); }
+function _isRiderUser(u){ return _hasRole('rider', u); }
+/* Admin is NOT routed through SokoniRoleAuthority. RA's own header states that
+   `admin` and `staff` are canonical server-side but are deliberately NOT workspace
+   roles, "because duplicating it here would create a second path to the same
+   privilege" — so isApproved('admin') is always false. sokoni-permissions.js is
+   the designated RBAC authority and resolves admin from signed claims; its
+   escalation suite proves forged storage cannot elevate to admin/superAdmin.
+   Fails CLOSED when the module is absent. */
+function _isAdminUser(u){
+  try{
+    var P = window.SokoniPermissions;
+    if(P && typeof P.hasAnyRole === 'function') return !!P.hasAnyRole(['admin','superAdmin']);
+  }catch(_){}
+  return false;
+}
 
 /* ── Business Management hub ─────────────────────────────────────────────────
    Role-driven and ADDITIVE: renders ONLY the modules the user can access, and a
@@ -3319,6 +3294,16 @@ function _renderBusinessHub(u){
   if(!wrap||!grid) return;
   var seller=_isSellerUser(u), provider=_isProviderUser(u), rider=_isRiderUser(u), admin=_isAdminUser(u);
   var anyBiz=seller||provider, mods=[];
+
+  /* Identity entry points in the header card — links out to the operational
+     surfaces, never operations themselves. Same predicates as the modules below
+     so the two can never disagree about who holds which role. */
+  var _idB = document.getElementById('upIdBusiness');
+  var _idS = document.getElementById('upIdServices');
+  var _idCard = document.getElementById('upAnalyticsCard');
+  if(_idB) _idB.style.display = seller   ? 'flex' : 'none';
+  if(_idS) _idS.style.display = provider ? 'flex' : 'none';
+  if(_idCard) _idCard.style.display = (seller || provider || admin) ? '' : 'none';
   if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',items:[
     {label:'My Shops',href:'seller.html'},{label:'Products',href:'seller.html'},
     {label:'Orders',href:'seller.html'},{label:'Open POS',href:'pos.html'}]});
@@ -3361,50 +3346,28 @@ async function _bizRouteProvider(u){
 /* List the provider's bookable services — the service equivalent of "My Shops & Branches".
    Additive: shows for a provider (or anyone who has services) INDEPENDENTLY of the shops section.
    "Manage" reuses the existing provider-dashboard service management (extend, don't rebuild). */
-async function _renderMyServices(u){
-  var wrap = document.getElementById('upServicesWrap');
-  var list = document.getElementById('upServicesList');
-  if(!wrap || !list) return;
-  var uid = u && (u.uid || u.id);
-  if(!uid){ wrap.style.display = 'none'; return; }
-  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
-  var db = window.firebaseDB;
-  if(!db){ wrap.style.display = 'none'; return; }
-  try {
-    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    var snap = await m.getDocs(m.query(m.collection(db, 'providerServices'), m.where('providerId','==',String(uid)), m.limit(20)));
-    var svcs = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); })
-                        .filter(function(s){ return !s.removedAt && s.active !== false; });
-    /* Show the section for a provider OR anyone who already has services; hide for pure buyers. */
-    if(!svcs.length && !_isProviderUser(u)){ wrap.style.display = 'none'; return; }
-    var rows = svcs.map(function(s){
-      var name  = escHtml(s.name || 'Service');
-      var price = (typeof s.price === 'number') ? ('KSh ' + Math.round(s.price/100).toLocaleString()) : '';
-      var vurl  = 'provider-profile.html?id=' + encodeURIComponent(uid);
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
-        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + name + '</div>'
-        + (price ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);">' + price + '</div>' : '')
-        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
-        + '<a href="' + vurl + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
-        + '<a href="provider-dashboard.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
-        + '</div></div>';
-    }).join('');
-    /* + Add Service (opens the provider service-management surface / onboarding). */
-    rows += '<a href="' + (svcs.length ? 'provider-dashboard.html' : 'provider-onboarding.html') + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:rgba(113,255,0,0.08);border:1px dashed rgba(113,255,0,0.35);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">&#43; Add Service</a>';
-    list.innerHTML = rows;
-    wrap.style.display = 'block';
-  } catch(e){ wrap.style.display = 'none'; }
+/* Claims land asynchronously. Re-render ONCE they do, so the document fallback in
+   _hasRole() is a first-paint stopgap rather than a standing authority: after this
+   fires, isVerified() is true and a forged document flag can no longer show a card.
+   Guarded so the re-render cannot recurse. */
+var _roleAuthorityRepainted = false;
+function _repaintOnRoleAuthority(){
+  if(_roleAuthorityRepainted) return;
+  var RA = window.SokoniRoleAuthority;
+  if(!RA || typeof RA.ready !== 'function') return;
+  _roleAuthorityRepainted = true;
+  RA.ready().then(function(){ renderHeaderCard(); renderRoleSwitcher(); })
+            .catch(function(){ /* transient refresh failure — keep last paint */ });
 }
 
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
 
+  _repaintOnRoleAuthority();
   _syncMyStoreBtn(_user);
   _syncMyServicesBtn(_user);  /* provider equivalent of My Store → provider-dashboard.html */
-  _renderBusinessHub(_user);  /* consolidated role-driven Business Management modules */
-  _renderMyBranches(_user);   /* seller's shop + branches (Marketplace module) */
-  _renderMyServices(_user);   /* provider's services (Services module) — additive, independent of shops */
+  _renderBusinessHub(_user);  /* role entry points — links out, never operations */
 
   /* Name — the PERSON's name (personal identity), independent of the shop name
      which lives on the seller doc and is shown in "My Shops & Branches" below. */
@@ -3443,9 +3406,10 @@ function renderHeaderCard(){
     if(coverArea){ coverArea.style.background = "#050505 url('/assets/Sokoni%20Logo.png') center/auto 62% no-repeat"; }
   }
 
-  /* Verified */
-  var badge = document.getElementById('upVerifiedBadge');
-  if(badge) badge.style.display = _user.verified ? 'flex' : 'none';
+  /* Verification is rendered as named facet chips by _renderHeroBadges(), from
+     the canonical verifications/{uid}.facets via profileGetOverview. There is no
+     generic badge here any more, and no users.verified read: nothing writes that
+     field, so it was permanently false. */
 
   /* Location */
   if(_user.location){
@@ -3915,9 +3879,15 @@ function switchTab(tabKey){
   });
 }
 
+/* Tabs that moved to a merchant surface. Existing bookmarks and shared links
+   still point here, so forward them rather than dropping the visitor on an
+   unrelated panel. */
+var _MOVED_TABS = { listings: 'seller.html', reviews: 'seller.html' };
+
 /* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync */
 function _openTabFromHash(){
   var key = (location.hash || '').replace(/^#/, '');
+  if(_MOVED_TABS[key]){ location.replace(_MOVED_TABS[key]); return; }
   if(key && document.getElementById('panel-'+key)) switchTab(key);
 }
 window.addEventListener('hashchange', _openTabFromHash);
@@ -4018,82 +3988,10 @@ function loadOrders(){
     el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="/" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
   }
 }
-
-/* ══════════════════════════════════════════════════════════════
-   LISTINGS PANEL
-══════════════════════════════════════════════════════════════ */
-function loadListings(){
-  var el = document.getElementById('listingsPanel');
-  if(!el) return;
-
-  var products = [];
-  try{ products = JSON.parse(localStorage.getItem('sokoniProducts')||'[]'); }catch(e){}
-
-  if(!products.length && !(_user.roles && (_user.roles.indexOf('seller')>-1 || _user.roles.indexOf('business')>-1))){
-    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No active listings.<br><a href="seller.html" style="color:#71ff00;text-decoration:none;">Open Seller Hub to list items</a></div>';
-    return;
-  }
-
-  /* Firestore listings */
-  function _render(list){
-    if(!list.length){
-      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No listings yet. <a href="seller.html" style="color:#71ff00;text-decoration:none;">Add your first product</a></div>';
-      return;
-    }
-    el.innerHTML = '<div class="up-listing-grid">'+list.slice(0,12).map(function(p){
-      var imgSrc = (p.images && p.images[0]) || p.image || '';
-      var active = p.active !== false;
-      return '<div class="up-listing-card">'
-        +'<div class="up-listing-thumb">'+(imgSrc?'<img src="'+escHtml(imgSrc)+'" alt="'+escHtml(p.name)+'" loading="lazy">':'&#128230;')+'</div>'
-        +'<div class="up-listing-body">'
-        +'<div class="up-listing-name">'+escHtml(p.name||'Product')+'</div>'
-        +'<div class="up-listing-price">KES '+Number(p.price||0).toLocaleString()+'</div>'
-        +'<div class="up-listing-meta">'+(p.views||0)+' views</div>'
-        +'<div class="up-listing-toggle">'
-        +'<button type="button" class="up-toggle'+(active?' on':'')+'" onclick="toggleListing(\''+escHtml(p.id||p._id||'')+'\',this)" aria-label="Toggle listing active"></button>'
-        +'<span class="up-toggle-lbl">'+(active?'Active':'Paused')+'</span>'
-        +'</div></div></div>';
-    }).join('')+'</div>';
-    document.getElementById('statListings').textContent = list.length;
-  }
-
-  if(products.length){ _render(products); }
-
-  /* Firestore query */
-  if(window.firebaseDB && _user && _user.uid){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var db = window.firebaseDB;
-      var q = m.query(m.collection(db,'products'), m.where('sellerUid','==',_user.uid), m.limit(24));
-      _profSellerProductsUnsub = m.onSnapshot(q, function(snap){
-        var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
-        if(list.length){ _render(list); }
-      }, function(){});
-    }).catch(function(){});
-  } else if(!products.length){
-    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No listings yet. <a href="seller.html" style="color:#71ff00;text-decoration:none;">Add your first product</a></div>';
-  }
-}
-
-function toggleListing(id, btn){
-  var isOn = btn.classList.contains('on');
-  btn.classList.toggle('on', !isOn);
-  var lbl = btn.nextElementSibling;
-  if(lbl) lbl.textContent = isOn ? 'Paused' : 'Active';
-  /* Firestore update */
-  if(window.firebaseDB && id){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var ref = m.doc(window.firebaseDB, 'products', id);
-      m.updateDoc(ref, {active: !isOn}).catch(function(){});
-    }).catch(function(){});
-  }
-  upToast(isOn ? 'Listing paused' : 'Listing active', true);
-}
-
 /* ══════════════════════════════════════════════════════════════
    BOOKINGS PANEL
 ══════════════════════════════════════════════════════════════ */
 function loadBookings(){
-  try{ loadMyServiceBookings(); }catch(e){}   /* WS4b — canonical providerBookings (independent card) */
   var el = document.getElementById('bookingsPanel');
   if(!el) return;
 
@@ -4145,135 +4043,6 @@ function loadBookings(){
   }
 }
 
-/* ══════════════════════════════════════════════════════════════
-   WS4b — CANONICAL SERVICE BOOKINGS (providerBookings)
-   Self-contained: own listener, own render, own card. The customer's
-   authoritative service bookings, filtered by customerUid (rules already
-   authorize this list — proven in the emulator). Completed + unreviewed
-   bookings expose a review entry that reuses SokoniBookService.review()
-   → bookingSubmitReview (one review UI, one server gate). Deleting this
-   whole block + its card is all Phase F needs — no legacy entanglement.
-══════════════════════════════════════════════════════════════ */
-function loadMyServiceBookings(){
-  var el = document.getElementById('myServiceBookingsPanel');
-  var card = document.getElementById('myServiceBookingsCard');
-  if(!el || !card) return;
-  var uid = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
-  if(!uid || !firebase.firestore) return;
-
-  /* Display state derives ONLY from the booking doc (single source of truth). */
-  var STATUS = {
-    pending:      {t:'Awaiting provider', c:'rgba(255,185,0,0.18)'},
-    confirmed:    {t:'Confirmed',         c:'rgba(113,255,0,0.15)'},
-    in_progress:  {t:'In progress',       c:'rgba(113,255,0,0.15)'},
-    completed:    {t:'Completed',         c:'rgba(113,255,0,0.22)'},
-    cancelled:    {t:'Cancelled',         c:'rgba(255,77,77,0.15)'},
-    declined:     {t:'Declined',          c:'rgba(255,77,77,0.15)'},
-    no_show:      {t:'No-show',           c:'rgba(255,77,77,0.15)'}
-  };
-  function label(b){
-    if(b.paymentStatus==='refunded') return {t:'Refunded', c:'rgba(255,185,0,0.18)'};
-    if(b.status!=='completed' && b.paymentStatus==='paid_held') return {t:'Paid · Held', c:'rgba(113,255,0,0.15)'};
-    return STATUS[b.status] || {t:(b.status||'pending'), c:'rgba(255,255,255,0.07)'};
-  }
-  function render(list){
-    if(!list.length){ card.style.display='none'; return; }
-    card.style.display='';
-    el.innerHTML = list.slice(0,20).map(function(b){
-      var st = label(b);
-      var when = (b.date?escHtml(b.date):'') + (b.startTime?(' &middot; '+escHtml(b.startTime)):'');
-      var reviewed = !!b.reviewedAt;
-      var canReview = b.status==='completed' && !reviewed;
-      var svc = escHtml(b.service||'Service');
-      var action = canReview
-        ? '<button type="button" class="up-card-link" style="border:none;background:none;cursor:pointer;color:#71ff00;font-weight:800" '
-          + 'onclick="SokoniBookService.review({bookingId:\''+escHtml(b.id)+'\',serviceName:\''+svc.replace(/'/g,"&#39;")+'\'})">Leave a review</button>'
-        : reviewed
-          ? '<span style="color:#9a9a9a;font-size:12px">&#11088; '+(b.reviewRating?escHtml(String(b.reviewRating)):'')+' Reviewed</span>'
-          : '';
-      return '<div class="up-booking-card">'
-        +'<div class="up-booking-header">'
-        +'<span class="up-booking-type">&#128295; '+svc+'</span>'
-        +'<span style="font-size:10px;font-weight:800;background:'+st.c+';color:#fff;padding:2px 9px;border-radius:6px;">'+escHtml(st.t.toUpperCase())+'</span>'
-        +'</div>'
-        +'<div class="up-booking-meta">'+when+'</div>'
-        + (action?('<div style="margin-top:8px">'+action+'</div>'):'')
-        +'</div>';
-    }).join('');
-  }
-
-  try{
-    if(_myServiceBookingsUnsub){ _myServiceBookingsUnsub(); _myServiceBookingsUnsub=null; }
-    /* customerUid list query — authorized by the current rule (no rule change). No orderBy
-       (avoids a composite index); sort newest-first in memory by startTs/createdAt. */
-    _myServiceBookingsUnsub = firebase.firestore().collection('providerBookings')
-      .where('customerUid','==',uid).limit(50)
-      .onSnapshot(function(snap){
-        var rows = snap.docs.map(function(d){ var x=d.data()||{}; x.id=d.id; return x; })
-          .sort(function(a,b){
-            var av=(a.startTs||(a.createdAt&&a.createdAt.seconds*1000)||0), bv=(b.startTs||(b.createdAt&&b.createdAt.seconds*1000)||0);
-            return bv-av;
-          });
-        render(rows);
-      }, function(){ /* listener error — leave last rendered state */ });
-  }catch(e){ /* non-fatal */ }
-}
-
-/* ══════════════════════════════════════════════════════════════
-   REVIEWS PANEL
-══════════════════════════════════════════════════════════════ */
-function loadReviews(){
-  var el = document.getElementById('reviewsPanel');
-  if(!el) return;
-
-  if(!window.firebaseDB || !_user || !_user.uid){
-    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet.</div>';
-    return;
-  }
-
-  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-    var db = window.firebaseDB;
-    /* Two equality filters, no orderBy: /reviews only exposes approved rows, and
-       a query without that clause is denied outright — which is why this panel
-       was always empty. Equality-only queries are served by the automatic
-       single-field indexes, so this needs no composite index. Sorting moves to
-       the client, which also fixes the old shape: it fetched the newest 100
-       reviews platform-wide and then filtered to this user, so anyone whose
-       reviews were not among the most recent 100 saw none of them. */
-    var q = m.query(
-      m.collection(db,'reviews'),
-      m.where('revieweeUid','==',_user.uid),
-      m.where('status','==','approved'),
-      m.limit(100)
-    );
-    _profReviewsUnsub = m.onSnapshot(q, function(snap){
-      var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
-        .sort(function(a,b){
-          var at = a.createdAt && a.createdAt.seconds ? a.createdAt.seconds : 0;
-          var bt = b.createdAt && b.createdAt.seconds ? b.createdAt.seconds : 0;
-          return bt - at;
-        });
-      if(!reviews.length){
-        el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>';
-        return;
-      }
-      var avg = reviews.reduce(function(acc,r){ return acc+(r.rating||5); },0)/reviews.length;
-      document.getElementById('statRating').textContent = avg.toFixed(1);
-      el.innerHTML = reviews.map(function(r){
-        var stars = '&#11088;'.repeat(Math.min(5,Math.max(1,Math.round(r.rating||5))));
-        var ts = r.createdAt && r.createdAt.seconds ? new Date(r.createdAt.seconds*1000) : new Date(r.createdAt||Date.now());
-        return '<div class="up-review-card">'
-          +'<div class="up-review-header">'
-          +'<span class="up-reviewer">'+escHtml(r.reviewerName||'Anonymous')+'</span>'
-          +'<span class="up-review-date">'+ts.toLocaleDateString('en-KE',{dateStyle:'medium'})+'</span>'
-          +'</div>'
-          +'<div class="up-stars">'+stars+'</div>'
-          +(r.comment?'<div class="up-review-text" style="margin-top:6px;">'+escHtml(r.comment)+'</div>':'')
-          +'</div>';
-      }).join('');
-    }, function(){});
-  }).catch(function(){});
-}
 
 /* ══════════════════════════════════════════════════════════════
    FOLLOWING PANEL
@@ -4743,7 +4512,8 @@ function listenFirestoreProfile(uid){
       if(data.coverUrl) _user.coverUrl = data.coverUrl;
       if(data.roles) _user.roles = data.roles;
       if(data.activeRole) _user.activeRole = data.activeRole;
-      if(data.verified) _user.verified = data.verified;
+      /* users.verified deliberately NOT mirrored — the canonical source is
+         verifications/{uid}.facets, surfaced through profileGetOverview. */
       if(data.followersCount) _user.followersCount = data.followersCount;
       if(data.followingCount) _user.followingCount = data.followingCount;
       if(data.averageRating) _user.averageRating = data.averageRating;
@@ -4888,30 +4658,64 @@ window.logoutUser = logoutUser;
   }
 
   /* ── Render verification badges in hero ── */
-  function _renderHeroBadges(verifications) {
+  /* Canonical facet labels — keys match functions/verification-vocabulary.js.
+     Each chip NAMES what is verified; there is no generic "Verified" fallback.
+     Ordered by BADGE_PRECEDENCE so the most specific credential reads first. */
+  var _FACET_LABEL = {
+    doctor:         { icon: '🩺', label: 'Verified Doctor' },
+    lawyer:         { icon: '⚖️', label: 'Verified Lawyer' },
+    property_agent: { icon: '🏘️', label: 'Licensed Agent' },
+    driver:         { icon: '🚗', label: 'Verified Driver' },
+    business:       { icon: '🏢', label: 'Verified Business' },
+    professional:   { icon: '🎓', label: 'Verified Professional' },
+    kra:            { icon: '📑', label: 'KRA Verified' },
+    identity:       { icon: '🪪', label: 'Identity Verified' },
+    address:        { icon: '📍', label: 'Address Verified' },
+    bank:           { icon: '💳', label: 'Payment Verified' },
+    email:          { icon: '✉️', label: 'Email Verified' },
+    phone:          { icon: '📱', label: 'Phone Verified' }
+  };
+  /* Owner-only informational states. None of these counts as verified anywhere —
+     not in badges, trust score, completion, achievements or primaryBadge. */
+  var _STATE_CHIP = {
+    pending:  { icon: '◷', cls: 'pending',  suffix: 'pending' },
+    rejected: { icon: '!', cls: 'rejected', suffix: 'needs attention' },
+    expired:  { icon: '↻', cls: 'expired',  suffix: 'expired — renew' }
+  };
+
+  function _renderHeroBadges(verifications, facetStates) {
     var wrap = document.getElementById('piVerifBadges');
     if (!wrap) return;
-    var MAP = {
-      email:      { icon: '✉️', label: 'Email' },
-      phone:      { icon: '📱', label: 'Phone' },
-      identity:   { icon: '🪪', label: 'Identity' },
-      business:   { icon: '🏢', label: 'Business' },
-      kra:        { icon: '📑', label: 'KRA' },
-      address:    { icon: '📍', label: 'Address' },
-      bank:       { icon: '💳', label: 'Payment' },
-      merchant:   { icon: '🏅', label: 'Merchant' },
-    };
-    var html = '';
-    var delay = 0;
-    Object.keys(MAP).forEach(function(k) {
-      if (verifications[k]) {
-        html += '<span class="pi-badge" style="animation-delay:' + delay + 'ms">'
-              + MAP[k].icon + ' ' + MAP[k].label
-              + '</span>';
-        delay += 60;
-      }
+    var html = '', delay = 0;
+
+    /* Approved facets first, in precedence order. */
+    Object.keys(_FACET_LABEL).forEach(function(k) {
+      if (!verifications || !verifications[k]) return;
+      var m = _FACET_LABEL[k];
+      html += '<span class="pi-badge" style="animation-delay:' + delay + 'ms">'
+            + m.icon + ' ' + escHtml(m.label) + '</span>';
+      delay += 60;
     });
-    wrap.innerHTML = html || '';
+
+    /* Then the owner's actionable states — pending / rejected / expired. Absent
+       for anyone viewing someone else (facetStates is null server-side). */
+    if (facetStates) {
+      Object.keys(facetStates).forEach(function(k) {
+        var st = facetStates[k] && facetStates[k].state;
+        var chip = _STATE_CHIP[st];
+        var m = _FACET_LABEL[k];
+        if (!chip || !m) return;
+        var name = m.label.replace(/^(Verified|Licensed)\s+/, '').replace(/\s+Verified$/, '');
+        html += '<span class="pi-badge pi-badge--' + chip.cls + '" style="animation-delay:' + delay + 'ms"'
+              + (facetStates[k].reason ? ' title="' + escHtml(facetStates[k].reason) + '"' : '')
+              + '>' + chip.icon + ' ' + escHtml(name + ' ' + chip.suffix) + '</span>';
+        delay += 60;
+      });
+    }
+
+    /* No facets and no states → render nothing at all, rather than an empty
+       container or a generic badge. */
+    wrap.innerHTML = html;
     wrap.style.display = html ? '' : 'none';
   }
 
@@ -4943,7 +4747,7 @@ window.logoutUser = logoutUser;
             lvl.className = 'pi-trust-level pi-level-' + level.toLowerCase();
           }
           if (data.trust) _animateTrustRing(data.trust.score);
-          if (data.verifications) _renderHeroBadges(data.verifications);
+          if (data.verifications) _renderHeroBadges(data.verifications, data.facetStates);
           var badges = document.getElementById('piVerifBadges');
           if (badges) badges.style.display = '';
 
@@ -5001,12 +4805,18 @@ window.logoutUser = logoutUser;
       if (sid)    sid.textContent  = data.sokoniId  || _sokoniId('');
 
       // Verifications grid
+      /* Canonical facets + the two self-service contact checks. Keys match
+         functions/verification-vocabulary.js; role-specific credentials
+         (doctor/lawyer/property_agent/professional/driver) are shown as chips in
+         the header rather than as checklist rows, because they are not steps
+         every account is expected to complete. */
       var VERIF_MAP = [
         { k:'email',    icon:'✉️',  label:'Email'    },
         { k:'phone',    icon:'📱',  label:'Phone'    },
         { k:'identity', icon:'🪪',  label:'Identity' },
         { k:'business', icon:'🏢',  label:'Business' },
         { k:'kra',      icon:'📑',  label:'KRA'      },
+        { k:'address',  icon:'📍',  label:'Address'  },
         { k:'bank',     icon:'💳',  label:'Bank'     },
       ];
       var grid = document.getElementById('piVerifGrid');
@@ -5496,7 +5306,15 @@ window.logoutUser = logoutUser;
       if (name)    name.textContent = data.displayName || 'SOKONI Member';
       if (hl)      hl.textContent   = data.headline    || '';
       if (sid)     sid.textContent  = data.sokoniId    || '';
-      if (verifEl) verifEl.style.display = data.isVerified ? '' : 'none';
+      /* The card is a genuinely compact, single-badge surface — the one place
+         primaryBadge belongs. Name the facet rather than saying "Verified":
+         a licensed doctor's card should say so. Hidden entirely when nothing is
+         active, never a generic fallback. */
+      if (verifEl) {
+        var _pb = data.primaryBadge && _FACET_LABEL[data.primaryBadge];
+        if (_pb) { verifEl.textContent = '✓ ' + _pb.label; verifEl.style.display = ''; }
+        else     { verifEl.style.display = 'none'; }
+      }
 
       // Fields
       var fieldsEl = document.getElementById('piBcardFields');
@@ -6231,10 +6049,8 @@ window.logoutUser = logoutUser;
     _searchIndex.push({ icon: '🔐', text: 'Security Settings', sub: 'Account', action: function() { switchTab('security'); } });
     _searchIndex.push({ icon: '💳', text: 'ID Card', sub: 'Digital Identity', action: function() { switchTab('card'); } });
     _searchIndex.push({ icon: '📦', text: 'My Orders', sub: 'Orders', action: function() { switchTab('orders'); } });
-    _searchIndex.push({ icon: '🏪', text: 'My Listings', sub: 'Marketplace', action: function() { switchTab('listings'); } });
     _searchIndex.push({ icon: '📅', text: 'My Bookings', sub: 'Bookings', action: function() { switchTab('bookings'); } });
     _searchIndex.push({ icon: '💰', text: 'Wallet & Transactions', sub: 'Finance', action: function() { switchTab('wallet'); } });
-    _searchIndex.push({ icon: '⭐', text: 'My Reviews', sub: 'Reputation', action: function() { switchTab('reviews'); } });
     _searchIndex.push({ icon: '👥', text: 'Following', sub: 'Social', action: function() { switchTab('following'); } });
     _searchIndex.push({ icon: '💼', text: 'Employment & Jobs', sub: 'Work', action: function() { switchTab('employment'); } });
 
@@ -6927,7 +6743,7 @@ window.logoutUser = logoutUser;
                   {i:'🆘',l:'Support',        href:'help.html'} ],
     provider:   [ {i:'📅',l:'New Booking',   href:'services.html#book'},
                   {i:'🗓️',l:'Availability',   href:'services.html#calendar'},
-                  {i:'⭐',l:'Reviews',        tab:'reviews'},
+                  {i:'⭐',l:'Reviews',        href:'provider-dashboard.html#reviews'},
                   {i:'💳',l:'Payments',       tab:'wallet'},
                   {i:'📊',l:'Analytics',      href:'services.html#analytics'},
                   {i:'🔔',l:'Schedule',       href:'services.html#schedule'} ],
@@ -6991,7 +6807,7 @@ window.logoutUser = logoutUser;
 
   /* ── Resume Last Context ── */
   var TAB_LABELS = {
-    orders:'Orders', listings:'My Listings', bookings:'Bookings',
+    orders:'Orders', bookings:'Bookings',
     reviews:'Reviews', wallet:'Wallet', career:'Career', vault:'Documents',
     identity:'Identity', employment:'Employment', achievements:'Achievements',
     security:'Security', card:'ID Card'
@@ -7478,7 +7294,6 @@ window.logoutUser = logoutUser;
     { p:["open pos","pos","point of sale","till"],         icon:'🖥️', lbl:'Open POS',           href:'pos.html' },
     { p:["my wallet","wallet","balance","funds"],          icon:'💰', lbl:'My Wallet',           tab:'wallet' },
     { p:["withdraw","withdrawal","payout","cash out"],     icon:'💸', lbl:'Withdraw Funds',      href:'wallet.html#withdraw' },
-    { p:["my listings","listings","products","catalog"],   icon:'🏪', lbl:'My Listings',         tab:'listings' },
     { p:["bookings","my bookings","appointments"],         icon:'📅', lbl:'My Bookings',         tab:'bookings' },
     { p:["analytics","performance","stats","reports"],     icon:'📊', lbl:'Analytics',           href:'seller-analytics.html' },
     { p:["staff","team","employees","workforce"],          icon:'👥', lbl:'My Team',             href:'staff-management.html' },
@@ -7491,7 +7306,6 @@ window.logoutUser = logoutUser;
     { p:["identity","id","verification","verify"],         icon:'🪪', lbl:'Identity Center',     tab:'identity' },
     { p:["achievements","badges","awards"],                icon:'🏅', lbl:'Achievements',        tab:'achievements' },
     { p:["id card","digital card","my card"],              icon:'💳', lbl:'ID Card',             tab:'card' },
-    { p:["reviews","ratings","feedback"],                  icon:'⭐', lbl:'My Reviews',          tab:'reviews' },
     { p:["ask kass","kass","ai","assistant","help"],       icon:'🤖', lbl:'Ask KASS',            act:'if(window.piOpenKass)piOpenKass()' },
     { p:["jobs","hiring","employment","work"],             icon:'📋', lbl:'Jobs',                href:'jobs.html' },
     { p:["shop","marketplace","buy","browse"],             icon:'🛍️', lbl:'Marketplace',         href:'/' },

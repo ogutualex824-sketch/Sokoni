@@ -25,6 +25,8 @@ const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 /* Markup lives in profile-page.js — the engine owns data, not presentation. */
 const { renderProfilePage: _profilePage, renderProfileError: _profileErrorPage } = require('./profile-page');
+/* Canonical verification vocabulary — one facet list, shared with the engine. */
+const { activeFacets: _activeFacets, primaryBadge: _primaryBadge } = require('./verification-vocabulary');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -49,16 +51,23 @@ function _trustScore(user = {}, verif = {}, bizCount = 0) {
   const factors = [];
   let score = 0;
 
-  if (verif.emailVerified   || user.emailVerified)  { score += 15; factors.push('Email Verified'); }
+  /* Facets are the single source of truth — see verification-vocabulary.js.
+     `activeFacets` counts a facet only while approved AND unexpired, so a lapsed
+     licence stops contributing without any sweep job. Email and phone stay
+     self-service booleans on users/{uid}; they were never admin-decided.
+     `merchantVerified` folded into `business`, and its 5 points folded with it
+     (10 → 15) so the reachable ceiling is unchanged. */
+  const _active = _activeFacets(verif);
+
+  if (verif.emailVerified   || user.emailVerified)   { score += 15; factors.push('Email Verified'); }
   if (verif.phoneVerified   || user.phoneVerified)   { score += 15; factors.push('Phone Verified'); }
-  if (verif.identityVerified)                        { score += 20; factors.push('Identity Verified'); }
-  if (verif.businessVerified || bizCount > 0)        { score += 10; factors.push('Business Verified'); }
-  if (verif.kraVerified)                             { score += 10; factors.push('KRA Verified'); }
-  if (verif.addressVerified)                         { score += 5;  factors.push('Address Verified'); }
-  if (verif.bankVerified)                            { score += 10; factors.push('Payment Verified'); }
+  if (_active.has('identity'))                       { score += 20; factors.push('Identity Verified'); }
+  if (_active.has('business') || bizCount > 0)       { score += 15; factors.push('Business Verified'); }
+  if (_active.has('kra'))                            { score += 10; factors.push('KRA Verified'); }
+  if (_active.has('address'))                        { score += 5;  factors.push('Address Verified'); }
+  if (_active.has('bank'))                           { score += 10; factors.push('Payment Verified'); }
   if (user.photoURL)                                 { score += 5;  factors.push('Profile Photo'); }
   if (user.legalSigned)                              { score += 5;  factors.push('Legal Agreements'); }
-  if (verif.merchantVerified)                        { score += 5;  factors.push('Merchant Verified'); }
 
   const capped = Math.min(score, 100);
   const level  = capped >= 90 ? 'Platinum'
@@ -70,18 +79,68 @@ function _trustScore(user = {}, verif = {}, bizCount = 0) {
 }
 
 /** Calculate profile completion steps. */
+/**
+ * OWNER-ONLY presentation state for non-approved facets.
+ *
+ * Returns the minimum a profile needs to say "pending" / "needs attention" /
+ * "expired" and nothing more. Explicitly NOT the request document: no evidence
+ * array, no uploaded file references, no decidedBy, no applicant fields. Those
+ * remain in verificationRequests and the document vault, both owner-or-admin.
+ *
+ * `approved` facets are omitted — they are already carried by verifications{},
+ * and repeating them would create a second place to ask the same question.
+ * An approved-but-expired facet surfaces here as `expired`, because otherwise a
+ * lapsed credential just vanishes with no explanation to the person who holds it.
+ */
+function _facetStates(verif = {}) {
+  const out = {};
+  const facets = (verif && verif.facets) || {};
+  const now = Date.now();
+
+  for (const [facet, rec] of Object.entries(facets)) {
+    if (!rec || !rec.state) continue;
+
+    let state = rec.state;
+    let expiresAt = null;
+
+    if (state === 'approved') {
+      const exp = rec.expiresAt;
+      if (!exp) continue;                       /* approved + no expiry — nothing to say */
+      const ms = exp.toMillis ? exp.toMillis()
+               : exp._seconds ? exp._seconds * 1000
+               : new Date(exp).getTime();
+      if (isNaN(ms) || ms > now) continue;      /* still valid — carried by verifications{} */
+      state = 'expired';
+      expiresAt = new Date(ms).toISOString();
+    }
+
+    out[facet] = { state };
+    if (expiresAt) out[facet].expiresAt = expiresAt;
+    /* The rejection reason is the one free-text field worth returning: without it
+       "needs attention" is another dead end. It is admin-authored copy, not
+       applicant PII. */
+    if (state === 'rejected' && rec.reason) out[facet].reason = String(rec.reason).slice(0, 300);
+  }
+  return out;
+}
+
 function _completion(user = {}, verif = {}, prof = {}) {
+  /* Facets, not the retired *Verified booleans. Reading the dead shape here made
+     identity/address/bank/kra impossible to complete, so the strength percentage
+     was permanently understated — a visibly wrong number, which is exactly what
+     the no-fabricated-metrics rule forbids. */
+  const _f = _activeFacets(verif);
   const steps = [
     { id:'photo',    label:'Add profile photo',         done: !!user.photoURL },
     { id:'bio',      label:'Write a bio / headline',    done: !!(prof.headline || prof.summary || user.bio) },
     { id:'email',    label:'Verify email address',      done: !!(verif.emailVerified || user.emailVerified) },
     { id:'phone',    label:'Verify phone number',       done: !!(verif.phoneVerified || user.phoneVerified) },
-    { id:'identity', label:'Verify identity (ID/passport)', done: !!verif.identityVerified },
-    { id:'address',  label:'Add physical address',      done: !!(user.address || user.location || verif.addressVerified) },
+    { id:'identity', label:'Verify identity (ID/passport)', done: _f.has('identity') },
+    { id:'address',  label:'Add physical address',      done: !!(user.address || user.location) || _f.has('address') },
     { id:'skills',   label:'Add at least 3 skills',     done: (prof.skills || []).length >= 3 },
     { id:'cert',     label:'Upload a certificate',      done: (prof.certifications || []).length > 0 },
-    { id:'bank',     label:'Add bank / payment method', done: !!verif.bankVerified },
-    { id:'kra',      label:'Add KRA PIN',               done: !!verif.kraVerified },
+    { id:'bank',     label:'Add bank / payment method', done: _f.has('bank') },
+    { id:'kra',      label:'Add KRA PIN',               done: _f.has('kra') },
   ];
 
   const done    = steps.filter(s => s.done).length;
@@ -119,6 +178,7 @@ exports.profileGetOverview = onCall({ region: 'us-central1' }, async (req) => {
 
   const trust = _trustScore(user, verif, bizCount);
   const compl = _completion(user, verif, prof);
+  const _facets = _activeFacets(verif);
   const sid   = _sokoniId(uid);
 
   // Filter active memberships (not resigned/terminated/archived)
@@ -156,20 +216,33 @@ exports.profileGetOverview = onCall({ region: 'us-central1' }, async (req) => {
     createdAt:     user.createdAt   || null,
     roles:         user.roles       || ['buyer'],
     subscription:  user.planId      || 'free',
+    /* Derived from canonical facets. APPROVED-and-unexpired only: a pending,
+       rejected, revoked or expired facet is never "verified" here, so it cannot
+       leak into trust score, completion, achievements or any badge. Email, phone
+       and legal remain self-service booleans and were never admin-decided.
+       `merchant` folded into `business`. */
     verifications: {
-      email:      !!(verif.emailVerified    || user.emailVerified),
-      phone:      !!(verif.phoneVerified    || user.phoneVerified),
-      identity:   !!verif.identityVerified,
-      business:   !!verif.businessVerified  || bizCount > 0,
-      kra:        !!verif.kraVerified,
-      address:    !!verif.addressVerified,
-      bank:       !!verif.bankVerified,
-      legal:      !!user.legalSigned,
-      merchant:   !!verif.merchantVerified,
-      healthcare: !!verif.healthcareVerified,
-      property:   !!verif.propertyVerified,
-      driver:     !!verif.driverVerified,
+      email:          !!(verif.emailVerified || user.emailVerified),
+      phone:          !!(verif.phoneVerified || user.phoneVerified),
+      legal:          !!user.legalSigned,
+      identity:       _facets.has('identity'),
+      business:       _facets.has('business') || bizCount > 0,
+      professional:   _facets.has('professional'),
+      driver:         _facets.has('driver'),
+      doctor:         _facets.has('doctor'),
+      lawyer:         _facets.has('lawyer'),
+      property_agent: _facets.has('property_agent'),
+      kra:            _facets.has('kra'),
+      address:        _facets.has('address'),
+      bank:           _facets.has('bank'),
     },
+    /* OWNER ONLY. Minimum presentation state so the profile can say "pending",
+       "needs attention" or "expired" instead of silently showing nothing — the
+       dead-end the old flow had. Deliberately NOT the request document: no
+       evidence, no uploaded files, no decidedBy, no KYC material. Those stay in
+       the protected vault. Null for anyone viewing another user's profile, and
+       the public projection remains approved-only regardless. */
+    facetStates: isOwner ? _facetStates(verif) : null,
     trust,
     profileCompletion: compl,
     businessCount:     bizCount,
@@ -265,7 +338,10 @@ exports.profileGetAchievements = onCall({ region: 'us-central1' }, async (req) =
   const ageMs  = createdSecs ? (Date.now() - createdSecs * 1000) : 0;
   const ageYrs = ageMs / (365.25 * 24 * 3600 * 1000);
 
-  const allVerified = verif.emailVerified && verif.phoneVerified && verif.identityVerified;
+  /* identity comes from the canonical facets; email/phone stay self-service
+     booleans. Reading verif.identityVerified made this badge unreachable. */
+  const _achFacets = _activeFacets(verif);
+  const allVerified = !!verif.emailVerified && !!verif.phoneVerified && _achFacets.has('identity');
 
   /* ── Earned badges ── */
   const badges = [];
@@ -284,7 +360,8 @@ exports.profileGetAchievements = onCall({ region: 'us-central1' }, async (req) =
   if (empCount  >= 1)    _badge('team_member',     'Team Member',          '👥', 'Active in an organization');
   if (allEmpCount >= 3)  _badge('multi_org',       'Multi-Org Pro',        '🌐', `${allEmpCount} organizations`);
   if (allVerified)       _badge('verified_id',     'Fully Verified',       '✅', 'All core verifications done');
-  if (verif.merchantVerified) _badge('trusted_merchant', 'Trusted Merchant', '🏅', 'Business verified by SOKONI');
+  /* merchantVerified folded into the `business` facet — one fact, one name. */
+  if (_achFacets.has('business')) _badge('trusted_merchant', 'Trusted Merchant', '🏅', 'Business verified by SOKONI');
   if (ageYrs >= 0.5)     _badge('established',     'Established Member',   '✨', '6+ months on SOKONI');
   if (ageYrs >= 1)       _badge('year_1',          '1 Year on SOKONI',     '🎖️', 'Loyal member');
   if (ageYrs >= 2)       _badge('year_2',          '2 Years on SOKONI',    '🥈', '2 years of excellence');
@@ -411,9 +488,10 @@ exports.profileGenerateCard = onCall({ region: 'us-central1' }, async (req) => {
     return { businessName: m.businessName || '', role: m.roleTitle || m.role || '' };
   });
 
-  const verifiedTypes = Object.entries(verif)
-    .filter(([k, v]) => k.endsWith('Verified') && v === true)
-    .map(([k]) => k.replace('Verified', ''));
+  /* Canonical facets. The previous shape scanned for keys ending in 'Verified',
+     which nothing ever wrote — so this list was permanently empty. */
+  const verifiedTypes = [..._activeFacets(verif)];
+  const primaryBadge  = _primaryBadge(verifiedTypes);
 
   return {
     sokoniId:      _sokoniId(uid),
@@ -428,6 +506,7 @@ exports.profileGenerateCard = onCall({ region: 'us-central1' }, async (req) => {
     skills:        (prof.skills || []).slice(0, 5),
     isVerified:    verifiedTypes.length > 0,
     verifiedTypes,
+    primaryBadge,
     profileUrl:    `https://mysokoni.co.ke/profile/${uid}`,
   };
 });
@@ -514,10 +593,12 @@ exports.profileGetPublicProfile = onRequest(
       const prof  = profSnap?.exists  ? profSnap.data()  : {};
       const verif = verifSnap?.exists ? verifSnap.data() : {};
 
-      /* Badge NAMES only. The underlying documents stay private. */
-      const verifiedTypes = Object.entries(verif)
-        .filter(([k, v]) => k.endsWith('Verified') && v === true)
-        .map(([k]) => k.replace('Verified', ''));
+      /* Badge NAMES only. The underlying documents stay private.
+         The full active set is returned — a provider who is both a doctor and a
+         business is BOTH, and the projection says so. `primaryBadge` is a
+         presentation convenience for surfaces that can show only one. */
+      const verifiedTypes = [..._activeFacets(verif)];
+      const primaryBadge  = _primaryBadge(verifiedTypes);
 
       const shopDoc = handleSnap && !handleSnap.empty ? handleSnap.docs[0] : null;
 
@@ -541,6 +622,7 @@ exports.profileGetPublicProfile = onRequest(
         skills:        (prof.skills     || []).slice(0, 5),
         isVerified:    verifiedTypes.length > 0,
         verifiedTypes,
+        primaryBadge,
         trustLevel:    _trustScore(user, verif, 0).level,
         memberSince,
         shop: shopDoc ? {
