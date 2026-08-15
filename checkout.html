@@ -1667,9 +1667,15 @@ let subtotal = 0;
    every payment call sends orderTotal/stkAmount — never the value below. What this feeds
    is the displayed subtotal and, through saveAndRedirect, the order record, the printed
    receipt and referral credit. */
+/* ONE definition of "how many of this line". Extracted because the order-summary
+   row needs the same number the line total is computed from: reading `item.qty`
+   directly there would show no ×N badge for a legacy row that carries `quantity`
+   instead — while still charging for it. Same reason _ckLineTotal exists. */
+function _ckQty(item) {
+  return Math.max(1, Math.round(Number(item && item.qty) || Number(item && item.quantity) || 1));
+}
 function _ckLineTotal(item) {
-  const qty = Math.max(1, Math.round(Number(item && item.qty) || Number(item && item.quantity) || 1));
-  return Number((item && item.price) || 0) * qty;
+  return Number((item && item.price) || 0) * _ckQty(item);
 }
 let promoDiscount = 0;
 let deliveryFee = 0;
@@ -1710,6 +1716,14 @@ cart.forEach((item, _idx) => {
      under-reported multi-quantity orders on the receipt and in referral credit. Copying
      this expression there would have created the second pricing authority all over
      again, so there is now exactly one. */
+  /* `qty` was referenced in the row template below but never bound in this scope —
+     the only binding was the const INSIDE _ckLineTotal. Every checkout with a
+     non-empty cart therefore threw `ReferenceError: qty is not defined` on the
+     FIRST item, which propagated out of this forEach and aborted the rest of this
+     top-level script block, so no summary row rendered at all. Introduced by
+     b9ff761, which moved the arithmetic into _ckLineTotal and left the template
+     reference behind; live from that commit through 8290102. */
+  const _ckItemQty = _ckQty(item);
   const lineTotal = _ckLineTotal(item);
   subtotal += lineTotal;
   /* XSS-safe: escape all user-supplied strings before inserting into innerHTML */
@@ -1725,7 +1739,7 @@ cart.forEach((item, _idx) => {
         ${safeCat ? `<div class="os-item-cat">${safeCat}</div>` : ``}
         <div class="os-item-price">KES ${safePrice}</div>
       </div>
-      ${qty > 1 ? `<div class="os-item-qty">×${qty}</div>` : ``}
+      ${_ckItemQty > 1 ? `<div class="os-item-qty">×${_ckItemQty}</div>` : ``}
       <button type="button" class="os-item-remove" onclick="removeCartItem(${_idx})" aria-label="Remove ${safeName}" title="Remove" style="margin-left:auto;background:rgba(255,61,61,0.12);border:1px solid rgba(255,61,61,0.3);color:#ff6b6b;width:34px;height:34px;min-width:34px;border-radius:9px;cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">&times;</button>
     </div>
   `);

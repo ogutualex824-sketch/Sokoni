@@ -1,3 +1,82 @@
+## [2026-08-15] — P0: checkout threw on every non-empty cart
+
+**Slice #3a — isolated live-defect fix.** Files: `checkout.html`,
+`scripts/test-checkout-summary.js` (new). Nothing else touched; **no inventory code
+changed**.
+
+### The defect
+
+`checkout.html` line 1728, inside the top-level `cart.forEach`:
+
+```js
+${qty > 1 ? `<div class="os-item-qty">×${qty}</div>` : ``}
+```
+
+Nothing bound `qty` in that scope — the only binding was the `const qty` **inside**
+`_ckLineTotal(item)`. Every checkout with a **non-empty cart** therefore threw:
+
+```
+ReferenceError: qty is not defined
+    at checkout.html:1728  (inside cart.forEach)
+    at checkout.html:1703  (top level)
+```
+
+on the **first** item. The throw propagated out of `forEach` and aborted the rest of
+that top-level script block, so no summary row rendered and the ~10 top-level
+statements after the loop never ran — including `window.removeCartItem`, which every ✕
+button in the summary calls. Hoisted function *declarations* such as `saveAndRedirect`
+survived; the breakage is the aborted execution, not a missing function.
+
+It reproduced **only** with a non-empty cart, which is why empty-cart smoke checks
+looked clean.
+
+Introduced by `b9ff761` — itself the *"saveAndRedirect fallback ignored quantity"* fix,
+which moved the arithmetic into `_ckLineTotal` and left the template reference behind.
+`b9ff761` is an ancestor of `8290102`, so **this is live on production now**.
+
+### The fix, and why not simply `item.qty`
+
+The charged line total normalises `qty` **or** legacy `quantity`, floored at 1. Reading
+`item.qty` in the row would show no `×N` badge for a legacy row carrying `quantity`
+while still charging for it — a second quantity authority, exactly the class of bug
+`b9ff761` was fixing. So the normalisation is extracted once:
+
+```js
+function _ckQty(item) { … }                       // ONE definition
+function _ckLineTotal(item) { … * _ckQty(item); } // delegates
+const _ckItemQty = _ckQty(item);                  // bound in the loop
+```
+
+### Verification
+
+`scripts/test-checkout-summary.js` — **31/31**. Covers qty 1 → no badge, qty 2+ → `×N`,
+legacy `quantity`, 0/negative flooring to 1, a four-line mixed cart rendering every line
+with the subtotal covering **all** lines, and that `saveAndRedirect`,
+`createCheckoutSession`, `_serverTotalOverride` and `removeCartItem` all still exist.
+All three classic `<script>` blocks parse.
+
+Proven by mutation: restoring the bare `qty` reference failed 3 assertions; duplicating
+the qty rule instead of delegating failed 2.
+
+**Browser before/after, identical probe, 6 combinations** (single-qty1 and a
+multi-line qty-3 cart × 390 / 844 / 1440):
+
+| | pageErrors | ReferenceErrors |
+|---|---|---|
+| pre-fix (`HEAD`) | 1 each — **6/6** | `qty is not defined` **6/6** |
+| post-fix | 0 each — **0/6** | **0/6** |
+
+Regression: `test-catalogue-authority` 67/67 · `test-product-tombstone` 34/34 ·
+`test-sellability-contract` 74/74 · `test-product-reviews` 32/32 ·
+`test-age-classification` 39/39 · `test-product-revalidation` 21/21 ·
+`test-availability-enforcement` 27/27.
+
+**Deployment deferred** — this joins the combined release candidate rather than shipping
+alone, per the standing single-gate rule. `_decrementStock` is untouched: its
+double-decrement behaviour remains unproven and must not be "fixed" via checkout code.
+
+---
+
 ## [2026-08-15] — A stale catalogue may display, but it may not delete
 
 **Synchronisation fix #2 of 4** (CDN authority). Files: `sokoni-db.js`, `category.js`,
