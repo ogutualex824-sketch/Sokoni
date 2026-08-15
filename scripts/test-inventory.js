@@ -35,14 +35,31 @@ const { suiteEnv } = require('./gate-namespace');
    roughly the slowest suite without changing any individual result. Kept modest
    so browser-driving suites do not starve each other into false timeouts. */
 /* Overridable so the level can be MEASURED rather than assumed. Seven gate runs at the
-   default produced a different casualty every time — merchant-deep-switch, nav-routes,
-   shop-setup-hydration, seller-deeplink, auth-email, cart-universal — and twice returned
-   opposite verdicts for the identical commit. That is the contention signature this file's
-   own header describes, not a defect in any suite. The default is unchanged, so setting
-   nothing behaves exactly as before. */
+   old cpu-derived default produced a different casualty every time — merchant-deep-switch,
+   nav-routes, shop-setup-hydration, seller-deeplink, auth-email, cart-universal — and twice
+   returned opposite verdicts for the identical commit. That is the contention signature this
+   file's own header describes, not a defect in any suite.
+
+   THE DEFAULT IS NOW 2, because the level was decided in two different places.
+
+   Certification was run explicitly:            SOKONI_GATE_CONCURRENCY=2 node scripts/gate-inventory.js
+   The hosting predeploy hook was not:          node scripts/gate-inventory.js   (firebase.json)
+
+   With the cpu-derived default that second path resolved to 6 on an 8-core host — three
+   times the level every certified verdict was measured at. So the gate that GATES a deploy
+   was not the gate that CERTIFIED it, and it behaved exactly as the note above predicts:
+   two consecutive runs of the identical commit (08d1a79) blocked with DISJOINT casualties —
+   five POS/returns/merchant suites, then two entirely different merchant suites, each of
+   which passes standalone. The same configuration had also passed 164 and 165 on earlier
+   deploys, which is the point: it is unstable, not broken, and an unstable gate cannot
+   certify anything.
+
+   2 is not a new threshold — it is the level every accepted verdict was already measured at.
+   Nothing else about the gate changes: no assertion, budget, classification, ENV handling or
+   blocking set is touched. An explicit override still wins, so the level remains measurable
+   rather than assumed, and CI can raise it deliberately on a bigger host. */
 const CONCURRENCY = Math.max(1,
-  parseInt(process.env.SOKONI_GATE_CONCURRENCY, 10) ||
-  Math.max(2, Math.min(6, (require('os').cpus() || [{}]).length - 1)));
+  parseInt(process.env.SOKONI_GATE_CONCURRENCY, 10) || 2);
 
 const ROOT = path.resolve(__dirname, '..');
 const AS_JSON = process.argv.includes('--json');
