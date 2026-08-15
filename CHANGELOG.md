@@ -1,3 +1,46 @@
+## [2026-08-15] — Gate 1: the rider photo-exception no longer depends on an email address
+
+`scripts/verify-claim-based-auth.js` was RED on the release lineage. `driver.html` gated a
+temporary RC onboarding exception on
+
+```js
+_cu.uid === 'D5Ql2…' || (_cu.email||'').toLowerCase() === '<owner gmail address>'
+```
+
+The gate exists to make a rename safe: SOKONI is moving its administrative identities to
+`@mysokoni.co.ke`, and the address hardcoded here was one of the three being renamed. On rename
+day that clause silently stops matching — the exact failure the gate was written to catch.
+
+**The two clauses identified the SAME account.** `scripts/qa/consolidate-kass-seller.js` maps that
+UID to that operator, so the email half granted nothing the UID half did not. It was pure
+redundancy carrying a rename hazard.
+
+**Fix: delete the email clause. One executable line.**
+
+```js
+var _photoExempt = !!_cu && _cu.uid==='D5Ql2EYr95bt79IpcGTmOMTK0P83';
+```
+
+The exception itself is **unchanged in scope** — same account, same two photo checks, still marked
+TEMPORARY and still expiring with v1.0.0 (`a6cb72b`). A UID is stable across an address change,
+which is why it is the safe half to keep; the gate's own documentation says a UID allowlist is
+acceptable for precisely this reason.
+
+Worth recording for whoever touches this next: **the verifier is not comment-aware**, despite its
+header listing comments as not-flagged. A first attempt left the gate red because the explanatory
+comment quoted the removed address. The comment now describes it without any literal address, and
+says so inline.
+
+Also note what this exception is and is not: it skips two **client-side form validation** returns.
+The photos go to `localStorage` and the Firestore submission excludes them. It grants no authority,
+so this is a rename-safety fix, not a privilege fix.
+
+**Files:** `driver.html` (+16/−2; 1 executable line, the rest explanatory comment).
+**Database:** none. **API:** none. **Security:** removes an email-dependent gate — authorization is
+now uniformly claim/UID based. **Breaking:** none. **Deployed:** no.
+
+---
+
 ## [2026-08-15] — FIXED: a platform-funded discount was being paid for by the seller
 
 **Status: implemented, tested, NOT deployed.** Checkpoint `bfdb8c7`. discount-funding **44/0** ·
