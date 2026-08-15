@@ -742,6 +742,27 @@ function ratingStarsHtml(avg){
 }
 
 /* ----- PRICE HISTORY BADGE ----- */
+/* ── Sellability: delegate, never re-derive ────────────────────────────────────
+   sokoni-sellability.js — byte-identical to functions/shared/sellability.js — is the
+   one decision Home, Shop, the product page and createCheckoutSession all use, so the
+   same product cannot be buyable on one surface and not another.
+
+   Home has no shop state (buyer surfaces do not read shops/{sellerUid}); absent means
+   OPEN, the server's own default for un-migrated shops, and shop-closed stays enforced
+   at checkout. FAIL OPEN if the module is missing — a failed script load is not an
+   authoritative "unavailable". */
+function _homeAvailability(p){
+    var A = (typeof window !== 'undefined') && window.SokoniSellability;
+    if (!A || typeof A.availabilityOf !== 'function') {
+        if (!_homeAvailability._warned) {
+            _homeAvailability._warned = true;
+            try { console.warn('[home] SokoniSellability not loaded — rendering fail-open'); } catch(e){}
+        }
+        return { state: 'in_stock', reason: 'module-missing', sellable: true, available: null };
+    }
+    return A.availabilityOf(p, undefined);
+}
+
 function priceChangeBadge(product){
     if(!product.priceHistory || !product.priceHistory.length) return "";
     const last = product.priceHistory[0];
@@ -813,8 +834,13 @@ function buildProductCard(product, size = "normal"){
                           ? isProductAgeRestricted(product)
                           : (typeof isAdultCategory === "function" && isAdultCategory(product.category));
     const adultBadge  = isAdult ? `<div class="adult-card-badge">🔞 18+</div>` : "";
-    const oos         = product.outOfStock || (product.stock !== undefined && Number(product.stock) === 0);
-    const oosOverlay  = oos ? `<div class="oos-overlay">Out of Stock</div>` : "";
+    /* Canonical sellability — the same decision the Shop grid, the product page and
+       createCheckoutSession make. Was `Number(product.stock) === 0`, which read
+       NEGATIVE stock as in-stock and ignored status/isVisible entirely, so Home could
+       offer a removed product with an Add button. */
+    const _hAv        = _homeAvailability(product);
+    const oos         = !_hAv.sellable;
+    const oosOverlay  = oos ? `<div class="oos-overlay">${_hAv.state === 'unavailable' ? 'Unavailable' : 'Out of Stock'}</div>` : "";
     const btnDisabled = oos ? "disabled" : "";
     const priceBadge    = priceChangeBadge(product);
     const demandBadge   = wishlistDemandBadge(product);
@@ -1081,6 +1107,14 @@ function displayProducts(productsToShow = []){
 
     const container = document.getElementById("productsContainer");
     if(!container) return;
+
+    /* Same canonical listing predicate /api/catalogue and the Shop grid apply, so a
+       removed / rejected / unpublished product cannot survive on Home alone. Fail
+       OPEN if the module is missing — never blank a real catalogue over a script load. */
+    productsToShow = (typeof window !== 'undefined' && window.SokoniSellability
+        && typeof window.SokoniSellability.isPubliclyListed === 'function')
+        ? productsToShow.filter(p => window.SokoniSellability.isPubliclyListed(p))
+        : productsToShow;
 
     if(productsToShow.length === 0){
         container.innerHTML = `

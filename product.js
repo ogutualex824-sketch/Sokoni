@@ -649,12 +649,15 @@ else{
 
                 <!-- DELIVERY + STOCK -->
                 ${(()=>{
-                    var stock = product.stock != null ? Number(product.stock) : null;
+                    /* One canonical state, not a third local interpretation. The
+                       threshold and the "unmetered = always in stock" rule now come
+                       from sokoni-sellability.js, so this chip, the related-products
+                       grid, the Shop grid and the server all say the same thing. */
+                    var _a = _prdAvailability(product);
                     var chipClass = 'in-stock', chipText = '&#x2714; In Stock';
-                    if (stock !== null) {
-                        if (stock <= 0) { chipClass = 'out-of-stock'; chipText = '&#x2716; Out of Stock'; }
-                        else if (stock <= 5) { chipClass = 'low-stock'; chipText = '&#x26A0; Only ' + stock + ' left'; }
-                    }
+                    if (_a.state === 'unavailable')       { chipClass = 'out-of-stock'; chipText = '&#x2716; Unavailable'; }
+                    else if (_a.state === 'out_of_stock') { chipClass = 'out-of-stock'; chipText = '&#x2716; Out of Stock'; }
+                    else if (_a.state === 'low_stock')    { chipClass = 'low-stock';    chipText = '&#x26A0; Only ' + _a.available + ' left'; }
                     var _dDays = (product.location||'').toLowerCase().includes('nairobi')||
                                  (product.county||'').toLowerCase().includes('nairobi') ? 1 : 2;
                     var _dDate = new Date(); _dDate.setDate(_dDate.getDate() + _dDays);
@@ -1056,7 +1059,8 @@ function renderRelatedProducts(){
     grid.innerHTML = related.map(p => {
         const img   = p.image || "assets/default-product.png";
         const price = Number(p.price).toLocaleString();
-        const oos   = p.outOfStock || (p.stock !== undefined && Number(p.stock) === 0);
+        /* Canonical, not a local `=== 0` (which read negative stock as in-stock). */
+        const oos   = !_prdAvailability(p).sellable;
         const oosOverlay = oos ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;z-index:4;border-radius:12px;">Out of Stock</div>` : "";
         const badge = (() => {
             const ageMs = Date.now() - Number(p.uploadedAt || 0);
@@ -1133,9 +1137,30 @@ function decreaseQty(){
    Pre-order) + live total that tracks the quantity. Docks above the bottom-nav,
    respects the safe area, mobile-only. Never covers content (fixed, own layer).
 ══════════════════════════════════════════════════════════════════════════ */
+/* ── Sellability: delegate, never re-derive ────────────────────────────────────
+   sokoni-sellability.js is byte-identical to functions/shared/sellability.js, the
+   module createCheckoutSession decides with, so the detail page cannot promise
+   something the server will refuse.
+
+   No shop state here: buyer surfaces do not read shops/{sellerUid}. Absent means OPEN
+   — the same default the server applies to un-migrated shops — and shop-closed stays
+   enforced at checkout. FAIL OPEN if the module is missing: a script that failed to
+   load must not mark real products unavailable. */
+function _prdAvailability(p){
+    var A = (typeof window !== 'undefined') && window.SokoniSellability;
+    if (!A || typeof A.availabilityOf !== 'function') {
+        if (!_prdAvailability._warned) {
+            _prdAvailability._warned = true;
+            try { console.warn('[product] SokoniSellability not loaded — rendering fail-open'); } catch(e){}
+        }
+        return { state: 'in_stock', reason: 'module-missing', sellable: true, available: null };
+    }
+    return A.availabilityOf(p, undefined);
+}
+
 function _prdIsOOS(){
-    return (typeof product !== 'undefined' && product &&
-        (product.outOfStock === true || (product.stock != null && Number(product.stock) <= 0)));
+    if (typeof product === 'undefined' || !product) return false;
+    return !_prdAvailability(product).sellable;
 }
 function _prdVariantPending(){
     try {

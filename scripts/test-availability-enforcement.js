@@ -72,10 +72,28 @@ ok(JSON.stringify(liveProd) === before, 'availability checks never mutate the pr
 
 /* ── 6. Creation-only invariant: the module gates a NEW checkout only. It exposes no
        concept of an existing order — there is no function here that could re-check or
-       invalidate one. Enforced by contract: only itemAvailability + fulfillmentAllowed
-       exist; both take a candidate product/shop, never an order. ── */
-ok(Object.keys(A).sort().join(',') === 'fulfillmentAllowed,itemAvailability,normalizeShop',
+       invalidate one. Every export takes a CANDIDATE product/shop, never an order.
+
+       This was previously pinned as a frozen three-name list. Slice 3 re-pointed this
+       module at the canonical shared decision (sokoni-availability.js) and exposed
+       three more creation-time predicates, so the list went stale while the invariant
+       it protects did not. It is now an explicit allow-list plus a positive check that
+       nothing order-shaped is reachable — strictly stronger than the old form, because
+       an unexpected NEW export still fails AND an order-named one fails by name. ── */
+const ALLOWED_EXPORTS = [
+  'availabilityOf',    /* (product, shop) -> state          */
+  'clampQty',          /* (qty, product, shop) -> qty        */
+  'fulfillmentAllowed',/* (type, shop) -> ok                 */
+  'isPubliclyListed',  /* (product) -> bool                  */
+  'itemAvailability',  /* (product, shop) -> available       */
+  'normalizeShop',     /* (shop) -> shop                     */
+].sort().join(',');
+ok(Object.keys(A).sort().join(',') === ALLOWED_EXPORTS,
    'module exposes ONLY creation-time gates (no existing-order path) — creation-only invariant');
+ok(!Object.keys(A).some(k => /order|refund|cancel|fulfil{1,2}ed|settle/i.test(k)),
+   'no export is order-shaped — nothing here can re-check or invalidate an existing order');
+ok(Object.keys(A).every(k => typeof A[k] === 'function'),
+   'every export is a pure function (no mutable shared state)');
 
 console.log(fail === 0 ? ('\nALL ' + pass + ' PASSED') : ('\n' + pass + ' passed, ' + fail + ' FAILED'));
 process.exit(fail === 0 ? 0 : 1);

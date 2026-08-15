@@ -1,3 +1,109 @@
+## [2026-08-15] — One product, one sellability decision, every surface agrees
+
+**Slice 3 of the merchant→Shop→Marketplace convergence.** Files: `sokoni-sellability.js` (new),
+`functions/shared/sellability.js` (new, byte-identical), `functions/availability-enforce.js`,
+`functions/index.js`, `category.js`, `category.html`, `product.js`, `product.html`, `script.js`,
+`index.html`, `scripts/test-sellability-contract.js` (new), `scripts/test-availability-enforcement.js`.
+No database, rules, inventory-transaction or payment changes.
+
+### The audit came first, and it changed the slice
+
+Most of what a "build an availability model" brief implies **already existed**, and rebuilding it
+would have been the defect. Confirmed already-built and left alone:
+
+* `createCheckoutSession` re-reads every product, uses server prices, rejects OOS, clamps
+  quantity, enforces the fulfilment channel, returns a server-authoritative total.
+* `darajaSTKPush` discards the client `amount` outright — *"not compared, not tolerated, discarded"*.
+* Stock deduction is one transaction, floored at zero, `stock`+`sold`+`inventoryVersion` written
+  together, idempotent via `inventoryApplied`, shortfall recorded in `oversoldAlerts`.
+* `analytics-aggregator.js` already mandates exactly-once event points and canonical commission.
+
+**No reservation system was added.** The invariant *"an order cannot make canonical inventory
+negative"* already holds. What the platform deliberately permits is a *post-payment* oversell,
+flagged rather than rejected, because the money has already moved.
+
+### The real defect: five definitions of "sellable"
+
+```
+/api/catalogue        HIDDEN = deleted|removed|hidden|draft|archived|banned|
+                               suspended|paused|inactive|rejected + isVisible
+listenProducts        NO status filter at all
+availability-enforce  isVisible===false, status==='archived'   ← only these two
+darajaSTKPush         status && status !== 'active'
+admin.html            removed|unpublished|deleted
+```
+
+Two of those are supposed to be the **same** authority. `/api/catalogue` hid a `status:'removed'`
+product; the Firestore listener returned it. Since `20dfcd2` made an authoritative response able
+to *remove* products, the same document appeared or vanished depending on which authority answered
+first. Slice 2 did not cause this — it made it visible.
+
+And because checkout blocked only `archived`, **a product the merchant had removed, rejected or
+unpublished was still purchasable.** Buyer surfaces drifted too: `category.js` and `product.js`
+used `Number(p.stock) === 0`, so **negative stock rendered as in-stock**, while a third site in the
+same file used `<= 0`. None considered `status` or `isVisible`.
+
+### One decision
+
+`sokoni-sellability.js` — pure, no I/O, byte-identical to `functions/shared/sellability.js`,
+following the `delivery-engine` duplicate-plus-parity-test pattern. It invents nothing:
+`reservedStock`, `available = max(stock − reserved, 0)` and the low-stock default of 5 all come
+from existing POS code (`pos-hq.js`, `pos-db.js`, `pos-scanner.js`, `pos.js`).
+
+States: `in_stock` | `low_stock` | `out_of_stock` | `unavailable`, each with a reason.
+Precedence is listing → shop → stock, so a delisted product reads `unavailable`, not
+`out_of_stock` — restocking it would not make it buyable. **Absent `stock` means unmetered, not
+zero**; treating it as zero would take the legacy catalogue off sale.
+
+Wired into `/api/catalogue`, the Shop grid, Home, product detail and `createCheckoutSession`.
+`availability-enforce.js` now delegates rather than holding a second copy. `darajaSTKPush` gained
+the canonical check **in addition to** its stricter `status==='active'` rule — additive, so no
+existing safeguard is weakened. Lists (Shop, Home) exclude delisted products exactly as
+`/api/catalogue` does; the detail page still renders one as `Unavailable`, because someone on a
+bookmark deserves an explanation rather than a blank page.
+
+Buyer surfaces have no shop state and do not read `shops/{sellerUid}` (an N+1 per card). Absent
+shop state means OPEN — the server's own default for un-migrated shops — and shop-closed stays
+enforced at checkout. Every surface **fails open** if the module is missing: a failed script load
+is not an authoritative "unavailable".
+
+### A near-miss worth recording
+
+`sokoni-availability.js` already existed — `window.AvailabilityService`, the **merchant-side**
+shop/product authority with its own vocabulary (`available`/`low`/`out`/`unavailable`) and
+`minStockLevel` threshold, consumed by `merchant.html`. It was overwritten by the same-named new
+module and restored from git; the working file is byte-identical to `HEAD`. The new module was
+renamed to `sokoni-sellability.js` / `SokoniSellability`. That makes **six** definitions found, not
+five; converging the merchant one is out of this slice's scope and is recorded in both modules.
+The contract test now asserts both survive with distinct files, globals and APIs.
+
+### Verification
+
+`scripts/test-sellability-contract.js` — **74/74**, no emulator, no network. Its value is the
+anti-drift half, proven by mutation rather than assumed: reintroducing `Number(p.stock) === 0`,
+reintroducing a local `status === 'archived'` gate, drifting the two copies by one byte, and
+removing a page's script tag were each injected and each **failed the suite**.
+
+`test-availability-enforcement` 27/27 · `test-catalogue-authority` 41/41 ·
+`test-age-classification` 39/39 · `test-product-revalidation` 21/21.
+
+**RULES: PASS** — environment restored (`npm ci`); `test-follow-rules` 40/0 and
+`test-reviews-canonical` 18/0 under the Firestore emulator, `GATE_EXIT=0`. Not classified as ENV.
+
+Browser, App Check rejected — rendered DOM, not the module in isolation:
+
+| seeded | Shop grid |
+|---|---|
+| removed / archived / hidden / rejected / unpublished | not listed |
+| negative (−2) | `Out of Stock`, not buyable |
+| stock 0 | `Out of Stock`, not buyable |
+| stock 3 · legacy (no stock field) · stock 10 / reserved 8 | buyable |
+
+Home 15 cards and agrees; detail loads with canonical `?id=`; 390 / 844 / 1440 all render with
+cart buttons and no horizontal overflow; zero page errors.
+
+---
+
 ## [2026-08-15] — The catalogue now deletes: an absent product leaves the grid
 
 **Catalogue synchronisation, slice 2 of the merchant→Shop→Marketplace convergence.**

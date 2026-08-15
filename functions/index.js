@@ -54,6 +54,10 @@ const logger              = require("firebase-functions/logger");
 const _brands             = require("./brands");            /* consumer brands; Bravilex stays the legal entity */
 const _ageVerify          = require("./age-verification");  /* server-side age gate */
 const _avail              = require("./availability-enforce"); /* pure shop/product availability gating (tested) */
+/* The canonical sellability decision, byte-identical to the browser's
+   sokoni-availability.js. `_avail` re-exports it for checkout; `/api/catalogue`
+   uses it directly so catalogue visibility and checkout can never disagree. */
+const _availability       = require("./shared/sellability");
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -2378,10 +2382,16 @@ exports.createCheckoutSession = onCall(
         continue;
       }
 
-      /* Out-of-stock check: outOfStock flag OR stock field present and zero */
-      const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
-      const isOos    = prod.outOfStock === true || (stockQty !== null && stockQty <= 0);
-      if (isOos) {
+      /* Out-of-stock check — the CANONICAL decision, not a local expression.
+         Same module the Shop grid, Home and the product page render from, so a card
+         that says "In Stock" and this gate cannot disagree. Semantics preserved
+         exactly: the outOfStock flag OR a metered product with nothing available is
+         rejected; an unmetered product (no stock field) still passes, which is what
+         keeps the legacy catalogue on sale. It additionally accounts for
+         `reservedStock` where a shop already writes it. */
+      const _pa      = _availability.availabilityOf(prod, shopState[prod.sellerUid]);
+      const stockQty = _pa.metered ? _pa.available : null;
+      if (_pa.state === "out_of_stock") {
         outOfStockItems.push(prod.name || pid);
         continue;
       }
@@ -2390,13 +2400,15 @@ exports.createCheckoutSession = onCall(
       let   qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
 
       /* Quantity revalidation: never authorise a session for more than remains.
-         When a metered product has fewer units than requested, clamp to what is
-         available (>=1 here, since <=0 was rejected as OOS above) and report the
-         adjustment so the buyer can be told "only N available" before paying. */
-      if (stockQty !== null && qty > stockQty) {
-        adjustedItems.push({ name: prod.name || pid, requested: qty, available: stockQty });
-        qty = stockQty;
+         The server wins — a request for 5 against 3 available becomes 3, reported in
+         `adjustedItems` so the buyer is told "only N available" BEFORE paying rather
+         than after. Clamping is the canonical clampQty(), so the ceiling the UI shows
+         and the ceiling the server enforces come from one place. */
+      const _clamped = _availability.clampQty(qty, prod, shopState[prod.sellerUid]);
+      if (_clamped.adjusted) {
+        adjustedItems.push({ name: prod.name || pid, requested: _clamped.requested, available: _clamped.available });
       }
+      qty = _clamped.qty;
 
       const lineTotal = unitPrice * qty;
       serverSubtotal += lineTotal;
@@ -3555,6 +3567,13 @@ exports.darajaSTKPush = onCall(
         const owner = p.sellerUid || p.uid || null;
         if (owner && owner !== sellerUid) {
           throw new HttpsError("failed-precondition", "Cart contains items from another seller.");
+        }
+        /* Canonical listability FIRST, then this path's own stricter rule. Additive on
+           purpose: the shared predicate closes the removed/rejected/unpublished hole,
+           and the existing status==='active' requirement is kept rather than relaxed,
+           so this guard only ever gets stronger. */
+        if (!_availability.isPubliclyListed(p)) {
+          throw new HttpsError("failed-precondition", "Product is not available for sale: " + pid);
         }
         if (p.status && p.status !== "active") {
           throw new HttpsError("failed-precondition", "Product is not available for sale: " + pid);
@@ -7123,13 +7142,19 @@ exports.catalogue = onRequest(
       const cap       = Math.min(Number(req.query.limit) || 200, 300);
       const category  = (req.query.category  || "").toString().trim().toLowerCase();
       const sellerUid = (req.query.sellerUid || "").toString().trim();
-      /* Match the client listener: NO status filter. Most legacy products have no `status`
-         field at all (absent = visible per the commerce lifecycle) — filtering on
-         status=='active' wrongly hid 92 of 103 real, previously-visible products. Return
-         everything EXCEPT the explicitly-hidden states. */
+      /* Visibility comes from the CANONICAL predicate, not a local set. Most legacy
+         products have no `status` field at all (absent = visible per the commerce
+         lifecycle) — filtering on status=='active' wrongly hid 92 of 103 real,
+         previously-visible products, which is why isPubliclyListed() treats only the
+         explicitly-hidden vocabulary as hidden and everything else as listable.
+
+         This endpoint and the client's Firestore listener are supposed to be the SAME
+         authority. They were not: this filtered `status:'removed'`, the listener had no
+         status filter at all, and since 20dfcd2 an authoritative response can REMOVE
+         products — so the same document appeared or vanished depending on which
+         authority answered first. Both now ask one function. */
       const snap = await db.collection("products").limit(500).get();
       const _isData = (v) => typeof v === "string" && v.slice(0, 5) === "data:";
-      const HIDDEN = new Set(["deleted", "removed", "hidden", "draft", "archived", "banned", "suspended", "paused", "inactive", "rejected"]);
       let products = snap.docs.map((d) => {
         const v = d.data() || {};
         delete v._syncedAt;
@@ -7138,10 +7163,7 @@ exports.catalogue = onRequest(
         if (Array.isArray(v.images)) v.images = v.images.filter((u) => !_isData(u));
         return { id: d.id, ...v };
       }).filter((p) => {
-        const st = String(p.status || "").toLowerCase();
-        if (HIDDEN.has(st)) return false;
-        if (p.isDeleted === true || p.deleted === true) return false;
-        if (p.visible === false || p.isVisible === false) return false;
+        if (!_availability.isPubliclyListed(p)) return false;
         if (sellerUid && String(p.sellerUid || "") !== sellerUid && String(p.uid || "") !== sellerUid) return false;
         if (category && String(p.category || "").toLowerCase() !== category) return false;
         return true;

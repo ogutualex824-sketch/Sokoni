@@ -270,9 +270,58 @@ function renderVariantFilters(baseList){
 }
 
 /* RENDER */
+/* ── Sellability: delegate, never re-derive ────────────────────────────────────
+   The canonical decision lives in sokoni-sellability.js, byte-identical to the
+   functions/shared/sellability.js that createCheckoutSession uses, so the card and
+   the server cannot disagree about the same product.
+
+   The grid has no shop state — buyer surfaces never read shops/{sellerUid}, and doing
+   so would be an N+1 read per card. Absent shop state means OPEN, which is the same
+   documented default the server applies to un-migrated shops; shop-closed remains
+   enforced at checkout, where the shop doc is already loaded. This is why the module
+   keeps product availability and shop availability as separate reasons rather than one
+   vague flag: the grid can answer the half it actually knows.
+
+   FAIL OPEN, never closed. If the module is missing the page is already broken, but a
+   script that failed to load must not silently mark real products unavailable — a
+   failed read is not an authoritative "no". Delisted products are still filtered by
+   /api/catalogue and still rejected by the server at checkout. A wiring test asserts
+   the script tag exists so this path stays theoretical. */
+function _catAvailability(p){
+    var A = (typeof window !== 'undefined') && window.SokoniSellability;
+    if (!A || typeof A.availabilityOf !== 'function') {
+        if (!_catAvailability._warned) {
+            _catAvailability._warned = true;
+            try { console.warn('[category] SokoniSellability not loaded — rendering fail-open'); } catch(e){}
+        }
+        return { state: 'in_stock', reason: 'module-missing', sellable: true };
+    }
+    return A.availabilityOf(p, undefined);
+}
+
+/* Keep only products that may appear in a public catalogue — the same predicate
+   /api/catalogue filters with. Fail OPEN: with the module missing, show everything
+   rather than blanking a real catalogue on a script-load failure. */
+function _catListable(list){
+    var A = (typeof window !== 'undefined') && window.SokoniSellability;
+    if (!A || typeof A.isPubliclyListed !== 'function') return list;
+    return (list || []).filter(function(p){ return A.isPubliclyListed(p); });
+}
+
 function renderProducts(list){
     const grid = document.getElementById("catProductsGrid");
     if(!grid) return;
+
+    /* A delisted product is not a listing. /api/catalogue already filters removed /
+       deleted / rejected / unpublished / hidden docs server-side, but the Firestore
+       listener has no status filter, so the same document reached this grid from one
+       authority and not the other. Both now apply the SAME canonical predicate, so
+       catalogue visibility cannot depend on which authority answered first.
+
+       This filters LISTS only. The product detail page still renders a delisted item
+       with an `Unavailable` state rather than a blank page — someone arriving on a
+       direct link or a bookmark deserves an explanation, not a vanished product. */
+    list = _catListable(list);
 
     /* Facets reflect the unfiltered set; the grid reflects the filtered one. */
     _variantBase = list;
@@ -315,8 +364,17 @@ function renderProducts(list){
                           ? isProductAgeRestricted(p)
                           : (p.ageRestricted === true);
         const adultBadge = isAdult ? `<div class="adult-card-badge" style="position:absolute;top:5px;right:5px;z-index:4;font-size:8px;font-weight:900;background:rgba(255,30,30,0.85);color:white;padding:2px 6px;border-radius:5px;">🔞 18+</div>` : "";
-        const oos = p.outOfStock || (p.stock !== undefined && Number(p.stock) === 0);
-        const oosOverlay = oos ? `<div class="oos-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;z-index:6;border-radius:12px;">Out of Stock</div>` : "";
+        /* Sellability comes from the ONE canonical decision (sokoni-sellability.js),
+           the same module functions/shared/sellability.js gives createCheckoutSession.
+
+           This used to be `p.outOfStock || (p.stock !== undefined && Number(p.stock) === 0)`.
+           Two defects: `=== 0` let NEGATIVE stock render as in-stock, and nothing here
+           considered `status` or `isVisible`, so a removed / rejected / unpublished
+           product showed a normal buyable card and the buyer only learned otherwise at
+           checkout. Availability is not a per-surface opinion. */
+        const _av = _catAvailability(p);
+        const oos = _av.state !== 'in_stock' && _av.state !== 'low_stock';
+        const oosOverlay = oos ? `<div class="oos-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;z-index:6;border-radius:12px;">${_av.state === 'unavailable' ? 'Unavailable' : 'Out of Stock'}</div>` : "";
         /* Rating placeholder only — the VALUE is filled in by _hydrateCardRatings()
            from the canonical ratingsSummary aggregate after render.
 

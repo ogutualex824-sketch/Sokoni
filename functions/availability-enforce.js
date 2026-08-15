@@ -1,51 +1,39 @@
 /* ════════════════════════════════════════════════════════════════════════
-   Availability enforcement — PURE decision logic shared by createCheckoutSession
-   and its automated acceptance test. No I/O, so the exact server behavior can be
-   proven deterministically (replacing the device-only Layer 5 checks).
+   Availability enforcement — createCheckoutSession's decision layer.
 
-   Canonical model (never a second one):
-     shop  = shops/{sellerUid} { acceptingOrders, online, delivery, pickup }  (ABSENT = true)
-     prod  = products/{id}      { status, isVisible, ... }
+   This module used to CONTAIN the decision logic. It now DELEGATES to the
+   canonical availability module (`functions/shared/availability.js`, byte-identical
+   to the browser's `sokoni-availability.js`), so the server and every buyer surface
+   answer "can this be bought?" from one implementation instead of five.
 
-   INVARIANT: this is CREATION-time gating only. It decides whether a NEW checkout
-   session may include an item / use a channel. It never sees or mutates existing
-   orders — "unavailable for new orders" must never invalidate an existing order.
+   Kept as a named module because createCheckoutSession, its acceptance test and
+   the QA gate all import THIS path; re-pointing it here is a one-line change for
+   them and preserves the exported names and return shapes exactly.
+
+   ONE DELIBERATE BEHAVIOUR CHANGE (Slice 3). `itemAvailability` previously blocked
+   `status === 'archived'` alone, so a product the merchant had removed, rejected
+   or unpublished was still purchasable — while `/api/catalogue` hid it from the
+   catalogue. It now rejects the whole canonical hidden-status vocabulary, which is
+   the set `/api/catalogue` already used. Nothing that was buyable and correctly
+   listed becomes unbuyable: an ABSENT status, `pending` and `approved` all remain
+   available, because filtering on status==='active' once wrongly hid 92 of 103
+   real products and must not be reintroduced.
+
+   INVARIANT (unchanged): this is CREATION-time gating only. It decides whether a
+   NEW checkout session may include an item / use a channel. It never sees or
+   mutates existing orders — "unavailable for new orders" must never invalidate an
+   order that already exists.
    ════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-/* Apply safe defaults: an absent field means open, so un-migrated shops behave
-   exactly as before this feature existed. */
-function normalizeShop(raw) {
-  raw = raw || {};
-  return {
-    acceptingOrders: raw.acceptingOrders !== false,
-    online:          raw.online          !== false,
-    delivery:        raw.delivery        !== false,
-    pickup:          raw.pickup          !== false,
-  };
-}
+const canonical = require('./shared/sellability');
 
-/* Can this product be added to a NEW checkout on availability grounds?
-   (Stock/price/qty are handled separately by the caller.)
-   Returns { available:boolean, reason:null|'hidden'|'archived'|'shop-closed'|'online-off' }. */
-function itemAvailability(prod, shopRaw) {
-  prod = prod || {};
-  if (prod.isVisible === false) return { available: false, reason: 'hidden' };
-  if (prod.status === 'archived') return { available: false, reason: 'archived' };
-  const sh = normalizeShop(shopRaw);
-  if (!sh.acceptingOrders) return { available: false, reason: 'shop-closed' };
-  if (!sh.online)          return { available: false, reason: 'online-off' };
-  return { available: true, reason: null };
-}
-
-/* Is the chosen fulfillment channel enabled by this shop?
-   fulfillmentType: 'delivery' | 'pickup'. Returns { ok:boolean, reason:null|'delivery-off'|'pickup-off' }. */
-function fulfillmentAllowed(fulfillmentType, shopRaw) {
-  const sh = normalizeShop(shopRaw);
-  const type = (String(fulfillmentType || 'delivery') === 'pickup') ? 'pickup' : 'delivery';
-  if (type === 'delivery' && !sh.delivery) return { ok: false, reason: 'delivery-off' };
-  if (type === 'pickup'   && !sh.pickup)   return { ok: false, reason: 'pickup-off' };
-  return { ok: true, reason: null };
-}
-
-module.exports = { normalizeShop, itemAvailability, fulfillmentAllowed };
+module.exports = {
+  normalizeShop:      canonical.normalizeShop,
+  itemAvailability:   canonical.itemAvailability,
+  fulfillmentAllowed: canonical.fulfillmentAllowed,
+  /* Newly exposed so the checkout path can stop deriving stock itself. */
+  availabilityOf:     canonical.availabilityOf,
+  clampQty:           canonical.clampQty,
+  isPubliclyListed:   canonical.isPubliclyListed,
+};
