@@ -22,12 +22,37 @@ This was recorded in `RELEASE_ROADMAP.md` as *"acceptable pre-launch (≈zero bu
 before real buyers."* **Monday is real buyers.** The precondition that made it acceptable expires at
 launch.
 
-**Fix:** mint `paymentIntents/{ref}` with a server-recomputed amount (re-read catalogue prices +
-`deliveryConfig`, as `darajaSTKPush` did), then add `"product"` to `_enforcedCategories`.
-**Deploy the client FIRST** — adding the category before the client ships breaks product payments
-outright.
+**The pricing authority already exists — it is simply bypassed.** No new pricing logic is needed,
+which makes this a routing fix rather than a rewrite:
 
-*Verified open: `functions/index.js:6315`.*
+- `createCheckoutSession` (`functions/index.js:2365`) already builds `serverSubtotal` **from
+  catalogue prices**, skips items not in the catalogue, and rejects out-of-stock, hidden/archived
+  products and closed shops.
+- `darajaSTKPush` (`functions/index.js:3571`) already recomputes delivery through the shared
+  `delivery-engine` from the merchant's own `deliveryConfig`, and **rejects** a client/server
+  mismatch rather than absorbing it — producing `authoritativeAmount` with
+  `pricingSource: "server_recomputed"`.
+- `payment-purposes.js` is a registry where a pricer derives the amount server-side; its contract
+  is already *"no pricer may read an amount from the request"*.
+
+The IntaSend product path calls `initiateSTKPush` directly from `checkout.html:2107` with a
+client-computed `orderTotal`, traversing none of the above.
+
+**Fix:** register a `product_order` purpose that reuses the catalogue-subtotal and delivery-engine
+authorities, have checkout call `createPaymentIntent` and send the **returned** amount and ref,
+then add `"product"` to `_enforcedCategories`.
+
+**Order matters — deploy the client FIRST.** Adding the category before the client ships breaks
+product payments outright (`STAGE_1B_REFUSED`).
+
+**One design constraint:** the payment ref and order id are the same value today
+(`payments/{ref}` ↔ `orders/{ref}`), and the order id is deliberately deterministic so a retry
+reuses one order identity. `createPaymentIntent` mints a fresh ref via `_mintRef()`, so the intent
+must either adopt the deterministic order id or the client must key the pending order on the
+returned ref. Whichever is chosen, retry must stay idempotent — `.create()` throws
+`ALREADY_EXISTS`, which the retry path has to handle rather than surface as a payment failure.
+
+*Verified open: `_enforcedCategories = ["subscription"]` at `functions/index.js:6315`.*
 
 ---
 
