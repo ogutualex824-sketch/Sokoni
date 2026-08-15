@@ -312,7 +312,19 @@ function renderProducts(list){
         const adultBadge = isAdult ? `<div class="adult-card-badge" style="position:absolute;top:5px;right:5px;z-index:4;font-size:8px;font-weight:900;background:rgba(255,30,30,0.85);color:white;padding:2px 6px;border-radius:5px;">🔞 18+</div>` : "";
         const oos = p.outOfStock || (p.stock !== undefined && Number(p.stock) === 0);
         const oosOverlay = oos ? `<div class="oos-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;z-index:6;border-radius:12px;">Out of Stock</div>` : "";
-        const rating = (()=>{ try{ const r=JSON.parse(localStorage.getItem("sokoniRatings")||"{}")[p.id]||[]; if(!r.length) return ""; const avg=(r.reduce((s,x)=>s+x.stars,0)/r.length).toFixed(1); return `<span style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;">★ ${avg}</span>`; }catch(e){ return ""; } })();
+        /* Rating placeholder only — the VALUE is filled in by _hydrateCardRatings()
+           from the canonical ratingsSummary aggregate after render.
+
+           This used to compute a star average from localStorage `sokoniRatings`:
+           a map seeded by demo-seed.js and appended to by success.html after a
+           purchase on THIS device. So the rating shown on the marketplace's main
+           shopping surface was per-device fiction — a shopper saw stars nobody
+           else saw, and a product with genuine reviews showed none. Exactly the
+           fabricated-metric pattern CLAUDE.md forbids.
+
+           Empty until a canonical summary is known: no stars is honest, invented
+           stars are not. */
+        const rating = `<span class="pcard-rating" data-rating-pid="${_esc(p.id)}"></span>`;
         const _csn = p.sellerName || '';
         const _csi = _csn ? _csn.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase() : '';
         const _csc = _csn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#a8ff58','#0891b2','#dc2626','#059669'][_csn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
@@ -433,6 +445,53 @@ function renderProducts(list){
         if(typeof ageGateWrap === "function") return ageGateWrap(cardHtml, isAdult);
         return cardHtml;
     }).join("");
+
+    /* Fill the rating placeholders from the CANONICAL aggregate. Fire-and-forget:
+       a rating is decoration, and the grid must never wait on it. */
+    _hydrateCardRatings(list);
+}
+
+/* ── CANONICAL CARD RATINGS ────────────────────────────────────────────────
+   Source of truth is ratingsSummary/{targetId} — {avg,count} recomputed
+   server-side by functions/reviews.js::_recalcSummary over APPROVED reviews
+   only, so moderation is honoured. The collection is `allow read: if true`
+   (firestore.rules), so the client may read it directly; no Cloud Function
+   round-trip and no new rule is required.
+
+   Batched with documentId() `in` queries (Firestore caps `in` at 30), so a
+   98-card grid costs 4 queries rather than 98 document reads.
+
+   A product with no summary, or a summary with count 0, renders NOTHING — not
+   "★ 0", not "no reviews". An unrated product and an unknown rating are both
+   honestly represented by absence. */
+async function _hydrateCardRatings(list){
+  try{
+    if(!window.firebase || !firebase.firestore) return;
+    const nodes = document.querySelectorAll('[data-rating-pid]');
+    if(!nodes.length) return;
+    const ids = [...new Set([...nodes].map(n => n.getAttribute('data-rating-pid')).filter(Boolean))];
+    if(!ids.length) return;
+
+    const db = firebase.firestore();
+    const FP = firebase.firestore.FieldPath;
+    const summaries = {};
+    for(let i = 0; i < ids.length; i += 30){
+      const chunk = ids.slice(i, i + 30);
+      /* eslint-disable no-await-in-loop */
+      const snap = await db.collection('ratingsSummary')
+        .where(FP.documentId(), 'in', chunk).get().catch(() => null);
+      if(!snap) continue;
+      snap.forEach(d => { const v = d.data() || {}; summaries[d.id] = { avg: v.avg, count: v.count }; });
+    }
+
+    nodes.forEach(n => {
+      const s = summaries[n.getAttribute('data-rating-pid')];
+      if(!s || typeof s.avg !== 'number' || !s.count) return;   /* unknown/unrated → stays empty */
+      n.style.cssText = 'font-size:9px;color:rgba(255,193,7,0.85);font-weight:700;';
+      n.textContent = '★ ' + s.avg.toFixed(1) + ' (' + s.count + ')';
+      n.title = s.count + ' approved review' + (s.count === 1 ? '' : 's');
+    });
+  }catch(e){ /* decoration only — never break the grid */ }
 }
 
 renderProducts(filtered);
