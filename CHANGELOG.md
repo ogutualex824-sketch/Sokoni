@@ -1,3 +1,59 @@
+## [2026-08-15] — ADR-0018: one identity, and the invariants made checkable
+
+**Files:** `docs/ADR.md` (ADR-0018), `docs/IDENTITY_SHOP_CENSUS.md`,
+`sokoni-merchant-diag.js`. No runtime behaviour, server, rules or payment changes. Still
+read-only; nothing repaired, nothing deployed.
+
+### The rule
+
+```
+auth.uid === users/{uid}.sellerUid          shops/{activeShopId} owned by auth.uid
+```
+
+Established **once at onboarding** — Auth user → `users/{uid}` → seller identity → shop →
+active shop → all merchant data in that scope. Never a buyer account, then a separate
+seller account, then another shop owner, joined afterwards. That sequence is what produced
+the KASS split.
+
+### Three corrections the codebase forced
+
+Encoding the invariant verbatim would have failed for every account on the platform.
+
+1. **`shops` has no `ownerUid`.** Ownership is `sellerUid` (`merchant.html:2004`), `ownerId`
+   (`automation-engine.js:284`), or the doc id being the uid (`account-status.js:59`). The
+   canonical resolver already exists — `functions/kasshop.js:74 _ownedShop()` tries
+   `sellerUid → ownerUid → ownerId`, scoped by uid, deterministic on ties, and *"never
+   consults a document id, a cached shop, or a handle."* The convergence work is routing
+   other surfaces **onto** it, not writing a fourth resolver.
+2. **`users/{uid}.activeShopId` does not exist** — nothing reads or writes it. Active shop
+   lives only in `SokoniShell` (memory), `localStorage`, and `claims.shopId`. Giving it a
+   persisted home is a decision to implement, so the census reports it `UNKNOWN` rather
+   than reporting the whole platform broken.
+3. **The creation path writes the role in a shape the readers do not read.**
+   `automation-engine.js:277` sets `users/{uid}.role = 'seller'` (**string**) +
+   `sellerEnabled`, while `profile.html:5521`, `seller-analytics.html:333` and
+   `business-analytics.html:340` read `roles[]` (**array**). A seller approved by automation
+   is invisible to those surfaces. This is the strongest single explanation for a "missing"
+   seller role — and it is a **creation-rule defect, not a data defect**.
+
+### Invariants I1–I7, with a third verdict
+
+The census now checks each invariant and reports `PASS` / `FAIL` / `UNKNOWN`, kept strictly
+apart. A denied read reported as `FAIL` invents a defect; reported as `PASS` hides one. A
+run with zero failures but open unknowns is explicitly **not** a clean bill of health.
+`owns()` was widened to all three ownership fields — checking fewer would report a
+legitimately-owned shop as foreign.
+
+### Reconciliation, not re-creation
+
+KASS reconciles toward `D5Ql2EYr95bt79IpcGTmOMTK0P83` (handle `kassshop`). No new account,
+shop or duplicate role. `xrH21J5GFbW8PluCZ2ny5nIuf602` remains historical/linked — payment
+evidence is not rewritten because an account was later merged. Analytics is never
+reconciled by copying figures between identities; reconcile the scope keys and let it
+re-derive. `sold` vs `soldCount` stays separate.
+
+---
+
 ## [2026-08-15] — Identity → seller → shop → analytics census (read-only)
 
 **Files:** `sokoni-merchant-diag.js`, `docs/IDENTITY_SHOP_CENSUS.md` (new). No runtime

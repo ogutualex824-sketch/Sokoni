@@ -942,3 +942,99 @@ argument on `gipDispatch/{jobId}` — the same client-asserted-proof shape as th
 defect. It authorises no payout today because that collection does not feed
 `onOrderStatusChange`, so it is reported as a standing NOTE rather than a breach; it must be
 reviewed before `gipDispatch` is ever wired to `orders`.
+
+---
+
+## ADR-0018 — One identity: auth.uid → profile → seller → shop → every merchant surface
+
+**Status:** ACCEPTED (model) · **NOT IMPLEMENTED** (three gaps below) · 2026-08-15
+**Context:** [[IDENTITY_SHOP_CENSUS]] · [[IDENTITY_UNIFIED]] · [[PLATFORM_CONSTITUTION]]
+
+### Decision
+
+```
+AUTH ACCOUNT ─ auth.uid ─▶ users/{uid} ─ sellerUid ─▶ SELLER IDENTITY
+                                              │
+                                     activeShopId
+                                              ▼
+                                    shops/{activeShopId}
+        ├── MiniShop ├── Products ├── Inventory ├── POS ├── Orders ├── Analytics
+```
+
+**Invariant.** For an authenticated merchant:
+
+```
+auth.uid === users/{uid}.sellerUid
+shops/{activeShopId} is owned by auth.uid
+```
+
+Every seller-private query derives its scope from that relationship, so *My Shop*,
+*My Products*, *My Inventory*, *My POS*, *My Orders* and *My Analytics* all mean the
+same business.
+
+**Creation rule.** Establish the relationship **once, at onboarding**:
+
+```
+create Auth user → create users/{uid} → attach seller identity → create shop
+                 → set active shop → all merchant data uses that scope
+```
+
+Never create a buyer account, then a separate seller account, then another shop owner,
+and attempt to join them afterwards. That sequence is what produced the KASS split.
+
+### Three corrections the codebase forced on the stated invariant
+
+Writing the invariant verbatim would have produced a check that fails for everyone.
+
+1. **`shops` has no `ownerUid` field.** Ownership is carried by `sellerUid` (`merchant.html:2004`),
+   `ownerId` (`functions/automation-engine.js:284`, `finance-os-sprint43.js:31`), or the document
+   id being the uid (`account-status.js:59`). The canonical resolver already exists —
+   `functions/kasshop.js:74 _ownedShop()` tries `sellerUid → ownerUid → ownerId`, scoped by uid,
+   deterministic on ties, and *"never consults a document id, a cached shop, or a handle."*
+   **The invariant is expressed in terms of that resolver, and other surfaces converge onto it
+   rather than inventing a fourth.**
+
+2. **`users/{uid}.activeShopId` does not exist.** Nothing in the repository reads or writes it.
+   Active shop lives only in `SokoniShell.activeShopId` (memory), `localStorage.activeShopId`,
+   and `claims.shopId`. Giving it a canonical persisted home is a **decision to implement**, not
+   a condition to test — the census reports it `UNKNOWN`, because asserting it would report
+   every account on the platform as broken.
+
+3. **The creation path writes the role in the shape the readers do not read.**
+   `functions/automation-engine.js:277` sets `users/{uid}.role = 'seller'` (a **string**) plus
+   `sellerEnabled: true`, while `profile.html:5521`, `seller-analytics.html:333` and
+   `business-analytics.html:340` all read `roles[]` (an **array**). A seller approved by
+   automation is therefore invisible to those surfaces. **This is a creation-rule defect, not a
+   data defect** — and it is the most likely single explanation for a "missing" seller role.
+
+### Precedence
+
+The **signed claim outranks the cache.** `pos-completeness.html:524` and `pos-kds.html:261`
+currently resolve `localStorage.getItem('activeShopId') || r.claims.shopId`, so the cache wins
+by construction, and `merchant.html:2177` already warns the value survives an account switch.
+Reversing that precedence is required by this ADR and is not yet done.
+
+### Reconciliation, not re-creation
+
+For KASS: reconcile toward `D5Ql2EYr95bt79IpcGTmOMTK0P83` as `auth.uid` = `sellerUid` = shop
+owner. **No new account, shop, or duplicate role is created.** The deprecated
+`xrH21J5GFbW8PluCZ2ny5nIuf602` remains as historical/linked data — historical payment evidence
+is not rewritten because an account was later merged (see the `paymentIntents/SKN3550FD490`
+record earlier in this file, which correctly names the old uid).
+
+**Analytics is never reconciled by copying figures between identities.** Reconcile the scope
+keys and let analytics re-derive from canonical commerce records; a dashboard made to agree by
+transcription is contradicted by the next sale, refund or inventory change. The `sold` vs
+`soldCount` divergence found by the inventory-writer sweep stays a separate item
+([[LAUNCH_TODO]] §2b).
+
+### Consequences
+
+- Merchant surfaces must resolve scope through the canonical owned-shop resolver, not through
+  a document id, a cached `activeShopId`, or a handle.
+- The role signal must converge to one source. Nine are read today (see [[IDENTITY_SHOP_CENSUS]]).
+- Steps that change precedence or key space are architectural and are **flagged under RC freeze**,
+  not executed.
+- Verification is read-only first: the census (`sokoni-merchant-diag.js`) checks invariants
+  I1–I7 and reports `PASS` / `FAIL` / `UNKNOWN`, never folding an unanswered question into
+  either verdict.

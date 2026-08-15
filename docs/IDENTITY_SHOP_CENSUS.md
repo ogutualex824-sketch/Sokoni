@@ -126,6 +126,65 @@ Check, no test credential), which is the same constraint that created this modul
 
 ---
 
+## The canonical model — now a rule
+
+Recorded as **[[ADR#ADR-0018 — One identity]]**. The invariant the census checks:
+
+```
+auth.uid === users/{uid}.sellerUid          and    shops/{activeShopId} owned by auth.uid
+```
+
+Three corrections the codebase forced on that statement — each would otherwise have
+produced a check that fails for every account on the platform:
+
+| stated | actual | consequence |
+|---|---|---|
+| `shops.ownerUid` | no such field — `sellerUid` \| `ownerId` \| doc-id | check all three, in `_ownedShop`'s order |
+| `users/{uid}.activeShopId` | **does not exist anywhere** | a decision to implement, reported `UNKNOWN` |
+| role written as `roles[]` | creation writes `role: 'seller'` **string** | sellers invisible to array readers |
+
+That third row is the strongest single explanation for a *"missing"* seller role.
+`functions/automation-engine.js:277` auto-approves a seller by setting
+`users/{uid}.role = 'seller'` plus `sellerEnabled: true`, while `profile.html:5521`,
+`seller-analytics.html:333` and `business-analytics.html:340` all read `roles[]`. The role
+is not missing — it was **written in a shape those surfaces never read**. It is a
+creation-rule defect, which is exactly where the fix belongs.
+
+**The canonical resolver already exists.** `functions/kasshop.js:74 _ownedShop()` resolves
+by ownership field (`sellerUid → ownerUid → ownerId`), scoped by uid, deterministic on
+ties, and explicitly *"never consults a document id, a cached shop, or a handle."* The
+convergence work is routing other surfaces **onto** it — not writing a fourth resolver.
+
+### Invariants the census now checks
+
+| id | statement | note |
+|---|---|---|
+| I1 | `users/{uid}.sellerUid === auth.uid` | `UNKNOWN` if unset — absent is not wrong |
+| I2 | `shops/{uid}` owned by auth.uid | reports **which** field carried ownership |
+| I3 | `activeShopId` resolves to a shop this uid owns | the stale-identity check |
+| I4 | the signed claim outranks the localStorage cache | today it does not, by construction |
+| I5 | the seller role agrees across profile · claims · cache | `UNKNOWN` when no signal says seller |
+| I6 | `users/{uid}.roles` has no duplicates | merge residue → deduplicate, don't add |
+| I7 | `users/{uid}.activeShopId` is the canonical home | **`UNKNOWN` — field does not exist yet** |
+
+`PASS` / `FAIL` / `UNKNOWN` are kept strictly apart. A denied read reported as `FAIL`
+invents a defect; reported as `PASS` hides one. Both are worse than recording that the
+question went unanswered — so a run with zero failures and open unknowns is explicitly
+**not** a clean bill of health.
+
+### Expected values for KASS
+
+From the merge record (2026-08-05/06) — a **prediction to verify**, not a finding:
+
+```
+auth.uid = users/{uid}.sellerUid = shop owner = D5Ql2EYr95bt79IpcGTmOMTK0P83
+handle                                        = kassshop
+deprecated, historical/linked only             = xrH21J5GFbW8PluCZ2ny5nIuf602
+```
+
+If `activeShopId` returns `xrH…` or a branch id, that is I3/I4 — the cache-outranks-claim
+path — and the repair is precedence, not a new shop.
+
 ## Repair plan — gated on the census, not started
 
 No repair should begin until the runtime census answers all four questions. The order

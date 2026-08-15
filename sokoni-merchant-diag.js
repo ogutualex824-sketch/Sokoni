@@ -337,8 +337,12 @@ window.SokoniMerchantDiag = (() => {
     }
 
     /* ── shops: two key spaces, three ownership fields ── */
-    const owns = (s) => !!s && (String(s.sellerUid || '') === String(uid) ||
-                                String(s.ownerId  || '') === String(uid));
+    /* Same three fields, same order, as the canonical resolver
+       functions/kasshop.js:74 _ownedShop() — which accepts the legacy names
+       precisely because older shop documents predate `sellerUid`. Checking
+       fewer fields here would report a legitimately-owned shop as foreign. */
+    const owns = (s) => !!s && ['sellerUid', 'ownerUid', 'ownerId']
+      .some((f) => String(s[f] || '') === String(uid));
     out.shopByUid    = await getDoc('SHOP_BY_UID',    'shops', uid);
     out.shopByActive = (out.activeShopId && out.activeShopId !== uid)
       ? await getDoc('SHOP_BY_ACTIVE', 'shops', out.activeShopId) : out.shopByUid;
@@ -388,6 +392,109 @@ window.SokoniMerchantDiag = (() => {
         'Reconcile the SCOPE KEYS and let analytics re-derive from canonical commerce data. ' +
         'Never copy figures between profiles to make a dashboard agree — the next POS sale, ' +
         'refund or inventory change would silently contradict it.');
+    }
+
+    /* ── CANONICAL IDENTITY INVARIANTS ────────────────────────────────────
+       The architecture rule, checked rather than assumed. Three verdicts, and
+       the third one matters most:
+
+         PASS     the invariant holds
+         FAIL     the invariant is violated — reconciliation needed
+         UNKNOWN  it could not be evaluated (denied read, or the field does not
+                  exist in the data model yet)
+
+       UNKNOWN is never folded into either of the others. A denied read reported
+       as FAIL invents a defect; reported as PASS hides one. Both are worse than
+       admitting the question went unanswered. */
+    const inv = [];
+    const check = (id, statement, verdict, detail) => {
+      inv.push({ id, statement, verdict, detail });
+      const colour = verdict === 'PASS' ? '#71ff00' : verdict === 'FAIL' ? '#ff6b6b' : '#ffb020';
+      console.log('%c  ' + id + ' ' + verdict.padEnd(8) + statement, 'color:' + colour);
+      if (detail) console.log('      ' + detail);
+      if (verdict === 'FAIL') out.divergences.push(id + ' ' + statement);
+    };
+    out.invariants = inv;
+    console.log('%c  ── CANONICAL IDENTITY INVARIANTS ──', 'color:#71ff00;font-weight:bold');
+
+    /* I1 — sellerUid IS the auth uid, never a pointer elsewhere. */
+    check('I1', 'users/{uid}.sellerUid === auth.uid',
+      u === undefined ? 'UNKNOWN' : u === null ? 'UNKNOWN'
+        : !u.sellerUid ? 'UNKNOWN'
+        : String(u.sellerUid) === String(uid) ? 'PASS' : 'FAIL',
+      u && !u.sellerUid ? 'sellerUid is not set on this profile — absent, not wrong.' : null);
+
+    /* I2 — the shop this uid OWNS, resolved the way functions/kasshop.js:74
+       _ownedShop() does it: by ownership field, never by document id. That
+       resolver is the canonical one; this mirrors its field order. */
+    const ownerField = out.shopByUid && ['sellerUid', 'ownerUid', 'ownerId']
+      .find((f) => String(out.shopByUid[f] || '') === String(uid));
+    check('I2', 'shops/{uid} is owned by auth.uid (sellerUid|ownerUid|ownerId)',
+      out.shopByUid === undefined ? 'UNKNOWN'
+        : out.shopByUid === null ? 'FAIL'
+        : ownerField ? 'PASS' : 'FAIL',
+      out.shopByUid === null
+        ? 'No shop document at shops/{uid}. If a shop exists under a different id, ' +
+          'that is the reconciliation — do NOT create a second shop.'
+        : ownerField ? 'ownership carried by `' + ownerField + '`'
+        : 'Shop exists but none of sellerUid/ownerUid/ownerId equals this uid.');
+
+    /* I3 — the ACTIVE shop is the shop this uid owns. */
+    const activeIsMine = !out.activeShopId ? null
+      : String(out.activeShopId) === String(uid) ? true
+      : (out.shopByActive === undefined ? null
+         : out.shopByActive === null ? false
+         : owns(out.shopByActive));
+    check('I3', 'activeShopId resolves to a shop owned by auth.uid',
+      activeIsMine === null ? 'UNKNOWN' : activeIsMine ? 'PASS' : 'FAIL',
+      activeIsMine === false
+        ? 'The session is scoped to a shop this account does not own. Correct activeShopId ' +
+          '— never create a shop to satisfy the page.'
+        : null);
+
+    /* I4 — the signed claim outranks the cache. Today it does not: two POS
+       surfaces resolve `localStorage || claims.shopId`. */
+    check('I4', 'the SIGNED shop claim outranks the localStorage cache',
+      !claimShop ? 'UNKNOWN'
+        : !lsShop ? 'PASS'
+        : String(lsShop) === String(claimShop) ? 'PASS' : 'FAIL',
+      !claimShop ? 'No shopId claim on the token — precedence cannot be evaluated.'
+        : 'pos-completeness.html:524 and pos-kds.html:261 resolve `localStorage || claims.shopId`, ' +
+          'so today the CACHE wins by construction. Reversing that is the fix.');
+
+    /* I5 — one seller signal, not nine. */
+    const sig = Object.values(out.roleSignals || {});
+    check('I5', 'the seller role agrees across profile, claims and cache',
+      !sig.length ? 'UNKNOWN'
+        : sig.every(Boolean) ? 'PASS'
+        : sig.every((v) => !v) ? 'UNKNOWN'
+        : 'FAIL',
+      sig.length && sig.every((v) => !v)
+        ? 'No signal says seller — this may simply be a buyer-only account.'
+        : 'Reconcile toward the canonical source; do not set the false signals true.');
+
+    /* I6 — roles[] is a SET. Duplicates are the visible residue of a merge. */
+    const rr = (u && Array.isArray(u.roles)) ? u.roles.map((r) => String(r).toLowerCase()) : null;
+    check('I6', 'users/{uid}.roles contains no duplicates',
+      !rr ? 'UNKNOWN' : rr.length === new Set(rr).size ? 'PASS' : 'FAIL',
+      rr && rr.length !== new Set(rr).size ? 'Deduplicate — do not add a role to compensate.' : null);
+
+    /* I7 is NOT checked, deliberately, and saying why matters more than a verdict:
+       `users/{uid}.activeShopId` DOES NOT EXIST in this codebase. Nothing reads or
+       writes it. Making the active shop a persisted profile field is a DECISION to
+       implement, not a condition to test — asserting it here would report FAIL for
+       every account on the platform and read as "everyone is broken". */
+    check('I7', 'users/{uid}.activeShopId is the canonical active-shop home', 'UNKNOWN',
+      'FIELD DOES NOT EXIST YET. activeShopId lives only in SokoniShell (memory), ' +
+      'localStorage, and claims.shopId. Giving it a canonical persisted home is step 3 ' +
+      'of the repair plan, not a defect in this account\'s data.');
+
+    const fails = inv.filter((i) => i.verdict === 'FAIL').length;
+    const unks  = inv.filter((i) => i.verdict === 'UNKNOWN').length;
+    console.log('%c  INVARIANTS      ' + (inv.length - fails - unks) + ' pass · ' + fails +
+                ' FAIL · ' + unks + ' unknown', 'color:' + (fails ? '#ff6b6b' : '#71ff00'));
+    if (!fails && unks) {
+      console.log('      No failures, but ' + unks + ' unanswered — that is not a clean bill of health.');
     }
 
     return out;
