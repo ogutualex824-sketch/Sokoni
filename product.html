@@ -59,10 +59,63 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
      absolutely-centred title rendered ON TOP of the logo. All of those controls
      remain reachable from the bottom nav. -->
 <nav class="product-nav-premium sk-sub-nav">
-  <a href="/" class="pnp-back" title="Back to marketplace" aria-label="Back">←</a>
+  <!-- CLOSE, not Back-to-Home.
+
+       This was `<a href="/">←</a>`: a hard navigation to the homepage. A shopper
+       who tapped it from the Shop/Marketplace grid lost their place entirely —
+       their scroll position, category filter, sort and search were all discarded
+       and they landed on Home, which is not where they came from.
+
+       Product Details is a detail view over a browsing context, so the control
+       is a ✕ that CLOSES it: history.back() returns to the exact grid state the
+       browser already holds. closeProduct() falls back to the Shop/Marketplace
+       page only when there is no in-app history to return to (a direct link, a
+       shared URL, a new tab) — never to Home.
+
+       It stays an <a> with a real href so middle-click, long-press and
+       "open in new tab" still work, and so it degrades correctly without JS. -->
+  <a href="category.html?cat=all" class="pnp-back" title="Close" aria-label="Close product details"
+     onclick="return closeProduct(event);">✕</a>
   <span class="pnp-title">Product Details</span>
   <a href="wishlist.html" class="pnp-icon-btn" title="Wishlist" aria-label="Wishlist">❤️</a>
 </nav>
+<script>
+/* Close the product detail view.
+
+   Returns to the browsing context the shopper came FROM, preserving scroll,
+   category, sort and search — none of which survive a fresh navigation.
+
+   history.back() is used only when we can show this page was reached from
+   within SOKONI. `document.referrer` is the evidence: same-origin referrer
+   means there is a real in-app page behind us. history.length is NOT reliable
+   for this (a fresh tab can still report >1), and using it caused back() to
+   walk into another site's history entry.
+
+   Every other case — direct link, shared URL, new tab, cross-site referrer —
+   falls through to the anchor's own href (the Shop/Marketplace grid). Never
+   Home: the shopper was browsing products, so products is where Close belongs.
+
+   Returning false/true rather than always preventing default keeps the <a>
+   working for middle-click and "open in new tab", which the browser handles
+   before this ever runs. */
+function closeProduct(ev){
+  try{
+    var sameOrigin = false;
+    if (document.referrer) {
+      try { sameOrigin = new URL(document.referrer).origin === location.origin; } catch(_) {}
+    }
+    /* Don't bounce back to another product page — that is sideways, not "close". */
+    var refIsProduct = /\/product(\.html)?(\?|$)/i.test(document.referrer || '');
+    if (sameOrigin && !refIsProduct && history.length > 1) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      history.back();
+      return false;
+    }
+  }catch(_){}
+  return true;   /* let the href carry us to the Shop/Marketplace grid */
+}
+window.closeProduct = closeProduct;
+</script>
 <!-- The header auth script was removed with the elements it drove (#authButtons,
      #pnpProfileAvatar, #pnpProfileInitial). It was already null-guarded, so it
      would have become a silent no-op; deleting it avoids leaving dead code that
