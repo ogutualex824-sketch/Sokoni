@@ -35,11 +35,21 @@ window.SokoniMerchantDiag = (() => {
 
   const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-  /* The account this sprint is about. Signing in with the email account instead
-     is the single likeliest cause of a "missing workspace", and it presents as
-     an empty dashboard rather than as an error — so it is checked explicitly
-     and named, rather than left for someone to infer. */
-  const EXPECTED_PHONE = '+254705726803';
+  /* The account a census is about. Signing in with the email account instead is
+     the single likeliest cause of a "missing workspace", and it presents as an
+     empty dashboard rather than as an error — so it is checked explicitly and
+     named, rather than left for someone to infer.
+
+     OVERRIDABLE, because a hardcoded expectation becomes a FALSE finding the
+     moment a different account is censused: a correct sign-in would be reported
+     as "WRONG ACCOUNT — the workspace is missing", which is precisely the kind
+     of confident-but-wrong output a diagnostic must never produce. Set
+     window.SOKONI_DIAG_ACCOUNT (phone or email) before load to census another
+     identity; leave it unset and the check degrades to informational. */
+  const EXPECTED_PHONE = (typeof window !== 'undefined' && window.SOKONI_DIAG_ACCOUNT)
+    ? String(window.SOKONI_DIAG_ACCOUNT)
+    : '+254705726803';
+  const ACCOUNT_DECLARED = !!(typeof window !== 'undefined' && window.SOKONI_DIAG_ACCOUNT);
 
   const t0 = (window.performance && performance.now) ? performance.now() : Date.now();
   const now = () => ((window.performance && performance.now) ? performance.now() : Date.now());
@@ -95,8 +105,16 @@ window.SokoniMerchantDiag = (() => {
     console.log('  PROVIDERS       ' + (providers.join(', ') || '(none)'));
     console.log('  AUTH RESOLVED   ' + ms(waited));
 
-    /* The wrong-account case, named explicitly. */
-    if (phone !== EXPECTED_PHONE) {
+    /* The wrong-account case, named explicitly — but only asserted when the
+       operator has DECLARED which account this census is about. Otherwise the
+       mismatch is stated as context, not as a defect. */
+    if (phone !== EXPECTED_PHONE && email !== EXPECTED_PHONE && !ACCOUNT_DECLARED) {
+      note('info', 'This is not the account the default expectation names.',
+        'Default expectation is ' + EXPECTED_PHONE + '. Set window.SOKONI_DIAG_ACCOUNT to ' +
+        'declare the account under census; until then no wrong-account claim is made.');
+      console.log('  ACCOUNT         ' + (phone || email || '(unknown)') +
+                  '  (no declared expectation — not treated as wrong)');
+    } else if (phone !== EXPECTED_PHONE && email !== EXPECTED_PHONE) {
       if (email && !phone) {
         note('error', 'Signed in with the EMAIL account, not the phone account.',
           'The seller role and KASS VAPES products belong to the ' + EXPECTED_PHONE +
@@ -184,6 +202,195 @@ window.SokoniMerchantDiag = (() => {
         'employer, pages would query the wrong identity.');
     }
     return active;
+  }
+
+  /* ── identity chain census ─────────────────────────────────────────────
+     READ-ONLY. Every call below is a getDoc — it creates nothing and repairs
+     nothing, deliberately. Making the UI work by writing a missing role or a
+     second shop document is how a competing identity model gets born; the
+     point here is to find out which identity is CANONICAL, not to manufacture
+     one that satisfies the page.
+
+     Repository reading predicts three structural divergences, and this block
+     exists to prove or disprove each on a real signed-in device:
+
+     1. ROLE is read from at least nine different signals across the app —
+        users/{uid}.roles[], users/{uid}.role, isSeller, registeredAs,
+        sellerActive, storeName, claims.seller, claims.roles[], claims.role.
+        profile.html:5521 reads roles[]; script.js:3489 accepts any of five;
+        functions/analytics-engine.js:90 reads claims.role. A seller can
+        therefore be present in one and absent in another indefinitely.
+
+     2. ACTIVE SHOP has three sources with NO agreed precedence:
+          window.SokoniShell.activeShopId   (in-memory, set by merchant.html)
+          localStorage.activeShopId         (merchant.html:1956)
+          claims.shopId                     (the signed value)
+        pos-completeness.html:524 and pos-kds.html:261 both resolve
+        `localStorage || claims.shopId` — the CACHE outranks the SIGNED claim.
+        merchant.html:2177 already warns that activeShopId survives an account
+        switch, which is exactly how a shop can appear under a stale identity.
+
+     3. KEY SPACE. `shops` is addressed two ways:
+          shops/{sellerUid}    account-status.js:59, etims.js:517
+          shops/{activeShopId} analytics-engine.js:83, finance-os-sprint43.js:28
+        and ownership is expressed three ways: doc-id == uid, ownerId == uid,
+        sellerUid == uid (merchant.html:2004). Meanwhile the server keys
+        analytics as shopId: sellerUid (functions/index.js:3169/3201/3382)
+        while the client passes the BRANCH id as the shop dimension
+        (sokoni-analytics-engine.js:77). If activeShopId is a branch id and the
+        analytics key is a sellerUid, Shop and Analytics cannot converge — not
+        because a number is wrong, but because they are keyed differently. */
+  async function identityBlock(uid, claims, ls) {
+    const out = { usersDoc: null, activeShopId: null, shopByUid: null, shopByActive: null,
+                  cfgByUid: null, cfgByActive: null, roleSignals: {}, divergences: [] };
+    const bad = (msg, detail) => { out.divergences.push(msg); note('error', msg, detail); };
+
+    let fs, db;
+    try { fs = await import(FS_URL); } catch (e) {
+      note('error', 'Firestore SDK failed to load — identity chain not read.', e && e.message);
+      return out;
+    }
+    db = window.firebaseDB;
+    if (!db) { note('error', 'window.firebaseDB absent — identity chain not read.'); return out; }
+
+    const getDoc = async (label, coll, id) => {
+      if (!id) return null;
+      const s = now();
+      try {
+        const snap = await fs.getDoc(fs.doc(db, coll, String(id)));
+        state.queries.push({ label, ok: true, count: snap.exists() ? 1 : 0, ms: now() - s });
+        return snap.exists() ? snap.data() : null;
+      } catch (e) {
+        const code = (e && e.code) || 'unknown';
+        state.queries.push({ label, ok: false, code, ms: now() - s });
+        note(code === 'permission-denied' ? 'error' : 'warn', label + ' failed (' + code + ')',
+          'A denied read is NOT evidence of absence — it is an unanswered question.');
+        return undefined;                                  /* undefined = unknown, null = absent */
+      }
+    };
+
+    console.log('%c  ── IDENTITY CHAIN ──', 'color:#71ff00;font-weight:bold');
+
+    /* ── users/{uid}: the canonical profile ── */
+    const u = await getDoc('USERS_DOC', 'users', uid);
+    out.usersDoc = u;
+    if (u === null) {
+      bad('users/' + uid + ' does not exist.',
+        'Every seller surface resolves role from this document. Its absence is the ' +
+        'identity defect itself, not a symptom of one.');
+    } else if (u) {
+      const rawRoles = Array.isArray(u.roles) ? u.roles : (u.roles ? [String(u.roles)] : []);
+      const norm = rawRoles.map((r) => String(r).toLowerCase());
+      console.log('  users.roles[]   ' + (JSON.stringify(rawRoles)) + '   (raw, undeduped)');
+      console.log('  users.role      ' + (u.role || '(unset)'));
+      console.log('  users.sellerUid ' + (u.sellerUid || '(unset)'));
+      console.log('  users.storeName ' + (u.storeName || u.shopName || '(unset)'));
+
+      /* "Two buyer roles" is visible ONLY in the raw array — a Set hides it. */
+      const dupes = norm.filter((r, i) => norm.indexOf(r) !== i);
+      if (dupes.length) {
+        bad('users/{uid}.roles contains DUPLICATES: ' + JSON.stringify([...new Set(dupes)]),
+          'A duplicated role is not cosmetic: role ladders that pick roles[0] or count ' +
+          'entries behave differently from ones that test includes(). Reconcile the array ' +
+          'to a set — do not add a role to compensate.');
+      }
+
+      /* sellerUid must be the identity itself, never a pointer to another account. */
+      if (u.sellerUid && String(u.sellerUid) !== String(uid)) {
+        bad('users/{uid}.sellerUid points at a DIFFERENT uid (' + u.sellerUid + ').',
+          'Products, shops and analytics are keyed by sellerUid. If it is not this uid, ' +
+          'every seller surface resolves someone else\'s scope.');
+      }
+
+      out.roleSignals = {
+        'users.roles[]':   norm.includes('seller') || norm.includes('vendor'),
+        'users.role':      String(u.role || '').toLowerCase() === 'seller',
+        'users.isSeller':  !!u.isSeller,
+        'claims.seller':   !!claims.seller,
+        'claims.role':     String(claims.role || '').toLowerCase() === 'seller',
+        'claims.roles[]':  Array.isArray(claims.roles) && claims.roles.includes('seller'),
+        'localStorage':    !!(ls && ((Array.isArray(ls.roles) && ls.roles.indexOf('seller') > -1) || ls.isSeller)),
+      };
+      const agree = Object.values(out.roleSignals);
+      console.log('  SELLER SIGNALS  ' + Object.entries(out.roleSignals)
+        .map(([k, v]) => k + '=' + (v ? 'Y' : 'n')).join('  '));
+      if (agree.some(Boolean) && !agree.every(Boolean)) {
+        bad('The seller role DISAGREES across signals — the role is not missing, it is inconsistent.',
+          'Restore it from whichever source is canonical (claims are the client authority per ' +
+          'the Role Authority work); do not set the ones that are false, or the divergence ' +
+          'simply becomes permanent.');
+      }
+    }
+
+    /* ── active shop: three sources, no agreed precedence ── */
+    const shell = (window.SokoniShell && window.SokoniShell.activeShopId) || null;
+    let lsShop = null; try { lsShop = localStorage.getItem('activeShopId') || null; } catch (_) {}
+    const claimShop = claims.shopId || null;
+    out.activeShopId = shell || lsShop || claimShop;
+    console.log('  activeShopId    shell=' + (shell || '-') +
+                '  localStorage=' + (lsShop || '-') + '  claim=' + (claimShop || '-'));
+    if (lsShop && claimShop && lsShop !== claimShop) {
+      bad('localStorage.activeShopId (' + lsShop + ') disagrees with the SIGNED claim (' + claimShop + ').',
+        'pos-completeness.html:524 and pos-kds.html:261 resolve `localStorage || claims.shopId`, ' +
+        'so the cache WINS. merchant.html:2177 already warns this value survives an account ' +
+        'switch. This is the stale-identity path.');
+    }
+
+    /* ── shops: two key spaces, three ownership fields ── */
+    const owns = (s) => !!s && (String(s.sellerUid || '') === String(uid) ||
+                                String(s.ownerId  || '') === String(uid));
+    out.shopByUid    = await getDoc('SHOP_BY_UID',    'shops', uid);
+    out.shopByActive = (out.activeShopId && out.activeShopId !== uid)
+      ? await getDoc('SHOP_BY_ACTIVE', 'shops', out.activeShopId) : out.shopByUid;
+
+    console.log('  shops/{uid}     ' + (out.shopByUid === undefined ? 'UNREADABLE'
+      : out.shopByUid ? 'exists  owner=' + (out.shopByUid.sellerUid || out.shopByUid.ownerId || '(none)') +
+        '  handle=' + (out.shopByUid.minishopHandle || '(unclaimed)') : 'absent'));
+    if (out.activeShopId && out.activeShopId !== uid) {
+      console.log('  shops/{active}  ' + (out.shopByActive === undefined ? 'UNREADABLE'
+        : out.shopByActive ? 'exists  owner=' + (out.shopByActive.sellerUid || out.shopByActive.ownerId || '(none)')
+          : 'absent'));
+      if (out.shopByActive && !owns(out.shopByActive)) {
+        bad('shops/' + out.activeShopId + ' is NOT owned by this uid.',
+          'The active shop resolves to another identity. Do NOT create a new shop to make the ' +
+          'page render — correct activeShopId to the shop this uid actually owns.');
+      }
+      if (out.shopByActive === null && out.shopByUid) {
+        bad('activeShopId points at a shop document that does not exist, while shops/{uid} does.',
+          'Two key spaces are in play: shops/{sellerUid} (account-status.js:59) vs ' +
+          'shops/{activeShopId} (analytics-engine.js:83). activeShopId is a BRANCH id here.');
+      }
+    }
+
+    /* ── minishopConfig: the populated / partially-populated split ── */
+    out.cfgByUid = await getDoc('MSCFG_BY_UID', 'minishopConfig', uid);
+    if (out.activeShopId && out.activeShopId !== uid) {
+      out.cfgByActive = await getDoc('MSCFG_BY_ACTIVE', 'minishopConfig', out.activeShopId);
+    }
+    const fieldCount = (o) => (o && typeof o === 'object') ? Object.keys(o).length : 0;
+    console.log('  minishopConfig  byUid=' + (out.cfgByUid === undefined ? 'UNREADABLE'
+      : out.cfgByUid ? fieldCount(out.cfgByUid) + ' fields' : 'absent') +
+      (out.activeShopId && out.activeShopId !== uid
+        ? '  byActive=' + (out.cfgByActive === undefined ? 'UNREADABLE'
+          : out.cfgByActive ? fieldCount(out.cfgByActive) + ' fields' : 'absent') : ''));
+    if (out.shopByUid && out.cfgByUid === null && out.cfgByActive == null) {
+      bad('shops/{uid} exists but minishopConfig has no document for this identity.',
+        'The storefront reads minishopConfig; the dashboard reads shops. A shop that is ' +
+        'populated on one side and absent on the other renders as "my shop exists but shows ' +
+        'nothing" — and is a key-space split, not missing content.');
+    }
+
+    /* ── analytics scope: the key the SERVER aggregates under ── */
+    console.log('  ANALYTICS KEY   server aggregates shopId=<sellerUid> ' +
+                '(functions/index.js:3169/3201/3382); client passes branch=' + (shell || '-'));
+    if (out.activeShopId && String(out.activeShopId) !== String(uid)) {
+      note('warn', 'Analytics is keyed by sellerUid, but this session\'s shop scope is a branch id.',
+        'Reconcile the SCOPE KEYS and let analytics re-derive from canonical commerce data. ' +
+        'Never copy figures between profiles to make a dashboard agree — the next POS sale, ' +
+        'refund or inventory change would silently contradict it.');
+    }
+
+    return out;
   }
 
   /* ── product census — the decisive measurement ─────────────────────── */
@@ -357,8 +564,12 @@ window.SokoniMerchantDiag = (() => {
     console.log('  ONLINE          ' + navigator.onLine + '   viewport ' + innerWidth + 'x' + innerHeight);
 
     const auth = await authBlock();
+    let identity = null;
     if (auth) {
       workspaceBlock(auth.ls);
+      /* Identity BEFORE products: a product census reported against the wrong
+         scope reads as "no products" when the truth is "not my shop". */
+      identity = await identityBlock(auth.user.uid, auth.claims || {}, auth.ls);
       await productBlock(auth.user.uid);
       await orderBlock(auth.user.uid);
     }
@@ -384,7 +595,7 @@ window.SokoniMerchantDiag = (() => {
     }
     console.groupEnd();
 
-    window._md = { page: state.page, findings: state.findings, queries: state.queries };
+    window._md = { page: state.page, findings: state.findings, queries: state.queries, identity };
     return window._md;
   }
 

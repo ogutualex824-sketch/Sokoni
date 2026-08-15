@@ -1,3 +1,70 @@
+## [2026-08-15] — Identity → seller → shop → analytics census (read-only)
+
+**Files:** `sokoni-merchant-diag.js`, `docs/IDENTITY_SHOP_CENSUS.md` (new). No runtime
+behaviour, server, rules or payment changes. **Nothing repaired, nothing deployed** — this
+is evidence gathering for a profile/shop identity defect, deliberately kept separate from
+the inventory-writer freeze so neither set of evidence contaminates the other.
+
+### Static census — three divergences provable from source alone
+
+Each is sufficient on its own to produce the reported symptoms (two buyer roles, a missing
+seller role, a shop under a stale identity, analytics under another key).
+
+1. **"Seller" is read from nine different signals** — `users.roles[]`, `users.role`,
+   `isSeller`, `registeredAs`, `sellerActive`/`storeName`, `claims.seller`, `claims.role`,
+   `claims.roles[]`, `claims.sellerVerified`. `profile.html:5521` reads the array;
+   `script.js:3489` accepts any of five; `functions/analytics-engine.js:90` reads
+   `claims.role`. A seller can be present in one and absent in another indefinitely with
+   nothing reporting it — so the role is far more likely **inconsistent** than **missing**.
+2. **`activeShopId` has three sources with no agreed precedence** — `SokoniShell`,
+   `localStorage`, `claims.shopId`. `pos-completeness.html:524` and `pos-kds.html:261`
+   resolve `localStorage || claims.shopId`, so **the cache outranks the signed claim**, and
+   `merchant.html:2177` already warns in-comment that the value survives an account switch.
+3. **`shops` is addressed in two key spaces** — `shops/{sellerUid}`
+   (`account-status.js:59`) vs `shops/{activeShopId}` (`analytics-engine.js:83`) — with
+   ownership asserted three ways (doc-id, `ownerId`, `sellerUid`). Meanwhile the server
+   aggregates analytics under `shopId: <sellerUid>` (`functions/index.js:3169/3201/3382`)
+   while the client passes the **branch** id (`sokoni-analytics-engine.js:77`).
+
+Shop and Analytics are therefore not disagreeing about a *number* — they are keyed by
+different *identifiers*. Recomputing figures cannot converge them.
+
+### Runtime census — extended, not run
+
+`sokoni-merchant-diag.js` gains an `identityBlock` tracing
+`auth.uid → claims → users/{uid} → activeShopId → shops → minishopConfig → analytics
+scope`, flagging each divergence. Read-only by construction: every call is a `getDoc`.
+It extends the existing module rather than adding a competing diagnostic — it is already
+loaded by ten merchant surfaces.
+
+Deliberate details: the roles array is printed **raw**, because duplicate roles are
+invisible through a `Set`; a denied read returns `undefined`, not `null`, because
+permission-denied is an unanswered question and not evidence of absence; and identity runs
+**before** the product census, since a count against the wrong scope reads as "no products"
+when the truth is "not my shop".
+
+One correctness fix to the tool itself: `EXPECTED_PHONE` was hardcoded to a previous
+sprint's account and would have reported a correct sign-in as *"WRONG ACCOUNT — the
+workspace is missing"*. It is now overridable via `window.SOKONI_DIAG_ACCOUNT` and degrades
+to informational when undeclared. A diagnostic that is confidently wrong is worse than one
+that is silent.
+
+**It has not been run.** This environment cannot authenticate the account (phone OTP, App
+Check, no test credential) — the same constraint that created the module.
+
+### Repair plan — gated, not started
+
+Recorded in `docs/IDENTITY_SHOP_CENSUS.md`: establish canonical ownership → reconcile role
+signals (deduplicate; do not set the false ones true) → collapse `activeShopId` to one
+source with the signed claim outranking the cache → converge the key space → only then
+align routes. Steps 3 and 4 are architectural and are **flagged for confirmation under RC
+freeze, not executed**.
+
+Boundary held: analytics must never be merged by copying figures between profiles, and
+`sold` vs `soldCount` remains a separate convergence item under the writer inventory.
+
+---
+
 ## [2026-08-15] — Writer inventory: the anti-drift gate was under-counting
 
 **Files:** `scripts/gate-inventory-writers.js`, `scripts/test-gate-inventory-writers.js`,
