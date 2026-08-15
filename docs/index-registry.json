@@ -1666,5 +1666,131 @@
     "owner": "Booking Engine",
     "dateAdded": "2026-08-01",
     "expectedLifespan": "permanent"
+  },
+  "providerBookings|providerId:ASCENDING,scheduledAt:DESCENDING": {
+    "purpose": "List a provider's bookings newest-first for the dashboard calendar.",
+    "feature": "Provider OS — bookings",
+    "query": "providerBookings where providerId == uid orderBy scheduledAt desc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent",
+    "addedBy": "53eb655"
+  },
+  "providerBookings|providerId:ASCENDING,status:ASCENDING,scheduledAt:DESCENDING": {
+    "purpose": "Filter a provider's bookings by status, newest-first.",
+    "feature": "Provider OS — bookings",
+    "query": "providerBookings where providerId == uid and status == X orderBy scheduledAt desc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent",
+    "addedBy": "53eb655"
+  },
+  "providerBookings|providerId:ASCENDING,status:ASCENDING,scheduledAt:ASCENDING": {
+    "purpose": "Upcoming-slot lookup used by the availability guard to detect conflicts.",
+    "feature": "Provider OS — availability",
+    "query": "providerBookings where providerId == uid and status == X orderBy scheduledAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent",
+    "addedBy": "53eb655"
+  },
+  "providerPayouts|providerId:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Settlement history for a provider, oldest-first for ledger reconciliation.",
+    "feature": "Provider OS — payouts (canonical settlements collection)",
+    "query": "providerPayouts where providerId == uid orderBy createdAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent",
+    "addedBy": "53eb655"
+  },
+  "auditLogs|callerUid:ASCENDING,type:ASCENDING,ts:ASCENDING": {
+    "purpose": "Replay one caller's actions of a given type in chronological order during an audit.",
+    "feature": "Security — audit trail",
+    "query": "auditLogs where callerUid == uid and type == X orderBy ts asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-06-21",
+    "expectedLifespan": "permanent",
+    "addedBy": "b905bc9"
+  },
+  "etimsAuditLog|entityId:ASCENDING,seq:ASCENDING": {
+    "purpose": "Ordered per-entity ETIMS audit sequence — KRA requires a gap-free, ordered trail.",
+    "feature": "eTIMS — audit log",
+    "query": "etimsAuditLog where entityId == X orderBy seq asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-03",
+    "expectedLifespan": "permanent",
+    "addedBy": "5c5a5ac"
+  },
+  "etimsAuditLog|sellerUid:ASCENDING,atTs:DESCENDING": {
+    "purpose": "A seller's ETIMS audit entries, newest-first, for compliance review.",
+    "feature": "eTIMS — audit log",
+    "query": "etimsAuditLog where sellerUid == uid orderBy atTs desc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-03",
+    "expectedLifespan": "permanent",
+    "addedBy": "5c5a5ac"
+  },
+  "hubInvoiceQueue|status:ASCENDING,nextRetryAt:ASCENDING": {
+    "purpose": "Drain the hub invoice retry queue: pending items in due order.",
+    "feature": "Hub eTIMS — invoice queue",
+    "query": "hubInvoiceQueue where status == pending orderBy nextRetryAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-06-27",
+    "expectedLifespan": "permanent",
+    "addedBy": "a0bed90"
+  },
+  "walletTransactions|idempotencyKey:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Exactly-once guard: locate a prior transaction by idempotency key before crediting.",
+    "feature": "Wallet — exactly-once settlement (FROZEN engine)",
+    "query": "walletTransactions where idempotencyKey == K orderBy createdAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent",
+    "addedBy": "96ead7b"
+  },
+  "claimableTransfers|idempotencyKey:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Exactly-once guard for send-to-anyone transfers.",
+    "feature": "Wallet — claimable transfers",
+    "query": "claimableTransfers where idempotencyKey == K orderBy createdAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-03",
+    "expectedLifespan": "permanent",
+    "addedBy": "3065ec6"
+  },
+  "claimableTransfers|normalizedPhone:ASCENDING,status:ASCENDING": {
+    "purpose": "Find transfers waiting to be claimed by a recipient phone number at claim time.",
+    "feature": "Wallet — claimable transfers",
+    "query": "claimableTransfers where normalizedPhone == P and status == pending",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-03",
+    "expectedLifespan": "permanent",
+    "addedBy": "3065ec6"
+  },
+  "claimableTransfers|status:ASCENDING,expiresAt:ASCENDING": {
+    "purpose": "Scheduled sweep of unclaimed transfers past expiry, so funds are returned to the sender.",
+    "feature": "Wallet — claimable transfers",
+    "query": "claimableTransfers where status == pending orderBy expiresAt asc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-03",
+    "expectedLifespan": "permanent",
+    "addedBy": "3065ec6"
+  },
+  "returns|buyerId:ASCENDING,submittedAt:DESCENDING": {
+    "purpose": "A buyer's return requests, newest-first, on the returns page.",
+    "feature": "Returns — buyer view",
+    "query": "returns where buyerId == uid orderBy submittedAt desc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-09",
+    "expectedLifespan": "permanent",
+    "addedBy": "e529a33"
+  },
+  "returns|sellerId:ASCENDING,submittedAt:DESCENDING": {
+    "purpose": "A seller's incoming return requests, newest-first, for triage.",
+    "feature": "Returns — seller view",
+    "query": "returns where sellerId == uid orderBy submittedAt desc",
+    "owner": "Alex Ogutu",
+    "dateAdded": "2026-08-09",
+    "expectedLifespan": "permanent",
+    "addedBy": "e529a33"
   }
 }

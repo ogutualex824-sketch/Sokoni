@@ -1,3 +1,45 @@
+## [2026-08-15] — Gate 3: register the 14 live indexes the governance registry had lost
+
+`verify-index-governance` was RED on the release lineage, reporting 14 ORPHAN indexes across 8
+collections. The gate's remedy line reads *"Add metadata … or drop the index."*
+
+**Dropping them would have been the wrong half of that sentence.** Every one is actively queried:
+
+| Index | Consumer |
+|---|---|
+| `claimableTransfers` ×3 | `functions/wallet-engine.js` — send-to-anyone claim, idempotency, expiry sweep |
+| `walletTransactions\|idempotencyKey` | the wallet **exactly-once** guard (FROZEN engine) |
+| `etimsAuditLog` ×2 | `functions/etims-audit.js` — KRA gap-free ordered trail |
+| `hubInvoiceQueue` | `functions/hub-etims.js` — invoice retry drain |
+| `returns` ×2 | `functions/returns-engine.js`, `returns.html` |
+| `providerBookings` ×3 | `functions/availability.js`, `provider-dashboard.html` |
+| `providerPayouts` | `functions/admin-os.js` |
+| `auditLogs\|callerUid,type,ts` | security audit replay |
+
+Deleting them would have broken wallet claimable transfers, ETIMS audit, hub invoicing and returns
+— the money and tax paths. Consistent with the standing index rule: **never drop, only add.**
+
+**The registry was simply stale.** `firestore.indexes.json` was last updated 2026-08-09 (`e529a33`);
+`docs/index-registry.json` last on 2026-08-01 (`424ffba`, an unrelated privacy commit). Eight days
+and several feature commits behind.
+
+**Fix: registry only.** `firestore.indexes.json` is byte-identical (md5-verified) — no index
+definition created, altered or removed.
+
+These are **not** marked `{ "legacy": true }`. That flag grandfathers indexes predating governance;
+all 14 were added *after* it, by identifiable commits, so each carries real metadata — purpose,
+feature, query, owner, dateAdded and the adding commit — traced from the consuming code. Marking
+them legacy would have turned the gate green while erasing the record the gate exists to keep.
+
+Result: **398 declared / 398 registered / 0 stale**, and `reconcile-indexes --verify` confirms
+*"a firestore:indexes deploy would delete NOTHING"* — the property that matters most here, since
+several of these guard the money path.
+
+**Files:** `docs/index-registry.json` (+126). **Database:** no index change — registry metadata only.
+**API:** none. **Security:** none. **Breaking:** none. **Deployed:** no.
+
+---
+
 ## [2026-08-15] — Gate 1: the rider photo-exception no longer depends on an email address
 
 `scripts/verify-claim-based-auth.js` was RED on the release lineage. `driver.html` gated a
