@@ -150,7 +150,42 @@ That third row is the strongest single explanation for a *"missing"* seller role
 is not missing — it was **written in a shape those surfaces never read**. It is a
 creation-rule defect, which is exactly where the fix belongs.
 
-**The canonical resolver already exists.** `functions/kasshop.js:74 _ownedShop()` resolves
+### The role defect is PATH-DEPENDENT, and a canonical granter already exists
+
+Tracing every writer of seller role state onto `users/{uid}` sharpens the finding
+considerably. It is not "the creation path uses the wrong shape" — it is that **whether
+your seller role is visible depends on which approval path ran.**
+
+| path | writes | visible to `roles[]` readers |
+|---|---|---|
+| `functions/application-lifecycle.js:886` `grantAccountRole` | `roles: arrayUnion(key)` **+** `registeredAs.{key}` | ✅ **canonical** |
+| `functions/index.js:272` (admin), `:5265` | `role` string **+** `roles: arrayUnion` | ✅ |
+| `functions/automation-engine.js:277` `auto_approve_seller` | `role:'seller'` + `sellerEnabled` **only** | ❌ bypass |
+| `onboarding-seller.html:469` | `role:'seller'` string | ❌ bypass (client) |
+| `sokoni-wap-definitions.js:426` | `role:'seller'` string | ❌ bypass (client) |
+
+`grantAccountRole` is unambiguously the intended granter: it holds a `ROLE_KEY` map and
+**throws** on an unmapped role rather than — in its own words — treating it as *"a problem
+to be smoothed over"*. Three paths bypass it.
+
+> **The same architectural shape as the inventory work.** A canonical writer exists; other
+> paths write the same state directly and diverge from it. `sokoni-wap-definitions.js`
+> appears in *both* findings — quarantined for writing canonical stock from the browser
+> (§2b of [[LAUNCH_TODO]]), and here for granting a role outside the canonical granter. One
+> file, one habit, two subsystems.
+
+**Consequence for the repair:** re-granting the role by hand fixes one profile and leaves
+the next auto-approval to reproduce it. Invariant **I8** therefore attributes the *granter*
+from the residue left on the profile — `roles[]` + `registeredAs.seller` means canonical;
+`sellerEnabled` without `roles[]` means `automation-engine`; a bare `role` string means a
+client write. That turns the authenticated run into a diagnosis of **which path to fix**,
+not merely whether the account is broken.
+
+Note also: `functions/universal-onboarding.js:194` writes `roles: arrayUnion(role)` to
+`accounts/{uid}` — a **different collection** from `users/{uid}`. Recorded, not chased; it
+is a separate convergence question.
+
+**The canonical shop resolver already exists too.** `functions/kasshop.js:74 _ownedShop()` resolves
 by ownership field (`sellerUid → ownerUid → ownerId`), scoped by uid, deterministic on
 ties, and explicitly *"never consults a document id, a cached shop, or a handle."* The
 convergence work is routing other surfaces **onto** it — not writing a fourth resolver.
@@ -166,6 +201,7 @@ convergence work is routing other surfaces **onto** it — not writing a fourth 
 | I5 | the seller role agrees across profile · claims · cache | `UNKNOWN` when no signal says seller |
 | I6 | `users/{uid}.roles` has no duplicates | merge residue → deduplicate, don't add |
 | I7 | `users/{uid}.activeShopId` is the canonical home | **`UNKNOWN` — field does not exist yet** |
+| I8 | the seller role was granted by the canonical path | attributes the **granter** from profile residue |
 
 `PASS` / `FAIL` / `UNKNOWN` are kept strictly apart. A denied read reported as `FAIL`
 invents a defect; reported as `PASS` hides one. Both are worse than recording that the

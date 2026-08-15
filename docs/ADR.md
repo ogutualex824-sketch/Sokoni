@@ -1000,12 +1000,26 @@ Writing the invariant verbatim would have produced a check that fails for everyo
    a condition to test — the census reports it `UNKNOWN`, because asserting it would report
    every account on the platform as broken.
 
-3. **The creation path writes the role in the shape the readers do not read.**
-   `functions/automation-engine.js:277` sets `users/{uid}.role = 'seller'` (a **string**) plus
-   `sellerEnabled: true`, while `profile.html:5521`, `seller-analytics.html:333` and
-   `business-analytics.html:340` all read `roles[]` (an **array**). A seller approved by
-   automation is therefore invisible to those surfaces. **This is a creation-rule defect, not a
-   data defect** — and it is the most likely single explanation for a "missing" seller role.
+3. **The role defect is PATH-DEPENDENT — and a canonical granter already exists.**
+   `functions/application-lifecycle.js:886 grantAccountRole` is the intended granter: it writes
+   `roles: arrayUnion(key)` **and** `registeredAs.{key}`, holds a `ROLE_KEY` map, and *throws*
+   on an unmapped role rather than treating it as *"a problem to be smoothed over"*.
+   `functions/index.js:272` and `:5265` also maintain the array. **Three paths bypass it**,
+   writing only the `role` **string**: `functions/automation-engine.js:277`
+   (`auto_approve_seller`, plus `sellerEnabled`), `onboarding-seller.html:469`, and
+   `sokoni-wap-definitions.js:426`. Meanwhile `profile.html:5521`,
+   `seller-analytics.html:333` and `business-analytics.html:340` read `roles[]`.
+
+   So whether a seller role is *visible* depends on **which approval path ran**. This is a
+   **granting-path defect, not a data defect**: re-granting by hand fixes one profile and
+   leaves the next auto-approval to reproduce it. Invariant I8 attributes the granter from the
+   residue left on the profile, so the authenticated run diagnoses *which path to fix*.
+
+   > Same architectural shape as the inventory work — a canonical writer exists and other
+   > paths write the state directly. `sokoni-wap-definitions.js` appears in **both** findings.
+
+   Separately, `functions/universal-onboarding.js:194` maintains `roles` on **`accounts/{uid}`**,
+   a different collection from `users/{uid}`. Recorded as a distinct convergence question.
 
 ### Precedence
 

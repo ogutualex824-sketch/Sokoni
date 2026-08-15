@@ -489,6 +489,40 @@ window.SokoniMerchantDiag = (() => {
       'localStorage, and claims.shopId. Giving it a canonical persisted home is step 3 ' +
       'of the repair plan, not a defect in this account\'s data.');
 
+    /* I8 — WHICH path granted the seller role. The canonical granter
+       (functions/application-lifecycle.js:886 grantAccountRole) writes
+       roles:arrayUnion(key) AND registeredAs.{key}. Three other paths write only
+       the `role` STRING and bypass it:
+         functions/automation-engine.js:277   auto_approve_seller (+ sellerEnabled)
+         onboarding-seller.html:469           client
+         sokoni-wap-definitions.js:426        client WAP handler
+       The residue on the profile therefore identifies the granter, which is what
+       tells us whether this is a data repair or a creation-path repair. */
+    if (u && u !== undefined) {
+      const inRoles  = !!(out.roleSignals && out.roleSignals['users.roles[]']);
+      const regSeller = !!(u.registeredAs && (u.registeredAs.seller || u.registeredAs.vendor));
+      const strRole  = String(u.role || '').toLowerCase() === 'seller';
+      const sellerEn = !!u.sellerEnabled;
+      let granter, verdict;
+      if (inRoles && regSeller)      { granter = 'canonical grantAccountRole'; verdict = 'PASS'; }
+      else if (inRoles)              { granter = 'roles[] set, registeredAs missing'; verdict = 'FAIL'; }
+      else if (sellerEn || strRole)  { granter = sellerEn ? 'automation-engine auto_approve_seller (BYPASS)'
+                                                          : 'client string-role write (BYPASS)'; verdict = 'FAIL'; }
+      else                           { granter = 'no seller grant on this profile'; verdict = 'UNKNOWN'; }
+      console.log('  GRANT RESIDUE   roles[]=' + (inRoles ? 'Y' : 'n') +
+                  '  registeredAs.seller=' + (regSeller ? 'Y' : 'n') +
+                  '  role="' + (u.role || '') + '"  sellerEnabled=' + (sellerEn ? 'Y' : 'n'));
+      check('I8', 'the seller role was granted by the canonical path', verdict,
+        'Granter looks like: ' + granter +
+        (verdict === 'FAIL'
+          ? '. Repair the GRANTING PATH, not just this profile — re-granting by hand leaves ' +
+            'the next approval to reproduce it.'
+          : ''));
+    } else {
+      check('I8', 'the seller role was granted by the canonical path', 'UNKNOWN',
+        'users/{uid} unreadable — granter cannot be attributed.');
+    }
+
     const fails = inv.filter((i) => i.verdict === 'FAIL').length;
     const unks  = inv.filter((i) => i.verdict === 'UNKNOWN').length;
     console.log('%c  INVARIANTS      ' + (inv.length - fails - unks) + ' pass · ' + fails +

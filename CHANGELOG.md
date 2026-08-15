@@ -1,3 +1,42 @@
+## [2026-08-15] — The seller-role defect is path-dependent, and the canonical granter exists
+
+**Files:** `sokoni-merchant-diag.js`, `docs/ADR.md` (ADR-0018 correction 3),
+`docs/IDENTITY_SHOP_CENSUS.md`. Read-only; nothing repaired, nothing deployed.
+
+Tracing every writer of seller role state onto `users/{uid}` sharpens yesterday's finding.
+It is not *"the creation path uses the wrong shape"* — it is that **whether a seller role
+is visible depends on which approval path ran.**
+
+| path | writes | visible to `roles[]` readers |
+|---|---|---|
+| `functions/application-lifecycle.js:886` `grantAccountRole` | `roles: arrayUnion(key)` + `registeredAs.{key}` | ✅ **canonical** |
+| `functions/index.js:272` (admin), `:5265` | `role` string + `roles: arrayUnion` | ✅ |
+| `functions/automation-engine.js:277` `auto_approve_seller` | `role:'seller'` + `sellerEnabled` only | ❌ bypass |
+| `onboarding-seller.html:469` | `role:'seller'` string | ❌ bypass (client) |
+| `sokoni-wap-definitions.js:426` | `role:'seller'` string | ❌ bypass (client) |
+
+`grantAccountRole` is unambiguously the intended granter — it holds a `ROLE_KEY` map and
+**throws** on an unmapped role rather than treating it as *"a problem to be smoothed
+over"*. Three paths bypass it.
+
+**Same architectural shape as the inventory work:** a canonical writer exists and other
+paths write the state directly. `sokoni-wap-definitions.js` appears in **both** findings —
+quarantined for writing canonical stock from the browser, and here for granting a role
+outside the canonical granter. One file, one habit, two subsystems.
+
+**Consequence:** re-granting the role by hand fixes one profile and leaves the next
+auto-approval to reproduce it. This is a **granting-path defect, not a data defect**.
+
+New invariant **I8** attributes the granter from residue left on the profile — `roles[]` +
+`registeredAs.seller` means canonical; `sellerEnabled` without `roles[]` means
+`automation-engine`; a bare `role` string means a client write. The authenticated run
+therefore diagnoses *which path to fix*, not merely whether the account is broken.
+
+Recorded, not chased: `functions/universal-onboarding.js:194` maintains `roles` on
+**`accounts/{uid}`**, a different collection from `users/{uid}`.
+
+---
+
 ## [2026-08-15] — ADR-0018: one identity, and the invariants made checkable
 
 **Files:** `docs/ADR.md` (ADR-0018), `docs/IDENTITY_SHOP_CENSUS.md`,
