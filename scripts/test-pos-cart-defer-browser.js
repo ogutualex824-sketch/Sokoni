@@ -210,7 +210,11 @@ function serve() {
     ok('...and injects immediately otherwise (so a non-blocking header WOULD need order)',
        /\}\s*else\s*\{\s*_inject\(\);/.test(gate));
 
-    await browser.close();
+    /* Teardown deliberately NOT here. The bounded close below runs AFTER the report:
+       an unbounded close() at this point can hang, and the suite is then killed with
+       every assertion already passed — a finished result lost, its coverage gone.
+       Measured in the gate: this suite printed A/B/C green, entered D, and exited at
+       7.8s with no tally at all. */
   } catch (e) {
     console.error('\n  probe error: ' + (e && e.message));
     fail++; failures.push('probe error: ' + (e && e.message));
