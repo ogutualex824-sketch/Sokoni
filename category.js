@@ -456,19 +456,31 @@ function renderProducts(list){
     _hydrateCardRatings(list);
 }
 
-/* ── CANONICAL CARD RATINGS ────────────────────────────────────────────────
+/* ── CANONICAL REVIEW AFFORDANCE ───────────────────────────────────────────
    Source of truth is ratingsSummary/{targetId} — {avg,count} recomputed
    server-side by functions/reviews.js::_recalcSummary over APPROVED reviews
    only, so moderation is honoured. The collection is `allow read: if true`
-   (firestore.rules), so the client may read it directly; no Cloud Function
-   round-trip and no new rule is required.
+   (firestore.rules), so the client reads it directly; no Cloud Function
+   round-trip and no new rule.
 
    Batched with documentId() `in` queries (Firestore caps `in` at 30), so a
    98-card grid costs 4 queries rather than 98 document reads.
 
-   A product with no summary, or a summary with count 0, renders NOTHING — not
-   "★ 0", not "no reviews". An unrated product and an unknown rating are both
-   honestly represented by absence. */
+   THREE distinct states, because two of them are NOT the same thing:
+
+     read OK, count > 0   ->  "★ 4.8 · 12 reviews"   (canonical figures)
+     read OK, no summary  ->  "No reviews yet"       (a KNOWN zero: _recalcSummary
+     read OK, count === 0     has never produced an approved review for this id)
+     read FAILED          ->  nothing at all         (UNKNOWN — we must not claim
+                                                      zero when we could not look)
+
+   That last distinction is the whole point: "no approved reviews" is a fact worth
+   showing, "we could not reach Firestore" is not, and rendering them identically
+   would turn an outage into a false claim about every product in the catalogue.
+
+   The affordance links to the product's REAL identity (product.html?id=<id>),
+   never a name, and opens the canonical per-target review UI that product.html
+   already hosts via sokoni-reviews.js. */
 async function _hydrateCardRatings(list){
   try{
     if(!window.firebase || !firebase.firestore) return;
@@ -480,21 +492,43 @@ async function _hydrateCardRatings(list){
     const db = firebase.firestore();
     const FP = firebase.firestore.FieldPath;
     const summaries = {};
+    const readOk = {};                       /* id -> did its batch actually resolve? */
+
     for(let i = 0; i < ids.length; i += 30){
       const chunk = ids.slice(i, i + 30);
       /* eslint-disable no-await-in-loop */
       const snap = await db.collection('ratingsSummary')
         .where(FP.documentId(), 'in', chunk).get().catch(() => null);
-      if(!snap) continue;
+      if(!snap) continue;                    /* batch failed -> those ids stay UNKNOWN */
+      chunk.forEach(id => { readOk[id] = true; });
       snap.forEach(d => { const v = d.data() || {}; summaries[d.id] = { avg: v.avg, count: v.count }; });
     }
 
     nodes.forEach(n => {
-      const s = summaries[n.getAttribute('data-rating-pid')];
-      if(!s || typeof s.avg !== 'number' || !s.count) return;   /* unknown/unrated → stays empty */
-      n.style.cssText = 'font-size:9px;color:rgba(255,193,7,0.85);font-weight:700;';
-      n.textContent = '★ ' + s.avg.toFixed(1) + ' (' + s.count + ')';
-      n.title = s.count + ' approved review' + (s.count === 1 ? '' : 's');
+      const pid = n.getAttribute('data-rating-pid');
+      if(!readOk[pid]) return;               /* could not look -> claim nothing */
+      const s = summaries[pid];
+      const has = s && typeof s.avg === 'number' && s.count > 0;
+
+      /* One tap target, sized for touch, resolving to the canonical product id. */
+      n.style.cssText = 'font-size:9px;font-weight:700;display:inline-flex;align-items:center;'
+                      + 'min-height:22px;padding:2px 4px;margin:-2px -4px;border-radius:6px;'
+                      + 'cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;'
+                      + 'color:' + (has ? 'rgba(255,193,7,0.85)' : 'rgba(255,255,255,0.32)') + ';';
+      n.textContent = has
+        ? '★ ' + s.avg.toFixed(1) + ' · ' + s.count + ' review' + (s.count === 1 ? '' : 's')
+        : 'No reviews yet';
+      n.title = has
+        ? s.count + ' approved review' + (s.count === 1 ? '' : 's') + ' — read them'
+        : 'No approved reviews yet — be the first';
+      n.setAttribute('role', 'link');
+      n.setAttribute('tabindex', '0');
+      n.setAttribute('aria-label', (has ? ('Rated ' + s.avg.toFixed(1) + ' from ' + s.count + ' reviews. ') : 'No reviews yet. ') + 'Open reviews');
+      /* stopPropagation: the whole card already carries its own open-product
+         handler, so without it every tap would fire twice. */
+      const go = (ev) => { if(ev) ev.stopPropagation(); openProductCat(pid); };
+      n.onclick = go;
+      n.onkeydown = (ev) => { if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); go(ev); } };
     });
   }catch(e){ /* decoration only — never break the grid */ }
 }

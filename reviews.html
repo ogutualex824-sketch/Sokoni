@@ -342,11 +342,34 @@ function submitReview(){
   const reviews = _localReviews();
   reviews.unshift(review);
   saveReviews(reviews);
-  /* Push to Firestore so all devices see it */
-  if(window.SokoniDB){
-    window.SokoniDB.saveReview(review)
-      .catch(e => console.warn("[SOKONI] Review save failed:", e.message));
-  }
+  /* The SokoniDB.saveReview() call that used to sit here is REMOVED.
+
+     It claimed "push to Firestore so all devices see it". It did neither safely
+     nor usefully:
+
+     1. IT BYPASSED EVERY BUSINESS CONTROL. The canonical path is the submitReview
+        Cloud Function, which enforces eligibility, a 3/day rate limit,
+        one-review-per-target, a moderation status, and recomputes
+        ratingsSummary. saveReview() writes reviews/{id} straight from the client,
+        so a review could be created with none of that applied. Firestore rules
+        PERMIT the write (`create: if claimsOwner() && noAdminFields()`), but rules
+        cannot replace business controls — permitted is not the same as validated.
+
+     2. NOBODY COULD EVER READ IT. saveReview() sets no `status`, and the read rule
+        is `status == "approved" || author || admin`. So these rows were invisible
+        to every other device — the exact thing the comment promised. They were
+        write-only, and they polluted the canonical `reviews` collection with docs
+        carrying no targetId and no valid targetType.
+
+     3. THE SHAPE IS NOT CANONICAL ANYWAY. This page collects a free-text name
+        ("Product name", "Seller or business name"), not a stable targetId, and its
+        "platform" tab reviews SOKONI itself — which has no target at all and no
+        valid targetType in functions/reviews.js.
+
+     Platform testimonials therefore stay page-local until a first-class platform
+     review schema is designed deliberately. Product and seller reviews already
+     have a canonical home: the per-target UI on product.html (sokoni-reviews.js),
+     which goes through submitReview() properly. */
   selectedStar = 0; updateStars(0);
   document.getElementById("reviewComment").value = "";
   if(targetEl) targetEl.value = "";

@@ -43,6 +43,17 @@ function shouldRender(summary) {
   return !!(summary && typeof summary.avg === 'number' && summary.count > 0);
 }
 
+/* Mirrors the THREE-state affordance in category.js::_hydrateCardRatings.
+   The distinction between "known zero" and "could not look" is the point:
+   rendering them identically would turn a Firestore outage into a false claim
+   that every product in the catalogue has no reviews. */
+function affordanceText(readOk, summary) {
+  if (!readOk) return '';                                   /* UNKNOWN — claim nothing */
+  if (!shouldRender(summary)) return 'No reviews yet';      /* KNOWN zero */
+  const n = summary.count;
+  return '★ ' + summary.avg.toFixed(1) + ' · ' + n + ' review' + (n === 1 ? '' : 's');
+}
+
 (async () => {
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-reviews-canonical-test',
@@ -92,6 +103,20 @@ function shouldRender(summary) {
   ck('missing summary renders NOTHING', shouldRender(got['P3-missing']) === false);
   ck('P1 average is the server value, not a client computation',
     got['P1'] && got['P1'].avg === 4.5, got['P1'] && got['P1'].avg);
+
+  console.log('\nReview affordance — three states, never two');
+  ck('read OK + approved reviews -> canonical figures',
+     affordanceText(true, got['P1']) === '★ 4.5 · 12 reviews', affordanceText(true, got['P1']));
+  ck('read OK + count 0 -> "No reviews yet" (a KNOWN zero)',
+     affordanceText(true, got['P2']) === 'No reviews yet');
+  ck('read OK + no summary doc -> "No reviews yet"',
+     affordanceText(true, got['P3-missing']) === 'No reviews yet');
+  ck('read FAILED -> renders NOTHING (unknown must not read as zero)',
+     affordanceText(false, undefined) === '');
+  ck('read FAILED on a product that HAS reviews still renders nothing',
+     affordanceText(false, got['P1']) === '');
+  ck('singular is not pluralised',
+     affordanceText(true, { avg: 5, count: 1 }) === '★ 5.0 · 1 review');
 
   console.log('\nModeration gate on reviews');
   await check('an APPROVED review is publicly readable',
