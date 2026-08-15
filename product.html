@@ -283,6 +283,13 @@ window.closeProduct = closeProduct;
      localStorage['cart']; without this tag Add to Cart and Buy Now fail closed and say
      so. Must load before product.js. -->
 <script src="sokoni-cart.js"></script>
+<!-- Canonical 18+ gate. This page had NO age check and did not load this file,
+     so an age-restricted product reached via a direct or shared URL could be
+     added to cart and bought without verification — Shop's blur and Home's
+     action-time check are both upstream of here and neither is on this path.
+     Provides isProductAgeRestricted() / isAgeVerified() / requireAgeVerification(),
+     which product.js::_ageGuard() consults. Must load before product.js. -->
+<script src="adult-gate.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>

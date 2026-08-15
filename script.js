@@ -804,7 +804,14 @@ function buildProductCard(product, size = "normal"){
     const locTag   = locLabel ? `<span class="product-location-tag">📍 ${locLabel}</span>` : "";
     const descTag  = product.description ? `<p class="product-desc-text">${_escHtml(product.description)}</p>` : "";
     const boosted  = isProductBoosted(product.id);
-    const isAdult     = typeof isAdultCategory === "function" && isAdultCategory(product.category);
+    /* Canonical: the product's own ageRestricted flag FIRST, category as fallback.
+       This read only isAdultCategory(product.category), so a product explicitly
+       flagged 18+ outside an adult category showed no badge on Home while Shop
+       gated the very same product — the two surfaces disagreeing about the same
+       row from the same /api/catalogue response. */
+    const isAdult     = typeof isProductAgeRestricted === "function"
+                          ? isProductAgeRestricted(product)
+                          : (typeof isAdultCategory === "function" && isAdultCategory(product.category));
     const adultBadge  = isAdult ? `<div class="adult-card-badge">🔞 18+</div>` : "";
     const oos         = product.outOfStock || (product.stock !== undefined && Number(product.stock) === 0);
     const oosOverlay  = oos ? `<div class="oos-overlay">Out of Stock</div>` : "";
@@ -1257,7 +1264,7 @@ async function buyProduct(productId, _trigBtn){
     }
 
     /* 18+ age gate */
-    if(typeof isAdultCategory === "function" && isAdultCategory(selectedProduct.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
         if(typeof requireAgeVerification === "function"){
             const verified = await requireAgeVerification();
             if(!verified) {
@@ -1325,7 +1332,7 @@ async function buyNow(productId, _trigBtn){
     }
 
     /* 18+ age gate */
-    if(typeof isAdultCategory === "function" && isAdultCategory(selectedProduct.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
         if(typeof requireAgeVerification === "function"){
             const verified = await requireAgeVerification();
             if(!verified) {
@@ -1398,7 +1405,7 @@ async function addToWishlist(productId){
     if(!selectedProduct) return;
 
     /* 18+ age gate */
-    if(typeof isAdultCategory === "function" && isAdultCategory(selectedProduct.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(selectedProduct)){
         if(typeof requireAgeVerification === "function"){
             const verified = await requireAgeVerification();
             if(!verified) return;

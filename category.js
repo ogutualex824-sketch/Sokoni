@@ -306,9 +306,14 @@ function renderProducts(list){
         return;
     }
 
-    const ADULT_CATS_CAT = new Set(["vape","alcohol","tobacco","adult"]);
+    /* The duplicate ADULT_CATS_CAT Set that used to sit here is gone. It mirrored
+       ADULT_CATS in adult-gate.js by hand, so the two could drift and the Shop
+       grid would gate a different set of products than the rest of the platform.
+       One list, one predicate: isProductAgeRestricted(). */
     grid.innerHTML = list.map(p => {
-        const isAdult = ADULT_CATS_CAT.has((p.category||"").toLowerCase()) || p.ageRestricted === true;
+        const isAdult = typeof isProductAgeRestricted === "function"
+                          ? isProductAgeRestricted(p)
+                          : (p.ageRestricted === true);
         const adultBadge = isAdult ? `<div class="adult-card-badge" style="position:absolute;top:5px;right:5px;z-index:4;font-size:8px;font-weight:900;background:rgba(255,30,30,0.85);color:white;padding:2px 6px;border-radius:5px;">🔞 18+</div>` : "";
         const oos = p.outOfStock || (p.stock !== undefined && Number(p.stock) === 0);
         const oosOverlay = oos ? `<div class="oos-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;z-index:6;border-radius:12px;">Out of Stock</div>` : "";
@@ -599,7 +604,7 @@ async function addToCart(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isAdultCategory === "function" && isAdultCategory(product.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
         if(typeof requireAgeVerification === "function"){
             const ok = await requireAgeVerification();
             if(!ok) return;
@@ -642,7 +647,7 @@ async function addToWishlistCat(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isAdultCategory === "function" && isAdultCategory(product.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
         if(typeof requireAgeVerification === "function"){
             const ok = await requireAgeVerification();
             if(!ok) return;
@@ -695,7 +700,7 @@ async function buyNowCat(id){
     const product = allProducts.find(p => String(p.id) === String(id));
     if(!product) return;
 
-    if(typeof isAdultCategory === "function" && isAdultCategory(product.category)){
+    if(typeof isProductAgeRestricted === "function" && isProductAgeRestricted(product)){
         if(typeof requireAgeVerification === "function"){
             const ok = await requireAgeVerification();
             if(!ok) return;

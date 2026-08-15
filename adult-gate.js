@@ -11,6 +11,37 @@ function isAdultCategory(cat){
     return ADULT_CATS.includes((cat || "").toLowerCase());
 }
 
+/* ── THE canonical age-restriction test ────────────────────────────────────
+   Every SOKONI surface must decide "is this product 18+" through THIS function,
+   so a product cannot be gated on one page and open on another.
+
+   The PRODUCT DOCUMENT is the source of truth: `ageRestricted === true` marks an
+   item 18+ regardless of how it is categorised. Category remains a fallback so
+   the existing alcohol/vape/tobacco/adult catalogue stays gated without needing
+   every legacy row backfilled — but a product may now be flagged individually,
+   which category alone could never express (a spirit-infused gift hamper filed
+   under "food", say).
+
+   Why this exists: the surfaces had drifted apart.
+     · Shop      checked `p.ageRestricted === true` OR its OWN duplicate category
+                 list, so it honoured the field.
+     · Home      checked ONLY isAdultCategory(product.category) — a product
+                 flagged ageRestricted outside an adult category was ungated.
+     · Product   detail did not load this file at all and performed NO age check.
+
+   Home and Shop read the SAME /api/catalogue source, so the classification never
+   needed duplicating per surface — it only needed reading consistently.
+
+   Never identify a restricted product by array index, position, name, price or
+   localStorage. Only this predicate, against the product's own fields. */
+function isProductAgeRestricted(product){
+    if (!product) return false;
+    if (product.ageRestricted === true) return true;
+    /* Tolerate a string enum if the schema grows one, e.g. ageRestriction:"18+" */
+    if (typeof product.ageRestriction === "string" && /^\s*18\s*\+?\s*$/.test(product.ageRestriction)) return true;
+    return isAdultCategory(product.category);
+}
+
 function isAgeVerified(){
     return sessionStorage.getItem("sokoniAgeVerified") === "true" ||
            localStorage.getItem("sokoniAgeVerified") === "true";
@@ -333,3 +364,5 @@ window.confirmAge  = confirmDOB;
 window.requireAgeVerification = requireAgeVerification;
 window.isAdultCategory = isAdultCategory;
 window.isAgeVerified   = isAgeVerified;
+/* The canonical predicate every surface must use. */
+window.isProductAgeRestricted = isProductAgeRestricted;

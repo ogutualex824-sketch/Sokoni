@@ -1225,7 +1225,34 @@ function _cartItem(){
     });
 }
 
-function addToCart(){
+/* ── 18+ GATE ───────────────────────────────────────────────────────────────
+   The product DETAIL page performed no age check at all and did not even load
+   adult-gate.js. Shop blurs restricted cards and Home verifies at action time,
+   but both link here — and a direct URL, a shared link or a search result
+   reaches this page without passing either. So an 18+ item could be added to
+   cart and bought with zero verification: the gate was bypassable simply by
+   knowing the product URL.
+
+   That matters beyond UX. category.html states this catalogue complies with
+   Kenya's Alcoholic Drinks Control Act and Tobacco Control Act, both of which
+   turn on the buyer's age.
+
+   Uses the SAME canonical predicate as Home and Shop, so one product cannot be
+   restricted on one surface and open on another. Returns a promise-aware guard;
+   callers await it before touching the cart. */
+async function _ageGuard(){
+    try{
+        if (typeof isProductAgeRestricted !== "function") return true;   /* gate script absent — do not block commerce */
+        if (!isProductAgeRestricted(product)) return true;
+        if (typeof isAgeVerified === "function" && isAgeVerified()) return true;
+        if (typeof requireAgeVerification === "function") return !!(await requireAgeVerification());
+        return true;
+    }catch(e){ return true; }
+}
+
+async function addToCart(){
+
+    if(!(await _ageGuard())) return false;
 
     const c = _cartSvc();
     /* Fails closed. Writing localStorage directly as a fallback is exactly what this
@@ -1248,7 +1275,11 @@ function addToCart(){
 
 /* BUY NOW */
 
-function buyNowProduct(){
+async function buyNowProduct(){
+
+    /* Same 18+ gate as addToCart — Buy Now goes straight to checkout, so it is
+       the MORE important of the two to guard, not the lesser. */
+    if(!(await _ageGuard())) return false;
 
     /* Buy Now = express-checkout THIS item only. Build a FRESH cart instead of
        appending to whatever was saved — appending made checkout charge for stale/
