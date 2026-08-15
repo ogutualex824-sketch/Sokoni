@@ -165,7 +165,17 @@ const EMU_PROJECT = process.env.SOKONI_GATE_PROJECT || 'sokoni-inventory-gate';
    re-split by the shell, so the inner `--gate` arrived as an option to `firebase` itself
    ("error: unknown option '--gate'") rather than staying inside the quoted script. Quoting
    the inner command in a single string keeps it one argument to emulators:exec. */
+/* Emulator ports come from firebase.json, so two agents working this repo in
+   parallel collide: the second one's Auth emulator cannot bind 9099 and this gate
+   fails closed — correctly, but for an infrastructure reason rather than a defect.
+   SOKONI_GATE_EMU_CONFIG points the CLI at an alternate firebase.json carrying
+   only an `emulators` block on free ports, giving this run its own isolated suite.
+   Unset (the normal case) the command is byte-identical to before, and the gate
+   stays mandatory and fail-closed either way — this changes WHERE it runs, never
+   WHETHER it runs. */
+const EMU_CONFIG = process.env.SOKONI_GATE_EMU_CONFIG;
 const cmd = 'firebase emulators:exec --only firestore,auth --project ' + EMU_PROJECT +
+            (EMU_CONFIG ? ' --config "' + EMU_CONFIG.replace(/\\/g, '/') + '"' : '') +
             ' "node scripts/test-inventory.js --gate"';
 
 const res = spawnSync(cmd, {
