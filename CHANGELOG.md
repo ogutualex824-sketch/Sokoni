@@ -1,3 +1,73 @@
+## [2026-08-15] — Every product page was showing two invented reviews
+
+**Reviews completion.** Files: `product.js`, `functions/reviews.js`,
+`scripts/test-product-reviews.js` (new). No database, rules, or Cloud Function
+behaviour changes — the canonical engine was already correct; the product page was not
+using it.
+
+### The defect
+
+`product.js` rendered two **hardcoded** review cards on **every** product page:
+
+```html
+<div class="review-card">
+  <div class="review-top">⭐⭐⭐⭐☆</div>
+  <p>Premium hoodie quality. Sokoni is becoming elite 🔥</p>
+  <span>— Brian</span>
+</div>
+```
+
+Five stars and four stars, a body praising a "premium hoodie", and an invented reviewer
+called Brian — shown regardless of what the product was, or whether anyone had ever
+reviewed it. Fabricated social proof on the page a buyer uses to decide, and the same
+defect class as the 21 invented reviews removed from reviews.html in `92c7536`. It is
+live on `8290102` today.
+
+### The fix
+
+The section is now filled by `_prdLoadReviews()` from the canonical **`getReviews`**
+Cloud Function, which already returns only `status == 'approved'` and strips
+`authorUid`. The client never queries `reviews/{id}` and never writes an aggregate.
+
+The review target is the canonical product id from `?id=` — never the product name.
+Output is escaped; the rating is clamped to 0..5 before stars are built. The read is
+deliberately **not awaited**, so a slow or failing review load cannot hold up the
+product render.
+
+**Unknown is not zero.** Before the read resolves the section says nothing; on failure
+it says *"Reviews are unavailable right now."* — never "No reviews yet" and never `0`.
+"No reviews yet" appears only on a *successful* empty result.
+
+### A drift trap in the server header, corrected
+
+`functions/reviews.js` documented `targetId format: "{type}_{entityId}"` — e.g.
+`product_abc`. **Nothing implements that.** `submitReview` stores `targetId` verbatim
+and keys `ratingsSummary/{targetId}` with it, while every live caller passes a bare id:
+`business.html` submits and reads `targetId: BIZ_ID`, and the Shop grid hydrates
+`ratingsSummary/{productId}`. Anyone following the comment would have written
+`product_abc` and their rating would be stored under a key no surface reads — silently
+never appearing. The header now documents the bare-id convention that is actually in
+force, and records that a name is never identity.
+
+### Boundary kept
+
+Platform testimonials remain **outside** the product/seller review engine. No
+`targetId:"SOKONI"` / `targetType:"platform"` was invented; extending the canonical
+model to a platform type would need a deliberate model and rules change.
+
+### Verification
+
+`scripts/test-product-reviews.js` — **32/32**, no emulator, no network. Proven by
+mutation, not assumption: reintroducing a hardcoded review card failed 3 assertions,
+and making the failed-read branch claim "No reviews yet" failed 2.
+
+Browser, rendered DOM: `renderedReviewCards: 0`, no "Brian", no "premium hoodie", no
+"0 reviews" claim, canonical `?id=` preserved, zero page errors. With App Check
+rejected locally the section correctly shows the failed-read state rather than a
+fabricated or zero one.
+
+---
+
 ## [2026-08-15] — One product, one sellability decision, every surface agrees
 
 **Slice 3 of the merchant→Shop→Marketplace convergence.** Files: `sokoni-sellability.js` (new),

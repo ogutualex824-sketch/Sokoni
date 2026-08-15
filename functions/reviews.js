@@ -10,7 +10,19 @@
  *   ratingsSummary/{targetId}             — denormalised avg+count
  *   reviewRateLimits/{uid}_{action}_{day} — daily rate-limit counters
  *
- * targetId format: "{type}_{entityId}"  e.g. "product_abc", "seller_xyz"
+ * targetId: the BARE canonical entity id — a product id, a seller/business id.
+ *
+ *   This header used to document the format as "{type}_{entityId}" (e.g.
+ *   "product_abc"). Nothing implements that, and it is a drift trap: submitReview
+ *   stores `targetId` verbatim and keys ratingsSummary/{targetId} with it, while
+ *   the live callers pass a bare id — business.html submits and reads
+ *   `targetId: BIZ_ID`, and the Shop grid hydrates `ratingsSummary/{productId}`.
+ *   Anyone following the old comment would write "product_abc", and their rating
+ *   would be stored under a key no surface ever reads, so it would silently never
+ *   appear. `targetType` carries the type; the id carries identity.
+ *
+ *   NEVER a product or business NAME. Names are not identity: they are editable,
+ *   non-unique, and would re-point a review target the moment a merchant renames.
  *
  * Security hardening v1.1:
  *   - Per-user daily rate limits on submit/flag/helpful

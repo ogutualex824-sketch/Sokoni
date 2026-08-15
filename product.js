@@ -780,74 +780,22 @@ else{
 
         <!-- REVIEWS -->
 
-        <div class="reviews-section">
+        <!-- Canonical reviews. This block previously rendered TWO HARDCODED review
+             cards — five stars, four stars, a body praising a "premium hoodie", and an
+             invented reviewer called Brian — on EVERY product page regardless of what
+             the product was or whether anyone had ever reviewed it. That is fabricated
+             social proof on a page a buyer uses to decide, and the same defect class as
+             the 21 invented reviews removed from reviews.html in 92c7536.
 
-            <h2>
-
-                Customer Reviews
-
-            </h2>
-
-
-
-            <div class="review-card">
-
-                <div class="review-top">
-
-                    ⭐⭐⭐⭐⭐
-
-                </div>
-
-
-
-                <p>
-
-                    Amazing quality and fast delivery.
-
-                    Definitely buying again 😄🔥
-
-                </p>
-
-
-
-                <span>
-
-                    — Alex
-
-                </span>
-
+             Real content is loaded by _prdLoadReviews() from the canonical getReviews
+             Cloud Function, keyed on the canonical product id from ?id=. Until it
+             resolves this says nothing; if the read fails it says so. An unknown count
+             is never rendered as zero. -->
+        <div class="reviews-section" id="prdReviewsSection">
+            <h2>Customer Reviews</h2>
+            <div id="prdReviewsBody" class="prd-reviews-body">
+                <div class="prd-reviews-loading" style="color:rgba(255,255,255,0.4);font-size:12px;padding:8px 0;">Loading reviews…</div>
             </div>
-
-
-
-            <div class="review-card">
-
-                <div class="review-top">
-
-                    ⭐⭐⭐⭐☆
-
-                </div>
-
-
-
-                <p>
-
-                    Premium hoodie quality.
-
-                    Sokoni is becoming elite 🔥
-
-                </p>
-
-
-
-                <span>
-
-                    — Brian
-
-                </span>
-
-            </div>
-
         </div>
 
         <!-- SPECS -->
@@ -1146,6 +1094,72 @@ function decreaseQty(){
    — the same default the server applies to un-migrated shops — and shop-closed stays
    enforced at checkout. FAIL OPEN if the module is missing: a script that failed to
    load must not mark real products unavailable. */
+/* ── Canonical reviews ────────────────────────────────────────────────────────
+   Reads through the canonical `getReviews` Cloud Function (functions/reviews.js),
+   which returns only what the moderation contract permits the caller to see. The
+   client never queries reviews/{id} directly and never writes an aggregate.
+
+   TARGET IDENTITY is the canonical product id from ?id= — never the product NAME.
+   The de-facto platform convention is the BARE entity id: business.html submits and
+   reads `targetId: BIZ_ID`, and the Shop grid hydrates `ratingsSummary/{productId}`.
+   (functions/reviews.js's header still documents a `{type}_{entityId}` format that
+   nothing implements — a drift trap, since anyone following it would write
+   `product_abc` and their ratings would silently never appear. Corrected there.)
+
+   UNKNOWN IS NOT ZERO. Before the read resolves this renders nothing; if the read
+   fails it says the reviews could not be loaded. It never renders "0 reviews" for a
+   product whose review count it does not know. */
+function _prdReviewTargetId(){
+    /* The URL id is canonical; the cached product object is a convenience only. */
+    var id = _urlId || (typeof product !== 'undefined' && product && product.id);
+    return id ? String(id) : null;
+}
+
+async function _prdLoadReviews(){
+    var box = document.getElementById('prdReviewsBody');
+    if (!box) return;
+    var targetId = _prdReviewTargetId();
+    if (!targetId) { box.innerHTML = ''; return; }
+
+    try {
+        var mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+        var fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
+        var call = mod.httpsCallable(fns, 'getReviews');
+        var res  = await call({ targetId: targetId, sort: 'recent', limit: 20 });
+        var list = (res && res.data && res.data.reviews) || [];
+        _prdRenderReviews(box, list);
+    } catch (e) {
+        /* A failed read is UNKNOWN, not "no reviews". Say so rather than implying
+           this product has never been reviewed. */
+        console.warn('[product] reviews load failed:', e && (e.code || e.message));
+        box.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:12px;padding:8px 0;">'
+                      + 'Reviews are unavailable right now.</div>';
+    }
+}
+
+function _prdRenderReviews(box, list){
+    if (!list.length) {
+        box.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:12px;padding:8px 0;">'
+                      + 'No reviews yet.</div>';
+        return;
+    }
+    var esc = function(s){ return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+    box.innerHTML = list.map(function(r){
+        var n = Math.max(0, Math.min(5, Number(r.rating) || 0));
+        var stars = '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
+        /* Author name comes from the review document the server returned. */
+        var who = esc(r.authorName || 'Verified buyer');
+        return '<div class="review-card">'
+             +   '<div class="review-top">' + stars + '</div>'
+             +   (r.title ? '<strong style="display:block;margin:4px 0;">' + esc(r.title) + '</strong>' : '')
+             +   '<p>' + esc(r.body || '') + '</p>'
+             +   '<span>— ' + who + '</span>'
+             + '</div>';
+    }).join('');
+}
+
 function _prdAvailability(p){
     var A = (typeof window !== 'undefined') && window.SokoniSellability;
     if (!A || typeof A.availabilityOf !== 'function') {
@@ -1675,6 +1689,10 @@ function submitQuestion(){
 
 window.submitQuestion = submitQuestion;
 renderQa();
+
+/* Canonical reviews — fire after the page body exists. Deliberately not awaited:
+   a slow or failing review read must never hold up the product render. */
+try { _prdLoadReviews(); } catch (e) { console.warn('[product] reviews init:', e && e.message); }
 
 /* ==============================================
    LIVE PUBLIC COMMENTS
