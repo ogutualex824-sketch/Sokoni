@@ -382,9 +382,12 @@
     <!-- Admin controls -->
     <div class="va-modal-field">
       <label class="va-modal-label">Status</label>
+      <!-- Only the two states verificationDecide can actually commit are offered.
+           "Under review" and staying on "Pending" were removed rather than left
+           selectable-but-inert: a control that appears to work and does nothing is
+           worse than one that is absent. Triage returns if/when the engine gains
+           the state. -->
       <select class="va-modal-select" id="modal-status" onchange="onStatusChange()">
-        <option value="pending">Pending</option>
-        <option value="under_review">Under Review</option>
         <option value="approved">Approved</option>
         <option value="rejected">Rejected</option>
       </select>
@@ -658,8 +661,9 @@
   async function performApproval(docId, a, adminNotes) {
     try {
       const db = await getDB();
-      const { doc, updateDoc, setDoc, addDoc, collection, serverTimestamp } =
-        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+      /* No Firestore write imports here on purpose. This function used to pull in
+         setDoc/updateDoc/addDoc; leaving them once the writes moved into the Cloud
+         Function would make it trivial to reintroduce a client mutation path. */
 
       /* ONE atomic call replaces five sequential un-transacted writes.
          The old sequence marked the request approved, then threw on the second
@@ -714,8 +718,7 @@
     if (!a) return;
     try {
       const db = await getDB();
-      const { doc, updateDoc, addDoc, collection, serverTimestamp } =
-        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+      /* Likewise: no Firestore write imports. */
 
       /* Same single atomic call. Rejection previously touched only the request,
          leaving any already-approved facet standing — there was no way to say
@@ -827,34 +830,22 @@
     } else if (newStatus === "rejected" && currentAppData.status !== "rejected") {
       await performRejection(currentDocId, currentAppData, rejectReason);
     } else {
-      // status change only (e.g. pending -> under_review, or updating notes)
-      try {
-        const db = await getDB();
-        const { doc, updateDoc, addDoc, collection, serverTimestamp } =
-          await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
-        const adminEmail = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}").email||"admin"; } catch { return "admin"; } })();
+      /* Triage ("under review") and notes-only edits are NOT available in this
+         release, and the control says so rather than silently doing nothing.
 
-        await updateDoc(doc(db, "verificationRequests", currentDocId), {
-          status: newStatus, adminNotes,
-          ...(newStatus === "rejected" ? { rejectionReason: rejectReason } : {})
-        });
+         This branch used to write verificationRequests directly from the client.
+         That bypassed the transaction, emitted its own adminLog entry outside the
+         atomic decision, and wrote the retired `status` field alongside the
+         canonical `state` — two names for one fact, which is exactly what the
+         verification contract removed.
 
-        await addDoc(collection(db, "adminLog"), {
-          action: `verify_status_update: ${currentAppData.refNumber} → ${newStatus}`,
-          adminEmail, targetUser: currentAppData.fullName,
-          docId: currentDocId, createdAt: serverTimestamp()
-        });
-
-        const idx = allApps.findIndex(x=>x.id===currentDocId);
-        if (idx !== -1) { allApps[idx].status = newStatus; allApps[idx].adminNotes = adminNotes; }
-        renderApps();
-        msgEl.className = "va-modal-msg ok";
-        msgEl.textContent = "Changes saved.";
-        loadAdminLog();
-      } catch(err) {
-        msgEl.className = "va-modal-msg err";
-        msgEl.textContent = "Error: " + err.message;
-      }
+         It is not simply routed through verificationDecide because the engine
+         accepts 'approved' or 'rejected' only; 'under_review' is a triage state
+         the canonical model does not have. Adding it is a deliberate change to
+         the engine with its own tests, not something to slip into this release. */
+      msgEl.className = "va-modal-msg err";
+      msgEl.textContent = 'Only Approve and Reject are available. "Under review" and '
+                        + 'notes-only changes are not supported in this release.';
     }
 
     saveBtn.disabled = false;

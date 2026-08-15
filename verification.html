@@ -780,12 +780,10 @@
      SECTION 5 Â· VERIFIED LISTINGS DIRECTORY
 ══════════════════════════════════════════════════ -->
 <section class="vf-section">
-  <div class="vf-section-title">Recently Verified Members</div>
-  <p class="vf-section-sub">Businesses and professionals who have been reviewed and approved for SOKONI verification.</p>
-
-  <div class="vf-dir-grid" id="vfDirectory">
-    <div class="vf-dir-empty"><div class="vf-spinner"></div><div style="margin-top:16px;">Loading verified members…</div></div>
-  </div>
+  <!-- "Recently Verified Members" removed with its query. There is no public
+       projection to populate it: verifications/ is owner-or-admin read. Leaving the
+       section would show a permanent spinner, or an empty state falsely implying
+       nobody is verified. It returns when built on profileGetPublicProfile. -->
 </section>
 
 <hr class="vf-divider">
@@ -1338,58 +1336,12 @@
     if (e.key === "Enter") window.checkStatus();
   });
 
-  /* ═════════════ LOAD VERIFIED DIRECTORY ═════════════ */
-  async function loadDirectory() {
-    const grid = document.getElementById("vfDirectory");
-    try {
-      const db = await getDB();
-      const { collection, query, where, orderBy, limit, getDocs } =
-        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
-
-      const q = query(
-        collection(db, "verifications"),
-        where("status", "==", "approved"),
-        orderBy("approvedAt", "desc"),
-        limit(12)
-      );
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        grid.innerHTML = `<div class="vf-dir-empty"><i class="fa-solid fa-badge-check"></i><div>No verified members yet — be the first to apply!</div></div>`;
-        return;
-      }
-
-      const cards = snap.docs.map(doc => {
-        const d = doc.data();
-        const t = TIER_MAP[d.verifyType] || { color: "#71ff00", bg: "rgba(113,255,0,0.12)", emoji: "✅" };
-        const initials = (d.practiceName || d.fullName || "?").split(" ").slice(0,2).map(w => w[0]).join("").toUpperCase();
-        const approvedDate = d.approvedAt?.toDate ? d.approvedAt.toDate().toLocaleDateString("en-KE", { month:"short", year:"numeric" }) : "";
-
-        return `
-          <div class="vf-dir-card">
-            <div class="vf-dir-card-top">
-              <div class="vf-dir-avatar" style="background:${t.bg};color:${t.color};">${initials}</div>
-              <div class="vf-dir-info">
-                <div class="vf-dir-name">${escHtml(d.practiceName || d.fullName || "—")}</div>
-                <div class="vf-dir-practice">${escHtml(d.fullName || "")}</div>
-                <div style="margin-top:5px;">${tierBadge(d.verifyType)}</div>
-              </div>
-            </div>
-            <div class="vf-dir-desc">${escHtml(d.description || "")}</div>
-            <div class="vf-dir-meta">
-              <div class="vf-dir-county"><i class="fa-solid fa-location-dot" style="font-size:9px;"></i> ${escHtml(d.county || "")}</div>
-              <div class="vf-dir-date">${approvedDate}</div>
-            </div>
-          </div>`;
-      });
-
-      grid.innerHTML = cards.join("");
-
-    } catch (err) {
-      console.error("Directory load error:", err);
-      grid.innerHTML = `<div class="vf-dir-empty"><i class="fa-solid fa-wifi"></i><div>Could not load directory. Please refresh the page.</div></div>`;
-    }
-  }
+  /* The "recently verified" directory was removed.
+     It queried verifications/ for status=='approved' ordered by approvedAt —
+     both retired fields — against a collection whose read rule is owner-or-admin,
+     so the query was denied for every visitor and the grid only ever showed its
+     error state. A public directory needs a public projection; profileGetPublicProfile
+     is that surface, and building one on it is a separate, deliberate change. */
 
   /* ── HTML escape helper ── */
   function escHtml(str) {
@@ -1397,7 +1349,7 @@
   }
 
   /* ── Boot ── */
-  loadDirectory();
+  /* loadDirectory() removed with the query above. */
 
   /* ═════════════ FAQ ACCORDION ═════════════ */
   window.toggleFaq = function(btn) {
