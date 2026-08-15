@@ -99,7 +99,10 @@ server.listen(0, async () => {
     check('settings read does not throw', out.settingsThrew === null, out.settingsThrew || '');
     check('expected store count is a full schema (> 15 stores)', out.diag && out.diag.expected > 15, out.diag ? String(out.diag.expected) : '');
 
-    await browser.close();
+  /* Teardown deliberately NOT here. The bounded close below runs AFTER the tally:
+     an unbounded close() at this point can hang, and the suite is then SIGKILLed at
+     its budget with every assertion already passed — a finished result recorded as
+     TIMEOUT, a non-blocking verdict, and its coverage silently gone. */
   } catch (e) {
     console.log('SKIP — browser session flaked (not available in this environment / contention): ' + (e && e.message || e));
     try { server.close(); } catch (_) {}

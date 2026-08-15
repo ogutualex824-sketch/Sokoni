@@ -16,6 +16,10 @@ const PosMobile = (() => {
   let _cartCount     = 0;
   let _activeTab     = 'home';
   let _swipeStart    = null;
+  /* True once init() has made its default-panel decision (see the note at the
+     end of init). A late listener that missed the event can read this instead,
+     so readiness is not lost to a subscribe-after-the-fact race. */
+  let _shellReady    = false;
 
   /* ── Boot ──────────────────────────────────────────────────── */
   async function init() {
@@ -51,6 +55,34 @@ const PosMobile = (() => {
 
     /* Set mobile home as default */
     tab('home');
+
+    /* ── Shell readiness ────────────────────────────────────────────────────
+       The default-panel decision is complete. It is announced HERE, after
+       tab('home'), because that call IS the decision — everything before it is
+       construction.
+
+       This exists because the panel choice was previously unobservable. pos.html
+       ships #panel-pos active in its markup, and this function only overrides
+       that at the very end of init, behind an await. Anything watching from
+       outside could not tell "the shell chose Checkout" from "the shell has not
+       decided yet", and a test that sampled too early saw the static default and
+       reported a selection failure that had not happened.
+
+       It deliberately says ONLY that the decision is made. Not that SPos exists,
+       not that Firebase succeeded, not that dashboard data loaded, not that any
+       particular panel is active — a reader must inspect the result themselves,
+       or the signal would just be the answer restated.
+
+       It fires even when the backend is unreachable: refreshDashboard() catches
+       its own failure, so tab('home') runs regardless, and this must follow it
+       just as unconditionally. App Check refusing to attest 127.0.0.1 stops the
+       dashboard from POPULATING; it does not stop the shell from DECIDING. */
+    _shellReady = true;
+    try {
+      document.dispatchEvent(new CustomEvent('sokoniPosMobileReady', {
+        detail: { activeTab: _activeTab },
+      }));
+    } catch (_) { /* readiness must never break init */ }
   }
 
   /* ── Bottom Navigation ─────────────────────────────────────── */
@@ -813,6 +845,10 @@ const PosMobile = (() => {
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   return {
+    /* Readiness — see the note at the end of init(). Reports ONLY that the
+       default-panel decision has been made, never which panel won. Present so a
+       reader that subscribed after the event still gets a truthful answer. */
+    isShellReady: () => _shellReady,
     init, tab, refreshDashboard, openMore, openStockIn, openCreateProduct,
     openProductEdit, showWarranty, openRegisterSerial, openBluetooth, installApp,
     showCartBadge, resetCartBadge, closeSheet,

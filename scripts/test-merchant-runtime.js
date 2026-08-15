@@ -70,7 +70,10 @@ server.listen(0, async () => {
     check('admin-only nav item IS hidden for a seller (role filter intact)', out.adminNav === 'none', 'adminNav=' + out.adminNav);
     check('seller nav item is visible for a seller', out.sellerNav !== 'none', 'sellerNav=' + out.sellerNav);
 
-    await browser.close();
+  /* Teardown deliberately NOT here. The bounded close below runs AFTER the tally:
+     an unbounded close() at this point can hang, and the suite is then SIGKILLed at
+     its budget with every assertion already passed — a finished result recorded as
+     TIMEOUT, a non-blocking verdict, and its coverage silently gone. */
   } catch (e) {
     console.log('SKIP — browser session flaked (not available in this environment / contention): ' + (e && e.message || e));
     try { server.close(); } catch (_) {}

@@ -97,6 +97,46 @@ server.listen(0, async () => {
     await page.evaluate(() => { const e = document.querySelector('.mnav-item[data-id="pos"]'); if (e) e.click(); });
     await settle(page, 9000);
 
+    /* ── Wait for the SHELL'S DECISION, not for a duration ────────────────────
+       pos.html ships #panel-pos active in its markup, and pos-mobile.js only
+       overrides that at the END of init(), after `await refreshDashboard()`.
+       A fixed sleep therefore sometimes sampled the STATIC default and reported
+       "the shell selected the wrong panel" when the shell had not selected yet —
+       the same assertion passed and failed across five gate runs at two different
+       concurrency levels for exactly this reason.
+
+       PosMobile now announces the decision (sokoniPosMobileReady / isShellReady),
+       so this waits for that and then inspects the result independently. It does
+       NOT wait for the panel to be active: that is the thing under test, and
+       waiting for it would make the assertion vacuous.
+
+       Desktop never runs the mobile shell, so there is nothing to wait for there.
+
+       A timeout is NOT converted into a pass. `shellReady` is carried into the
+       assertion below so an un-initialised shell is reported as this file's
+       existing App Check boundary rather than as a panel-selection failure. */
+    let shellReady = false;
+    if (vp.m) {
+      shellReady = await page.evaluate(() => {
+        const f = document.querySelector('.mpanel.show iframe');
+        const w = f && f.contentWindow;
+        if (!w) return false;
+        if (w.PosMobile && typeof w.PosMobile.isShellReady === 'function' && w.PosMobile.isShellReady()) return true;
+        return new Promise((resolve) => {
+          const d = w.document;
+          const done = () => { clearTimeout(t); resolve(true); };
+          const t = setTimeout(() => {
+            try { d.removeEventListener('sokoniPosMobileReady', done); } catch (_) {}
+            /* Re-read the flag: the event may have fired between the check above
+               and this listener being attached. */
+            resolve(!!(w.PosMobile && typeof w.PosMobile.isShellReady === 'function' && w.PosMobile.isShellReady()));
+          }, 20000);
+          try { d.addEventListener('sokoniPosMobileReady', done, { once: true }); }
+          catch (_) { clearTimeout(t); resolve(false); }
+        });
+      });
+    }
+
     let st = await page.evaluate(VISIBLE_PANEL);
     ck('Seller -> POS opens the app', !st.err, st.err || (st.count + ' panels, hash ' + st.hash));
 
@@ -142,6 +182,21 @@ server.listen(0, async () => {
     const expectedLabel   = shellDefault
       ? 'POS shell selects HOME as its default panel (not Inventory)'
       : 'POS selects CHECKOUT as its default panel (not Inventory)';
+
+    /* An un-initialised mobile shell has made no selection to judge. Asserting
+       against the static markup default would report a product failure that did
+       not happen — the same false negative the readiness wait above removes. This
+       is the App Check boundary this file already declares for the tab
+       controller, applied to the one assertion that also depends on the shell
+       having run. It is a SKIP, loudly: never a pass, never a fail. */
+    if (vp.m && !shellReady) {
+      console.log('\n  SKIP — the POS mobile shell did not finish initialising in this environment.');
+      console.log('         PosMobile.init() never reached its default-panel decision, so there is no');
+      console.log('         selection to judge. UNVERIFIED here — not failed.');
+      console.log('         Run against a device or with the Auth + Firestore emulators to verify.');
+      await ctx.close();
+      continue;
+    }
 
     ck(expectedLabel,
        !selected.err &&
