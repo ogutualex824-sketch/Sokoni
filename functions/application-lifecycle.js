@@ -63,8 +63,9 @@
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
+/* Roles (users.roles[] + the Auth claim) have ONE writer. */
+const { grantAccountRole } = require('./role-authority');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -566,49 +567,12 @@ async function projectDriver(db, app, uid, approved) {
    delegated instead of being silently skipped. */
 const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders', legal: 'legalProviders' };
 
-/* Account roles. `roles` must be written as an ARRAY — a provider whose account
-   carries only `isProvider: true` lands in the app as a buyer, and the analytics
-   gate reads `roles` (array), not a `role` string. Both the array and the
-   legacy booleans are maintained so no existing reader breaks. */
-async function grantAccountRole(db, uid, role, approved) {
-  const ROLE_KEY = { provider: 'provider', driver: 'rider', seller: 'seller', health: 'provider', legal: 'provider' };
-  const key = ROLE_KEY[role] || 'provider';
-  const ref = db.collection('users').doc(uid);
-  const patch = { updatedAt: _ts() };
-
-  if (approved) {
-    patch.roles = FieldValue.arrayUnion(key);
-    patch[`registeredAs.${key}`] = true;
-    patch.approved = true;
-    patch.approvedAt = _ts();
-    if (role === 'provider') patch.isProvider = true;
-    if (role === 'driver') { patch.isDriver = true; patch.isRider = true; }
-  } else {
-    /* The role is removed but the account is untouched otherwise — a rejected
-       provider is still a customer. */
-    patch.roles = FieldValue.arrayRemove(key);
-    patch[`registeredAs.${key}`] = false;
-    if (role === 'provider') patch.isProvider = false;
-    if (role === 'driver') { patch.isDriver = false; patch.isRider = false; }
-  }
-  await ref.set(patch, { merge: true });
-
-  /* Auth custom claims mirror the grant so security rules and the client gate
-     agree without a Firestore read. Best-effort: a claim failure must not
-     abort a projection that already succeeded. */
-  try {
-    const auth = getAuth();
-    const user = await auth.getUser(uid);
-    const claims = { ...(user.customClaims || {}) };
-    if (role === 'provider' || role === 'health' || role === 'legal') claims.provider = !!approved;
-    if (role === 'driver') { claims.driver = !!approved; claims.rider = !!approved; }
-    if (role === 'seller') claims.seller = !!approved;
-    await auth.setCustomUserClaims(uid, claims);
-  } catch (e) {
-    logger.warn('[appLifecycle] claim update skipped', { uid, role, error: e.message });
-  }
-  return key;
-}
+/* Account roles now live in ONE primitive — ./role-authority. Both halves of a
+   role (users.roles[] and the Auth custom claim) are written there, and a claim
+   that fails after the Firestore commit is recorded as an observable
+   divergence instead of a warn. This module used to own that logic; two other
+   paths granted roles without it and produced accounts whose `roles` said
+   "seller" while their token did not. See role-authority.js for the contract. */
 
 /**
  * Apply a decision. Returns a receipt describing exactly what was written —
@@ -648,16 +612,31 @@ async function applyDecision(appId, app, opts = {}) {
     }
 
     /* A pending application must not grant anything; only a decision does. */
+    let claimPending = false;
     if (status === 'approved' || status === 'rejected' || status === 'suspended') {
-      receipt.roleKey = await grantAccountRole(db, uid, role, approved);
+      const grant = await grantAccountRole(db, uid, role, approved, {
+        source: 'applicationLifecycle', entityId: appId,
+      });
+      receipt.roleKey = grant.key;
+      receipt.claim = grant.claim;
+      claimPending = !grant.ok;
+      if (claimPending) receipt.claimReconcileId = grant.reconcileId;
     }
 
+    /* The projection is only 'applied' when BOTH halves of the role landed. A
+       granted role whose Auth claim never minted leaves the applicant behaving
+       as a buyer, so it is reported as pending — `applicationList` already
+       surfaces anything that is approved but not 'applied', and the trigger's
+       idempotency guard (projectionStatus === 'applied') lets a later write
+       re-run the projection and re-attempt the mint. */
     await db.collection('applications').doc(appId).set({
       statusCanonical: status,
       decisionAppliedFor: status,
       decisionAppliedAt: _ts(),
-      projectionStatus: 'applied',
-      projectionError: FieldValue.delete(),
+      projectionStatus: claimPending ? 'applied_claim_pending' : 'applied',
+      projectionError: claimPending
+        ? `Role "${receipt.roleKey}" granted in Firestore but the Auth claim did not mint — see roleClaimReconcile/${receipt.claimReconcileId}.`
+        : FieldValue.delete(),
       projectionReceipt: receipt.writes,
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
@@ -668,16 +647,24 @@ async function applyDecision(appId, app, opts = {}) {
     if (status === 'approved') {
       try {
         const { notify } = require('./notify');
+        /* Do not promise an account the applicant cannot yet use. Until the
+           claim mints their token still reads as a buyer, so a "you are live"
+           message would be a success notice over a half-applied decision. */
+        const approvedBody = role === 'driver'
+          ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
+          : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`;
         await notify({
           uid,
           type: role === 'driver' ? 'rider_approved' : 'merchant_approved',
-          title: 'You are approved on SOKONI',
-          body: role === 'driver'
-            ? 'Your rider application is approved. Open the SOKONI driver app and go online to start receiving deliveries.'
-            : `${app.name || 'Your business'} is now live on SOKONI and customers can find you in search.`,
+          title: claimPending ? 'Approved — finishing setup' : 'You are approved on SOKONI',
+          body: claimPending
+            ? 'Your application is approved. We are finishing the last step of your account setup — you will be able to sign in to your new dashboard shortly.'
+            : approvedBody,
           phone: app.phoneNumber || undefined,
-          dedupeKey: `app_approved:${appId}`,
-          data: { applicationId: appId, role },
+          /* Distinct key per variant: a re-run that finally mints the claim must
+             still be able to send the real "you are live" message. */
+          dedupeKey: claimPending ? `app_approved_pending:${appId}` : `app_approved:${appId}`,
+          data: { applicationId: appId, role, claimPending },
         });
       } catch (e) {
         logger.warn('[appLifecycle] notify failed', { appId, error: e.message });

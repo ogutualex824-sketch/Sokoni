@@ -1,3 +1,86 @@
+## [2026-08-16] — A granted role that the token never carried (Stage 2: role convergence)
+
+Stage 1's bypass audit found two paths that granted the seller role in Firestore and never minted
+the Auth custom claim. A role is **two** facts that must agree:
+
+| fact | written to | read by |
+|---|---|---|
+| `users/{uid}.roles[]` | Firestore | server, dashboards, analytics gate |
+| `customClaims.<key>` | Auth | `firestore.rules`, the client role gate |
+
+Write one without the other and the account is broken in the way that is hardest to see: every
+admin surface shows an approved merchant, and the merchant themself opens the app as a buyer.
+
+**The two bypasses**
+
+| file | wrote | granted |
+|---|---|---|
+| `functions/automation-engine.js:278` (auto-approve) | `users/{uid}.role = 'seller'` inside its transaction | nothing the platform reads — `role` is a legacy string, not `roles[]`, and no claim |
+| `functions/wap.js:1087` (`seller.activate`) | same, one `set(merge)` | same |
+
+The canonical path was not innocent either: `grantAccountRole()` in `application-lifecycle.js`
+wrapped its own `setCustomUserClaims` in `try/catch → logger.warn`, so the identical divergence was
+produced silently by the *approved* path whenever Auth hiccuped.
+
+**One primitive — `functions/role-authority.js` (new)**
+
+`setCustomUserClaims` is an Auth call and has no place inside a Firestore transaction (a retry
+re-issues it; a rollback leaves the claim minted for a grant that never happened). So the contract
+is two-phase, and every call site follows it:
+
+```
+roleFieldPatch()  →  caller's transaction / batch / set     (field values + sentinels only)
+        ↓ COMMIT
+syncRoleClaim()   →  after the commit, never inside it
+        ↓
+{ ok:false }      →  caller reports PENDING, never success
+```
+
+A claim that fails after the commit is now **observable**: `roleClaimReconcile/{uid}__{key}`
+(server-only — no rules match, so default-deny applies) records the divergence with
+`state: CLAIM_MISSING | CLAIM_STALE`, the source, the error and an attempt counter, and one
+deduplicated `adminAlerts/role_claim_unminted__{uid}__{key}` raises it. Nothing self-repairs.
+
+**Callers now tell the truth about a partial grant**
+
+- `application-lifecycle.js` — `projectionStatus: 'applied_claim_pending'` instead of `'applied'`
+  (`applicationList` already surfaces approved-but-not-applied), and the applicant gets
+  *"Approved — finishing setup"* rather than *"now live on SOKONI"*, under its own dedupe key so the
+  real approval message can still follow.
+- `automation-engine.js` — audit outcome `approved_claim_pending`, an `automationQueue` exception at
+  `high`, and the honest notification variant.
+- `wap.js` — `seller.activate` **throws** on a failed mint. The step carries no `onFailure`, so the
+  instance fails and is swept to the DLQ instead of advancing to *"Notify Seller: Approved"*. The
+  Firestore write is an idempotent merge, so a re-run converges.
+
+**Also fixed in passing:** the old patch wrote `` patch[`registeredAs.${key}`] `` through `set()`.
+Only `update()` expands dot notation (`fromUpdateMap`); `set()` encodes keys literally — so it was
+creating a field *named* `registeredAs.seller` and the real map was never populated. The primitive
+writes the nested form.
+
+**Files:** `functions/role-authority.js` (new), `functions/application-lifecycle.js`,
+`functions/automation-engine.js`, `functions/wap.js`, `scripts/test-role-authority.js` (new),
+`scripts/census-role-claims.js` (new), `docs/ROLE_AUTHORITY.md` (new).
+**Database:** new server-only collection `roleClaimReconcile`; new `adminAlerts.kind`
+`role_claim_unminted`. **Rules:** unchanged (default-deny covers the new collection —
+[[reference_rules_compiled_size_ceiling]] leaves no room anyway). **API:** unchanged.
+**Breaking:** none. **Deployment:** Functions only — `automation-engine`, `wap`,
+`application-lifecycle`. Not deployed.
+
+**Verification:** `node scripts/test-role-authority.js` — **29/0**. Behavioural tests drive the real
+primitive against stubbed SDKs; the static contract checks on both bypasses are each proven by a
+mutation that reintroduces the original defect (M1–M5) and must be caught. The suite also holds a
+**claim-writer registry** — and building it surfaced role-claim authorities Stage 1 did not cover:
+`admin-os.js` (`adminSetUserRole` mints `{[role]:true}` **without** spreading existing claims, so
+assigning a role destroys every other claim on the account, and writes `users.role` not `roles[]`),
+`provider-onboarding.js` (mints `provider:true` **before** `batch.commit()`, and the batch never
+writes `roles[]` — the ROLE_MISSING mirror defect), and `universal-onboarding.js` (a parallel
+`accounts/{uid}` role model). All three are recorded as OPEN, none were touched.
+
+**Census:** `scripts/census-role-claims.js` classifies the live population
+CONSISTENT / CLAIM_MISSING / ROLE_MISSING / AMBIGUOUS. It performs **zero writes** and refuses to
+run without an explicit `GCLOUD_PROJECT`. **NOT RUN** — it reads production Auth.
+
 ## [2026-08-13] â€” SECURITY: the rider was authorizing their own payout
 
 **Status: FIXED and proven.** 36/36. **Release blocker â€” this is the money path.**
