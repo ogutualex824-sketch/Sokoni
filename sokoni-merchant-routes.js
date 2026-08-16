@@ -164,9 +164,17 @@
            'on that device. Neither behaviour is reachable from the merchant workspace any more.' },
 
     { id:'messages', name:'Messages', icon:'💬', tier:'primary',
-      kind:'seller', sec:'messages',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
-      mobile:true, desktop:true, activeKey:'messages' },
+      mobile:true, desktop:true, activeKey:'messages',
+      note:'Native surface (sokoni-merchant-messages-ui.js) through the deployed messagesDispatch ' +
+           'router — the individual handlers are not re-exported, the router is, and it routes into ' +
+           'the same messages._h ops. Every mutation is an op; the only Firestore access is a READ ' +
+           'of conversations/{id}/messages, which firestore.rules gates on participation and whose ' +
+           'client creates are blocked outright (allow create: if false), so sendMessage stays the ' +
+           'sole writer. PARTICIPANT-scoped, not shop-scoped, and labelled so. Was kind:seller ' +
+           '(seller.html#messages), whose inbox lived in localStorage.sokoniMessages — a thread read ' +
+           'on one device stayed unread on another.' },
 
     { id:'marketing', name:'Marketing', icon:'📣', tier:'more',
       kind:'native',

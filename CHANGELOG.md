@@ -1,3 +1,88 @@
+## [2026-08-16] — 2D-2 step 5: Messages, and a composer that stays on screen
+
+Native `messages` route through the deployed `messagesDispatch` router. Was `kind:'seller'` —
+an iframe of `seller.html#messages`, whose inbox lived in `localStorage.sokoniMessages`, so a thread
+read on one device stayed unread on another.
+
+### One server boundary, and exactly one read
+
+Every **mutation** is an op on the router: `sendMessage`, `markRead`, `getConversationContext`. The
+individual handlers are not re-exported; the router is, and it routes into the same `messages._h`
+ops — which is why the census classified Messages reachable rather than undeployed.
+
+The thread **body** is a Firestore read, because no server op returns messages.
+`firestore.rules` makes that safe rather than incidental:
+
+```
+conversations/{id}/messages   allow read:   if participant
+                              allow create: if false
+```
+
+A client cannot write a message even by accident — `sendMessage` (Admin SDK) is the only writer,
+which is what stops `senderId` spoofing. This surface performs **no Firestore write of any kind**.
+
+Participation is decided server-side on every op and asserted against the shipped source:
+`markRead`, `sendMessage`, `updateConversationStatus` and `getConversationContext` each check
+`participants.includes(uid)`; `createConversation` refuses a caller absent from its own participant
+list, so it cannot be used to manufacture access to an existing thread; the inbox reads
+`userConversations/{uid}` — a per-account projection that cannot return another user's threads. The
+client layer contains **no participant check of its own**, because a client-side one would be theatre.
+
+The router also exposes four admin ops. All four are superAdmin-gated (asserted), and **none is named
+anywhere in the merchant path**.
+
+### The mobile defect, fixed and measured
+
+The previous diagnostic found the composer far below the viewport on a long thread — because it was
+the last element of a scrolling column. The thread is now three flex rows and the composer is a
+**footer, not content**:
+
+```
+header    fixed
+messages  flex:1, scrolls independently
+composer  fixed
+```
+
+A `visualViewport` handler lifts that footer by the exact height of the software keyboard —
+`env(safe-area-inset-bottom)` covers the home indicator, not the keyboard, and on iOS the layout
+viewport does not shrink when it opens.
+
+Measured with a **populated** fixture — 40 messages, a 900-character message, a 290-character URL
+with no spaces, a 62-character customer name, a 127 unread badge — at **320×568, 375×667, 390×844,
+430×932 and 1280×800**.
+
+**Files:** `sokoni-merchant-messages.js`, `sokoni-merchant-messages-ui.js`,
+`scripts/test-merchant-messages.js`, `scripts/test-merchant-messages-ui.js` (new);
+`sokoni-merchant-routes.js`, `merchant.html` (modified — adds a read-only `queryMessages` adapter).
+**Database/API/Rules:** unchanged — no new callable, no new collection, no authorization touched.
+**Breaking:** none. **Deployment:** Hosting only, when authorized. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-messages.js` *(new)* | **58 / 0** |
+| `test-merchant-messages-ui.js` *(new, WebKit)* | **195 / 0** across **five** viewports |
+| `test-merchant-route-gate.js --all` | **512 / 10** |
+| disputes · marketing · staff · shop-employee-authority · orderAdvance | 60/0 · 70/0 · 74/0 · 53/0 · 47/0 |
+| adjust-stock · data · sell-inventory · routes · shop-access | 51/0 · 37/0 · 90/0 · 62/0 · 34/0 |
+
+Proven on screen at every viewport: the composer and its text field are **inside the viewport with no
+page scroll**, and stay put when the thread is scrolled to the top; the message list is what scrolls,
+not the page; a 290-character unbroken URL does not scroll the thread sideways and no bubble extends
+past the viewport; a 62-character name ellipsises while the unread badge stays on screen; sending is
+an op and the thread is **re-read** rather than appended locally, so a refused send leaves no fake
+bubble; `markRead` is an op, not a local flag; back returns to the list; empty, error, refused-thread,
+refused-send and signed-out are five distinct states; no `localStorage` key is written.
+
+**The route gate went 510/10 → 512/10** — the `seller:messages` deep-switch is gone with the iframe.
+
+**A test-selection bug worth recording, because it recurred.** Positional `:nth-child` selectors were
+wrong twice for two different reasons: the first child of the list is the scope banner, and the list
+sorts unread-first, so the fixture's display order is not its declaration order. One assertion was
+opening the one-message thread while claiming to test the empty one — and failing in a way that
+looked like a product defect. Selection is now by **name**, not position.
+
 ## [2026-08-16] — SECURITY: `orderAdvance` accepted any signed-in caller
 
 `orderAdvance` was the **only** authority over an order's status, it is deployed, and its entire

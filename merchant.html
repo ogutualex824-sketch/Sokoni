@@ -493,6 +493,10 @@
      and adds evidence; opening, cancelling and resolving are not theirs. -->
 <script src="sokoni-merchant-disputes.js"></script>
 <script src="sokoni-merchant-disputes-ui.js"></script>
+<!-- MESSAGES (2D-2 step 5) — every mutation is an op on messagesDispatch; the
+     only Firestore access is a participant-gated READ of the thread body. -->
+<script src="sokoni-merchant-messages.js"></script>
+<script src="sokoni-merchant-messages-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -888,6 +892,7 @@
     else if (id === 'staff') renderStaff();
     else if (id === 'marketing') renderMarketing();
     else if (id === 'disputes') renderDisputes();
+    else if (id === 'messages') renderMessages();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1639,6 +1644,22 @@
         return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
       });
     },
+    /* The ONE subcollection read in the workspace: a conversation's messages.
+       No server op returns them, and firestore.rules gates the read on
+       participation while blocking client creates outright — so this can never
+       become a write path. `path` is an array so the caller never assembles a
+       string, and a conversation id can never be spliced into a wrong one. */
+    queryMessages: function (spec) {
+      return _fs().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Messages are not available yet.');
+        var parts = [m.collection.apply(null, [window.firebaseDB].concat(spec.path))];
+        if (spec.orderBy) parts.push(m.orderBy(spec.orderBy[0], spec.orderBy[1]));
+        if (spec.limit) parts.push(m.limit(spec.limit));
+        return m.getDocs(m.query.apply(null, parts));
+      }).then(function (snap) {
+        return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      });
+    },
     queryMovements: function (spec) {
       return _fs().then(function (m) {
         if (!window.firebaseDB) throw new Error('Adjustment history is not available yet.');
@@ -1830,6 +1851,26 @@
     if (!_dspUI) console.error('[merchant] Disputes failed to mount — sokoni-merchant-disputes-ui.js did not load');
   }
 
+  var _msgUI = null, _msgKey = null;
+  function renderMessages () {
+    var host = document.getElementById('native-messages'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_msgUI && _msgKey === key) { _msgUI.refresh(); return; }
+    if (_msgUI) { try { _msgUI.destroy(); } catch (_) {} _msgUI = null; }
+    host.innerHTML = '';
+    _msgUI = window.SokoniMerchantMessagesUI && SokoniMerchantMessagesUI.mount(host, {
+      scope: scope,
+      /* ONE server boundary for every mutation. */
+      dispatch: _callable('messagesDispatch'),
+      /* ...and one READ, for the thread body only: no server op returns messages,
+         and firestore.rules blocks client creates on that subcollection outright. */
+      db: _mdb,
+      onToast: _merchantToast
+    });
+    _msgKey = _msgUI ? key : null;
+    if (!_msgUI) console.error('[merchant] Messages failed to mount — sokoni-merchant-messages-ui.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
@@ -1837,6 +1878,7 @@
     else if (current === 'staff') renderStaff();
     else if (current === 'marketing') renderMarketing();
     else if (current === 'disputes') renderDisputes();
+    else if (current === 'messages') renderMessages();
   });
 
   function renderDashboard () {
