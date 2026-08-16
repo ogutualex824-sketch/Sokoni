@@ -65,10 +65,18 @@ const BLOCK = SRC.slice(s, e);
 
 /* eslint-disable no-new-func */
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-const priceIt = new AsyncFunction('db', 'admin', 'HttpsError', 'request', 'amount', 'items', 'sellerUid', 'orderId',
+/* The pricing block calls `_availability.isPubliclyListed(p)` to refuse unlisted products.
+   That module is required at the top of functions/index.js, far outside this slice, so the
+   slice cannot resolve it on its own and threw ReferenceError before the first assertion —
+   silently converting the whole suite from 22/0 into no coverage at all. Inject the REAL
+   module rather than a stub: a stub would let the pricing block and the sellability engine
+   drift apart, which is the exact failure this suite extracts real source to avoid. */
+const _availability = require(path.join(__dirname, '..', 'functions', 'shared', 'sellability'));
+
+const priceIt = new AsyncFunction('db', 'admin', 'HttpsError', '_availability', 'request', 'amount', 'items', 'sellerUid', 'orderId',
   '"use strict";' + BLOCK + '; return { authoritativeAmount, pricingSource, pricedItems };');
 
-const run = (o) => priceIt(db, admin, HttpsError,
+const run = (o) => priceIt(db, admin, HttpsError, _availability,
   { auth: { uid: 'BUYER' }, data: { deliveryFee: o.deliveryFee } },
   o.amount, o.items, o.sellerUid || 'SELLER_A', o.orderId || 'SKN1');
 

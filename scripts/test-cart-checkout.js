@@ -220,20 +220,45 @@ console.log('\nE. A cart it cannot read is not rendered as an empty cart');
 console.log('\nF. Stock decrement: unknown cart must not read as empty');
 {
   const sw = stripComments(read('seller-wiring.js'));
-  /* Scoped to _patchCheckout. seller-wiring.js contains five orig.apply call sites across
-     different patches, so a whole-file indexOf compared against the wrong one. */
+  /* This block used to assert the INTERNALS of _patchCheckout's wrapper: that it snapshotted
+     the cart before saveAndRedirect cleared it, that a missing service produced null rather
+     than [], and that the decrement only ran on a real cart. Every one of those was a careful
+     guard around a client-side stock write.
+
+     0e13db2 and 6daec0b retired that write. The client is no longer an inventory writer, so
+     the wrapper has nothing to snapshot FOR — seller-wiring.js removes it rather than emptying
+     it, precisely so it cannot be refilled. Asserting the old internals here made the suite
+     fail for having got what it wanted, which is the most misleading way a test can fail.
+
+     What is worth guarding now is the ABSENCE. The positive property — that no client-side
+     inventory writer returns — is owned by scripts/gate-inventory-writers.js (with its own
+     meta-test, scripts/test-gate-inventory-writers.js); this block asserts only the local
+     shape, so the two cannot drift into disagreeing about who checks what. */
   {
     const fnStart = sw.indexOf('function _patchCheckout');
-    const patch = sw.slice(fnStart, fnStart + 1400);
-    ck('F', 'the snapshot is still taken BEFORE the original runs',
-       patch.indexOf('cartItems = C.list()') > -1 &&
-       patch.indexOf('cartItems = C.list()') < patch.indexOf('orig.apply(this, a)'),
-       'snapshot@' + patch.indexOf('cartItems = C.list()') + ' orig@' + patch.indexOf('orig.apply(this, a)'));
+    ck('F', '_patchCheckout still exists as a call target', fnStart > -1);
+    /* Brace-matched, NOT a fixed-width window. The old code took 1400 characters because the
+       wrapper was long; now that the body is a single no-op line, any fixed window overruns
+       into the NEXT patch — and seller-wiring.js has five orig.apply call sites, so the
+       overrun found one and reported the wrapper as still present. The window has to follow
+       the function, not a guess about its length. */
+    const open = sw.indexOf('{', fnStart);
+    let depth = 0, end = -1;
+    for (let i = open; i < sw.length; i++) {
+      if (sw[i] === '{') depth++;
+      else if (sw[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+    }
+    ck('F', '...and its body is locatable', end > -1);
+    const patch = sw.slice(fnStart, end);
+    ck('F', '...but it no longer wraps the original',
+       patch.indexOf('orig.apply(this, a)') === -1,
+       'orig@' + patch.indexOf('orig.apply(this, a)'));
+    ck('F', '...and it no longer snapshots the cart for a stock write',
+       patch.indexOf('cartItems = C.list()') === -1,
+       'snapshot@' + patch.indexOf('cartItems = C.list()'));
   }
-  ck('F', 'no service means null, never []', /let cartItems = null/.test(sw));
-  ck('F', 'and that case is reported loudly, not swallowed',
-     /console\.error[\s\S]{0,200}stock was NOT decremented/i.test(sw));
-  ck('F', 'the decrement only runs on a real cart', /cartItems && cartItems\.length/.test(sw));
+  ck('F', 'no client-side stock decrement remains in seller-wiring.js',
+     !/stock was NOT decremented/i.test(sw) && !/_decrementStock\s*\(/.test(sw));
   ck('F', 'no localStorage cart read remains',
      !/localStorage\s*(?:\.\s*getItem\s*\(\s*|\[\s*)["']cart["']/.test(sw));
   ck('F', 'checkout.html loads the service this path depends on',

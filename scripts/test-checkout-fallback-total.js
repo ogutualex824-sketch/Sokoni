@@ -54,7 +54,12 @@ function extract(name) {
   }
   throw new Error(name + ' block not closed');
 }
-const SRC = extract('_ckLineTotal');
+/* _ckLineTotal delegates the quantity decision to _ckQty, which was split out so the
+   order-summary row and the line total read the same number (see the comment above both
+   in checkout.html). Extracting _ckLineTotal alone yields a slice that references an
+   undefined _ckQty and throws on the first assertion — the suite then reports nothing at
+   all, which reads as "not run" rather than "passed". Pull both, in definition order. */
+const SRC = extract('_ckQty') + '\n' + extract('_ckLineTotal');
 const sandbox = { };
 vm.createContext(sandbox);
 vm.runInContext(SRC + '; this.__f = _ckLineTotal;', sandbox);
@@ -240,15 +245,22 @@ const fixedFallback = (cart) => cart.reduce((s, p) => s + lineTotal(p), 0);
       return s.__f;
     }
 
+    /* The effective-quantity decision now lives in _ckQty, so every mutation target below
+       follows it there. The `mutation target present` guard is what caught the move: when
+       the anchors still described the pre-split shape, `SRC.replace` matched nothing, the
+       mutants came back byte-identical to the shipped helper, and G1–G3b failed by
+       reporting the CORRECT answers. A positive control that silently stops mutating is
+       worse than no control — it certifies the assertions bite while testing nothing. */
+
     /* Drop the multiplication — the original defect, reintroduced. */
-    const m1 = mutant('return Number((item && item.price) || 0) * qty;',
+    const m1 = mutant('return Number((item && item.price) || 0) * _ckQty(item);',
                       'return Number((item && item.price) || 0);');
     eq('G1  a mutant that forgets qty reports 250 for three — so A2/A6 really bite',
        m1({ price: 250, qty: 3 }), 250);
 
     /* Multiply twice — the opposite error, which would OVERCHARGE the record. */
-    const m2 = mutant('return Number((item && item.price) || 0) * qty;',
-                      'return Number((item && item.price) || 0) * qty * qty;');
+    const m2 = mutant('return Number((item && item.price) || 0) * _ckQty(item);',
+                      'return Number((item && item.price) || 0) * _ckQty(item) * _ckQty(item);');
     eq('G2  a mutant that multiplies twice reports 2250 — so D5/D6 really bite',
        m2({ price: 250, qty: 3 }), 2250);
 
@@ -256,8 +268,8 @@ const fixedFallback = (cart) => cart.reduce((s, p) => s + lineTotal(p), 0);
        floors the rest — so removing either alone changes nothing. That redundancy is worth
        having, and it means the honest mutant is the realistic simplification that drops
        both at once. */
-    const m3 = mutant('const qty = Math.max(1, Math.round(Number(item && item.qty) || Number(item && item.quantity) || 1));',
-                      'const qty = Number(item && item.qty) || 0;');
+    const m3 = mutant('return Math.max(1, Math.round(Number(item && item.qty) || Number(item && item.quantity) || 1));',
+                      'return Number(item && item.qty) || 0;');
     eq('G3  a mutant with no effective-quantity floor zeroes a qty-0 line — so B really bites',
        m3({ price: 100, qty: 0 }), 0);
     eq('G3b ...and loses the quantity fallback entirely',
