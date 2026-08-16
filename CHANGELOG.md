@@ -1,3 +1,64 @@
+## [2026-08-16] — merchant.html asked for a shop called "main"
+
+A correctly-provisioned merchant could not reach their shop in the merchant workspace. It was **not**
+a claim problem and not an identity-model problem — the chain
+`auth.uid → sellerUid → activeShopId → shops/{activeShopId}` was intact; merchant.html never
+consulted it.
+
+`SokoniBranch.init()` synthesises a branch when its device-local list is empty:
+
+```js
+branches = [{ id: 'main', name: 'Main Branch', biz: biz, isMain: true }];
+```
+
+and merchant.html did `SokoniShell.activeShopId = b.id`. So on any device without a pre-existing
+branch list — a fresh browser, cleared storage, an account that never used POS — **the active shop
+id became the literal string `'main'`**. Every module then queried `products where shopId == 'main'`
+and `shops/main`, neither of which exists, and the account looked broken. It would have presented as
+intermittent and device-specific, because a device that *had* used POS carried real branch ids.
+
+**The shop is a fact in Firestore; the branch is a device preference.** The shop is now resolved
+canonically, each candidate confirmed by reading the document:
+
+```
+users/{uid}.activeShopId  → verified against shops/{id}
+       ↓ (absent or unverifiable)
+shops/{uid}               → the marketplace shop the merchant owns
+       ↓
+sellers/{uid}             → registry-only merchants
+       ↓
+null + a stated reason    → the workspace says "no shop yet"
+```
+
+This is not a fallback from `shopId` to `sellerUid`: the uid is used to **look up** a shop, and the
+shop document's own id is what is returned. With no document, the answer is `null` — never an
+invented id. A branch placeholder (`main`, `default`, empty) is rejected outright, including when
+declared in `users.activeShopId`. `SokoniBranch` keeps its real job: choosing a branch *within* the
+resolved shop (`SokoniShell.activeBranchId`).
+
+**No claim was granted and none is consulted** — the suite asserts the shop-access path never reads
+a custom claim. KASS's missing `seller` claim remains an open item for the separate backfill
+decision; it is not what blocked shop access.
+
+**Files:** `sokoni-merchant-data.js` (canonical `resolveShopId`, placeholder rejection),
+`merchant.html` (loads the data layer; resolves at boot), `scripts/test-merchant-shop-access.js`
+(new). **Database/API/Rules:** unchanged. **Breaking:** none. **Deployment:** Hosting only, when
+authorized. Not deployed.
+
+**Verification:** `node scripts/test-merchant-shop-access.js` — **34/0** on `SELLER_A ≠ SHOP_B`, with
+KASS as a control that resolves by the same rules and no bypass. Proven: `'main'` is refused and no
+query can be built from it; a declared shop that does not exist is discarded in favour of the owned
+one; a declared `'main'` is refused even if `shops/main` existed; with no documents at all the uid is
+**not** returned as a shop id, and every candidate was actually read. Three mutations caught —
+accepting `'main'` again, returning the uid without reading a shop, and trusting a declared shop
+without confirming it exists.
+
+**Navigation preserved, and proven so:** all **30** merchant routes still registered, the contract
+still validates, the sidebar still renders from the contract rather than a private list, and POS and
+Plan remain reachable. `scripts/test-merchant-routes.js` **64/0** and the runtime gate
+`scripts/test-merchant-route-gate.js` **138/0**, which mounts native, page, seller and pos routes at
+real device viewports (iPhone SE included). Nothing was removed.
+
 ## [2026-08-16] — 2D-1B: one authority for a stock correction, and it never touches `sold`
 
 Two things change `products.stock`, and they mean different things:

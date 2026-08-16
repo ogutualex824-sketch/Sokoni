@@ -55,11 +55,63 @@
     var uid = o.uid || null;
     var shopId = o.activeShopId != null && o.activeShopId !== '' ? String(o.activeShopId) : null;
     if (!uid) return { ok: false, reason: 'not_signed_in', sellerUid: null, shopId: null };
+    /* A branch placeholder is not a shop. Accepting 'main' here is what made a
+       correctly-provisioned merchant look like a broken account. */
+    if (shopId && isPlaceholderShopId(shopId)) {
+      return { ok: false, reason: 'placeholder_shop_id', sellerUid: String(uid), shopId: null, rejected: shopId };
+    }
     if (!shopId) {
       /* Deliberately NOT `shopId = uid`. See the header. */
       return { ok: false, reason: 'no_active_shop', sellerUid: String(uid), shopId: null };
     }
     return { ok: true, sellerUid: String(uid), shopId: shopId, source: o.source || 'active_shop' };
+  }
+
+  /* Shop ids that are not shop ids. `SokoniBranch.init()` synthesises
+     `{id:'main'}` when its device-local branch list is empty, and merchant.html
+     assigned that straight to `SokoniShell.activeShopId` — so on any fresh
+     device the workspace asked for `products where shopId == 'main'` and
+     `shops/main`, got nothing, and looked like a broken account. A branch
+     placeholder must never be mistaken for a canonical shop. */
+  var NOT_A_SHOP_ID = ['main', 'default', 'branch', 'null', 'undefined', ''];
+  function isPlaceholderShopId(id) {
+    return NOT_A_SHOP_ID.indexOf(String(id == null ? '' : id).trim().toLowerCase()) !== -1;
+  }
+
+  /* ── Canonical shop resolution ────────────────────────────────────────────
+     The shop is a FACT IN FIRESTORE, not a device preference. Order:
+
+       1. users/{uid}.activeShopId  — an explicit choice, verified to exist
+       2. shops/{uid}               — the marketplace shop a merchant owns
+       3. sellers/{uid}             — registry-only merchants (pre-shops)
+
+     Every candidate is CONFIRMED by reading the document; a shop id is only
+     returned when its document exists. That is why this is not "falling back to
+     the uid": the uid is used to LOOK UP a shop, and the shop's own document id
+     is what gets returned. If no document exists, the answer is null — the
+     workspace then says "no shop yet" instead of querying a fiction.
+
+     `db` adapter: { getDoc(collection, id) -> data|null }. */
+  async function resolveShopId(o) {
+    var uid = o && o.uid;
+    var db = o && o.db;
+    if (!uid) return { shopId: null, source: 'not_signed_in' };
+    if (!db) throw new Error('merchant data: a db adapter is required to resolve the shop');
+
+    var user = await db.getDoc('users', String(uid));
+    var declared = user && user.activeShopId ? String(user.activeShopId) : null;
+    if (declared && !isPlaceholderShopId(declared)) {
+      var declaredShop = await db.getDoc('shops', declared);
+      if (declaredShop) return { shopId: declared, source: 'users.activeShopId', shop: declaredShop };
+    }
+
+    var own = await db.getDoc('shops', String(uid));
+    if (own) return { shopId: String(uid), source: 'shops/{uid}', shop: own };
+
+    var seller = await db.getDoc('sellers', String(uid));
+    if (seller) return { shopId: String(uid), source: 'sellers/{uid}', shop: seller };
+
+    return { shopId: null, source: 'no_shop' };
   }
 
   /* ── Products ─────────────────────────────────────────────────────────────
@@ -199,6 +251,8 @@
     SCOPE_FIELD: SCOPE_FIELD,
     SALE_CALLABLE: SALE_CALLABLE,
     resolveScope: resolveScope,
+    resolveShopId: resolveShopId,
+    isPlaceholderShopId: isPlaceholderShopId,
     productQuery: productQuery,
     listProducts: listProducts,
     assertInScope: assertInScope,

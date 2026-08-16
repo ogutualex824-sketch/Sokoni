@@ -462,6 +462,9 @@
      projections of this file; none of them may hold a private list. Must load
      BEFORE the shell script, which reads it at definition time. -->
 <script src="sokoni-merchant-routes.js"></script>
+<!-- MERCHANT DATA LAYER — canonical shop resolution + product scope + the sale
+     path. Loads before the shell script, which resolves the shop at boot. -->
+<script src="sokoni-merchant-data.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -1922,13 +1925,71 @@
     var brandBtn = document.getElementById('mbrand');
     var brandName = document.getElementById('mbrand-name');
     function _cur () { try { return (window.SokoniBranch && SokoniBranch.getCurrent && SokoniBranch.getCurrent()) || null; } catch (_) { return null; } }
+    /* The SHOP is a fact in Firestore; the BRANCH is a device preference.
+       SokoniBranch.init() synthesises {id:'main'} when its local list is empty,
+       and assigning that to activeShopId made a correctly-provisioned merchant
+       look like a broken account: every module then queried
+       `products where shopId == 'main'` and `shops/main`, which do not exist.
+       The shop is now resolved canonically (users.activeShopId → shops/{uid} →
+       sellers/{uid}, each confirmed by reading the document) and SokoniBranch
+       keeps its real job: choosing a branch WITHIN that shop. */
     function _applyShop (b) {
       b = b || _cur();
-      window.SokoniShell.activeShopId = b ? b.id : null;
-      window.SokoniShell.activeShopName = b ? b.name : null;
+      var branchId = b ? b.id : null;
+      window.SokoniShell.activeBranchId = branchId;
+      window.SokoniShell.activeBranchName = b ? b.name : null;
+
+      var MD = window.SokoniMerchantData;
+      var placeholder = MD && MD.isPlaceholderShopId(branchId);
+
+      /* Until the canonical resolve returns, only a non-placeholder branch id
+         may stand in — never 'main'. */
+      if (!window.SokoniShell.activeShopId && branchId && !placeholder) {
+        window.SokoniShell.activeShopId = branchId;
+      }
       if (brandName && b && b.name) brandName.textContent = b.name;
-      try { localStorage.setItem('activeShopId', b ? b.id : ''); } catch (_) {}
+      try { localStorage.setItem('activeShopId', window.SokoniShell.activeShopId || ''); } catch (_) {}
     }
+
+    /* Canonical resolve — authoritative, and it overwrites whatever the branch
+       switcher guessed. Runs once auth is known; failure leaves activeShopId
+       null so modules render "no shop yet" rather than querying a fiction. */
+    async function _resolveCanonicalShop (uid) {
+      var MD = window.SokoniMerchantData;
+      if (!MD || !uid || !window.firebaseDB) return;
+      try {
+        var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var adapter = {
+          getDoc: async function (coll, id) {
+            if (!id) return null;
+            var s = await fs.getDoc(fs.doc(window.firebaseDB, coll, String(id)));
+            return s.exists() ? s.data() : null;
+          }
+        };
+        var res = await MD.resolveShopId({ uid: uid, db: adapter });
+        window.SokoniShell.activeShopId = res.shopId;
+        window.SokoniShell.activeShopSource = res.source;
+        try { localStorage.setItem('activeShopId', res.shopId || ''); } catch (_) {}
+        if (res.shop && res.shop.name && brandName) brandName.textContent = res.shop.name;
+        try {
+          document.dispatchEvent(new CustomEvent('sokoni:shop-resolved', {
+            detail: { shopId: res.shopId, source: res.source }
+          }));
+        } catch (_) {}
+        if (!res.shopId) console.warn('[merchant] no canonical shop for this account (' + res.source + ')');
+      } catch (e) {
+        console.warn('[merchant] canonical shop resolve failed:', e && e.message);
+      }
+    }
+    try {
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+        _resolveCanonicalShop(window.firebaseAuth.currentUser.uid);
+      }
+      document.addEventListener('sokoniAuthReady', function (e) {
+        var uid = e && e.detail && e.detail.uid;
+        if (uid) _resolveCanonicalShop(uid);
+      });
+    } catch (_) {}
     if (brandBtn) brandBtn.onclick = function () { try { if (window.SokoniBranch) SokoniBranch.openPicker(); } catch (_) {} };
     /* Initial context (once SokoniBranch has inited). */
     _applyShop();
