@@ -1,3 +1,73 @@
+## [2026-08-16] — 2A: a merchant can finally file an application (and that is all it does)
+
+The census found the marketplace merchant lifecycle had no first step: nothing wrote a seller
+application anywhere. `onboarding-seller.html` collected four steps of business detail, wrote one
+`addDoc` to `onboardingCompleted` — a collection nothing reads — and then told the merchant
+*"You're ready to sell! Your seller profile is live on SOKONI"* with a button to the dashboard. No
+application, no review, no role, no shop.
+
+**One primitive — `sokoni-merchant-application.js` (new).**
+
+```
+authenticated user
+     ↓
+applications/{uid}--merchant     deterministic — cannot fork a second application
+     ↓
+type: 'seller'                   intake vocabulary; the SERVER resolves the role
+     ↓
+status: 'pending_review'         canonStatus() → pending → the trigger grants nothing
+     ↓
+ADMIN decision                   ← 2B owns everything past here
+```
+
+`role` is never written: `resolveRole()` owns it server-side, and `firestore.rules`
+`noAdminFields()` would reject it anyway. Caller-supplied fields pass an **allowlist** (`name`,
+`category`, `phone`, delivery settings…) and then a forbidden-key sweep, so no call site can smuggle
+`status: 'approved'`, `decidedBy`, `approvedBy`, `role` or a claim into a submission. Status is not
+an input — it is set by the primitive.
+
+**Identity is two identifiers, not one.** `sellerUid` is the account; `shopId` is the shop, resolved
+from the canonical active shop and recorded with its provenance (`active_shop` / `none_yet`). When
+no shop exists yet `shopId` is **null**, never back-filled from the uid — a shop id that is silently
+the uid is how a single-shop assumption becomes permanent, and the shop is 2B's to establish.
+
+**Re-submission is a documented state machine**, since the id is deterministic:
+
+| existing | action |
+|---|---|
+| none | create → `pending_review` |
+| pending | update in place, stays `pending_review` (profile edits welcome) |
+| rejected | resubmit → `pending_review`, `resubmitCount++`, prior reason retained |
+| approved | **refused** — an approved merchant does not re-apply, and a merge would reset a live merchant to pending |
+| suspended | **refused** — a suspended merchant must not clear their own suspension |
+
+Both refusals are returned to the caller and surfaced in the UI, never swallowed.
+
+**The wizard no longer claims a merchant is live.** The modal now reads *"Application submitted —
+pending review"* and offers no live-selling controls; a failed submit says so and keeps the answers
+on the device instead of showing a success screen over nothing.
+
+**Files:** `sokoni-merchant-application.js` (new), `onboarding-seller.html`,
+`scripts/test-merchant-application.js` (new). **Database:** first writer of
+`applications/{uid}--merchant`. **Rules:** unchanged — the document satisfies `claimsOwner()` (it
+carries `uid`) and `noAdminFields()` (it carries none). **API:** unchanged — no new callable.
+**Breaking:** none. **Deployment:** Hosting only, when authorized. Not deployed.
+
+**Verification:** `node scripts/test-merchant-application.js` — **35/0**, on a deliberately
+non-degenerate fixture (`SELLER_A` ≠ `SHOP_B`; a fixture where the uid doubles as the shop id would
+pass even if the code substituted one for the other). KASS appears once, as a control, never as the
+proof. The suite drives the real primitive against an in-memory Firestore, and C8/C9 feed the
+resulting document to the **real `applicationLifecycle` trigger**: a `pending_review` application
+grants nothing, and an applicant flipping their own status to `approved` is still refused by the
+`bc9bf4c` guard. Five mutations are each caught: `type` away from seller, `status` away from
+`pending_review`, a non-deterministic id (duplicate applications), `shopId` falling back to the uid,
+and removal of the forbidden-field filter.
+
+Page verified in a real browser: module loaded, `docId('SELLER_A')` → `SELLER_A--merchant`, status
+`pending_review`, zero console errors. (Note for future runs: the browser harness's `--eval` and
+`page.evaluate` execute in an **isolated world** — page globals read as `undefined` there. Probing
+through an injected `<script>` is what reads the real main world.)
+
 ## [2026-08-16] — SECURITY: an application could approve itself
 
 Found while starting the merchant application flow (stage 2A), whose stated invariant is

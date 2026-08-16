@@ -292,20 +292,28 @@
     </div>
   </div>
 
-  <!-- ══════════════ Success Modal ══════════════ -->
+  <!-- ══════════════ Submitted Modal ══════════════
+       This used to read "You're ready to sell! Your seller profile is live on
+       SOKONI" and offer a dashboard button — over a submission that granted
+       nothing. Completing this form files an APPLICATION; a merchant becomes
+       live when an administrator approves it, and not one moment earlier. The
+       modal states the real state and offers no live-selling controls. -->
   <div class="wiz-modal-bg" id="successModal" style="display:none;">
     <div class="wiz-modal">
-      <div class="modal-icon">🎉</div>
-      <h2>You're ready to sell!</h2>
-      <p>Your seller profile is live on SOKONI. Start adding products and reach thousands of buyers across Kenya.</p>
+      <div class="modal-icon">📋</div>
+      <h2>Application submitted</h2>
+      <p id="wizSubmitMsg">Your merchant application is <strong>pending review</strong>. Our team checks new merchants before a shop goes live — we'll notify you by SMS as soon as it's decided.</p>
       <div class="wiz-modal-btns">
-        <button class="wiz-modal-btn primary" onclick="window.location.href='seller-success.html'">Go to Seller Dashboard →</button>
-        <button class="wiz-modal-btn ghost" onclick="window.location.href='seller.html?tab=products'">Add Products Now</button>
+        <button class="wiz-modal-btn primary" onclick="window.location.href='profile.html'">Back to my account</button>
+        <button class="wiz-modal-btn ghost" onclick="window.location.href='index.html'">Browse SOKONI</button>
       </div>
     </div>
   </div>
 
   <script type="module" src="firebase.js"></script>
+  <!-- The ONE merchant-application primitive. Loaded without `defer` so it is
+       defined before step4Complete() can run. -->
+  <script src="sokoni-merchant-application.js"></script>
   <script src="sokoni-trust.js" defer></script>
   <script src="kass-widget.js" defer></script>
   <script src="scroll-top.js" defer></script>
@@ -473,6 +481,78 @@
           });
         }
       } catch(err){ console.warn('[SellerOnboarding]', err); }
+
+      /* ── File the merchant application ────────────────────────────────────
+         The wizard used to write only `onboardingCompleted` — a log nothing
+         reads — and then tell the merchant they were live. The canonical
+         request is applications/{uid}--merchant, submitted through the ONE
+         primitive (sokoni-merchant-application.js) so the document shape, the
+         forbidden-field filter and the idempotency rule live in one place.
+         This grants nothing: an admin decision does that. */
+      var submitted = null, submitError = null;
+      try {
+        var db2   = window.firebaseDB;
+        var auth2 = window.firebaseAuth;
+        if (!db2 || !auth2 || !auth2.currentUser) throw new Error('Please sign in to submit your application.');
+        if (!window.SokoniMerchantApplication) throw new Error('Application module unavailable — reload and try again.');
+
+        var fs2 = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var adapter = {
+          get: async function (coll, id) {
+            var snap = await fs2.getDoc(fs2.doc(db2, coll, id));
+            return snap.exists() ? snap.data() : null;
+          },
+          set: async function (coll, id, data, opts) {
+            await fs2.setDoc(fs2.doc(db2, coll, id), data, opts || { merge: true });
+          }
+        };
+
+        /* Canonical shop identity. `shopId` is NOT the uid — an applicant with
+           no shop yet submits with a stated absence, and 2B (approval) is what
+           establishes the canonical shop. */
+        var shopId = null, shopIdSource = 'none_yet';
+        try {
+          var active = (window.SokoniShell && window.SokoniShell.activeShopId) || window._currentBranchId || null;
+          if (active) { shopId = active; shopIdSource = 'active_shop'; }
+        } catch (_) {}
+
+        submitted = await window.SokoniMerchantApplication.submit({
+          uid: auth2.currentUser.uid,
+          shopId: shopId,
+          shopIdSource: shopIdSource,
+          source: 'onboarding-seller',
+          profile: {
+            name:            sellerData.storeName || sellerData.businessName || '',
+            businessName:    sellerData.businessName || sellerData.storeName || '',
+            category:        sellerData.category || '',
+            description:     sellerData.description || sellerData.storeTagline || '',
+            phone:           sellerData.phone || '',
+            email:           sellerData.email || (auth2.currentUser && auth2.currentUser.email) || '',
+            location:        sellerData.location || sellerData.county || '',
+            county:          sellerData.county || '',
+            deliveryMethods: sellerData.deliveryMethods || [],
+            deliveryZones:   sellerData.deliveryZones || [],
+            stdRate:         sellerData.stdRate || '',
+            exprRate:        sellerData.exprRate || ''
+          }
+        });
+      } catch (err) {
+        submitError = (err && err.message) || 'Could not submit your application.';
+        console.warn('[SellerOnboarding] application submit failed:', submitError);
+      }
+
+      /* Never announce a submission that did not happen. */
+      var msgEl = document.getElementById('wizSubmitMsg');
+      if (submitError) {
+        if (msgEl) msgEl.innerHTML = '<strong>Not submitted.</strong> ' + submitError
+          + ' Your answers are saved on this device — reopen this page to try again.';
+      } else if (submitted && !submitted.ok) {
+        if (msgEl) msgEl.innerHTML = submitted.message || 'This account already has a merchant application.';
+      } else if (submitted && submitted.action === 'update') {
+        if (msgEl) msgEl.innerHTML = 'Your existing application was <strong>updated</strong> and remains <strong>pending review</strong>. We\'ll notify you by SMS as soon as it\'s decided.';
+      } else if (submitted && submitted.action === 'resubmit') {
+        if (msgEl) msgEl.innerHTML = 'Your application has been <strong>resubmitted</strong> and is <strong>pending review</strong> again. We\'ll notify you by SMS as soon as it\'s decided.';
+      }
 
       document.getElementById('successModal').style.display = 'flex';
     }
