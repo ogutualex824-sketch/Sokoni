@@ -17,7 +17,7 @@
 | Store | ✅ done | `51780ed` |
 | Tax | ✅ done — native, account-level | `pending` |
 | Devices / POS | census done — **fleet BLOCKED**, local peripherals buildable | `pending` |
-| Fulfilment / Delivery | **7/7 findings closed in code**; regression PASS ([[FULFILMENT_REGRESSION_b8b0428]]); awaiting deploy + A7 | `b8b0428` |
+| Fulfilment / Delivery | **7/7 closed in code**; regression PASS; packaged as `release/delivery-security` @ `63f6a48` and **handed to the rc/combined release owner** ([[HANDOFF_delivery-security-63f6a48]]) — **NOT DEPLOYED** | `c40d882` |
 | **Devices — security hardening** | ← **next** (the 7 device findings below) | — |
 | Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
@@ -67,6 +67,27 @@ assigned): a plaintext `deliveryPin` on the order and a plaintext `proofPin` on
 cleared by `scripts/sweep-order-delivery-pins.js --apply`, which has been **reported, not run** —
 and which must run **after** deployment, because migrating the PIN before `getMyDeliveryPin` is
 live would leave that buyer unable to read their own code from either location.
+
+### Why it is not deployed, and who owns that
+
+Production tracks **`rc/combined`**, not this consolidation branch. The two have diverged
+(54 commits live-only, 41 here), so deploying from here would revert 110 files including three
+settlement engines. `rc/combined` also has its own single-SHA combined release gate
+(`docs/LAUNCH_TODO.md`: *"No deployment until the combined gate passes against one exact SHA"*)
+and 23 unreleased commits of its own.
+
+The security work is therefore packaged as **`release/delivery-security` @ `63f6a48`**, branched
+from the `rc/combined` tip so it *contains* live, regression-verified, and **frozen**. It is handed
+to the `rc/combined` release owner rather than deployed. A ready artifact is not deploy
+authorisation. See [[HANDOFF_delivery-security-63f6a48]].
+
+**Recorded so it is not misattributed:** `test-payment-authority` fails on `rc/combined` with
+`ReferenceError: _availability is not defined`, verified pre-existing at `352f22e` before the
+delivery cherry-picks. Not caused by this work and not fixed by it.
+
+**Still open everywhere except the frozen release branch:** `guard-no-rollback.js` permits diverged
+trees. It printed *"not behind live — allowing deploy"* for the tree that would have reverted those
+110 files. `63f6a48` fixes it; no other branch has that fix yet.
 
 **Fulfilment is not one screen either.** `fulfilmentScan` authorises correctly and projects
 correctly, `_sellerView` already omits commission and settlement, and

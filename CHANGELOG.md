@@ -1,3 +1,72 @@
+## [2026-08-16] — Delivery security packaged for handoff, NOT deployed
+
+The preflight for the staged deployment found that `c40d882` was not deployable, and the reason
+matters more than the fix.
+
+**Production tracks `rc/combined`, not this branch.** Live is `8290102`; this branch forked at
+`3dcf572`. 54 commits live-only, 41 here. Because Hosting publishes the working **tree**
+(`"public": "."`), deploying from here would have reverted **110 files** — including
+`settlement-engine.js`, `settlement-executor.js` and `order-settlement.js`.
+
+**The no-rollback guard would not have caught it.** It ran and printed *"local c40d882 is not
+behind live 8290102 — allowing deploy"*. Its own header documented the gap: *"otherwise (ahead /
+diverged / live commit unknown here) → allowed."* A diverged branch is neither behind nor ahead.
+
+**`rc/combined` has its own release gate.** `docs/LAUNCH_TODO.md`: *"No deployment until the
+combined gate passes against one exact SHA"*, with 23 unreleased commits of its own — the
+`pushStock` inventory-authority retirement, the checkout P0 fix, review-fabrication removal, age
+gating. Deploying the security patch from a branch containing all of that would have released
+another workstream's candidate without its gate: trading one P0 for an uncontrolled multi-stream
+deployment.
+
+### What was built instead
+
+`release/delivery-security` @ **`63f6a48`**, in an isolated worktree so the main tree's 24 dirty
+files (another process's work) were never touched. Branched from the `rc/combined` tip `352f22e`,
+so it **contains** live and has no rollback surface. Four delivery commits cherry-picked, plus the
+guard fix.
+
+**`rc/combined` had already fixed `driver.html` more thoroughly than this work did** — it removed
+the client-side `proofPin` comparison *and* rewired to `completeDeliveryWithPin`, validates the PIN
+format, resolves the `deliveryRef`, and cites the same live order `SKN0SWYXPD`. Their version was
+kept; the duplicate was dropped. Finding someone else's better fix and deleting your own is the
+correct outcome of a merge, not a loss.
+
+Regression on the release branch: delivery-authorization 36/0, fulfilment-scan **69/0**,
+sequence 33/0, tracking-rules 22/0, pin-unreachable 65/0, pin-buyer-path 20/0,
+dispatch-authority 45/0, rider-navigation 24/0, merchant-routes 64/0, syntax and payout gates pass,
+`firestore.rules` byte-identical to live.
+
+### The guard, fixed and proven both ways
+
+`63f6a48` makes `guard-no-rollback.js` require that the live commit is **contained** in the tree,
+rather than merely that the tree is not behind. Diverged tree → exit **1**; release branch → exit
+**0**. The old guard returns 0 on the first, which is the whole point.
+
+**That fix exists only on the frozen release branch.** Every other branch, `rc/combined` included,
+still carries the permissive guard.
+
+### Recorded so it is not misattributed
+
+`test-payment-authority` fails on `rc/combined` with `ReferenceError: _availability is not
+defined`. Verified pre-existing at `352f22e`, before the cherry-picks. Not caused by the delivery
+work and not fixed by it. `test-order-advance-authority` does not exist on `rc/combined` — it
+belongs to the consolidation track and is correctly out of scope.
+
+### Not done, deliberately
+
+Nothing was deployed. The historical PIN sweep remains reported, not applied, and is sequenced
+after deployment on purpose. `release/delivery-security` is frozen and will not be modified unless
+the combined workstream asks.
+
+Production still carries both P0s: the checkout defect and the unauthenticated
+`availableDeliveries`. The fix for the second exists and has changed nothing an attacker can
+observe, because it is not live.
+
+**Files:** `docs/HANDOFF_delivery-security-63f6a48.md` (new), `docs/MERCHANT_2D2_QUEUE.md`.
+**Database / API / security changes:** none on this branch — the security changes live on
+`release/delivery-security`.
+**Deployment:** none.
 ## [2026-08-16] — Full fulfilment regression at `b8b0428`: PASS
 
 Gate artifact: `docs/FULFILMENT_REGRESSION_b8b0428.md`. Baseline `1753b44`. **Nothing deployed.**
