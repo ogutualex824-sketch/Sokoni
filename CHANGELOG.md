@@ -1,3 +1,90 @@
+## [2026-08-16] — Receipts / Tax authority census (Stage 1, read-only)
+
+No UI, no repairs, no backfill, no deployment. `scripts/census-receipts-tax-authority.js` +
+`docs/MERCHANT_RECEIPTS_TAX_AUTHORITY.md`. Twenty-four capabilities, every one read from its body.
+
+### Receipts and Tax are not one screen
+
+They were queued as a pair. The census separates them.
+
+**Tax is ready to build and needs nothing first.** `etimsProfiles/{auth.uid}` uses the Firebase uid
+*directly as the document id* — no `sellers/{id}`, no `merchants/{id}`, no claim, no client-supplied
+identifier anywhere in the merchant-facing eTIMS path. Every callable derives `sellerUid` from
+`req.auth.uid` and queries by it (`etimsGetSellerStats`, `etimsBulkGenerate`) or checks it against
+the resource (`etimsGenerateInvoice` → `order.sellerUid`, `etimsResubmitInvoice` → `inv.sellerUid`).
+This is the cleanest identity handling found in any census in this track. There is nothing to
+converge and no legacy `merchants/{merchantId}` model to resurrect — the eTIMS path does not need
+one and must not be given one.
+
+The consequence to record is a limitation, not a defect: tax identity has **no shop dimension**. A
+seller with two shops has one KRA PIN, one invoice prefix, one invoice sequence. That is very likely
+correct in Kenyan law — the PIN belongs to the taxpayer, not the outlet — but a Tax surface must be
+labelled **account-level** or a two-shop seller will read it as a bug.
+
+`posGetEtimsExport` is worth citing as the pattern for accepting a client-supplied scope id: it takes
+`sellerId` from the query string and then refuses unless `keyDoc.sellerId === sellerId`. Accepted,
+then proven. `etimsDownloadReceipt` does the same over a Bearer token — seller, buyer, or admin, else
+403.
+
+**Receipts is blocked**, and not on polish.
+
+### There is no merchant receipt-list authority
+
+The `posReceipts` rule gates client reads on `resource.data.sellerId == request.auth.uid`. The census
+extracts the literal field set each writer emits rather than asserting it in prose:
+
+| writer | writes `sellerId`? |
+|---|---|
+| `posCompleteCheckout` (POS sale) | no — `merchantId` |
+| `generateTrustReceipt` (SOKONI Pay) | no — `merchantId` |
+| M-Pesa checkout callback (`index.js:7978`) | no — `merchantId` |
+| RECEIPT async job | **yes** |
+
+One of four. The three paths that actually produce merchant receipts all write `merchantId`, so a
+merchant reading its own receipts is denied on every one of them.
+
+This is the **fifth** instance of *rules gating on a field nothing writes* — after
+`shopEmployees.sellerUid`, `disputes.sellerUid`, `posCustomers.sellerId` and
+`minishopAnalytics.ownerUid`. It differs in one way that makes it worse: one writer *does* emit the
+field, so the rule is not visibly dead. It returns a partial list instead of an error.
+
+So the classification is **NEW AUTHORITY REQUIRED**, not *SAFE (rules-scoped)*. The Firestore read is
+genuinely protected — it is just protected against the merchant as well.
+
+### Five findings, recorded and deliberately not fixed here
+
+| finding | severity |
+|---|---|
+| `emailTrustReceipt` — `_assertAuth` and nothing else, then mails any receipt to any address | **high** |
+| `sendPOSReceipt` — the whole receipt is client-composed, delivered to a client-supplied recipient | **high** |
+| `posLogReprint` — uncorroborated `merchantId` into the audit record; any order's counter mutable | medium |
+| `posGetQueueMetrics` — queries `posCheckoutMetrics` by client-supplied `merchantId` | medium |
+| `posReceipts` rule vs writers (above) | medium |
+
+The first two are the same class as the already-fixed `posLookupCustomer` (`9360cbd`) and
+`orderAdvance` (`1d49634`) defects: authenticated was treated as authorised. `emailTrustReceipt`
+discloses merchant name, line items, totals and customer name to whoever asks. `sendPOSReceipt` reads
+nothing back, so it is not disclosure — it is brand spoofing and outbound-messaging abuse.
+
+`verifyTrustReceipt` is classified **PUBLIC BY DESIGN** and is not a finding. A buyer verifying a
+receipt without an account is the point of it. It must not be used as merchant authority.
+
+`finosGenerateReceipt` is self-scoped — `buyerUid`/`generatedBy` come from `auth.uid`, so a caller can
+only mint a receipt attributed to itself — but its amounts are client-supplied, so `receipts/` is not
+a trustworthy financial record and its figures must not be displayed.
+
+### Census tooling
+
+Two negative controls failed on the first run and were the reason the output was not published:
+the brace matcher had latched onto the `{receiptId}` path wildcard instead of the rule body, and
+shorthand keys terminated by `}` rather than `,` were dropped — which would have under-reported
+`merchantId`. Both fixed; the run aborts on control failure.
+
+**Files:** `scripts/census-receipts-tax-authority.js` (new),
+`docs/MERCHANT_RECEIPTS_TAX_AUTHORITY.md` (new), `docs/MERCHANT_2D2_QUEUE.md`.
+**Database changes:** none. **API changes:** none. **Security changes:** none — five findings
+recorded for separate stages. **Breaking changes:** none.
+
 ## [2026-08-16] — Store Stage 2: the storefront surface, on a shopId the server hands over
 
 Native `shop` route. Was `kind:'seller'` — an iframe of `seller.html#store`.

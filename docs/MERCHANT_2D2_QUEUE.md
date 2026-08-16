@@ -14,9 +14,9 @@
 | Disputes | ✅ done | `eaefe47` |
 | Messages | ✅ done | `59b6ffe` |
 | Customers | ✅ done | `50f6e99` |
-| **Store** | ← **next** | — |
-| Receipts | authorization hardening first | — |
-| Tax | authorization hardening first | — |
+| Store | ✅ done | `51780ed` |
+| **Tax** | **ready to build** — census clean, account-level | — |
+| Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
 | Orders | **blocked** — divergent store | — |
 | Flash Sales | **blocked** — divergent store | — |
@@ -31,6 +31,19 @@
 | `_resolveSellerId` trusts `req.data.sellerId` when no claim exists | **open** | — |
 | `posCompleteCheckout` updates `posCustomers/{client-supplied id}` | **open** (frozen sales path) | — |
 | numeric `role` gate inverts for string claims (`marketing-engine`, `b2b-wholesale`) | **open** | — |
+| `followShop` could create `minishopConfig/{arbitrary shopId}` | ✅ fixed | `0e6a1f5` |
+| `emailTrustReceipt` mails any receipt to any address for any signed-in caller | **open** — high | — |
+| `sendPOSReceipt` delivers arbitrary client-composed branded receipts to arbitrary recipients | **open** — high | — |
+| `posLogReprint` accepts an uncorroborated `merchantId`; mutates any order's reprint counter | **open** — medium | — |
+| `posGetQueueMetrics` queries `posCheckoutMetrics` by client-supplied `merchantId` | **open** — medium | — |
+| `posReceipts` rule gates on `sellerId`; 3 of 4 writers emit `merchantId` | **open** — medium | — |
+
+Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]].
+
+**Receipts and Tax are not one screen.** Tax is entirely server-decided (`etimsProfiles/{auth.uid}`
+— the uid *is* the doc id, no client identity anywhere) and can be built now, labelled as an
+**account-level** setting because tax identity has no shop dimension. Receipts has no
+merchant-scoped list authority at all and sits behind the five findings above.
 
 ---
 
