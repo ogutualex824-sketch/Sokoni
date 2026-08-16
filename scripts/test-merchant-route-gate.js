@@ -42,8 +42,20 @@ const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text
    restating a superseded copy of it, and de-duplicated so POS is not walked three times. */
 const BATCH_1 = [...new Set(['dashboard', 'plan', 'products', 'inventory', 'cashier']
   .map((id) => C.resolve(id) || id))];
+/* REQUIRED_EXTRA: routes that --all must walk even though they are not tier:'primary'.
+
+   --all widened to C.primary() only, so every tier:'more' route was invisible to this gate.
+   pos-setup is a production POS surface reached from the Settings row and the nav engine,
+   and the merchant consolidation keeps moving the identity, shop and navigation paths it
+   depends on — so "no gate ever opened it" was the actual risk, not a theoretical one. It is
+   named here rather than promoted to primary, because its tier is a NAVIGATION decision and
+   this is a COVERAGE decision; conflating them would change the merchant UI to satisfy a test.
+
+   Availability of the page itself is asserted in depth by test-pos-setup-availability.js.
+   This entry covers the other half: that the merchant shell can still route to it. */
+const REQUIRED_EXTRA = ['pos-setup'];
 const TARGETS = process.argv.includes('--all')
-  ? C.primary().map(r => r.id)
+  ? [...new Set([...C.primary().map(r => r.id), ...REQUIRED_EXTRA])]
   : BATCH_1;
 
 const VIEWPORTS = [
