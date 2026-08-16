@@ -1,3 +1,57 @@
+## [2026-08-16] — "Start Selling" was skipping the question it exists to ask
+
+The flow is meant to be **Start Selling → `/offer` ("What Are You Offering?") → Products or
+Services**. Seven acquisition CTAs pointed straight at `seller.html` — the seller *dashboard* — so a
+merchant who had not yet said whether they sell products or offer services was dropped into a
+back-office instead of the one page that asks. `sell.html` still pointed at `/offer`, which is why
+the flow worked from one entry point and not the others.
+
+Traced end to end before changing anything: the element (the CTA anchors), the target
+(`seller.html`), the canonical route (`offer.html`, served at `/offer` — `cleanUrls: true`), the
+guard (**none** — `offer.html` imposes no auth gate of its own and does not bounce to login or
+home), and therefore the regression is in the **links**, not the route, the handler or a guard.
+
+| file | CTA | was | now |
+|---|---|---|---|
+| `index.html` | "Become a Seller → Start Selling" | `seller.html` | `offer.html` |
+| `index.html` | footer "➕ Start Selling" | `seller.html` | `offer.html` |
+| `script.js` | empty-catalogue "Start Selling →" | `seller.html` | `offer.html` |
+| `category.js` | empty-category "Start Selling" | `seller.html` | `offer.html` |
+| `sokoni-spotlight.js` | "Become a Seller" card | `seller.html` | `offer.html` |
+| `community.html` | sidebar "Start Selling →" | `seller.html` | `offer.html` |
+| `marketing.html` | "📦 Start Selling Free →" | `seller.html` | `offer.html` |
+
+Scoped CTAs are deliberately unchanged and are listed by the test rather than silently skipped:
+"Start Selling **Products**" (already chose products → `onboarding-seller.html`), `seller-terms.html`,
+`digital-esoko.html` (a separate product), and the POS "Start Selling" buttons (those open the till).
+`offer.html`'s own "Already have a dashboard? Seller ↗ / Provider ↗" is untouched, so an existing
+merchant still has a direct route to their workspace.
+
+Nothing else moved: no new onboarding page, no identity or shop model change, no role claims, no
+App Check, no product or sales logic. `sellerUid → activeShopId` resolution is untouched.
+
+**Files:** `index.html`, `script.js`, `category.js`, `sokoni-spotlight.js`, `community.html`,
+`marketing.html`, `scripts/test-start-selling-route.js` (new). **Database/API/Rules:** unchanged.
+**Breaking:** none. **Deployment:** Hosting only, when authorized. Not deployed.
+
+**Verification.** `node scripts/test-start-selling-route.js` — **22/0**: the destination is the page
+it claims to be (title, both gates, Products → `seller.html`, Services → `provider.html?cat=…`, no
+self-imposed auth redirect, `cleanUrls` on, not Hosting-ignored), every generic CTA resolves to the
+chooser, and five mutations that restore the old destination are each caught (M1–M5). Existing
+suites still green: `test-nav-routes` 12/0, `test-merchant-routes` 64/0, `test-seller-deeplink`
+14/0, `test-navigation` 11 checks, `test-hub-nav` 17 checks, `test-role-authority` 30/0.
+
+Driven in a real browser against a local server: the homepage renders 3 generic CTAs, all
+`offer.html`, plus the product-scoped one; clicking the hero lands on `/offer` with both gates
+present, `Products → seller.html`, `Services → provider.html?cat=cleaning`, and **zero console
+errors** on the destination.
+
+**Found while verifying, NOT changed** (metadata, not navigation): `seo.js:84` and `splash.js:36`
+both read `offer.html` as a *deals* page — the live title is "Special Offers & Promotions in Kenya |
+SOKONI" and a splash reads "Exclusive Offer — Just for You", over a page whose `<h1>` is "What Are
+You Offering?". Two one-line data corrections in lookup tables; flagged for a decision rather than
+folded into a navigation fix.
+
 ## [2026-08-16] — A granted role that the token never carried (Stage 2: role convergence)
 
 Stage 1's bypass audit found two paths that granted the seller role in Firestore and never minted
@@ -99,6 +153,7 @@ unproven from data alone), and the four AMBIGUOUS accounts are self-declared —
 `seller` resolves for display without being elevated). No backfill designed or run — the repair
 differs per class and needs the authorization source proven first. Full report (with uids) was
 written outside the repo.
+
 ## [2026-08-13] â€” SECURITY: the rider was authorizing their own payout
 
 **Status: FIXED and proven.** 36/36. **Release blocker â€” this is the money path.**

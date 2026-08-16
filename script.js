@@ -260,7 +260,7 @@ function _renderCatalogueEmpty(container) {
             <div style="font-size:56px;margin-bottom:16px;">🛍️</div>
             <h2 style="color:white;font-size:22px;margin-bottom:10px;">No products yet</h2>
             <p style="color:rgba(255,255,255,0.4);margin-bottom:22px;">Be the first to sell on Sokoni!</p>
-            <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
+            <a href="offer.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
         </div>`;
 }
 
