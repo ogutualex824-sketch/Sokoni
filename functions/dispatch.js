@@ -12,6 +12,9 @@ const logger                 = require('firebase-functions/logger');
 const admin                  = require('firebase-admin');
 const SokoniDispatch         = require('./sokoni-dispatch');
 const SokoniLogistics        = require('./sokoni-logistics');
+/* ONE delivery actor primitive, shared with fulfilment-scan.js. A second copy
+   of this logic is how `assigned` and `driver_assigned` drifted apart. */
+const _deliveryAuth          = require('./delivery-authority');
 
 const REGION = 'us-central1'; /* match the rest of the platform */
 
@@ -92,6 +95,13 @@ exports.dispatchDelivery = onCall(
     const deliverySnap = await firestore.collection('packageRequests').doc(deliveryRef).get();
     if (!deliverySnap.exists) throw new HttpsError('not-found', 'Delivery not found');
     const delivery = Object.assign({ id: deliveryRef }, deliverySnap.data());
+
+    /* Offering a parcel to riders is the seller's decision — they are handing
+       over custody. This previously accepted any signed-in caller, so anyone
+       could push a stranger's delivery into the rider cascade. */
+    _deliveryAuth.assertMayPerform('dispatch', {
+      uid: request.auth.uid, token: request.auth.token, delivery, HttpsError, deliveryRef,
+    });
 
     if (!['ready_for_pickup', 'pending'].includes(delivery.status)) {
       throw new HttpsError('failed-precondition', `Delivery status is "${delivery.status}", expected ready_for_pickup`);
@@ -370,6 +380,16 @@ exports.handleFailedDelivery = onCall(
     if (!deliverySnap.exists) throw new HttpsError('not-found', 'Delivery not found');
     const delivery = deliverySnap.data();
 
+    /* Authorise BEFORE anything is written. This accepted any signed-in caller,
+       so a stranger could fail someone else's delivery — and the `reassign`
+       branch below nulls the rider AND decrements that rider's activeDeliveries,
+       while `refund` moves the delivery into refund_initiated. A buyer is
+       deliberately not an actor here: a buyer disputing a delivery is a dispute,
+       which has its own path. */
+    _deliveryAuth.assertMayPerform('fail', {
+      uid: request.auth.uid, token: request.auth.token, delivery, HttpsError, deliveryRef,
+    });
+
     const attemptsSnap = await firestore.collection('deliveryAttempts').where('deliveryRef', '==', deliveryRef).get();
     const attemptCount = attemptsSnap.size;
 
@@ -492,7 +512,21 @@ exports.optimizeBatchRoute = onCall(
       deliveryRefs.map(ref => firestore.collection('packageRequests').doc(ref).get()
         .then(s => s.exists ? Object.assign({ id: ref }, s.data()) : null))
     );
-    const valid = deliveries.filter(Boolean);
+    /* Every delivery in the batch is authorised INDIVIDUALLY. This returned
+       dropoff addresses, customer names and phone numbers for whatever refs the
+       caller listed, bounded only by maxBatchSize — a bulk PII read behind
+       `_assertAuth`. Checking one ref, or checking that the caller is "a rider",
+       would not be enough: the question is whether they are the rider on EACH
+       of these. A ref they do not hold is dropped rather than refusing the whole
+       batch, so one stale id cannot break a rider's route mid-shift. */
+    const authorised = deliveries.filter(Boolean).filter((d) =>
+      _deliveryAuth.mayPerform('route', _deliveryAuth.resolveActor({
+        uid: request.auth.uid, token: request.auth.token, delivery: d,
+      })));
+    if (!authorised.length) {
+      throw new HttpsError('permission-denied', 'None of those deliveries are assigned to you.');
+    }
+    const valid = authorised;
     const stops = [];
     valid.forEach(d => {
       stops.push({ id: d.id + '_pickup',  type: 'pickup',  deliveryId: d.id, lat: d.pickupLat || 0,  lng: d.pickupLng || 0,  label: d.pickupAddress || 'Pickup' });

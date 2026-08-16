@@ -380,17 +380,40 @@ function _watchOrder(orderId){
     (o.timeline||[]).forEach(function(e){ if(e&&e.key) stamps[e.key]=e.at; });
     _renderTimeline(stage,stamps);
 
-    /* Secure Delivery Authorization (Phase 0) — show the buyer's delivery PIN until
-       the order is delivered. Plaintext lives on the buyer's own order doc; the rider
-       never sees it. Hidden once delivered/completed. */
+    /* Secure Delivery Authorization — show the buyer's delivery PIN until the order
+       is delivered.
+
+       The plaintext used to sit on this order document, and the comment here used to
+       say "the rider never sees it". That was wrong: firestore.rules grants the
+       assigned rider a full-document read on orders, so the rider read it too. The
+       value now lives in `deliveryPins`, which no client can read, and this screen
+       asks the server for it — getMyDeliveryPin proves buyer identity and refuses the
+       assigned rider. Fetched once per order, never cached to storage. */
     var _pinBox=document.getElementById('pinBox');
     if(_pinBox){
       var _delivered=(stage==='delivered'||stage==='completed');
-      if(o.deliveryPin && !_delivered){
-        document.getElementById('pinCode').textContent=String(o.deliveryPin).split('').join(' ');
+      if(o.deliveryPinIssued && !_delivered){
         _pinBox.style.display='';
+        if(_pinBox.__forOrder!==_orderId){
+          _pinBox.__forOrder=_orderId;
+          document.getElementById('pinCode').textContent='· · · · · ·';
+          (async function(){
+            try{
+              var r=await _cf('getMyDeliveryPin')({orderId:_orderId});
+              var p=r&&r.data&&r.data.pin;
+              /* No PIN is a real answer (none issued yet) — say nothing rather than
+                 render an empty box that looks like a loading failure. */
+              if(p){ document.getElementById('pinCode').textContent=String(p).split('').join(' '); }
+              else { _pinBox.style.display='none'; }
+            }catch(e){
+              document.getElementById('pinCode').textContent='—';
+              console.warn('[track] delivery PIN unavailable:',e&&e.message);
+            }
+          })();
+        }
       } else {
         _pinBox.style.display='none';
+        _pinBox.__forOrder=null;
       }
       /* Wire the fallback once. It calls the server, which re-checks that this caller is
          the buyer — the button is a convenience, never the authorisation. */

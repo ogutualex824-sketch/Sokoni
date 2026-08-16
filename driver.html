@@ -2172,7 +2172,11 @@ function _showDrvDelivery(req) {
         💰 KES ${fee} · ${km}
         ${req.sellerName?'<br>🏪 Seller: '+req.sellerName:''}
         ${req.buyerName ?'<br>👤 Buyer: '+req.buyerName:''}
-        ${req.proofPin  ?'<br>🔑 Delivery PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:3px;">'+req.proofPin+'</strong>':''}
+        <!-- The delivery PIN was rendered here, straight from the availableDeliveries
+             payload. A rider holding the proof code can close a delivery without ever
+             meeting the customer, which is the one thing the code exists to prevent.
+             The server no longer returns it to any rider-facing endpoint. Ask the
+             customer for their code at handover and enter it below. -->
       </div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
         <button onclick="window._drvNavigate('${_navDest}')" style="flex:1 1 110px;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
@@ -3508,6 +3512,18 @@ window.toggleOnline = async function() {
       anchor.parentNode.insertBefore(el, anchor);
       return el;
     }
+    /* A refusal is not "no work". Showing the empty-board copy for a 401/403 would
+       tell an unapproved rider that the platform is quiet, which is false and sends
+       them to support with the wrong question. */
+    function _renderNotice(code){
+      var el = _container(); if (!el) return;
+      el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div>'
+        + '<div style="color:rgba(255,255,255,0.45);font-size:13px;padding:10px 0;line-height:1.6;">'
+        + (code === 403
+            ? 'Your rider account is not approved to take deliveries yet. Once it is approved, available jobs appear here.'
+            : 'Sign in with your rider account to see available deliveries.')
+        + '</div>';
+    }
     function _render(list){
       var el = _container(); if (!el) return;
       if (!window.isOnline) { el.innerHTML = ''; return; }
@@ -3515,9 +3531,13 @@ window.toggleOnline = async function() {
       el.innerHTML = '<div class="section-heading">🛵 Available Deliveries ('+list.length+')</div>' + list.map(function(d){
         var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.88);
         return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
-          + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryAddress||'—').slice(0,40))+'</div></div>'
+          /* Area, not street address — and no buyer name or phone. An unclaimed job
+             is assigned to nobody, so nobody has yet earned the customer's identity.
+             Those details arrive after the claim, through fulfilmentScan's rider
+             projection, which checks the assignment is still active. */
+          + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryArea||'Area not recorded').slice(0,40))+'</div></div>'
           + '<div><div class="dc-fee">KES '+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
-          + '<div class="dc-info">📦 '+((d.items||[]).length)+' item(s) · 📞 '+_esc(d.buyerPhone||'')+'</div>'
+          + '<div class="dc-info">📦 '+(Number(d.itemCount)||0)+' item(s)'+(d.vehicleType?' · '+_esc(d.vehicleType):'')+'</div>'
           + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept — Earn KES '+net+'</button></div></div>';
       }).join('');
       el.querySelectorAll('button[data-del]').forEach(function(b){
@@ -3528,7 +3548,10 @@ window.toggleOnline = async function() {
             if (!_riderUid()) { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Please sign in first.'); return; }
             var fn = firebase.functions().httpsCallable('claimAvailableDelivery');
             var res = await fn({ deliveryRef: id });
-            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; SK.dialog.alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
+            /* No PIN in this message. The server stopped returning proofPin at claim
+               time — a code handed to the rider before they have met the customer
+               proves nothing. They collect it at handover instead. */
+            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; SK.dialog.alert('Delivery accepted. Collect the customer\'s delivery PIN when you hand the parcel over.'); }
             else { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Could not accept — please try again.'); }
           } catch(e){
             /* Full diagnostics to console; friendly, code-aware message to the rider. */
@@ -3548,7 +3571,21 @@ window.toggleOnline = async function() {
     }
     async function _poll(){
       if (!window.isOnline) { var el = document.getElementById('availDispatch'); if (el) el.innerHTML = ''; return; }
-      try { var r = await fetch('/api/available-deliveries?cb='+Date.now(), { cache:'no-store' }); var j = r.ok ? await r.json() : null; if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries); } catch(_){}
+      /* The board now requires a Firebase ID token and an approved rider account.
+         It was public: anyone could read buyer names, phone numbers, delivery
+         addresses and plaintext proof PINs for every pending order. A 401/403 here
+         is a real answer, not a transport error — say so rather than showing an
+         empty board that looks like "no work available". */
+      var tok = null;
+      try { tok = await firebase.auth().currentUser.getIdToken(); } catch(_){}
+      if (!tok) { _render([]); return; }
+      try {
+        var r = await fetch('/api/available-deliveries?cb='+Date.now(),
+          { cache:'no-store', headers:{ Authorization: 'Bearer ' + tok } });
+        if (r.status === 401 || r.status === 403) { _renderNotice(r.status); return; }
+        var j = r.ok ? await r.json() : null;
+        if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries);
+      } catch(_){}
     }
     function _start(){ _poll(); if (_timer) clearInterval(_timer); _timer = setInterval(_poll, POLL); }
     /* Exposed so going online refreshes the job list IMMEDIATELY (no 20s wait). */
