@@ -17,7 +17,8 @@
 | Store | ✅ done | `51780ed` |
 | Tax | ✅ done — native, account-level | `pending` |
 | Devices / POS | census done — **fleet BLOCKED**, local peripherals buildable | `pending` |
-| **Fulfilment / Delivery** | ← **next** — **audit required, see below** | — |
+| Fulfilment / Delivery | census done — **delivery half BLOCKED**, merchant board buildable | `pending` |
+| **Devices — security hardening** | ← **next** (the 7 device findings below) | — |
 | Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
 | Orders | **blocked** — divergent store | — |
@@ -45,8 +46,26 @@
 | `validateDeviceAccess` — staff PIN oracle against a client-supplied `branchId` | **open** — high | — |
 | `posInitiateTerminalPayment`/`posGetTerminalHealth` — auth only, client `terminalId` | **open** — high | — |
 | `posDevices` rule gates on `sellerId`; writers write `merchantId` | **open** — medium | — |
+| **`availableDeliveries` — UNAUTHENTICATED HTTP; buyer name/phone/address + plaintext `proofPin`, up to 80 pending deliveries. VERIFIED LIVE (HTTP 200, no credentials)** | **open** — **CRITICAL, LIVE** | — |
+| Plaintext `deliveryPin` on `orders/{orderId}` readable by the assigned rider via the Firestore rules | **open** — **critical** | — |
+| `claimAvailableDelivery` returns plaintext `proofPin` to the claiming rider | **open** — high | — |
+| `deliveryVerifyShadow` — no assignment check (PIN oracle); burns the lockout counter `completeDeliveryWithPin` reads | **open** — high | — |
+| `handleFailedDelivery` — auth only; fails any delivery and strips its rider | **open** — high | — |
+| `dispatchDelivery` — auth only; starts the cascade on any delivery | **open** — medium | — |
+| `optimizeBatchRoute` — auth only; bulk address disclosure | **open** — medium | — |
 
-Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]]. Devices detail: [[MERCHANT_DEVICES_AUTHORITY]].
+Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]]. Devices detail: [[MERCHANT_DEVICES_AUTHORITY]]. Fulfilment detail: [[MERCHANT_FULFILMENT_AUTHORITY]].
+
+**`availableDeliveries` is not a consolidation defect and must not be queued behind merchant UI
+work.** It is a live, unauthenticated production endpoint publishing customer name, phone number,
+home address and the plaintext delivery proof PIN. It predates this track. Triage it on its own
+timeline.
+
+**Fulfilment is not one screen either.** `fulfilmentScan` authorises correctly and projects
+correctly, `_sellerView` already omits commission and settlement, and
+`fulfilment-lifecycle.resolveStage` already resolves the true stage across five vocabularies — a
+merchant board (prepare / ready / handed to rider) needs no new authority. Anything that assigns,
+reassigns, dispatches, completes, or displays a delivery PIN does.
 
 **Devices is not one screen either.** The *local peripheral* surface (printer connect/test/forget,
 scanner, cash drawer) touches no cross-tenant authority and can be finished now; printer
