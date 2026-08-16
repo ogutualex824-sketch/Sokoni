@@ -258,9 +258,18 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
           orderTotal: Number(order.total || 0), deliveryFee: fee,
           driverNet: Math.round(fee * 0.8), commissionPct: 5,
           vehicleType: 'moto', speed: 'same_day', category: 'general',
-          status: 'awaiting_rider', proofPin: pin,
+          /* proofPin is NOT stored on the packageRequest — the assigned rider can
+             read this document under firestore.rules, so a plaintext PIN here is
+             readable by the party it defends against. It verifies nothing
+             server-side; completeDeliveryWithPin checks deliveryPinHash. Moved to
+             the CF-only deliveryPins doc, which has no rule and is deny-by-default. */
+          status: 'awaiting_rider',
           timeline: [{ status: 'awaiting_rider', at: nowIso, by: 'merchant_ready' }],
           source: 'merchant_ready', createdAt: now,
+        }, { merge: true });
+        await db.doc(`deliveryPins/${orderId}`).set({
+          orderId, deliveryRef: delId, proofPin: pin, buyerUid,
+          issuedAt: now,
         }, { merge: true });
         await ref.update({ dispatchStatus: 'awaiting_rider', deliveryRef: delId });
         try { await db.doc(`orders/${orderId}`).set({ status: 'awaiting_rider', deliveryRef: delId, readyAt: now, updatedAt: now }, { merge: true }); } catch (_) {}

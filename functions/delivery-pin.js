@@ -6,8 +6,17 @@
        live claimAvailableDelivery accept function is NOT modified),
      • stores a keyed HMAC HASH on the packageRequest (safe to expose — a 6-digit
        PIN is only non-brute-forceable because the server HMAC key is secret),
-     • delivers the PLAINTEXT PIN to the BUYER only (on their order doc; the rider
-       reads deliveries via CF endpoints, not the order doc),
+     • stores the PLAINTEXT PIN in `deliveryPins/{orderId}`, which has NO rule and
+       is therefore deny-by-default — no client reads it, the buyer obtains it only
+       through getMyDeliveryPin, which proves buyer identity and refuses the rider.
+
+       This line used to read "delivers the PLAINTEXT PIN to the BUYER only (on their
+       order doc; the rider reads deliveries via CF endpoints, not the order doc)".
+       That was wrong in one word — ONLY. The CF endpoints and their projections were
+       real, but firestore.rules grants `assignedDriverUid` a FULL-DOCUMENT read on
+       orders, and Firestore cannot project fields on read. The rider could read the
+       plaintext out of the order it was written to. Fixed by moving the secret off
+       the document rather than by adding another projection in front of it.
      • records every verification attempt to `deliveryAuditLog`,
      • tracks `deliveryVerificationStatus`.
    It DOES NOT gate delivery completion or any payout. Escrow release, wallet
@@ -38,6 +47,13 @@ function _hash(deliveryRef, pin) {
   let key = "sokoni-delivery-pin-fallback";
   try { key = SOKONI_HMAC_KEY.value() || key; } catch (_) {}
   return crypto.createHmac("sha256", key).update(String(deliveryRef) + "|" + String(pin)).digest("hex");
+}
+
+/* The buyer, spelled every way the delivery documents spell it. */
+const BUYER_FIELDS = ["buyerUid", "buyerId", "userId", "uid", "customerUid"];
+function buyerUidOf(d) {
+  for (const f of BUYER_FIELDS) if (d && d[f]) return String(d[f]);
+  return null;
 }
 
 function _audit(entry) {
@@ -92,11 +108,44 @@ exports.deliveryPinOnAccept = onDocumentUpdated(
         deliveryVerifyAttempts:   0,
       }, { merge: true });
 
-      /* plaintext PIN → the BUYER's order doc (buyer-readable; riders read
-         deliveries via CF endpoints, not orders). This is the buyer's display copy. */
+      /* ── The plaintext PIN does NOT go on the order document ──────────────
+         It used to. The reasoning was "riders read deliveries via CF endpoints,
+         not orders" — and the endpoints and their projections are real. What
+         failed was the word ONLY: firestore.rules grants a FULL-DOCUMENT read
+         on orders to `assignedDriverUid`, and claimAvailableDelivery sets that
+         field to the rider's uid in the same transaction that produces the
+         `driver_accepted` transition this trigger fires on. So the rider could
+         read the plaintext PIN out of the order the moment it was issued —
+         the party the PIN exists to defend against.
+
+         Firestore has no field-level read control, so no projection can fix a
+         document the rider is entitled to read. The secret therefore moves off
+         that document entirely.
+
+         `deliveryPins` has NO rule in firestore.rules and there is no
+         permissive catch-all, so it is deny-by-default: unreadable by every
+         client including the buyer, and reachable only through the Admin SDK.
+         The buyer gets it from getMyDeliveryPin, which proves buyer identity
+         first. That is strictly stronger than a buyer-readable document AND
+         costs zero rules bytes, which matters — the compiled ruleset has ~72
+         bytes of headroom. */
       if (orderId) {
+        await db.collection("deliveryPins").doc(String(orderId)).set({
+          orderId:    String(orderId),
+          deliveryRef: pkgId,
+          pin,                                  /* CF-only; never client-readable */
+          buyerUid:   buyerUidOf(after),
+          issuedAt:   admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        /* The order keeps only the fact that a PIN exists, so track.html can
+           show the right state without the value. Any plaintext left on the
+           document by the previous implementation is removed here as the order
+           passes through — see scripts/sweep-order-delivery-pins.js for the
+           historical records this trigger will never touch again. */
         await db.collection("orders").doc(String(orderId)).set({
-          deliveryPin:         pin,          /* buyer-visible; shown on track.html */
+          deliveryPin:         admin.firestore.FieldValue.delete(),
+          deliveryPinIssued:   true,
           deliveryPinIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
       }
@@ -123,6 +172,20 @@ exports.deliveryVerifyShadow = onCall(
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "Delivery not found.");
     const d = snap.data();
+
+    /* ── The caller must be the rider this delivery is assigned to ───────────
+       Without this, shadow was a PIN oracle: any signed-in account could submit
+       guesses for any deliveryRef and read pass/fail back. delivery-complete.js
+       states the reason plainly in its own guard — "checked before the PIN so a
+       stranger cannot use this endpoint as a PIN oracle" — and that guard was
+       simply never applied here. Same check, same order: assignment first, PIN
+       second. */
+    const assigned = d.riderId || d.assignedRiderId || d.assignedDriverUid || null;
+    if (!assigned || assigned !== uid) {
+      await _audit({ event: "shadow_denied_not_assigned", deliveryRef: String(deliveryRef),
+                     orderId: d.orderId || null, actorUid: uid, assigned });
+      throw new HttpsError("permission-denied", "This delivery is not assigned to you.");
+    }
 
     /* Two-PIN stage: 'pickup' (seller handover → custody) or 'delivery' (money release).
        Shadow verifies the Phase-0 deliveryPin for both until distinct pickup/delivery codes
@@ -162,9 +225,15 @@ exports.deliveryVerifyShadow = onCall(
       at: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true }).catch(() => {});
 
+    /* ── Shadow keeps its OWN attempt counter ────────────────────────────────
+       It used to increment `deliveryVerifyAttempts` — the same field
+       completeDeliveryWithPin reads for its 5-attempt lockout. Telemetry could
+       therefore exhaust the budget the real completion path depends on and push
+       a legitimate rider into the "ask support" branch. A shadow observer must
+       not be able to deny the authoritative path. */
     await ref.set({
       deliveryVerificationStatus: (stage === "delivery" && wouldAllow) ? "verified_shadow" : (d.deliveryVerificationStatus || "pending"),
-      deliveryVerifyAttempts:     admin.firestore.FieldValue.increment(1),
+      deliveryShadowAttempts:     admin.firestore.FieldValue.increment(1),
       deliveryLastVerifyAt:       admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true }).catch(() => {});
 
@@ -177,5 +246,58 @@ exports.deliveryVerifyShadow = onCall(
     /* Shadow: returns the outcome so the client can show telemetry, but the caller must NOT
        treat it as completion — the real completion path is unchanged (no money released). */
     return { ok: true, stage, result, geofence, distanceM, wouldAllow, shadow: true };
+  }
+);
+
+/* ── The BUYER reads their own delivery PIN ─────────────────────────────────
+   The plaintext used to sit on the order document so track.html could render
+   it. That made it readable by the assigned rider, because the orders rule
+   grants that rider a full-document read and Firestore cannot project fields
+   on read. The value now lives in `deliveryPins`, which has no rule at all and
+   is therefore deny-by-default — no client can read it, and this callable is
+   the only way to obtain one.
+
+   Authorisation is against the ORDER, not against the stored `buyerUid` hint:
+   the order is the record that decides who the buyer is, and resolving it here
+   means a delivery document written with a missing or unusual buyer field
+   cannot lock a buyer out of their own PIN.
+
+   The assigned rider is refused explicitly. Without that, a rider who is also
+   the buyer of some other order could probe this endpoint by orderId; more
+   importantly it states the invariant in code rather than relying on the buyer
+   check happening to exclude them. */
+exports.getMyDeliveryPin = onCall(
+  { region: "us-central1", timeoutSeconds: 15, memory: "256MiB" },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in to see your delivery PIN.");
+
+    const orderId = String((request.data && request.data.orderId) || "").trim();
+    if (!orderId) throw new HttpsError("invalid-argument", "orderId is required.");
+
+    const oSnap = await db.collection("orders").doc(orderId).get();
+    if (!oSnap.exists) throw new HttpsError("not-found", "Order not found.");
+    const o = oSnap.data();
+
+    const buyer = buyerUidOf(o);
+    if (!buyer || buyer !== uid) {
+      await _audit({ event: "pin_read_denied", orderId, actorUid: uid, buyer });
+      throw new HttpsError("permission-denied", "Only the buyer can see this delivery PIN.");
+    }
+
+    const rider = o.assignedDriverUid || o.riderId || o.assignedRiderId || null;
+    if (rider && rider === uid) {
+      await _audit({ event: "pin_read_denied_rider", orderId, actorUid: uid });
+      throw new HttpsError("permission-denied", "The assigned rider cannot read the delivery PIN.");
+    }
+
+    const pSnap = await db.collection("deliveryPins").doc(orderId).get();
+    if (!pSnap.exists || !pSnap.data().pin) {
+      /* Not an error — a PIN is only issued once a rider accepts. */
+      return { ok: true, issued: false, pin: null };
+    }
+
+    await _audit({ event: "pin_read", orderId, actorUid: uid });
+    return { ok: true, issued: true, pin: String(pSnap.data().pin) };
   }
 );

@@ -51,7 +51,30 @@ function balancedFrom(src, openIdx, open, close) {
   }
   return '';
 }
-function bodyOf(src, name) {
+/* Comments are stripped BEFORE paren-matching. Counting parens across prose
+   truncates a body at the first unmatched ")" — a numbered comment like
+   "1) PIN check" ended one handler 700 characters early in the sibling suite,
+   silently, and a short body reports a guard that exists as absent. */
+function stripComments(src) {
+  let out = '', i = 0, n = src.length;
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === '/' && d === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+    if (c === '/' && d === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (c === '"' || c === "'" || c === '`') {
+      const q = c; out += c; i++;
+      while (i < n) {
+        if (src[i] === '\\') { out += src[i] + (src[i + 1] || ''); i += 2; continue; }
+        out += src[i]; if (src[i] === q) { i++; break; } i++;
+      }
+      continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+function bodyOf(rawSrc, name) {
+  const src = stripComments(rawSrc);
   const m = new RegExp('exports\\.' + name + '\\s*=\\s*on(?:Call|Request|DocumentUpdated)\\b').exec(src);
   if (!m) return null;
   return balancedFrom(src, src.indexOf('(', m.index), '(', ')');
@@ -79,6 +102,12 @@ must('rules readable', RULES.length > 5000);
 must('bodyOf true positive', (bodyOf(COMP, 'completeDeliveryWithPin') || '').includes('deliveryPinHash'));
 must('bodyOf true negative', bodyOf(COMP, 'notARealExport') === null);
 must('bodyOf does not bleed', !(bodyOf(COMP, 'completeDeliveryWithPin') || '').includes('buyerConfirmDelivery'));
+/* A body truncated by a paren in prose still "extracts" and still passes a length
+   check — so assert on a guard that sits near the END of a commented handler. */
+must('bodyOf survives a numbered comment mid-body',
+  (bodyOf(PIN, 'deliveryVerifyShadow') || '').includes('deliveryShadowAttempts') ||
+  (bodyOf(PIN, 'deliveryVerifyShadow') || '').includes('deliveryVerifyAttempts'),
+  'the shadow handler contains "1) PIN check" — the classic truncation trigger');
 
 /* ══ THE PIN READ-PATH CENSUS ══════════════════════════════════════════════
    Four links. Each is checked against source, not assumed.
@@ -122,12 +151,16 @@ const AVAIL = bodyOf(INDEX, 'availableDeliveries');
 must('availableDeliveries body extracted', AVAIL && AVAIL.length > 200);
 const AVAIL_PUBLIC = /invoker: "public"/.test(AVAIL || '');
 const AVAIL_NO_AUTH = !/req\.headers\.authorization|verifyIdToken|request\.auth/.test(AVAIL || '');
+const AVAIL_RIDER_GATED = /rideDrivers/.test(AVAIL || '');
 const AVAIL_RETURNS_PIN = /proofPin:\s*o\.proofPin/.test(AVAIL || '');
 const AVAIL_RETURNS_PII = /buyerPhone:\s*o\.buyerPhone/.test(AVAIL || '') && /deliveryAddress:\s*o\.deliveryAddress/.test(AVAIL || '');
-must('availableDeliveries auth detector true negative (it really has no auth)', AVAIL_NO_AUTH);
-/* NEGATIVE CONTROL: the same detector must find auth where auth exists. */
+/* These controls prove the DETECTOR discriminates, not that the defect is still
+   present. An audit whose controls assert the finding can only ever be run once;
+   this one is meant to be re-run after remediation and report the new state. */
 must('auth detector true positive on a function that DOES authenticate',
   /verifyIdToken/.test(read('functions/etims.js')));
+must('auth detector true negative on a function that does NOT',
+  !/verifyIdToken|req\.headers\.authorization/.test(bodyOf(DISP, 'optimizeBatchRoute') || 'verifyIdToken'));
 
 /* ══ Per-callable authorisation ════════════════════════════════════════════ */
 const CALLS = [
@@ -251,13 +284,34 @@ if (MD) {
   line('That is the healthy part. What follows is not.');
   line('');
 
+  /* ── Remediation status, computed on every run ── */
+  const REMEDIATED = !AVAIL_NO_AUTH && AVAIL_RIDER_GATED && !AVAIL_RETURNS_PIN && !CHAIN_CLOSED;
+  line('## Remediation status (recomputed on every run)');
+  line('');
+  line('| boundary | state |');
+  line('|---|---|');
+  line('| `availableDeliveries` requires authentication | ' + (!AVAIL_NO_AUTH ? '✅ closed' : '❌ OPEN') + ' |');
+  line('| `availableDeliveries` requires an approved rider | ' + (AVAIL_RIDER_GATED ? '✅ closed' : '❌ OPEN') + ' |');
+  line('| `availableDeliveries` withholds `proofPin` | ' + (!AVAIL_RETURNS_PIN ? '✅ closed' : '❌ OPEN') + ' |');
+  line('| `availableDeliveries` withholds buyer PII | ' + (!AVAIL_RETURNS_PII ? '✅ closed' : '❌ OPEN') + ' |');
+  line('| rider PIN read chain (L1–L4) | ' + (!CHAIN_CLOSED ? '✅ broken at L1' : '❌ STILL CLOSED') + ' |');
+  line('');
+  line(REMEDIATED
+    ? '**All four boundaries in this section are closed.** The sections below describe the '
+      + 'defects as found, and are retained as the record of what was wrong and why. Ongoing '
+      + 'proof that the PIN stays unreachable lives in `scripts/test-delivery-pin-unreachable.js`, '
+      + 'which enumerates every rider-accessible path rather than checking one projection.'
+    : '**One or more boundaries are OPEN.** Treat the sections below as current.');
+  line('');
+
   /* ── HEADLINE 1 ── */
-  line('## 🚨 `availableDeliveries` — unauthenticated, and live');
+  line('## 🚨 `availableDeliveries` — unauthenticated, and live *(as found)*');
   line('');
   line('`exports.availableDeliveries` is an `onRequest` endpoint. Measured against source:');
   line('');
   line('- `invoker: "public"`: **' + (AVAIL_PUBLIC ? 'yes' : 'no') + '**');
   line('- contains no authentication of any kind: **' + (AVAIL_NO_AUTH ? 'yes' : 'no') + '**');
+  line('- gates on an approved `rideDrivers` record: **' + (AVAIL_RIDER_GATED ? 'yes' : 'no') + '**');
   line('- returns `proofPin` per record: **' + (AVAIL_RETURNS_PIN ? 'yes' : 'no') + '**');
   line('- returns `buyerPhone` and `deliveryAddress` per record: **' + (AVAIL_RETURNS_PII ? 'yes' : 'no') + '**');
   line('');
