@@ -1,3 +1,98 @@
+## [2026-08-16] — SECURITY: `posLookupCustomer` returned any customer on the platform
+
+`posLookupCustomer` is deployed. It searched `posCustomers` by phone, document id, email or
+member-card code with **no merchant filter on any query**, and returned the customer's name, email,
+phone, loyalty points, tier, total spent and purchase count. `merchantId` was accepted but used only
+to fetch the loyalty-programme config, long after the customer had already been selected.
+
+So any signed-in account could look up any customer on the platform by phone number. A phone number
+is guessable — this was enumerable cross-tenant PII disclosure.
+
+`getPOSCustomer` was a second unscoped read of the same collection. And `upsertPOSCustomer` was the
+**write-side twin**: its existing-customer lookup was collection-wide, so a second merchant upserting
+a phone already on file **updated the first merchant's record** — one customer document shared
+between two businesses, with the later name and email overwriting the earlier.
+
+### Why this was a data-model fix, not a query fix
+
+The write path was traced before anything was chosen, exactly because picking a convenient
+identifier is how this kind of defect is created:
+
+| writer | records |
+|---|---|
+| `pos-customers.js` (client) | `{id, name, phone, …}` — **no owner**. `firestore.rules` requires `sellerId == auth.uid` on create, so these writes were silently rejected (`.catch(() => {})`) |
+| `upsertPOSCustomer` (server) | Admin SDK, bypasses rules — **no owner** either |
+| `pos-crm-pro.js` | owner in the **document id** (`{sellerId}_{phone}`), never in the body |
+
+Meanwhile `pos-bi.js` filters `where('sellerId','==',sid)` and `posGetCustomerInsights` filters
+`where('merchantId','==',merchantId)` — two filters over documents that carry neither, matching
+nothing.
+
+**There was no field to filter on.** Adding one to the query alone would have returned nothing for
+every real customer and broken the till; using the composite document id would have covered only the
+subset `pos-crm-pro` created. The owner had to be *written* before it could be filtered.
+
+### `functions/pos-customer-scope.js` (new)
+
+`sellerId` — the authenticated uid, resolved from `auth` and **never** from the request. That is the
+identifier `pos-crm-pro`'s composite document id already encodes, and the only one available without
+trusting the caller. It is deliberately not read from `req.data.sellerId`: `_resolveSellerId` in
+`pos-crm-pro.js` does exactly that whenever no `sellerId` claim is present — and **no `sellerId` claim
+is minted anywhere** — so any caller can name any seller there. That is a separate open finding this
+module does not inherit. An admin may still act for a named seller, because the claim has already
+established they may.
+
+The owner is part of every **query**, not a filter applied afterwards — a post-filter still reads the
+other merchant's document into memory before discarding it.
+
+**Legacy records with no owner belong to nobody and are returned to nobody.** They are not migrated
+and not guessed at; handing an unattributable customer record to a caller is precisely the disclosure
+being closed. The next upsert for that phone creates a correctly-owned record, so the path heals
+forward without a backfill — at the cost of the old record's history. **That trade-off is stated, not
+assumed**: if those histories matter, a backfill is a separate data decision.
+
+`upsertPOSCustomer` now scopes its lookup *and* stamps the owner on create, so the record can be
+filtered ever after.
+
+**Files:** `functions/pos-customer-scope.js`, `scripts/test-pos-customer-scope.js` (new);
+`functions/pos-zero-friction.js` (+32/−14), `functions/pos-retail-engine.js` (+38/−17).
+**Database:** `posCustomers` gains `sellerId` on create. **API/Rules:** unchanged. **Breaking:** a
+caller looking up customers it does not own now receives `{found:false}` — that is the fix; and a
+legacy unowned record is not found until re-created. **Deployment:** Functions. **Not deployed.**
+
+### Verification — `node scripts/test-pos-customer-scope.js` — **41 / 0**
+
+| caller | result |
+|---|---|
+| SELLER_A → their own customer | **found** |
+| SELLER_A → another merchant's customer | not found |
+| unrelated signed-in account | not found |
+| unauthenticated | **denied** |
+| the legitimate POS caller for that customer | **found** |
+
+Driven through the **real callable** against a Firestore stub whose queries honour every `where()`,
+so an unscoped query would return the wrong row rather than nothing.
+
+**Zero disclosure on a denial**, asserted rather than assumed: the response contains no name, phone,
+email or member-card code, no loyalty, spend or purchase data, and is **byte-identical to the response
+for a customer that does not exist** — so it does not even disclose existence. Every alternative
+method is scoped too: email, member-card, document-id and the default `auto` path, because a fix that
+closes phone and leaves email open is not a fix. Naming another `sellerId` in the request does not
+widen the search.
+
+**A skipped part is not a passing part.** Part D initially skipped because the module imports
+`firebase-admin/firestore`, a different specifier from `firebase-admin`, so the real SDK loaded and
+threw — while the run still looked green. The suite counts that skip as a failure, and the stub was
+completed until it genuinely runs. Same lesson as the `orderAdvance` suite, and the second time this
+exact class of gap has hidden a decisive assertion.
+
+### Recorded, not fixed here
+
+- `_resolveSellerId` (`pos-crm-pro.js`) trusts `req.data.sellerId` when no claim exists — the same
+  pattern, across the wallet, store-credit and referral surfaces.
+- `posCompleteCheckout` updates `posCustomers/{customer.id}` from a client-supplied id, on the frozen
+  sales path.
+
 ## [2026-08-16] — 2D-2 step 6: Customers, on the only path that is actually scoped
 
 Native `customers` route. Built on exactly what the Customers census classified as usable:

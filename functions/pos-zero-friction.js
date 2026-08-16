@@ -426,37 +426,55 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
 /* ════════════════════════════════════════════════════════════════
    posLookupCustomer — multi-method: phone, QR code, member ID, email
 ════════════════════════════════════════════════════════════════ */
+/* Every lookup is scoped to the CALLER'S customers.
+
+   This function previously searched `posCustomers` collection-wide by phone,
+   document id, email or member-card code with no merchant filter at all, and
+   returned the customer's name, email, phone, loyalty points, tier, total spent
+   and purchase count. Any signed-in account could look up any customer on the
+   platform by phone number — and a phone number is guessable, so it was
+   enumerable cross-tenant PII disclosure. `merchantId` was accepted but used
+   ONLY to fetch the loyalty-programme config, long after the customer had
+   already been selected.
+
+   The owner now comes from AUTH (see pos-customer-scope.js) and is part of every
+   query rather than a filter applied afterwards — a post-filter still reads the
+   other merchant's document into memory before discarding it.
+
+   A miss returns exactly `{ found: false }`, the same shape and the same
+   response as a customer that genuinely does not exist. "Exists, but not yours"
+   is itself an existence disclosure, so the two cases are indistinguishable. */
+const _custScope = require('./pos-customer-scope');
+
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { query, method = 'auto', merchantId } = data || {};
   if (!query) _e('query required');
 
-  const q    = String(query).trim();
-  const coll = db.collection('posCustomers');
-  let snap   = null;
+  const owner = _custScope.resolveOwner(auth, data && data.sellerId);
+  const q     = String(query).trim();
+  let doc     = null;
 
   if (method === 'phone' || method === 'auto') {
     const phone = q.replace(/\s/g, '').replace(/^0/, '+254');
-    snap = await coll.where('phone', '==', phone).limit(1).get();
-    if (snap.empty) snap = await coll.where('phone', '==', q).limit(1).get();
+    doc = await _custScope.findOwned(db, owner, 'phone', phone);
+    if (!doc) doc = await _custScope.findOwned(db, owner, 'phone', q);
   }
 
-  if ((!snap || snap.empty) && (method === 'id' || method === 'auto')) {
-    const direct = await coll.doc(q).get();
-    if (direct.exists) snap = { docs: [direct], empty: false };
+  if (!doc && (method === 'id' || method === 'auto')) {
+    doc = await _custScope.getOwned(db, owner, q);
   }
 
-  if ((!snap || snap.empty) && (method === 'email' || method === 'auto')) {
-    snap = await coll.where('email', '==', q.toLowerCase()).limit(1).get();
+  if (!doc && (method === 'email' || method === 'auto')) {
+    doc = await _custScope.findOwned(db, owner, 'email', q.toLowerCase());
   }
 
-  if ((!snap || snap.empty) && (method === 'memberCard' || method === 'auto')) {
-    snap = await coll.where('memberCardCode', '==', q.toUpperCase()).limit(1).get();
+  if (!doc && (method === 'memberCard' || method === 'auto')) {
+    doc = await _custScope.findOwned(db, owner, 'memberCardCode', q.toUpperCase());
   }
 
-  if (!snap || snap.empty) return { found: false };
+  if (!doc) return { found: false };
 
-  const doc  = snap.docs[0];
   const cust = doc.data();
 
   /* Fetch loyalty info if merchantId provided */
