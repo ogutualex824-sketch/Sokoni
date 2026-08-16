@@ -46,7 +46,6 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
 
 const REGION = 'us-central1';
@@ -67,23 +66,20 @@ const _san = (v, n = 200) => String(v == null ? '' : v).slice(0, n).replace(/[<>
  * analytics-engine's `_assertShop`. Throws HttpsError, never a bare Error, so
  * the client receives a code it can act on.
  */
-async function assertShopAccess(uid, shopId) {
-  const db = _db();
-  const shopSnap = await db.collection('shops').doc(shopId).get();
-  if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
-  const shop = shopSnap.data() || {};
-  if (shop.ownerId === uid) return 'owner';
+/* Delegates to the ONE shopEmployees contract (functions/shop-employees.js).
 
-  const empSnap = await db.collection('shopEmployees').doc(`${shopId}_${uid}`).get();
-  if (empSnap.exists) return empSnap.data().role || 'employee';
+   This module previously carried its own copy of the check, and that copy granted
+   employee access on `empSnap.exists` alone. Two things were wrong with it:
 
-  try {
-    const claims = (await getAuth().getUser(uid)).customClaims || {};
-    if (claims.admin === true || claims.superAdmin === true) return 'admin';
-  } catch (_) { /* an unresolvable account is simply not an admin */ }
+     · the record it looked for could never exist — `acceptShopInvite` wrote
+       `shopEmployees/{uid}` while this read `shopEmployees/{shopId}_{uid}`, so no
+       real employee has ever been able to adjust stock; and
+     · a record that DID exist was believed without corroboration, and
+       firestore.rules lets a client create one at any id naming itself owner.
 
-  throw new HttpsError('permission-denied', 'You do not have access to this shop.');
-}
+   The shared contract keys canonically, refuses the legacy {uid} record, and
+   believes an employee only when the shop document agrees with it. */
+const { assertShopAccess } = require('./shop-employees');
 
 exports.merchantAdjustStock = onCall(
   { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },

@@ -1,3 +1,118 @@
+## [2026-08-16] — 2D-2 step 1: one `shopEmployees` key, and a closed cross-tenant hole
+
+The 2D-2 census found `shopEmployees` had two incompatible document keys, and that the only
+**writer** used the one no reader looks up:
+
+```
+WRITER   acceptShopInvite      shopEmployees/{uid}
+reader   analytics-engine      shopEmployees/{shopId}_{uid}
+reader   merchantAdjustStock   shopEmployees/{shopId}_{uid}
+```
+
+So **no employee who ever accepted an invite has been visible to any reader** — both fell through to
+their permission-denied branch. Employee access has never worked in production, including in the
+Inventory surface shipped at 2D-1C, whose "employees may adjust stock" path could not match a real
+record. That suite passed because its fixture was `{ role: 'manager' }` — a shape nothing writes.
+
+### The worse defect underneath it
+
+Both readers granted access on `empSnap.exists` **alone**, and `firestore.rules` permits any
+signed-in client to create a `shopEmployees` document at an arbitrary id provided it names itself
+owner:
+
+```
+allow create: if isAuthed() && request.resource.data.shopOwnerId == request.auth.uid;
+```
+
+A client could therefore write `shopEmployees/{SOMEONE_ELSES_SHOP}_{ownUid}` and be read as that
+shop's staff — cross-tenant access to another merchant's analytics. **The key divergence never
+protected against this.** It hid the legitimate employee while leaving the forged one perfectly
+readable.
+
+### `functions/shop-employees.js` (new) — the ONE contract
+
+Canonical key `shopEmployees/{shopId}_{uid}`, always **constructed**, never parsed. An employee
+record is believed only when the **shop document corroborates it**: the record's `shopOwnerId` must
+equal the owner `shops/{shopId}` actually names. A forged record names the forger; the shop names
+the real owner; they disagree, and access is refused.
+
+Corroboration is deliberately **server-side**, so no `firestore.rules` change was needed — the
+compiled ruleset has ~72 bytes of headroom and an over-size ruleset uploads but cannot activate.
+The client-create permission is now harmless but still untidy; tightening it is noted for when
+headroom exists.
+
+Also enforced: the record must name the shop it is filed under and the person it is for, be
+`active`, and carry a role from the shop vocabulary. A refusal never says *which* check failed —
+that would tell a prober how to shape a better forgery.
+
+**Legacy `shopEmployees/{uid}` records are never honoured**: not read, not migrated, not silently
+upgraded. Establishing the contract comes first; migrating existing records is separate, deliberate
+work and has **not** been done.
+
+### Ownership is itself divergent — recorded, not silently resolved
+
+`shops` documents carry ownership under `ownerId` (analytics-engine, merchant-inventory,
+logistics-plus, finance-os), `sellerUid` (minishop, minishop-v3) or `ownerUid` (kasshop). This module
+**reads the union**, exactly as `kasshop.js:514` already does, so a legitimate owner is not refused
+because their shop was written by a different subsystem. That tolerance is read-side only; converging
+the write side is separate work. It is not an identity fallback — the shop document still decides,
+and a uid never stands in for a shop.
+
+### The writer, converged
+
+`inviteShopEmployee` now records `shopId` on the invite and **verifies the caller owns that shop**.
+`shopId` stays optional for the existing seller.js caller; when absent it is **resolved by looking up
+a shop this account owns** and using that document's own id — a lookup, not a fallback. An account
+owning no shop is refused; two shops force an explicit choice. `acceptShopInvite` writes the
+canonical key with every field corroboration needs, and **refuses a pre-convergence invite that names
+no shop** rather than writing a record no reader will find.
+
+Two new callables, both owner-scoped: `listShopEmployees` (forged rows are filtered out of the list
+too) and `removeShopEmployee`, which **deactivates rather than deletes** — who had access to a till,
+and until when, is evidence. An owner cannot remove themselves.
+
+**Files:** `functions/shop-employees.js`, `scripts/test-shop-employee-authority.js` (new);
+`functions/index.js`, `functions/analytics-engine.js`, `functions/merchant-inventory.js`,
+`scripts/test-merchant-adjust-stock.js`, `scripts/census-merchant-2d2-authority.js`,
+`docs/MERCHANT_2D2_AUTHORITY_CENSUS.md` (modified). **Database:** no new collection; `shopInvites`
+gains `shopId`, `shopEmployees` gains `shopId` and moves to the canonical key. **API:** two new
+callables, re-exported by name. **Rules:** unchanged, deliberately. **Breaking:** invites issued
+before this change cannot be accepted — the owner re-issues; nothing is half-created.
+**Deployment:** Functions. **Not deployed.**
+
+### Verification
+
+`node scripts/test-shop-employee-authority.js` — **53/0**, on `SELLER_A` ≠ `SHOP_B` with a `SHOP_C`
+owned by someone else. Proven: owner manages staff; an accepted employee is recognised; a
+**client-forged record is refused**; a record filed under one shop naming another is refused; an
+inactive employee loses access immediately; a **legacy `{uid}` record grants nothing and is not
+migrated as a side effect of being read**; a uid-named shop resolves only because its document says
+so, and one owned by someone else is refused; an account owning no shop resolves to `null`, never to
+its own uid; SHOP_B and SHOP_C never meet in either direction.
+
+The mutation control is **behavioural, not source-presence**: it loads a copy of the module with the
+corroboration line removed and proves the *same* forged record is then **accepted** — so the check is
+demonstrably what stops it.
+
+`scripts/test-merchant-adjust-stock.js` — **51/0** (was 46). The employee fixture was replaced with
+the canonical corroborated record, and four assertions added: a forged record is refused, the shop's
+stock is untouched, a legacy `{uid}` record is not honoured, and a SHOP_B employee cannot correct
+SHOP_C stock. Its six mutation controls were also **passing for the wrong reason** — mutants are
+written to a temp directory, so after this change every one died on `Cannot find module
+'./shop-employees'` and the control reported PASS. Sibling requires are now mapped, so a mutant
+fails for the defect injected into it.
+
+Merchant regression, all green: data 37/0 · sell-inventory 90/0 · routes 66/0 · shop-access 34/0 ·
+application 35/0 · templates 32/0.
+
+The census regenerates to **CONVERGED** for this defect — its key detector was updated to recognise
+`employeeDocId(...)`, because a census that reports a fixed defect as still-broken is as useless as
+one that misses it.
+
+**Still open, unchanged by this commit:** `seller.js:2633` deletes `shopEmployees` directly via the
+client SDK (a migration item for the Team/Staff rebuild), the `orderAdvance` IDOR, the numeric-role
+gate, and the un-re-exported marketing-engine module.
+
 ## [2026-08-16] — 2D-1C: the phone-first till, and Inventory as its own authority
 
 2D-1 shipped the data layer and 2D-1B the correction authority. Neither had a surface. This is the

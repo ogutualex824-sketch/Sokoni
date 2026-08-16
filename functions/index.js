@@ -5599,7 +5599,11 @@ exports.onDeliveryStatusChange = onDocumentUpdated(
 ══════════════════════════════════════════════════════════════════════ */
 
 const PLATFORM_ROLES = ["moderator","support","driverCoordinator","financeReviewer","contentManager"];
-const SHOP_ROLES     = ["cashier","manager","inventory","support"];
+/* The ONE shopEmployees contract — canonical key, corroborated reads, staff
+   management. Every authority that asks "does this uid work at this shop?" must
+   go through it, so the writer and the readers can never drift apart again. */
+const _shopEmployees = require('./shop-employees');
+const SHOP_ROLES     = _shopEmployees.SHOP_ROLES;
 /* One invitation engine for every entry point — see functions/invitations-core.js. */
 const invitationsCore = require("./invitations-core");
 
@@ -5700,7 +5704,17 @@ exports.removePlatformEmployee = onCall({}, async (request) => {
   return { success: true };
 });
 
-/* ── Create shop-employee invite (any authenticated seller) ────────── */
+/* ── Create shop-employee invite ───────────────────────────────────────
+   An invite must name the SHOP the person is being invited to, not merely the
+   account inviting them. It previously recorded only `shopOwnerId`, which is why
+   the accepted record had no shop to be keyed by — the root of the shopEmployees
+   key divergence the 2D-2 census found.
+
+   `shopId` is optional for backward compatibility with existing callers
+   (seller.js sends none). When absent it is RESOLVED from Firestore by looking up
+   a shop this account owns, and the resolved document's own id is used. That is a
+   lookup, not a fallback: an account owning no shop is refused, and the uid is
+   never used as a shop id. */
 exports.inviteShopEmployee = onCall({}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
@@ -5709,6 +5723,16 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
   const shopName = (request.data.shopName || "My Shop").slice(0, 80);
   if (!email || !role)            throw new HttpsError("invalid-argument", "email and role are required.");
   if (!SHOP_ROLES.includes(role)) throw new HttpsError("invalid-argument", "Invalid role: " + role);
+
+  let shopId = request.data.shopId ? String(request.data.shopId).slice(0, 200) : null;
+  if (!shopId) {
+    shopId = await _shopEmployees.resolveOwnedShopId(request.auth.uid);
+    if (!shopId) throw new HttpsError("failed-precondition",
+      "This account does not own a shop yet, so there is no team to invite anyone to.");
+  }
+  /* The caller must own the shop they are staffing — verified against the shop
+     document, never taken from the request. */
+  await _shopEmployees.assertShopOwner(request.auth.uid, shopId);
 
   /* Rate limit: max 20 invites per seller per 24 hours */
   const oneDayAgo = new Date(Date.now() - 86400000);
@@ -5724,6 +5748,7 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
     token,
     email,
     role,
+    shopId,
     shopOwnerId: request.auth.uid,
     shopName,
     invitedBy: request.auth.uid,
@@ -5731,7 +5756,7 @@ exports.inviteShopEmployee = onCall({}, async (request) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 86400000))
   });
-  return { token };
+  return { token, shopId };
 });
 
 /* ── Accept shop invite (called after new user creates account) ────── */
@@ -5754,11 +5779,26 @@ exports.acceptShopInvite = onCall({}, async (request) => {
     throw new HttpsError("permission-denied",
       "This invite was sent to " + data.email + ". Please sign in with that email address.");
 
-  await db.collection("shopEmployees").doc(request.auth.uid).set({
+  /* The invite must name a shop. Invites created before the shopId convergence
+     have none, and an accepted record with no shop cannot be keyed canonically —
+     so it is refused rather than written somewhere a reader will never look.
+     The owner simply re-issues the invite; nothing is silently half-created. */
+  if (!data.shopId) {
+    throw new HttpsError("failed-precondition",
+      "This invite was created before shops were named on invites. Ask the shop owner to send a new one.");
+  }
+
+  /* CANONICAL KEY — shopEmployees/{shopId}_{uid}. This is the id every reader
+     (analytics-engine, merchantAdjustStock, listShopEmployees) looks up. Writing
+     the bare {uid} here is what made accepted employees invisible platform-wide.
+     `shopId` and `shopOwnerId` are both stored so a reader can CORROBORATE the
+     record against the shop document instead of trusting its existence. */
+  await db.collection("shopEmployees").doc(_shopEmployees.employeeDocId(data.shopId, request.auth.uid)).set({
     uid: request.auth.uid,
     email: data.email,
     name: request.auth.token.name || "",
     role: data.role,
+    shopId: data.shopId,
     shopOwnerId: data.shopOwnerId,
     shopName: data.shopName,
     active: true,
@@ -5772,6 +5812,7 @@ exports.acceptShopInvite = onCall({}, async (request) => {
   const protectedRoles = ["seller","admin","superAdmin","moderator","driver","provider"];
   const userUpdate = {
     employeeRole: data.role,
+    employeeShopId: data.shopId,     /* which SHOP, not merely whose account */
     shopOwnerId: data.shopOwnerId,
     shopName: data.shopName,
     joinedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -10112,6 +10153,9 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
    goes through here; neither ever touches `products.sold`. */
 const merchantInventory = require("./merchant-inventory");
 exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
+/* Staff management on the canonical shopEmployees contract (2D-2 step 1). */
+exports.listShopEmployees            = _shopEmployees.listShopEmployees;
+exports.removeShopEmployee           = _shopEmployees.removeShopEmployee;
 
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;

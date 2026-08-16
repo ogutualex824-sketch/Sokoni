@@ -93,6 +93,12 @@ function loadCallable(sourceOverride) {
     if (id === 'firebase-admin/firestore') return { getFirestore: () => ENV.db, FieldValue };
     if (id === 'firebase-admin/auth') return { getAuth: () => ENV.auth };
     if (id === 'firebase-functions/logger') return { info() {}, warn() {}, error() {} };
+    /* A mutant is written to a temp directory, so its RELATIVE requires no longer
+       resolve. Left unmapped, every mutant died with "Cannot find module
+       './shop-employees'" and the control reported PASS — detecting a broken
+       require path, not the injected defect. Map sibling modules to their real
+       location so a mutant fails for the reason it is supposed to. */
+    if (id === './shop-employees') return orig.call(this, path.join(FUNCTIONS_DIR, 'shop-employees.js'));
     if (id === 'firebase-functions/v2/https') {
       return {
         onCall: (_o, h) => { captured = h; return h; },
@@ -148,10 +154,42 @@ console.log('\nPART A — who may correct stock\n');
     e3 && e3.code === 'permission-denied', e3 && e3.message);
   ck('A6  ...and still nothing was written', ENV.data['products/x9'].stock === 5);
 
-  /* A shop employee may correct stock. */
-  ENV = makeEnv({ ...baseDocs(), [`shopEmployees/${SHOP_B}_EMP_1`]: { role: 'manager' } });
+  /* A shop employee may correct stock — on the CANONICAL, CORROBORATED record.
+     The old fixture here was `{ role: 'manager' }` with no shopId, no uid and no
+     shopOwnerId, and it passed. That is precisely the gap the 2D-2 census found:
+     the fixture was shaped like nothing production ever writes, so it proved a
+     code path that no real employee could reach. */
+  const EMP_RECORD = {
+    uid: 'EMP_1', role: 'manager', shopId: SHOP_B, shopOwnerId: SELLER_A, active: true,
+  };
+  ENV = makeEnv({ ...baseDocs(), [`shopEmployees/${SHOP_B}_EMP_1`]: { ...EMP_RECORD } });
   const okEmp = await call(fn, { productId: 'p1', shopId: SHOP_B, delta: -1, reason: 'damage', adjustmentId: 'a4' }, 'EMP_1');
-  ck('A7  a shop employee is authorised', okEmp.ok === true && okEmp.after === 9);
+  ck('A7  a corroborated shop employee is authorised', okEmp.ok === true && okEmp.after === 9);
+
+  /* A FORGED record. firestore.rules lets any signed-in client create a
+     shopEmployees document at an arbitrary id as long as it names itself owner,
+     so this is the document an attacker can actually write. The shop document
+     names SELLER_A as owner; the forgery names the attacker; they disagree. */
+  ENV = makeEnv({ ...baseDocs(),
+    [`shopEmployees/${SHOP_B}_ATTACKER`]: { uid: 'ATTACKER', role: 'manager', shopId: SHOP_B, shopOwnerId: 'ATTACKER', active: true } });
+  const eForge = await err(call(fn, { productId: 'p1', shopId: SHOP_B, delta: -5, reason: 'damage', adjustmentId: 'a5' }, 'ATTACKER'));
+  ck('A8  a client-forged employee record is REFUSED (shopOwnerId must match the shop)',
+    eForge && eForge.code === 'permission-denied', eForge && eForge.code);
+  ck('A9  ...and the shop\'s stock is untouched', ENV.data['products/p1'].stock === 10);
+
+  /* The LEGACY key. This is what acceptShopInvite wrote before the convergence;
+     it must not be silently upgraded into access. */
+  ENV = makeEnv({ ...baseDocs(), ['shopEmployees/EMP_1']: { ...EMP_RECORD } });
+  const eLegacy = await err(call(fn, { productId: 'p1', shopId: SHOP_B, delta: -1, reason: 'damage', adjustmentId: 'a6' }, 'EMP_1'));
+  ck('A10 a legacy shopEmployees/{uid} record is NOT honoured',
+    eLegacy && eLegacy.code === 'permission-denied', eLegacy && eLegacy.code);
+
+  /* An employee of SHOP_B is not an employee of SHOP_C. */
+  ENV = makeEnv({ ...baseDocs(), [`shopEmployees/${SHOP_B}_EMP_1`]: { ...EMP_RECORD } });
+  const eCross = await err(call(fn, { productId: 'x9', shopId: SHOP_C, delta: -1, reason: 'damage', adjustmentId: 'a7' }, 'EMP_1'));
+  ck('A11 a SHOP_B employee cannot correct SHOP_C stock',
+    eCross && eCross.code === 'permission-denied', eCross && eCross.code);
+  ck('A12 ...and SHOP_C stock is untouched', ENV.data['products/x9'].stock === 5);
 }
 
 /* ═══ B — validation ═══ */

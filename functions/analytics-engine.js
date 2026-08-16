@@ -79,16 +79,28 @@ function _emptyTimeSeries(fromMs, toMs, granularity) {
   return map;
 }
 
+/* Shop access is resolved by the ONE shopEmployees contract.
+
+   This used to grant employee access on `empSnap.exists` ALONE. Because
+   firestore.rules permits any signed-in client to create a shopEmployees document
+   at an arbitrary id provided it sets `shopOwnerId` to itself, a client could
+   write `shopEmployees/{someOtherShop}_{ownUid}` and be read here as that shop's
+   staff — a cross-tenant escalation into another merchant's analytics.
+
+   shop-employees.js corroborates the record against the shop document (the
+   record's shopOwnerId must equal the shop's real owner), refuses the legacy
+   {uid} key, and requires an active, known role. */
+const _shopEmployees = require('./shop-employees');
+
 async function _assertShop(uid, shopId) {
-  const shopSnap = await _db().collection('shops').doc(shopId).get();
-  if (!shopSnap.exists) throw new Error('Shop not found');
-  const d = shopSnap.data();
-  if (d.ownerId === uid) return 'owner';
-  const empSnap = await _db().collection('shopEmployees').doc(shopId + '_' + uid).get();
-  if (empSnap.exists) return empSnap.data().role || 'employee';
-  const claims = (await admin.auth().getUser(uid)).customClaims || {};
-  if (claims.role === 'admin' || claims.role === 'superAdmin') return 'admin';
-  throw new Error('Access denied');
+  try {
+    return await _shopEmployees.assertShopAccess(uid, shopId);
+  } catch (e) {
+    /* This module's callers expect a bare Error with these messages; preserve
+       them so behaviour above is unchanged. */
+    if (e && e.code === 'not-found') throw new Error('Shop not found');
+    throw new Error('Access denied');
+  }
 }
 
 async function _assertAdmin(uid) {

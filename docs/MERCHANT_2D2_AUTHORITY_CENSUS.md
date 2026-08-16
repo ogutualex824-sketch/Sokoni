@@ -20,7 +20,7 @@ That ratio is the whole finding: for these eleven screens seller.js is not a dat
 
 3. **`orderAdvance` has no ownership check.** It is the only order-status authority, it is deployed, and it verifies only that the caller is signed in. It accepts any `orderId`, advances that order's timeline, and on the `accepted` stage sets `status: 'confirmed'` — which is what triggers rider auto-assignment. This is a live IDOR independent of 2D-2, not merely a blocker for the Orders screen.
 
-4. **`shopEmployees` writer and readers disagree on the document key** — see the cross-cutting section. This one reaches backwards into the Inventory surface shipped in 2D-1C.
+4. **`shopEmployees` key divergence — FIXED (2D-2 step 1).** The writer and both readers are now on the canonical `shopEmployees/{shopId}_{uid}`, and the readers corroborate each record against the shop document rather than trusting that it exists. That second part closed a cross-tenant escalation: `firestore.rules` lets a client create a `shopEmployees` document at any id naming itself owner, and both readers previously granted access on existence alone. Legacy `{uid}` records are refused, not migrated. See the cross-cutting section.
 
 5. **Stories has no server authority of any kind** — and `demo-seed.js` writes the same `sokoniStories` key the screen reads, which is a demo/seed path touching a production surface.
 
@@ -83,12 +83,12 @@ That ratio is the whole finding: for these eleven screens seller.js is not a dat
 
 | candidate | status | guard | client scope | considered because |
 |---|---|---|---|---|
-| `inviteShopEmployee` | **AUTHORITATIVE** | shop-owner assert | no | the invite authority seller.js already calls |
-| `acceptShopInvite` | **AUTH ONLY** | auth-only | no | the only WRITER of shopEmployees |
+| `inviteShopEmployee` | **AUTHORITATIVE** | shop-owner assert | ⚠ yes | the invite authority seller.js already calls |
+| `acceptShopInvite` | **AUTH ONLY + CLIENT SCOPE** | auth-only | ⚠ yes | the only WRITER of shopEmployees |
 | `orgCreateTeam` | **NOT MERCHANT-USABLE** | admin-only | no | NAME TRAP — organisational teams, a different entity from shop staff |
 | `getStaffRoster` | **NOT MERCHANT-USABLE** | auth-only | ⚠ yes | NAME TRAP — provider/roster domain, not shop employees |
 
-**VERDICT: SAFE TO REBUILD** — deployed, ownership-asserting authority: inviteShopEmployee
+**VERDICT: SAFE TO REBUILD (partial)** — a shop-scoped authority exists, but 1 sibling(s) accept a client-supplied scope id unchecked — build ONLY on the asserted ones: inviteShopEmployee
 
 ## Messages
 
@@ -246,27 +246,28 @@ That ratio is the whole finding: for these eleven screens seller.js is not a dat
 
 ## Cross-cutting defects
 
-### `shopEmployees`: the writer and the readers disagree on the document key
+### `shopEmployees` document key
+
+**CONVERGED.** Every server site uses the canonical `shopEmployees/{shopId}_{uid}`.
 
 | site | key form | role |
 |---|---|---|
-| `functions/analytics-engine.js:87` | `{shopId}_{uid}` | reader |
-| `functions/index.js:5757` | `{uid}` | WRITER |
-| `functions/merchant-inventory.js:77` | `{shopId}_{uid}` | reader |
-| `seller.js:2633` | `{id} (client-supplied)` | deleter |
+| `functions/index.js:5796` | `{shopId}_{uid} (via employeeDocId)` | WRITER |
 
-**Consequence.** The only thing that CREATES a `shopEmployees` record writes one key; every reader looks up another. An employee who accepts an invite is therefore invisible to `merchantAdjustStock` and to `analytics-engine`, and both fall through to their permission-denied branch. The `{uid}` form also means an employee can belong to exactly one shop platform-wide.
+Both readers now delegate to `functions/shop-employees.js`, which additionally **corroborates** the record against the shop document — an employee is believed only when its `shopOwnerId` matches the owner `shops/{shopId}` names. Legacy `shopEmployees/{uid}` records are never honoured and are not migrated.
 
-This is not a 2D-2 finding only — it reaches back into the Inventory surface shipped in 2D-1C, whose employee-access path cannot match a real record until the key converges.
+Remaining **client-SDK** sites (migration items, not authority divergence):
+
+- `seller.js:2633` — deleter, key `{id} (client-supplied)`
 
 
 ## Implementation order (evidence-derived)
 
 | # | screen | verdict | what must happen first |
 |---|---|---|---|
-| 1 | Team / Staff | **SAFE TO REBUILD** | nothing — build on the asserted authority |
-| 2 | Marketing | **SAFE TO REBUILD** | nothing — build on the asserted authority |
-| 3 | Disputes | **SAFE TO REBUILD** | nothing — build on the asserted authority |
+| 1 | Marketing | **SAFE TO REBUILD** | nothing — build on the asserted authority |
+| 2 | Disputes | **SAFE TO REBUILD** | nothing — build on the asserted authority |
+| 3 | Team / Staff | **SAFE TO REBUILD (partial)** | nothing — build on the asserted authority |
 | 4 | Messages | **SAFE TO REBUILD (partial)** | nothing — build on the asserted authority |
 | 5 | Customers | **SAFE TO REBUILD (partial)** | nothing — build on the asserted authority |
 | 6 | Store | **SAFE TO REBUILD (partial)** | nothing — build on the asserted authority |

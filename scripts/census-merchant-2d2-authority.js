@@ -432,7 +432,14 @@ if (MD) {
   line('');
   line('3. **`orderAdvance` has no ownership check.** It is the only order-status authority, it is deployed, and it verifies only that the caller is signed in. It accepts any `orderId`, advances that order\'s timeline, and on the `accepted` stage sets `status: \'confirmed\'` — which is what triggers rider auto-assignment. This is a live IDOR independent of 2D-2, not merely a blocker for the Orders screen.');
   line('');
-  line('4. **`shopEmployees` writer and readers disagree on the document key** — see the cross-cutting section. This one reaches backwards into the Inventory surface shipped in 2D-1C.');
+  /* Derived from the same rows the cross-cutting section renders, so this headline
+     cannot go on describing a defect after it has been fixed. */
+  const empServer = grep('shopEmployees').filter((h) => /\.doc\(/.test(h) && h.startsWith('functions/'));
+  const empForms = [...new Set(empServer.map((h) => (/employeeDocId\(/.test(h) ? 'canonical' : /request\.auth\.uid\)|\.doc\(uid\)/.test(h) ? 'legacy' : 'other')))];
+  const empFixed = empForms.length === 1 && empForms[0] === 'canonical';
+  line(empFixed
+    ? '4. **`shopEmployees` key divergence — FIXED (2D-2 step 1).** The writer and both readers are now on the canonical `shopEmployees/{shopId}_{uid}`, and the readers corroborate each record against the shop document rather than trusting that it exists. That second part closed a cross-tenant escalation: `firestore.rules` lets a client create a `shopEmployees` document at any id naming itself owner, and both readers previously granted access on existence alone. Legacy `{uid}` records are refused, not migrated. See the cross-cutting section.'
+    : '4. **`shopEmployees` writer and readers disagree on the document key** — see the cross-cutting section. This one reaches backwards into the Inventory surface shipped in 2D-1C.');
   line('');
   line('5. **Stories has no server authority of any kind** — and `demo-seed.js` writes the same `sokoniStories` key the screen reads, which is a demo/seed path touching a production surface.');
   line('');
@@ -485,9 +492,16 @@ line(MD ? '\n## Cross-cutting defects\n' : '\n-- cross-cutting --');
    permanent miss: every lookup returns "not found" and every caller takes its
    not-found branch, which here reads as "you do not have access". */
 const empKeys = grep('shopEmployees').filter((h) => /\.doc\(|,\s*"shopEmployees"|, 'shopEmployees'/.test(h));
-const keyForm = (code) => /\$\{shopId\}_\$\{uid\}|shopId \+ ['"]_['"] \+ uid/.test(code) ? '{shopId}_{uid}'
-  : /request\.auth\.uid\)|\.doc\(uid\)/.test(code) ? '{uid}'
+/* `employeeDocId(...)` is checked FIRST. After the 2D-2 step-1 convergence the
+   writer builds its key through that helper, and a detector that only looked for
+   the literal `${shopId}_${uid}` template read the converged call as legacy
+   `{uid}` — because the arguments still mention `request.auth.uid`. A census that
+   reports a fixed defect as still-broken is as useless as one that misses it. */
+const keyForm = (code) => /employeeDocId\(/.test(code) ? '{shopId}_{uid} (via employeeDocId)'
+  : /\$\{shopId\}_\$\{uid\}|shopId \+ ['"]_['"] \+ uid/.test(code) ? '{shopId}_{uid}'
+  : /request\.auth\.uid\)|\.doc\(uid\)|\.doc\(String\(uid\)\)/.test(code) ? '{uid}'
   : /,\s*id\)/.test(code) ? '{id} (client-supplied)' : 'unresolved';
+const CANONICAL_KEY = /^\{shopId\}_\{uid\}/;
 const roleOf = (code) => /\.set\(|\.create\(/.test(code) ? 'WRITER' : /deleteDoc|\.delete\(/.test(code) ? 'deleter' : 'reader';
 
 const empRows = empKeys.map((h) => {
@@ -496,9 +510,36 @@ const empRows = empKeys.map((h) => {
   return { at: p[0] + ':' + p[1], form: keyForm(code), role: roleOf(code) };
 }).filter((r) => r.form !== 'unresolved');
 
-const forms = [...new Set(empRows.map((r) => r.form))];
-line(MD ? '### `shopEmployees`: the writer and the readers disagree on the document key\n' : ' shopEmployees key forms: ' + forms.join(' vs '));
-if (forms.length > 1) {
+/* Client-SDK sites are reported separately: a legacy client path that still
+   reaches the collection directly is a migration item, not a key divergence
+   between server authorities. */
+const serverRows = empRows.filter((r) => r.at.startsWith('functions/'));
+const clientRows = empRows.filter((r) => !r.at.startsWith('functions/'));
+const forms = [...new Set(serverRows.map((r) => r.form))];
+const converged = forms.length === 1 && CANONICAL_KEY.test(forms[0]);
+
+line(MD ? '### `shopEmployees` document key\n' : ' shopEmployees server key forms: ' + (forms.join(' vs ') || 'none'));
+if (converged) {
+  if (MD) {
+    line('**CONVERGED.** Every server site uses the canonical `shopEmployees/{shopId}_{uid}`.');
+    line('');
+    line('| site | key form | role |');
+    line('|---|---|---|');
+    for (const r of serverRows) line(`| \`${r.at}\` | \`${r.form}\` | ${r.role} |`);
+    line('');
+    line('Both readers now delegate to `functions/shop-employees.js`, which additionally **corroborates** the record against the shop document — an employee is believed only when its `shopOwnerId` matches the owner `shops/{shopId}` names. Legacy `shopEmployees/{uid}` records are never honoured and are not migrated.');
+    if (clientRows.length) {
+      line('');
+      line('Remaining **client-SDK** sites (migration items, not authority divergence):');
+      line('');
+      for (const r of clientRows) line(`- \`${r.at}\` — ${r.role}, key \`${r.form}\``);
+    }
+  } else {
+    for (const r of serverRows) line('   ' + r.at.padEnd(42) + r.form.padEnd(34) + r.role);
+    line('   => CONVERGED on the canonical key; readers corroborate against the shop document.');
+    for (const r of clientRows) line('   client-SDK site remaining: ' + r.at + ' (' + r.role + ')');
+  }
+} else if (forms.length > 1) {
   if (MD) {
     line('| site | key form | role |');
     line('|---|---|---|');
