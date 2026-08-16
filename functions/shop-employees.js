@@ -235,6 +235,61 @@ exports.listShopEmployees = onCall(
 );
 
 /* ════════════════════════════════════════════════════════════════════════════
+   listShopInvites — the invites OUTSTANDING for one shop.
+
+   A team screen that shows only accepted staff is telling half the truth: the
+   owner has no way to see who was invited, whether the link is still live, or
+   why someone they invited has not appeared. Scoped to the shop, owner-only.
+
+   Invites created before the shopId convergence carry no `shopId`, so they
+   cannot be listed against a shop. They are surfaced under `staleCount` — an
+   honest "these exist and can no longer be accepted" rather than a silent
+   omission that makes an owner re-invite blindly.
+   ════════════════════════════════════════════════════════════════════════════ */
+exports.listShopInvites = onCall(
+  { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },
+  async (req) => {
+    const uid = req.auth && req.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Sign in to view invites.');
+
+    let shopId = req.data && req.data.shopId ? String(req.data.shopId).slice(0, 200) : null;
+    if (!shopId) {
+      shopId = await resolveOwnedShopId(uid);
+      if (!shopId) throw new HttpsError('failed-precondition', 'This account does not own a shop yet.');
+    }
+    await assertShopOwner(uid, shopId);
+
+    const db = _db();
+    /* Scoped by the INVITER as well as the shop: shopOwnerId is what
+       revokeShopInvite authorises against, so listing by it keeps the two
+       operations describing the same set. */
+    const snap = await db.collection('shopInvites').where('shopOwnerId', '==', uid).limit(200).get();
+
+    const now = Date.now();
+    const invites = [];
+    let staleCount = 0;
+    snap.forEach((d) => {
+      const v = d.data() || {};
+      if (!v.shopId) { if (v.status === 'pending') staleCount++; return; }
+      if (String(v.shopId) !== String(shopId)) return;
+      if (v.status !== 'pending') return;
+      let expiresMs = null;
+      try { expiresMs = v.expiresAt && v.expiresAt.toMillis ? v.expiresAt.toMillis() : null; } catch (_) {}
+      invites.push({
+        token: d.id,
+        email: v.email || null,
+        role: v.role || null,
+        createdAt: v.createdAt || null,
+        expiresAt: v.expiresAt || null,
+        expired: expiresMs != null ? expiresMs < now : null,
+      });
+    });
+
+    return { ok: true, shopId, invites, count: invites.length, staleCount };
+  }
+);
+
+/* ════════════════════════════════════════════════════════════════════════════
    removeShopEmployee — deactivate, never hard-delete.
 
    A removed employee is evidence: who had access to a till, and until when. The

@@ -1,3 +1,82 @@
+## [2026-08-16] — 2D-2 step 2: Team/Staff, native and on the corroborated contract
+
+```
+merchant.html → native Team surface → listShopEmployees / listShopInvites /
+inviteShopEmployee / revokeShopInvite / removeShopEmployee
+→ shopEmployees/{shopId}_{uid} → shops/{shopId} corroboration
+```
+
+Staff was `kind:'seller'` — an iframe of `seller.html#team`. It is now a native route. No merchant
+button, route or surface was removed; POS and the 2D-1C Sell/Inventory surfaces are untouched.
+
+### What the iframe was doing
+
+`seller.js` removed a person with a client-side `deleteDoc` on **`shopEmployees/{id}` AND
+`users/{id}`** — the browser deciding who was allowed to, destroying the employment record, the audit
+trail and the person's user document together. It also mirrored every fetch into
+`localStorage.sokoniEmployees` and fell back to that mirror when Firestore failed, so a revoked
+cashier kept appearing as staff on that device.
+
+Neither is reachable from the merchant workspace any more. Removal goes through
+`removeShopEmployee`, which **deactivates rather than deletes** — who had access to a till, and until
+when, is evidence. `seller.js` itself is unchanged; it is legacy-page code, outside the merchant
+path, and the suite records that rather than pretending otherwise.
+
+### The surface
+
+Team and Invites tabs; role-coloured avatars; invite by email with a role picker and its
+consequences spelled out; the share link built from the **server's** token; pending invites listed,
+copyable and withdrawable; per-member sheet with removal. Loading, empty, error and refused are four
+distinct states — an empty team says *"It is just you so far"*, and a failed read says it failed
+rather than rendering an empty team.
+
+Invites created before the shopId convergence can no longer be accepted. They are surfaced as a
+counted warning — *"send a fresh invite instead"* — rather than silently omitted, so an owner is not
+left waiting for someone who cannot join. They are still not migrated.
+
+**`listShopInvites` (new, re-exported).** Owner-scoped, shop-scoped, and it separates those stale
+invites out honestly. `revokeShopInvite` already existed and is already owner-scoped; it is reused.
+
+### The client layer cannot write
+
+`sokoni-merchant-staff.js` contains no Firestore access of any kind, and the shell passes the Team
+surface **no db adapter** — there is nothing for it to write with. Asserted across the whole merchant
+path: `merchant.html` and all seven `sokoni-merchant-*.js` modules name `shopEmployees` as a
+collection nowhere and invoke no Firestore write primitive.
+
+**Files:** `sokoni-merchant-staff.js`, `sokoni-merchant-team.js`, `scripts/test-merchant-staff.js`,
+`scripts/test-merchant-team-ui.js` (new); `functions/shop-employees.js`, `functions/index.js`,
+`sokoni-merchant-routes.js`, `merchant.html` (modified). **Database:** none — no new collection, no
+new field. **API:** one new callable, `listShopInvites`. **Rules:** unchanged. **Breaking:** none.
+**Deployment:** Hosting + Functions, when authorized. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-staff.js` *(new)* | **74 / 0** |
+| `test-merchant-team-ui.js` *(new, WebKit)* | **86 / 0** at iPhone SE **and** iPhone 14 Pro |
+| `test-merchant-route-gate.js --all` | **508 / 10** — Staff mounts native at both viewports |
+| shop-employee-authority · adjust-stock · data · sell-inventory | 53/0 · 51/0 · 37/0 · 90/0 |
+| routes · shop-access · application · templates · home-back | 65/0 · 34/0 · 35/0 · 32/0 · 93/0 |
+
+Every acceptance gate is proven by observation: the roster is read through `listShopEmployees`
+scoped by the canonical `activeShopId`; another shop's staff is never rendered; asking for SHOP_C is
+refused by the authority; invite, revoke and remove each leave through their server authority
+carrying the shop; after a mutation the list is **re-read from the server**, never spliced locally; a
+refusal shows the server's own wording and changes nothing on screen; the surface writes **no
+localStorage key at all**; a 47-character name ellipsises and a 40-person team renders without the
+page ever scrolling sideways; every visible control is ≥44px.
+
+**The gate went 504/12 → 508/10.** The two failures that disappeared are the `seller:team`
+deep-switch errors — Staff no longer mounts a seller iframe, so the deep-switch that could never be
+confirmed no longer happens. The remaining 10 are the same pre-existing localhost/environment
+failures verified at `HEAD` earlier in this track.
+
+Five mutation controls, plus three detector controls proving the merchant-path scan can actually
+fail — the first version of that scan flagged three files for *documenting* the defect they replace,
+so it now matches Firestore **calls**, not the words in a comment.
+
 ## [2026-08-16] — 2D-2 step 1: one `shopEmployees` key, and a closed cross-tenant hole
 
 The 2D-2 census found `shopEmployees` had two incompatible document keys, and that the only

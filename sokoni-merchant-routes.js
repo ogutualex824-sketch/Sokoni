@@ -152,9 +152,16 @@
       note:'Bounded 12s load with terminal error+Retry — always reaches READY/EMPTY/ERROR (1d81f11).' },
 
     { id:'staff', name:'Staff', icon:'👥', tier:'primary',
-      kind:'seller', sec:'team',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'staff' },
+      mobile:true, desktop:true, activeKey:'staff',
+      note:'Native team surface (sokoni-merchant-team.js) on the canonical shopEmployees contract: ' +
+           'listShopEmployees / listShopInvites / inviteShopEmployee / revokeShopInvite / ' +
+           'removeShopEmployee, all owner-scoped and corroborated against shops/{shopId}. ' +
+           'Was kind:seller (seller.html#team), whose remove path called deleteDoc on ' +
+           'shopEmployees/{id} AND users/{id} straight from the browser, and which mirrored the ' +
+           'roster into localStorage.sokoniEmployees so a revoked cashier kept appearing as staff ' +
+           'on that device. Neither behaviour is reachable from the merchant workspace any more.' },
 
     { id:'messages', name:'Messages', icon:'💬', tier:'primary',
       kind:'seller', sec:'messages',

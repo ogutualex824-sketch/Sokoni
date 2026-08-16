@@ -479,6 +479,11 @@
 <script src="sokoni-merchant-stock.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
+<!-- TEAM/STAFF (2D-2 step 2) — the canonical shopEmployees contract, native.
+     sokoni-merchant-staff.js is the client layer over the server authorities and
+     contains no Firestore access at all; sokoni-merchant-team.js is the surface. -->
+<script src="sokoni-merchant-staff.js"></script>
+<script src="sokoni-merchant-team.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -871,6 +876,7 @@
     if (id === 'dashboard') renderDashboard();
     else if (id === 'sell') renderSell();
     else if (id === 'inventory') renderInventory();
+    else if (id === 'staff') renderStaff();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1739,10 +1745,35 @@
     if (!_invUI) console.error('[merchant] Inventory failed to mount — sokoni-merchant-inventory-ui.js did not load');
   }
 
+  var _teamUI = null, _teamShop = null;
+  function renderStaff () {
+    var host = document.getElementById('native-staff'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_teamUI && _teamShop === key) { _teamUI.refresh(); return; }
+    if (_teamUI) { try { _teamUI.destroy(); } catch (_) {} _teamUI = null; }
+    host.innerHTML = '';
+    _teamUI = window.SokoniMerchantTeam && SokoniMerchantTeam.mount(host, {
+      scope: scope,
+      shopName: (window.SokoniShell && SokoniShell.activeShopName) || null,
+      origin: location.origin,
+      /* Every staff mutation is a SERVER call. There is deliberately no db
+         adapter here: the surface has nothing to write Firestore with. */
+      callList:    _callable('listShopEmployees'),
+      callInvites: _callable('listShopInvites'),
+      callInvite:  _callable('inviteShopEmployee'),
+      callRevoke:  _callable('revokeShopInvite'),
+      callRemove:  _callable('removeShopEmployee'),
+      onToast: _merchantToast
+    });
+    _teamShop = _teamUI ? key : null;
+    if (!_teamUI) console.error('[merchant] Team failed to mount — sokoni-merchant-team.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
     else if (current === 'inventory') renderInventory();
+    else if (current === 'staff') renderStaff();
   });
 
   function renderDashboard () {

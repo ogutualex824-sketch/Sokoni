@@ -10155,6 +10155,7 @@ const merchantInventory = require("./merchant-inventory");
 exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
 /* Staff management on the canonical shopEmployees contract (2D-2 step 1). */
 exports.listShopEmployees            = _shopEmployees.listShopEmployees;
+exports.listShopInvites              = _shopEmployees.listShopInvites;
 exports.removeShopEmployee           = _shopEmployees.removeShopEmployee;
 
 const inventoryEngine = require("./inventory-engine");
