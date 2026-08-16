@@ -502,6 +502,10 @@
      authorities are deliberately NOT bound. -->
 <script src="sokoni-merchant-customers.js"></script>
 <script src="sokoni-merchant-customers-ui.js"></script>
+<!-- STORE (2D-2 Stage 2) — six SAFE authorities. The shopId is LEARNED from
+     getMyMinishop, never taken from activeShopId or defaulted to the uid. -->
+<script src="sokoni-merchant-store.js"></script>
+<script src="sokoni-merchant-store-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -899,6 +903,7 @@
     else if (id === 'disputes') renderDisputes();
     else if (id === 'messages') renderMessages();
     else if (id === 'customers') renderCustomers();
+    else if (id === 'shop') renderStore();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1913,6 +1918,29 @@
     if (!_cusUI) console.error('[merchant] Customers failed to mount — sokoni-merchant-customers-ui.js did not load');
   }
 
+  var _stoUI = null, _stoKey = null;
+  function renderStore () {
+    var host = document.getElementById('native-shop'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_stoUI && _stoKey === key) { _stoUI.refresh(); return; }
+    if (_stoUI) { try { _stoUI.destroy(); } catch (_) {} _stoUI = null; }
+    host.innerHTML = '';
+    _stoUI = window.SokoniMerchantStoreUI && SokoniMerchantStoreUI.mount(host, {
+      scope: scope,
+      origin: location.origin,
+      /* No db adapter: every read and write is a callable. The surface learns
+         its shopId from getMyMinishop rather than being handed one. */
+      callIdentity:  _callable('getMyMinishop'),
+      callSave:      _callable('saveMinishopConfig'),
+      callClaim:     _callable('claimMinishopHandle'),
+      callAnalytics: _callable('getMinishopAnalytics'),
+      callShare:     _callable('generateMinishopShareCard'),
+      onToast: _merchantToast
+    });
+    _stoKey = _stoUI ? key : null;
+    if (!_stoUI) console.error('[merchant] Store failed to mount — sokoni-merchant-store-ui.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
@@ -1922,6 +1950,7 @@
     else if (current === 'disputes') renderDisputes();
     else if (current === 'messages') renderMessages();
     else if (current === 'customers') renderCustomers();
+    else if (current === 'shop') renderStore();
   });
 
   function renderDashboard () {

@@ -132,7 +132,16 @@ window.SokoniMiniShop = (() => {
       if (!user || !_state.shopId) return;
       _state.currentUser = user;
       const snap = await firebase.firestore()
-        .doc(`shopFollowers/${_state.shopId}/followers/${user.uid}`)
+      /* The FLAT document is the relationship. This read used the subcollection
+         path `shopFollowers/{shopId}/followers/{uid}` — which nothing writes and
+         no firestore.rules block matches, so it was denied and swallowed by the
+         catch below, and the Follow button never showed "Following" no matter
+         how many times the shopper had followed.
+
+         `followShop` writes `shopFollowers/{shopId}_{uid}` and Store Stage 1B
+         made that document CF-only, so it is the one authority on follow state.
+         This reads it rather than introducing a second. */
+        .doc(`shopFollowers/${_state.shopId}_${user.uid}`)
         .get();
       _state.following = snap.exists;
       _updateFollowBtn();

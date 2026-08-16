@@ -286,9 +286,16 @@
       mobile:true, desktop:true, activeKey:'availability' },
 
     { id:'shop', name:'Shop Details', icon:'🏬', tier:'more',
-      kind:'seller', sec:'store',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'shop' },
+      mobile:true, desktop:true, activeKey:'shop',
+      note:'Native storefront surface (sokoni-merchant-store-ui.js) on the six authorities the ' +
+           'Store census classified SAFE: getMyMinishop, saveMinishopConfig, claimMinishopHandle, ' +
+           'getMinishopAnalytics, generateMinishopShareCard. The shopId is LEARNED from ' +
+           'getMyMinishop, which resolves shops where sellerUid == uid — never taken from ' +
+           'SokoniShell.activeShopId, the URL, or anything a browser can edit, and never defaulted ' +
+           'to the uid. The follower count has ONE source, getMinishopAnalytics, whose value ' +
+           'derives from the shopFollowers relationship made CF-only in Store Stage 1B.' },
 
     { id:'fulfilment', name:'Fulfilment', icon:'🚚', tier:'more',
       kind:'page', src:'seller-fulfilment.html',

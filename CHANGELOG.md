@@ -1,3 +1,89 @@
+## [2026-08-16] — Store Stage 2: the storefront surface, on a shopId the server hands over
+
+Native `shop` route. Was `kind:'seller'` — an iframe of `seller.html#store`.
+
+### The shopId is learned, never assumed
+
+`getMyMinishop` resolves `shops where sellerUid == uid` and returns the document's own id. The
+surface learns its shopId **from the server** and passes that same value back to the calls that need
+one, where `_assertShopOwner` verifies it again.
+
+Nothing reads `SokoniShell.activeShopId`, the URL, or anything a browser can edit — **asserted**, not
+intended. An account with no shop gets *"You do not have a shop yet"*, and no call is made with an
+invented id. That fallback-to-uid is what made a correctly-provisioned merchant look broken in 2D-1,
+and it is not reintroduced.
+
+`claimMinishopHandle` is sent the **handle alone** — no shopId, because it resolves the shop itself
+and passing one would invite a caller to name a different shop.
+
+### One follower count
+
+`getMinishopAnalytics` is the only source, and its value derives from the `shopFollowers`
+relationship that Store Stage 1B made CF-only. The surface does not count followers and does not
+cache the number — a second computation would be a second authority, which is exactly what 1B
+removed. A missing count renders nothing rather than a fabricated `0`; a genuine `0` is shown.
+
+### The read mismatch, fixed on the one authority
+
+`sokoni-minishop.js` checked follow state at `shopFollowers/{shopId}/followers/{uid}` — a
+**subcollection path nothing writes and no rule matches**, so the read was denied and swallowed, and
+the Follow button never showed *Following* however many times a shopper had followed. It now reads
+`shopFollowers/{shopId}_{uid}`, the document `followShop` writes. **No second follower-state
+authority was introduced** — asserted on the access expression: exactly one `shopFollowers` document
+is ever read, and it is the flat one.
+
+### Editing that respects the merchant's work
+
+Save sends **only what changed**, and the button says how many changes. Saving shows *Saving…* then
+*Saved* from the **server's** response, never optimistically. A refused save **keeps the typed text**
+in the field, states the server's reason, and leaves the previously-saved values untouched — a screen
+that clears a rejected edit loses work and teaches the merchant not to trust it.
+
+Ownership, standing and counters are never put in the payload, and `PROTECTED_FIELDS` refuses them
+server-side regardless.
+
+**Files:** `sokoni-merchant-store.js`, `sokoni-merchant-store-ui.js`,
+`scripts/test-merchant-store.js`, `scripts/test-merchant-store-ui.js` (new);
+`sokoni-merchant-routes.js`, `merchant.html`, `sokoni-minishop.js` (modified).
+**Database/API/Rules:** unchanged — no new callable, no new collection, no authorization touched.
+**Breaking:** none. **Deployment:** Hosting only, when authorized. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-store.js` *(new)* | **60 / 0** |
+| `test-merchant-store-ui.js` *(new, WebKit)* | **120 / 0** at iPhone SE, iPhone 14 Pro and desktop |
+| `test-merchant-route-gate.js --all` | **512 / 10** — **identical to baseline**, same three failure signatures |
+| customers · messages · disputes · marketing · staff | 49/0 · 58/0 · 60/0 · 70/0 · 74/0 |
+| follow-shop · shop-employee · orderAdvance · pos-customer-scope | 39/0 · 53/0 · 47/0 · 41/0 |
+| adjust-stock · data · sell-inventory · routes · shop-access · application · templates | 51/0 · 37/0 · 90/0 · 60/0 · 34/0 · 35/0 · 32/0 |
+
+The route gate was compared against the recorded baseline rather than read fresh: **512/10 before,
+512/10 after**, and the ten break down as 6 × Firebase CORS on `127.0.0.1`, 2 × `Can't find variable:
+firebase` in `seller-delivery.html`, 2 × `seller:products` deep-switch — the same pre-existing set
+verified at `HEAD` earlier in this track. No new failures.
+
+**One honest limit on that comparison:** `--all` walks `C.primary()`, the 17 primary routes. `shop`
+is `tier:'more'`, so the gate never visits it — exactly as it never visited Marketing. An unchanged
+gate count therefore does **not** prove Store mounts; the 120-assertion browser suite does.
+
+Proven on screen at every viewport: `getMyMinishop` is called with an **empty payload**; every later
+call carries the server's shopId and never SHOP_C; a shop-less account triggers **no call with an
+invented id** and never shows the uid as a shop; a refused save keeps the typed text; the handle claim
+carries the handle alone; identity is re-read from the server after claiming; only the five SAFE
+authorities were ever called; no `localStorage` key is written.
+
+**One of my own assertions was wrong and was rewritten.** It counted occurrences of `shopFollowers`
+in `sokoni-minishop.js` and failed at 3 — two of them in the comment explaining the fix. The
+comment-stripper did not help either, because that file desynchronises one (a regex literal
+containing a quote is enough). It now matches the `.doc(...)` **access expression**, which is exact
+and needs no tokenizer.
+
+**Repo note:** `sokoni-minishop.js` already carried another process's uncommitted work. Only my
+single hunk was staged — 10 insertions, 1 deletion — leaving their 104 lines untouched in the working
+tree.
+
 ## [2026-08-16] — Store Stage 1B: `followShop` could create storefront config for shops nobody owns
 
 Two defects, and the first is the more serious of the two.
