@@ -1,3 +1,48 @@
+## [2026-08-16] — 2D-1 foundation: the canonical data layer under Sell and Inventory
+
+The capability map established that consolidation is a **rebuild of the data layer**, not a port of
+seller.js's screens. This is that layer — one scope resolver, one product read, one sale
+submission — so Sell, Inventory and later Orders/Receipts cannot drift into three models.
+
+**`sokoni-merchant-data.js` (new).** What it deliberately cannot do is the point:
+
+- **No Firestore write of any kind.** Not one — asserted by the suite, not by intent. Inventory
+  moves only when `posCompleteCheckout` says a sale completed; that callable owns the transaction,
+  the `posIdempotency` claim and the canonical `products.stock` deduction with `inventoryVersion`.
+- **No localStorage business state.** seller.js carries 28 device-local keys; every figure here
+  comes from `products` or the POS authority, or is reported as unknown. Unknown stock is `null`,
+  never `0` — `0` is a real and different answer.
+
+**Identity stays two identifiers.** `sellerUid` is the account, `shopId` is the shop; products are
+scoped by `products.shopId`, the same field `analytics-engine` and `merchant-success` query. With no
+active shop the scope resolves **not-ok** rather than defaulting `shopId` to the uid — that default
+is how a single-shop assumption becomes permanent and two merchants' stock quietly merges.
+
+**Retry cannot double-sell.** The idempotency key is derived from shop + cart contents + a
+per-attempt sale token and contains no clock, so a double tap or a retry after a dropped response
+reproduces the *same* key and the server completes the sale once. A failed sale reports failure —
+no success shape, and no local "compensating" stock write.
+
+**Files:** `sokoni-merchant-data.js` (new), `scripts/test-merchant-data.js` (new).
+**Database/API/Rules:** unchanged — no new collection, no new callable. **Breaking:** none.
+**Deployment:** Hosting only, when authorized. Not deployed.
+
+**Verification:** `node scripts/test-merchant-data.js` — **37/0** on a non-degenerate fixture
+(`SELLER_A` ≠ `SHOP_B`, plus a `SHOP_C` a product cannot cross into). The acceptance chain is
+proven: SHOP_B's catalogue loads scoped, a sale carries SELLER_A + SHOP_B, `posCompleteCheckout` is
+called exactly once, and an **abandoned cart calls no authority and leaves the catalogue byte-identical**.
+Five mutations are each caught: `shopId` falling back to the uid, the shop filter dropped from the
+product query, a time-based idempotency key, quantity collapsed to one-per-line, and unknown stock
+rendered as `0`. KASS appears once, as a control.
+
+**Blocked, and reported rather than worked around:** 2D-1B's *stock corrections* have **no server
+authority over `products.stock`**. `inventoryAdjustStock` writes
+`tenants/{id}/inventory_levels|inventory_movements|inventory_products` — a different counter from
+the one POS and the catalogue use — and the only path that touches the canonical field from a client
+is `sokoni-db.updateProductStock`, which also increments `sold`, conflating a correction with a
+sale. So this layer ships product **read** for Inventory and stops short of adjustments; see the
+report for the decision that unblocks it.
+
 ## [2026-08-16] — 2A: a merchant can finally file an application (and that is all it does)
 
 The census found the marketplace merchant lifecycle had no first step: nothing wrote a seller
