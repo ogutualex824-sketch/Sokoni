@@ -17,7 +17,7 @@
 | Store | ✅ done | `51780ed` |
 | Tax | ✅ done — native, account-level | `pending` |
 | Devices / POS | census done — **fleet BLOCKED**, local peripherals buildable | `pending` |
-| Fulfilment / Delivery | census done — **delivery half BLOCKED**, merchant board buildable | `pending` |
+| Fulfilment / Delivery | **7/7 findings closed in code**; regression PASS ([[FULFILMENT_REGRESSION_b8b0428]]); awaiting deploy + A7 | `b8b0428` |
 | **Devices — security hardening** | ← **next** (the 7 device findings below) | — |
 | Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
@@ -46,20 +46,27 @@
 | `validateDeviceAccess` — staff PIN oracle against a client-supplied `branchId` | **open** — high | — |
 | `posInitiateTerminalPayment`/`posGetTerminalHealth` — auth only, client `terminalId` | **open** — high | — |
 | `posDevices` rule gates on `sellerId`; writers write `merchantId` | **open** — medium | — |
-| **`availableDeliveries` — UNAUTHENTICATED HTTP; buyer name/phone/address + plaintext `proofPin`, up to 80 pending deliveries. VERIFIED LIVE (HTTP 200, no credentials)** | **open** — **CRITICAL, LIVE** | — |
-| Plaintext `deliveryPin` on `orders/{orderId}` readable by the assigned rider via the Firestore rules | **open** — **critical** | — |
-| `claimAvailableDelivery` returns plaintext `proofPin` to the claiming rider | **open** — high | — |
-| `deliveryVerifyShadow` — no assignment check (PIN oracle); burns the lockout counter `completeDeliveryWithPin` reads | **open** — high | — |
-| `handleFailedDelivery` — auth only; fails any delivery and strips its rider | **open** — high | — |
-| `dispatchDelivery` — auth only; starts the cascade on any delivery | **open** — medium | — |
-| `optimizeBatchRoute` — auth only; bulk address disclosure | **open** — medium | — |
+| **`availableDeliveries` — UNAUTHENTICATED HTTP; buyer name/phone/address + plaintext `proofPin`, up to 80 pending deliveries. VERIFIED LIVE (HTTP 200, no credentials)** | ✅ fixed in code — **NOT DEPLOYED** | `b8b0428` |
+| Plaintext `deliveryPin` on `orders/{orderId}` readable by the assigned rider via the Firestore rules | ✅ fixed in code — **NOT DEPLOYED** | `b8b0428` |
+| `claimAvailableDelivery` returns plaintext `proofPin` to the claiming rider | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
+| `deliveryVerifyShadow` — no assignment check (PIN oracle); burns the lockout counter `completeDeliveryWithPin` reads | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
+| `handleFailedDelivery` — auth only; fails any delivery and strips its rider | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
+| `dispatchDelivery` — auth only; starts the cascade on any delivery | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
+| `optimizeBatchRoute` — auth only; bulk address disclosure | ✅ fixed in code — NOT DEPLOYED | `b8b0428` |
 
 Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]]. Devices detail: [[MERCHANT_DEVICES_AUTHORITY]]. Fulfilment detail: [[MERCHANT_FULFILMENT_AUTHORITY]].
 
-**`availableDeliveries` is not a consolidation defect and must not be queued behind merchant UI
-work.** It is a live, unauthenticated production endpoint publishing customer name, phone number,
-home address and the plaintext delivery proof PIN. It predates this track. Triage it on its own
-timeline.
+**`availableDeliveries` — fixed in code at `b8b0428`, STILL LIVE IN PRODUCTION.** The endpoint
+in production is still the unauthenticated one: it publishes customer name, phone number, home
+address and the plaintext delivery proof PIN to anyone who asks. Deploying Functions is what closes
+it. Until then the code fix has changed nothing an attacker can observe.
+
+Two related items also remain live for one specific order, `SKN0SWYXPD` (`in_transit`, rider
+assigned): a plaintext `deliveryPin` on the order and a plaintext `proofPin` on
+`packageRequests/DELSKN0SWYXPD`. New writes no longer create either, but existing records are only
+cleared by `scripts/sweep-order-delivery-pins.js --apply`, which has been **reported, not run** —
+and which must run **after** deployment, because migrating the PIN before `getMyDeliveryPin` is
+live would leave that buyer unable to read their own code from either location.
 
 **Fulfilment is not one screen either.** `fulfilmentScan` authorises correctly and projects
 correctly, `_sellerView` already omits commission and settlement, and

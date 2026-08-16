@@ -1,3 +1,63 @@
+## [2026-08-16] — Full fulfilment regression at `b8b0428`: PASS
+
+Gate artifact: `docs/FULFILMENT_REGRESSION_b8b0428.md`. Baseline `1753b44`. **Nothing deployed.**
+
+Scope was derived from the files changed since the baseline, not from module names. That mattered:
+the same commits touched `availableDeliveries`, `claimAvailableDelivery`, `smsTemplates`,
+`onOrderStatusChange` and the IntaSend webhook's delivery creation — all in `functions/index.js` —
+so a regression limited to the delivery suites would have missed the order, notification and
+checkout paths those sit on.
+
+**Tier 1 — delivery / fulfilment: 314 assertions, 0 failures.** authorization 36/0,
+fulfilment-scan 69/0, sequence 33/0, tracking-rules 22/0, pin-unreachable 65/0, pin-buyer-path 20/0,
+dispatch-authority 45/0, rider-navigation 24/0, auth-dispatch pass, server-delivery-authority pass,
+delivery-engine-sync pass.
+
+The load-bearing result is `test-fulfilment-scan` at **69/0, unchanged**. It predates this work;
+holding steady after `fulfilment-scan.js` was refactored onto `delivery-authority.js` is what proves
+the shared primitive changed no behaviour. A new suite passing would not have proven that.
+
+**Tier 2 — order / notification / payment: pass, with two environmental failures.**
+order-advance-authority 47/0, payment-authority 22/0, b2c-webhook-classification 12/12, notify,
+sms, payment-integrity and `verify-webhook-authority webhookIntasend` all pass.
+
+`test-cart-checkout` and `test-checkout-fallback-total` each fail one assertion. Both assert
+working-tree cleanliness via `git diff --name-only HEAD` — **uncommitted** changes only. Every file
+this work touched is committed, so none can appear there, and none does. The 24 files they flag are
+byte-for-byte the set already dirty at session start, belonging to another process working this
+repo in parallel; the set-intersection with the files changed since `1753b44` is **empty**. They
+would have failed identically at the baseline. Recorded, not suppressed — a gate that reports green
+by ignoring a red suite is worse than one that explains it.
+
+**Tier 3 — merchant surface: unchanged.** routes 59/0; route-gate `--all` **512/10**, identical to
+baseline in count *and* composition (6 CORS, 2 `Can't find variable: firebase`, 2 `seller:products`).
+Standing caveat unchanged: `--all` walks only the 17 `tier:'primary'` routes, so `fulfilment` is
+never visited by the gate — the tier-1 suites are what cover it.
+
+**Tier 4 — gates and rules.** syntax gate pass (1,515 JS files, 433 inline `<script>` blocks);
+payout gate pass (0 mismatches); `firestore.rules` **byte-identical to `1753b44`**.
+
+### What this does NOT establish, stated plainly
+
+`availableDeliveries` **is still live and unauthenticated in production.** The fix exists in code
+and has changed nothing an attacker can observe. Deploying Functions is what closes it. The queue
+entries now read "fixed in code — NOT DEPLOYED" rather than "fixed", because the previous wording
+would have read as resolved.
+
+One order, `SKN0SWYXPD` (`in_transit`, rider assigned), still carries a plaintext `deliveryPin`,
+and `packageRequests/DELSKN0SWYXPD` still carries a plaintext `proofPin`. Both remain readable by
+that rider. The sweep is reported, not applied — and is sequenced **after** deployment on purpose:
+migrating the PIN before `getMyDeliveryPin` is live would leave that buyer unable to read their own
+code from either location.
+
+Also unverifiable from here, and recorded as such: the IntaSend dashboard registration
+(`verify-webhook-authority` says so itself — code agreeing with itself is not code agreeing with the
+dashboard), and the second deployed webhook handler (ADR-0014, pre-existing, still open).
+
+**Files:** `docs/FULFILMENT_REGRESSION_b8b0428.md` (new), `docs/MERCHANT_2D2_QUEUE.md`.
+**Database / API / security changes:** none — this is a verification stage.
+**Deployment:** none.
+
 ## [2026-08-16] — Pre-release: PIN sweep report, smsTemplates repair, findings 5–7 closed
 
 Three pre-deployment items. `firestore.rules` remains byte-identical to HEAD — verified again.
