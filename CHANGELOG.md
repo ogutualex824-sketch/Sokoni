@@ -1,3 +1,48 @@
+## [2026-08-16] — Deploy guard: "not behind" was never the safety question
+
+`scripts/deploy/guard-no-rollback.js` blocked only the strict case where local HEAD is an
+**ancestor** of the live commit. Its own header said so: *"otherwise (ahead / diverged / live
+commit unknown here) → allowed."*
+
+A diverged branch is neither behind nor ahead. It forked, both sides moved, and deploying it
+reverts everything the live side advanced since the fork. Because Hosting publishes the working
+**tree** (`"public": "."`), that revert is total — it is not limited to the files the branch
+happens to have touched.
+
+Found while preparing the delivery security release. On `fix/algolia-batch-poisoning` the guard
+printed:
+
+```
+[rollback-guard] local c40d882 is not behind live 8290102 — allowing deploy.
+```
+
+for a tree that had forked 54 commits earlier and would have reverted **110 files**, including
+`settlement-engine.js`, `settlement-executor.js` and `order-settlement.js` — money paths.
+
+The guard now asks the stronger question: is the live commit **contained** in this tree?
+
+```
+git merge-base --is-ancestor <live> <head>
+```
+
+If not, it refuses and reports the divergence in both directions. An unknown live commit is now
+treated as diverged and reported, rather than waved through as "not behind" — fetching is the
+caller's job, and a guard that cannot see the live commit cannot vouch for the tree.
+
+Verified both ways, which is the only way this kind of change means anything:
+
+| tree | expected | exit |
+|---|---|---|
+| `fix/algolia-batch-poisoning` (diverged, 54/41) | refuse | **1** |
+| `release/delivery-security` (contains live) | allow | **0** |
+
+The old guard returns `0` on the first of those. That contrast is the test.
+
+**Files:** `scripts/deploy/guard-no-rollback.js`.
+**Database / API changes:** none. **Security changes:** none — release tooling.
+**Breaking changes:** deploys from a diverged tree now fail. That is the point; the fix is to merge
+onto the live branch and re-run the regression.
+
 ## [2026-08-16] — Full fulfilment regression at `b8b0428`: PASS
 
 Gate artifact: `docs/FULFILMENT_REGRESSION_b8b0428.md`. Baseline `1753b44`. **Nothing deployed.**

@@ -95,5 +95,49 @@ function fetchLiveVersion() {
     process.exit(1);
   }
 
-  console.log(`  [rollback-guard] local ${head.slice(0, 7)} is not behind live ${live.commit.slice(0, 7)} — allowing deploy.`);
+  /* ── DIVERGENCE ────────────────────────────────────────────────────────────
+     "Not an ancestor of live" is not the same as "safe". A branch that forked
+     before the live commit is neither behind nor ahead — it is DIVERGED, and
+     deploying it reverts every file the live side advanced since the fork.
+     Hosting publishes the working TREE, so that revert is total: it is not
+     limited to the files this branch happens to have touched.
+
+     This guard used to allow that case explicitly. It was caught on
+     release/delivery-security, whose branch had forked 54 commits earlier: the
+     guard printed "allowing deploy" for a tree that would have rolled back 110
+     files including settlement-engine.js, settlement-executor.js and
+     order-settlement.js. Being merely not-behind is the weaker claim; the
+     question is whether live's commit is CONTAINED in this tree. */
+  let liveIsContained = false;
+  try {
+    cp.execSync(`git merge-base --is-ancestor ${live.commit} ${head}`, { stdio: 'ignore' });
+    liveIsContained = true;
+  } catch (e) {
+    /* Also reached when the live commit is not in this object store. Fetching is
+       the caller's job; an unknown live commit is treated as diverged and
+       reported as such below, rather than waved through. */
+    liveIsContained = false;
+  }
+
+  if (!liveIsContained) {
+    let ahead = '?', behind = '?';
+    try {
+      const counts = cp.execSync(`git rev-list --left-right --count ${live.commit}...${head}`,
+        { encoding: 'utf8' }).trim().split(/\s+/);
+      behind = counts[0]; ahead = counts[1];
+    } catch (_) {}
+    console.error('');
+    console.error('  ✖ [rollback-guard] REFUSING TO DEPLOY — this tree has DIVERGED from production.');
+    console.error(`      This worktree HEAD : ${head.slice(0, 7)} (${git('rev-parse --abbrev-ref HEAD') || 'detached'})`);
+    console.error(`      Already live       : ${live.commit.slice(0, 7)}  built ${live.buildTime || '?'}`);
+    console.error(`      Commits only on live: ${behind}   only here: ${ahead}`);
+    console.error('      The live commit is NOT contained in this tree, so deploying would revert');
+    console.error('      every file production advanced since the fork — hosting publishes the whole');
+    console.error('      tree, not just the files you changed.');
+    console.error('      Fix: merge or rebase onto the live branch, re-run the regression, then retry.');
+    console.error('');
+    process.exit(1);
+  }
+
+  console.log(`  [rollback-guard] local ${head.slice(0, 7)} contains live ${live.commit.slice(0, 7)} — allowing deploy.`);
 })();
