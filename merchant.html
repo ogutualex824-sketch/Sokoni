@@ -484,6 +484,11 @@
      contains no Firestore access at all; sokoni-merchant-team.js is the surface. -->
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
+<!-- MARKETING (2D-2 step 3) — SAFE authorities only. The data layer strips
+     orders/revenue/ROI before the surface can reach them: those counters are
+     incremented by an endpoint that needs no sign-in. -->
+<script src="sokoni-merchant-campaigns.js"></script>
+<script src="sokoni-merchant-marketing.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -877,6 +882,7 @@
     else if (id === 'sell') renderSell();
     else if (id === 'inventory') renderInventory();
     else if (id === 'staff') renderStaff();
+    else if (id === 'marketing') renderMarketing();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1769,11 +1775,40 @@
     if (!_teamUI) console.error('[merchant] Team failed to mount — sokoni-merchant-team.js did not load');
   }
 
+  var _mktUI = null, _mktShop = null;
+  function renderMarketing () {
+    var host = document.getElementById('native-marketing'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_mktUI && _mktShop === key) { _mktUI.refresh(); return; }
+    if (_mktUI) { try { _mktUI.destroy(); } catch (_) {} _mktUI = null; }
+    host.innerHTML = '';
+    _mktUI = window.SokoniMerchantMarketing && SokoniMerchantMarketing.mount(host, {
+      scope: scope,
+      /* Only the authorities the Marketing census classified SAFE are bound here.
+         The eleven marketing-engine callables are deliberately absent: they are
+         not re-exported, and their role gate admits any string claim. */
+      callList:          _callable('getMinishopCampaigns'),
+      callCreate:        _callable('createMinishopCampaign'),
+      callPause:         _callable('pauseMinishopCampaign'),
+      callDelete:        _callable('deleteMinishopCampaign'),
+      callPromos:        _callable('miniShopGetPromotions'),
+      callCreatePromo:   _callable('miniShopCreatePromotion'),
+      callUpdatePromo:   _callable('miniShopUpdatePromotion'),
+      /* Account-scoped by design — sokoAds has no shopId in the writer or either
+         reader, and the surface labels it accordingly. */
+      callCreateAd:      _callable('createAdCampaign'),
+      onToast: _merchantToast
+    });
+    _mktShop = _mktUI ? key : null;
+    if (!_mktUI) console.error('[merchant] Marketing failed to mount — sokoni-merchant-marketing.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
     else if (current === 'inventory') renderInventory();
     else if (current === 'staff') renderStaff();
+    else if (current === 'marketing') renderMarketing();
   });
 
   function renderDashboard () {

@@ -169,9 +169,17 @@
       mobile:true, desktop:true, activeKey:'messages' },
 
     { id:'marketing', name:'Marketing', icon:'📣', tier:'more',
-      kind:'seller', sec:'marketing',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'marketing' },
+      mobile:true, desktop:true, activeKey:'marketing',
+      note:'Native surface (sokoni-merchant-marketing.js) built ONLY on the authorities the ' +
+           'Marketing census classified SAFE: createMinishopCampaign / getMinishopCampaigns / ' +
+           'pauseMinishopCampaign / deleteMinishopCampaign (all four now shop-scoped) plus the ' +
+           'minishop promotions path. Ads are ACCOUNT-scoped and labelled as such, because ' +
+           'sokoAds carries no shopId in the writer or either reader. Orders and ROI are NOT ' +
+           'displayed: those counters come from trackCampaignClick, an endpoint needing no ' +
+           'sign-in, so they are not business results. The eleven marketing-engine callables ' +
+           'stay out — un-re-exported, and their role gate admits any string claim.' },
 
     { id:'plan', name:'Plan', icon:'💎', tier:'primary',
       kind:'page', src:'plans.html?shell=merchant',

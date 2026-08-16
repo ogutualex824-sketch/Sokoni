@@ -1,3 +1,88 @@
+## [2026-08-16] — 2D-2 step 3: Marketing, built only on what is actually authoritative
+
+Two commits in one boundary: the authorization fix the census called for, then the surface.
+
+### The hardening — delete and pause now ask the right question
+
+`minishop-campaigns.js` held two authorization rules. Create and read asked the shop
+(`shops/{shopId}.sellerUid !== uid`); delete and pause asked the campaign's **creator**
+(`campaign.uid !== uid`). For a single-owner shop the two coincide, which is why it survived
+unnoticed — they separate the moment a shop changes hands, leaving a transferred shop's own
+campaigns permanently unmanageable by the person who now owns it. Nothing repaired that, because no
+path rewrites `campaign.uid`.
+
+All four now use one helper: read the document, then assert on the shop it names — the rule
+`miniShopUpdatePromotion` already applied to the same shape. **Not a new authorization mechanism, the
+existing one applied consistently.** Deliberately scoped to `sellerUid`, the field this module's
+create/read path already used; the platform-wide `ownerId`/`sellerUid`/`ownerUid` divergence is a
+separate convergence and is **not** touched here.
+
+Every refusal is now an `HttpsError`, so a client can read `permission-denied` instead of receiving
+`internal` with a message attached.
+
+### The surface — and what it refuses to show
+
+Native `marketing` route. Three tabs, each bounded by what the backend can honestly do:
+
+| tab | authority | bound by |
+|---|---|---|
+| Campaigns | create / list / pause / delete | shop-scoped, all four hardened |
+| Promotions | create + update; **list is the public storefront read** | active promotions only, and it says so |
+| Ads | `createAdCampaign` | **account-scoped**, labelled *"SOKONI Ads — Account campaigns"* |
+
+**Orders, revenue and ROI are never displayed.** Those counters are incremented by
+`trackCampaignClick`, an `onRequest` endpoint that needs no sign-in, so they are not business
+results. The **data layer strips them** before the surface can reach them — a screen cannot render
+what it was never handed, and no future surface can pick them up by accident. Clicks and views appear
+as *traffic*, labelled as such.
+
+**Ads carry no `shopId`.** `sokoAds` has no shop scoping in the writer or in either reader, so
+attaching one would manufacture the appearance of shop scoping with none of the behaviour. The
+account-level scope is stated on screen rather than papered over.
+
+**Blocked capabilities are visible, not hidden.** Bundle deals, A/B tests, platform coupon codes and
+per-campaign conversions each render as *"Not available yet"* with the reason. A merchant can see the
+edge of what works instead of meeting a button that fails.
+
+**Pause is the ordinary action.** Deleting destroys the campaign's click and view history, so delete
+sits behind a confirmation that names the exact counts being lost and offers Pause instead.
+
+**None of the eleven marketing-engine callables is bound anywhere in the merchant path** — asserted,
+not intended. They remain un-re-exported, and their role gate admits any string claim.
+
+**Files:** `sokoni-merchant-campaigns.js`, `sokoni-merchant-marketing.js`,
+`scripts/test-merchant-marketing.js`, `scripts/test-merchant-marketing-ui.js` (new);
+`functions/minishop-campaigns.js`, `sokoni-merchant-routes.js`, `merchant.html`,
+`docs/MERCHANT_MARKETING_AUTHORITY.md` (modified). **Database:** none. **API:** no new callable —
+four existing ones had their authorization corrected. **Rules:** unchanged. **Breaking:** a caller
+who created a campaign and then lost shop ownership can no longer delete it; that is the fix.
+**Deployment:** Hosting + Functions, when authorized. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-marketing.js` *(new)* | **70 / 0** |
+| `test-merchant-marketing-ui.js` *(new, WebKit)* | **92 / 0** at iPhone SE **and** iPhone 14 Pro |
+| `test-merchant-route-gate.js --all` | **508 / 10** |
+| marketing-authority census | re-runs to **SAFE** for all four campaign functions |
+| staff · shop-employee-authority · adjust-stock · data · sell-inventory | 74/0 · 53/0 · 51/0 · 37/0 · 90/0 |
+| routes · shop-access · application · templates · home-back | 64/0 · 34/0 · 35/0 · 32/0 · 93/0 |
+
+Proven on screen, not inferred: the server returns `orders: 137`, `revenue: 845000`, `roi: '3.3%'`
+for the fixture campaign and **none of the three ever reaches the DOM** — the metric tiles are
+asserted to carry only Clicks and Views. Every mention of ROI is asserted to live inside a
+*not-available* notice, which is how the merchant learns the figure exists but cannot be trusted yet.
+Ads are asserted to leave with **no `shopId` on the payload**. Delete is asserted to send nothing
+until confirmed. SHOP_C is refused and nothing of SHOP_C renders. A 76-character campaign name
+ellipsises without the page scrolling sideways; every visible control is ≥44px; no `localStorage` key
+is written at all.
+
+**One assertion was too broad and was corrected rather than satisfied:** the first version banned the
+word *ROI* anywhere on screen, which would have forced the surface to hide the limitation instead of
+stating it. It now bans the ROI **value** and requires every mention of the word to sit inside a
+not-available notice.
+
 ## [2026-08-16] — 2D-2 step 2: Team/Staff, native and on the corroborated contract
 
 ```

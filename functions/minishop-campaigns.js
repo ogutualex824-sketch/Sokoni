@@ -5,13 +5,45 @@
  * Collections: minishopCampaigns/{campaignId}
  * All queries: doc-ID or single-field — no composite indexes needed.
  */
-const { onCall, onRequest } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function _requireAuth(ctx) {
-  if (!ctx.auth) throw new Error('UNAUTHENTICATED: Login required');
+  if (!ctx.auth) throw new HttpsError('unauthenticated', 'Login required');
+}
+
+/**
+ * ONE ownership rule for this module: the SHOP DOCUMENT decides.
+ *
+ * `createMinishopCampaign` and `getMinishopCampaigns` already asked this
+ * question. `deleteMinishopCampaign` and `pauseMinishopCampaign` asked a
+ * different one — `campaign.uid !== uid`, i.e. "did you create this?" rather
+ * than "is this yours?". For a single-owner shop the two coincide, which is why
+ * the difference survived unnoticed; they separate the moment a shop changes
+ * hands, leaving a transferred shop's own campaigns permanently unmanageable by
+ * the person who now owns it. Nothing repaired that, because no path rewrites
+ * `campaign.uid`.
+ *
+ * This is the rule `miniShopUpdatePromotion` already applies to the same shape
+ * (mutate a document reached by its own id): read the document, then assert on
+ * the shop it names. Not a new authorization mechanism — the existing one,
+ * applied consistently.
+ *
+ * Scoped deliberately to `sellerUid`, the field this module's create/read path
+ * already uses. The wider `ownerId`/`sellerUid`/`ownerUid` divergence across the
+ * platform is a separate convergence and is NOT resolved here.
+ */
+async function _assertShopOwner(db, shopId, uid) {
+  if (!shopId || typeof shopId !== 'string') {
+    throw new HttpsError('invalid-argument', 'shopId required');
+  }
+  const shopSnap = await db.collection('shops').doc(shopId).get();
+  if (!shopSnap.exists || shopSnap.data().sellerUid !== uid) {
+    throw new HttpsError('permission-denied', 'Not your shop');
+  }
+  return shopSnap.data();
 }
 
 function _san(s, max = 200) {
@@ -33,17 +65,14 @@ exports.createMinishopCampaign = onCall({ cors: true }, async (request) => {
   const uid = request.auth.uid;
   const { shopId, name, type, description, targetUrl, startsAt, endsAt } = request.data || {};
 
-  if (!shopId || typeof shopId !== 'string') throw new Error('shopId required');
-  if (!name || typeof name !== 'string' || name.trim().length < 2) throw new Error('Campaign name required (min 2 chars)');
-  if (type && !CAMPAIGN_TYPES.includes(type)) throw new Error('Invalid campaign type');
+  if (!shopId || typeof shopId !== 'string') throw new HttpsError('invalid-argument', 'shopId required');
+  if (!name || typeof name !== 'string' || name.trim().length < 2) throw new HttpsError('invalid-argument', 'Campaign name required (min 2 chars)');
+  if (type && !CAMPAIGN_TYPES.includes(type)) throw new HttpsError('invalid-argument', 'Invalid campaign type');
 
   const db = getFirestore();
 
-  // Verify caller owns the shop
-  const shopSnap = await db.collection('shops').doc(shopId).get();
-  if (!shopSnap.exists || shopSnap.data().sellerUid !== uid) {
-    throw new Error('PERMISSION_DENIED: Not your shop');
-  }
+  // Verify caller owns the shop — the one rule, shared with delete/pause.
+  await _assertShopOwner(db, shopId, uid);
 
   // Get the minishop handle
   const configSnap = await db.collection('minishopConfig').doc(shopId).get();
@@ -103,15 +132,12 @@ exports.getMinishopCampaigns = onCall({ cors: true }, async (request) => {
   const uid = request.auth.uid;
   const { shopId, status } = request.data || {};
 
-  if (!shopId) throw new Error('shopId required');
+  if (!shopId) throw new HttpsError('invalid-argument', 'shopId required');
 
   const db = getFirestore();
 
-  // Verify ownership
-  const shopSnap = await db.collection('shops').doc(shopId).get();
-  if (!shopSnap.exists || shopSnap.data().sellerUid !== uid) {
-    throw new Error('PERMISSION_DENIED: Not your shop');
-  }
+  // Verify ownership — the one rule, shared with delete/pause.
+  await _assertShopOwner(db, shopId, uid);
 
   // Single-field query — no composite index needed
   let query = db.collection('minishopCampaigns').where('shopId', '==', shopId);
@@ -196,13 +222,14 @@ exports.pauseMinishopCampaign = onCall({ cors: true }, async (request) => {
   const uid = request.auth.uid;
   const { campaignId, pause = true } = request.data || {};
 
-  if (!campaignId) throw new Error('campaignId required');
+  if (!campaignId) throw new HttpsError('invalid-argument', 'campaignId required');
 
   const db = getFirestore();
   const docSnap = await db.collection('minishopCampaigns').doc(campaignId).get();
-  if (!docSnap.exists || docSnap.data().uid !== uid) {
-    throw new Error('PERMISSION_DENIED: Not your campaign');
-  }
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Campaign not found');
+
+  /* Read the campaign, then authorise on the SHOP it names. */
+  await _assertShopOwner(db, docSnap.data().shopId, uid);
 
   await db.collection('minishopCampaigns').doc(campaignId).update({
     status: pause ? 'paused' : 'active',
@@ -218,14 +245,18 @@ exports.deleteMinishopCampaign = onCall({ cors: true }, async (request) => {
   const uid = request.auth.uid;
   const { campaignId } = request.data || {};
 
-  if (!campaignId) throw new Error('campaignId required');
+  if (!campaignId) throw new HttpsError('invalid-argument', 'campaignId required');
 
   const db = getFirestore();
   const docSnap = await db.collection('minishopCampaigns').doc(campaignId).get();
-  if (!docSnap.exists || docSnap.data().uid !== uid) {
-    throw new Error('PERMISSION_DENIED: Not your campaign');
-  }
+  if (!docSnap.exists) throw new HttpsError('not-found', 'Campaign not found');
 
+  /* Read the campaign, then authorise on the SHOP it names. */
+  await _assertShopOwner(db, docSnap.data().shopId, uid);
+
+  /* Still a hard delete, and it still destroys the campaign's click/view history
+     with it. That is why the merchant workspace makes PAUSE the ordinary action
+     and puts this one behind an explicit confirmation. */
   await db.collection('minishopCampaigns').doc(campaignId).delete();
   return { success: true };
 });

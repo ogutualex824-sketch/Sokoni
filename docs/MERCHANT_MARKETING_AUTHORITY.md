@@ -9,10 +9,10 @@ Companion to [[MERCHANT_2D2_AUTHORITY_CENSUS]]. Resolves the three questions tha
 
 | callable | exported | auth | ownership | client scope | collections | verdict |
 |---|---|---|---|---|---|---|
-| `createMinishopCampaign` | yes | yes | shop | yes | `shops` `minishopConfig` `minishopCampaigns` | **SAFE** |
-| `getMinishopCampaigns` | yes | yes | shop | yes | `shops` `minishopCampaigns` | **SAFE** |
-| `deleteMinishopCampaign` | yes | yes | **creator** | no | `minishopCampaigns` | **SAFE AFTER AUTH HARDENING** |
-| `pauseMinishopCampaign` | yes | yes | **creator** | no | `minishopCampaigns` | **SAFE AFTER AUTH HARDENING** |
+| `createMinishopCampaign` | yes | yes | shop | yes | `minishopConfig` `minishopCampaigns` | **SAFE** |
+| `getMinishopCampaigns` | yes | yes | shop | yes | `minishopCampaigns` | **SAFE** |
+| `deleteMinishopCampaign` | yes | yes | shop | yes | `minishopCampaigns` | **SAFE** |
+| `pauseMinishopCampaign` | yes | yes | shop | yes | `minishopCampaigns` | **SAFE** |
 | `miniShopCreatePromotion` | yes | yes | shop | yes | `minishopPromoCodes` `minishopPromotions` | **SAFE** |
 | `miniShopGetPromotions` | yes | public (by design) | **none** | yes | `minishopPromotions` | **SAFE** |
 | `miniShopUpdatePromotion` | yes | yes | shop | yes | `minishopPromotions` `minishopPromoCodes` | **SAFE** |
@@ -166,8 +166,8 @@ empty for the same merchants, and would not see the catalogue Sell and Inventory
 
 | classification | capabilities |
 |---|---|
-| **SAFE** | `createMinishopCampaign`, `getMinishopCampaigns`, `miniShopCreatePromotion`, `miniShopGetPromotions`, `miniShopUpdatePromotion` |
-| **SAFE AFTER AUTH HARDENING** | `deleteMinishopCampaign`, `pauseMinishopCampaign` |
+| **SAFE** | `createMinishopCampaign`, `getMinishopCampaigns`, `deleteMinishopCampaign`, `pauseMinishopCampaign`, `miniShopCreatePromotion`, `miniShopGetPromotions`, `miniShopUpdatePromotion` |
+| **SAFE AFTER AUTH HARDENING** | — |
 | **SHOP-SCOPE DECISION REQUIRED** | `createAdCampaign` |
 | **BLOCKED** | `createBundleDeal`, `getActiveBundleDeals`, `createFlashSale`, `getFlashSalePrice`, `recordFlashSalePurchase`, `getCrossSellRecommendations`, `getUpsellRecommendations`, `createMarketingCampaign`, `runABTest`, `recordABTestImpression`, `applyCouponCode` |
 
