@@ -1,3 +1,154 @@
+## [2026-08-16] — Pre-release: PIN sweep report, smsTemplates repair, findings 5–7 closed
+
+Three pre-deployment items. `firestore.rules` remains byte-identical to HEAD — verified again.
+
+### 1. Historical plaintext PIN — REPORT ONLY, nothing written
+
+`scripts/sweep-order-delivery-pins.js`, run read-only against production:
+
+```
+orders with a plaintext deliveryPin: 1
+  already delivered/completed:       0
+  still in flight:                   1
+  READABLE BY A RIDER RIGHT NOW:     1
+
+  order            status        rider assigned
+  SKN0SWYXPD       in_transit    YES
+
+linked packageRequests carrying a plaintext proofPin: 1
+  DELSKN0SWYXPD    driver_accepted   hash present
+```
+
+One order. It is **actively in transit with a rider assigned**, so its PIN is readable by that
+rider right now. No PIN value was read into the process or printed.
+
+**The report changed the remediation.** A probe of that order found `deliveryPins/SKN0SWYXPD` does
+not exist and `deliveryPinIssued` is false. Deleting the field alone would have closed the exposure
+and simultaneously removed the **buyer's only copy of their PIN, mid-delivery**, while the rider
+stood there asking for it — `track.html` keys the PIN box off `deliveryPinIssued`, so the buyer
+would have seen nothing at all.
+
+So `--apply` now **migrates before it deletes**, per order:
+
+1. copy the plaintext into `deliveryPins/{orderId}` — server-side only, a collection with no rule
+2. set `deliveryPinIssued: true` so `track.html` knows to ask `getMyDeliveryPin`
+3. **then** delete `deliveryPin` from the order
+
+Step 3 never runs unless 1–2 succeeded. Closing an exposure by breaking a live delivery is not a
+remediation. `--delete-only` preserves the literal delete-only behaviour and is documented as
+stranding an in-flight buyer.
+
+The report also exposed a **gap in the previous commit**: that delivery still carries plaintext
+`proofPin` on its `packageRequest`, and the rules grant the assigned rider a read there via
+`assignedDriverId`. `7716d65` fixed the *writers*; existing records were untouched. The sweep now
+covers `packageRequests.proofPin` too — fixing writers without sweeping records would have left the
+identical exposure one collection over, which is the mistake this whole remediation exists to
+correct.
+
+**Not applied.** The report is for review.
+
+### 2. `smsTemplates` — the stale `o.proofPin` assumption
+
+`smsTemplates(after)` receives an **order** document and read `o.proofPin`, but `proofPin` has only
+ever been written to `packageRequests`. The field was always undefined, so every buyer's "delivered"
+SMS and push said **`PIN: ----`** — four literal hyphens. A data-flow bug, not an authorisation one:
+nothing leaked, the message was simply useless.
+
+The PIN is now resolved by the caller from `deliveryPins/{orderId}` and passed in. The builder is
+synchronous and `onOrderStatusChange` is not, so the read happens in the trigger — and only for the
+one status whose message uses it. `deliveryPins` is CF-only, so this is the same Admin-SDK access
+`getMyDeliveryPin` performs, and the value goes only to the buyer's own number. A lookup failure
+degrades the message, never the trigger.
+
+When no PIN resolves, the message now **omits it** rather than printing a placeholder. Telling a
+buyer a code exists and then handing them four hyphens is worse than not mentioning it.
+
+**Buyer path verified behaviourally** — `scripts/test-delivery-pin-buyer-path.js`, **20/0**. It
+loads `delivery-pin.js` with `firebase-admin` and `firebase-functions` intercepted, captures the
+**real** `getMyDeliveryPin` handler and runs it against a Firestore stub: the buyer receives the
+PIN and the read is audited; the assigned rider is refused; a rider who is *also the buyer of that
+order* is refused **through the rider branch specifically** (the buyer check alone would have passed
+them); a stranger, an anonymous caller, a missing orderId and an unknown order each get the right
+code; "not issued yet" returns `issued:false` with a null PIN rather than a fabricated one; and no
+audit entry carries the PIN value.
+
+Observation recorded, not acted on: the buyer receives their PIN in the **`delivered`** message,
+but under the authoritative flow the rider needs it from the buyer at *handover* — i.e. earlier.
+Moving it is a product decision about when customers receive a code by SMS, not a data-flow repair,
+so it is flagged rather than changed.
+
+### 3. Findings 5–7 — closed with ONE shared primitive
+
+`dispatchDelivery`, `handleFailedDelivery` and `optimizeBatchRoute` each took a client-supplied
+`deliveryRef` behind `_assertAuth` and nothing else. Reading the full bodies made them worse than
+recorded: `handleFailedDelivery`'s `reassign` branch nulls `riderId`/`driverId` **and decrements the
+real rider's `activeDeliveries`**, its `refund` branch moves the delivery into `refund_initiated`,
+it notifies the customer, and it can contribute to a rider's excessive-cancellation record.
+
+New `functions/delivery-authority.js` holds **one** actor primitive. It is not a second copy:
+`fulfilment-scan.js` now consumes the same field lists rather than declaring its own, because two
+lists that drift is exactly how `assigned` and `driver_assigned` came apart and left a real rider
+on a real delivery refused the customer's address.
+
+Actors are derived from who bears the consequence:
+
+| operation | who may | why |
+|---|---|---|
+| `dispatch` | seller, admin | offering a parcel to riders is the seller handing over custody |
+| `fail` | rider, seller, admin | the rider discovers a failure, the seller owns the consequence; a **buyer** declaring failure is a dispute, which has its own path |
+| `route` | rider, admin | it returns dropoff addresses and customer phone numbers |
+
+`optimizeBatchRoute` authorises **per delivery**, not once for the batch — checking one ref, or
+checking that the caller is "a rider", would not have been enough; the question is whether they are
+the rider on *each* of these. An unauthorised ref is dropped rather than failing the whole batch, so
+one stale id cannot break a rider's route mid-shift.
+
+Every guard runs **before** the first write, and the suite asserts the ordering by index rather than
+by presence — a guard placed after the write is not a guard.
+
+**No legitimate caller was broken**, verified rather than assumed: `dispatchDelivery` is called from
+`dispatch.html`, which is `data-require-role="admin"`; `handleFailedDelivery` from
+`seller-delivery.html`, the seller's own hub; `optimizeBatchRoute` has no client caller yet.
+
+### Verification
+
+```
+test-delivery-dispatch-authority   45/0   (new)
+test-delivery-pin-buyer-path       20/0   (new)
+test-delivery-pin-unreachable      65/0
+test-fulfilment-scan               69/0   unchanged after the shared-primitive refactor
+test-delivery-authorization        36/0
+test-delivery-sequence             33/0
+test-delivery-tracking-rules       22/0
+test-rider-navigation              24/0
+verify-server-delivery-authority   pass
+predeploy syntax gate              pass
+```
+
+`test-fulfilment-scan` staying at 69/0 is the load-bearing result: it proves the refactor to a
+shared primitive changed no behaviour.
+
+The dispatch-authority suite carries the controls that matter — a resolver returning a role for
+everyone would pass the positive cases and be worthless, so it asserts a stranger resolves to
+**null**, an unknown operation fails **closed**, `admin:false` is not admin, and an arbitrary truthy
+claim (`admin: 'yes-please'`) is not admin.
+
+### Still open
+
+- Findings 1–4 are closed in code but **not deployed**.
+- The historical sweep is **reported, not applied**.
+- Merchant Fulfilment stays on `seller-fulfilment.html`. It is not promoted into `merchant.html`
+  until the delivery authority is deployed and verified.
+
+**Files:** `functions/delivery-authority.js` (new), `functions/dispatch.js`,
+`functions/fulfilment-scan.js`, `functions/index.js`, `scripts/sweep-order-delivery-pins.js`,
+`scripts/test-delivery-dispatch-authority.js` (new), `scripts/test-delivery-pin-buyer-path.js`
+(new), `docs/MERCHANT_FULFILMENT_AUTHORITY.md`.
+**Database changes:** none written. **API changes:** none — three existing callables now refuse
+unauthorised callers. **Security changes:** findings 5–7 closed.
+**Breaking changes:** none for legitimate callers, each verified above.
+**Deployment:** Functions + Hosting together, unchanged from `7716d65`. **Not deployed.**
+
 ## [2026-08-16] — Fulfilment security remediation: the delivery PIN is closed at the read path
 
 Not a UI change. The demonstrated problem was backend read authority, so every fix removes or
