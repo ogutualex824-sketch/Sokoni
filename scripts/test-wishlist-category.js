@@ -42,9 +42,14 @@ async function wipe() {
 }
 
 /* ── Extract the SHIPPED addToWishlistCat from category.js ──────────────────── */
+/* Async-first on purpose. Looking for `function <name>` alone would also match inside
+   `async function <name>`, and slicing from there silently drops the `async` — turning an
+   awaited call in the body into a SyntaxError. Try the async form, fall back to the plain
+   one, and never the reverse. */
 function extractFn(file, name) {
   const src = fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
-  const start = src.indexOf('async function ' + name);
+  let start = src.indexOf('async function ' + name);
+  if (start === -1) start = src.indexOf('function ' + name);
   if (start === -1) throw new Error(name + ' not found in ' + file);
   let i = src.indexOf('{', start), depth = 0, end = -1, q = null;
   for (; i < src.length; i++) {
@@ -109,7 +114,11 @@ function makeSurface(uid, opts) {
     requireAgeVerification: async () => true,
     console,
   };
-  const body = extractFn('category.js', 'addToWishlistCat');
+  /* addToWishlistCat calls _shopAgeGuard (f8c5b5a/17eef7a), which calls
+     _explicitlyAgeRestricted. Extracting the handler alone left both unresolved and the
+     suite died on ReferenceError before its first assertion. */
+  const body = ['_explicitlyAgeRestricted', '_shopAgeGuard', 'addToWishlistCat']
+    .map((n) => extractFn('category.js', n)).join('\n');
   const vm = require('vm');
   vm.createContext(sandbox);
   vm.runInContext(body + '\nglobalThis.__fn = addToWishlistCat;', sandbox);

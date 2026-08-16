@@ -37,7 +37,17 @@ function sliceFn(src, sig) {
   }
   throw new Error('unbalanced: ' + sig);
 }
-const FNS = ['function _cartSvc(', 'async function addToCart(', 'async function buyNowCat(']
+/* f8c5b5a/17eef7a put a canonical 18+ check in front of the add path, so addToCart now calls
+   _shopAgeGuard, which in turn calls _explicitlyAgeRestricted. Neither was in this bundle, so
+   the slice threw ReferenceError on the first add and the suite reported nothing at all.
+
+   The other three names the guard touches — isProductAgeRestricted, requireAgeVerification,
+   isAgeVerified — are reached through `typeof` checks, so leaving them out of the sandbox is
+   not an oversight: it exercises 17eef7a's documented fallback, where an unavailable gate lets
+   ordinary commerce through and still refuses an explicitly flagged item. That is the correct
+   posture for these cart tests, whose products are ordinary. */
+const FNS = ['function _cartSvc(', 'function _explicitlyAgeRestricted(', 'async function _shopAgeGuard(',
+             'async function addToCart(', 'async function buyNowCat(']
   .map(s => sliceFn(SRC, s)).join('\n');
 
 const PRODUCT = { id: 'c1', name: 'Kikoi', price: 1200, image: 'k.png', category: 'Fashion',

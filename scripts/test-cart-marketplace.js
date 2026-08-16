@@ -37,8 +37,14 @@ function sliceFn(src, sig) {
   }
   throw new Error('unbalanced: ' + sig);
 }
+/* buyProduct/buyNow now call _homeAgeGuard (f8c5b5a/17eef7a), which calls
+   _explicitlyAgeRestricted. Neither was bundled, so the slice threw ReferenceError on the
+   first buy and the suite reported nothing. isProductAgeRestricted / requireAgeVerification /
+   isAgeVerified are reached via `typeof`, so their absence exercises the documented
+   gate-unavailable fallback rather than breaking the sandbox. */
 const FNS = [
   'function _cartSvc(', 'function _syncCart(',
+  'function _explicitlyAgeRestricted(', 'async function _homeAgeGuard(',
   'async function buyProduct(', 'async function buyNow(',
   'function updateCart(', 'function removeFromCart(', 'function checkAbandonedCart(',
 ].map(s => sliceFn(SRC, s)).join('\n');

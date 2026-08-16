@@ -184,9 +184,23 @@ console.log('\nB. The rollout did not mangle any file');
     /* `was` now holds anything LOST; `gained` anything new.
        The four food pages already carried the tag from 2.5 — this slice only MOVED it
        above their non-deferred header, so they gain nothing and must lose nothing. */
+    /* Nothing may be LOST — that is the real perimeter and it stays absolute. */
     if (was.length > 0) return true;
-    return hadService ? gained.length !== 0
-                      : (gained.length !== 1 || !/sokoni-cart\.js/.test(gained[0] || ''));
+    /* Gains were originally required to be exactly sokoni-cart.js. That froze every rolled
+       page against all later work, and two unrelated workstreams have since landed
+       legitimately: adult-gate.js (f8c5b5a, the canonical 18+ classification) and
+       sokoni-sellability.js (dde631b) on product.html. Read literally, this check called
+       them cart-migration overreach and failed.
+
+       What this suite actually owns is the CART perimeter, so that is what it now asserts:
+       the service tag arrived where it was missing, and no OTHER cart or wishlist authority
+       was smuggled onto the page alongside it. A page gaining an unrelated module is not
+       this suite's business; a page gaining a second cart is. */
+    const extra = gained.filter(t => !/sokoni-cart\.js/.test(t));
+    const rivalCartAuthority = extra.some(t => /(^|[\/"'])(.*cart.*|.*wishlist.*)\.js/i.test(t));
+    if (rivalCartAuthority) return true;
+    return hadService ? gained.length !== extra.length
+                      : !gained.some(t => /sokoni-cart\.js/.test(t));
   });
   ck('B', 'every page kept all its tags; new ones are only the service',
      overreach.length === 0, overreach.slice(0, 6).join(', '));

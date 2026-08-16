@@ -33,6 +33,13 @@ function sliceFn(src, sig) {
   const bare = stripComments(src);
   const start = bare.indexOf(sig);
   if (start === -1) throw new Error('not found: ' + sig);
+  /* Refuse a match that begins mid-declaration. `function addToCart(` matches inside
+     `async function addToCart(`, and slicing from there drops the `async` — producing a
+     function that parses differently from the one that ships. Fail loudly instead: the
+     caller's signature is simply out of date and must say `async`. */
+  if (!sig.startsWith('async ') && /\basync\s+$/.test(bare.slice(Math.max(0, start - 12), start))) {
+    throw new Error('signature omits `async` for: ' + sig);
+  }
   let i = bare.indexOf('{', start), depth = 0;
   for (; i < bare.length; i++) {
     if (bare[i] === '{') depth++;
@@ -41,7 +48,20 @@ function sliceFn(src, sig) {
   throw new Error('unbalanced: ' + sig);
 }
 const SRC = read('product.js');
-const FNS = ['function _cartSvc(', 'function _cartItem(', 'function addToCart(', 'function buyNowProduct(']
+/* Two separate breakages, and the second is the dangerous one.
+
+   1. f8c5b5a/17eef7a put _ageGuard (and _explicitlyAgeRestricted behind it) in front of the
+      add path. Both must be in the bundle or the slice cannot resolve them.
+
+   2. addToCart and buyNowProduct became `async function`. The old signatures said
+      `function addToCart(`, which still MATCHES — as a substring starting six characters
+      into `async function addToCart(`. sliceFn therefore began the slice after `async`,
+      silently stripping the keyword, and `await _ageGuard()` inside the now-synchronous
+      function was a SyntaxError. A slice that quietly changes what it extracted is worse
+      than one that fails to find it; sliceFn now refuses that case outright. */
+const FNS = ['function _cartSvc(', 'function _cartItem(',
+             'function _explicitlyAgeRestricted(', 'async function _ageGuard(',
+             'async function addToCart(', 'async function buyNowProduct(']
   .map(sig => sliceFn(SRC, sig)).join('\n');
 
 const PRODUCT = {
@@ -86,11 +106,19 @@ const cartOf = (g) => JSON.parse(g.store.cart || '[]');
 
 console.log('\nTRACK 2.3 · surface 1 — product.js on SokoniCart\n' + '='.repeat(66));
 
+/* The add/buy entry points are async since the canonical 18+ gate landed in front of them,
+   so every call site below has to await. Left synchronous, the store was read one microtask
+   too early and reported an empty cart — and `fn() === false` compared a Promise object
+   against false, which is never true, so the fail-closed assertions would have PASSED for
+   the wrong reason. That is the more dangerous half: a suite reporting green while asserting
+   nothing. The body is therefore an async IIFE. */
+;(async () => {
+
 /* ══ A. add preserves the whole product object ══ */
 console.log('\nA. The item shape is the product object, unchanged');
 {
   const g = page({ size: '2kg', variants: { pack: 'single' } });
-  g.addToCart();
+  await g.addToCart();
   const c = cartOf(g);
   ck('A', 'one row for quantity 1', c.length === 1, c.length);
   Object.keys(PRODUCT).forEach(f => ck('A', 'preserves ' + f,
@@ -108,7 +136,7 @@ console.log('\nA. The item shape is the product object, unchanged');
 console.log('\nB. Quantity is still N duplicate rows');
 {
   const g = page({ quantity: 3 });
-  g.addToCart();
+  await g.addToCart();
   const c = cartOf(g);
   ck('B', 'three rows', c.length === 3, c.length);
   ck('B', 'none carries a qty field', c.every(i => i.qty === undefined));
@@ -127,7 +155,7 @@ console.log('\nB. Quantity is still N duplicate rows');
 console.log('\nC. Add to Cart appends, it does not replace');
 {
   const g = page({ seed: { cart: JSON.stringify([{ id: 'old', name: 'Chai', price: 90 }]) }, quantity: 2 });
-  g.addToCart();
+  await g.addToCart();
   const c = cartOf(g);
   ck('C', 'the existing item survives', c.some(i => i.id === 'old'), JSON.stringify(c.map(i => i.id)));
   ck('C', 'three rows total', c.length === 3, c.length);
@@ -137,7 +165,7 @@ console.log('\nC. Add to Cart appends, it does not replace');
 console.log('\nD. Buy Now replaces the cart — express checkout for this item only');
 {
   const g = page({ seed: { cart: JSON.stringify([{ id: 'stale', name: 'Old', price: 999 }]) }, quantity: 2 });
-  g.buyNowProduct();
+  await g.buyNowProduct();
   const c = cartOf(g);
   ck('D', 'the stale item is gone', !c.some(i => i.id === 'stale'), JSON.stringify(c.map(i => i.id)));
   ck('D', 'only this product remains', c.every(i => i.id === 'pr1'), JSON.stringify(c.map(i => i.id)));
@@ -152,7 +180,7 @@ console.log('\nE. Buy Now never leaves the cart momentarily empty');
   const seen = [];
   const real = g.localStorage.setItem;
   g.localStorage.setItem = function (k, v) { if (k === 'cart') seen.push(JSON.parse(v).length); return real.call(this, k, v); };
-  g.buyNowProduct();
+  await g.buyNowProduct();
   g.localStorage.setItem = real;
   ck('E', 'exactly one cart write', seen.length === 1, JSON.stringify(seen));
   ck('E', 'no intermediate empty state was persisted', !seen.includes(0), JSON.stringify(seen));
@@ -166,7 +194,7 @@ console.log('\nF. A failed write does not send the shopper to checkout');
 {
   const g = page({ seed: { cart: JSON.stringify([{ id: 'stale', name: 'Old', price: 999 }]) }, failWrite: true });
   const before = g.location.href;
-  const ok = g.buyNowProduct();
+  const ok = await g.buyNowProduct();
   ck('F', 'buyNowProduct reports failure', ok === false, String(ok));
   ck('F', 'did NOT navigate', g.location.href === before, g.location.href);
   ck('F', 'the previous cart is untouched', cartOf(g)[0].id === 'stale', JSON.stringify(cartOf(g)));
@@ -178,7 +206,7 @@ console.log('\nF. A failed write does not send the shopper to checkout');
 console.log('\nG. A failed add is reported');
 {
   const g = page({ failWrite: true });
-  const ok = g.addToCart();
+  const ok = await g.addToCart();
   ck('G', 'addToCart reports failure', ok === false, String(ok));
   ck('G', 'nothing stored', !g.store.cart, String(g.store.cart));
   ck('G', 'no success notification', !g.notifs.some(n => /added to cart/i.test(n.msg)),
@@ -191,8 +219,8 @@ console.log('\nG. A failed add is reported');
 console.log('\nH. Without SokoniCart both buttons fail closed');
 {
   const g = page({ withoutService: true });
-  ck('H', 'addToCart returns false', g.addToCart() === false);
-  ck('H', 'buyNowProduct returns false', g.buyNowProduct() === false);
+  ck('H', 'addToCart returns false', await g.addToCart() === false);
+  ck('H', 'buyNowProduct returns false', await g.buyNowProduct() === false);
   ck('H', 'nothing was written to localStorage', !g.store.cart, String(g.store.cart));
   ck('H', 'no navigation happened', g.location.href !== 'checkout.html', g.location.href);
   ck('H', 'the shopper was told the cart is loading',
@@ -230,8 +258,10 @@ console.log('\nJ. Frozen perimeter and unmigrated surfaces');
   })());
 }
 
+})().then(() => {
 console.log('\n' + '='.repeat(66));
 console.log('Track 2.3 surface 1 acceptance\n');
 ['A','B','C','D','E','F','G','H','I','J'].forEach(k => console.log('  ' + k + ': ' + (R[k] || 'MISSING')));
 console.log('\n  TOTAL:   ' + (pass + fail) + '\n  PASSED:  ' + pass + '\n  FAILED:  ' + fail);
 process.exit(fail ? 1 : 0);
+}).catch((e) => { console.error(e); process.exit(1); });

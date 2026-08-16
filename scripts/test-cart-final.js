@@ -123,14 +123,21 @@ const PAGE = {
     g._selectedSize = null; g._selectedColor = null; g._selectedVariants = {};
     g._showProductNotif = (m, t) => g.notifs.push({ msg: m, type: t });
     const s = read('product.js');
-    vm.runInContext(['function _cartSvc(', 'function _cartItem(', 'function addToCart(', 'function buyNowProduct(']
+    /* `function addToCart(` still matched — as a substring of `async function addToCart(` —
+       so the slice began after `async` and the awaited 18+ guard inside became a SyntaxError.
+       The signatures must carry `async`, and the guard pair must be bundled with them. */
+    vm.runInContext(['function _cartSvc(', 'function _cartItem(',
+      'function _explicitlyAgeRestricted(', 'async function _ageGuard(',
+      'async function addToCart(', 'async function buyNowProduct(']
       .map(x => sliceFn(s, x)).join('\n'), g);
   },
   category: (g) => {
     g.allProducts = [P('cat1')]; g.isAdultCategory = () => false;
     g.updateCartCount = () => {};
     const s = read('category.js');
-    vm.runInContext(['function _cartSvc(', 'async function addToCart(', 'async function buyNowCat(']
+    vm.runInContext(['function _cartSvc(',
+      'function _explicitlyAgeRestricted(', 'async function _shopAgeGuard(',
+      'async function addToCart(', 'async function buyNowCat(']
       .map(x => sliceFn(s, x)).join('\n'), g);
   },
   home: (g) => {
@@ -138,7 +145,9 @@ const PAGE = {
     g.displayProducts = () => {}; g.flyToCart = () => {}; g.saveHomeScroll = () => {};
     g.isAdultCategory = () => false; g.sokoniTrackAddToCart = () => {};
     const s = read('script.js');
-    vm.runInContext(['function _cartSvc(', 'function _syncCart(', 'async function buyProduct(',
+    vm.runInContext(['function _cartSvc(', 'function _syncCart(',
+      'function _explicitlyAgeRestricted(', 'async function _homeAgeGuard(',
+      'async function buyProduct(',
       'async function buyNow(', 'function updateCart(', 'function removeFromCart(']
       .map(x => sliceFn(s, x)).join('\n'), g);
   },
@@ -181,6 +190,13 @@ const tick = () => new Promise(r => setTimeout(r, 20));
 
 (async () => {
 console.log('\nTRACK 2 — FINAL CART ISOLATION + PERSISTENCE SUITE\n' + '='.repeat(70));
+
+/* The add/buy entry points are async since the canonical 18+ gate landed in front of them,
+   so every call site below must await. Left synchronous, storage was read one microtask too
+   early and reported an empty cart — and `fn() === false` compared a Promise against false,
+   which is never true, so fail-closed assertions would have PASSED for the wrong reason.
+   That is the more dangerous half: a suite reporting green while asserting nothing. */
+;(async () => {
 await db.collection('products').doc('pr1').set({ name: 'Item pr1', price: 100 });
 
 /* ══ A. persistence across a reload ══ */
@@ -188,7 +204,7 @@ console.log('\nA. Persistence — add, reload, still there');
 {
   const b = browser();
   const p1 = b.open('product.html', PAGE.product);
-  p1.addToCart();
+  await p1.addToCart();
   ck('A', 'stored after the add', cartOf(b).length === 1, cartOf(b).length);
   /* A genuine reload: new context, same storage. Nothing in memory survives. */
   const p2 = b.open('product.html', PAGE.product);
@@ -213,7 +229,7 @@ console.log('\nA. Persistence — add, reload, still there');
 console.log('\nB. Cross-surface — one browser, many pages, one cart');
 {
   const b = browser();
-  b.open('product.html', PAGE.product).addToCart();
+  await b.open('product.html', PAGE.product).addToCart();
   await b.open('category.html', PAGE.category).addToCart('cat1');
   b.open('flashsale.html', PAGE.flash).fsAddCart('fs1', 90);
   b.open('food.html', PAGE.food).SokoniFood.addToCart('r1', 'Mama', '🐟', { id: 'd1', name: 'Fish', price: 800 }, 2, '');
@@ -242,7 +258,7 @@ console.log('\nB. Cross-surface — one browser, many pages, one cart');
 console.log('\nC. Removal — one surface removes, every reader reflects it');
 {
   const b = browser();
-  b.open('product.html', PAGE.product).addToCart();
+  await b.open('product.html', PAGE.product).addToCart();
   b.open('flashsale.html', PAGE.flash).fsAddCart('fs1', 90);
   ck('C', 'two rows to start', cartOf(b).length === 2);
 
@@ -262,7 +278,7 @@ console.log('\nC. Removal — one surface removes, every reader reflects it');
 console.log('\nD. Two browsers are two devices');
 {
   const a = browser(), z = browser();
-  a.open('product.html', PAGE.product).addToCart();
+  await a.open('product.html', PAGE.product).addToCart();
   ck('D', 'browser A has one row', cartOf(a).length === 1);
   ck('D', 'browser Z has none — no shared state', cartOf(z).length === 0, cartOf(z).length);
   const zh = z.open('about.html', PAGE.header);
@@ -290,7 +306,7 @@ console.log('\nE. Anonymous shopping keeps working');
   const b = browser();
   const p = b.open('product.html', PAGE.product);
   ck('E', 'no auth object exists at all', p.firebaseAuth === undefined);
-  p.addToCart();
+  await p.addToCart();
   ck('E', 'the add still persisted', cartOf(b).length === 1);
   const p2 = b.open('cart.html', PAGE.cart);
   p2.renderCart();
@@ -304,7 +320,7 @@ console.log('\nE. Anonymous shopping keeps working');
 console.log('\nF. Four quantity models, one cart, none converted');
 {
   const b = browser();
-  const p = b.open('product.html', PAGE.product); p.quantity = 3; p.addToCart();   /* duplicate rows */
+  const p = b.open('product.html', PAGE.product); p.quantity = 3; await p.addToCart();   /* duplicate rows */
   b.open('business.html', (g) => {
     g.BIZ_ID = 'biz1'; g.skNavRefresh = () => {};
     vm.runInContext(sliceFn(read('business.html'), 'window.bizAddToCart ='), g);
@@ -336,7 +352,7 @@ console.log('\nG. A failed write is never a success claim, never a wipe');
   const b = browser({ cart: JSON.stringify([P('keep')]) });
   b.failing.write = true;
   const p = b.open('product.html', PAGE.product);
-  ck('G', 'product add reports failure', p.addToCart() === false);
+  ck('G', 'product add reports failure', await p.addToCart() === false);
   ck('G', 'no success toast', !p.notifs.some(n => /added to cart/i.test(n.msg)), JSON.stringify(p.notifs));
   const f = b.open('food.html', PAGE.food);
   f.SokoniFood.clearCart();
@@ -377,7 +393,7 @@ console.log('\nH. Buy Now — no navigation without a write');
 console.log('\nI. Checkout array contract, and no resurrection');
 {
   const b = browser();
-  const p = b.open('product.html', PAGE.product); p.quantity = 2; p.addToCart();
+  const p = b.open('product.html', PAGE.product); p.quantity = 2; await p.addToCart();
   const raw = cartOf(b);
   /* The real server cross-check, against a real catalogue. */
   const ids = [...new Set(raw.map(i => String(i.id || i.productId || '')).filter(Boolean))];
@@ -409,7 +425,7 @@ console.log('\nI. Checkout array contract, and no resurrection');
 console.log('\nJ. Food and product rows stay separate across pages');
 {
   const b = browser();
-  b.open('product.html', PAGE.product).addToCart();
+  await b.open('product.html', PAGE.product).addToCart();
   b.open('food.html', PAGE.food).SokoniFood.addToCart('r1', 'M', '🐟', { id: 'pr1', name: 'Fish', price: 800 }, 1, '');
   const c = cartOf(b);
   ck('J', 'a dish whose itemId equals a product id stays separate', c.length === 2,
@@ -495,9 +511,11 @@ console.log('\nM. Frozen invariants — reported, not silently fixed');
   ck('M', 'firestore.rules untouched', rules === '', rules);
 }
 
+})().then(() => {
 console.log('\n' + '='.repeat(70));
 console.log('Track 2 final acceptance\n');
 ['A','B','C','D','E','F','G','H','I','J','K','L','M'].forEach(k => console.log('  ' + k + ': ' + (R[k] || 'MISSING')));
 console.log('\n  TOTAL:   ' + (pass + fail) + '\n  PASSED:  ' + pass + '\n  FAILED:  ' + fail);
 process.exit(fail ? 1 : 0);
+}).catch((e) => { console.error(e); process.exit(1); });
 })().catch(e => { console.error('\nHARNESS ERROR:', e); process.exit(2); });
