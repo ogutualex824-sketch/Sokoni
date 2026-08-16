@@ -561,12 +561,115 @@ async function projectDriver(db, app, uid, approved) {
   };
 }
 
-/* Roles the platform already owns elsewhere. Projecting them from here would
-   duplicate an existing pipeline (sellers has its own onboarding + ade trigger;
-   healthProviders and legalProviders have their own registries), so the role is
-   recorded, the account is granted its role, and the projection is reported as
-   delegated instead of being silently skipped. */
-const DELEGATED_ROLES = { seller: 'sellers', health: 'healthProviders', legal: 'legalProviders' };
+/* Roles whose registry is still owned by another pipeline. `seller` USED to be
+   in here — the projection recorded `action: 'delegated'` and wrote nothing, on
+   the assumption that "sellers has its own onboarding". The capability census
+   showed that assumption was false: the only writers of `sellers/{uid}` are
+   client-side forms, and `shops/{uid}` had exactly one production writer, inside
+   a trigger nothing reaches. So an approved merchant got a role and a claim and
+   NO shop — and merchant.html then had no canonical shop to resolve. Seller is
+   projected properly below; health and legal genuinely still have their own
+   registries. */
+const DELEGATED_ROLES = { health: 'healthProviders', legal: 'legalProviders' };
+
+/* Shop ids that are not shop ids — the same placeholders the client rejects
+   (SokoniBranch synthesises {id:'main'} on an empty device). An application
+   that carries one must not activate a shop called "main". */
+const PLACEHOLDER_SHOP_IDS = ['main', 'default', 'branch', 'null', 'undefined', ''];
+const isPlaceholderShopId = (id) =>
+  PLACEHOLDER_SHOP_IDS.indexOf(String(id == null ? '' : id).trim().toLowerCase()) !== -1;
+
+/**
+ * Approval → a LIVE shop.
+ *
+ * Runs BEFORE the role is granted, deliberately: if the shop cannot be
+ * established, applyDecision's catch records `projectionStatus: 'failed'` and
+ * rethrows, so no seller role and no claim are handed out. The dangerous state
+ * this removes is "approved merchant with no shop" — an account that is
+ * authorised to sell and has nowhere to sell from.
+ *
+ * The shop id comes from the application when it named one (2A records
+ * `shopId` with its provenance), otherwise the account's own marketplace shop
+ * `shops/{uid}`. A merchant's account id and their shop id are NOT the same
+ * concept even when they share a value.
+ *
+ * Idempotent: deterministic ids + merge, so re-approving converges instead of
+ * forking a second shop. `createdAt` is written only when the shop is new.
+ */
+async function projectSeller(db, app, uid, approved) {
+  const declared = app.shopId && !isPlaceholderShopId(app.shopId) ? String(app.shopId) : null;
+  const shopId = declared || String(uid);
+  const shopRef = db.collection('shops').doc(shopId);
+  const sellerRef = db.collection('sellers').doc(String(uid));
+  const userRef = db.collection('users').doc(String(uid));
+
+  const name = _sanText(app.name || app.businessName || app.storeName, 160) || 'My Shop';
+  const existing = await shopRef.get();
+
+  if (!approved) {
+    /* A rejection has nothing to retract (no shop was ever created). A
+       suspension deactivates the shop but never deletes it — the merchant's
+       products, orders and history stay intact for reinstatement. */
+    if (existing.exists) {
+      await shopRef.set({ status: 'suspended', suspendedAt: _ts(), updatedAt: _ts() }, { merge: true });
+      await sellerRef.set({ status: 'suspended', active: false, updatedAt: _ts() }, { merge: true }).catch(() => {});
+      return { collection: 'shops', id: shopId, action: 'suspended' };
+    }
+    return { collection: 'shops', id: shopId, action: 'none' };
+  }
+
+  const batch = db.batch();
+
+  /* The canonical shop. `ownerId` is what every server-side ownership check
+     reads (analytics-engine, merchantAdjustStock); `sellerUid` states the same
+     fact in the merchant vocabulary. */
+  batch.set(shopRef, {
+    shopId,
+    ownerId: String(uid),
+    sellerUid: String(uid),
+    name,
+    nameLower: name.toLowerCase(),
+    status: 'active',
+    activatedAt: _ts(),
+    updatedAt: _ts(),
+    source: 'application_approval',
+    applicationId: app.applicationId || null,
+    ...(existing.exists ? {} : { createdAt: _ts() }),
+    ...(app.category ? { category: _sanText(app.category, 80) } : {}),
+    ...(app.phoneNumber ? { phoneNumber: app.phoneNumber } : {}),
+    ...(app.location ? { location: _sanText(app.location, 160) } : {}),
+  }, { merge: true });
+
+  /* The seller registry the storefront reads. Keyed by the ACCOUNT (that is how
+     every existing reader addresses it) and carrying the shop it belongs to. */
+  batch.set(sellerRef, {
+    uid: String(uid),
+    shopId,
+    name,
+    nameLower: name.toLowerCase(),
+    status: 'active',
+    active: true,
+    /* `updatedAt` is load-bearing: the discovery queries order by it, so a
+       registry row without one is invisible to the very listing it just
+       joined. */
+    updatedAt: _ts(),
+    ...(existing.exists ? {} : { createdAt: _ts() }),
+  }, { merge: true });
+
+  /* The account's active shop — what merchant.html resolves first. Without
+     this, an approved merchant with a shop still lands in a workspace that
+     cannot tell which shop is theirs. */
+  batch.set(userRef, { activeShopId: shopId, updatedAt: _ts() }, { merge: true });
+
+  await batch.commit();
+
+  return {
+    collection: 'shops+sellers', id: shopId,
+    action: existing.exists ? 'reactivated' : 'created',
+    shopId, sellerUid: String(uid), activeShopId: shopId,
+    shopIdSource: declared ? 'application.shopId' : 'account_shop',
+  };
+}
 
 /* Account roles now live in ONE primitive — ./role-authority. Both halves of a
    role (users.roles[] and the Auth custom claim) are written there, and a claim
@@ -606,6 +709,10 @@ async function applyDecision(appId, app, opts = {}) {
   try {
     if (role === 'driver') {
       receipt.writes.push(await projectDriver(db, app, uid, approved));
+    } else if (role === 'seller') {
+      /* Before the role is granted — see projectSeller. A merchant is never
+         authorised to sell before they have somewhere to sell from. */
+      receipt.writes.push(await projectSeller(db, app, uid, approved));
     } else if (DELEGATED_ROLES[role]) {
       receipt.writes.push({ collection: DELEGATED_ROLES[role], id: uid, action: 'delegated' });
     } else {

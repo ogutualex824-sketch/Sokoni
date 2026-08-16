@@ -1,3 +1,54 @@
+## [2026-08-16] — 2B: approval now creates the shop, and creates it FIRST
+
+`seller` was in `DELEGATED_ROLES`: an approved merchant got a role and a claim, and the projection
+recorded `action: 'delegated'` and wrote nothing — on the assumption that "sellers has its own
+onboarding pipeline". The capability census showed that assumption was false. The only writers of
+`sellers/{uid}` are client-side forms, and `shops/{uid}` had exactly one production writer, inside a
+trigger nothing reaches. So approval produced a merchant **authorised to sell with nowhere to sell
+from** — and, after the shop-resolution fix, a workspace that correctly reported "no shop yet".
+
+**`projectSeller()` runs before `grantAccountRole()`.** That ordering is the point: if the shop
+cannot be established, `applyDecision`'s catch records `projectionStatus: 'failed'` and rethrows, so
+no role and no claim are handed out. The dangerous half-state is removed by construction rather than
+detected afterwards.
+
+Approval now writes, in one batch:
+
+| document | what it establishes |
+|---|---|
+| `shops/{shopId}` | `status: 'active'`, `ownerId`, `sellerUid`, name — what every server-side ownership check reads (`analytics-engine`, `merchantAdjustStock`) |
+| `sellers/{uid}` | the registry row the storefront reads, **with `updatedAt`** — discovery orders by it, so a row without one is invisible to the listing it just joined |
+| `users/{uid}.activeShopId` | what `merchant.html` resolves first |
+
+The shop id comes from the application when it named one (2A records `shopId` with its provenance),
+otherwise the account's own marketplace shop. A **placeholder is never honoured** — an application
+carrying `shopId: 'main'` activates the account's shop, not `shops/main`. Rejection creates nothing;
+**suspension deactivates rather than deletes**, so products, orders and history survive
+reinstatement. Re-approval converges on the same documents and does not rewrite `createdAt`.
+
+`health` and `legal` remain genuinely delegated — they do have their own registries.
+
+**Files:** `functions/application-lifecycle.js`, `scripts/test-approval-activates-shop.js` (new).
+**Database:** approval is now a writer of `shops/{shopId}`, `sellers/{uid}` and
+`users/{uid}.activeShopId`. **Rules:** unchanged (Admin SDK). **API:** unchanged. **Breaking:**
+none. **Deployment:** Functions only (`applicationLifecycle`), when authorized. Not deployed.
+
+**Verification:** `node scripts/test-approval-activates-shop.js` — **35/0**, driving the real trigger
+on a non-degenerate fixture where the application names **SHOP_B** while the account is **SELLER_A**,
+so an implementation quietly using the uid as the shop id fails. Proven: pending mints nothing and
+creates nothing; self-approval still activates nothing (the `bc9bf4c` guard holds); approval creates
+an active SHOP_B owned by SELLER_A, projects the registry row with `updatedAt`, sets
+`activeShopId`, mints the seller claim **while preserving an existing rider claim**, and — asserted
+on write order — **creates the shop before minting the claim**; re-approval leaves exactly one shop
+with `createdAt` intact; suspension deactivates; rejection creates no shop and grants no seller
+claim; `'main'` never becomes a shop; and `merchant.html`'s resolver then finds exactly what
+approval created, scoped `SELLER_A` ≠ `SHOP_B`. KASS is a control. Five mutations caught, including
+re-delegating seller, dropping `activeShopId`, and losing `updatedAt` on the registry row.
+
+*(Harness note: an early run failed `B10` because the stub lacked `.delete()`, which `role-authority`
+calls to retire a reconcile record after a successful mint — the TypeError was caught and reported
+as a claim failure. The hole was in the harness, not the code.)*
+
 ## [2026-08-16] — merchant.html asked for a shop called "main"
 
 A correctly-provisioned merchant could not reach their shop in the merchant workspace. It was **not**
