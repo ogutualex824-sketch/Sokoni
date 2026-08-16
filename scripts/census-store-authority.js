@@ -96,10 +96,10 @@ const ROWS = [
   { name: 'followShop',
     auth: '_requireAuth',
     merchantId: 'n/a — a follow is a BUYER action',
-    clientShopId: 'accepted, and NOT verified to exist',
-    corroborates: 'no, and correctly so for the follow itself',
-    verdict: 'SAFE AFTER HARDENING',
-    why: 'Allowing non-owners is INTENTIONAL and right: following is what a shopper does, and the follow record is keyed shopFollowers/{shopId}_{uid} with uid from auth, so a caller can only ever create or remove their own. Two separate problems sit beside that — see below.' },
+    clientShopId: 'accepted, and verified to EXIST (not owned) inside the transaction',
+    corroborates: 'the SHOP must exist (checked in-transaction); ownership is correctly not required',
+    verdict: 'SAFE',
+    why: 'Allowing non-owners is INTENTIONAL and right: following is what a shopper does, and the follow record is keyed shopFollowers/{shopId}_{uid} with uid from auth, so a caller can only ever create or remove their own. HARDENED in Stage 1B — the shop is now proved to exist inside the transaction before anything is written, and shopFollowers is CF-only in firestore.rules so the relationship cannot be changed outside this function. See below for what the two defects were.' },
 ];
 
 /* ══ Report ═══════════════════════════════════════════════════════════════ */
@@ -216,6 +216,10 @@ const protectsCounter = /'totalProducts', 'followerCount'/.test(SCHEMA);
 must('followShop body located', followBody.length > 500);
 
 if (MD) {
+  line('> **Status: hardened in Stage 1B.** Both problems below are closed — the shop is proved to');
+  line('> exist inside the transaction, and `shopFollowers` is CF-only in the rules. Kept here because');
+  line('> the reasoning is what makes the fix reviewable.');
+  line('');
   line('**Intended, and correct:** a non-owner may follow. Following is a shopper\'s action, and the');
   line('record is keyed `shopFollowers/{shopId}_{uid}` with `uid` taken from auth — so a caller can');
   line('only ever create or remove their own follow. That part needs no change.');

@@ -14,14 +14,14 @@ Handoff: [[MERCHANT_2D2_QUEUE]]. Companions: [[MERCHANT_2D2_AUTHORITY_CENSUS]] �
 | `getMinishopAnalytics` | yes | _requireAuth | client-supplied shopId, then VERIFIED | verified by _assertShopOwner | yes | **SAFE** |
 | `generateMinishopShareCard` | yes | _requireAuth | client-supplied shopId, then VERIFIED | verified by _assertShopOwner | yes | **SAFE** |
 | `getMyMinishop` | yes | _requireAuth | RESOLVED server-side: shops where sellerUid == uid | not accepted | yes | **SAFE** |
-| `followShop` | yes | _requireAuth | n/a — a follow is a BUYER action | accepted, and NOT verified to exist | no, and correctly so for the follow itself | **SAFE AFTER HARDENING** |
+| `followShop` | yes | _requireAuth | n/a — a follow is a BUYER action | accepted, and verified to EXIST (not owned) inside the transaction | the SHOP must exist (checked in-transaction); ownership is correctly not required | **SAFE** |
 
 - **`claimMinishopHandle`** — Takes only a handle. It never accepts a shopId, and it never creates a shop: if no shop names this uid the claim is refused with not-found. The reservation is a transaction, so two concurrent claims cannot both succeed, and a handle already held by another uid is already-exists. A handle held by this seller but pointing at a different shop is failed-precondition rather than silently repointed.
 - **`saveMinishopConfig`** — A client-supplied shopId that is verified against the shop document is not a trusted client scope — it is a lookup key. It also refuses PROTECTED_FIELDS, so config can never write ownership, financial identity, platform standing or server-maintained counters.
 - **`getMinishopAnalytics`** — Owner-asserted read. See the rules finding below: the client-SDK path to the same collection is dead, so this callable is the only way in — which is fine, but is a fact the surface must rely on rather than a fallback.
 - **`generateMinishopShareCard`** — Same pattern.
 - **`getMyMinishop`** — Self-scoped by construction; returns shopId: null for an account with no shop rather than guessing one.
-- **`followShop`** — Allowing non-owners is INTENTIONAL and right: following is what a shopper does, and the follow record is keyed shopFollowers/{shopId}_{uid} with uid from auth, so a caller can only ever create or remove their own. Two separate problems sit beside that — see below.
+- **`followShop`** — Allowing non-owners is INTENTIONAL and right: following is what a shopper does, and the follow record is keyed shopFollowers/{shopId}_{uid} with uid from auth, so a caller can only ever create or remove their own. HARDENED in Stage 1B — the shop is now proved to exist inside the transaction before anything is written, and shopFollowers is CF-only in firestore.rules so the relationship cannot be changed outside this function. See below for what the two defects were.
 
 ## Is a browser-supplied `shopId` trusted anywhere?
 
@@ -88,19 +88,23 @@ now `minishopAnalytics.ownerUid`. Worth treating as a pattern rather than four c
 
 ## `followShop` — what is intended, and what is not
 
+> **Status: hardened in Stage 1B.** Both problems below are closed — the shop is proved to
+> exist inside the transaction, and `shopFollowers` is CF-only in the rules. Kept here because
+> the reasoning is what makes the fix reviewable.
+
 **Intended, and correct:** a non-owner may follow. Following is a shopper's action, and the
 record is keyed `shopFollowers/{shopId}_{uid}` with `uid` taken from auth — so a caller can
 only ever create or remove their own follow. That part needs no change.
 
 **Problem 1 — the shop is never proved to exist.** `followShop` accepts any `shopId` string
-and writes `minishopConfig/{shopId}` with `{ merge: true }` — and the body contains no shop existence check. A merge write to a missing document *creates* it, so any authenticated caller can
+and writes `minishopConfig/{shopId}` with `{ merge: true }`. A merge write to a missing document *creates* it, so any authenticated caller can
 create arbitrary publicly-readable `minishopConfig` documents carrying a `followerCount`.
 
 **Problem 2 — the counter can be desynchronised, and inflated without limit.** These two facts
 sit in different files and are harmless apart:
 
 - `followShop` decides idempotency by reading the follow document: `const alreadyFollowing = followerSnap.exists`, and only increments when it is absent.
-- `firestore.rules` lets the client delete that same document directly: `allow delete: if isAuthed() && resource.data.uid == request.auth.uid;`
+- `firestore.rules` lets the client delete that same document directly: (delete rule not matched — re-check)
 
 Together they form a loop a single account can run repeatedly:
 
@@ -130,8 +134,8 @@ without proving anything about the shop.
 
 | classification | capabilities |
 |---|---|
-| **SAFE** | `claimMinishopHandle`, `saveMinishopConfig`, `getMinishopAnalytics`, `generateMinishopShareCard`, `getMyMinishop` |
-| **SAFE AFTER HARDENING** | `followShop` |
+| **SAFE** | `claimMinishopHandle`, `saveMinishopConfig`, `getMinishopAnalytics`, `generateMinishopShareCard`, `getMyMinishop`, `followShop` |
+| **SAFE AFTER HARDENING** | — |
 | **CLIENT-SCOPE / UNSAFE** | — |
 | **BLOCKED** | — |
 | **NEW AUTHORITY REQUIRED** | — |

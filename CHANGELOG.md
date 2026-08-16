@@ -1,3 +1,98 @@
+## [2026-08-16] — Store Stage 1B: `followShop` could create storefront config for shops nobody owns
+
+Two defects, and the first is the more serious of the two.
+
+### 1 — Write authority
+
+`followShop` accepted any `shopId` string and merge-wrote `minishopConfig/{shopId}`. **A merge to a
+missing document creates it**, so any authenticated caller could conjure publicly-readable storefront
+config documents for shop ids nobody owns. That is a write-authority defect, not a counter bug.
+
+The shop must now be proved to exist, and the check is **inside the transaction** so it cannot be
+raced by a shop being deleted between verification and write.
+
+### 2 — Counter desynchronisation
+
+Two facts in different files, each harmless alone:
+
+- `followShop` decided idempotency by reading `shopFollowers/{shopId}_{uid}` and only incremented
+  when that document was absent.
+- `firestore.rules` let the client **delete that same document**.
+
+```
+followShop(follow:true)  → count +1, relationship created
+client deleteDoc(…)      → relationship gone, counter NOT decremented
+followShop(follow:true)  → "not already following" → count +1 again
+```
+
+One account, any shop, unbounded.
+
+**The fix is in the rules, not the function.** `shopFollowers` is now CF-only, so the loop has no
+first step:
+
+```
+shopFollowers/{shopId}_{uid}   the authoritative relationship  (CF-only)
+         ↓
+followerCount                  DERIVED, maintained in the same transaction
+```
+
+`followerCount` was deliberately **not** made a second mutable authority. It is a cache of the
+relationship, changed only in the transaction that changes the relationship, floored at zero, and
+already protected from `saveMinishopConfig` by `PROTECTED_FIELDS`.
+
+**Unchanged on purpose:** a non-owner may still follow. Following is a shopper's action, and the
+record is keyed by `{shopId}_{uid}` with the uid from auth, so a caller can only ever affect their
+own. Ownership is not required and was never the point.
+
+### The rules change
+
+The first `firestore.rules` change in this track, and it **removes** two `allow` statements while
+adding one comment line — the source file is **86 bytes smaller** than before and the compiled
+ruleset strictly shrinks, which matters given the ~72-byte headroom against the 256 KB ceiling. Brace
+balance verified. **The compiled size must still be confirmed against the releases API at deploy
+time** — a local byte count is not the compiled figure.
+
+No shipped client writes `shopFollowers`, so nothing breaks. (`sokoni-minishop.js` only *reads*, and
+it reads `shopFollowers/{shopId}/followers/{uid}` — a **subcollection path nothing writes and no rule
+matches**, so the storefront's follow-state check has always silently failed. Recorded for Store
+Stage 2, not fixed here.)
+
+**Files:** `scripts/test-follow-shop-authority.js` (new); `functions/minishop.js` (+33/−2),
+`firestore.rules` (+1/−2), `scripts/census-store-authority.js` and
+`docs/MERCHANT_STORE_AUTHORITY.md` (regenerated — `followShop` now classifies **SAFE**).
+**Database:** none. **API:** none. **Rules:** `shopFollowers` writes become CF-only. **Breaking:** a
+client that wrote `shopFollowers` directly would now be denied — no shipped client does.
+**Deployment:** Functions **and Rules**. **Not deployed.**
+
+### Verification — `node scripts/test-follow-shop-authority.js` — **39 / 0**
+
+| case | result |
+|---|---|
+| SELLER_A follows SHOP_B | pass |
+| SELLER_A follows SHOP_C (exists, not theirs) | pass — following is not ownership |
+| nonexistent shop | `not-found`, **nothing written** |
+| arbitrary shop id string | `not-found`, **no document of any kind created** |
+| owner follows own shop | unchanged policy, still allowed |
+| duplicate follow ×3 | count stays 1 |
+| unfollow | count reconciles to 0 |
+| duplicate unfollow | never goes negative |
+| ten follow/unfollow cycles | count lands **exactly** 0 |
+| five distinct followers, one unfollows | count 4, and equals the number of relationship documents |
+| unauthenticated | denied, nothing written |
+
+Also asserted: following writes **nothing to `shops/`**, touches exactly two documents, and the
+counter write is a `merge` so it cannot clobber storefront config. And the rules are asserted
+directly — no `allow create`, no `allow delete`, public read preserved — with a control proving the
+detector can still catch a permissive rule.
+
+**Two of my own assertions were brittle and were rewritten rather than satisfied.** One bounded the
+distance between `runTransaction` and the existence check with `[\s\S]{0,400}`, which measures prose
+length rather than structure and broke the moment a comment sat between them; it now asserts
+**ordering** — the check happens after the transaction opens and before the first write. The other
+demanded no mention of `followerCount` outside the transaction, which failed on the legitimate
+destructuring of the transaction's own return value; it now asserts the counter document is never
+**written** outside it.
+
 ## [2026-08-16] — SECURITY: `posLookupCustomer` returned any customer on the platform
 
 `posLookupCustomer` is deployed. It searched `posCustomers` by phone, document id, email or
