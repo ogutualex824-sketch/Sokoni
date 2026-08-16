@@ -260,9 +260,20 @@
            'would invent a boundary the server never applied.' },
 
     { id:'customers', name:'Customers', icon:'🧑‍🤝‍🧑', tier:'more',
-      kind:'seller', sec:'customers',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'customers' },
+      mobile:true, desktop:true, activeKey:'customers',
+      note:'Native surface. List + search read crmCustomerProfiles through firestore.rules, which ' +
+           'scope on resource.data.merchantId == auth.uid and refuse client writes outright — so a ' +
+           'merchant cannot receive another merchant\'s rows however the query is written. Profile ' +
+           'and summary use getCustomerProfile / getCRMDashboard. DELIBERATELY NOT BOUND: ' +
+           'posLookupCustomer (searches posCustomers platform-wide with no merchant filter — a ' +
+           'cross-tenant PII disclosure), posGetCustomerInsights (client-supplied merchantId, ' +
+           'unverified) and getCustomerGrowthMetrics (gated on a sellerId claim nothing mints). ' +
+           'The two callables assert ownership via merchants/{merchantId}, a POS-only record a ' +
+           'marketplace merchant does not have; the screen states that plainly and does NOT create ' +
+           'one — resurrecting the POS identity model to satisfy a legacy CRM callable would undo ' +
+           'the shops/{shopId} identity work.' },
 
     { id:'reports', name:'Reports', icon:'📊', tier:'more',
       kind:'native',

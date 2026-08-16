@@ -1,3 +1,96 @@
+## [2026-08-16] — 2D-2 step 6: Customers, on the only path that is actually scoped
+
+Native `customers` route. Built on exactly what the Customers census classified as usable:
+
+| | |
+|---|---|
+| list + search | `crmCustomerProfiles`, read through `firestore.rules` |
+| profile | `getCustomerProfile` (owner-asserted) |
+| summary | `getCRMDashboard` (owner-asserted) |
+
+### The list is scoped by the rules, not by this code
+
+```
+match /crmCustomerProfiles/{uid} {
+  allow read:  resource.data.merchantId == request.auth.uid
+  allow write: if false          ← CF-only
+}
+```
+
+Same shape that made the Messages thread body safe: a rules-gated read, and client writes refused
+outright. A merchant cannot receive another merchant's rows however the query is written, and the
+client cannot become the writer even by accident.
+
+**`posCustomers` is not used.** Its rule gates on a `sellerId` *body* field its writers never set —
+they put the seller in the document id — while three modules query it by three different scope
+fields.
+
+**Search runs over rows the rules already restricted.** That is not a compromise: the only server
+search that exists (`posLookupCustomer`) queries the whole platform with no merchant filter, so
+local search over an already-scoped set is both the honest option and, by construction, incapable of
+reaching another merchant's customers.
+
+### Three authorities deliberately NOT bound
+
+`posLookupCustomer`, `posGetCustomerInsights` and `getCustomerGrowthMetrics` are **absent from the
+binding** — not fetched and then hidden. A surface that fetches and hides is still a surface that
+fetched. Asserted: the surface has no callable slot for them, and at runtime only three operations
+were ever issued.
+
+### The identity line, held
+
+`getCustomerProfile` and `getCRMDashboard` assert ownership by reading `merchants/{merchantId}` — a
+POS-only document with one writer, `business-bootstrap._createBusiness`, reachable only from
+`pos-setup.html`. A marketplace merchant has none, so both refuse.
+
+**Nothing here creates one.** Marketplace onboarding already produces `shops/{shopId}` and a
+subscription; resurrecting the POS `merchants/{merchantId}` identity to satisfy a legacy CRM callable
+would undo the identity work this track has been protecting. The refusal is *classified* — a
+`not-found` naming the merchant record is distinguished from a genuine permission refusal — and the
+screen states it plainly:
+
+> **Customer totals need a POS merchant record.** Your shop and subscription are set up, but the
+> customer analytics engine still keys on the older SmartPOS merchant record, which this account does
+> not have. The list below is complete and correct — only the summary figures and the deeper profile
+> are affected.
+
+The list does **not** degrade with it, and the profile still shows the stored, rules-scoped row.
+
+### No fabricated figures
+
+An unprofiled customer projects `null` for spend, orders and CLV, and renders `—`. A real zero
+renders as zero. The summary shows **only** figures `getCRMDashboard` actually returned — nothing is
+derived from the loaded page, because a total over a 500-row page is not a total.
+
+**Files:** `sokoni-merchant-customers.js`, `sokoni-merchant-customers-ui.js`,
+`scripts/test-merchant-customers.js`, `scripts/test-merchant-customers-ui.js` (new);
+`sokoni-merchant-routes.js`, `merchant.html` (modified — adds a read-only `queryProfiles` adapter).
+**Database/API/Rules:** unchanged. **Breaking:** none. **Deployment:** Hosting only, when authorized.
+**Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-customers.js` *(new)* | **49 / 0** |
+| `test-merchant-customers-ui.js` *(new, WebKit)* | **185 / 0** across **five** viewports |
+| `test-merchant-route-gate.js --all` | **512 / 10** |
+| messages · disputes · marketing · staff · shop-employee-authority | 58/0 · 60/0 · 70/0 · 74/0 · 53/0 |
+| orderAdvance · adjust-stock · data · sell-inventory · routes · shop-access | 47/0 · 51/0 · 37/0 · 90/0 · 61/0 · 34/0 |
+
+Driven against a fixture of **240 customers plus one belonging to another merchant**, with an adapter
+that honours the filter so a wrong scope would return the wrong rows. Proven on screen at every
+viewport: the foreign customer never appears and their phone number is nowhere on the page;
+**searching that foreign phone number finds nothing**; an unprofiled customer shows dashes and never
+a fabricated `KES 0`; a 71-character name ellipsises without the page scrolling sideways; the missing
+POS record leaves all 240 rows intact while removing only the summary tiles; and **only three
+operations were ever issued** — `queryProfiles`, `getCustomerProfile`, `getCRMDashboard`.
+
+**Two of my own assertions were wrong and were corrected rather than worked around.** One matched a
+sentence split across a string concatenation in the source; the other read the *first*
+`getCustomerProfile` call in the run rather than the call for the customer under test, and so failed
+on correct behaviour — the same class of mistake as the positional selectors in earlier suites.
+
 ## [2026-08-16] — 2D-2 step 5: Messages, and a composer that stays on screen
 
 Native `messages` route through the deployed `messagesDispatch` router. Was `kind:'seller'` —

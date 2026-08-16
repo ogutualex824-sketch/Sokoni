@@ -497,6 +497,11 @@
      only Firestore access is a participant-gated READ of the thread body. -->
 <script src="sokoni-merchant-messages.js"></script>
 <script src="sokoni-merchant-messages-ui.js"></script>
+<!-- CUSTOMERS (2D-2 step 6) — list/search read crmCustomerProfiles through the
+     rules; profile + summary are owner-asserted callables. Three unsafe
+     authorities are deliberately NOT bound. -->
+<script src="sokoni-merchant-customers.js"></script>
+<script src="sokoni-merchant-customers-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -893,6 +898,7 @@
     else if (id === 'marketing') renderMarketing();
     else if (id === 'disputes') renderDisputes();
     else if (id === 'messages') renderMessages();
+    else if (id === 'customers') renderCustomers();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1649,6 +1655,20 @@
        participation while blocking client creates outright — so this can never
        become a write path. `path` is an array so the caller never assembles a
        string, and a conversation id can never be spliced into a wrong one. */
+    /* crmCustomerProfiles — a rules-gated READ. The rules compare
+       resource.data.merchantId to request.auth.uid and refuse client writes
+       outright, so the scope is enforced server-side, not by this query. */
+    queryProfiles: function (spec) {
+      return _fs().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Customers are not available yet.');
+        var parts = spec.where.map(function (w) { return m.where(w[0], w[1], w[2]); });
+        if (spec.orderBy) parts.push(m.orderBy(spec.orderBy[0], spec.orderBy[1]));
+        if (spec.limit) parts.push(m.limit(spec.limit));
+        return m.getDocs(m.query.apply(null, [m.collection(window.firebaseDB, spec.collection)].concat(parts)));
+      }).then(function (snap) {
+        return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      });
+    },
     queryMessages: function (spec) {
       return _fs().then(function (m) {
         if (!window.firebaseDB) throw new Error('Messages are not available yet.');
@@ -1871,6 +1891,28 @@
     if (!_msgUI) console.error('[merchant] Messages failed to mount — sokoni-merchant-messages-ui.js did not load');
   }
 
+  var _cusUI = null, _cusKey = null;
+  function renderCustomers () {
+    var host = document.getElementById('native-customers'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_cusUI && _cusKey === key) { _cusUI.refresh(); return; }
+    if (_cusUI) { try { _cusUI.destroy(); } catch (_) {} _cusUI = null; }
+    host.innerHTML = '';
+    _cusUI = window.SokoniMerchantCustomersUI && SokoniMerchantCustomersUI.mount(host, {
+      scope: scope,
+      /* The list is a rules-gated READ; the rules scope it, not this code. */
+      db: _mdb,
+      /* Owner-asserted callables only. posLookupCustomer, posGetCustomerInsights
+         and getCustomerGrowthMetrics are deliberately absent — not fetched and
+         hidden, never bound. */
+      callProfile:   _callable('getCustomerProfile'),
+      callDashboard: _callable('getCRMDashboard'),
+      onToast: _merchantToast
+    });
+    _cusKey = _cusUI ? key : null;
+    if (!_cusUI) console.error('[merchant] Customers failed to mount — sokoni-merchant-customers-ui.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
@@ -1879,6 +1921,7 @@
     else if (current === 'marketing') renderMarketing();
     else if (current === 'disputes') renderDisputes();
     else if (current === 'messages') renderMessages();
+    else if (current === 'customers') renderCustomers();
   });
 
   function renderDashboard () {
