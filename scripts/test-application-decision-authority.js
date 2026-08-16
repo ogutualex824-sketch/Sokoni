@@ -114,9 +114,14 @@ function loadLifecycle(sourceOverride) {
   if (sourceOverride) {
     file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'applc-')), 'application-lifecycle.js');
     fs.writeFileSync(file, sourceOverride);
-    /* Its relative requires must still resolve to the real modules. */
-    fs.writeFileSync(path.join(path.dirname(file), 'role-authority.js'),
-      `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, 'role-authority.js'))});`);
+    /* Its relative requires must still resolve to the real modules. Every
+       sibling application-lifecycle.js requires needs a shim here, or the
+       mutant fails to LOAD and the mutation reports as "not detected" for the
+       wrong reason. */
+    for (const sibling of ['role-authority', 'seller-trial']) {
+      fs.writeFileSync(path.join(path.dirname(file), `${sibling}.js`),
+        `module.exports = require(${JSON.stringify(path.join(FUNCTIONS_DIR, `${sibling}.js`))});`);
+    }
   }
   delete require.cache[require.resolve(file)];
   installStubs();

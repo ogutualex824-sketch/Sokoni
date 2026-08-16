@@ -67,6 +67,8 @@ const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
 /* Roles (users.roles[] + the Auth claim) have ONE writer. */
 const { grantAccountRole } = require('./role-authority');
+/* The 14-day seller_free trial has ONE implementation, shared with POS onboarding. */
+const { startSellerFreeTrial } = require('./seller-trial');
 
 const REGION = 'us-central1';
 const _db = () => getFirestore();
@@ -729,6 +731,24 @@ async function applyDecision(appId, app, opts = {}) {
       receipt.claim = grant.claim;
       claimPending = !grant.ok;
       if (claimPending) receipt.claimReconcileId = grant.reconcileId;
+    }
+
+    /* Entitlement — LAST, and only for an approved seller whose shop exists.
+       The trial is the same 14-day `seller_free` the POS path starts, through
+       the same authority (./seller-trial); marketplace approval does NOT create
+       the POS-only `merchants/` or `branches/` records to get it. Idempotent:
+       an existing subscription is left alone, so a repeat approval cannot
+       restart a trial or overwrite a paid plan. A trial is an entitlement, not
+       a gate — a failure here is reported, never a reason to undo an approval
+       that already granted the role and activated the shop. */
+    if (approved && role === 'seller') {
+      const shopWrite = receipt.writes.find((w) => w && w.shopId);
+      if (shopWrite && shopWrite.shopId) {
+        const trial = await startSellerFreeTrial({
+          db, uid, shopId: shopWrite.shopId, source: 'application_approval',
+        });
+        receipt.trial = trial;
+      }
     }
 
     /* The projection is only 'applied' when BOTH halves of the role landed. A

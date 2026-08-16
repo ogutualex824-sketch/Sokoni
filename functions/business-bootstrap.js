@@ -27,6 +27,10 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
+/* The 14-day seller_free trial has ONE implementation, shared with marketplace
+   approval. TRIAL_DAYS / TRIAL_GRACE_DAYS below are re-exported from it so the
+   policy cannot drift between the two callers. */
+const { buildSellerFreeTrial, TRIAL_DAYS: _TRIAL_DAYS, TRIAL_GRACE_DAYS: _TRIAL_GRACE_DAYS } = require('./seller-trial');
 
 const db     = admin.firestore();
 const F      = admin.firestore.FieldValue;
@@ -43,11 +47,11 @@ const OPT    = {
 };
 
 /* ── Free-trial window ─────────────────────────────────────────────
-   Referenced by the subscription doc written in _createBusiness. Declared here (module scope)
-   because the trial boundaries are policy, not per-call state. TRIAL_GRACE_DAYS mirrors the
-   grace window sub-billing applies between currentPeriodEnd and graceEnd. */
-const TRIAL_DAYS       = 14;
-const TRIAL_GRACE_DAYS = 3;
+   The boundaries are policy, and the policy now lives in ./seller-trial so the
+   POS path and marketplace approval cannot drift apart. Re-exported here under
+   the original names because other code in this module reads them. */
+const TRIAL_DAYS       = _TRIAL_DAYS;
+const TRIAL_GRACE_DAYS = _TRIAL_GRACE_DAYS;
 
 /* ── Cache TTL ─────────────────────────────────────────────────── */
 const CACHE_TTL_MS   = 5 * 60 * 1000;   // 5 minutes
@@ -965,29 +969,18 @@ async function _createBusiness(req) {
    *
    * Write the fields the engines actually read. `now` is a serverTimestamp sentinel and cannot
    * be used in arithmetic, so the boundaries are explicit Timestamps off the server clock. */
-  const _trialMs   = Date.now();
-  const _trialEnd  = admin.firestore.Timestamp.fromMillis(_trialMs + TRIAL_DAYS * 86400000);
-  const _graceEnd  = admin.firestore.Timestamp.fromMillis(
-    _trialMs + (TRIAL_DAYS + TRIAL_GRACE_DAYS) * 86400000
-  );
-  batch.set(db.collection('subscriptions').doc(merchantId), {
-    merchantId,
-    uid,                                  // required by the expiry notifier (users/{uid})
-    hubType:  'seller',                   // drives the post-trial downgrade to `${hubType}_free`
-    planId:   'seller_free',
+  /* The trial payload now comes from the ONE authority (./seller-trial), which
+     marketplace approval also uses. Same document id (subscriptions/{merchantId}),
+     same batch, same atomicity, same field values — the module is where the
+     block moved to, not a change to what it writes. `planName: 'SmartPOS'` is
+     passed so this path's label is unchanged. */
+  batch.set(db.collection('subscriptions').doc(merchantId), buildSellerFreeTrial({
+    uid,
+    shopId: merchantId,
     planName: 'SmartPOS',
-    plan: 'trial',
-    status: 'trialing',
-    trial: true,                          // subscription-core.computeStatus gate
-    trialDays: TRIAL_DAYS,
-    trialStartsAt:      now,
-    currentPeriodStart: now,
-    trialEndsAt:      _trialEnd,          // subscription-core
-    currentPeriodEnd: _trialEnd,          // sub-billing sweep + sub-engine renewal query
-    graceEnd:         _graceEnd,
-    autoActivated: true,
-    startedAt: now, createdAt: now,
-  });
+    now,
+    source: 'pos_create_business',
+  }));
   batch.set(db.collection('merchants').doc(merchantId), {
     merchantId, name: businessName, ownerId: uid, adminUids: [uid], status: 'active', createdAt: now,
   });

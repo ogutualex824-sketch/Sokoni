@@ -1,3 +1,71 @@
+## [2026-08-16] — 2C: one 14-day trial authority, two callers
+
+The correctly-shaped `seller_free` trial already existed — buried inside
+`business-bootstrap._createBusiness`, reachable only from `pos-setup.html`. Marketplace approval
+needed the same entitlement, so the block **moved** to `functions/seller-trial.js` and both paths
+call it:
+
+```
+business-bootstrap._createBusiness  ─┐
+                                     ├─→ buildSellerFreeTrial() → subscriptions/{shopId}
+application approval (projectSeller) ─┘
+```
+
+**The POS path is behaviourally unchanged**, asserted rather than assumed: every field it wrote
+before the extraction is compared value-by-value against what the primitive now produces, the
+document id is still `subscriptions/{merchantId}`, the label is still `SmartPOS`, and it is still
+written **in the same batch** so its atomicity is untouched. Three fields are added (`shopId`,
+`sellerUid`, `source`) — a superset, and the suite pins that only those three are new.
+
+**Approval starts the trial last**, after the shop exists and the role is granted, and only for an
+approved seller. A trial is an entitlement, not a gate: a failure is reported on the receipt and
+never undoes an approval that already activated a shop. **Marketplace approval does not create the
+POS-only `merchants/` or `branches/` records** to obtain one.
+
+### The document — `subscriptions/{shopId}`, keyed by the SHOP, recording the OWNER
+
+| field | value | read by |
+|---|---|---|
+| `shopId` / `merchantId` | the canonical shop | scope |
+| `uid` / `sellerUid` | the owner | the expiry notifier (`users/{uid}`) |
+| `planId` | `seller_free` | entitlement |
+| `plan` / `status` / `trial` | `trial` / `trialing` / `true` | `subscription-core.computeStatus` |
+| `trialDays` | `14` | display |
+| `trialEndsAt` | +14d | `subscription-core` |
+| `currentPeriodEnd` | +14d | `sub-billing` sweep, `sub-engine` renewal query |
+| `graceEnd` | +17d | `sub-billing` grace window |
+| `trialStartsAt` / `currentPeriodStart` / `startedAt` / `createdAt` | server time | — |
+| `hubType` | `seller` | post-trial downgrade to `${hubType}_free` |
+| `autoActivated` / `source` | `true` / `application_approval` | provenance |
+
+Every one of those is read somewhere — the original decorative version omitted most of them and the
+trial consequently never expired.
+
+**Idempotent:** an existing subscription is left completely alone, so a repeat approval cannot
+restart a trial or reset its dates — and **a paid plan is never overwritten by a free one**.
+
+**Files:** `functions/seller-trial.js` (new), `functions/business-bootstrap.js` (calls it),
+`functions/application-lifecycle.js` (starts it on approval), `scripts/test-seller-trial.js` (new),
+`scripts/test-application-decision-authority.js` (harness). **Database:** approval is now a writer of
+`subscriptions/{shopId}`. **Rules/API:** unchanged. **Breaking:** none. **Deployment:** Functions
+only. Not deployed.
+
+**Verification:** `node scripts/test-seller-trial.js` — **34/0** on `SELLER_A` ≠ `SHOP_B`, KASS as a
+control. Proven: pending → no subscription; rejected → none; an unauthorised approval → none;
+approved → exactly one, keyed by the shop and recording the seller; 14 days; the expiry fields the
+sweeps read are present; the existing rider claim survives; **no `merchants/` or `branches/` records
+created**; repeat approval leaves one subscription with its dates intact; an existing paid plan
+untouched; and merchant.html can read the trial for the shop it resolved, with a real end date to
+count down from. Five mutations caught — trial-length drift, idempotency removed (paid plan
+overwritten), trial scoped to the shop instead of the seller, and approval building its own payload.
+Lifecycle green: approval-activates-shop 35/0, decision-authority 17/0, merchant-application 35/0,
+shop-access 34/0, merchant-data 37/0, adjust-stock 46/0, role-authority 30/0.
+
+*(Harness note: adding the `./seller-trial` require broke two mutation tests in
+`test-application-decision-authority` — its mutant copies shim siblings into a temp dir and the new
+one was missing, so the mutants failed to LOAD and reported as undetected. The harness now shims
+every sibling. The hole was in the harness, not the code.)*
+
 ## [2026-08-16] — 2B: approval now creates the shop, and creates it FIRST
 
 `seller` was in `DELEGATED_ROLES`: an approved merchant got a role and a claim, and the projection
