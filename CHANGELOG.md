@@ -1,3 +1,111 @@
+## [2026-08-16] — 2D-1C: the phone-first till, and Inventory as its own authority
+
+2D-1 shipped the data layer and 2D-1B the correction authority. Neither had a surface. This is the
+surface — two native merchant routes, built on the authorities that already existed rather than on
+a port of seller.js's eleven localStorage-backed screens.
+
+```
+Sell        cart (memory) ─→ dry run ─→ posCompleteCheckout ─→ stock ↓  sale  sold ↑
+Inventory   delta          ─────────→ merchantAdjustStock  ─→ stock ⇅  movement  sold UNCHANGED
+```
+
+### The wall between them is structural, not documentary
+
+Four modules, and the split is what makes the invariant true rather than intended:
+
+| file | can do | cannot do |
+|---|---|---|
+| `sokoni-merchant-data.js` | read products, submit **sales** | name `merchantAdjustStock` at all |
+| `sokoni-merchant-stock.js` *(new)* | submit **corrections** | name `posCompleteCheckout` at all |
+| `sokoni-merchant-sell.js` *(new)* | the till surface | reach the adjustment authority |
+| `sokoni-merchant-inventory-ui.js` *(new)* | the stock surface | reach the sale authority |
+
+The correction client is a **separate module** for exactly this reason: `test-merchant-data.js`
+(D4/D6) and `test-merchant-adjust-stock.js` (F3) assert the Sell layer contains no adjustment path
+and no Firestore write. Adding corrections to it would have required weakening those. So the screen
+a cashier uses to sell **cannot express a stock correction** — the function does not exist in the
+object it holds. Both directions are now asserted against comment-stripped source, so a module may
+still explain the wall without the assertion mistaking prose for a code path.
+
+### Sell — success is the server's word, never the screen's
+
+- **An abandoned cart calls no authority at all.** No reservation, no decrement, no document. Proven
+  by observation, not by reading: the stubbed callables record every call and the count is zero.
+- **The pay button cannot show success.** It shows *Checking* → *Completing* → whatever the server
+  returned. Mid-flight the sheet is undismissable and the button disabled, and the DOM is asserted
+  to contain no receipt number, no tick and no "Sale complete" until the callable resolves.
+- **A retry cannot double-sell.** The sale token is minted once per attempt and held across retries
+  and across a trip back to the cart, so `idempotencyKey` is reproduced identically — asserted at
+  the surface by driving a failure and a retry and comparing the two keys.
+- **Oversell is guarded before charging**, using `posCompleteCheckout`'s own `dryRun:true` path,
+  which prices against canonical `products` and computes stock deltas with **no** idempotency claim
+  and **no** write. The check and the real sale share one key. A check that could not *run* is
+  reported as not-run and does not block — the transaction re-validates atomically and is the
+  authority — but it is never treated as a pass.
+- **Provenance now actually reaches the server.** `buildSale` put `sellerUid` and `channel` at top
+  level, where `posCompleteCheckout` destructures neither: they were recorded nowhere. They are
+  mirrored into `metadata`, which the server spreads into the sale document.
+- **A payment is RECORDED as tendered, not requested.** There is no STK push here; the screen says
+  so in those words rather than implying money moved. Collecting through SokoniPay is separate work.
+
+### Inventory — a correction is not a sale, and the screen says so
+
+Stock on hand, low/out filter, adjustment history, and one action: a signed delta with a **mandatory
+reason** from the server's own vocabulary. Apply stays disabled until a reason is chosen; an
+impossible correction is refused on-screen *before* it is sent; a server refusal is shown in the
+server's own wording. The figure displayed afterwards is the server's `after`, never a local sum.
+Unknown stock renders `—`; a product with no tracked count refuses adjustment rather than inventing
+an opening figure.
+
+### Navigation — added, nothing removed
+
+`sell` and `inventory` are native routes. `#inventory` **stops aliasing to POS**: the POS inventory
+tab reaches canonical `products.stock` through `sokoni-db.updateProductStock()`, which also
+increments `sold` — so counting three damaged units off the shelf recorded three *sales*. POS is
+preserved unchanged as its own destination, `#cashier` still aliases to it, and the bottom-nav
+**Sell** tab (already labelled "Sell") now opens the native till instead of the desktop-scale POS
+application in a phone-sized panel. Sidebar: 15 → 17 primary rows.
+
+**Files:** `sokoni-merchant-stock.js`, `sokoni-merchant-sell.js`, `sokoni-merchant-inventory-ui.js`,
+`scripts/test-merchant-sell-inventory.js`, `scripts/test-merchant-sell-ui.js` (all new);
+`sokoni-merchant-data.js`, `sokoni-merchant-routes.js`, `merchant.html`,
+`scripts/test-merchant-routes.js`, `scripts/test-merchant-route-gate.js` (modified).
+**Database:** none — no new collection, no new field. **API:** none — no new callable; both
+authorities already existed. **Security:** no new client write path; both mutations remain
+server-authorised, and neither surface builds an inline `on*` handler from data (asserted).
+**Breaking:** none. **Deployment:** Hosting only, when authorized. `merchantAdjustStock` (2D-1B)
+is still **not deployed**, so Inventory's Apply will fail until Functions ship — it fails honestly,
+with the server's error. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-sell-inventory.js` *(new)* | **90 / 0** |
+| `test-merchant-sell-ui.js` *(new, WebKit)* | **108 / 0** at iPhone SE **and** iPhone 14 Pro |
+| `test-merchant-route-gate.js --all` | **504 / 12** — all 34 route×viewport combinations pass |
+| `test-merchant-routes.js` | 66 / 0 |
+| `test-merchant-data.js` | 37 / 0 (unchanged) |
+| `test-merchant-adjust-stock.js` | 46 / 0 (unchanged) |
+
+The runtime gate's 12 failures are **pre-existing and unrelated**, verified rather than assumed: a
+worktree at `HEAD` (`2dcd39e`) produces the *identical* 12 — seller.js deep-switch never confirming
+without a real session, Firebase CORS on `127.0.0.1`, and `seller-delivery.html` referencing a bare
+`firebase`. The gate went 444/12 → 504/12: **60 new passing assertions, zero new failures.**
+
+Seven mutation controls are each caught, including *"the correction payload starts carrying `sold`"*,
+*"a clock enters the adjustment id"*, *"a not-run pre-charge check is treated as a pass"*, and *"the
+Sell surface reaches merchantAdjustStock"*.
+
+**Found by the browser suite and fixed:** the search input measured 20px tall (the 48px target was
+the wrapping label, not the control a thumb aims at); the quantity stepper, quick-amount and
+Inventory tab buttons were 36–42px. All are now ≥44px, asserted on every visible control at both
+viewports.
+
+**Out of scope, and deliberately not started:** SokoniPay/STK collection, the customer/loyalty
+attachment at the till, and the remaining 2D-2 seller screens (Orders, Customers, Products, Team,
+Messages, Marketing, Flash Sales, Tax, Stories, Disputes, Store).
+
 ## [2026-08-16] — 2C: one 14-day trial authority, two callers
 
 The correctly-shaped `seller_free` trial already existed — buried inside

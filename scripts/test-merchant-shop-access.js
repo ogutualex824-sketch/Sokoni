@@ -169,7 +169,11 @@ console.log('\nPART D — the shell wiring, and no silent deletion\n');
   /* The navigation must survive the fix — every route still present. */
   const C = require(path.join(ROOT, 'sokoni-merchant-routes.js'));
   ck('D5  the route contract still validates', C.validate().length === 0);
-  ck('D6  all 30 merchant routes are still registered', C.ROUTES.length === 30, String(C.ROUTES.length));
+  /* A FLOOR, not an exact count. This assertion exists to catch a route being REMOVED, and D7
+     below does that properly by name. Pinning the total at exactly 30 also failed the moment a
+     route was legitimately ADDED (2D-1C: `sell`, `inventory`) — which is not the defect it was
+     written to catch, and "delete the new route" is the wrong way to make it green again. */
+  ck('D6  no merchant route was removed (>= 30 registered)', C.ROUTES.length >= 30, String(C.ROUTES.length));
 
   const EXPECTED = ['dashboard', 'orders', 'analytics', 'revenue', 'payments', 'settings', 'reports',
     'availability', 'devices', 'products', 'receipts', 'staff', 'messages', 'marketing',

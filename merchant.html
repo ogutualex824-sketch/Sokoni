@@ -465,6 +465,20 @@
 <!-- MERCHANT DATA LAYER — canonical shop resolution + product scope + the sale
      path. Loads before the shell script, which resolves the shop at boot. -->
 <script src="sokoni-merchant-data.js"></script>
+<!-- MERCHANT WORKSPACE — Sell and Inventory (2D-1C).
+     Three files, and the split is load-bearing rather than cosmetic:
+
+       sokoni-merchant-data.js       reads products, submits SALES (posCompleteCheckout)
+       sokoni-merchant-stock.js      submits CORRECTIONS (merchantAdjustStock)
+       sokoni-merchant-sell.js       the till surface
+       sokoni-merchant-inventory-ui.js  the stock surface
+
+     The data layer is asserted by suite to contain no adjustment path at all, so the
+     screen a cashier uses to sell cannot express a stock correction. A correction is
+     not a sale, and the two must never be reachable through one object. -->
+<script src="sokoni-merchant-stock.js"></script>
+<script src="sokoni-merchant-sell.js"></script>
+<script src="sokoni-merchant-inventory-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -855,6 +869,8 @@
   /* ── Native modules ── */
   function renderNative (id) {
     if (id === 'dashboard') renderDashboard();
+    else if (id === 'sell') renderSell();
+    else if (id === 'inventory') renderInventory();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1559,6 +1575,176 @@
     if (q('dv-forget'))    q('dv-forget').onclick    = function () { window.SokoniShell.Printer.forget(); setTimeout(renderDevices, 800); };
     if (q('dv-done'))      q('dv-done').onclick      = function () { go(_lastModule || 'dashboard'); };  /* return to previous module, no reload */
   }
+  /* ══ Sell + Inventory (2D-1C) ═════════════════════════════════════════════
+     The shell owns the PLUMBING — a Firestore read adapter, callable handles, the
+     printer, the scanner — and the two modules own the surfaces. Neither module
+     reaches for Firebase itself, so there is exactly one place where the merchant
+     workspace decides how it talks to the backend.
+
+     Both surfaces are mounted ONCE and then refreshed; remounting on every
+     navigation would throw away an in-progress cart, which at a till is the same
+     as losing a customer's order. */
+
+  /* Modular Firestore/Functions, loaded on first use. The shell already imports
+     firestore this way elsewhere; doing it lazily keeps it off the boot path. */
+  var _fsMod = null, _fnMod = null;
+  function _fs () {
+    if (_fsMod) return Promise.resolve(_fsMod);
+    return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+      .then(function (m) { _fsMod = m; return m; });
+  }
+  function _fn () {
+    if (_fnMod) return Promise.resolve(_fnMod);
+    return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js')
+      .then(function (m) { _fnMod = m; return m; });
+  }
+  /* A callable handle that resolves the SDK lazily and rejects honestly when the app
+     is not ready — never resolving with a fabricated success shape. */
+  function _callable (name) {
+    return function (payload) {
+      return _fn().then(function (m) {
+        if (!window.firebaseApp) throw new Error('SOKONI is still starting up. Try again in a moment.');
+        return m.httpsCallable(m.getFunctions(window.firebaseApp), name)(payload);
+      });
+    };
+  }
+
+  /* Read-only adapter matching the shape SokoniMerchantData / SokoniMerchantStock
+     expect. It performs NO write of any kind — every mutation in this workspace
+     goes through a server callable. */
+  var _mdb = {
+    queryProducts: function (spec) {
+      return _fs().then(function (m) {
+        if (!window.firebaseDB) throw new Error('The product catalogue is not available yet.');
+        var parts = spec.where.map(function (w) { return m.where(w[0], w[1], w[2]); });
+        return m.getDocs(m.query.apply(null, [m.collection(window.firebaseDB, spec.collection)].concat(parts)));
+      }).then(function (snap) {
+        return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      });
+    },
+    queryMovements: function (spec) {
+      return _fs().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Adjustment history is not available yet.');
+        var parts = spec.where.map(function (w) { return m.where(w[0], w[1], w[2]); });
+        if (spec.orderBy) parts.push(m.orderBy(spec.orderBy[0], spec.orderBy[1]));
+        if (spec.limit) parts.push(m.limit(spec.limit));
+        return m.getDocs(m.query.apply(null, [m.collection(window.firebaseDB, spec.collection)].concat(parts)));
+      }).then(function (snap) {
+        return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      });
+    }
+  };
+
+  /* The scope is resolved from AUTH + the canonically-resolved shop, never from the
+     URL and never from localStorage alone. A missing shop resolves NOT-ok, and the
+     surfaces render "no shop yet" instead of querying a guess. */
+  function _merchantScope () {
+    var uid = null;
+    try { uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null; } catch (_) {}
+    return window.SokoniMerchantData.resolveScope({
+      uid: uid,
+      activeShopId: (window.SokoniShell && window.SokoniShell.activeShopId) || null
+    });
+  }
+
+  function _merchantToast (msg, kind) {
+    try {
+      if (window.SokoniToast && typeof SokoniToast.show === 'function') { SokoniToast.show(msg, kind); return; }
+      if (window.SokoniUI && typeof SokoniUI.toast === 'function') { SokoniUI.toast(msg, kind); return; }
+    } catch (_) {}
+    if (kind === 'error') console.error('[merchant] ' + msg);
+  }
+
+  /* The receipt goes through the ONE print entry point (PosPrintService.printReceipt).
+     This frame IS the shell, so `__fromShell` stops the service bouncing the job back
+     up to a parent that does not exist. */
+  function _merchantPrint (receipt) {
+    if (!window.PosPrintService || typeof PosPrintService.printReceipt !== 'function') {
+      return Promise.reject(new Error('no printer service'));
+    }
+    var shopName = (window.SokoniShell && SokoniShell.activeShopName) || null;
+    return PosPrintService.printReceipt(Object.assign({}, receipt, {
+      businessName: shopName || 'SOKONI',
+      branchName: (window.SokoniShell && SokoniShell.activeBranchName) || null,
+      date: new Date().toLocaleString('en-KE')
+    }), { __fromShell: true, method: (receipt.payments && receipt.payments[0] && receipt.payments[0].method) || null });
+  }
+
+  /* Barcode scanning is loaded ON DEMAND — a camera library has no business on the
+     boot path of a till that is usually driven by search. */
+  var _bcLoading = null;
+  function _merchantScan () {
+    var ready = window.SokoniBarcode ? Promise.resolve() : (_bcLoading || (_bcLoading = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = 'sokoni-barcode.js';
+      s.onload = res; s.onerror = function () { rej(new Error('scanner unavailable')); };
+      document.head.appendChild(s);
+    })));
+    return ready.then(function () {
+      if (!window.SokoniBarcode) throw new Error('scanner unavailable');
+      return new Promise(function (resolve) {
+        SokoniBarcode.openScanner({
+          title: 'Scan a product',
+          onScan: function (v) { resolve(v || null); },
+          onClose: function () { resolve(null); }
+        });
+      });
+    });
+  }
+
+  function _merchantCtx () {
+    return {
+      scope: _merchantScope(),
+      db: _mdb,
+      shopName: (window.SokoniShell && SokoniShell.activeShopName) || null,
+      callSale: _callable('posCompleteCheckout'),
+      callAdjust: _callable('merchantAdjustStock'),
+      onToast: _merchantToast,
+      onPrint: _merchantPrint,
+      openScanner: _merchantScan
+    };
+  }
+
+  /* A mounted surface is bound to the shop it was mounted for. The scope resolves
+     ASYNCHRONOUSLY (auth, then the canonical shop lookup) and can CHANGE later when
+     the merchant switches branch — so "already mounted" is not sufficient grounds to
+     reuse. Compare the shop the surface was built for against the shop that is active
+     now; if they differ, tear it down and rebuild rather than refreshing a surface
+     that would query the previous shop's catalogue.
+
+     This is the mechanism that stops a workspace that booted before the shop resolved
+     from showing "no shop yet" permanently. */
+  var _sellUI = null, _sellShop = null, _invUI = null, _invShop = null;
+  function _scopeKey (s) { return (s && s.ok) ? s.shopId : ('!' + ((s && s.reason) || 'unknown')); }
+
+  function renderSell () {
+    var host = document.getElementById('native-sell'); if (!host) return;
+    var ctx = _merchantCtx(), key = _scopeKey(ctx.scope);
+    if (_sellUI && _sellShop === key) { _sellUI.refresh(); return; }
+    if (_sellUI) { try { _sellUI.destroy(); } catch (_) {} _sellUI = null; }
+    host.innerHTML = '';
+    _sellUI = window.SokoniMerchantSell && SokoniMerchantSell.mount(host, ctx);
+    _sellShop = _sellUI ? key : null;
+    if (!_sellUI) console.error('[merchant] Sell failed to mount — sokoni-merchant-sell.js did not load');
+  }
+
+  function renderInventory () {
+    var host = document.getElementById('native-inventory'); if (!host) return;
+    var ctx = _merchantCtx(), key = _scopeKey(ctx.scope);
+    if (_invUI && _invShop === key) { _invUI.refresh(); return; }
+    if (_invUI) { try { _invUI.destroy(); } catch (_) {} _invUI = null; }
+    host.innerHTML = '';
+    _invUI = window.SokoniMerchantInventoryUI && SokoniMerchantInventoryUI.mount(host, ctx);
+    _invShop = _invUI ? key : null;
+    if (!_invUI) console.error('[merchant] Inventory failed to mount — sokoni-merchant-inventory-ui.js did not load');
+  }
+
+  /* Rebuild whichever surface is open the moment the canonical shop lands. */
+  document.addEventListener('sokoni:shop-resolved', function () {
+    if (current === 'sell') renderSell();
+    else if (current === 'inventory') renderInventory();
+  });
+
   function renderDashboard () {
     var host = document.getElementById('native-dashboard');
     if (!host || host.dataset.done) { if (host) refreshDashboardLive(); return; }
@@ -1574,7 +1760,7 @@
         '</div>' +
         '<div class="dsec-t">Quick actions</div>' +
         '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-          '<a class="dbtn" onclick="__mgo(\'cashier\')">💳 New Sale</a>' +
+          '<a class="dbtn" onclick="__mgo(\'sell\')">💳 New Sale</a>' +
           '<a class="dbtn" onclick="__mgo(\'orders\')">🧾 View Orders</a>' +
           '<a class="dbtn" onclick="__mgo(\'inventory\')">📦 Inventory</a>' +
           '<a class="dbtn" onclick="__mgo(\'devices\')">🖨️ Devices</a>' +

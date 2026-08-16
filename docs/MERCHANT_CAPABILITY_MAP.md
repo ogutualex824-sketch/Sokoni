@@ -142,5 +142,28 @@ implementation, not inferred from source.
    correctness defect in the frozen sales path, not UI work, and it should not be smuggled into a
    consolidation commit.
 
-Nothing here is implemented. Next commit boundary is 2D-1 (Sell/POS + Inventory on canonical data),
-once the above is agreed.
+---
+
+## Implementation status
+
+| stage | what shipped | state |
+|---|---|---|
+| 2D-1  | `sokoni-merchant-data.js` — scope, product read, sale submission | **built**, 37/0 |
+| 2D-1B | `functions/merchant-inventory.js` → `merchantAdjustStock` | **built**, 46/0, **not deployed** |
+| 2D-1C | Native `sell` + `inventory` routes and their surfaces | **built**, 90/0 + 108/0, **not deployed** |
+| 2D-2  | Orders, Receipts, Customers, Products, Team, Messages, Marketing, Flash Sales, Tax, Stories, Disputes, Store | not started |
+
+Point 2 above held: Sell and Inventory came first and together — but *not* for the reason predicted.
+The pair did **not** both have a server authority in place. `posCompleteCheckout` covered sales;
+corrections had **none**, and the only client path to canonical `products.stock`
+(`sokoni-db.updateProductStock()`) also increments `sold`, so a correction was recorded as a sale.
+2D-1B created that missing authority before 2D-1C could build the screen on top of it.
+
+The consequence for the remaining eleven screens is that **"is there a server authority?" must be
+answered before each one is scheduled**, not assumed from the existence of a related callable. See
+[[CHANGELOG]] 2D-1C.
+
+Real viewport interaction is no longer inferred: `scripts/test-merchant-sell-ui.js` drives both
+surfaces in WebKit at iPhone SE and iPhone 14 Pro and asserts tap-target size, horizontal overflow,
+and that success is never rendered before the server answers. It found three sub-44px controls that
+source review had not.

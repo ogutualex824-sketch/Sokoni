@@ -264,19 +264,29 @@ server.listen(0, async () => {
     console.log('\n  ── DEEP LINK + REFRESH ──');
     await page.goto(BASE + '/merchant.html#inventory', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
-    const deep = await page.evaluate(() => ({
-      hash: location.hash.replace('#',''),
-      title: (document.getElementById('mtitle') || {}).textContent,
-      shown: document.querySelectorAll('.mpanel.show').length,
-      frame: (document.querySelector('.mpanel.show iframe') || {}).id || null,
-    }));
-    /* #inventory is an ALIAS of pos since the Cashier + Inventory merge — a bookmark on the old
-       hash must still land somewhere real, and the contract says that place is POS. Asserting
-       the hash stayed `inventory` was asserting the pre-merge architecture; what matters is that
-       the alias RESOLVES rather than dead-ends. */
-    check('deep link #inventory resolves through the alias to POS',
-          deep.hash === C.resolve('inventory'), '#' + deep.hash + ' (contract: ' + C.resolve('inventory') + ')');
-    check('deep link mounts the POS panel', deep.frame === 'mfx-pos', String(deep.frame));
+    const deep = await page.evaluate(() => {
+      const panel = document.querySelector('.mpanel.show');
+      return {
+        hash: location.hash.replace('#',''),
+        title: (document.getElementById('mtitle') || {}).textContent,
+        shown: document.querySelectorAll('.mpanel.show').length,
+        frame: (panel && panel.querySelector('iframe') || {}).id || null,
+        native: (panel && panel.querySelector('.native') || {}).id || null,
+      };
+    });
+    /* #inventory WAS an alias of pos (the Cashier + Inventory merge). It is a native route
+       again as of 2D-1C, because stock corrections moved onto their own server authority
+       (merchantAdjustStock) and the POS tab reaches canonical stock through a path that also
+       increments `sold`. The deep link must therefore mount the NATIVE inventory panel.
+       Whichever it is, this block is resolved THROUGH the contract, so it follows the
+       architecture rather than restating a superseded copy of it. */
+    const deepTarget = C.resolve('inventory');
+    const deepKind = (C.get(deepTarget) || {}).kind;
+    check('deep link #inventory resolves through the contract',
+          deep.hash === deepTarget, '#' + deep.hash + ' (contract: ' + deepTarget + ' / ' + deepKind + ')');
+    check('deep link mounts the ' + deepKind + ' panel for that route',
+          deepKind === 'native' ? deep.native === 'native-' + deepTarget : deep.frame === 'mfx-pos',
+          'native=' + deep.native + ' frame=' + deep.frame);
     check('deep link shows exactly one panel', deep.shown === 1, String(deep.shown));
 
     /* Legacy alias must still land (back-compat, not a silent dashboard fallback). */

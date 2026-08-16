@@ -152,12 +152,19 @@ check('Plan is NOT in the bottom nav (must not crowd it)',
 console.log('\n9. Founder sidebar coverage');
 /* The founder's canonical sidebar, in order. This literal is the SPEC — the contract must
    match it, not the other way round. Marketing moved to the More tier; Disputes is primary. */
-/* Cashier and Inventory MERGED into one POS route. They were two sidebar rows opening the same
-   application at different tabs, which forced the shell to deep-switch into it and made the
-   src hash load-bearing. POS now owns the in-shop operation (Checkout / Inventory / Audit Log)
-   through the POS app's own tabs, and opens on Checkout. Products stays separate: catalogue
-   management is a different job from in-shop stock operations. Both old ids alias to 'pos'. */
-const FOUNDER_SIDEBAR = ['dashboard','plan','products','pos','orders','analytics',
+/* Cashier MERGED into POS: two sidebar rows opening the same application at different tabs
+   forced the shell to deep-switch into it and made the src hash load-bearing. POS still owns
+   the desktop-scale in-shop operation and still opens on Checkout; `#cashier` aliases to it.
+
+   Sell and Inventory are NATIVE routes as of 2D-1C, and neither is a duplicate of POS:
+     · Sell      the phone-first till. Same server authority as POS (posCompleteCheckout), a
+                 different surface — POS's checkout assumes a counter and a wide viewport.
+     · Inventory stock CORRECTIONS through merchantAdjustStock. The POS inventory tab reaches
+                 canonical `products.stock` via sokoni-db.updateProductStock(), which also
+                 increments `sold` — so a correction was recorded as a sale. `#inventory` no
+                 longer aliases to POS for exactly that reason.
+   Products stays separate: catalogue management is a different job from stock operations. */
+const FOUNDER_SIDEBAR = ['dashboard','plan','sell','products','inventory','pos','orders','analytics',
   'revenue','payments','deliveries','returns','receipts','staff','messages','disputes','settings'];
 
 FOUNDER_SIDEBAR.forEach(id => {

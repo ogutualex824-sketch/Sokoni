@@ -32,6 +32,9 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
+/* The route contract, so navigation targets follow the architecture instead of a
+   second copy of it kept in this file. */
+const C = require(path.join(ROOT, 'sokoni-merchant-routes.js'));
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css',
   '.png':'image/png', '.json':'application/json', '.svg':'image/svg+xml', '.jpg':'image/jpeg',
   '.webp':'image/webp', '.ico':'image/x-icon', '.woff2':'font/woff2' };
@@ -303,10 +306,15 @@ server.listen(0, async () => {
        the primary tabs. `minishop` is the KASS Shop entry and is a HIDDEN-tier route — it has
        no sidebar row by design, so it is opened through its header button, which is the only
        control a merchant has for it. */
+    /* The Sell tab's TARGET is read from the contract, not hardcoded. It pointed at `pos` and
+       points at the native `sell` till since 2D-1C; hardcoding either one makes this suite fail
+       on a legitimate retarget and describe it as a dead button. What the suite actually cares
+       about is that the bottom-nav control exists and lands where the contract says. */
+    const SELL_TAB = (C.BOTTOM_NAV.find((b) => b.label === 'Sell') || {}).id || 'pos';
     const ROUTES = [
-      { id: 'orders',   label: 'Orders',     how: 'bnav' },
-      { id: 'pos',      label: 'Sell (POS)', how: 'bnav' },
-      { id: 'products', label: 'Products',   how: 'nav'  },
+      { id: 'orders',   label: 'Orders',   how: 'bnav' },
+      { id: SELL_TAB,   label: 'Sell',     how: 'bnav' },
+      { id: 'products', label: 'Products', how: 'nav'  },
       /* KASS Shop needs a longer budget, and the reason is deliberate design rather than
          slowness: __openMiniShop() resolves ownership BEFORE navigating, and _resolve()
          waits up to 15s for auth (_awaitAuth(15000)) so that an unresolved read is reported

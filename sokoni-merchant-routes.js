@@ -60,6 +60,19 @@
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
 
+    { id:'sell', name:'Sell', icon:'💳', tier:'primary',
+      kind:'native',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'sell',
+      note:'The phone-first till (sokoni-merchant-sell.js). Native, NOT the POS iframe: POS is a ' +
+           'desktop-scale in-shop application whose checkout assumes a counter, a drawer and a ' +
+           'wide viewport. This is the surface for a merchant standing up with a phone. ' +
+           'It reads canonical `products` scoped by shopId through SokoniMerchantData and ' +
+           'submits sales to posCompleteCheckout — the SAME server authority POS uses, so the two ' +
+           'cannot produce different stock or different revenue. It writes nothing itself: an ' +
+           'abandoned cart reserves nothing and decrements nothing, and success is only ever ' +
+           'rendered from a server result. POS is preserved unchanged as its own destination.' },
+
     { id:'pos', name:'POS', icon:'🧮', tier:'primary',
       kind:'pos', tab:'pos',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
@@ -73,6 +86,19 @@
            'suppressed here — it is now the navigation for this surface. #cashier and #inventory ' +
            'alias here so existing links keep working. Products stays separate: catalogue ' +
            'management is a different job from in-shop stock operations.' },
+
+    { id:'inventory', name:'Inventory', icon:'📦', tier:'primary',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'inventory',
+      note:'Stock on hand + CORRECTIONS, via merchantAdjustStock — the first and only server ' +
+           'authority over a correction to canonical `products.stock`. It was an ALIAS to the POS ' +
+           'inventory tab until 2D-1C; that tab reaches the canonical field through ' +
+           'sokoni-db.updateProductStock(), which also increments `sold`, so counting three ' +
+           'damaged units off the shelf silently recorded three SALES. This route exists because ' +
+           'a correction is not a sale: it moves stock, writes a stockMovements record with a ' +
+           'mandatory reason, and leaves `sold`, revenue and every sales aggregate untouched. ' +
+           'Selling remains Sell/POS -> posCompleteCheckout.' },
 
     { id:'orders', name:'Orders', icon:'🧾', tier:'primary',
       kind:'native',
@@ -261,7 +287,7 @@
      by accident when a route definition moves. Every id here must be tier:'primary', and every
      tier:'primary' route must appear here — validate() enforces both directions. */
   var PRIMARY_ORDER = [
-    'dashboard', 'plan', 'products', 'pos', 'orders', 'analytics', 'revenue',
+    'dashboard', 'plan', 'sell', 'products', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
@@ -271,7 +297,12 @@
      unknown-id check, so they are back-compat — not a silent fallback to Dashboard. */
   var ALIASES = {
     cashier:     'pos',       /* merged: Cashier was this same app at its checkout tab */
-    inventory:   'pos',       /* merged: Inventory is a TAB inside POS, not a second app */
+    /* `inventory` used to alias to POS, because Inventory was a TAB inside that app. It is a
+       REAL native route again as of 2D-1C — not a reinstated duplicate, but the move of stock
+       corrections onto their own server authority (merchantAdjustStock). The POS tab writes the
+       canonical field through a path that also increments `sold`; the native route does not. So
+       `#inventory` must resolve to the route that cannot record a correction as a sale.
+       resolve() checks byId before ALIASES, so the entry is simply gone rather than shadowed. */
     /* Audit Log and POS Settings are POS TABS, not sidebar destinations. They were removed as
        rows once POS became the single in-shop surface — two sidebar entries that opened the same
        app at a different tab is exactly what the merge existed to end. Kept as aliases so any
@@ -295,10 +326,14 @@
      a bottom bar means "the shop", and the merchant had no way back to it at all. Making the
      dashboard the thing called Home was what hid that: the button looked like an exit and
      behaved like a no-op for anyone already on it. */
+  /* The Sell tab points at the NATIVE till, not the POS iframe. The label always said
+     "Sell"; what it opened was a desktop-scale in-shop application inside a phone-sized
+     panel. POS is unchanged and still reachable as its own sidebar destination — this
+     retargets one button, it does not remove a surface. */
   var BOTTOM_NAV = [
     { id:'home',      icon:'🏠', label:'Home'   },
     { id:'orders',    icon:'🧾', label:'Orders' },
-    { id:'pos',       icon:'💳', label:'Sell'   },
+    { id:'sell',      icon:'💳', label:'Sell'   },
     { id:'__more',    icon:'☰',  label:'More'   }
   ];
 
