@@ -489,6 +489,10 @@
      incremented by an endpoint that needs no sign-in. -->
 <script src="sokoni-merchant-campaigns.js"></script>
 <script src="sokoni-merchant-marketing.js"></script>
+<!-- DISPUTES (2D-2 step 4) — party-scoped authorities only. A merchant responds
+     and adds evidence; opening, cancelling and resolving are not theirs. -->
+<script src="sokoni-merchant-disputes.js"></script>
+<script src="sokoni-merchant-disputes-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -883,6 +887,7 @@
     else if (id === 'inventory') renderInventory();
     else if (id === 'staff') renderStaff();
     else if (id === 'marketing') renderMarketing();
+    else if (id === 'disputes') renderDisputes();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1803,12 +1808,35 @@
     if (!_mktUI) console.error('[merchant] Marketing failed to mount — sokoni-merchant-marketing.js did not load');
   }
 
+  var _dspUI = null, _dspKey = null;
+  function renderDisputes () {
+    var host = document.getElementById('native-disputes'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_dspUI && _dspKey === key) { _dspUI.refresh(); return; }
+    if (_dspUI) { try { _dspUI.destroy(); } catch (_) {} _dspUI = null; }
+    host.innerHTML = '';
+    _dspUI = window.SokoniMerchantDisputesUI && SokoniMerchantDisputesUI.mount(host, {
+      scope: scope,
+      /* Only what a merchant is a PARTY to. createDispute (buyer-only),
+         cancelDispute (buyer-only) and adminResolveDispute (admin) are
+         deliberately not bound — the surface explains them instead. */
+      callList:     _callable('getSellerDisputes'),
+      callDetail:   _callable('getDisputeDetail'),
+      callRespond:  _callable('sellerRespondToDispute'),
+      callEvidence: _callable('addDisputeEvidence'),
+      onToast: _merchantToast
+    });
+    _dspKey = _dspUI ? key : null;
+    if (!_dspUI) console.error('[merchant] Disputes failed to mount — sokoni-merchant-disputes-ui.js did not load');
+  }
+
   /* Rebuild whichever surface is open the moment the canonical shop lands. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
     else if (current === 'inventory') renderInventory();
     else if (current === 'staff') renderStaff();
     else if (current === 'marketing') renderMarketing();
+    else if (current === 'disputes') renderDisputes();
   });
 
   function renderDashboard () {

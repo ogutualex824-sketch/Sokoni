@@ -239,9 +239,17 @@
       mobile:true, desktop:true, activeKey:'stories' },
 
     { id:'disputes', name:'Disputes', icon:'⚖️', tier:'primary',
-      kind:'seller', sec:'disputes',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'disputes' },
+      mobile:true, desktop:true, activeKey:'disputes',
+      note:'Native surface (sokoni-merchant-disputes-ui.js) on the party-scoped dispute ' +
+           'authorities: getSellerDisputes / getDisputeDetail / sellerRespondToDispute / ' +
+           'addDisputeEvidence. A merchant CANNOT open a dispute (createDispute refuses a ' +
+           'non-buyer), cancel one (cancelDispute is the buyer withdrawing) or resolve one ' +
+           '(adminResolveDispute is admin-gated) — the screen explains each instead of ' +
+           'offering a control the server refuses. ACCOUNT-scoped and labelled so: a dispute ' +
+           'carries orderId/buyerId/sellerId and NO shopId, so filtering by the active shop ' +
+           'would invent a boundary the server never applied.' },
 
     { id:'customers', name:'Customers', icon:'🧑‍🤝‍🧑', tier:'more',
       kind:'seller', sec:'customers',

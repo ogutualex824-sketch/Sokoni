@@ -1,3 +1,86 @@
+## [2026-08-16] — 2D-2 step 4: Disputes, where a merchant responds and SOKONI decides
+
+Native `disputes` route on the four party-scoped authorities: `getSellerDisputes`,
+`getDisputeDetail`, `sellerRespondToDispute`, `addDisputeEvidence`.
+
+### Two authorities the earlier census missed
+
+The 2D-2 census evaluated a curated candidate list and did not include **`getSellerDisputes`** or
+**`sellerRespondToDispute`** — the two most merchant-relevant calls in the module, both already
+re-exported and both correctly scoped. Reading `functions/disputes.js` directly found them. A curated
+candidate map is a judgement input, and this is what it costs when the judgement is incomplete.
+
+The correction runs the other way too: the census listed `cancelDispute` as merchant-usable. It is
+**not** — `data.buyerId !== uid` denies anyone but the buyer. It is the buyer withdrawing their own
+claim, despite reading like a merchant action.
+
+### The line the screen must not cross
+
+`sellerRespondToDispute` sets status `seller_responded`, which is still an **open** status. A merchant
+who reads a success tick and stops watching will miss the outcome, so the progression is written as it
+is:
+
+```
+Buyer raised it  →  Your response  →  SOKONI reviews
+```
+
+The third step is never marked done by anything this surface can do. Both completion states are
+headlined **"Awaiting SOKONI review"** and say in words that nothing is settled yet.
+
+### What a merchant cannot do — explained, not omitted
+
+- **Open** a dispute: `createDispute` refuses a non-buyer (`isBuyer` check).
+- **Cancel** one: buyer-only.
+- **Resolve** one: `adminResolveDispute` is admin-gated, correctly.
+
+Rather than quietly leaving those controls out, the screen states where disputes come from and what
+the merchant's part is. None of the three calls is bound anywhere in the merchant path — asserted.
+
+### Scope: account-level, and stated
+
+A dispute carries `orderId`, `buyerId` and `sellerId` — and **no `shopId`**. `sellerId` is copied from
+the order, so it is an account uid, and `getSellerDisputes` queries `sellerId == auth.uid`. Filtering
+by `activeShopId` on the client would invent a boundary the server never applied, so the surface
+labels the list *"Disputes across your account"* instead. Same treatment Ads received in Marketing.
+
+**Recorded, not worked around:** `firestore.rules` gates a seller's dispute read on
+`resource.data.sellerUid`, a field disputes never carry — the code writes `sellerId`, 5 times, and
+`sellerUid` 0 times. The client-SDK read path for a seller is therefore dead; the callables are the
+only way in. This surface uses callables, so it is unaffected, but the rule is misleading as written.
+
+**Files:** `sokoni-merchant-disputes.js`, `sokoni-merchant-disputes-ui.js`,
+`scripts/test-merchant-disputes.js`, `scripts/test-merchant-disputes-ui.js` (new);
+`sokoni-merchant-routes.js`, `merchant.html` (modified). **Database/API/Rules:** unchanged — no new
+callable, no new collection, no authorization touched. **Breaking:** none. **Deployment:** Hosting
+only, when authorized. **Not deployed.**
+
+### Verification
+
+| suite | result |
+|---|---|
+| `test-merchant-disputes.js` *(new)* | **60 / 0** |
+| `test-merchant-disputes-ui.js` *(new, WebKit)* | **70 / 0** at iPhone SE **and** iPhone 14 Pro |
+| `test-merchant-route-gate.js --all` | **510 / 10** |
+| marketing · staff · shop-employee-authority · adjust-stock | 70/0 · 74/0 · 53/0 · 51/0 |
+| data · sell-inventory · routes · shop-access · application · templates | 37/0 · 90/0 · 63/0 · 34/0 · 35/0 · 32/0 |
+
+Proven on screen: every `data-act` on the list is enumerated and asserted to contain no
+create/cancel/resolve control; the response-sent state is asserted **not** to contain the word
+*resolved*; the third progression step is asserted not-done while the dispute is open; a resolved
+dispute offers neither response nor evidence and explains why; evidence with no attachment sends **no
+`fileUrl` key** rather than an empty one; the detail view re-reads from the authority so a merchant is
+never arguing with a stale timeline; no `localStorage` key is written at all.
+
+**The route gate went 508/10 → 510/10** — the `seller:disputes` deep-switch is gone with the iframe.
+
+**Two of my own assertions were too broad and were corrected rather than satisfied.** One banned the
+word *settled* near the response-sent state and failed on the sentence *"nothing is settled yet"* —
+the disclaimer that makes the screen honest; it is now a positive assertion that the state says so.
+The other used `:nth-child` to pick dispute cards, but the first child of the list is the scope
+banner, so the indices were shifted by one and section 7 was clicking the responded dispute while
+asserting about the resolved one — a test that passed for the wrong reason. Card selection is now by
+index among actual cards.
+
 ## [2026-08-16] — 2D-2 step 3: Marketing, built only on what is actually authoritative
 
 Two commits in one boundary: the authorization fix the census called for, then the surface.
