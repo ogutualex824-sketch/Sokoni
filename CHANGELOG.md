@@ -1,3 +1,20 @@
+## [2026-08-16] — The deploy guard can land without the delivery package
+
+Addendum to [[HANDOFF_delivery-security-63f6a48]]. No code change; a verified claim added.
+
+The guard fix protects the **release process**, not this release. If the delivery package sits in
+the `rc/combined` combined gate, the guard should not sit with it — until it lands, any operator
+can deploy a divergent tree and revert production, and the current guard will tell them it is fine.
+That failure mode outlives the delivery P0.
+
+`63f6a48` is independently cherry-pickable, verified rather than assumed: the blob hash of
+`scripts/deploy/guard-no-rollback.js` is **identical** (`ffeb63b8`) at the `rc/combined` tip
+`352f22e` and at `63f6a48`'s parent, because none of the four delivery commits touch that file.
+`git cherry-pick 63f6a48` onto `rc/combined` therefore applies the guard cleanly; the only conflict
+is `CHANGELOG.md`, where both sides prepend.
+
+**Files:** `docs/HANDOFF_delivery-security-63f6a48.md`.
+**Database / API / security changes:** none. **Deployment:** none.
 ## [2026-08-16] — Delivery security packaged for handoff, NOT deployed
 
 The preflight for the staged deployment found that `c40d882` was not deployable, and the reason

@@ -162,8 +162,25 @@ for a tree that would have reverted **110 files**, including `settlement-engine.
 directions: diverged tree → exit 1, release branch → exit 0.
 
 **The fix currently exists only on `release/delivery-security`.** Every other branch, including
-`rc/combined` itself, still carries the permissive guard. Worth landing early regardless of what
-happens to the rest of this package.
+`rc/combined` itself, still carries the permissive guard.
+
+### Land the guard on its own — it does not depend on this package
+
+`63f6a48` is independently cherry-pickable. Verified rather than assumed: the blob hash of
+`scripts/deploy/guard-no-rollback.js` is **identical** at the `rc/combined` tip `352f22e` and at
+`63f6a48`'s parent (`ffeb63b8`), because none of the delivery commits touch that file. So:
+
+```
+git cherry-pick 63f6a48        # onto rc/combined
+```
+
+applies the guard cleanly. The only conflict is `CHANGELOG.md`, where both sides prepend — resolve
+by keeping both entries. Nothing else in the commit.
+
+This matters because the guard protects the **release process itself**. If the delivery package
+sits in the combined gate, the guard should not sit with it: until it lands, any operator can
+deploy a divergent tree and revert production, and the current guard will tell them it is fine.
+That failure mode outlives whatever happens to the delivery P0.
 
 ## Artifact location
 
