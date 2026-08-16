@@ -1,3 +1,41 @@
+## [2026-08-17] — Quarantine baseline: three suites fail, and none of them is ours
+
+`docs/release-gates/QUARANTINE_BASELINE.md` (new). Clean-emulator gate at `7296b0b`:
+**PASS 185 · FAIL 0 · QUARANTINE 3 · STALE 0 · ENV 5 · TIMEOUT 0**, verdict APPROVED,
+artifact `docs/release-gates/7296b0b.json`.
+
+The gate's own wording for quarantine is *"genuine failure, untriaged — not blocking until
+classified."* Shipping while calling that `0 failures` would be false, so this commit
+classifies them. Each was run twice — once on the candidate, once on live `8290102` in a
+throwaway worktree — because "pre-existing" has to be measured, not inferred from the diff.
+A suite can break without its own files changing; that is precisely how seven cart and
+wishlist suites went silent earlier in this release.
+
+| suite | at `8290102` | verdict |
+|---|---|---|
+| `test-overlays` | 217, identical | pre-existing |
+| `test-icons` | identical | pre-existing |
+| `test-auth-email` | 7/7, same list | pre-existing, and **misclassified** |
+
+`test-overlays` deserves a note: this release does add one hardcoded z-index (`z-index:6` on
+an out-of-stock badge in `category.js`), and it does **not** count toward the 217 — if it did,
+live would read 216. It reads 217. The arithmetic looked like it implicated us, so it was
+checked rather than assumed.
+
+`test-auth-email` is environment-dependent, not a product defect: it reaches the real Auth
+endpoint, and all seven failures cascade from one `auth/network-request-failed`. It belongs in
+the ENV set. It is left in quarantine anyway — reclassifying a suite out of the failing set
+during a release is indistinguishable from tuning the gate to go green, so that is filed as
+follow-up work outside a release window.
+
+Also recorded: `test-pos-setup-availability` (added in `7296b0b`) **passes inside the gate**,
+not merely standalone — 23,305ms, in the blocking set. That is what lifts the gate from 184
+suites to 185.
+
+**Files:** `docs/release-gates/QUARANTINE_BASELINE.md`, `docs/release-gates/7296b0b.json`.
+**Database / API / security changes:** none — release evidence.
+**Deployment:** none. LIVE remains `8290102`.
+
 ## [2026-08-16] — Deploy guard: "not behind" was never the safety question
 
 `scripts/deploy/guard-no-rollback.js` blocked only the strict case where local HEAD is an
