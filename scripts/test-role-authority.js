@@ -130,6 +130,16 @@ console.log('\nPART A — role-authority primitive\n');
       && r.registeredAs.seller === false && !('approved' in r));
 }
 
+/* A6b: an unmapped role still defaults (this branch's behaviour is unchanged)
+   but the default is REPORTED. Phase 2 — which is not on this branch — replaces
+   the default with a throw; see the merge-hazard note in role-authority.js. */
+{
+  ENV = makeEnv();
+  const key = RA.roleKeyFor('mechanic');
+  ck('A6b an unmapped role defaults to provider AND is logged, not silent',
+    key === 'provider' && ENV.errors.length === 1, key);
+}
+
 /* A6: caller extras may not overwrite the canonical role fields. */
 {
   const p = RA.roleFieldPatch('seller', true, { role: 'seller', roles: 'seller', sellerEnabled: true });

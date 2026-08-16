@@ -69,8 +69,22 @@ const RECONCILE_COLLECTION = 'roleClaimReconcile';
 const ALERTS_COLLECTION = 'adminAlerts';
 
 /* Intake vocabulary → the canonical key used in BOTH `users.roles[]` and the
-   custom claim. `health` and `legal` are provider variants: they are their own
-   registries but one provider role on the account. */
+   custom claim. `health` and `legal` are provider variants here: they are their
+   own registries but one provider role on the account.
+   ─────────────────────────────────────────────────────────────────────────────
+   MERGE HAZARD — this map is the PRE-Phase-2 vocabulary, which is what this
+   branch runs. Roles Phase 2 (commit 2f7fd5d, on rc/combined and the identity
+   branches — NOT an ancestor of this branch) replaced it with a 12-entry map
+   that gives mechanic / landlord / tenant / health / legal their own keys and
+   THROWS on an unmapped role instead of defaulting. Production rules already
+   speak that vocabulary.
+
+   When this branch meets that one, this map must be replaced by the Phase-2 map
+   and the throw preserved — do not resolve the conflict by keeping this table,
+   and do not let Phase 2's copy live inside grantAccountRole again: the map
+   belongs here, with the rest of the role authority. Until then the fallback
+   below is kept (changing the vocabulary ahead of the branch that owns it would
+   grant `provider` where prod expects `legal`), but it is no longer silent. */
 const ROLE_KEY = Object.freeze({
   provider: 'provider',
   driver: 'rider',
@@ -79,7 +93,16 @@ const ROLE_KEY = Object.freeze({
   legal: 'provider',
 });
 
-const roleKeyFor = (role) => ROLE_KEY[role] || 'provider';
+function roleKeyFor(role) {
+  const key = ROLE_KEY[role];
+  if (key) return key;
+  /* A role that reaches here unmapped is a bug in the caller, not an applicant
+     problem to smooth over. Behaviour is unchanged — but it is now visible. */
+  logger.error('[roleAuthority] UNMAPPED role defaulted to "provider"', {
+    role, known: Object.keys(ROLE_KEY).join(','),
+  });
+  return 'provider';
+}
 
 /**
  * The claim shape a role implies, merged onto the account's existing claims.

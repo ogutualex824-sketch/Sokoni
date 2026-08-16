@@ -26,6 +26,17 @@ Vocabulary → canonical key:
 | `driver` | `rider` |
 | `seller` | `seller` |
 
+> **MERGE HAZARD.** That is the **pre-Phase-2** vocabulary, which is what this branch
+> (`fix/algolia-batch-poisoning`) runs. Roles Phase 2 — commit `2f7fd5d`, present on `rc/combined`
+> and the identity branches, **not an ancestor of this branch** — replaced it with a 12-entry map
+> giving `mechanic` / `landlord` / `tenant` / `health` / `legal` their own keys, and **throws** on an
+> unmapped role instead of defaulting to `provider`. Production rules (`e66d77a4`) already speak the
+> Phase-2 vocabulary. When the branches meet, `ROLE_KEY` here must be replaced by the Phase-2 map
+> with its throw — and Phase 2's copy must **not** go back inside `grantAccountRole()`; the map
+> belongs in this module with the rest of the role authority. Until then the default is preserved
+> (changing the vocabulary ahead of the branch that owns it would grant `provider` where production
+> expects `legal`) but it is logged at error level, never silent.
+
 ---
 
 ## The contract
