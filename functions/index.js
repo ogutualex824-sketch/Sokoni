@@ -2252,7 +2252,18 @@ async function getFcmToken(uid) {
  * smsTemplates — returns SMS text + FCM title/body per status change.
  * Keys: buyer, seller, driver, buyerFcm, sellerFcm, driverFcm.
  */
-function smsTemplates(o) {
+/* `pinOverride` is the buyer's delivery PIN, resolved by the CALLER from
+   `deliveryPins/{orderId}`.
+
+   This used to read `o.proofPin`, and `o` is an ORDER document — but `proofPin`
+   has only ever been written to `packageRequests`. So the field was always
+   undefined here and every buyer received the literal string "PIN: ----". A
+   pre-existing data-flow bug, not an authorisation one: nothing leaked, the
+   message was simply useless.
+
+   It is passed in rather than fetched here because this builder is synchronous
+   and is called from an async trigger that can do the read properly. */
+function smsTemplates(o, pinOverride) {
   const id     = o.id || o._fsId || "—";
   const total  = Number(o.orderTotal || o.total || 0).toLocaleString("en-KE");
   const buyer  = o.buyerName   || "Customer";
@@ -2260,7 +2271,7 @@ function smsTemplates(o) {
   const driver = o.driverName  || "Rider";
   const dPhone = o.driverPhone || "";
   const sNet   = Number(o.sellerNet || o.total || 0).toLocaleString("en-KE");
-  const pin    = o.proofPin || "----";
+  const pin    = pinOverride || null;
   const ref    = o.deliveryRef ? `delivery-tracking.html?ref=${o.deliveryRef}` : `track.html?id=${id}`;
 
   return {
@@ -2299,8 +2310,15 @@ function smsTemplates(o) {
       buyerFcm: { title: "🚗 On the Way!", body: `Order ${id} is en route to you` },
     },
     delivered: {
-      buyer:    `SOKONI: Order ${id} delivered! Confirm receipt to release payment to seller. PIN: ${pin}`,
-      buyerFcm: { title: "📬 Delivered!", body: `Confirm receipt with your PIN: ${pin}` },
+      /* No PIN resolved -> say nothing about a PIN. The previous code emitted
+         "PIN: ----" unconditionally, which is worse than omitting it: it tells the
+         buyer a code exists and then gives them four hyphens to read out. */
+      buyer:    pin
+        ? `SOKONI: Order ${id} delivered! Confirm receipt to release payment to seller. PIN: ${pin}`
+        : `SOKONI: Order ${id} delivered! Confirm receipt to release payment to seller: mysokoni.co.ke/${ref}`,
+      buyerFcm: pin
+        ? { title: "📬 Delivered!", body: `Confirm receipt with your PIN: ${pin}` }
+        : { title: "📬 Delivered!", body: "Tap to confirm receipt" },
     },
     completed: {
       seller:    `SOKONI: Order ${id} completed! KES ${sNet} released to your account.`,
@@ -3047,7 +3065,22 @@ exports.onOrderStatusChange = onDocumentUpdated(
 
     console.log(`[onOrderStatusChange] ${orderId}: ${before.status} → ${toStatus}`);
 
-    const tmpl = smsTemplates(after);
+    /* Resolve the buyer's delivery PIN server-side, and ONLY for the status whose
+       message uses it. `deliveryPins` is CF-only (no rule), so this read is not a
+       new exposure — it is the same Admin-SDK access getMyDeliveryPin performs
+       after proving buyer identity, and the value goes only to the buyer's own
+       number. A failure here degrades the message, never the trigger. */
+    let _deliveryPin = null;
+    if (toStatus === "delivered") {
+      try {
+        const _ps = await db.collection("deliveryPins").doc(String(orderId)).get();
+        if (_ps.exists) _deliveryPin = _ps.data().pin || _ps.data().proofPin || null;
+      } catch (e) {
+        console.warn("[onOrderStatusChange] delivery PIN lookup failed:", e.message);
+      }
+    }
+
+    const tmpl = smsTemplates(after, _deliveryPin);
     const msgs = tmpl[toStatus] || {};
 
     /* ── SMS ── */

@@ -36,10 +36,14 @@ const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestor
 const logger = require('firebase-functions/logger');
 
 /* Ownership fields mirror the canonical definition already in
-   firestore.rules:265-270. Not a new vocabulary. */
-const BUYER_FIELDS  = ['uid', 'userId', 'buyerId', 'buyerUid'];
-const SELLER_FIELDS = ['sellerUid', 'sellerId', 'merchantId'];
-const RIDER_FIELDS  = ['assignedDriverUid', 'riderId', 'driverId'];
+   firestore.rules:265-270. Not a new vocabulary — and now not a second copy
+   either: `delivery-authority.js` holds the one definition, and dispatch.js
+   consumes the same one. Two lists that drift is exactly how `assigned` and
+   `driver_assigned` came apart and left a real rider judged inactive. */
+const _deliveryAuth = require('./delivery-authority');
+const BUYER_FIELDS  = _deliveryAuth.BUYER_FIELDS;
+const SELLER_FIELDS = _deliveryAuth.SELLER_FIELDS;
+const RIDER_FIELDS  = _deliveryAuth.RIDER_FIELDS;
 
 /* Delivery states in which a rider legitimately needs the customer's address.
 
