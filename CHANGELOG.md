@@ -1,3 +1,124 @@
+## [2026-08-16] — Devices / POS authority census (Stage 1, read-only)
+
+No UI, no repairs, no backfill, no deployment. `scripts/census-devices-authority.js` +
+`docs/MERCHANT_DEVICES_AUTHORITY.md`. Fixture `SELLER_A → SHOP_B → DEVICE_B`,
+`SHOP_C → DEVICE_C`.
+
+The instruction was: don't assume POS setup is the merchant authority just because it already
+works. That was the right instruction.
+
+### POS device setup works. It decides almost nothing.
+
+Of the eleven callables that read or write the POS device fleet, **nine authorise nobody**, and
+eight of those contain no ownership token of any kind. The screen is deliberately generous — it
+matches `permission-denied`, `ownerId`, `adminUids`, `posStaff`, `isAdmin`, `sellerUid`, a
+`uid !==` comparison, or `users/{uid}.merchantId` — which makes that result harder to reach, not
+easier. Full function bodies were extracted by brace matching; `device-manager.js` declares eight
+callables back to back and several are under 800 characters, so a line window would have bled.
+
+`lockDevice`, `unlockDevice`, `remoteLogout`, `remoteUpdate`, `decommissionDevice` and
+`deviceHeartbeat` each take a client `deviceId` and act on it with `_requireAuth` and nothing else.
+`getDeviceList` takes a client `merchantId` and returns that fleet.
+
+### A device can be attached to the wrong shop, two independent ways
+
+**`bootstrapDevice`** takes `merchantId`, `branchId` and `deviceId` from the caller, checks
+nothing, returns the merchant's full bootstrap bundle, and then writes
+`posDevices/{client deviceId}` with the client's `merchantId` and `branchId`, `cashierId: uid`,
+`status: 'active'`, `{ merge: true }`. So any authenticated account can read any merchant's
+configuration, attach a device to any merchant, and — because of `merge` — **re-point an existing
+device to a different merchant**.
+
+It is also a **decommission bypass**. `registerDevice` explicitly refuses to re-register a
+decommissioned device; `bootstrapDevice` writes `status:'active'` with no such check. Combined with
+the unscoped `decommissionDevice`, an attacker can take a merchant's till out of service through
+the documented path while the documented recovery path refuses to bring it back.
+
+**`registerDevice`** does corroborate — owner of `businesses/{merchantId}` or
+`merchants/{merchantId}`, *or* active `posStaff`. The staff query is filtered by `branchId` and
+**not** by `merchantId`, and both come from the caller. A user who is legitimately staff at their
+own branch can send their own `branchId` with a victim's `merchantId` and pass. The record proves
+membership of a branch and is never checked to belong to the merchant being claimed — the same
+defect class as `orderAdvance` and `posLookupCustomer`: a real check that validates something other
+than the thing being authorised.
+
+### A generous screen is not a verdict
+
+`validateDeviceAccess` matched the ownership screen on `posStaff` and authorises nothing: the query
+is `branchId` + `pinHash` + `status`, and the client's `merchantId` is accepted and then never used.
+Given a correct staff PIN it returns the employee record for a branch the caller has no
+relationship to, rate-limited at 5 attempts per uid per 5 minutes — which bounds a brute force
+without establishing who is asking.
+
+So the census reports the automated screen and the hand-verified answer in **separate columns**, and
+a control asserts they disagree. If the screen and the verdicts agreed exactly, the verification
+step would be doing no work.
+
+### Three collections called "device", three different things
+
+| collection | what it is | verdict |
+|---|---|---|
+| `posDevices` | POS hardware fleet | **UNSAFE** |
+| `userDevices` | account login sessions | SAFE |
+| `securityDevices/{uid}/devices` | zero-trust attestation | SAFE |
+
+`userDevices` is the model the fleet should have copied: the uid is **in the document key**
+(`{uid}_{deviceId}`), the list filters by the caller, and logout refuses another user's device. All
+three properties are asserted by controls rather than taken on trust.
+
+"Sign out my other phone" and "decommission till 2" are different sentences with different blast
+radii. A merchant Devices screen is about `posDevices` only.
+
+### `posDevices` rules gate on a field the writers do not write
+
+`isPosOwner()` is `resource.data.sellerId == request.auth.uid`; both `registerDevice` and
+`bootstrapDevice` write `merchantId`. **Sixth** instance of this pattern, after
+`shopEmployees.sellerUid`, `disputes.sellerUid`, `posCustomers.sellerId`,
+`minishopAnalytics.ownerUid` and `posReceipts.sellerId`.
+
+### What the Devices screen does today
+
+`merchant.html` already routes `devices` as `kind:'native'`, so there is no iframe to remove — but
+the surface calls **no server authority at all**. It shows one live Web Bluetooth printer connection
+and two "available in Cashier" placeholders. The registered fleet a merchant actually owns is
+**invisible to its owner** while being lockable and decommissionable by anyone.
+
+### Verdict: Devices is BLOCKED, and it is not one screen
+
+Buildable now, and useful on its own: the **local peripheral** surface (printer connect / test /
+forget, scanner and cash-drawer status) touches no cross-tenant authority, plus printer
+configuration via `getPrinterConfig`/`setPrinterConfig` — `posPrinterConfig/{auth.uid}`, so
+**account-level**, labelled the same way Tax is.
+
+Must wait for a new authority: the **registered device fleet** (list, name, lock, unlock,
+decommission) and **terminal/PDQ operations**, one of which initiates a card payment on a terminal
+the caller names.
+
+### Seven findings recorded, none fixed here
+
+| # | finding | severity |
+|---|---|---|
+| 1 | `bootstrapDevice` — no check; any merchant's bundle + device hijack + decommission bypass | **critical** |
+| 2 | six `device-manager` commands — auth only, client `deviceId` | **critical** |
+| 3 | `getDeviceList` — auth only, client `merchantId` | high |
+| 4 | `registerDevice` — `posStaff` by `branchId`, not tied to the claimed merchant | high |
+| 5 | `validateDeviceAccess` — staff PIN oracle across branches | high |
+| 6 | `posInitiateTerminalPayment` / `posGetTerminalHealth` — auth only, client `terminalId` | high |
+| 7 | `posDevices` rule gates on `sellerId`; writers write `merchantId` | medium |
+
+### Identity, recorded not fixed
+
+The device path uses `businesses/{id}.ownerId`, `merchants/{id}.ownerId`/`adminUids` and
+`users/{uid}.merchantId` — none of which is `shops/{shopId}.sellerUid`. Per the standing
+instruction this census does not resurrect `merchants/{merchantId}` to make a legacy path
+convenient, and does not "fix" the spellings on aesthetic grounds. Whether they are
+writer-specific representations or a genuine authority conflict belongs to the identity work.
+
+**Files:** `scripts/census-devices-authority.js` (new),
+`docs/MERCHANT_DEVICES_AUTHORITY.md` (new), `docs/MERCHANT_2D2_QUEUE.md`.
+**Database changes:** none. **API changes:** none. **Security changes:** none — seven findings
+recorded for separate stages. **Breaking changes:** none.
+
 ## [2026-08-16] — Tax: native, and account-level in the header rather than by surprise
 
 `kra-tax` was `kind:'seller' sec:'tax'` — an iframe of `seller.html#tax`. It is now native.

@@ -16,8 +16,8 @@
 | Customers | ✅ done | `50f6e99` |
 | Store | ✅ done | `51780ed` |
 | Tax | ✅ done — native, account-level | `pending` |
-| **Devices / POS** | ← **next** — authority census first | — |
-| Fulfilment / Delivery | **audit required — see below** | — |
+| Devices / POS | census done — **fleet BLOCKED**, local peripherals buildable | `pending` |
+| **Fulfilment / Delivery** | ← **next** — **audit required, see below** | — |
 | Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
 | Orders | **blocked** — divergent store | — |
@@ -38,8 +38,21 @@
 | `posLogReprint` accepts an uncorroborated `merchantId`; mutates any order's reprint counter | **open** — medium | — |
 | `posGetQueueMetrics` queries `posCheckoutMetrics` by client-supplied `merchantId` | **open** — medium | — |
 | `posReceipts` rule gates on `sellerId`; 3 of 4 writers emit `merchantId` | **open** — medium | — |
+| `bootstrapDevice` — no owner check; returns any merchant's bundle AND writes `posDevices` with client scope, `merge:true`, `status:'active'` | **open** — **critical** | — |
+| `lockDevice`/`unlockDevice`/`remoteLogout`/`remoteUpdate`/`decommissionDevice`/`deviceHeartbeat` — auth only, client `deviceId` | **open** — **critical** | — |
+| `getDeviceList` — auth only, client `merchantId` | **open** — high | — |
+| `registerDevice` — `posStaff` checked by `branchId`, never tied to the claimed `merchantId` | **open** — high | — |
+| `validateDeviceAccess` — staff PIN oracle against a client-supplied `branchId` | **open** — high | — |
+| `posInitiateTerminalPayment`/`posGetTerminalHealth` — auth only, client `terminalId` | **open** — high | — |
+| `posDevices` rule gates on `sellerId`; writers write `merchantId` | **open** — medium | — |
 
-Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]].
+Receipts/Tax detail: [[MERCHANT_RECEIPTS_TAX_AUTHORITY]]. Devices detail: [[MERCHANT_DEVICES_AUTHORITY]].
+
+**Devices is not one screen either.** The *local peripheral* surface (printer connect/test/forget,
+scanner, cash drawer) touches no cross-tenant authority and can be finished now; printer
+configuration is `posPrinterConfig/{auth.uid}` and is account-level like Tax. The *registered
+device fleet* — list, name, lock, decommission — has **no owner check anywhere** and the rule that
+would have scoped a client read gates on `sellerId`, which no writer writes. Do not build it.
 
 **Receipts and Tax are not one screen.** Tax is entirely server-decided (`etimsProfiles/{auth.uid}`
 — the uid *is* the doc id, no client identity anywhere) and can be built now, labelled as an
