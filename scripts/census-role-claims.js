@@ -55,8 +55,17 @@ if (!PROJECT) {
   console.error('GCLOUD_PROJECT is required — refusing to guess which project to read.');
   process.exit(2);
 }
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.FIRESTORE_EMULATOR_HOST) {
-  console.error('GOOGLE_APPLICATION_CREDENTIALS is required (Auth listUsers needs admin credentials).');
+/* Credentials: an explicit service account, the emulator, or discoverable gcloud
+   ADC (`gcloud auth application-default login`). Auth listUsers needs real admin
+   credentials — the run fails loudly rather than reporting an empty population,
+   which would read as "nothing is divergent". */
+const ADC = path.join(process.env.APPDATA || process.env.HOME || '', 'gcloud', 'application_default_credentials.json');
+const ADC_POSIX = path.join(process.env.HOME || '', '.config', 'gcloud', 'application_default_credentials.json');
+const hasCreds = !!process.env.GOOGLE_APPLICATION_CREDENTIALS
+  || !!process.env.FIRESTORE_EMULATOR_HOST
+  || fs.existsSync(ADC) || fs.existsSync(ADC_POSIX);
+if (!hasCreds) {
+  console.error('No credentials. Set GOOGLE_APPLICATION_CREDENTIALS, or run: gcloud auth application-default login');
   process.exit(2);
 }
 

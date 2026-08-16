@@ -77,10 +77,28 @@ assigning a role destroys every other claim on the account, and writes `users.ro
 writes `roles[]` — the ROLE_MISSING mirror defect), and `universal-onboarding.js` (a parallel
 `accounts/{uid}` role model). All three are recorded as OPEN, none were touched.
 
-**Census:** `scripts/census-role-claims.js` classifies the live population
-CONSISTENT / CLAIM_MISSING / ROLE_MISSING / AMBIGUOUS. It performs **zero writes** and refuses to
-run without an explicit `GCLOUD_PROJECT`. **NOT RUN** — it reads production Auth.
+**Census — RUN 2026-08-16 against `sokoni-aeb26`, read-only, no repair.** 69 user documents, 94 Auth
+accounts:
 
+| role | CONSISTENT | CLAIM_MISSING | ROLE_MISSING | AMBIGUOUS |
+|---|---|---|---|---|
+| **seller** | **0** | **6** | 1 | 4 |
+| rider | 1 | 1 | 0 | 1 |
+| provider | 2 | 4 | 0 | 0 |
+
+**Not one seller holds the seller claim.** KASS is one of the six, not a special case — the
+divergence is a population defect, so a manual per-account fix would have treated a symptom. The
+other classes are different defects: the single ROLE_MISSING account holds `{"seller":true}` as its
+*only* claim with no `roles[]`, `sellers/`, `shops/`, `accounts/` or `applications/` record (a token
+authorizing access the server has no record of; the non-merging claim shape matches `admin-os.js`,
+unproven from data alone), and the four AMBIGUOUS accounts are self-declared —
+`registeredAs.seller` is client-writable for non-admin keys and
+`SokoniAccessControl.registerUserRole('seller')` is wired to buttons in `seller.js` /
+`management-init.js`. That is a declaration, not an authorization:
+`scripts/test-permissions-escalation.js` is **13/13** (forged storage cannot elevate; a cached
+`seller` resolves for display without being elevated). No backfill designed or run — the repair
+differs per class and needs the authorization source proven first. Full report (with uids) was
+written outside the repo.
 ## [2026-08-13] â€” SECURITY: the rider was authorizing their own payout
 
 **Status: FIXED and proven.** 36/36. **Release blocker â€” this is the money path.**

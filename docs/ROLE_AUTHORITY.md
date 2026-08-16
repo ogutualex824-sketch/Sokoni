@@ -124,7 +124,42 @@ GOOGLE_APPLICATION_CREDENTIALS=… GCLOUD_PROJECT=… node scripts/census-role-c
 ```
 
 Read-only classification of the live population into **CONSISTENT / CLAIM_MISSING / ROLE_MISSING /
-AMBIGUOUS**, plus dangling Firestore roles and open reconcile records. Zero writes. **Not yet run.**
+AMBIGUOUS**, plus dangling Firestore roles and open reconcile records. Zero writes.
+
+### Census result — `sokoni-aeb26`, 2026-08-16 (69 user docs, 94 Auth accounts)
+
+| role | CONSISTENT | CLAIM_MISSING | ROLE_MISSING | AMBIGUOUS |
+|---|---|---|---|---|
+| **seller** | **0** | **6** | 1 | 4 |
+| rider | 1 | 1 | 0 | 1 |
+| provider | 2 | 4 | 0 | 0 |
+
+Dangling Firestore roles: 0. Open `roleClaimReconcile` records: 0. Counts are the complete
+population, not a sample. **No repair was run.**
+
+**Not one seller on the platform holds the seller claim.** KASS (`D5Ql2…`) is one of the six, not a
+special case — so the question the census was asked to settle is settled: this is a population
+defect, not an isolated historical inconsistency, and a per-account repair of KASS would have
+treated a symptom.
+
+The other three classes are each a *different* defect, and none of them is repaired by minting a
+claim:
+
+- **ROLE_MISSING (1 seller)** — holds `{"seller": true}` as its **only** claim, with no `roles[]`
+  entry, no `sellers/`, `shops/`, `accounts/` or `applications/` document anywhere. A token that
+  authorizes seller access the server has no record of. The single-key claim shape (no spread of
+  prior claims) matches `admin-os.js`'s `{[role]: true}` write; origin unproven from data alone.
+- **AMBIGUOUS (4 sellers)** — `registeredAs.seller: true` with `roles: ['buyer']` and no claim.
+  These are **self-declared** sellers: `registeredAs` is client-writable for non-admin keys
+  (`noPrivilegeEscalation()` blocks only `admin`/`superAdmin`/`moderator`/`isAdmin`), and
+  `SokoniAccessControl.registerUserRole('seller')` is wired to buttons in `seller.js` and
+  `management-init.js`. Declaration, not authorization: `node scripts/test-permissions-escalation.js`
+  is **13/13** — forged storage cannot elevate, and a cached `seller` resolves for display without
+  being elevated.
+- **CLAIM_MISSING riders/providers (5)** — the same defect as the sellers, in the other role keys.
+
+A backfill is therefore **not** a single sweep. Deciding it needs the authorization source per
+class, which is the next decision, not the next script.
 
 ---
 
