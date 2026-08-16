@@ -706,11 +706,47 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
 }
 
 /* Callable form. Only the seller/rider/admin side advances an order, so this
-   requires auth; the buyer's client only ever READS the timeline. */
+   requires auth; the buyer's client only ever READS the timeline.
+
+   That sentence was true as a description and false as an implementation: the
+   check was `request.auth.uid` existing, and nothing more. Any signed-in account
+   could name any orderId and advance a stranger's order — and because the
+   `accepted` stage sets status 'confirmed', which onOrderStatusChange watches to
+   fire rider auto-assignment, that meant pushing someone else's order into
+   dispatch and putting a real rider on the road.
+
+   Authorisation now happens BEFORE advanceOrder() is reached, so a refused call
+   performs no read-modify-write on the order at all: the order document, its
+   status, and every downstream trigger are untouched.
+
+   advanceOrder() itself is deliberately NOT changed. It is the trusted internal
+   primitive; the callable is the boundary where an untrusted caller appears. */
+const _orderAuth = require('./order-advance-authority');
+const _shopEmployees = require('./shop-employees');
+
 exports.orderAdvance = onCall(
   { region: REGION, secrets: sokoniAt.secrets },
   async (request) => {
     if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const uid = request.auth.uid;
+    const { orderId, stage } = request.data || {};
+    if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required.');
+    if (!stage)   throw new HttpsError('invalid-argument', 'stage is required.');
+
+    const snap = await db().collection('orders').doc(String(orderId)).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
+
+    /* WHO is this caller to THIS order, then MAY that actor set THIS stage.
+       Two questions, asked separately — collapsing them is how the original
+       hole existed. */
+    await _orderAuth.authorise({
+      order: snap.data() || {},
+      uid,
+      claims: request.auth.token || {},
+      stage,
+      shopAccess: _shopEmployees.assertShopAccess,
+    });
+
     return advanceOrder(request.data || {});
   }
 );

@@ -1,3 +1,82 @@
+## [2026-08-16] — SECURITY: `orderAdvance` accepted any signed-in caller
+
+`orderAdvance` was the **only** authority over an order's status, it is deployed, and its entire
+check was:
+
+```js
+if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
+return advanceOrder(request.data || {});
+```
+
+Any signed-in account could name any `orderId` and advance that order's timeline. That is not only a
+data-integrity problem: the `accepted` stage also sets `status: 'confirmed'`, and
+`onOrderStatusChange` watches `confirmed` to fire **rider auto-assignment**. So an unrelated account
+could push a stranger's order into dispatch and put a real rider on the road.
+
+The code's own comment already described the correct rule — *"Only the seller/rider/admin side
+advances an order… the buyer's client only ever READS the timeline"* — which was true as a
+description and false as an implementation.
+
+### `functions/order-advance-authority.js` (new)
+
+Two questions, asked **separately**, because collapsing them is how this kind of hole appears:
+
+```
+auth.uid → who is this caller to THIS order? → may that actor set THIS stage?
+        → status mutation → rider assignment
+```
+
+| stage | who may set it |
+|---|---|
+| `received`, `paid` | admin only — payment is the payment authority's word, never a client's |
+| `accepted`, `preparing`, `ready` | seller, admin |
+| `assigned` | admin only — rider assignment is dispatch's, not a self-claim |
+| `picked_up`, `halfway`, `near`, `delivered` | rider, admin |
+| `completed` | seller, admin |
+
+Anything absent from a stage's list is admin-only, so a stage added upstream is refused by default
+rather than silently open. Identity is read from the **order**, across the vocabularies already in
+use (`sellerUid`/`sellerId`/`vendorId`, `riderId`/`riderUid`/`driverId`/`assignedRider`); if the
+order names a `shopId`, shop ownership counts too, through the canonical `shop-employees` contract —
+so a shop owner can act on their shop's order even when the order records another member as seller.
+The refusal never says which party the caller was mistaken for, which would let a prober enumerate an
+order's participants.
+
+**`advanceOrder()` itself is deliberately unchanged.** It is the trusted internal primitive; the
+callable is where an untrusted caller appears, and that is where the boundary belongs. Authorisation
+happens **before** `advanceOrder` is reached, so a refused call performs no read-modify-write at all.
+
+**Files:** `functions/order-advance-authority.js`, `scripts/test-order-advance-authority.js` (new);
+`functions/notify.js` (modified, +37/−1). **Database/API/Rules:** unchanged. **Breaking:** a client
+that was advancing orders it does not own now receives `permission-denied` — that is the fix.
+**Deployment:** Functions. **Not deployed.**
+
+### Verification — `node scripts/test-order-advance-authority.js` — **47 / 0**
+
+The four required cases, on `SELLER_A` / `SHOP_B` / `SHOP_C`:
+
+| caller | result |
+|---|---|
+| SELLER_A on SHOP_B's order | **allowed** |
+| SELLER_A on SHOP_C's order | denied |
+| the buyer — a real party | denied |
+| an unrelated signed-in account | denied |
+| unauthenticated | denied |
+
+And the decisive assertions, driven through the **real callable** captured as it registers, against a
+Firestore stub that records every write: a denied request writes **nothing** — the order keeps its
+status, **never becomes `confirmed`**, and gains no timeline entry, so rider auto-assignment has
+nothing to react to. A seller marking `delivered` is refused (the rider's stage) and writes nothing.
+An unknown order is `not-found` and writes nothing. The positive control proves the fix did not break
+the feature: the order's own seller still advances it, and that **does** write the confirmed
+transition.
+
+**A skipped part is not a passing part.** `notify.js` initially failed to load in isolation (a missing
+`defineString` in the stub, then a missing `onRequest`), which made the decisive Part D silently skip
+while the run still looked green. The suite now **counts a skip of Part D as a failure**, and the
+stubs were completed until it genuinely runs. A second incomplete stub (`logRef.create`) made the
+positive control fail on plumbing and read as "the fix broke the feature" when it had not.
+
 ## [2026-08-16] — 2D-2 step 4: Disputes, where a merchant responds and SOKONI decides
 
 Native `disputes` route on the four party-scoped authorities: `getSellerDisputes`,
