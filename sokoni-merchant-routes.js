@@ -235,11 +235,19 @@
       mobile:true, desktop:true, activeKey:'flash-sale' },
 
     { id:'kra-tax', name:'KRA Tax', icon:'🧾', tier:'more',
-      kind:'seller', sec:'tax',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'kra-tax',
-      note:'DASH_PAGES.tax existed but had NO merchant sidebar button before Phase 2 — the surface ' +
-           'was built and unreachable. eTIMS certification is separate (BLOCKED on KRA spec).' },
+      note:'Native tax surface (sokoni-merchant-tax-ui.js) on the eight authorities the ' +
+           'Receipts/Tax census classified SAFE: etimsGetProfile, etimsRegisterSeller, ' +
+           'etimsUpdateProfile, etimsValidatePin, etimsGetSellerStats, etimsGenerateInvoice, ' +
+           'etimsBulkGenerate, etimsResubmitInvoice. ctx is SELLER_UID ALONE and deliberately not ' +
+           'SHOP_ID: tax identity is etimsProfiles/{auth.uid} — the uid IS the document id, so no ' +
+           'merchant identifier is sent by any call and there is no shop dimension to scope. One ' +
+           'KRA PIN and one invoice sequence per ACCOUNT, which the surface states in its header ' +
+           'rather than letting a two-shop merchant find out by surprise. Was kind:\'seller\' ' +
+           'sec:\'tax\' — an iframe of seller.html#tax. eTIMS certification is separate ' +
+           '(BLOCKED on KRA spec).' },
 
     { id:'stories', name:'Stories', icon:'📸', tier:'more',
       kind:'seller', sec:'stories',

@@ -1,3 +1,96 @@
+## [2026-08-16] — Tax: native, and account-level in the header rather than by surprise
+
+`kra-tax` was `kind:'seller' sec:'tax'` — an iframe of `seller.html#tax`. It is now native.
+
+Built on the eight authorities the Receipts/Tax census classified SAFE and on nothing else:
+`etimsGetProfile`, `etimsRegisterSeller`, `etimsUpdateProfile`, `etimsValidatePin`,
+`etimsGetSellerStats`, `etimsGenerateInvoice`, `etimsBulkGenerate`, `etimsResubmitInvoice`.
+
+### No merchant identifier leaves the page
+
+Tax identity is `etimsProfiles/{auth.uid}` — the uid *is* the document id. So this surface sends
+**no sellerUid, no merchantId, no shopId**. `assertNoIdentity()` refuses all seven identity
+spellings outright, which makes it a property of the code rather than an intention.
+
+The browser suite arms the trap deliberately: the harness hands the surface a scope carrying
+`activeShopId: SHOP_B`, then asserts every recorded payload is free of any identifier. SHOP_B and
+SHOP_C are interchangeable in this suite precisely because neither is ever named — that is the
+point, not an oversight in the fixture.
+
+The route's `ctx` is `SELLER_UID` alone. Dropping `SHOP_ID` is the contract-level statement of the
+same fact.
+
+### Account-level is stated before any figure
+
+A seller with two shops has one KRA PIN, one invoice prefix and one invoice sequence. That is
+almost certainly correct — the PIN belongs to the taxpayer, not the outlet — but a two-shop
+merchant who is not told will read it as a bug. The header says so, and the suite asserts the
+statement precedes the first KPI in document order.
+
+### Accepted, pending and failed are three different claims
+
+Pending submissions are labelled as awaiting KRA and are **not** counted as filed; the screen says
+so. Failures get their own tab with a count badge, KRA's rejection text **verbatim**, and a
+Resubmit action per invoice. `etimsProcessQueue` runs every five minutes, so "queued" has a real
+horizon and the copy gives it one.
+
+Figures are never totalled locally — the server truncates its own queries at 30/20/20, so a
+client-side sum would silently understate filed VAT. The lists say they are capped instead of
+implying they are complete. `E1` asserts the layer contains no `.reduce(` at all.
+
+### States that would otherwise lie
+
+- A **stats failure on a registered merchant** does not fall back to the setup form. Doing so would
+  invite a second registration over a live taxpayer profile. The profile is shown, the figures are
+  dashes, and the reason is stated.
+- An **unregistered account** gets the setup form and no KPIs at all — not zeros.
+- A **KRA rejection at registration** is quoted verbatim and nothing claims success.
+- A **refused save** keeps the merchant's typing and shows the server's reason.
+- Credentials are write-only: the taxpayer secret and device serial are sent once, stored
+  encrypted, and never rendered back. The settings screen does not offer to edit them and explains
+  why.
+
+### One defect found and fixed by its own test
+
+The surface repainted on `change`, which destroyed the field under the merchant's cursor and, on a
+date input, rebuilt the panel on every picker interaction. `page.fill` followed by `page.click`
+exposed it. Fixed by updating only the buttons' enabled state instead of repainting — a better
+surface, not a relaxed assertion.
+
+### Not bound, deliberately
+
+`etimsGetBuyerReceipts` (a BUYER authority), `etimsGetAdminStats`, `etimsPlatformInvoice`,
+`hubUpdateTaxConfig`, `hubRegisterEtims` (all admin-only), and `calculateTaxBreakdown` — a quote,
+not a record of tax actually charged, which beside real filed figures would invite being read as
+one. None of the five open receipt findings is touched by this surface.
+
+### Verification
+
+- `scripts/test-merchant-tax.js` — **95/0**, including four negative controls (a guard that
+  refused *everything* would pass the identity assertions while making the module useless; the
+  comment-stripper is proven to have actually stripped; the export detector is proven to fail on a
+  name that does not exist).
+- `scripts/test-merchant-tax-ui.js` — **220/0** across 320×568, 375×667, 393×852 and 1280×800.
+  No horizontal overflow on any tab, every control ≥44px, no input under 16px, the long KRA error
+  wraps.
+- `scripts/test-merchant-routes.js` — 59/0.
+- `scripts/test-merchant-route-gate.js --all` — **512 passed, 10 failed**, identical to the
+  baseline in composition as well as count: 6× CORS on 127.0.0.1, 2× `Can't find variable:
+  firebase` in seller-delivery.html, 2× `seller:products` deep-switch. No regression.
+
+**Honest caveat, unchanged from Marketing and Store:** the `--all` walk visits only the 17
+`tier:'primary'` routes, and `kra-tax` is `tier:'more'`. The gate therefore does not exercise it.
+What proves the surface is the 220-assertion runtime suite; what proves the wiring is `I8`–`I13`.
+
+**Files:** `sokoni-merchant-tax.js` (new), `sokoni-merchant-tax-ui.js` (new),
+`scripts/test-merchant-tax.js` (new), `scripts/test-merchant-tax-ui.js` (new),
+`sokoni-merchant-routes.js`, `merchant.html`, `docs/MERCHANT_2D2_QUEUE.md`.
+**Database changes:** none. **API changes:** none — eight existing callables bound.
+**Security changes:** none. **Breaking changes:** none — the KRA Tax button is preserved and now
+opens a native surface instead of an iframe.
+**Deployment:** none. All eight callables are already deployed; this is a hosting-only change and
+is NOT deployed yet.
+
 ## [2026-08-16] — Receipts / Tax authority census (Stage 1, read-only)
 
 No UI, no repairs, no backfill, no deployment. `scripts/census-receipts-tax-authority.js` +

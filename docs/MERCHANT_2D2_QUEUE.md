@@ -15,12 +15,13 @@
 | Messages | ✅ done | `59b6ffe` |
 | Customers | ✅ done | `50f6e99` |
 | Store | ✅ done | `51780ed` |
-| **Tax** | **ready to build** — census clean, account-level | — |
+| Tax | ✅ done — native, account-level | `pending` |
+| **Devices / POS** | ← **next** — authority census first | — |
+| Fulfilment / Delivery | **audit required — see below** | — |
 | Receipts | **blocked** — no merchant receipt-list authority + 3 security fixes | — |
 | Stories | new server authority required | — |
 | Orders | **blocked** — divergent store | — |
 | Flash Sales | **blocked** — divergent store | — |
-| **Fulfilment / Delivery** | **audit required — see below** | — |
 
 ### Security stages (kept deliberately separate from UI commits)
 

@@ -506,6 +506,11 @@
      getMyMinishop, never taken from activeShopId or defaulted to the uid. -->
 <script src="sokoni-merchant-store.js"></script>
 <script src="sokoni-merchant-store-ui.js"></script>
+<!-- TAX (2D-2 Stage 2) — eight SAFE eTIMS authorities. ACCOUNT-scoped:
+     etimsProfiles/{auth.uid} uses the uid AS the document id, so no merchant
+     identifier is sent by any call and there is no shopId to get wrong. -->
+<script src="sokoni-merchant-tax.js"></script>
+<script src="sokoni-merchant-tax-ui.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -904,6 +909,7 @@
     else if (id === 'messages') renderMessages();
     else if (id === 'customers') renderCustomers();
     else if (id === 'shop') renderStore();
+    else if (id === 'kra-tax') renderTax();
     else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
@@ -1941,7 +1947,36 @@
     if (!_stoUI) console.error('[merchant] Store failed to mount — sokoni-merchant-store-ui.js did not load');
   }
 
-  /* Rebuild whichever surface is open the moment the canonical shop lands. */
+  var _taxUI = null, _taxKey = null;
+  function renderTax () {
+    var host = document.getElementById('native-kra-tax'); if (!host) return;
+    var scope = _merchantScope(), key = _scopeKey(scope);
+    if (_taxUI && _taxKey === key) { _taxUI.refresh(); return; }
+    if (_taxUI) { try { _taxUI.destroy(); } catch (_) {} _taxUI = null; }
+    host.innerHTML = '';
+    _taxUI = window.SokoniMerchantTaxUI && SokoniMerchantTaxUI.mount(host, {
+      scope: scope,
+      /* No db adapter and no shopId. Tax identity is etimsProfiles/{auth.uid} —
+         the uid IS the document id — so every one of these derives the merchant
+         from auth and none of them accepts an identifier from this page.
+         etimsGetBuyerReceipts is a BUYER authority and is deliberately absent;
+         the admin and hub eTIMS callables are never bound here. */
+      callProfile:  _callable('etimsGetProfile'),
+      callRegister: _callable('etimsRegisterSeller'),
+      callUpdate:   _callable('etimsUpdateProfile'),
+      callValidate: _callable('etimsValidatePin'),
+      callStats:    _callable('etimsGetSellerStats'),
+      callInvoice:  _callable('etimsGenerateInvoice'),
+      callBulk:     _callable('etimsBulkGenerate'),
+      callResubmit: _callable('etimsResubmitInvoice'),
+      onToast: _merchantToast
+    });
+    _taxKey = _taxUI ? key : null;
+    if (!_taxUI) console.error('[merchant] Tax failed to mount — sokoni-merchant-tax-ui.js did not load');
+  }
+
+  /* Rebuild whichever surface is open the moment the canonical shop lands.
+     Tax is absent by design: it is account-scoped and does not wait on a shop. */
   document.addEventListener('sokoni:shop-resolved', function () {
     if (current === 'sell') renderSell();
     else if (current === 'inventory') renderInventory();
