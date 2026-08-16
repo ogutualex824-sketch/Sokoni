@@ -10106,6 +10106,13 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
      (No extra secrets needed — uses ANTHROPIC_API_KEY already defined)
      firebase deploy --only functions,firestore:indexes,firestore:rules,hosting
 ============================================================ */
+/* Merchant stock CORRECTIONS on canonical `products.stock`. Distinct from
+   inventoryEngine below, which owns the tenant-scoped inventory_levels ledger —
+   a different counter. A sale goes through posCompleteCheckout; a correction
+   goes through here; neither ever touches `products.sold`. */
+const merchantInventory = require("./merchant-inventory");
+exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
+
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;

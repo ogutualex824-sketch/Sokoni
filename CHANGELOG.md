@@ -1,3 +1,63 @@
+## [2026-08-16] — 2D-1B: one authority for a stock correction, and it never touches `sold`
+
+Two things change `products.stock`, and they mean different things:
+
+```
+SALE        posCompleteCheckout → stock ↓ → sale event → sold ↑
+CORRECTION  merchantAdjustStock → stock ⇅ → movement   → sold UNCHANGED
+```
+
+The second had no server authority. The only client path to the canonical field was
+`sokoni-db.updateProductStock()`, which writes `stock: increment(delta)` **and**
+`sold: increment(-delta)` — so a merchant counting three damaged units off the shelf silently
+recorded three *sales*. `inventoryAdjustStock` was no alternative: it writes
+`tenants/{id}/inventory_levels|movements|products`, a different counter from the one POS deducts and
+the catalogue reads. Using it would have given one shelf two numbers.
+
+**`functions/merchant-inventory.js` → `merchantAdjustStock` (new, re-exported by name).** This is
+the *first* authority over corrections to canonical `products.stock`, not a second one:
+
+authenticate → resolve `sellerUid` → verify the shop → verify the product belongs to that shop →
+validate `delta` and `reason` → **transaction**: set `stock`, `increment(inventoryVersion)`, write a
+`stockMovements` adjustment → return. `products.sold` is never read, written or defaulted anywhere
+in the module — the update patch is `{stock, updatedAt, inventoryVersion}` and the suite asserts the
+word `sold` is absent from it.
+
+Details that carry weight:
+
+- **Authorisation comes from the shop document**, not the `seller` claim — owner, `shopEmployees`
+  entry, or platform admin, the same rule `analytics-engine` already applies. Gating on the claim
+  would lock out every real merchant, since 0 of 11 currently hold it.
+- **An impossible correction is refused, not floored.** `-25` against a stock of 10 returns
+  `failed-precondition` with *"There are 10; count again or adjust by at most 10."* (The sale path
+  floors instead — there, payment already happened and the shortfall is flagged, not rejected.)
+  Correcting exactly to zero is allowed.
+- **Idempotent by `adjustmentId`**, claimed inside the transaction, so a double tap applies once and
+  returns the original outcome.
+- **A reason is mandatory** from a fixed vocabulary (`count_correction`, `damage`, `theft`,
+  `expiry`, `restock`, `return_to_supplier`, `transfer`, `other`) with an optional note — an
+  unexplained inventory change is what an audit cannot work with.
+
+**Files:** `functions/merchant-inventory.js` (new), `functions/index.js` (re-export),
+`scripts/test-merchant-adjust-stock.js` (new). **Database:** writes `stockMovements/{adjustmentId}`
+with `kind: 'adjustment'` (existing collection, existing shape). **Rules:** unchanged — Admin SDK.
+**Breaking:** none. **Deployment:** Functions only — one new callable, `merchantAdjustStock`. Not
+deployed.
+
+**Verification:** `node scripts/test-merchant-adjust-stock.js` — **46/0**. The real callable is
+captured as it registers and driven against a stubbed Firestore whose transaction records writes in
+order, on `SELLER_A` / `SHOP_B` / `SHOP_C`. Proven: unauthenticated rejected; SELLER_A cannot touch
+SHOP_C; a SHOP_C product is refused even when the caller names their own SHOP_B; employees may
+adjust; positive and negative adjustments apply; `inventoryVersion` advances exactly once; **`sold`
+is byte-for-byte unchanged and absent from the write**; no sale event of any kind is created; a
+repeat cannot double-apply; the reason and note are preserved; the Sell layer still routes sales
+through `posCompleteCheckout` only and never calls this authority; an abandoned cart makes zero
+inventory calls. Six mutations are each caught — including *"the correction also increments sold"*
+and *"negative stock is floored instead of refused"*.
+
+Untouched, as scoped: `seller-wiring.js`, `sokoni-db.updateProductStock()`, `products.sold` and the
+17,162 figure all remain frozen for the separate sales-authority/provenance work.
+
 ## [2026-08-16] — 2D-1 foundation: the canonical data layer under Sell and Inventory
 
 The capability map established that consolidation is a **rebuild of the data layer**, not a port of
