@@ -109,6 +109,7 @@ seller accounts hold the seller claim** — nothing on this path was ever going 
 | # | commit | scope |
 |---|---|---|
 | 1 | **this census** | read-only baseline (done) |
+| 1b | **decision authority** (done) | see below — `pending_review` was not a boundary |
 | 2 | onboarding / application flow | merchant submits into `applications`; `/offer` → application, not straight to a dashboard |
 | 3 | approval → live authority | stop delegating `seller`: project the registry + `shops/{uid}` inside the existing lifecycle, after the canonical role grant |
 | 4 | subscription / trial integration | reach the existing trial authority on approval; no second authority |
@@ -116,3 +117,37 @@ seller accounts hold the seller claim** — nothing on this path was ever going 
 | 6 | regression + mutation tests | pending→live, claim grant, trial creation, application submission, merchant routing |
 
 Each stage stops at a clean commit. Nothing is deployed.
+
+---
+
+## Addendum — why 1b came before 2A: a submitted application could approve itself
+
+2A's stated invariant is *"submission alone must NOT grant the seller claim."* That invariant was
+**unachievable** before this fix, so it landed first.
+
+`firestore.rules` lets an applicant update their own request:
+
+```
+allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields())
+```
+
+`noAdminFields()` withholds `approved`, `role`, `verified`, `approvedBy`. The projection in
+`application-lifecycle.js` reads **none** of those — it reads `status`, which the applicant *may*
+write. `canonStatus()` maps `approved | active | accepted | verified` all to approved. So any
+signed-in user could write `status: 'approved'` onto their own application and the trigger would
+grant the role and mint the Auth claim. The rule's own comment states that self-approval is
+impossible; it guards a field the decision engine never consults.
+
+Every legitimate decision already goes through `applicationDecide` (admin-only, stamps `decidedBy`).
+`decidedBy` is itself client-writable, so requiring its *presence* would only move the forgery one
+field along. **Custom claims are the one thing a client cannot write**, so the guard resolves the
+account named in `decidedBy` and requires an `admin` / `superAdmin` claim on it.
+
+An unauthorised decision is refused, recorded (`projectionStatus: 'blocked_unauthorised_decision'`,
+`blockedFor`) and alerted — and deliberately does **not** rewrite `status`, which would silently
+downgrade a legitimately-decided legacy application that predates `decidedBy`. Blocking the
+*projection* grants nothing either way, and an admin re-deciding through the console clears it.
+
+Verified by `node scripts/test-application-decision-authority.js` — **17/0**, driving the real
+trigger handler against stubbed SDKs. The mutation control is the proof the hole was real: with the
+guard replaced by `{ ok: true }`, the forged self-approval mints `claims.seller = true`.

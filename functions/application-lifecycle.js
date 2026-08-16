@@ -63,6 +63,7 @@
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
 /* Roles (users.roles[] + the Auth claim) have ONE writer. */
 const { grantAccountRole } = require('./role-authority');
@@ -703,6 +704,45 @@ async function applyDecision(appId, app, opts = {}) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   A decision is an ADMIN act — so verify the DECIDER, not the document.
+
+   `firestore.rules` lets an applicant update their own application:
+
+       allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields())
+
+   and `noAdminFields()` withholds `approved`, `role`, `verified`, `approvedBy` —
+   none of which this engine reads. It does NOT withhold `status`, which is the
+   only field the projection consults. So any signed-in user could write
+   `status: 'approved'` (or 'active' / 'accepted' / 'verified' — canonStatus maps
+   all four) onto their OWN request and be granted the role and the Auth claim by
+   this trigger. The rule's own comment says self-approval is impossible; it
+   guards a field the decision engine never looks at.
+
+   Every legitimate decision goes through `applicationDecide`, which is admin-only
+   and stamps `decidedBy`. But `decidedBy` is itself client-writable, so trusting
+   its presence would only move the forgery one field along. Custom claims are the
+   one thing a client cannot write, so authorisation is decided by reading the
+   claims of the account named in `decidedBy`.
+
+   Returns { ok } — never throws: an unresolvable decider is a refusal, not a
+   crash that leaves the application in limbo.
+   ────────────────────────────────────────────────────────────────────────── */
+async function decisionAuthority(after) {
+  const by = typeof after.decidedBy === 'string' ? after.decidedBy.trim() : '';
+  if (!by) {
+    return { ok: false, reason: 'no decidedBy — a decision is only made through applicationDecide' };
+  }
+  try {
+    const user = await getAuth().getUser(by);
+    const claims = user.customClaims || {};
+    if (claims.admin === true || claims.superAdmin === true) return { ok: true, by };
+    return { ok: false, reason: `decidedBy "${by}" holds no admin claim` };
+  } catch (e) {
+    return { ok: false, reason: `decidedBy "${by}" is not a resolvable account (${e.message})` };
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    TRIGGER — applications/{appId}
    Settles in at most two extra hops: normalise (1), project (1), then every
    guard short-circuits.
@@ -730,7 +770,46 @@ exports.applicationLifecycle = onDocumentWritten(
     if (after.decisionAppliedFor === status && after.projectionStatus === 'applied') return;
     if (status === 'pending') return;                     // nothing to grant yet
 
-    await applyDecision(appId, after, {});
+    /* Phase 2a — authorise the decision before acting on it. A submitted
+       application is a REQUEST; only an admin turns it into a grant. */
+    const authority = await decisionAuthority(after);
+    if (!authority.ok) {
+      /* Already recorded for this exact status: return WITHOUT writing. The
+         block below is itself a write to this document, so re-writing it would
+         re-fire this trigger forever. */
+      if (after.projectionStatus === 'blocked_unauthorised_decision' && after.blockedFor === status) return;
+
+      /* The status is left as the client wrote it — deliberately. Rewriting it
+         would silently downgrade a legitimately-decided legacy application that
+         predates `decidedBy`; blocking the PROJECTION grants nothing either way,
+         and an admin re-deciding through applicationDecide clears it. */
+      await event.data.after.ref.set({
+        projectionStatus: 'blocked_unauthorised_decision',
+        blockedFor: status,
+        projectionError: `Refusing to apply "${status}": ${authority.reason}. No role or claim was granted.`,
+        decisionAppliedFor: FieldValue.delete(),
+        updatedAt: _ts(),
+      }, { merge: true });
+
+      await _db().collection('adminAlerts').doc(`application_unauthorised_decision__${appId}`).set({
+        kind: 'application_unauthorised_decision',
+        severity: 'high',
+        message: `Application ${appId} carries status "${after.status}" that no administrator made. Nothing was granted. If this is a real decision, re-decide it through the admin console.`,
+        appId,
+        uid: after.uid || null,
+        claimedStatus: String(after.status || ''),
+        decidedBy: after.decidedBy || null,
+        reason: authority.reason,
+        createdAt: _ts(),
+      }, { merge: true }).catch(() => {});
+
+      logger.error('[appLifecycle] REFUSED unauthorised decision', {
+        appId, uid: after.uid || null, status, reason: authority.reason,
+      });
+      return;
+    }
+
+    await applyDecision(appId, after, { decidedBy: authority.by });
   }
 );
 

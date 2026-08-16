@@ -1,3 +1,52 @@
+## [2026-08-16] — SECURITY: an application could approve itself
+
+Found while starting the merchant application flow (stage 2A), whose stated invariant is
+*"submission alone must not grant the seller claim"*. That invariant was not achievable, because a
+submitted application could grant it **to itself**.
+
+`firestore.rules` lets an applicant update their own request:
+
+```
+allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields())
+```
+
+`noAdminFields()` withholds `approved`, `role`, `verified`, `approvedBy` — and the projection in
+`application-lifecycle.js` reads **none of them**. It reads `status`, which the applicant may write,
+and `canonStatus()` maps `approved | active | accepted | verified` all to approved. So any signed-in
+user could `updateDoc` their own application with `status:'approved'`, and the trigger would run
+`grantAccountRole()` and mint `claims.seller = true`. The rule's own comment says self-approval is
+impossible; it guards a field the decision engine never consults.
+
+**The guard verifies the decider, not the document.** Every legitimate decision already goes through
+`applicationDecide` (admin-only, stamps `decidedBy`); but `decidedBy` is client-writable too, so
+requiring its presence would only move the forgery one field along. Custom claims are the one thing
+a client cannot write, so the trigger resolves the account named in `decidedBy` and requires an
+`admin`/`superAdmin` claim on it. No rules change — [[reference_rules_compiled_size_ceiling]] leaves
+72 bytes of headroom, and this closes the hole entirely server-side.
+
+An unauthorised decision is refused, recorded (`projectionStatus: 'blocked_unauthorised_decision'`
++ `blockedFor`, so the trigger's own write cannot re-fire itself into a loop) and raised as a
+deduplicated `adminAlerts` entry. It deliberately does **not** rewrite `status`: doing so would
+silently downgrade a legitimately-decided legacy application that predates `decidedBy`. Blocking the
+projection grants nothing either way, and an admin re-deciding through the console clears it.
+
+**Files:** `functions/application-lifecycle.js`,
+`scripts/test-application-decision-authority.js` (new), `docs/MERCHANT_CONSOLIDATION_CENSUS.md`.
+**Rules:** unchanged. **API:** unchanged. **Breaking:** none for legitimate paths — `admin.html` and
+`moderation.html` already decide exclusively through `applicationDecide`. **Deployment:** Functions
+only (`applicationLifecycle`), when authorized. Not deployed.
+
+**Verification:** `node scripts/test-application-decision-authority.js` — **17/0**. The real trigger
+handler is captured as it registers and invoked with synthetic events, so the assertions are on what
+was written and whether a claim was minted, not on source text: self-approval mints nothing and is
+recorded (A1–A4), the `active` synonym is refused (A5), a forged `decidedBy` naming a non-admin or a
+non-existent account is refused (A6–A7), a real admin decision still grants the role and mints the
+claim while preserving unrelated claims (B1–B5), pending grants nothing (B6), repeat approval is
+idempotent (B7), and a blocked application does not loop (B8). **The mutation control is the proof
+the hole was real:** with the guard replaced by `{ ok: true }`, the forged self-approval mints
+`claims.seller = true` (M1), and a guard that trusts `decidedBy` without reading its claims still
+falls to a forged decider (M2).
+
 ## [2026-08-16] — "Start Selling" was skipping the question it exists to ask
 
 The flow is meant to be **Start Selling → `/offer` ("What Are You Offering?") → Products or
