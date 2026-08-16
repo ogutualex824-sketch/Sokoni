@@ -25,14 +25,27 @@ a lagging field cannot drag an order backwards, and unknown values fail closed.
 
 That is the healthy part. What follows is not.
 
-## 🚨 `availableDeliveries` — unauthenticated, and live
+## Remediation status (recomputed on every run)
+
+| boundary | state |
+|---|---|
+| `availableDeliveries` requires authentication | ✅ closed |
+| `availableDeliveries` requires an approved rider | ✅ closed |
+| `availableDeliveries` withholds `proofPin` | ✅ closed |
+| `availableDeliveries` withholds buyer PII | ✅ closed |
+| rider PIN read chain (L1–L4) | ✅ broken at L1 |
+
+**All four boundaries in this section are closed.** The sections below describe the defects as found, and are retained as the record of what was wrong and why. Ongoing proof that the PIN stays unreachable lives in `scripts/test-delivery-pin-unreachable.js`, which enumerates every rider-accessible path rather than checking one projection.
+
+## 🚨 `availableDeliveries` — unauthenticated, and live *(as found)*
 
 `exports.availableDeliveries` is an `onRequest` endpoint. Measured against source:
 
 - `invoker: "public"`: **yes**
-- contains no authentication of any kind: **yes**
-- returns `proofPin` per record: **yes**
-- returns `buyerPhone` and `deliveryAddress` per record: **yes**
+- contains no authentication of any kind: **no**
+- gates on an approved `rideDrivers` record: **yes**
+- returns `proofPin` per record: **no**
+- returns `buyerPhone` and `deliveryAddress` per record: **no**
 
 It returns up to 80 pending deliveries with `buyerName`, `buyerPhone`, `deliveryAddress`,
 `pickupAddress`, `sellerName`, `items`, `orderTotal` and the plaintext **`proofPin`**.
@@ -57,12 +70,12 @@ rider can read `orders`. Four links, each checked against source:
 
 | # | link | holds? |
 |---|---|---|
-| L1 | `deliveryPinOnAccept` writes the PLAINTEXT pin to `orders/{orderId}` | **yes** |
+| L1 | `deliveryPinOnAccept` writes the PLAINTEXT pin to `orders/{orderId}` | no |
 | L2 | the same trigger fires on the `driver_accepted` transition | **yes** |
 | L3 | `claimAvailableDelivery` sets `orders/{orderId}.assignedDriverUid` to the RIDER's uid, in the same transaction that sets `driver_accepted` | **yes** |
 | L4 | the `orders` rule grants a FULL-DOCUMENT read to `assignedDriverUid` | **yes** |
 
-**Chain closed: YES.**
+**Chain closed: no.**
 
 So: `claimAvailableDelivery` writes `assignedDriverUid = <rider uid>` onto the order in the
 same transaction that sets `driver_accepted`; that transition fires `deliveryPinOnAccept`,

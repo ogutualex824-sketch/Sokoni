@@ -7089,21 +7089,80 @@ exports.recordMetric = onRequest(
    Admin-SDK endpoint lists deliveries the merchant marked "Ready for Dispatch"
    (status awaiting_rider, no rider yet). Decoupled from printing entirely.
 ══════════════════════════════════════════════════════════════════ */
+/* Coarse destination for the UNCLAIMED delivery board: the area or town, never
+   the street. Falls back to a null rather than leaking the full address string
+   when no structured field is present — a rider browsing jobs does not need to
+   know where a stranger lives, and "no area recorded" is an honest answer. */
+function _deliveryArea(o) {
+  const a = o && o.deliveryAddressParts;
+  if (a && (a.area || a.town || a.county)) return a.area || a.town || a.county;
+  if (o && o.deliveryArea) return String(o.deliveryArea);
+  if (o && o.deliveryTown) return String(o.deliveryTown);
+  return null;
+}
+
 exports.availableDeliveries = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
   async (req, res) => {
+    /* ── This endpoint was PUBLIC and returned buyer PII plus the plaintext
+       proof PIN for every pending delivery ──────────────────────────────────
+       `invoker: "public"` with no authentication at all. The `cors` list above
+       is not an access control: CORS constrains browsers, and curl ignores it
+       entirely. Anyone on the internet could read buyerName, buyerPhone,
+       deliveryAddress and proofPin for up to 80 live orders.
+
+       Three things change, and none of them is a UI-level hide:
+         1. a Firebase ID token is required and verified server-side;
+         2. the caller must be an APPROVED, non-suspended rider — the same
+            eligibility test claimAvailableDelivery already enforces at claim
+            time, applied at browse time too, because an unapproved account had
+            no business reading the board either;
+         3. the projection is rider-safe for an UNCLAIMED job: enough to decide
+            whether to take it, and nothing that identifies the customer.
+
+       An unclaimed delivery is not assigned to anybody, so nobody has yet
+       earned the customer's identity. Exact address, buyer name and phone
+       arrive after the claim, through fulfilmentScan's `_riderView` — which is
+       where the active-assignment check already lives. */
     try {
+      const authz = String(req.headers.authorization || "");
+      if (!authz.startsWith("Bearer ")) {
+        return res.status(401).json({ ok: false, error: "unauthenticated" });
+      }
+      let decoded;
+      try { decoded = await admin.auth().verifyIdToken(authz.slice(7)); }
+      catch (_) { return res.status(401).json({ ok: false, error: "unauthenticated" }); }
+
+      const riderSnap = await db.collection("rideDrivers").doc(decoded.uid).get();
+      const rider = riderSnap.exists ? (riderSnap.data() || {}) : {};
+      const _st = String(rider.status || "").toLowerCase();
+      const _approved = rider.approved === true || ["approved", "active", "online", "verified"].includes(_st);
+      const _blocked = ["suspended", "rejected", "banned", "deactivated"].includes(_st);
+      if (!riderSnap.exists || !_approved || _blocked) {
+        return res.status(403).json({ ok: false, error: "not_an_approved_rider" });
+      }
+
       const snap = await db.collection("packageRequests").where("status", "==", "awaiting_rider").limit(80).get();
       const deliveries = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
         .filter((o) => !o.assignedRiderId && !o.riderId && !o.assignedDriverId && !o.assignedDriverUid)
         .map((o) => ({
-          id: o.id, orderId: o.orderId, sellerName: o.sellerName,
-          pickupAddress: o.pickupAddress, deliveryAddress: o.deliveryAddress,
-          buyerName: o.buyerName, buyerPhone: o.buyerPhone,
-          items: o.items || [], orderTotal: o.orderTotal, deliveryFee: o.deliveryFee,
-          driverNet: o.driverNet, proofPin: o.proofPin,
+          id: o.id, orderId: o.orderId,
+          /* Where to collect from — a shop, not a person. */
+          sellerName: o.sellerName, pickupAddress: o.pickupAddress,
+          /* Roughly where it is going, so a rider can judge the trip. Never the
+             street address, and never the customer. */
+          deliveryArea: _deliveryArea(o),
+          /* What the job pays and how big it is. */
+          itemCount: Array.isArray(o.items) ? o.items.length : 0,
+          deliveryFee: o.deliveryFee, driverNet: o.driverNet,
+          vehicleType: o.vehicleType || null, speed: o.speed || null,
+          /* Deliberately ABSENT: buyerName, buyerPhone, deliveryAddress, items,
+             orderTotal — and proofPin, which no rider-facing payload should ever
+             have carried. The rider types the PIN the customer reads to them;
+             returning it here let a rider complete a delivery without meeting
+             anyone. */
         }));
-      res.set("Cache-Control", "no-cache, must-revalidate");
+      res.set("Cache-Control", "no-store");
       res.status(200).json({ ok: true, count: deliveries.length, deliveries });
     } catch (e) {
       console.error("[availableDeliveries] failed:", e.message);
@@ -7149,7 +7208,14 @@ exports.claimAvailableDelivery = onCall(
       });
       if (d.orderId) t.set(db.collection("orders").doc(String(d.orderId)),
         { status: "rider_assigned", assignedDriverUid: uid, riderAssignedAt: nowTs, updatedAt: nowTs }, { merge: true });
-      out = { ok: true, deliveryRef, orderId: d.orderId, proofPin: d.proofPin };
+      /* proofPin was returned here. Handing the rider the proof-of-delivery code
+         at CLAIM time makes the code worthless: it exists so the customer can
+         prove the handover happened, and a rider holding it can close a delivery
+         without ever meeting them. The claim semantics are unchanged — same
+         transaction, same first-claim-wins guard, same approved-rider check —
+         only the secret leaves the response. Completion goes through
+         completeDeliveryWithPin, which verifies what the customer reads out. */
+      out = { ok: true, deliveryRef, orderId: d.orderId };
     });
     return out;
   }
@@ -8111,11 +8177,24 @@ exports.webhookIntasend = onRequest(
                   orderTotal: amount, deliveryFee: _delivery,
                   driverNet:  Math.round(_delivery * 0.8), commissionPct: 5,
                   vehicleType: "moto", speed: "same_day", category: "general",
-                  status: "order_placed", proofPin: _pin,
+                  /* proofPin is NOT stored here. firestore.rules grants the assigned
+                     rider a read on packageRequests (`assignedDriverId`), and
+                     claimAvailableDelivery sets that field, so a plaintext PIN on
+                     this document is readable by the rider it exists to defend
+                     against — the same defect as the one on the order document, one
+                     collection over. It verifies nothing server-side either: the
+                     authoritative check is completeDeliveryWithPin against
+                     deliveryPinHash. It moves to the CF-only deliveryPins doc. */
+                  status: "order_placed",
                   timeline: [{ status: "order_placed", at: new Date().toISOString(), by: "system" }],
                   source: "webhookIntasend",
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
+                await db.collection("deliveryPins").doc(String(_pm.orderId)).set({
+                  orderId: String(_pm.orderId), deliveryRef: _delRef,
+                  proofPin: _pin, buyerUid: payData.uid || null,
+                  issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
                 await db.collection("orders").doc(_pm.orderId).set({ deliveryRef: _delRef }, { merge: true });
               }
             } catch (dErr) {
@@ -11423,6 +11502,10 @@ exports.processDriverEarning      = navigation.processDriverEarning;
 const _deliveryPin = require("./delivery-pin");
 exports.deliveryPinOnAccept       = _deliveryPin.deliveryPinOnAccept;
 exports.deliveryVerifyShadow      = _deliveryPin.deliveryVerifyShadow;
+/* The buyer's ONLY path to their delivery PIN now that the plaintext no longer
+   sits on the order document. A new Cloud Function must be re-exported by name
+   here or it is simply not deployed (AGENTS.md). */
+exports.getMyDeliveryPin          = _deliveryPin.getMyDeliveryPin;
 
 /* PHASE 1 — the ENFORCING delivery completion path. Phase 0 above issues the PIN and
    observes; these two are the only writers of `delivered` on an order now that
