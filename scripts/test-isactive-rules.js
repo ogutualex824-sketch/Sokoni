@@ -42,8 +42,22 @@ const ck = (l, ok, d) => {
 };
 const head = (t) => console.log('\n-- ' + t + ' --');
 
-/* products.create is the cheapest surface that goes through isActive(). Ownership and the
-   product counter are satisfied so the ONLY variable is the deactivated claim. */
+/* products.create is the cheapest surface that goes through isActive(). Ownership, the product
+   counter AND the seller claim are all satisfied, so the ONLY variable is `deactivated`.
+
+   The seller claim matters: E2 added isSeller() to products create/update/delete, so this probe
+   surface now requires it. Without it every case fails with "Property seller is undefined" — a
+   correct denial that says nothing about isActive(). That is exactly how this suite broke: it was
+   validated against firestore.rules.isactive-candidate, which carries the isActive fix WITHOUT
+   the seller gate, i.e. against a ruleset that never shipped. Proven by isolation — the two files
+   differ only by the seller gate:
+
+       firestore.rules.isactive-candidate   9 passed, 0 failed
+       firestore.rules (deployed)           5 passed, 4 failed
+
+   Note there is no admin bypass on products.create, so the admin/superAdmin cases below carry the
+   seller claim too; what they assert is that isActive() lets a DEACTIVATED admin through, not that
+   admin is a blanket create override. */
 const UID = 'uidSubject';
 const product = () => ({ sellerUid: UID, name: 'probe', price: 100, stock: 1, category: 'general', createdAt: 1 });
 const tryCreate = (db, id) => setDoc(doc(db, 'products', id), product()).then(() => true).catch(() => false);
@@ -59,9 +73,9 @@ const tryCreate = (db, id) => setDoc(doc(db, 'products', id), product()).then(()
     await setDoc(doc(ctx.firestore(), 'productCounters', UID), { uid: UID, maxProducts: -1, count: 0 });
   });
 
-  /* The candidate carries no seller predicate, so `seller` is irrelevant here EXCEPT in the
-     combined case, which is the one E2 depends on. */
-  const ctxFor = (claims) => env.authenticatedContext(UID, claims).firestore();
+  /* Every identity carries seller:true because the probe surface demands it (see above). The
+     variable under test is `deactivated` and nothing else. */
+  const ctxFor = (claims) => env.authenticatedContext(UID, Object.assign({ seller: true }, claims)).firestore();
 
   head('1 - the three states of the claim');
   ck('claim ABSENT      -> ACTIVE (create allowed)',
@@ -76,12 +90,16 @@ const tryCreate = (db, id) => setDoc(doc(db, 'products', id), product()).then(()
      await tryCreate(ctxFor({ deactivated: true, admin: true }), 'p_true_admin'));
   ck('deactivated:true + superAdmin -> ACTIVE (bypass preserved)',
      await tryCreate(ctxFor({ deactivated: true, superAdmin: true }), 'p_true_super'));
-  ck('deactivated:true + seller     -> INACTIVE (seller is not a bypass)',
-     (await tryCreate(ctxFor({ deactivated: true, seller: true }), 'p_true_seller')) === false);
+  ck('deactivated:true, seller, no admin -> INACTIVE (seller is not a deactivation bypass)',
+     (await tryCreate(ctxFor({ deactivated: true }), 'p_true_seller')) === false);
 
   head('3 - the case E2 depends on');
   ck('seller claim + NO deactivated -> ACTIVE',
-     await tryCreate(ctxFor({ seller: true }), 'p_seller_absent'));
+     await tryCreate(ctxFor({}), 'p_seller_absent'));
+
+  head('3b - the seller gate is still doing its job on this surface');
+  ck('NO seller claim -> DENIED even when active',
+     (await tryCreate(env.authenticatedContext(UID, { deactivated: false }).firestore(), 'p_noseller')) === false);
 
   head('4 - unauthenticated is still not active');
   ck('anonymous create -> DENIED',
