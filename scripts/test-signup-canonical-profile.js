@@ -45,6 +45,10 @@ const RULES = fs.readFileSync(path.join(ROOT, target), 'utf8');
 
 /* ── The payload signup actually sends, mirrored from auth.js ──────────────── */
 const AUTH_SRC = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+/* Bound to the signup function. Several markers ('Sync to localStorage for
+   backward-compat', 'catch(err){') also occur in the LOGIN path earlier in the file,
+   and a whole-file indexOf silently compares against the wrong occurrence. */
+const SIGNUP_SRC = AUTH_SRC.slice(AUTH_SRC.indexOf('async function _doSignup'));
 const baselineProfile = (uid) => ({
   uid,
   name: 'Ashitsa Violet',
@@ -134,10 +138,61 @@ const baselineProfile = (uid) => ({
   ck('the profile write precedes the consent row', iProfile > -1 && iConsent > iProfile);
   ck('the profile write is AWAITED (so a refusal cannot be ignored)',
      /await setDoc\(doc\(window\.firebaseDB, 'users'/.test(AUTH_SRC));
+  /* Was pinned to the exact adjacency `catch(err){ fail(...); throw err;`, which broke
+     the moment anything was logged in between. The PROPERTY that matters is that the
+     aborting catch fails the signup and rethrows, and renders no success — assert that
+     instead, so diagnostics can sit in the handler without weakening the guarantee. */
+  const iFail  = SIGNUP_SRC.indexOf('fail(_fbErr(err.code))');
+  const iCatch = SIGNUP_SRC.lastIndexOf('catch(err){', iFail);
+  const iThrow = SIGNUP_SRC.indexOf('throw err;', iFail);
   ck('a signup failure surfaces as an error, not a success screen',
-     /catch\(err\)\{\s*fail\(_fbErr\(err\.code\)\);\s*throw err;/.test(AUTH_SRC.replace(/\r/g, '')));
+     iCatch > -1 && iFail > iCatch && iThrow > iFail);
   const successIdx = AUTH_SRC.indexOf('Replace the auth card with the success screen');
   ck('the success screen comes AFTER the profile write', successIdx > iProfile);
+
+  /* ══ 6 · a consentRecords failure can NEVER be silently swallowed ══
+     §1 above proves the RULES permit the row. It passed all along — and production
+     still held ZERO consentRecords across the whole account population, because the
+     client wrapped the write in `catch (_) {}`. A rules-level "allowed" is not
+     evidence that a row is produced, and a write that can fail with no console
+     error, no audit entry and no metric will fail unnoticed for as long as it likes.
+
+     So this asserts the property the emulator cannot: the failure PATH reports.
+     It deliberately does not assert the diagnostic breadcrumb, which is temporary —
+     only that the error is bound and surfaced, which must outlive the diagnosis. */
+  head('6 · the consent-row failure path is observable');
+
+  const consentFailureIsReported = (src) => {
+    const i = src.indexOf("collection(window.firebaseDB, 'consentRecords')");
+    if (i < 0) return false;
+    const slice = src.slice(i, i + 2000);
+    /* The handler must BIND the error (not `catch (_)`) and SURFACE it. */
+    return /catch\s*\(\s*(err|error|e)\s*\)/.test(slice)
+        && slice.includes('console.error')
+        && slice.includes('CONSENT AUDIT');
+  };
+
+  /* Negative control — the exact silent form this suite exists to prevent. A
+     detector that cannot fail is not a test; prove it discriminates. */
+  const SILENT_FIXTURE = [
+    "try {",
+    "    await addDoc(collection(window.firebaseDB, 'consentRecords'), {",
+    "        uid: cred.user.uid, source: 'signup', policyVersion: POLICY_VERSION,",
+    "        privacy: true, terms: true, consentedAt: serverTimestamp(),",
+    "    });",
+    "} catch (_) { /* consent snapshot already on the profile; audit row is best-effort */ }",
+  ].join('\n');
+
+  ck('detector REJECTS the old silent catch (negative control)',
+     consentFailureIsReported(SILENT_FIXTURE) === false);
+  ck('detector ACCEPTS the current auth.js', consentFailureIsReported(AUTH_SRC) === true);
+  ck('the consent write is still AWAITED (an unawaited row cannot be observed at all)',
+     /await addDoc\(collection\(window\.firebaseDB, 'consentRecords'\)/.test(AUTH_SRC));
+  ck('the consent payload is unchanged by the diagnostic',
+     /uid: cred\.user\.uid, source: 'signup', policyVersion: POLICY_VERSION/.test(AUTH_SRC));
+  ck('a consent-row failure does NOT block the signup (profile snapshot still stands)',
+     SIGNUP_SRC.indexOf('CONSENT_AUDIT_WRITE_FAILED') > -1
+     && SIGNUP_SRC.indexOf('Sync to localStorage for backward-compat') > SIGNUP_SRC.indexOf('CONSENT_AUDIT_WRITE_FAILED'));
 
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed   (rules: ' + target + ')');

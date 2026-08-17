@@ -67,6 +67,49 @@ window.onunhandledrejection = function(e) {
    onAuthStateChanged in case localStorage hasn't been written yet
    (first load after hard-refresh, token refresh, etc.).
 ───────────────────────────────────────────────────────────────────────────── */
+/* ══ SIGNUP-TXN-BARRIER:BEGIN ═══════════════════════════════════════════════════
+   THE SIGNUP TRANSACTION.
+
+   _alreadyLoggedInGuard below bounces an ALREADY-signed-in visitor off the auth
+   forms. It cannot, on its own, tell that case apart from "is signing up right
+   now" — and createUserWithEmailAndPassword makes the visitor signed-in as its
+   FIRST act. So firebase.js published sokoniAuthReady mid-signup, the guard's
+   listener fired, and location.replace('index.html') unloaded the page while
+   _doSignup was still awaiting its profile write. Measured with a Navigation API
+   probe (userInitiated:false):
+
+       firebase.js:780 onAuthStateChanged
+         -> _publishSokoniAuthReady (firebase.js:220)
+           -> auth.js _onReady
+             -> auth.js _redir -> location.replace('index.html')
+
+   The profile setDoc COMMITTED server-side, but the client never processed the
+   ack, so _doSignup never resumed and the consentRecords write was never issued.
+   That is why consentRecords was empty across the ENTIRE account population: the
+   row is not flaky, it is structurally unreachable behind an acknowledgement the
+   page does not survive to receive.
+
+   The barrier is a TRANSACTION, not a mute switch. It is raised before the Auth
+   account is created and lowered once BOTH canonical writes have completed — and
+   it is lowered in a finally, so a failed signup can never leave a browser
+   permanently believing a signup is in progress.
+
+   Scope is deliberately minimal: only _doSignup ever raises it, so login is
+   untouched. loginUser does not rely on this guard at all — it performs its own
+   redirect via _sokoniLoginRedirect() (see the setTimeout in loginUser), so a
+   signup-scoped barrier cannot strand a login.                                  */
+var _sokoniSignupTxn = (function () {
+    var active = false, deferred = 0;
+    return {
+        begin: function () { active = true; deferred = 0; },
+        end: function () { active = false; },
+        isActive: function () { return active; },
+        noteDeferred: function () { deferred++; },
+        deferredCount: function () { return deferred; },
+    };
+}());
+try { window.SokoniSignupTxn = _sokoniSignupTxn; } catch (_) { }
+
 (function _alreadyLoggedInGuard() {
     /* CRITICAL: this guard bounces an already-signed-in user OFF the auth forms,
        so it must run ONLY on login/signup. auth.js is also included on CONTENT
@@ -83,6 +126,21 @@ window.onunhandledrejection = function(e) {
     }
 
     function _redir() {
+        /* ── SIGNUP BARRIER ──────────────────────────────────────────────────
+           One choke point covers BOTH entry paths — the DOMContentLoaded fast
+           path and the sokoniAuthReady slow path both land here — so the guard
+           cannot eject a signup that is mid-transaction by either route.
+
+           Suppressed, not queued. This guard exists for a visitor who was
+           ALREADY signed in on arrival; a signup in flight is not that visitor,
+           so there is no redirect owed once the transaction ends. _doSignup owns
+           what happens next (its success screen, or its error). A later genuine
+           arrival re-evaluates from a fresh page load with the marker down. */
+        if (_sokoniSignupTxn.isActive()) {
+            _sokoniSignupTxn.noteDeferred();
+            console.info('[SOKONI SIGNUP] auth-redirect suppressed — signup transaction in flight');
+            return;
+        }
         var dest = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
         sessionStorage.removeItem('sokoniLoginRedirect');
         /* Allowlist: relative paths only, no protocol-relative URLs */
@@ -156,6 +214,11 @@ window.onunhandledrejection = function(e) {
         if (e.detail && e.detail.uid) _redir();
     });
 }());
+/* ══ SIGNUP-TXN-BARRIER:END ════════════════════════════════════════════════════
+   scripts/test-signup-txn-barrier.js extracts everything between these two
+   markers and executes THIS source under mocked browser globals — the real text,
+   not a copy of it — including a negative control that neuters the barrier and
+   proves the redirect returns. Moving or renaming the markers fails that suite. */
 
 /* ── Session inactivity auto-logout ───────────────────────────────────────
    Regular users: 60 min idle → auto sign-out.
@@ -642,9 +705,16 @@ async function _doSignup(name, email, password){
            NEW consentRecords row is appended, so historical vs renewed consent stays distinguishable. */
         const POLICY_VERSION = '2026-06';
 
-        /* Create Firebase Auth account */
+        /* Create Firebase Auth account.
+
+           The transaction opens BEFORE this call, not after: this is the line that
+           makes the visitor signed-in, and the auth-state listeners it wakes are
+           exactly what used to eject the page. Opening it afterwards would leave
+           the gap open. */
+        _sokoniSignupTxn.begin();
         const cred = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
         await updateProfile(cred.user, { displayName: name });
+
         /* Send email verification — non-blocking; failure does not abort signup.
 
            Skipped when this account is going to be held at the code challenge, because
@@ -723,7 +793,33 @@ async function _doSignup(name, email, password){
                 uid: cred.user.uid, source: 'signup', policyVersion: POLICY_VERSION,
                 privacy: true, terms: true, consentedAt: serverTimestamp(),
             });
-        } catch (_) { /* consent snapshot already on the profile; audit row is best-effort */ }
+        } catch (err) {
+            /* NEVER silent. This row is the ODPC lawful-basis artifact, and it was
+               wrapped in `catch (_) {}` — so it could fail on every signup and report
+               nowhere: no console error, no audit entry, no metric. That silence is
+               how consentRecords stayed empty across the entire account population
+               while the deployed ruleset demonstrably PERMITTED the write.
+
+               The signup itself still proceeds. The profile already carries the
+               consent snapshot, so the user is never blocked by a failure of the
+               AUDIT copy — but the failure is now visible to someone. */
+            console.error('[SOKONI CONSENT AUDIT] consentRecords write FAILED —',
+                'code=' + (err && err.code), 'name=' + (err && err.name),
+                'message=' + (err && err.message), err);
+            try {
+                if (typeof SokoniAudit !== 'undefined' && SokoniAudit.log)
+                    SokoniAudit.log('CONSENT_AUDIT_WRITE_FAILED',
+                        { uid: cred.user.uid, code: err && err.code, message: err && err.message });
+            } catch (_) { }
+        }
+
+        /* ── TRANSACTION COMPLETE ────────────────────────────────────────────
+           Both canonical writes are done — users/{uid} is committed and the
+           consent row has been attempted and reported. This is the earliest
+           point at which ejecting the page costs nothing, so the barrier comes
+           down here rather than being held until the success screen. The finally
+           below is the backstop, not the normal path. */
+        _sokoniSignupTxn.end();
 
         /* ── AUTH SLICE 6C — signup enforcement ──────────────────────────────
            The ACCOUNT is now fully created: Firebase Auth record, Firestore profile,
@@ -855,6 +951,14 @@ async function _doSignup(name, email, password){
     } catch(err){
         fail(_fbErr(err.code));
         throw err;
+    } finally {
+        /* The marker must NEVER outlive the transaction. A signup that throws
+           anywhere — network, rules, gate — would otherwise leave this browser
+           permanently believing a signup is in progress, and the guard would stop
+           bouncing genuinely signed-in visitors off the auth forms for the rest
+           of the session. end() is idempotent, so the success path having already
+           called it changes nothing. */
+        _sokoniSignupTxn.end();
     }
 }
 

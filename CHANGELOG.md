@@ -1,3 +1,102 @@
+## [2026-08-17] — Signup was ejected mid-transaction, so the consent audit row was never written
+
+`f2e0e15` fixed the payload and the canonical profile began writing — but `consentRecords` stayed
+**empty across the entire 101-account population**, and the collection did not exist at all. It was
+not a rules problem and not a Firestore problem: the deployed ruleset `e66d77a4` **permits** the
+write (Rules test API returned SUCCESS for the exact payload, real uid, `email_verified:false`).
+
+### Why — a self-race inside auth.js
+
+`_alreadyLoggedInGuard()` bounces an **already**-signed-in visitor off the auth forms. It cannot
+tell that case apart from *"is signing up right now"* — and `createUserWithEmailAndPassword` signs
+the visitor in as its **first act**. Captured with a Navigation API probe (`userInitiated:false`):
+
+```
+firebase.js:780 onAuthStateChanged
+  -> _publishSokoniAuthReady (firebase.js:220)   dispatches 'sokoniAuthReady'
+    -> auth.js _onReady
+      -> auth.js _redir -> location.replace('index.html')
+```
+
+The profile `setDoc` **committed server-side** (`users/{uid}.createdAt` 13:01:19.115Z) but the page
+unloaded 448ms later, so the client never processed the ack, `_doSignup` never resumed, and the
+consent `addDoc` was **never issued**. The row was not flaky — it was structurally unreachable
+behind an acknowledgement the page did not survive to receive.
+
+The silent `catch (_) {}` on the consent write hid all of this. It was a real defect, but never the
+cause.
+
+### The fix — a signup transaction, checked at one choke point
+
+`_sokoniSignupTxn` is raised **before** `createUserWithEmailAndPassword` (the line that makes the
+visitor signed-in), lowered after **both** canonical writes, and lowered again in a `finally` — so
+a failed signup can never leave a browser permanently believing a signup is in progress. `_redir()`
+is the single choke point both the `DOMContentLoaded` fast path and the `sokoniAuthReady` slow path
+pass through, so one check covers both routes.
+
+Suppressed, not queued: this guard exists for a visitor who arrived already signed in, so no
+redirect is owed when the transaction ends. `_doSignup` owns what happens next.
+
+**Deliberately NOT moved to `firebase.js`.** A consumer census found exactly one `sokoniAuthReady`
+consumer on `signup.html` that navigates (the now-barriered guard); `shared-header.js:2514` and
+`kass-widget.js:143` are read-only. Broadening would delay auth-ready for unrelated subsystems.
+
+Also: consent-write `catch (_)` → `catch (err)` with `console.error` + a `CONSENT_AUDIT_WRITE_FAILED`
+audit entry. A compliance artifact must never fail silently.
+
+### Proof — end-to-end, real signup against production Firestore
+
+uid `8c8ASJQO3oPqmWqkvAhHCrFMBw43`, **the first `consentRecords` row this project has ever held**
+(`XkkIMJPEbZxGA0AMHK91`). Observed ordering:
+
+```
+13:42:35.000  Auth account
+13:42:37.731  users/{uid}        (canonical profile + consent snapshot)
+13:42:38.236  consentRecords row (+505ms — the step never previously reached)
+13:42:41.251  automation activation
+```
+
+12/12 assertions; `shops` 1→1, `sellers` 8→8, no seller claim, no `sellers/{uid}`, no orphan.
+
+### Files
+
+| file | change |
+|---|---|
+| `auth.js` | signup transaction barrier + consent-error visibility |
+| `scripts/test-signup-txn-barrier.js` | **new** — 20/0, executes the real source between `SIGNUP-TXN-BARRIER` markers |
+| `scripts/test-signup-canonical-profile.js` | §6 added; §5 adjacency assertion → property assertion |
+| `package.json` | `test:signup:barrier` |
+
+**Database:** none. **API:** none. **Rules:** none — **zero rules bytes** (the compiled executable
+is at 254,307/256,000, 1,693 B free). **Breaking:** none.
+
+**Security:** signup no longer completes with an unwritten consent audit row. The barrier is
+signup-scoped — `loginUser` performs its own redirect via `_sokoniLoginRedirect()` and never relied
+on this guard, asserted in the suite.
+
+### Testing
+
+barrier 20/0 (**including a negative control** that neuters the barrier and requires the
+`location.replace('index.html')` defect to return) · rules:signup 26/0 · verify:consent 93/0 ·
+verify:auth clean · auth-state 12/12 · signup-gate 85/85 · verify-gate 126/126 ·
+session-transitions 100/100.
+
+### Recorded, not fixed
+
+- **~101 existing accounts still have no consent row.** No backfill attempted — recording consent
+  that was never durably captured would fabricate lawful-basis evidence. Decide separately.
+- **`docs/ODPC_COMPLIANCE_CERTIFICATION.md` overstates must-fix #2** ("FIXED … 5/5", "CLOSED,
+  deployed and proven") for a row that until today had never existed. Needs correcting.
+- **Publisher-side auth-ready semantics** — `_publishSokoniAuthReady` can still announce a session
+  mid-identity-transaction. A future navigating consumer would reintroduce this bug class and the
+  barrier test would not catch it. Architectural backlog.
+
+### Deployment
+
+**NOT DEPLOYED.** Working tree only, `rc/combined`. Live `mysokoni.co.ke` still carries the defect.
+
+---
+
 ## [2026-08-17] — Email/password signup created an Auth account and no user document
 
 A throwaway signup with **every role box unticked** produced a Firebase Auth record and **no
