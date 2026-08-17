@@ -52,6 +52,8 @@
     "test:merchant-route-gate": "node scripts/test-merchant-route-gate.js",
     "gate:merchant-routes": "node scripts/test-merchant-routes.js && node scripts/test-merchant-visual-gate.js",
     "test:rules:returns": "firebase emulators:exec --only firestore --project sokoni-returns-rules-test \"node scripts/test-returns-rules.js\"",
+    "test:rules:role": "firebase emulators:exec --only firestore --project sokoni-role-rules-test \"node scripts/test-role-rules.js\"",
+    "test:rules:role:built": "firebase emulators:exec --only firestore --project sokoni-role-rules-test \"node scripts/test-role-rules.js --rules firestore.rules.build\"",
     "test:claim:persistence": "node scripts/test-minishop-claim-persistence.js",
     "test:claim:write": "node scripts/test-minishop-claim-write.js",
     "test:claim:firestore": "firebase emulators:exec --only firestore --project sokoni-claim-write-test \"node scripts/test-minishop-claim-firestore.js\"",

@@ -1,9 +1,30 @@
 #!/usr/bin/env node
 /* users.roles / users.activeRole authority — Firestore rules, emulator-backed  (Roles Phase 3)
  *
+ *   npm run test:rules:role           # firestore.rules — THE DEPLOYING FILE, so this is
+ *                                     # the run that certifies
+ *   npm run test:rules:role:built     # firestore.rules.build — the comment-stripped artifact
+ *
  *   firebase emulators:exec --only firestore "node scripts/test-role-rules.js"
+ *   firebase emulators:exec --only firestore "node scripts/test-role-rules.js --rules firestore.rules.build"
  *   RULES_FILE=firestore.rules.phase3-candidate firebase emulators:exec --only firestore \
- *     "node scripts/test-role-rules.js"        # prove the DEPLOYABLE artifact, not just the source
+ *     "node scripts/test-role-rules.js"        # env form — POSIX shells only
+ *
+ * RUN IT THROUGH THE EMULATOR. `node scripts/test-role-rules.js` on its own fails with
+ * `fetch failed` because there is no emulator to reach — that is a wrong invocation, NOT
+ * a broken suite. The npm wrappers exist so that mistake cannot be made silently.
+ *
+ * WHICH FILE CERTIFIES. firebase.json maps the `(default)` database to `firestore.rules`, so
+ * the source IS the deployed ruleset and `test:rules:role` is the certifying run.
+ * `firestore.rules.build` is produced by scripts/build-firestore-rules.js — comments stripped,
+ * for the size report — and is NOT referenced by firebase.json, so nothing deploys it today.
+ * `test:rules:role:built` therefore proves that stripping does not change semantics; it is a
+ * guard on the build step, not the certification. Do not invert these two: a green run on the
+ * build artifact alone would say nothing about the ruleset actually serving production.
+ *
+ * (No claim is made here about the 256 KiB ceiling. docs/FIRESTORE_RULES_RELEASE_BLOCKER.md
+ * records that the raw-size hypothesis was tested and DISPROVED — a 258,746-byte ruleset
+ * released 200 OK — so do not infer a deploy blocker from the build script's percentage.)
  *
  * WHY THIS EXISTS
  * Phase 2 made approval the authority on roles — grantAccountRole writes users.roles
@@ -46,7 +67,16 @@ const allowed = async (label, p) => {
 };
 const head = (t) => console.log('\n── ' + t + ' ──');
 
-const RULES_FILE = process.env.RULES_FILE || 'firestore.rules';
+/* `--rules <file>` is the PORTABLE selector. npm runs scripts through cmd.exe on
+   Windows, where a leading `RULES_FILE=…` is not a variable assignment but an
+   unknown command — so an npm wrapper cannot use the env form. RULES_FILE is kept
+   and still wins nothing over the flag: this file's header documents it, and it
+   remains the right form for a direct emulators:exec invocation on a POSIX shell. */
+const _rulesArg = (() => {
+  const i = process.argv.indexOf('--rules');
+  return (i > -1 && process.argv[i + 1]) ? process.argv[i + 1] : null;
+})();
+const RULES_FILE = _rulesArg || process.env.RULES_FILE || 'firestore.rules';
 
 (async () => {
   const env = await initializeTestEnvironment({

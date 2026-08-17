@@ -155,3 +155,64 @@ consolidated to chase a size limit that has been proven not to exist**.
 `scripts/ci-gates.sh` runs the returns authorization suite and **fails** when Java is missing or
 older than 21 — never a silent skip, because an unexecuted security suite reads exactly like a
 passing one. JDK 21 belongs in the CI image (`actions/setup-java` with `java-version: 21`).
+
+## Certification target (permanent)
+
+> **Certify against the rules file `firebase.json` maps for the database being deployed.**
+> Do not infer the production artifact from `scripts/build-firestore-rules.js`, and do not infer
+> a deployment blocker from its byte-count report.
+
+For this repo today:
+
+| Path | Role |
+|---|---|
+| `firebase.json` → `(default)` → **`firestore.rules`** | the deployed ruleset — **the certification target** |
+| `firebase.json` → `sokoni-ops` → `firestore.rules.sokoni-ops` | the ops database ruleset |
+| `firestore.rules.build` | comment-stripped output of `build-firestore-rules.js`; **not referenced by `firebase.json`** — a stripper / semantic-equivalence guard, not the shipping artifact |
+
+This was recorded after the inverse was asserted in error: `build-firestore-rules.js` reports the
+source at `268,059 bytes (102.3% of 256 KiB)`, from which it was wrongly concluded that the source
+could not deploy and that `firestore.rules.build` must therefore be the real artifact. Both halves
+were wrong, and the size half is **the same inference this document already disproved** — a
+comment-padded ruleset of 258,746 bytes released **200 OK**. The byte-size theory must not be
+resurrected as release policy, in either direction.
+
+**Open wiring question, not yet resolved:** `npm run deploy:rules` runs
+`build-firestore-rules.js` *before* deploying, yet the deploy sends `firestore.rules` per
+`firebase.json` — so the build output is not what goes out. Either the build is an incidental size
+preflight or the wiring is stale. Establish which before anyone relies on the build path.
+
+### Role-rules certification, 2026-08-17
+
+`scripts/test-role-rules.js` (`users.roles` / `users.activeRole` authority) executed under the
+Firestore emulator:
+
+| Wrapper | Rules under test | Result |
+|---|---|---|
+| `npm run test:rules:role` | `firestore.rules` | **57 / 0** — certifying run |
+| `npm run test:rules:role:built` | `firestore.rules.build` | **57 / 0** — stripper guard |
+
+Both wrappers were added because the suite had none, unlike its `landlord` / `returns` siblings,
+and a bare `node scripts/test-role-rules.js` fails with `fetch failed` — no emulator to reach.
+That failure was once recorded as a broken suite when it was only a wrong invocation, which is the
+same hazard this document's CI section already warns about from the other direction. The wrappers
+take a portable `--rules <file>` argument rather than a `RULES_FILE=…` prefix: npm runs scripts
+through `cmd.exe` on Windows, where a leading assignment is an unknown command, not a variable.
+`RULES_FILE` is retained for direct POSIX invocation.
+
+### Non-blocking rule-quality observation — `isAdmin()` denies by throwing
+
+`isAdmin()` ([`firestore.rules:15-17`](../firestore.rules#L15-L17)) evaluates
+`request.auth.token.admin == true`. For any token that does not carry the claim, the emulator
+reports `Property admin is undefined on object` — an **evaluation error**, not a decided `false`.
+Three checks in the role suite (`registeredAs.admin is still blocked`, `ageVerified is still
+blocked`, `uid still cannot be reassigned`) pass *through* that error at `firestore.rules:312` /
+`:317`. The same bare-claim pattern appears at lines 23 and 39.
+
+It **fails closed**, and legitimate-owner reads in the same suite pass, so this is neither a
+security hole nor a release blocker. What it costs is diagnosability: the deny is incidental
+rather than decided, and the emulator log fills with `PERMISSION_DENIED` evaluation errors that
+look like defects. The idiomatic fix is a guarded claim read.
+
+**Deliberately not fixed during the RC freeze** — it is a rules change to a shipped surface for a
+condition that already denies correctly. It belongs in a subsequent controlled change.

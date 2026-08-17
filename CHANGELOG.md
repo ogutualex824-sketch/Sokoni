@@ -1,3 +1,50 @@
+## [2026-08-17] — Role-rules gate: an npm wrapper, and the certification target corrected
+
+`scripts/test-role-rules.js` had no npm wrapper, unlike its `landlord` and `returns` siblings, and
+is not in `predeploy`. Run bare as `node scripts/test-role-rules.js` it fails with `fetch failed`
+— there is no emulator to reach — and that wrong invocation was recorded as a **crashing suite**,
+i.e. as missing evidence, when the suite was fine all along. An unexecuted security suite reads
+exactly like a passing one; a mis-invoked one reads exactly like a broken one.
+
+**Added** `test:rules:role` and `test:rules:role:built`, matching the siblings exactly: bare
+`firebase`, a dedicated `sokoni-role-rules-test` project, placed beside them.
+
+The file selector is a portable `--rules <file>` argument, **not** the `RULES_FILE=…` prefix first
+proposed. npm runs scripts through `cmd.exe` on Windows — the repo's primary platform — where a
+leading assignment is an unknown command rather than a variable, and there is no env-prefix
+convention, no `.npmrc` and no `cross-env` here. `RULES_FILE` is retained and still documented for
+direct POSIX invocation.
+
+### The certification target was asserted backwards, and is now recorded
+
+`build-firestore-rules.js` reports the source at `268,059 bytes (102.3% of 256 KiB)`. From that it
+was wrongly concluded that `firestore.rules` cannot deploy and that `firestore.rules.build` must be
+the real artifact. **Both halves were wrong.** `firebase.json` maps the `(default)` database to
+`firestore.rules`, so the source *is* the deployed ruleset and the run against it is what certifies;
+`firestore.rules.build` is the comment-stripped output that `firebase.json` never references, and
+running against it guards the stripper rather than certifying production.
+
+The size half is the same inference `docs/FIRESTORE_RULES_RELEASE_BLOCKER.md` had **already
+disproved** — a comment-padded ruleset of 258,746 bytes released 200 OK. The permanent invariant is
+now recorded there: certify against the file `firebase.json` maps for the database being deployed;
+never infer the artifact, or a blocker, from the build script's byte report.
+
+Also recorded there, and **deliberately not fixed during freeze**: `isAdmin()`
+(`firestore.rules:15-17`) reads `request.auth.token.admin` unguarded, so for a token without the
+claim it produces an *evaluation error* rather than a decided `false`. Three role-suite checks pass
+through that error. It fails closed — a diagnosability cost, not a security hole.
+
+**Files:** `package.json`, `scripts/test-role-rules.js`, `docs/FIRESTORE_RULES_RELEASE_BLOCKER.md`
+**Database / API / rules:** none — no generated rules touched, no application behaviour changed.
+**Breaking changes:** none.
+
+**Tests:** `npm run test:rules:role` → `firestore.rules` **57/0** (certifying) ·
+`npm run test:rules:role:built` → `firestore.rules.build` **57/0** (stripper guard) · both verified
+end to end through npm on Windows · `build-firestore-rules.js` rebuild is byte-identical to the
+committed artifact, so nothing was regenerated into the tree.
+
+**Nothing deployed.**
+
 ## [2026-08-17] — The acting role was persisted and never read back
 
 `setActiveRole` wrote `users/{uid}.activeRole` and mirrored it to `sokoniUser`, and **nothing
