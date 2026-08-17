@@ -1,3 +1,66 @@
+## [2026-08-18] — Business Hub follows the acting role (RC-freeze exception, not deployed)
+
+A shipped defect on hosting `8c6fd58`: switching the workspace role away from Seller left the
+Profile Business Hub on screen. Two causes, both in `profile.html`:
+
+1. `_renderBusinessHub()` read **entitlement** (`_isSellerUser` → `_hasRole` → claims), which a
+   role switch does not and must not change.
+2. Nothing on the page listened to `sokoniActiveRoleChanged`. The authority emitted the switch on
+   `document`; only `shared-header.js` was subscribed, so Profile never re-rendered.
+
+### The distinction being preserved
+
+| concept | means | where it lives | changed here |
+|---|---|---|---|
+| AUTHORITY | approved seller **may** act | `_isSellerUser` / claims / rules | no |
+| ACTING CONTEXT | active seller → Profile **presents** the hub | `_actingAs` (new) | yes |
+| DIRECT ROUTING | approved seller reaches `seller.html` | `guardWorkspace()` | no |
+
+`_actingAs(role, u)` is `_hasRole(role, u) && _activeRoleNow() === role` — composed **on top of**
+the entitlement predicate, never in place of it. A switch therefore cannot grant: selecting a role
+the account does not hold presents nothing, because `_hasRole` still has to agree. `_activeRoleNow()`
+reuses the resolution `renderRoleSwitcher()` already performs (authority first, local mirror only
+while unverified) rather than adding a second authority or a second cache.
+
+Applied **only** inside `_renderBusinessHub()`, to seller/provider/rider. `admin` stays
+entitlement-based — it is deliberately not a workspace role and has no acting context.
+
+`_isSellerUser()` is untouched, so **My Store stays visible to an approved seller whatever they
+are acting as**, and `guardWorkspace()` is untouched, so the workspace remains reachable directly.
+
+### One subscription, one render chain
+
+`_refreshRoleDependentUI()` coalesces on a pending flag and refreshes the genuinely role-dependent
+surfaces: role switcher, role chips, Business Hub. Registration is guarded by
+`window.__skProfileActiveRoleBound` so a re-evaluated script cannot double-bind. `switchRole()` now
+calls the same function it already called `renderRoleSwitcher()` from, so the Profile-initiated
+switch and the authority's event for that same switch collapse into a single render — and the UI
+still updates if the event never arrives.
+
+**Files:** `profile.html`, `scripts/test-business-hub-acting-role.js` (new), `package.json`.
+**Database / API / rules / claims / security changes:** none. Presentation only.
+**Breaking changes:** none.
+
+### Tests
+
+`npm run test:profile:acting-role` — **36 passed, 0 failed**. The real predicate and render source
+is sliced out of `profile.html` and run against a DOM shim; the harness aborts if the slice markers
+move. Section 9 re-runs the whole matrix with `_actingAs()` neutered back to `_hasRole()` and
+requires the entitlement-only cases to fail, so the assertions demonstrably discriminate.
+
+Also covered: a switch never changes the approved set; un-entitled active role presents nothing;
+unverified first paint still renders (no blank flash); duplicate registration yields exactly one
+render per switch; every classic inline script in `profile.html` compiles.
+
+Pre-existing, unrelated, and **not** introduced by this change (working-tree diff adds zero
+occurrences of either): `verify-receipt-naming` reports 117 deprecated aliases against a 109
+baseline, and `reconcile-indexes --verify` fails on `subscriptions` index drift. Predeploy hooks
+1–6 and 8–10 pass.
+
+**Not deployed.** Production remains hosting `8c6fd58` / rules `53e1185c`.
+
+---
+
 ## [2026-08-17] — Seller-authority rules candidate, and the isActive() defect that gates it
 
 Rules candidates, suites and a production-shaped gate. **Nothing released** — `firestore.rules` is

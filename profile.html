@@ -3047,6 +3047,33 @@ document.addEventListener('sokoniRoleAuthorityReady', function(){
   try{ renderSellerApplicationCard(); }catch(_){}
 });
 
+/* The acting role can change from anywhere — this page's switcher, the header's, or the
+   boot-time restore — and the authority announces every one of them on `document`. Subscribe
+   ONCE so the genuinely role-dependent surfaces follow the acting context without a reload.
+
+   Coalesced, because there are two callers for a single switch: the Profile switcher refreshes
+   itself on success (kept, so the UI still updates if the event never arrives) and the authority
+   emits this event for the same change. Two callers, one render chain.
+
+   PRESENTATION ONLY. Nothing here re-reads, grants or revokes authority — the approved-role set
+   is unchanged by a switch, and _actingAs() still requires the entitlement to agree. Registration
+   is guarded so a re-evaluated script cannot double-bind and double-render. */
+var _roleUiRefreshPending = false;
+function _refreshRoleDependentUI(){
+  if(_roleUiRefreshPending) return;
+  _roleUiRefreshPending = true;
+  setTimeout(function(){
+    _roleUiRefreshPending = false;
+    try{ renderRoleSwitcher(); }catch(_){}   /* also re-reads _user from storage */
+    try{ renderRoleChips(); }catch(_){}
+    try{ _renderBusinessHub(_user || getUser()); }catch(_){}
+  }, 0);
+}
+if(!window.__skProfileActiveRoleBound){
+  window.__skProfileActiveRoleBound = true;
+  document.addEventListener('sokoniActiveRoleChanged', _refreshRoleDependentUI);
+}
+
 /* ── Become a Seller — intake only ────────────────────────────────────────────
    Renders whatever SokoniSellerApplication reports and nothing else. It makes no
    authority decision: `approved` is reported only when the account holds the
@@ -3442,10 +3469,41 @@ function _isAdminUser(u){
    Role-driven and ADDITIVE: renders ONLY the modules the user can access, and a
    seller+provider sees BOTH (no exclusive roles). Consolidates the scattered entry
    points into one titled surface. Each item links to an already-built page. */
+/* The acting role, resolved the SAME way renderRoleSwitcher() resolves it — authority first,
+   local mirror only while the authority is unverified. Deliberately not a second cache and not
+   a second authority: there is one answer to "who am I acting as", and this reads it. */
+function _activeRoleNow(){
+  try{
+    var RA = window.SokoniRoleAuthority;
+    if(RA && RA.isVerified && RA.isVerified() && RA.getActiveRole) return RA.getActiveRole() || '';
+  }catch(_){}
+  try{ return (getUser() || {}).activeRole || ''; }catch(_){ return ''; }
+}
+
+/* ENTITLEMENT vs ACTING CONTEXT vs ROUTING — three different things, deliberately not collapsed:
+
+     AUTHORITY       approved seller -> may exercise seller capability   (_isSellerUser)
+     ACTING CONTEXT  active seller   -> Profile presents the seller hub  (_actingAs)
+     DIRECT ROUTING  approved seller -> seller.html stays reachable      (guardWorkspace)
+
+   A role switch changes only the middle one. It never grants or revokes anything, which is why
+   this composes ON TOP of the entitlement predicate rather than replacing it: selecting a role
+   you do not hold can never present it, because _hasRole still has to agree.
+
+   Scope is this function alone. _isSellerUser() keeps entitlement semantics, so My Store
+   (_syncMyStoreBtn) stays visible to an approved seller whatever they are acting as, and
+   guardWorkspace() is untouched. */
+function _actingAs(role, u){
+  return _hasRole(role, u) && _activeRoleNow() === role;
+}
+
 function _renderBusinessHub(u){
   var wrap=document.getElementById('upBizHub'), grid=document.getElementById('upBizHubGrid');
   if(!wrap||!grid) return;
-  var seller=_isSellerUser(u), provider=_isProviderUser(u), rider=_isRiderUser(u), admin=_isAdminUser(u);
+  /* Acting-role view. admin is NOT a workspace role (see _isAdminUser) and therefore has no
+     acting context — it stays entitlement-based. */
+  var seller=_actingAs('seller', u), provider=_actingAs('provider', u), rider=_actingAs('rider', u),
+      admin=_isAdminUser(u);
   var anyBiz=seller||provider, mods=[];
 
   /* Identity entry points in the header card — links out to the operational
@@ -4003,7 +4061,10 @@ function switchRole(roleKey){
       _user = getUser();
       _user.activeRole = roleKey;
       setUser(_user);
-      renderRoleSwitcher();
+      /* Same coalesced refresh the sokoniActiveRoleChanged subscription uses, so a switch made
+         here updates the Business Hub too — and so the authority's own event for THIS switch
+         collapses into the same single render instead of a second one. */
+      _refreshRoleDependentUI();
       window.dispatchEvent(new CustomEvent('sokoniRoleChanged', {detail:{role:roleKey}}));
       upToast('Switched to ' + rd.label, true);
       return;
