@@ -1900,7 +1900,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
   <div class="up-tabs" id="upTabs" role="tablist">
     <button type="button" class="up-tab active" data-tab="overview" onclick="switchTab('overview')" role="tab">Overview</button>
     <button type="button" class="up-tab" data-tab="orders" onclick="switchTab('orders')" role="tab">Orders</button>
-    <!-- Listings and Reviews moved to seller.html: product and reputation
+    <!-- Listings and Reviews moved to merchant.html: product and reputation
          management are merchant operations, not personal-profile destinations.
          Legacy #listings / #reviews links redirect — see _openTabFromHash(). -->
     <button type="button" class="up-tab" data-tab="bookings" onclick="switchTab('bookings')" role="tab">Bookings</button>
@@ -2059,7 +2059,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
       <!-- Seller / Business Owner actions (shown after auth) -->
       <div class="pi-qa-grid" id="piQaRoleActions" style="display:none;margin-top:8px;">
-        <a class="pi-qa-item" href="seller.html">
+        <a class="pi-qa-item" href="merchant.html">
           <span class="pi-qa-icon">&#43;</span><span class="pi-qa-lbl">Add Product</span>
         </a>
         <a class="pi-qa-item" href="pos.html">
@@ -2128,7 +2128,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="up-card-title">My Hubs <a href="/" class="up-card-link">Browse All</a></div>
       <div class="up-quick-links" id="upQuickLinks">
         <a class="up-ql" href="/"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
-        <a class="up-ql" href="seller.html"><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
+        <a class="up-ql" href="merchant.html"><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
         <a class="up-ql" href="services.html"><span class="up-ql-emoji">&#128295;</span><span class="up-ql-label">Services</span></a>
         <a class="up-ql" href="delivery.html"><span class="up-ql-emoji">&#128666;</span><span class="up-ql-label">Delivery</span></a>
         <a class="up-ql" href="property-hub.html"><span class="up-ql-emoji">&#127968;</span><span class="up-ql-label">Property</span></a>
@@ -2170,7 +2170,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <div id="upAnalyticsCard" class="up-card" style="margin-top:12px;display:none;">
       <div class="up-card-title">Your SOKONI identities</div>
       <div id="upIdentityLinks" style="display:flex;flex-direction:column;gap:8px;">
-        <a href="seller.html" id="upIdBusiness" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+        <a href="merchant.html" id="upIdBusiness" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
           <span style="font-size:20px;">&#127978;</span>
           <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Business</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your shop &amp; products</span></span>
           <span style="color:#71ff00;font-size:16px;">&#8250;</span>
@@ -2997,11 +2997,11 @@ function timeAgo(ts){
 /* ── Role definitions ── */
 var ROLES = [
   { key:'buyer',    label:'Buyer',            emoji:'&#128722;', chipClass:'chip-buyer',    hub:'index.html',    hubLabel:'Marketplace' },
-  { key:'seller',   label:'Seller',           emoji:'&#128234;', chipClass:'chip-seller',   hub:'seller.html',   hubLabel:'Seller Hub' },
+  { key:'seller',   label:'Seller',           emoji:'&#128234;', chipClass:'chip-seller',   hub:'merchant.html',   hubLabel:'Seller Hub' },
   { key:'provider', label:'Service Provider', emoji:'&#128295;', chipClass:'chip-provider', hub:'providers.html',hubLabel:'Services Hub' },
   { key:'driver',   label:'Driver',           emoji:'&#128664;', chipClass:'chip-driver',   hub:'driver.html',   hubLabel:'Driver Hub' },
   { key:'agent',    label:'Property Agent',   emoji:'&#127968;', chipClass:'chip-agent',    hub:'property.html', hubLabel:'Property Hub' },
-  { key:'business', label:'Business Owner',   emoji:'&#127970;', chipClass:'chip-business', hub:'seller.html',   hubLabel:'Business Hub' },
+  { key:'business', label:'Business Owner',   emoji:'&#127970;', chipClass:'chip-business', hub:'merchant.html',   hubLabel:'Business Hub' },
   /* Roles Phase 4 — the canonical vocabulary the SERVER grants. `rider` is the
      canonical spelling of the legacy `driver` above; both are listed so an older
      cached value still renders a correct label instead of silently falling back to
@@ -3261,7 +3261,7 @@ function _isSellerUser(u){   return _hasRole('seller', u); }
    returned 0 accounts carrying it (control: 69 users readable, 66 with 'buyer'). */
 function _isProviderUser(u){ return _hasRole('provider', u); }
 /* Show the My Services shortcut only to service providers. Mirrors _syncMyStoreBtn()
-   (seller → seller.html) exactly, using the same provider test as the Services section
+   (seller → merchant.html) exactly, using the same provider test as the Services section
    and the workspace switcher, so they can never disagree about who is a provider. */
 function _syncMyServicesBtn(u){
   var btn = document.getElementById('upMyServicesBtn');
@@ -3305,8 +3305,8 @@ function _renderBusinessHub(u){
   if(_idS) _idS.style.display = provider ? 'flex' : 'none';
   if(_idCard) _idCard.style.display = (seller || provider || admin) ? '' : 'none';
   if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',items:[
-    {label:'My Shops',href:'seller.html'},{label:'Products',href:'seller.html'},
-    {label:'Orders',href:'seller.html'},{label:'Open POS',href:'pos.html'}]});
+    {label:'My Shops',href:'merchant.html#shop'},{label:'Products',href:'merchant.html#products'},
+    {label:'Orders',href:'merchant.html#orders'},{label:'Open POS',href:'pos.html'}]});
   if(provider) mods.push({icon:'🛠',title:'Services',accent:'#f97316',items:[
     {label:'My Services',href:'provider-dashboard.html#services',id:'bizSvcMain'},
     {label:'Availability',href:'availability-manager.html'},
@@ -3882,7 +3882,7 @@ function switchTab(tabKey){
 /* Tabs that moved to a merchant surface. Existing bookmarks and shared links
    still point here, so forward them rather than dropping the visitor on an
    unrelated panel. */
-var _MOVED_TABS = { listings: 'seller.html', reviews: 'seller.html' };
+var _MOVED_TABS = { listings: 'merchant.html', reviews: 'merchant.html' };
 
 /* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync */
 function _openTabFromHash(){
@@ -6057,7 +6057,7 @@ window.logoutUser = logoutUser;
     /* Role-specific additions */
     var roles = ov.roles || [];
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      _searchIndex.push({ icon: '🏬', text: 'My Business / Store', sub: 'Merchant', href: 'seller.html' });
+      _searchIndex.push({ icon: '🏬', text: 'My Business / Store', sub: 'Merchant', href: 'merchant.html' });
       _searchIndex.push({ icon: '📊', text: 'Sales Analytics', sub: 'Merchant', href: 'seller-analytics.html' });
     }
     if (roles.indexOf('driver') !== -1) {
@@ -6187,7 +6187,7 @@ window.logoutUser = logoutUser;
 
     /* Role-specific intelligence */
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      chips.push({ cls: 'action', icon: '🏪', text: 'View your store →', href: 'seller.html' });
+      chips.push({ cls: 'action', icon: '🏪', text: 'View your store →', href: 'merchant.html' });
     }
     if (roles.indexOf('driver') !== -1) {
       chips.push({ cls: 'action', icon: '🚗', text: 'Open Driver Hub →', href: 'driver-dashboard.html' });
@@ -6369,7 +6369,7 @@ window.logoutUser = logoutUser;
 
     /* Primary role-specific hubs */
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      links.push({ icon: '🏬', label: 'My Store', href: 'seller.html', primary: true });
+      links.push({ icon: '🏬', label: 'My Store', href: 'merchant.html', primary: true });
       links.push({ icon: '📊', label: 'Analytics', href: 'seller-analytics.html' });
       links.push({ icon: '📦', label: 'Orders', href: null, tab: 'orders' });
     }
@@ -6730,7 +6730,7 @@ window.logoutUser = logoutUser;
                   {i:'🤖',l:'Ask KASS',       act:'if(window.piOpenKass)piOpenKass()'},
                   {i:'🎫',l:'Bookings',       tab:'bookings'} ],
     merchant:   [ {i:'🖥️',l:'Open POS',      href:'pos.html'},
-                  {i:'📦',l:'New Product',   href:'seller.html#add'},
+                  {i:'📦',l:'New Product',   href:'merchant.html#products'},
                   {i:'📊',l:'Orders',         tab:'orders'},
                   {i:'💸',l:'Withdraw',       href:'wallet.html'},
                   {i:'📈',l:'Analytics',      href:'seller-analytics.html'},
@@ -7297,7 +7297,7 @@ window.logoutUser = logoutUser;
     { p:["bookings","my bookings","appointments"],         icon:'📅', lbl:'My Bookings',         tab:'bookings' },
     { p:["analytics","performance","stats","reports"],     icon:'📊', lbl:'Analytics',           href:'seller-analytics.html' },
     { p:["staff","team","employees","workforce"],          icon:'👥', lbl:'My Team',             href:'staff-management.html' },
-    { p:["inventory","stock","restock"],                   icon:'📦', lbl:'Inventory',           href:'seller.html#inventory' },
+    { p:["inventory","stock","restock"],                   icon:'📦', lbl:'Inventory',           href:'merchant.html#inventory' },
     { p:["pending approvals","approvals","approve"],       icon:'✅', lbl:'Pending Approvals',   href:'staff-management.html#approvals' },
     { p:["notifications","alerts","activity"],             icon:'🔔', lbl:'Notifications',       href:'notifications.html' },
     { p:["security","password","mfa","2fa"],               icon:'🔐', lbl:'Security Settings',  tab:'security' },

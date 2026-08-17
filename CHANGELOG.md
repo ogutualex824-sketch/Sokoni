@@ -1,3 +1,51 @@
+## [2026-08-17] — Shop access: the grant path cannot mint the claim the client requires
+
+Shop access was gone from profile. Not a broken link — two independent causes, found by
+reading production rather than the page.
+
+**1. The shop is on a different account.** `shops/D5Ql2EYr95bt79IpcGTmOMTK0P83` — KASS SHOP,
+handle `kassshop`, active — belongs to *alexochieng3030@gmail.com*. The account in use
+(*ogutualex824@gmail.com*, `uwpD5gx3…`) owns no shop at all: no `sellers/` doc, 0 shops by
+`ownerUid` or `sellerUid`, no `shopName`. Profile was hiding the Business Hub **correctly**
+there, which is why restoring a link was never the fix — it would have opened an empty
+dashboard.
+
+**2. The owning account had no `seller` claim.** Role Authority Phases 1–5 made claims the
+only client authority, and `_hasRole` trusts them *"including its noes"*. `sellers/D5Ql2…`
+reads `status: active`, but the claim set was `{admin, superAdmin, role:5, driver, rider}`.
+With no module qualifying, `_renderBusinessHub` sets `display:none` — the surface vanished
+silently rather than failing.
+
+### The architectural cause
+
+`grantPlatformRole` classifies `seller` under `FIRESTORE_ROLES`, so it writes the roles array
+and never mints a claim — while `sokoni-role-authority.js` answers *"all from claims, never
+from storage"* and needs `seller: true` (or legacy `merchant` / `vendor`). **The only supported
+grant path cannot produce what the client requires.** That is the claim-reconcile gap, now
+located precisely. Left unchanged here and reported: altering the role vocabulary during a
+release freeze is not a profile fix.
+
+### What was done
+
+Claim granted to the **owner**, using the same bookkeeping `grantPlatformRole` performs:
+claims **merged** (`admin`, `superAdmin`, `driver`, `rider`, `role` preserved — lost keys
+**NONE**), `arrayUnion` on `users.roles` → `["buyer","rider","seller","driver"]`, and
+`roleGrants` + `auditLogs` entries. A blind `setCustomUserClaims` would have wiped that
+account's admin and rider access. Effective on the next ID-token refresh; no sign-out needed,
+because RA calls `getIdTokenResult(true)`.
+
+Profile now opens the native Merchant workspace: all seven entry points `seller.html` →
+`merchant.html`, each inspected individually so public storefront links were not swept up.
+Deep links follow the registry rather than assumption — `#add` → `#products` (no `add` route
+exists), and `#inventory` is kept because the registry resolves `inventory: 'pos'`: Inventory
+is a tab inside POS, by design. Three remaining `seller.html` mentions are comments; two were
+corrected rather than left describing behaviour that no longer holds.
+
+**Files:** `profile.html`. **Security:** one role grant on a live account, audit-logged.
+**Tests:** nav-routes 12/0 · merchant-routes 64/0 · navigation 11 checks · seller-deeplink
+16/0 · syntax gate clean. **Deployment:** the claim is live now; the profile change awaits a
+Hosting deploy.
+
 ## [2026-08-17] — Quarantine baseline: three suites fail, and none of them is ours
 
 `docs/release-gates/QUARANTINE_BASELINE.md` (new). Clean-emulator gate at `7296b0b`:
