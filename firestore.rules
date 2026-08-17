@@ -1,9 +1,3 @@
-/* THIS FILE DIVERGES FROM PRODUCTION. Read docs/RULES_RECONCILIATION.md before
-   deploying rules. It carries ~89 lines from several teams that have never been
-   released; promoting them all at once is what produced 400 INVALID_ARGUMENT on the
-   release (surfaced by the CLI as a misleading 409). Release one reviewed category at
-   a time from the live baseline in firestore.rules.live.
-   Preflight: TOKEN_FILE=<tok> node scripts/verify-rules-release-parity.js */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -26,6 +20,15 @@ service cloud.firestore {
 
     function isAuthed() {
       return request.auth != null;
+    }
+
+    /* Seller AUTHORITY. The claim is the only thing that grants it: an application is a
+       REQUEST, sellers/{uid} is an applicant-written record, and roles[] is historical.
+       Read straight off the token — a get(users/{uid}) here would cost a document read on
+       every product mutation and compiled bytes this ruleset does not have. Granted only by
+       admin approval through applicationDecide -> grantAccountRole. */
+    function isSeller() {
+      return isAuthed() && request.auth.token.seller == true;
     }
 
     /* Server-enforced account deactivation. accountDeactivate sets a custom claim
@@ -157,40 +160,11 @@ service cloud.firestore {
                      'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
     }
 
-    /* ── users.roles / users.activeRole are SERVER-OWNED (Roles Phase 3) ───────
-       noSelfGrant() above guards the `role` STRING and always has. It never
-       guarded the `roles` ARRAY or `activeRole`, and those are what the platform
-       actually authorizes on: sokoni-nav-engine, shared-header, the analytics
-       gate and every workspace read `roles`.
-
-       Settings → Linked hubs (profile.html) rebuilt that array from four
-       checkboxes and wrote it straight to the user's own document, so any signed-in
-       account could grant itself seller + provider + driver + agent, and drop a
-       server-granted role by unticking a box. driver.html did the additive form on
-       the shift toggle. Approval was authoritative in Cloud Functions and
-       overwritable from the browser, which is not authority.
-
-       roles:      immutable from the client. Only the Admin SDK (grantAccountRole)
-                   and an admin may change it. On CREATE the baseline is permitted —
-                   auth.js, firebase.js and sokoni-user-bootstrap.js all write
-                   ['buyer'] (auth.js:677 writes ['user']) at signup, and denying
-                   that would break every account creation.
-       activeRole: the client MAY select one, but only a role it has actually been
-                   approved for. Approval is read from the CUSTOM CLAIM, not from
-                   the user document — a claim is signed into the ID token by the
-                   server and is the one role signal a client cannot forge.
-                   'buyer' is always selectable; it is the baseline every account
-                   holds and the role revocation demotes to.
-
-       arrayUnion of a role the user ALREADY holds produces an identical array, so
-       it is absent from affectedKeys() and still permitted — an approved rider's
-       shift toggle is unaffected, while an unapproved one is denied. */
     function rolesUnchanged() {
       return resource == null
         ? request.resource.data.get('roles', ['buyer']).hasOnly(['buyer','user'])
         : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles']);
     }
-
     function activeRoleApproved() {
       let next = request.resource.data;
       return (resource != null
@@ -199,7 +173,6 @@ service cloud.firestore {
              || next.activeRole == 'buyer'
              || request.auth.token.get(next.activeRole, false) == true;
     }
-
     function noPrivilegeEscalation() {
       return noSelfGrant()
              && rolesUnchanged()
@@ -927,14 +900,14 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read:   if true;
-      allow create: if isActive() && isAuthed()
+      allow create: if isActive() && isAuthed() && isSeller()
                     && request.resource.data.sellerUid == request.auth.uid
                     && validPrice('price')
                     && noAdminFields()
                     && noBase64Image()
                     && withinProductLimit();
       allow update: if isAdmin()
-                    || (isAuthed()
+                    || (isAuthed() && isSeller()
                         && resource.data.sellerUid == request.auth.uid
                         && !request.resource.data.diff(resource.data)
                              .affectedKeys()
@@ -942,7 +915,7 @@ service cloud.firestore {
                         && noAdminFields()
                         && noBase64Image());
       allow delete: if isAdmin()
-                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+                    || (isAuthed() && isSeller() && resource.data.sellerUid == request.auth.uid);
     }
 
     match /listings/{listingId} {
@@ -1480,39 +1453,7 @@ service cloud.firestore {
                                        'hours','openingHours','returnPolicy','returnText',
                                        'packagingNote','delMethod','delTime','zones','updatedAt']));
       allow delete: if isAdmin();
-
-      /* Canonical per-shop analytics — maintained ONLY by Cloud Functions (analytics-aggregator).
-         The shop owner + admins may read their own numbers; clients never write. */
-      match /analytics/{doc} {
-        allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
-        allow write: if false;
-      }
-
-      /* Regulatory identifiers — KRA PIN, single business permit, BRS number.
-         Shop Setup collects these, and the legacy save wrote them into
-         `sellers/{uid}`, which is `allow read: if true` — so every seller's tax
-         identifier was readable by anyone who asked. They are NOT storefront
-         copy and must never sit on a world-readable document, so they live here
-         instead: written only by saveShopProfile (Admin SDK, after it has proved
-         ownership) and readable only by the owner and admins. */
-      match /private/{doc} {
-        allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
-        allow write: if false;
-      }
     }
-
-    /* Canonical platform-wide analytics (analytics/global, analytics/daily_*) — the ONE source
-       every admin/finance dashboard reads. Admin-read only; written only by Cloud Functions. */
-    match /analytics/{doc} {
-      allow read:  if isAdmin();
-      allow write: if false;
-    }
-
-    /* Dimensional analytics (RBAC) — platform-wide product/category stats + the cutover
-       parity log are admin-only; written only by Cloud Functions. */
-    match /productAnalytics/{productId}  { allow read: if isAdmin(); allow write: if false; }
-    match /categoryAnalytics/{categoryId}{ allow read: if isAdmin(); allow write: if false; }
-    match /analyticsParityLog/{entryId}  { allow read: if isAdmin(); allow write: if false; }
 
     /* ── orderEvents/{orderId}/events — the sale's audit trail / timeline ──
        Had no rule block, so `sokoni-orders.js::listenOrderEvents` and the
@@ -1608,6 +1549,7 @@ service cloud.firestore {
        is cheaper and cannot drift, because nothing may change it: it is absent
        from every hasOnly() list below. */
     match /landlordProperties/{propertyId} {
+      function _ownsProp() { return get(/databases/$(database)/documents/landlordProperties/$(propertyId)).data.ownerUid == request.auth.uid; }
       allow read:   if true;                    /* public directory, as bnbListings */
       allow create: if isAuthed()
                     && request.resource.data.ownerUid == request.auth.uid
@@ -1635,7 +1577,7 @@ service cloud.firestore {
                          create a unit inside another's building simply by naming themselves
                          owner. Resolve ownership from the parent on create only — reads,
                          updates and deletes keep using the cheap copy. */
-                      && get(/databases/$(database)/documents/landlordProperties/$(propertyId)).data.ownerUid == request.auth.uid
+                      && _ownsProp()
                       && request.resource.data.keys().hasAll(['ownerUid','number','createdAt']);
         allow update: if isAdmin()
                       || (isAuthed() && resource.data.ownerUid == request.auth.uid
@@ -1660,7 +1602,7 @@ service cloud.firestore {
                            could post a negative 'discount' already marked 'paid' into their own
                            ledger, because naming themselves owner satisfied the check. The
                            landlord of record is the parent unit's, not the writer's claim. */
-                        && get(/databases/$(database)/documents/landlordProperties/$(propertyId)/units/$(unitId)).data.ownerUid == request.auth.uid
+                        && _ownsProp()
                         && request.resource.data.keys().hasAll(['ownerUid','type','period','amount','status','createdAt'])
                         && request.resource.data.type in ['rent','water','deposit','refund','adjustment','penalty','discount']
                         && request.resource.data.amount is number
@@ -1680,36 +1622,17 @@ service cloud.firestore {
        owner and admins, so any device still holding a legacy mirror can be
        inspected. It has no reader in the codebase and nothing writes it after
        landlord.html moved to the new collection. */
-    match /landlordData/{uid} {
-      allow read, write: if isAuthed() && request.auth.uid == uid;
-      allow read: if isAdmin();
-    }
-
-    /* ── Approval-provisioned role profiles (Roles Phase 4) ────────────────────
-       The uid-keyed profiles Phase 2 created for the roles that had none. They are
-       written ONLY by grantAccountRole through the Admin SDK, which bypasses rules
-       entirely — so every client write is denied outright. A client that could write
-       these could assert a role the approval lifecycle never granted.
-
-       Until now they had NO match block at all, which Firestore default-denies: the
-       documents existed and were correct, and not even their owner could read them.
-       That was invisible because the only writer bypasses rules.
-
-       Read is owner-or-admin, the same shape drivers/{uid} uses. `tenantProfiles` in
-       particular is a rental tenant's personal data — it is never public, never
-       indexed (it also carries _noIndex:true), and is readable only by the tenant
-       themselves and an admin.
-
-       `mechanics/{uid}` is deliberately NOT here: that collection already has its own
-       block with public read, because a mechanic is a discoverable service provider. */
     match /landlordProfiles/{uid} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write: if false;
     }
-
     match /tenantProfiles/{uid} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write: if false;
+    }
+    match /landlordData/{uid} {
+      allow read, write: if isAuthed() && request.auth.uid == uid;
+      allow read: if isAdmin();
     }
 
     match /follows/{followId} {
@@ -1875,11 +1798,6 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.senderUid   == request.auth.uid
                         && !request.resource.data.diff(resource.data).affectedKeys()
                             .hasAny(['senderUid','deliveryFee','proofPIN']))
-                    /* driverLat/driverLng/driverLocUpdatedAt let the assigned rider
-                       publish their live position onto the delivery record itself.
-                       deliveryLocations is rider/admin-only, so this mirror is the
-                       sender's ONLY readable source for the live tracking map. Read
-                       access is unchanged — still sender, rider, or admin. */
                     || (isAuthed() && resource.data.assignedRiderId == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys()
                             .hasOnly(['status','timeline','updatedAt','assignedRiderId',
@@ -2109,13 +2027,15 @@ service cloud.firestore {
                        && request.resource.data.total <= resource.data.total);
     }
 
-    /* Canonical verification state — facet-keyed, CF-only.
-       verificationDecide / verificationRevoke are the sole writers, so no client
-       path can set a facet. Badge NAMES reach the public through
-       profileGetPublicProfile; the document itself never leaves owner/admin. */
-    match /verifications/{uid} {
-      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
-      allow write: if false;
+    match /verifications/{sellerUid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+
+      allow create: if isAuthed()
+                    && request.auth.uid == sellerUid
+                    && request.resource.data.status == 'pending'
+                    && !request.resource.data.keys().hasAny(['verifiedAt','approvedBy']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /homeServiceBookings/{bookingId} {
@@ -2283,35 +2203,14 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.ownerUid == request.auth.uid);
     }
 
-    /* Request log — CF-only. The old client create could never satisfy this rule
-       anyway: verification.html never wrote applicantUid, so every submission was
-       denied, which is why this collection was empty rather than unused. The
-       duplicate check now runs in verificationSubmit, where the query is
-       actually permitted. */
     match /verificationRequests/{reqId} {
-      allow read:  if isAdmin()
-                   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
-      allow write: if false;
-    }
-
-    /* Identity/KYC document vault. Had NO match block at all, so every client
-       read and write defaulted to denied while the CF read path (Admin SDK)
-       worked — an empty vault that looked healthy. The owner may add and remove
-       their own documents; only an admin may assert that one is verified. */
-    match /userDocuments/{uid} {
-      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
-      allow write: if false;
-
-      match /docs/{docId} {
-        allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
-        allow create: if isAuthed() && request.auth.uid == uid
-                      && !request.resource.data.keys()
-                           .hasAny(['isVerified','verifiedAt','verifiedBy']);
-        allow update, delete: if isAdmin()
-                      || (isAuthed() && request.auth.uid == uid
-                          && !request.resource.data.diff(resource.data).affectedKeys()
-                               .hasAny(['isVerified','verifiedAt','verifiedBy']));
-      }
+      allow create: if isAuthed()
+                    && request.resource.data.applicantUid == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.applicantUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /adminLog/{logId} {
@@ -2549,7 +2448,6 @@ service cloud.firestore {
     match /posRetailSales/{saleId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
-                   || (isAuthed() && resource.data.merchantId == request.auth.uid)   /* seller reads own sales (mirror + CF write merchantId) */
                    || (isAuthed() && resource.data.cashierUid == request.auth.uid);
       allow write: if false; /* CF Admin SDK only */
     }
@@ -2644,16 +2542,6 @@ service cloud.firestore {
                               .data.ownerId == request.auth.uid)
                      || isAdmin());
       allow write: if false;
-
-      /* Per-branch analytics (RBAC) — maintained ONLY by Cloud Functions. The branch owner
-         (parent branch's sellerId) + admins may read their own branch's numbers; no client writes. */
-      match /analytics/{doc} {
-        allow read:  if isAdmin()
-                     || (isAuthed()
-                         && exists(/databases/$(database)/documents/branches/$(branchId))
-                         && get(/databases/$(database)/documents/branches/$(branchId)).data.sellerId == request.auth.uid);
-        allow write: if false;
-      }
     }
 
     match /posRefunds/{refundId} {
@@ -2774,7 +2662,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /* ─── SmartPOS 3.0 — CRM Pro ───────────────────────────────── */
+    /* ─── SmartPOS 3.0 — CRM Pro ──────────────────────────────���── */
     match /posWallets/{walletId} {
       allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
       allow write: if false;
@@ -3106,57 +2994,6 @@ service cloud.firestore {
                              .affectedKeys().hasOnly(['status', 'receivedAt', 'receivedBy',
                                                       'receivedQty', 'note', 'updatedAt']));
         allow delete: if isTenantAdmin();
-      }
-      match /inventory_grn/{grnId} {
-        allow read:   if isTenantMember();
-        allow create: if isTenantMember()
-                      && request.resource.data.tenantId == tenantId
-                      && request.resource.data.purchaseOrderId is string
-                      && request.resource.data.supplierId is string
-                      && request.resource.data.status == 'draft';
-
-        allow update: if isTenantAdmin()
-                      || (isTenantMember()
-                          && resource.data.tenantId == tenantId
-                          && resource.data.status == 'draft'
-                          && !request.resource.data.diff(resource.data)
-                             .affectedKeys().hasAny(['tenantId', 'purchaseOrderId', 'postedAt', 'postedBy']));
-
-        allow delete: if isTenantAdmin()
-                      && resource.data.status == 'draft';
-      }
-      match /inventory_stockcounts/{countId} {
-        allow read:   if isTenantMember();
-        allow create: if isTenantMember()
-                      && request.resource.data.tenantId == tenantId
-                      && request.resource.data.warehouseId is string
-                      && request.resource.data.status == 'open'
-                      && request.resource.data.keys().hasAll(['startedBy', 'startedAt']);
-
-        allow update: if isTenantAdmin()
-                      || (isTenantMember()
-                          && resource.data.tenantId == tenantId
-                          && resource.data.status == 'open'
-                          && request.resource.data.diff(resource.data)
-                             .affectedKeys().hasOnly(['note', 'updatedAt']));
-        allow delete: if isTenantAdmin()
-                      && resource.data.status == 'open';
-
-        match /lines/{lineId} {
-          allow read:   if isTenantMember();
-          allow create: if isTenantMember()
-                        && get(/databases/$(database)/documents/tenants/$(tenantId)/inventory_stockcounts/$(countId))
-                             .data.status == 'open'
-                        && request.resource.data.keys().hasAll(['productId', 'counted', 'countedBy', 'countedAt'])
-                        && request.resource.data.counted is number
-                        && request.resource.data.counted >= 0;
-          allow update: if isTenantMember()
-                        && get(/databases/$(database)/documents/tenants/$(tenantId)/inventory_stockcounts/$(countId))
-                             .data.status == 'open'
-                        && request.resource.data.diff(resource.data)
-                           .affectedKeys().hasOnly(['counted', 'note', 'updatedAt', 'updatedBy']);
-          allow delete: if isTenantAdmin();
-        }
       }
       match /inventory_requisitions/{reqId} {
         allow read:   if isTenantMember();
@@ -3764,28 +3601,6 @@ service cloud.firestore {
       allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
     }
 
-    /* Immutable, append-only audit trail. Owner (seller) or admin may READ; NO client
-       writes at all. Records are written once by Cloud Functions (admin SDK) and never
-       updated or deleted — a per-entity hash chain makes any out-of-band tampering
-       detectable (functions/etims-audit.js verifyChain). */
-    match /etimsAuditLog/{eventId} {
-      allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
-      allow write: if false;
-    }
-    match /etimsAuditHeads/{entityId} {
-      allow read, write: if false;   // internal chain-head pointers — CF-only
-    }
-
-    /* Invoice lifecycle documents (credit/debit notes, cancellations, amendments,
-       reversals). Owner (seller) or admin READ; all writes via Cloud Functions only
-       (etims-lifecycle.js). */
-    match /creditNotes/{id}          { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
-    match /debitNotes/{id}           { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
-    match /invoiceCancellations/{id} { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
-    match /invoiceAmendments/{id}    { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
-    match /invoiceReversals/{id}     { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
-    match /etimsTransmissionQueue/{id} { allow read: if isAdmin(); allow write: if false; }
-
     match /hubs/{hubId} {
       allow read:   if isAuthed();
       allow create: if isAdmin();
@@ -4081,7 +3896,7 @@ service cloud.firestore {
       allow read:  if isAuthed() && resource.data.sellerUid == request.auth.uid || isAdmin();
     }
 
-    /* ── Returns ───────────────────────────────────────────────────────────────
+    /* ── Returns ──────────────��─────���──────────────────────────────────────────
        This collection had NO rule at all, so it was default-denied: every read
        failed with permission-denied, and returns.html surfaced that to merchants
        as "Failed to load returns" — including for shops that simply had none.
@@ -4474,7 +4289,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /* ── Disaster Recovery v1.0 ──────────────────────────────────────── */
+    /* ── Disaster Recovery v1.0 ──────────────────��───────���───────────── */
     match /drSimulations/{simId} {
       allow read:  if isAdmin();
       allow write: if false;
@@ -4558,7 +4373,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /* ── Healthcare Hub v1.0 ─────────────────────────────────────────────── */
+    /* ── Healthcare Hub v1.0 ─────���───────────────────────────────────────── */
     match /healthProviders/{providerId} {
       allow read:  if resource.data.status == 'active' || isAdmin();
       allow write: if false; // CF-only
@@ -4584,7 +4399,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /* ── Property Hub v1.0 ───────────────────────────────────────────────── */
+    /* ── Property Hub v1.0 ───────���───────────────────────────────────────── */
     match /propertyListings/{listingId} {
       allow read:  if resource.data.status == 'active'
                    || (isAuthed() && resource.data.agentUid == request.auth.uid)
@@ -4693,7 +4508,7 @@ service cloud.firestore {
       allow delete: if isAuthed() && resource.data.uid == request.auth.uid;
     }
 
-    /* ── Legal Acceptance Framework — court-grade evidence, CF-only ────────
+    /* ── Legal Acceptance Framework — court-grade evidence, CF-only ──────��─
        These six collections back the digital agreement engine: the signed acceptance
        records, the signature certificates, and the append-only audit trail that the
        legal docs describe as court-grade evidence.
@@ -5031,7 +4846,7 @@ service cloud.firestore {
       allow read, write: if false; // CF-only — transient test documents
     }
 
-    // ── CRM — Customer Relationship Management ───────────────────────────
+    // ── CRM — Customer Relationship Management ───���───────────────────────
     match /crmLeads/{leadId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.merchantId == request.auth.uid)
@@ -5260,7 +5075,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ── SFOS — Financial Operating System ─────────────────────────────────────
+    // ── SFOS — Financial Operating System ──────────────────────────���──────────
 
     match /sfosIdentity/{uid} {
       // Only the identity owner or admin may read; writes via CF Admin SDK only
@@ -5467,7 +5282,7 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isAuthed() && resource.data.ownerId == request.auth.uid);
     }
 
-    /* ══════════════════════════════════════════════════════════════════
+    /* ══════════════════════════════════════════════════���═══════════════
        HUB COLLECTIONS THAT HAD NO RULE BLOCK  (added 2026-07-23)
 
        Every path below was unreachable: with no match block, Firestore
