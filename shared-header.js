@@ -1759,6 +1759,8 @@
       '<div class="sk-acct-head">' +
         '<div class="sk-acct-name">' + _hesc(user.name || user.displayName || 'User') + '</div>' +
         '<div class="sk-acct-email">' + _hesc(user.email || '') + '</div>' +
+        _skActiveRoleLine(active) +
+        _skDeliveryLine() +
       '</div>' +
       switcherSection +
       rolePills +
@@ -1767,6 +1769,8 @@
         '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Settings</a>' +
         '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()"><i class="fas fa-briefcase"></i> My Workspaces</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
+        /* Wishlist moves here from the drawer's removed role-switcher slot. */
+        '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()"><i class="fas fa-heart"></i> Wishlist</a>' +
         '<div class="sk-acct-separator"></div>' +
         '<button class="sk-acct-link sk-acct-link-danger" onclick="window._skSignOutFromAcct()"><i class="fas fa-arrow-right-from-bracket"></i> Sign Out</button>' +
       '</div>';
@@ -1785,6 +1789,47 @@
 
   function _hesc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* The role the account is ACTING as, shown under the email so the menu answers
+     "who am I right now" before it offers to change it. Prefers the authority over
+     the local mirror: if the two ever disagree, the authority is the true answer
+     and showing the mirror would explain the wrong state confidently. */
+  function _skActiveRoleLine(active) {
+    var role = '';
+    try {
+      var RA = window.SokoniRoleAuthority;
+      if (RA && RA.isVerified && RA.isVerified() && RA.getActiveRole) role = RA.getActiveRole() || '';
+    } catch (_) {}
+    if (!role) role = active || '';
+    if (!role) return '';
+    var label = String(role).charAt(0).toUpperCase() + String(role).slice(1);
+    return '<div class="sk-acct-role-now">' + _hesc(label) + '</div>';
+  }
+
+  /* Default delivery address, e.g. "📍 Home: Lang'ata".
+
+     Renders ONLY from a confirmed saved address. There is no such store yet — the
+     buyer-addresses capability is still to be built — so today this returns an empty
+     string on every path and the menu simply omits the line.
+
+     It is deliberately NOT filled from device GPS, a reverse-geocode guess, or the
+     last delivery on an order. A menu that announces "Home: Lang'ata" because the
+     browser happened to report a coordinate is inventing a saved address the buyer
+     never confirmed, and they would reasonably trust it at checkout. An absent line
+     is honest; a guessed one is a defect. When sokoni-buyer-addresses.js lands, it
+     becomes the single source read here. */
+  function _skDeliveryLine() {
+    try {
+      var A = window.SokoniBuyerAddresses;
+      if (!A || typeof A.getDefaultConfirmed !== 'function') return '';
+      var a = A.getDefaultConfirmed();
+      if (!a || a.confirmed !== true) return '';
+      var where = a.area || a.city || '';
+      if (!where) return '';
+      var label = a.label ? (String(a.label).charAt(0).toUpperCase() + String(a.label).slice(1)) : 'Delivery';
+      return '<div class="sk-acct-delivery">📍 ' + _hesc(label) + ': ' + _hesc(where) + '</div>';
+    } catch (_) { return ''; }
   }
 
   window._skToggleAcct = function (e) {
@@ -1807,24 +1852,91 @@
     window._skCloseAcct();
   }
 
-  window._skSwitchRole = function (role) {
-    try {
-      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
-      var roles = Array.isArray(u.roles) ? [...u.roles] : [role];
-      var idx = roles.indexOf(role);
-      if (idx > 0) { roles.splice(idx, 1); roles.unshift(role); }
-      u.roles = roles; u.role = role;
-      localStorage.setItem('sokoniUser', JSON.stringify(u));
-    } catch (_) {}
-    if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
-    document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role: role } }));
+  /* Switching role goes through SokoniRoleAuthority FIRST, and only mirrors locally
+     once the authority has agreed.
+
+     Before this, the switch wrote localStorage and fired sokoniRoleChanged and that
+     was all. RA never learned, so the two systems disagreed in both directions:
+     the header believed you were a buyer while RA still approved `seller`, so
+     profile.html — which asks RA — kept rendering the Business Hub after you had
+     switched away. Nothing anywhere listened to RA's own sokoniActiveRoleChanged
+     either, so a change made through the authority updated no UI at all. Even the
+     mirrors disagreed: RA writes sokoniUser.activeRole, this wrote sokoniUser.role.
+
+     RA.setActiveRole refuses a role the account does not hold, persists
+     users/{uid}.activeRole so the choice survives reload and browser reopen, and
+     declines to switch locally when the server rejects the write. Deferring to it
+     is what makes a switch an actual change of role rather than a repaint.
+
+     If RA is absent (a page that does not load it), the legacy local path still
+     runs — otherwise role switching would break outright on those pages. That is a
+     deliberate fallback, not an oversight: it is strictly the old behaviour, and it
+     is the reason this cannot yet be called finished everywhere. */
+  window._skSwitchRole = async function (role) {
+    var RA = window.SokoniRoleAuthority;
+    if (RA && typeof RA.setActiveRole === 'function') {
+      var res = null;
+      try { res = await RA.setActiveRole(role); } catch (_) { res = null; }
+      if (!res || res.ok !== true) {
+        var why = (res && res.reason) || 'unavailable';
+        /* Say why, and do NOT switch. A silent no-op reads as a broken button, and
+           switching anyway would claim a role the authority just declined. */
+        var msg = why === 'not-approved' ? 'That role is not available on this account.'
+                : why === 'not-verified' ? 'Could not verify your roles. Check your connection and try again.'
+                : why === 'signed-out'   ? 'Sign in to switch role.'
+                : 'Could not switch role right now. Please try again.';
+        try {
+          if (window.showNotif) window.showNotif(msg, 'error');
+          else if (window.SokoniToast && window.SokoniToast.show) window.SokoniToast.show(msg, 'error');
+          else console.warn('[role-switch] ' + why + ': ' + msg);
+        } catch (_) {}
+        return;
+      }
+    }
+    _skMirrorRoleLocally(role);
     window._skCloseAcct();
-    /* Rebuild popup to reflect new active role */
     try {
       var u2 = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
       if (u2) _buildAcctPopup(u2);
     } catch (_) {}
   };
+
+  /* The local mirror of an already-authorised decision. Kept separate so the
+     authority path above and the bridge below cannot drift apart. */
+  function _skMirrorRoleLocally(role) {
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+      var roles = Array.isArray(u.roles) ? [...u.roles] : [role];
+      var idx = roles.indexOf(role);
+      if (idx > 0) { roles.splice(idx, 1); roles.unshift(role); }
+      /* Write BOTH fields: RA mirrors activeRole, the existing UI reads role. */
+      u.roles = roles; u.role = role; u.activeRole = role;
+      localStorage.setItem('sokoniUser', JSON.stringify(u));
+    } catch (_) {}
+    if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
+    document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role: role } }));
+  }
+
+  /* Bridge: a role change made through the authority must reach the UI.
+
+     RA demotes to baseline on its own when a role is revoked or a token turns out
+     not to carry it. Without this the header would keep showing the revoked role
+     until the next full page load. _skBridging stops the two events echoing. */
+  var _skBridging = false;
+  document.addEventListener('sokoniActiveRoleChanged', function (e) {
+    if (_skBridging) return;
+    var role = e && e.detail && e.detail.role;
+    if (!role) return;
+    var current = '';
+    try { current = String((JSON.parse(localStorage.getItem('sokoniUser') || '{}').role) || '').toLowerCase(); } catch (_) {}
+    if (current === String(role).toLowerCase()) return;
+    _skBridging = true;
+    try { _skMirrorRoleLocally(role); } finally { _skBridging = false; }
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u && document.getElementById('sk-acct-popup')) _buildAcctPopup(u);
+    } catch (_) {}
+  });
 
   window._skSignOutFromAcct = function () {
     window._skCloseAcct();

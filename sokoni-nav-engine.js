@@ -592,22 +592,29 @@
       body += '</div></div>';
     });
 
-    /* Role switcher — only for multi-role users */
-    var roleSwitcher = '';
-    var roles = _allRoles();
-    if (roles.length > 1) {
-      var ws = _workspace();
-      roleSwitcher = '<div class="sk-role-switcher"><p class="sk-role-switcher-label">Switch Workspace</p><div class="sk-role-pills">';
-      roles.forEach(function (r) {
-        var meta    = _ROLE_META[r] || { i:'👤', l:r, h:'index.html' };
-        var current = (r === ws) ? ' sk-role-pill--active' : '';
-        roleSwitcher +=
-          '<a href="' + meta.h + '" class="sk-role-pill' + current + '">' +
-            '<span aria-hidden="true">' + meta.i + '</span> ' + meta.l +
-          '</a>';
-      });
-      roleSwitcher += '</div></div>';
-    }
+    /* The drawer's "Switch Workspace" pill row is REMOVED, and Wishlist takes its place.
+
+       Those pills were plain <a href="seller.html"> links. They navigated to a role's
+       dashboard without setting the active role through ANY authority — not
+       SokoniRoleAuthority, not even the header's localStorage mirror. So the app
+       could be showing a seller dashboard while the authority still said buyer, and
+       every claim-gated surface on that page would disagree with the page you were
+       looking at. It was a third switching path on top of the two that already
+       existed, and the only one that recorded nothing at all.
+
+       Role switching now lives in ONE place: the account menu in shared-header.js,
+       which defers to SokoniRoleAuthority.setActiveRole and refuses a role the
+       account does not hold. Removing this leaves that single path intact rather
+       than hiding a second one that quietly disagreed with it.
+
+       Wishlist occupies the position because it is what a buyer actually reaches for
+       here, and the drawer had no Wishlist entry at all. */
+    var roleSwitcher =
+      '<div class="sk-drawer-wishlist">' +
+        '<a href="wishlist.html" class="sk-drawer-wishlist-link">' +
+          '<span aria-hidden="true">♡</span> Wishlist' +
+        '</a>' +
+      '</div>';
 
     drawer.innerHTML = header + storeCard + '<div class="sk-drawer-body">' + body + '</div>' + roleSwitcher;
     document.body.appendChild(drawer);
