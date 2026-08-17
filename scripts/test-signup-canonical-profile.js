@@ -38,9 +38,14 @@ const ck = (l, ok, d) => {
 const head = (t) => console.log('\n── ' + t + ' ──');
 
 /* ── The rules target, read from firebase.json ─────────────────────────────── */
+/* RULES_FILE lets a CANDIDATE ruleset be tested before it is promoted — the same override
+   test-returns-rules.js, test-landlord-rules.js, test-follow-rules.js, test-workspace-rules.js
+   and test-role-rules.js already use. Unset, the target is still resolved from firebase.json,
+   so the default remains "whatever production actually enforces" rather than an assumption. */
 const fbJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
 const fsCfg = Array.isArray(fbJson.firestore) ? fbJson.firestore : [fbJson.firestore];
-const target = (fsCfg.find((c) => c && c.database === '(default)') || fsCfg[0]).rules;
+const target = process.env.RULES_FILE
+  || (fsCfg.find((c) => c && c.database === '(default)') || fsCfg[0]).rules;
 const RULES = fs.readFileSync(path.join(ROOT, target), 'utf8');
 
 /* ── The payload signup actually sends, mirrored from auth.js ──────────────── */

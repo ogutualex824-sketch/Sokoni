@@ -1,3 +1,101 @@
+## [2026-08-17] — Seller-authority rules candidate, and the isActive() defect that gates it
+
+Rules candidates, suites and a production-shaped gate. **Nothing released** — `firestore.rules` is
+unchanged and production is still `e66d77a4` / 254,307 B.
+
+### The candidates, all built from the LIVE ruleset
+
+`firestore.rules.phase4-candidate` is **byte-identical to live `e66d77a4`** (sha `E28E0CD3…`,
+verified against `getExecutable`). Every candidate is built from it, never from the worktree
+`firestore.rules` — which is ~5 KB over the compiled ceiling and **cannot be released or even
+compiled by the Rules test API** (`rulesets.create` succeeds, the release returns a bare 400).
+
+| candidate | change | compiled | delta | headroom |
+|---|---|---|---|---|
+| live `e66d77a4` | — | 254,307 | — | 1,693 |
+| `firestore.rules.isactive-candidate` | one line | 254,322 | +15 | 1,678 |
+| `firestore.rules.e2-candidate` | `isSeller()` + 3 product gates | 254,499 | +192 | 1,501 |
+| `firestore.rules.combined-candidate` | both | 254,514 | +207 | 1,486 |
+
+Measured, not estimated — each via a temporary ruleset released under a name bound to **no
+existing database**, `getExecutable`, then both artifacts deleted and production re-verified.
+The build scripts refuse to write if the diff is anything other than the intended lines.
+
+### E2 — seller authority at the Firestore boundary
+
+`isSeller()` reads `request.auth.token.seller == true`. No `get(users/{uid})`: that would cost a
+document read on every product mutation and compiled bytes this ruleset does not have. Applied to
+`products` create/update/delete only.
+
+The claim is the **only** authority. An application is a REQUEST, `sellers/{uid}` is written by the
+applicant, `roles[]` is historical — `scripts/test-seller-rules.js` (15/0) proves each grants
+nothing, and its negative control against the live base fails exactly the three buyer-denial
+assertions.
+
+### The defect that gates it — `isActive()` and an ABSENT claim
+
+`isActive()` read `request.auth.token.deactivated` directly. Where that claim is **absent** the
+operand errors, and CEL absorbs the error only if another operand of the `||` is TRUE — true for an
+ADMIN, false for everyone else. Real accounts carry no custom claims at all, so **every ordinary
+account evaluated inactive and was denied by an error rather than a decision.** Measured
+consequence: all 103 live products belong to the one admin account.
+
+Fix: `request.auth.token.get('deactivated', false) != true`. `deactivated:true` → inactive;
+`false` → active; **absent → active**. `scripts/test-isactive-rules.js` (9/0) also proves
+deactivation still bites and the admin/superAdmin bypass is unchanged.
+
+### ⚠️ Release order is inverted — isActive() must NOT ship first
+
+`scripts/gate-seller-product-create.js` reproduces the real production prerequisites (the
+operational seller's actual claims, its actual `productCounters` row including `count:-23`):
+
+| ruleset | operational seller | ordinary approved seller | BUYER |
+|---|---|---|---|
+| live | ALLOWED | DENIED | denied *(by error)* |
+| + isActive only | ALLOWED | ALLOWED | **CREATED — HOLE** |
+| + seller gate only | ALLOWED | DENIED | denied |
+| + both | ALLOWED | ALLOWED | **DENIED** |
+
+The buyer-create hole is **masked** by the isActive() defect; fixing it alone removes the mask
+before the seller predicate exists to replace it. Approved order: **E2 first, then isActive** —
+safe at every intermediate point.
+
+**Correction to the record:** an earlier note said buyers can currently create products. That holds
+only for a token carrying `deactivated:false`. Real accounts have no claims, so today they are
+denied — by an error, not by a security decision.
+
+### Files
+
+`firestore.rules.e2-candidate`, `firestore.rules.isactive-candidate`,
+`firestore.rules.combined-candidate` (new artifacts; hosting ignores `firestore.rules*`) ·
+`scripts/test-seller-rules.js`, `scripts/test-isactive-rules.js`,
+`scripts/gate-seller-product-create.js` (new) · `scripts/test-signup-canonical-profile.js`
+(`RULES_FILE` override, matching five other suites; default still resolves from `firebase.json`) ·
+`package.json` · this file.
+
+**Database:** none. **API:** none. **Rules:** **not released.** **Claims / accounts / counters /
+migration:** untouched. **Breaking:** none.
+
+### Testing
+
+Against **both** the isactive and combined candidates: signup 26/0 · role 57/0 · returns 20/0 ·
+landlord 28/0 · follow 40/0 · workspace 12/0 · delivery-tracking 22/0 — **205/0 each**.
+Plus `test:rules:seller` 15/0, `test:rules:isactive` 9/0, and both negative controls.
+
+### Recorded, not fixed
+
+- `withinProductLimit()` dereferences a null `get()` when no `productCounters` row exists.
+- `userDocuments` — live denies a client write that live client code performs; separate track,
+  fix is client-side (omit `isVerified: false`).
+- The ~108 worktree-only rules lines remain unreleasable debt; only `userDocuments` and
+  `creditNotes` had any deployed-code justification.
+
+### Deployment
+
+**NOT RELEASED. NOT DEPLOYED.**
+
+---
+
 ## [2026-08-17] — Seller application intake, and signup no longer implies seller access
 
 The buyer-facing front door of the seller approval gate. A buyer can now request a seller
