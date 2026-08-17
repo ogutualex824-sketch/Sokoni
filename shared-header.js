@@ -1938,15 +1938,52 @@
     } catch (_) {}
   });
 
+  /* Mirror of firebase.js's _SOKONI_LS_KEEP. firebase.js is CANONICAL; this copy exists
+     only because the fallback below runs on pages where firebase.js is not loaded, so it
+     cannot be read from there. If one changes, change both — a key kept here but wiped
+     there (or the reverse) is a data-leak-shaped bug between two accounts on one device. */
+  var _SK_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sokoniadmin(pin|pattern|pw)hash/i;
+
+  /* Best-effort teardown for pages without firebase.js.
+
+     The old else-branch navigated to login and cleared NOTHING. 181 pages load
+     shared-header.js without firebase.js, so on all of them Sign Out was a redirect:
+     the Firebase session survived in IndexedDB and every mirror survived in
+     localStorage. Going back, or opening any other page, restored the previous
+     session — and sokoniUser still carried the old role, so the header rebuilt itself
+     as the signed-in user. "Signed out" was a page you were looking at, not a state.
+
+     This clears what it can reach and always lands on login. It is deliberately
+     idempotent: with no current user it still wipes and still navigates, so a second
+     press, or a press after the session already died, reaches the signed-out state
+     instead of leaving an authenticated-looking menu. */
+  function _skLocalSignOutFallback() {
+    try {
+      var a = window.firebaseAuth || (window.firebase && window.firebase.auth && window.firebase.auth());
+      if (a && typeof a.signOut === 'function') { try { a.signOut(); } catch (_) {} }
+    } catch (_) {}
+    [localStorage, sessionStorage].forEach(function (store) {
+      try {
+        Object.keys(store).forEach(function (k) {
+          if (!_SK_LS_KEEP.test(k)) { try { store.removeItem(k); } catch (_) {} }
+        });
+      } catch (_) {}
+    });
+  }
+
   window._skSignOutFromAcct = function () {
     window._skCloseAcct();
     /* sokoniSignOut clears the session but does NOT navigate — without this redirect
        the page stayed put and Sign Out looked broken ("not working"). Always land on
        login (even if the network sign-out throws, local state is cleared). */
     if (window.sokoniSignOut) {
-      window.sokoniSignOut().finally(function () { location.href = 'login.html'; });
+      window.sokoniSignOut().finally(function () { location.replace('login.html'); });
     } else {
-      location.href = 'login.html';
+      _skLocalSignOutFallback();
+      /* replace(), not href: href leaves the authenticated page in history, so Back
+         re-renders it. The session is gone, but a merchant surface painted from a
+         bfcache snapshot still looks signed in. */
+      location.replace('login.html');
     }
   };
 
