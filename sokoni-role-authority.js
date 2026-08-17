@@ -84,12 +84,30 @@
   };
 
   /* ── State. In-memory ONLY. ─────────────────────────────────────────────────
-     Never written to localStorage, sessionStorage, IndexedDB or a cookie, and
-     never restored from any of them. That is the whole security property: there
-     is no storage location an attacker can edit to appear approved. */
+     ENTITLEMENT (`_approved`, `_verified`) is never written to localStorage,
+     sessionStorage, IndexedDB or a cookie, and never restored from any of them.
+     That is the whole security property: there is no storage location an attacker
+     can edit to appear approved.
+
+     `_activeRole` is deliberately NOT covered by that rule, and the distinction is
+     the point. It is not an entitlement — it is a SELECTION among roles the signed
+     claims have already approved, and it is re-validated against `_approved` on
+     every restore (see _restoreActiveRole) and on every refresh. Editing the mirror
+     can therefore only ever pick a role the token already grants; it cannot add one.
+     A forged `activeRole:'seller'` on an account without the seller claim is
+     discarded, exactly as an unapproved setActiveRole call is refused.
+
+     The rule previously read "never restored from any of them" without that split,
+     which stated a stronger invariant than the security property requires — and
+     under it `activeRole` was written to users/{uid} but never read back, so the
+     acting role silently reset to buyer on every page load. */
   var _approved = null;      /* null = not yet verified this load */
   var _verified = false;
   var _activeRole = BASELINE;
+  /* True once the acting role has been decided this load — by an explicit
+     setActiveRole, by a revoke demotion, or by a restore. Keeps a later refresh()
+     from re-seeding over a choice already made in this page load. */
+  var _activeSelected = false;
   var _lastError = null;
   var _readyPromise = null;
 
@@ -155,6 +173,10 @@
         _approved = _rolesFromClaims(res && res.claims);
         _verified = true;
         _lastError = null;
+        /* Claims are known, so the acting role persisted by the last switch can now
+           be re-adopted — and validated against them. Runs before the revoke check
+           below, which then covers the restored role too. */
+        _restoreActiveRole();
         /* The acting role must remain inside the approved set. A role that has
            just been revoked cannot stay selected. */
         if (_approved.indexOf(_activeRole) < 0) _setActiveLocal(BASELINE);
@@ -215,14 +237,51 @@
 
   function _setActiveLocal(role) {
     _activeRole = role;
+    _activeSelected = true;
     try { document.dispatchEvent(new CustomEvent('sokoniActiveRoleChanged', { detail: { role: role } })); } catch (_) {}
     /* Kept for the existing UI, which reads sokoniUser for rendering. This is a
-       MIRROR of an already-authorised decision, never the decision itself —
-       nothing in this module ever reads it back. */
+       MIRROR of an already-authorised decision, never the decision itself. It is
+       read back exactly once per load, by _restoreActiveRole, and only to re-pick a
+       role the claims already approve — never to establish entitlement. */
     try {
       var raw = localStorage.getItem('sokoniUser');
       if (raw) { var u = JSON.parse(raw); u.activeRole = role; localStorage.setItem('sokoniUser', JSON.stringify(u)); }
     } catch (_) {}
+  }
+
+  /* ── Restoring the acting role ───────────────────────────────────────────────
+     setActiveRole persists to users/{uid}.activeRole, but nothing read it back, so
+     `_activeRole` began every page load at the baseline. The account was still
+     approved for its roles — entitlement was never the problem — but the ACTING
+     role silently reverted to buyer on each load, and any surface that asks the
+     authority "who am I right now" answered buyer with full confidence. The header's
+     role line prefers the authority over the mirror precisely because the authority
+     is meant to be the truer of the two; that reasoning only holds once the
+     authority actually knows.
+
+     Restores from the local mirror rather than a getDoc: the mirror is written on
+     every successful switch and costs no read on a path that runs on page load
+     across the app, where one getDoc per signed-in user per page is real spend for
+     a value the client already has.
+
+     The restore is SAFE because it is a selection, not a grant. `_approved` comes
+     from signed claims and is never sourced here; a mirror value that names a role
+     outside the approved set is discarded, so tampering can only ever re-pick a
+     role the token already carries. Returns quietly if a choice was already made
+     this load, so a token refresh cannot re-seed over a live switch. */
+  function _restoreActiveRole() {
+    if (_activeSelected) return;
+    if (!_verified || _approved == null) return;
+    try {
+      var raw = localStorage.getItem('sokoniUser');
+      if (!raw) return;
+      var u = JSON.parse(raw);
+      var r = _canonical(u && u.activeRole);
+      if (!r || r === _activeRole) return;
+      if (_approved.indexOf(r) < 0) return;   /* not approved — discard, do not adopt */
+      _activeRole = r;
+      _activeSelected = true;
+    } catch (_) { /* unparseable mirror — keep the baseline */ }
   }
 
   /* ── activeRole persistence ─────────────────────────────────────────────────

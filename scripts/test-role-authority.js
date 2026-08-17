@@ -431,6 +431,130 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
   const PERMS = fs.readFileSync(path.join(ROOT, 'sokoni-permissions.js'), 'utf8');
   ck('sokoni-permissions.js was NOT modified by Phase 4', /GUARDED_ROUTES/.test(PERMS) && /MANAGEMENT_PAGES/.test(PERMS));
 
+  /* ══ 17 · the acting role SURVIVES a page load ══
+     setActiveRole persisted users/{uid}.activeRole and mirrored it locally, but
+     nothing read either back, so `_activeRole` began every load at the baseline.
+     Entitlement was never affected — but any surface asking the authority "who am I
+     acting as" answered buyer with full confidence after a reload, including the
+     header's role line, which prefers the authority precisely because it is meant to
+     be the truer of the two sources.
+
+     A fresh module instance is what a page load actually is, so these tests reload
+     the module rather than reusing the one the sections above have already driven. */
+  head('17 · the acting role survives a page load');
+
+  const freshRA = () => {
+    delete require.cache[require.resolve(path.join(ROOT, 'sokoni-role-authority.js'))];
+    require(path.join(ROOT, 'sokoni-role-authority.js'));
+    const M = global.window.SokoniRoleAuthority;
+    /* A fresh instance also gets a fresh _fsLoader, which would reach for the real
+       gstatic ESM URL. Re-install the recording fake so the setActiveRole SUCCESS
+       path is exercised here too, as in section 12. */
+    M.__setFirestoreLoader(async () => ({
+      doc: (db, col, id) => ({ col, id }),
+      setDoc: async () => {},
+      getDoc: async () => ({ exists: () => false, data: () => null }),
+    }));
+    return M;
+  };
+  const mirror = (o) => localStorage.setItem('sokoniUser', JSON.stringify(Object.assign({ uid: 'u_test' }, o)));
+
+  /* The restore itself. */
+  mirror({ roles: ['buyer', 'seller'], activeRole: 'seller' });
+  setToken({ seller: true });
+  let RB = freshRA();
+  ck('a fresh load starts at the baseline before verification',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+  await RB.refresh(true);
+  ck('an APPROVED acting role is restored after verification',
+     RB.getActiveRole() === 'seller', RB.getActiveRole());
+  ck('...and the snapshot reports it, so sokoniRoleAuthorityReady carries the truth',
+     (await RB.ready()).activeRole === 'seller');
+
+  /* The security property: a restore is a SELECTION, never a grant. */
+  mirror({ roles: ['buyer', 'seller'], activeRole: 'seller' });
+  setToken({});                                    /* no seller claim at all */
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('an UNAPPROVED acting role in the mirror is discarded',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+  ck('...and the restore grants nothing either', !RB.isApproved('seller'));
+
+  mirror({ roles: ['buyer'], activeRole: 'superAdmin' });
+  setToken({ seller: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('a forged privileged acting role cannot be restored',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  mirror({ roles: ['buyer'], activeRole: 'wizard' });
+  setToken({ seller: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('a non-canonical acting role is discarded rather than adopted verbatim',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  /* A legacy mirror value still resolves, so accounts written before the rename
+     are not stranded on the baseline. */
+  mirror({ roles: ['buyer', 'rider'], activeRole: 'driver' });
+  setToken({ rider: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('a legacy `driver` acting role restores as rider',
+     RB.getActiveRole() === 'rider', RB.getActiveRole());
+
+  /* A refresh must not re-seed over a choice already made in this load. */
+  mirror({ roles: ['buyer', 'seller', 'rider'], activeRole: 'seller' });
+  setToken({ seller: true, rider: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('restored to seller to begin with', RB.getActiveRole() === 'seller', RB.getActiveRole());
+  const sw = await RB.setActiveRole('rider');
+  ck('a switch to another approved role succeeds', sw.ok, sw.reason);
+  await RB.refresh(true);                          /* e.g. an hourly token refresh */
+  ck('a later token refresh does NOT re-seed over the live switch',
+     RB.getActiveRole() === 'rider', RB.getActiveRole());
+
+  /* Revocation still wins over a restore. */
+  mirror({ roles: ['buyer', 'seller'], activeRole: 'seller' });
+  setToken({ seller: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('acting as seller while the claim holds', RB.getActiveRole() === 'seller');
+  setToken({});                                    /* claim revoked server-side */
+  await RB.refresh(true);
+  ck('a revoked role is dropped even though the mirror still names it',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  /* Absent and malformed mirrors are the baseline, not a crash. */
+  localStorage.removeItem('sokoniUser');
+  setToken({ seller: true });
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('no mirror at all yields the baseline', RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  localStorage.setItem('sokoniUser', '{not json');
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('an unparseable mirror yields the baseline rather than throwing',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  /* Signed out is not a restore opportunity. */
+  mirror({ roles: ['buyer', 'seller'], activeRole: 'seller' });
+  TOKEN = null;
+  RB = freshRA();
+  await RB.refresh(true);
+  ck('an unverified session does not restore an acting role',
+     RB.getActiveRole() === 'buyer', RB.getActiveRole());
+
+  /* The module still never sources ENTITLEMENT from storage — the invariant that
+     the amended header comment narrows to, and must still hold exactly. */
+  /* RASRC is the module source, already read in section 9. */
+  const approvedFromStorage = /_approved\s*=\s*[^;]*localStorage/.test(RASRC);
+  ck('`_approved` is never assigned from storage', !approvedFromStorage);
+  ck('the restore validates against the approved set',
+     /_approved\.indexOf\(r\)\s*<\s*0/.test(RASRC));
+
   console.log('\n' + '='.repeat(70));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

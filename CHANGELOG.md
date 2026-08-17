@@ -1,3 +1,72 @@
+## [2026-08-17] — The acting role was persisted and never read back
+
+`setActiveRole` wrote `users/{uid}.activeRole` and mirrored it to `sokoniUser`, and **nothing
+ever read either back**. `_activeRole` initialised to `BASELINE` on every module load and
+`refresh()` only validated it against the approved set — there was no restore path. So
+`SokoniRoleAuthority.getActiveRole()` returned `buyer` on every fresh page load, whatever the
+account had last switched to.
+
+Entitlement was never affected: `_approved` comes from signed claims and was always correct.
+What was wrong is the answer to *"who am I acting as right now"* — and that answer is already
+on screen. `_skActiveRoleLine` in `shared-header.js` deliberately prefers the authority over
+the local mirror, on the reasoning that *"if they disagree the authority is the true answer and
+showing the mirror would explain the wrong state confidently."* That reasoning is right, but
+the authority was stale by construction on every load, so after a reload the account menu
+displayed **Buyer** to someone acting as Seller — and the mirror it distrusted held the correct
+value. The claim that the choice *"survives reload and browser reopen"* was half-delivered:
+durably written, never read.
+
+### What was done
+
+`_restoreActiveRole()` re-adopts the persisted acting role once claims are known, from the
+**local mirror** rather than a `getDoc`. RA loads across the app, so one Firestore read per
+signed-in user per page is real spend for a value the client already holds.
+
+The restore is a **selection, not a grant**, and that is what makes reading storage safe here:
+`_approved` is still sourced only from signed claims, and a mirror value naming a role outside
+that set is discarded. Tampering can therefore only re-pick a role the token already carries —
+a forged `activeRole:'seller'` on an account without the claim is dropped, exactly as an
+unapproved `setActiveRole` call is refused. It runs *before* the existing revoke check, so a
+revoked role cannot be restored, and it is skipped once a choice has been made in this load, so
+an hourly token refresh cannot re-seed over a live switch.
+
+RA's state comment claimed a broader invariant than the security property needs — *"never
+restored from any of them"*, undivided. It is amended to separate **entitlement** (never from
+storage, unchanged) from the **acting-role selection** (restored, always re-validated). The
+undivided rule is what left `activeRole` write-only.
+
+No dispatch on restore: `sokoniRoleAuthorityReady` already fires immediately afterwards
+carrying the corrected `activeRole` in its snapshot, and `profile.html` re-renders the switcher
+from it. A synthetic `sokoniActiveRoleChanged` would announce a change that did not happen.
+
+**Files:** `sokoni-role-authority.js`, `scripts/test-role-authority.js`
+**Database / API / rules:** none — no schema, no new read, no rules bytes.
+**Security:** narrows a comment to match the real property; adds four forgery tests. No path by
+which storage can influence entitlement.
+**Breaking changes:** none. The acting role now persists across loads as originally intended,
+which is a behaviour *restoration*, not a new capability.
+
+**Tests:** role-authority **148/0** (130 before, +18 for the restore) · negative control:
+disabling `_restoreActiveRole()` fails exactly 5 of the new checks and no security check, so
+the suite detects the defect rather than describing it · role-vocabulary 66/0 ·
+role-provisioning 57/0 · signout-keep-parity 7/0 · nav-routes 12/0 · merchant-routes 64/0 ·
+seller-deeplink 16/0. `test-role-rules` crashes on `fetch failed` (emulator dependency,
+pre-existing, non-blocking per gate-integrity policy).
+
+### Still open — the Business Hub is not mode-scoped
+
+Confirmed and **deliberately not fixed here**: switching Seller → Buyer does **not** remove the
+Business Hub. `_renderBusinessHub` gates on `_isSellerUser` → `_hasRole` → `RA.isApproved`,
+which is role *possession*; `setActiveRole` changes only the acting role and never touches
+`_approved`. Two independent causes — the predicate is possession-based, and `switchRole()`
+never re-runs `renderHeaderCard()` (nothing in `profile.html` listens for `sokoniRoleChanged`).
+Held because mode-scoping changes a shipped surface for every multi-role account, which is an
+RC-freeze decision, not a defect fix. See `docs/BUSINESS_HUB_MODE_SCOPING.md`. This
+restore is its **prerequisite**: gating on `getActiveRole()` before the acting role survived a
+page load would have hidden the Business Hub from every seller on every load.
+
+**Nothing deployed.**
+
 ## [2026-08-17] — Shop access: the grant path cannot mint the claim the client requires
 
 Shop access was gone from profile. Not a broken link — two independent causes, found by
