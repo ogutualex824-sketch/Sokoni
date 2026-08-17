@@ -173,9 +173,37 @@ For this repo today:
 This was recorded after the inverse was asserted in error: `build-firestore-rules.js` reports the
 source at `268,059 bytes (102.3% of 256 KiB)`, from which it was wrongly concluded that the source
 could not deploy and that `firestore.rules.build` must therefore be the real artifact. Both halves
-were wrong, and the size half is **the same inference this document already disproved** — a
-comment-padded ruleset of 258,746 bytes released **200 OK**. The byte-size theory must not be
-resurrected as release policy, in either direction.
+were wrong.
+
+### RAW source size vs COMPILED executable size — do not conflate them
+
+The size discussion above concerns **raw source bytes**, and for that this document's conclusion
+stands: a comment-padded ruleset of 258,746 source bytes released **200 OK**, so raw source size is
+not the constraint and the builder's percentage must not be read as a deploy gate.
+
+**That is not a licence to add rules.** A later measurement (2026-08-15) established that the
+**compiled executable** ceiling is real and nearly exhausted:
+
+| Measure | Value |
+|---|---|
+| compiled executable, live release | **254,307 B of 256,000** — ~**1,693 B free** |
+| `build-firestore-rules.js` report for the same tree | `165,548 B · 63.2%` — **the source size, against the wrong cap** |
+
+The compiled executable runs roughly 1.5× the minified source, so a build reporting 63% full can be
+99% full. Comments are stripped at compile time, so shortening comments frees nothing — only
+functional syntax counts. An over-ceiling ruleset **uploads successfully and then cannot be
+activated**, failing as a detail-free `INVALID_ARGUMENT` / `409` that names neither size nor a field
+— see [[reference_rules_compiled_size_ceiling]] and the `409` section of this document.
+
+Measure the executable, never the source:
+
+```
+releases/cloud.firestore:getExecutable?executableVersion=FIREBASE_RULES_EXECUTABLE_V1
+```
+
+So the correct policy is two-sided: **do not** consolidate rules chasing the raw-source limit, and
+**do not** treat a comfortable-looking builder percentage as headroom. Before any rules change,
+measure compiled size.
 
 **Open wiring question, not yet resolved:** `npm run deploy:rules` runs
 `build-firestore-rules.js` *before* deploying, yet the deploy sends `firestore.rules` per
@@ -214,5 +242,8 @@ security hole nor a release blocker. What it costs is diagnosability: the deny i
 rather than decided, and the emulator log fills with `PERMISSION_DENIED` evaluation errors that
 look like defects. The idiomatic fix is a guarded claim read.
 
-**Deliberately not fixed during the RC freeze** — it is a rules change to a shipped surface for a
-condition that already denies correctly. It belongs in a subsequent controlled change.
+**Deliberately not fixed during the RC freeze**, for two reasons rather than one. It is a rules
+change to a shipped surface for a condition that already denies correctly — and a guarded read
+**adds functional syntax**, which is exactly what the ~1,693 B of compiled headroom above cannot
+absorb casually. Any fix here must be measured against the compiled executable first, and is
+better bundled with a change that frees space than shipped on its own.

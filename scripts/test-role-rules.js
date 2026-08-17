@@ -22,9 +22,14 @@
  * guard on the build step, not the certification. Do not invert these two: a green run on the
  * build artifact alone would say nothing about the ruleset actually serving production.
  *
- * (No claim is made here about the 256 KiB ceiling. docs/FIRESTORE_RULES_RELEASE_BLOCKER.md
- * records that the raw-size hypothesis was tested and DISPROVED — a 258,746-byte ruleset
- * released 200 OK — so do not infer a deploy blocker from the build script's percentage.)
+ * SIZE: RAW SOURCE is not the cap; the COMPILED EXECUTABLE is, and it is nearly full. Raw source
+ * size was tested and DISPROVED as the constraint (a 258,746-byte ruleset released 200 OK), so do
+ * not infer a deploy blocker from the build script's percentage — but do not read that as headroom
+ * either. The compiled executable measured 254,307 B of 256,000 (~1,693 B free) on 2026-08-15,
+ * while the builder reported 63.2% for the same tree. Over the compiled ceiling a ruleset uploads
+ * and then cannot be ACTIVATED, failing as a detail-free INVALID_ARGUMENT/409. Measure with
+ * releases/cloud.firestore:getExecutable before adding functional syntax.
+ * See docs/FIRESTORE_RULES_RELEASE_BLOCKER.md.
  *
  * WHY THIS EXISTS
  * Phase 2 made approval the authority on roles — grantAccountRole writes users.roles
