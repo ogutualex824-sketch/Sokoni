@@ -1,3 +1,95 @@
+## [2026-08-17] — Product ownership was not enforced on POS mutation callables
+
+Writes to `products` made through the Admin SDK **bypass `firestore.rules` entirely**. The rules
+layer correctly enforces `sellerUid == request.auth.uid` on create/update/delete, but a callable
+writing with admin credentials never consults it. A census of every server-side product mutation
+found 11 write sites; two of them relied on the rules that never ran.
+
+### The two defects
+
+**C1 · `posSyncToMarketplace`** — the only check was `if (!request.auth)`. `productId` and
+`qtyDeducted` came straight from the request body, and nothing compared the product's `sellerUid`
+to the caller. **Any authenticated account — including a brand-new buyer — could decrement any
+seller's stock by any amount and inflate `soldCount`.** The `saleId` idempotency guard blocks
+replaying one sale, not repetition with fresh ids.
+
+**C2 · `cycleCountComplete`** — `_assertPOS` bounded the *caller* to a shop, but nothing bound the
+*products* to that shop: `stock` was set to an arbitrary `countedQty` on whatever productIds the
+cycle-count document carried. A POS user authorised for shop A could rewrite shop B's stock.
+
+### The fix
+
+One shared predicate — `functions/shared/product-authority.js` — rather than a third spelling of
+seller authority. The divergence between `_assertPOS`, `_ownerOrAdmin` and `_requireRole` is
+precisely how these two paths came to disagree about what authority means.
+
+| path | authority chain |
+|---|---|
+| C1 | `request.auth.uid` (token, never the body — `branchId` is not authority) → `product.sellerUid` |
+| C2 | caller → `_assertPOS` shop → `shop.sellerUid \|\| uid` → `product.sellerUid` |
+
+Every target product is resolved and proved **before** the batch commits, so a payload mixing owned
+and foreign products applies **none** of its writes rather than the authorised subset. Unknown
+products are still skipped, preserving the legitimate case of a POS basket holding an unlisted item.
+
+The check lives in the **handler body**, not the export, because `cycleCountComplete` is reachable
+both as its own `onCall` and through `smartpos-dispatch.js` (173 merged handlers).
+
+### Design decisions, measured rather than assumed
+
+`shopEmployees` is **empty** and `posStaff` holds 2 rows, both `role:"owner"` with uid equal to the
+seller's own uid — so no staff-operated POS exists and `product.sellerUid === auth.uid` breaks no
+legitimate call. Had staff accounts existed, strict equality would have broken POS sync.
+
+**No seller-approval check is added here.** That is a separate gate; adding it now would deny the
+one operational merchant, whose authority today is ownership.
+
+**`_assertPOS` is deliberately NOT repaired.** It tests `shop.ownerId`, a field no shop document
+carries (ownership is `sellerUid`/`uid`), so its owner branch is dead and — with `shopEmployees`
+empty — it currently admits only admins. That is a separate architectural finding, left visible;
+the suite asserts the dead branch is still present so it cannot be silently repaired.
+
+### Files
+
+`functions/pos-retail.js` · `functions/pos-completeness.js` ·
+`functions/shared/product-authority.js` (new) · `scripts/test-product-write-authority.js` (new) ·
+`package.json` · this file.
+
+**Database:** none. **API:** no signature changes. **Rules:** none — **zero rules bytes** (compiled
+executable stays 254,307/256,000, 1,693 B free). **Breaking:** none.
+
+**Security:** closes cross-seller stock mutation by any authenticated caller (C1) and cross-shop
+product mutation by an authorised POS user (C2).
+
+### Testing
+
+`test:product:authority` **31/0** — including a **negative control** that neuters the ownership
+comparison and requires both vulnerabilities to reappear. Covers: authorized seller ✓, buyer vs
+foreign product ✗, *approved seller vs foreign product* ✗ (a seller-only check without ownership
+would reintroduce this), POS user own vs other shop, forged sellerId, forged shopId, mixed batch
+authorises nothing, idempotency preserved.
+
+Regression: `gate-inventory-writers` PASSED · `test-gate-inventory-writers` 52/0 ·
+`test-inventory-single-writer` 40/0 · `test-pos-canonical-stock` 55/0 · `test-inventory-sync` 18/18 ·
+`test:rules:role` 57/0 · `test:rules:signup` 26/0 · syntax gate clean.
+
+**Note for the record:** `test-inventory.js` was previously mischaracterised as an emulator-backed
+suite. It is the repository's **suite runner**; `test-inventory-sync.js` is a plain unit test. Neither
+needs an emulator.
+
+### Recorded, not fixed
+
+- `recordProductView` — anonymous `viewCount` increment with a client-supplied dedup key is
+  inflatable. Metric integrity, not the authority boundary; intentional telemetry by design.
+- `productCounters` drift (`D5Ql2…` 103 products / counter `-23` / max 10 → cap bypassed).
+- `_assertPOS` `ownerId`/`sellerUid` divergence.
+
+### Deployment
+
+**NOT DEPLOYED.**
+
+---
+
 ## [2026-08-17] — Signup was ejected mid-transaction, so the consent audit row was never written
 
 `f2e0e15` fixed the payload and the canonical profile began writing — but `consentRecords` stayed

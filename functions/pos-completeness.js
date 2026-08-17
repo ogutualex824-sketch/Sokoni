@@ -6,6 +6,10 @@
  */
 const { onCall } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+/* Server-side product ownership predicate — Admin SDK writes bypass firestore.rules.
+   Placed in the HANDLER body, not the export, because these handlers are reachable
+   both as their own onCall AND through smartpos-dispatch.js. */
+const _productAuthority = require('./shared/product-authority');
 
 exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 
@@ -585,7 +589,7 @@ exports.cycleCountUpdateItem = onCall({ enforceAppCheck: true }, exports._h.cycl
 
 exports.cycleCountComplete = onCall({ enforceAppCheck: true }, exports._h.cycleCountComplete = async (req) => {
   const { cycleCountId, shopId, adjustInventory } = req.data;
-  await _assertPOS(req.auth, shopId);
+  const _shop = await _assertPOS(req.auth, shopId);
 
   const ref = _db().collection('cycleCounts').doc(cycleCountId);
   const snap = await ref.get();
@@ -600,9 +604,36 @@ exports.cycleCountComplete = onCall({ enforceAppCheck: true }, exports._h.cycleC
   const adjustments = [];
 
   if (adjustInventory) {
+    /* ── OWNERSHIP (Stage E1 / C2) ──────────────────────────────────────────
+       _assertPOS bounds the CALLER to a shop, but nothing bound the PRODUCTS to
+       that shop: `stock` was set to an arbitrary countedQty on any productId the
+       cycle-count document happened to carry. Because this writes through the
+       Admin SDK it never reaches firestore.rules, so a POS user authorised for
+       shop A could rewrite shop B's stock.
+
+       The relationship proved here is caller -> authorised shop -> shop's seller
+       -> product.sellerUid. The seller comes from the shop document _assertPOS
+       already loaded (no second read), via sellerUid/uid — NOT `ownerId`, which no
+       shop document carries. That dead `ownerId` branch inside _assertPOS is a
+       separate finding and is left visible rather than quietly repaired here.
+
+       Resolved before the batch, so a count referencing one foreign product
+       commits nothing. */
+    const _sellerUid = _productAuthority.shopSellerUidFrom(_shop, shopId);
+    const _elevated = _productAuthority.isElevated(req.auth);
+    const { found: _owned } = await _productAuthority.resolveOwnedProducts(
+      _db(),
+      counted.filter((i) => i.variance !== 0).map((i) => i.productId),
+      _sellerUid,
+      { elevated: _elevated }
+    );
+
     const batch = _db().batch();
     for (const item of counted) {
       if (item.variance === 0) continue;
+      /* Unknown product — nothing to adjust. Previously the batch.update would
+         have failed the entire commit on a missing document. */
+      if (!_owned.has(String(item.productId))) continue;
       // Adjust product stock
       batch.update(_db().collection('products').doc(item.productId), {
         stock: item.countedQty,

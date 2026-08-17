@@ -7,6 +7,7 @@
     "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/verify-receipt-naming.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:consent": "node scripts/verify-consent-gate.js",
     "test:signup:barrier": "node scripts/test-signup-txn-barrier.js",
+    "test:product:authority": "node scripts/test-product-write-authority.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
     "verify:markup": "node scripts/verify-admin-markup.js",

@@ -10,6 +10,9 @@ const functions  = require('firebase-functions/v2');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin      = require('firebase-admin');
+/* Server-side product ownership predicate — Admin SDK writes bypass firestore.rules,
+   so the boundary has to be enforced here. See functions/shared/product-authority.js. */
+const _productAuthority = require('./shared/product-authority');
 
 const SENDGRID_SK = defineSecret('SENDGRID_API_KEY');
 const sokoniAt    = require('./sokoni-at');
@@ -56,17 +59,46 @@ exports.posSyncToMarketplace = onCall(
     const batch = db.batch();
     const errors = [];
 
+    /* ── OWNERSHIP (Stage E1 / C1) ────────────────────────────────────────
+       This handler previously checked only that the caller was signed in, then
+       decremented `stock` on a CLIENT-SUPPLIED productId. Because the write goes
+       through the Admin SDK it never reaches firestore.rules, so ANY authenticated
+       account could alter ANY seller's inventory and inflate `soldCount`. The
+       saleId guard blocks replaying one sale, not repetition with fresh ids.
+
+       Seller identity is derived from the token, never from the request body:
+       pos-sales.js sends only { saleId, branchId, items }, and `branchId` is not
+       authority. `auth.uid` is the same identity `_ownerOrAdmin` already treats as
+       the seller elsewhere in POS.
+
+       Every product is resolved and proved BEFORE the batch commits, so a payload
+       mixing owned and foreign products applies NONE of its writes rather than the
+       authorised subset. */
+    const _validItems = [];
     for (const item of items) {
       const { productId, qtyDeducted } = item;
       if (!productId || typeof qtyDeducted !== 'number') {
         errors.push(`Invalid item: ${JSON.stringify(item)}`);
         continue;
       }
+      _validItems.push(item);
+    }
 
-      /* Find matching marketplace product by productId or externalId */
-      const prodRef = db.collection('products').doc(productId);
-      const prodSnap = await prodRef.get();
-      if (!prodSnap.exists) continue;
+    const _elevated = _productAuthority.isElevated(request.auth);
+    const { found: _owned } = await _productAuthority.resolveOwnedProducts(
+      db,
+      _validItems.map((i) => i.productId),
+      request.auth.uid,
+      { elevated: _elevated }
+    );
+
+    for (const item of _validItems) {
+      const { productId, qtyDeducted } = item;
+
+      /* Not listed on the marketplace — skipped exactly as before. */
+      const prodSnap = _owned.get(String(productId));
+      if (!prodSnap) continue;
+      const prodRef = prodSnap.ref;
 
       /* Use atomic FieldValue.increment so concurrent POS device syncs
          from multiple branches don't overwrite each other's updates.
