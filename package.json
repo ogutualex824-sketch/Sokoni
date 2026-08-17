@@ -8,6 +8,7 @@
     "verify:consent": "node scripts/verify-consent-gate.js",
     "test:signup:barrier": "node scripts/test-signup-txn-barrier.js",
     "test:product:authority": "node scripts/test-product-write-authority.js",
+    "test:seller:application": "node scripts/test-seller-application.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
     "verify:markup": "node scripts/verify-admin-markup.js",

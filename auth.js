@@ -924,9 +924,16 @@ async function _doSignup(name, email, password){
                   style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:16px;border:none;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;letter-spacing:.01em;">
                   🛍️ Go to Marketplace
                 </button>
-                <button type="button" onclick="window.location.href='seller.html'"
+                <!-- A brand-new account is a BUYER, whatever was ticked at signup.
+                     Seller capability comes from the seller CLAIM, which only admin
+                     approval grants. Offering a seller dashboard here implied access
+                     that does not exist and would have failed at the server anyway;
+                     Profile is where the application is actually filed.
+                     (No backticks in here: this block sits inside a template
+                     literal, and one would terminate it.) -->
+                <button type="button" onclick="window.location.href='profile.html'"
                   style="width:100%;padding:14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;">
-                  🏪 Open Seller Dashboard
+                  👤 Go to Profile
                 </button>
                 <button type="button" onclick="window.location.href='login.html'"
                   style="width:100%;padding:12px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;border-radius:12px;cursor:pointer;font-family:inherit;">

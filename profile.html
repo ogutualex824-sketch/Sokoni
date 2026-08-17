@@ -1974,6 +1974,18 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="pi6-role-grid" id="pi6RoleCards"></div>
     </div>
 
+    <!-- ── Become a Seller (E2 stage 1 — intake only) ──────────────────────────
+         Deliberately a SIBLING of pi6RoleCardWrap rather than a card inside it:
+         that grid holds metric tiles (icon / value / label / sub) and is rebuilt
+         wholesale by _renderAdaptiveCards(), so an action card placed in it would
+         be both semantically wrong and erased on the next overview render.
+
+         This card is purely consumptive. It reports state and files a REQUEST; it
+         decides no authority. Seller capability comes from the `seller` claim,
+         granted only by admin approval through applicationDecide. Rendered by
+         renderSellerApplicationCard() further down. -->
+    <div class="up-card" id="skSellerAppCard" style="padding:14px 16px;display:none;"></div>
+
     <!-- ── SOKONI Beta — status + apply, bound to the deployed betaGetAccess /
          betaApply callables. This authenticated surface (firebase.js provides
          auth + App Check) is the canonical apply point; beta.html stays a public
@@ -2872,6 +2884,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
      paint, which is right for a nav bar and wrong for entering a workspace; this
      module answers only from a verified ID token and never from storage. -->
 <script src="sokoni-role-authority.js"></script>
+<!-- Seller application intake. Depends on sokoni-role-authority.js above for the
+     claim check, so it must load after it. -->
+<script src="sokoni-seller-application.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>
 <script type="module" src="session-manager.js"></script>
@@ -3029,7 +3044,145 @@ function getRoleDef(key){
 document.addEventListener('sokoniRoleAuthorityReady', function(){
   try{ renderRoleSwitcher(); renderRoleChips(); }catch(_){}
   try{ renderTenantProfile(); }catch(_){}
+  try{ renderSellerApplicationCard(); }catch(_){}
 });
+
+/* ── Become a Seller — intake only ────────────────────────────────────────────
+   Renders whatever SokoniSellerApplication reports and nothing else. It makes no
+   authority decision: `approved` is reported only when the account holds the
+   `seller` CLAIM, which admin approval grants through applicationDecide. An
+   application document — including one an admin has marked approved — is a
+   request, never a capability, and neither sellers/{uid} nor roles[] is consulted
+   anywhere in this path.
+
+   A failure to resolve renders nothing rather than an invitation to apply: an
+   unknown state must not be drawn as "you are not a seller yet". */
+function _skEscape(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function renderSellerApplicationCard(){
+  var card = document.getElementById('skSellerAppCard');
+  var SA   = window.SokoniSellerApplication;
+  if(!card || !SA) return;
+
+  SA.state().then(function(res){
+    var body = '';
+    switch(res.state){
+      case 'none':
+      case 'rejected':
+        body =
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<span style="font-size:24px;">&#128717;</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:14px;font-weight:900;color:#fff;">Start selling on SOKONI</div>' +
+              '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-top:2px;">' +
+                (res.state === 'rejected'
+                  ? 'Your previous application was not approved. You can apply again.'
+                  : 'Apply for a seller account. An admin reviews every application.') +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<button type="button" id="skSellerApplyBtn" style="width:100%;margin-top:12px;padding:12px;background:#71ff00;color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">Become a Seller</button>' +
+          '<div id="skSellerForm" style="display:none;margin-top:12px;">' +
+            '<input id="skSellerShopName" placeholder="Shop name" maxlength="120" style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:13px;">' +
+            '<input id="skSellerPhone" placeholder="Phone" maxlength="32" style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:13px;">' +
+            '<input id="skSellerLocation" placeholder="Location (e.g. Nairobi)" maxlength="120" style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:13px;">' +
+            '<textarea id="skSellerDesc" placeholder="What do you sell?" maxlength="600" rows="3" style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:13px;resize:vertical;"></textarea>' +
+            '<button type="button" id="skSellerSubmitBtn" style="width:100%;padding:12px;background:#71ff00;color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">Submit application</button>' +
+            '<div id="skSellerMsg" style="font-size:11px;font-weight:700;margin-top:8px;"></div>' +
+          '</div>';
+        break;
+
+      case 'pending':
+        body =
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<span style="font-size:24px;">&#8987;</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:14px;font-weight:900;color:#ffc800;">Seller application pending</div>' +
+              '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-top:2px;">' +
+                (res.reason === 'approved-awaiting-claim'
+                  ? 'Approved — your seller access is being activated.'
+                  : 'An admin is reviewing your application. You cannot sell until it is approved.') +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        break;
+
+      case 'approved':
+        body =
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<span style="font-size:24px;">&#9989;</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:14px;font-weight:900;color:#71ff00;">You are an approved seller</div>' +
+              '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-top:2px;">Manage your shop, products and orders.</div>' +
+            '</div>' +
+          '</div>' +
+          '<a href="merchant.html" style="display:block;text-align:center;width:100%;margin-top:12px;padding:12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-weight:900;font-size:14px;border-radius:12px;text-decoration:none;">Open Seller Hub</a>';
+        break;
+
+      case 'suspended':
+        body =
+          '<div style="display:flex;align-items:center;gap:12px;">' +
+            '<span style="font-size:24px;">&#9888;</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:14px;font-weight:900;color:#ff6b6b;">Seller access suspended</div>' +
+              '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-top:2px;">Contact support to resolve this.</div>' +
+            '</div>' +
+          '</div>';
+        break;
+
+      default:
+        /* signed-out or unknown — render nothing rather than a wrong invitation. */
+        card.style.display = 'none';
+        return;
+    }
+
+    card.innerHTML = body;
+    card.style.display = '';
+
+    var applyBtn = document.getElementById('skSellerApplyBtn');
+    if(applyBtn){
+      applyBtn.onclick = function(){
+        var f = document.getElementById('skSellerForm');
+        if(f) f.style.display = '';
+        applyBtn.style.display = 'none';
+      };
+    }
+    var submitBtn = document.getElementById('skSellerSubmitBtn');
+    if(submitBtn){
+      submitBtn.onclick = function(){
+        var msg = document.getElementById('skSellerMsg');
+        var shopName = (document.getElementById('skSellerShopName') || {}).value || '';
+        if(!String(shopName).trim()){
+          if(msg){ msg.style.color = '#ff6b6b'; msg.textContent = 'Shop name is required.'; }
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting…';
+        SA.submit({
+          shopName:    shopName,
+          phone:       (document.getElementById('skSellerPhone') || {}).value || '',
+          location:    (document.getElementById('skSellerLocation') || {}).value || '',
+          description: (document.getElementById('skSellerDesc') || {}).value || '',
+        }).then(function(){
+          renderSellerApplicationCard();
+        }).catch(function(err){
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit application';
+          if(msg){
+            msg.style.color = '#ff6b6b';
+            msg.textContent = /already|not-allowed/.test(String(err && err.message))
+              ? 'You already have an application in progress.'
+              : 'Could not submit right now. Please try again.';
+          }
+        });
+      };
+    }
+  }).catch(function(){ /* unresolved state renders nothing */ });
+}
 
 /* Reads tenantProfiles/{uid} through SokoniRoleAuthority, which owns the path, the
    approval check and the permission-failure handling. Shows a neutral state when the

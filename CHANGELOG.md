@@ -1,3 +1,94 @@
+## [2026-08-17] — Seller application intake, and signup no longer implies seller access
+
+The buyer-facing front door of the seller approval gate. A buyer can now request a seller
+account from Profile, and see where that request stands.
+
+> **This stage adds NO enforcement.** `firestore.rules` is unchanged, so an ordinary buyer can
+> still create products exactly as before — the product-mutation rules require `sellerUid ==
+> request.auth.uid` and no seller authority. Closing that is the next stage, and until it lands
+> nothing here should be read as a capability boundary.
+
+### The separation this stage exists to establish
+
+    `applications` is the REQUEST.  The `seller` claim is the AUTHORITY.
+
+Four things that are **not** seller authority, each with a live counter-example found in the
+Stage E0/E1 inventory:
+
+| not authority | evidence |
+|---|---|
+| an application document | 3 accounts hold one with no role and no claim |
+| `sellers/{uid}.status === 'active'` | the applicant writes that document themselves — rules permit it **by design**, because it *is* the application |
+| `roles[]` containing `'seller'` | historical, and not what the server reads |
+| a stray `seller: true` claim | one test account holds one with no application behind it |
+
+`sokoni-seller-application.js` therefore reads approval **only** from the claim, through
+`SokoniRoleAuthority`, and never consults `sellers/{uid}` or `roles[]` — asserted by the suite
+against the module source so it cannot quietly start doing so.
+
+### What was added
+
+**`sokoni-seller-application.js`** — `state()` reports `signed-out | approved | pending |
+rejected | suspended | none`; `submit()` files `applications/{appId}` with
+`requestedRole: 'seller'`, `status: 'pending'`. Nothing else. The declaration is `requestedRole`
+because `role`, `approved`, `approvedAt` and `approvedBy` are refused by `noAdminFields()` in the
+live ruleset, and `application-lifecycle.js` resolves `requestedRole` explicitly.
+
+An application an admin has marked **approved**, whose claim has not landed yet, reports as
+`pending` with reason `approved-awaiting-claim` — never `none` (which would invite a duplicate on
+top of a grant that already happened) and never `approved` (which would claim a capability the
+account does not hold).
+
+Duplicate prevention re-checks state immediately before writing, covering `pending`,
+`info_requested`, `in_review` and `submitted`. It is a **client-side guard on a client-written
+document**: it prevents the accident, not a determined actor. Nothing here grants anything, so a
+duplicate is an admin-queue annoyance rather than a privilege.
+
+**`profile.html`** — a Become a Seller card showing the live state. Placed as a *sibling* of
+`pi6RoleCardWrap` rather than inside it: that grid holds metric tiles and is rebuilt wholesale by
+`_renderAdaptiveCards()`, so an action card there would be semantically wrong and erased on the
+next overview render. An unresolved state renders nothing rather than an invitation — "cannot
+tell" must not be drawn as "you are not a seller yet".
+
+**`auth.js`** — the signup success card offered **Open Seller Dashboard**. A newly registered
+account is a buyer whatever it ticked at signup, so that implied access it did not have and would
+have failed server-side. It now offers **Go to Profile**, where the application is actually filed.
+
+### Files
+
+`sokoni-seller-application.js` (new) · `profile.html` · `auth.js` ·
+`scripts/test-seller-application.js` (new) · `package.json` · this file.
+
+**Database:** none — no schema change; `applications` already existed with this shape.
+**API:** none. **Rules:** **unchanged** (compiled executable still 254,307/256,000, 1,693 B free).
+**Claims / accounts / counters / migration:** untouched. **Breaking:** none.
+
+### Testing — `npm run test:seller:application`, 57/0
+
+Buyer → no authority · active application → cannot re-apply, nothing written · approved
+application **without** the claim → pending · **claim with no application document at all →
+approved**, cannot re-apply, nothing written (protects existing merchants whose application row
+predates the intake) · missing authority module → *not* approved · rejected → may re-apply,
+grants nothing · suspended → cannot · `submit()` writes none of
+`role`/`approved`/`approvedAt`/`approvedBy`/`roles`/`seller`/`isAdmin`/`commissionRate`.
+
+**Negative control:** substituting "an approved application counts as approved" into the real
+module source reproduces the broken invariant.
+
+The suite also parses `auth.js` and `sokoni-seller-application.js` with `node --check`, and asserts
+no backtick exists inside the success-card template literal — a stray one silently terminated the
+literal during this change while source-regex assertions still reported green. Same class as the
+CSS-in-JS backtick trap already recorded, but it is not limited to `<style>` blocks.
+
+Regression: syntax gate 1480 files clean · `test:signup:barrier` 20/0 · `test:product:authority`
+31/0.
+
+### Deployment
+
+**NOT DEPLOYED.**
+
+---
+
 ## [2026-08-17] — Product ownership was not enforced on POS mutation callables
 
 Writes to `products` made through the Admin SDK **bypass `firestore.rules` entirely**. The rules
