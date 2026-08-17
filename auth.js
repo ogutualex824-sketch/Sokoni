@@ -665,17 +665,46 @@ async function _doSignup(name, email, password){
         /* Build the profile object stored in both Firestore and localStorage */
         const dobStr = `${dobYear}-${String(dobMonth).padStart(2,'0')}-${String(dobDay).padStart(2,'0')}`;
         const _now = new Date();
+        /* Only fields the security rules permit a client to write on create.
+           This object once carried `role: 'user'` and `ageVerified: true`, and BOTH are
+           refused by the live ruleset — `role` by noAdminFields(), `ageVerified` by
+           noPrivilegeEscalation(). Because the setDoc below is awaited, that refusal
+           threw and the account was left with a Firebase Auth record and NO user
+           document and NO consent row: an orphaned identity on every email/password
+           signup. (Google signup was unaffected — firebase.js's new-user profile never
+           carried either key, which is why only this path broke.)
+
+           They are NOT restored here and the rules are NOT relaxed to admit them:
+
+           `ageVerified` is owned by functions/age-verification.js (`ageVerifySubmit`),
+           which checks 18+ AND a Kenyan ID format before CF-writing ageVerified +
+           ageVerifiedAt + ageVerifiedMethod — "CF-written so a client cannot set it".
+           Its meaning is "the server verified age", not "a date of birth was typed".
+           Writing it here asserted a verification that never happened, so removing it
+           corrects a semantic defect as well as an authorization one. It arrives later
+           via that flow, which uses set({merge:true}) and so needs no placeholder now.
+
+           `role` (the STRING) is refused on create AND update, so no client can ever
+           set it; it is left to the server authorities that own it. Nothing reads it
+           in a way that grants privilege when absent — the one default that keys off it
+           (coupon-manager.html) selects the NON-admin branch, so absence is the safe
+           direction.
+
+           `roles` is permitted, and the baseline is now the canonical 'buyer' rather
+           than the legacy 'user'. functions/role-vocabulary.js lists 'buyer' as the
+           "implicit baseline — every account has it" and maps user -> buyer, so this
+           stores the value the vocabulary would normalise to anyway, and matches the
+           shape firebase.js already writes for Google accounts. A census found nothing
+           keying off roles containing 'user'. */
         const profile = {
             uid:              cred.user.uid,
             name,
             email,
             dob:              dobStr,
-            ageVerified:      true,
             joinedAt:         _now.toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
             joinedTimestamp:  _now.getTime(),
             registeredAs:     { user: true },
-            roles:            ['user'],
-            role:             'user',
+            roles:            ['buyer'],
         };
 
         /* Persist to Firestore users collection (the authoritative source) */

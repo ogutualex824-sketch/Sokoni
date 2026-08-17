@@ -1,3 +1,84 @@
+## [2026-08-17] — Email/password signup created an Auth account and no user document
+
+A throwaway signup with **every role box unticked** produced a Firebase Auth record and **no
+`users/{uid}` document and no `consentRecords` row**. Found by acceptance test, not by report:
+Auth UID `IKhcJDidHdNoqMqdZ9hQohcNsPS2` (`ashitsaviolet@gmail.com`) exists with `customAttributes`
+empty, while `users/{uid}` reads NOT_FOUND.
+
+### Why
+
+`auth.js`'s signup payload carried two keys the **live** ruleset refuses on create:
+
+| key | refused by |
+|---|---|
+| `role: 'user'` | `noAdminFields()` |
+| `ageVerified: true` | `noPrivilegeEscalation()` |
+
+Bisected key-by-key against the rules: baseline `{uid,name,email}` allowed; `dob`, `joinedAt`,
+`joinedTimestamp`, `registeredAs`, `roles`, `consent`, `createdAt` all allowed; `role` and
+`ageVerified` each denied alone; the payload minus both allowed. Confirmed against the live
+ruleset `e66d77a4` — it forbids `role` on create and references `ageVerified` — so this is what
+governed the real signup, not just the working tree's copy.
+
+The `setDoc` is **awaited**, so the refusal threw, and the `addDoc(consentRecords)` after it never
+ran. Every email/password signup was affected. **Google signup was not** — `firebase.js`'s
+new-user profile never carried either key, which is exactly why only one path broke.
+
+### The fix — client stops sending privileged fields; rules unchanged
+
+**No rules were relaxed.** `noAdminFields()` and `noPrivilegeEscalation()` are untouched, and the
+suite asserts both keys are *still* refused, so the fix cannot be mistaken for a loosening.
+
+`ageVerified` is **removed, not relocated**. It is already owned by
+`functions/age-verification.js` → `ageVerifySubmit`, an App-Check-enforced callable that checks
+18+ **and** a Kenyan ID format before CF-writing `ageVerified` + `ageVerifiedAt` +
+`ageVerifiedMethod` — *"CF-written so a client cannot set it"*. Its meaning is *"the server
+verified age"*, not *"a date of birth was typed"*, so the client write was asserting a
+verification that never happened: removing it corrects a **semantic** defect as well as an
+authorization one. No placeholder is needed — that flow uses `set({merge:true})`.
+
+`role` (the STRING) is refused on create **and** update, so no client can ever set it; it is left
+to the server authorities that own it. Nothing grants privilege when it is absent — the single
+default that keys off it (`coupon-manager.html:453`, `|| 'seller'`) is only ever compared against
+`'admin'`, so it selects the **non-admin** branch. Absence is the safe direction, and that file was
+therefore **not** changed.
+
+`roles` moves from the legacy `['user']` to the canonical `['buyer']`.
+`functions/role-vocabulary.js` lists `buyer` as the *"implicit baseline — every account has it"* and
+maps `user -> buyer`, so this stores what the vocabulary would normalise to anyway and matches the
+shape `firebase.js` already writes for Google accounts. A census found nothing keying off `roles`
+containing `'user'`.
+
+**Files:** `auth.js`, `scripts/test-signup-canonical-profile.js` (new), `package.json`
+**Database:** none. **API:** none. **Rules bytes:** zero — no rules change.
+**Security:** strictly reduces client authority. Two privileged fields are no longer sent, and both
+remain rules-refused. No claim, no `sellers/{uid}`, no shop is created by a baseline signup.
+**Breaking changes:** none. New accounts store `roles:['buyer']` instead of `roles:['user']`;
+`users.role` is absent on new accounts, as the rules have always required.
+
+**Tests:** `npm run test:rules:signup` → **21/0** against `firestore.rules`, resolved from
+`firebase.json` rather than assumed. Negative control: reintroducing `role`/`ageVerified` trips the
+payload assertions. No regressions — auth signup gate **85/85**, auth verify gate **126/126**.
+
+### Recorded, not fixed
+
+`sellers/{uid}` self-create is **permitted by design** — `allow create: if isAuthed() &&
+request.auth.uid == uid && noAdminFields()`, and `status` is not an admin field, so an owner may
+write `status:'active'` on their own onboarding application. This is **not** an authorization
+bypass: client authority comes from signed claims, and no server path grants anything from
+`sellers/{uid}.status` (reads are inventory/sales/eTIMS; `platform-ops` and `release-readiness`
+only *count* `status=='active'`, which such a document would inflate). The suite characterises the
+current behaviour so a change in either direction is visible.
+
+### The orphaned account is recoverable but its consent row is not
+
+`firebase.js`'s new-user path writes a rules-legal profile, and the verification gate is a no-op as
+shipped, so signing that account in once would create `users/{uid}` with `roles:["buyer"]`. It
+would **not** backfill `dob` or the `consentRecords` row — the ODPC lawful-basis proof for that
+signup is permanently absent. Account preserved as evidence pending a remediation decision.
+
+**Nothing deployed.**
+
 ## [2026-08-17] — Role-rules gate: an npm wrapper, and the certification target corrected
 
 `scripts/test-role-rules.js` had no npm wrapper, unlike its `landlord` and `returns` siblings, and
