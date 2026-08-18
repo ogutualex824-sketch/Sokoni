@@ -1,8 +1,20 @@
 # Merchant Shell Capability Negotiation
 
-**Status:** DESIGNED + STATICALLY PROVEN — **not wired into either shell.**
+**Status:** **WIRED INTO v1 AND RUNTIME-PROVEN.** v2 is not wired and does not need to be — it
+negotiates to full native, so the layer is a no-op there (see §6 step 3).
 **Branch:** `fix/merchant-shell-capability` (from `merchant-v2-preservation` @ `168d54f`)
-**Gate:** `scripts/test-merchant-capability.js` — **36 passed, 0 failed**
+
+| gate | result |
+|---|---|
+| `test-merchant-capability.js` | **42 / 0** |
+| `test-merchant-routes.js` (v1 / v2) | **68 / 0** each |
+| `test-merchant-exit-contract.js` (mutation controls) | **18 / 0** |
+| `test-merchant-exit-runtime.js` | **11 / 0** |
+| `test-merchant-v2-modules.js` | **41 / 0** |
+| `test-merchant-route-gate.js --all` (v1, runtime) | **499 / 13** — 13 are environment noise; **0 blanks**, run completed |
+
+Sections 1–4 describe the problem as it was found and are kept unedited; §5 onward is what was
+done about it.
 
 Related: [[MERCHANT_V2_CERTIFICATION]] · [[MERCHANT_ROUTE_MATRIX]] · [[NAVIGATION_CONTRACT]] ·
 [[MERCHANT_CLICKABLE_CENSUS]] · [[DELIVERY_DESTINATION_BLOCKER]]
@@ -14,7 +26,7 @@ Related: [[MERCHANT_V2_CERTIFICATION]] · [[MERCHANT_ROUTE_MATRIX]] · [[NAVIGAT
 There is now **one** route registry and **two** shells that can render different amounts of it.
 
 The certified `sokoni-merchant-routes.js` (48,364 bytes, sha256 `2b8fc08d…`) differs from the
-registry live on `rc/combined` (29,296 bytes, sha256 `7697b4f5…`) in four measured ways:
+registry live on `rc/combined` (29,296 bytes, sha256 `7697b4f5…`) in these measured ways:
 
 | | `rc/combined` | certified |
 |---|---|---|
@@ -23,6 +35,12 @@ registry live on `rc/combined` (29,296 bytes, sha256 `7697b4f5…`) in four meas
 | `seller` → `native` | — | `customers`, `disputes`, `kra-tax`, `marketing`, `messages`, `shop`, `staff` |
 | page `src` | plain | 7 routes gain `?shell=merchant` |
 | exports | — | `ACTIONS`, `ACTION_OWNERS`, `actions`, `plannedActions` |
+| **bottom nav till slot** | `pos` | **`sell`** |
+
+> The last row was **missed by the first census**, which compared routes and kinds but not
+> `BOTTOM_NAV`. It is the most dangerous item in the table — see §7 — because it puts a withheld
+> route behind the most prominent control in the app. A delta census that only walks the shape it
+> expects to change will miss the ones that matter.
 
 Those 7 upgrades are the whole problem. **Measured** native renderer coverage, read out of each
 shell's own `renderNative()` body rather than asked for:
@@ -433,11 +451,10 @@ Integration proceeds from the work branch; `168d54f` remains the immutable refer
    position.
 2. ~~Model sign-out in the route contract~~ — **DONE.** Declared exit route, contract-composed
    clean-URL target, gate distinguishes authorized exit from unexpected navigation.
-3. **Wire `negotiate()` into both shells.** v2 first — it is the one under active certification and
-   currently negotiates to full native, so wiring it changes no behaviour and proves the plumbing.
-   Then v1, where the layer actually does work.
-4. **Re-run the runtime gate** (`scripts/test-merchant-route-gate.js`) against both shells with the
-   layer wired. Static proof of a downgrade is not proof that the downgraded panel renders.
+3. ~~Wire `negotiate()` into v1~~ — **DONE.** See §7. v2 is not wired and does not need to be: it
+   negotiates to full native, so the layer would be a no-op there. It should still be wired before
+   v2 meets a future registry naming a surface it has not ported.
+4. ~~Re-run the runtime gate with the layer wired~~ — **DONE.** See §7.
 5. **Only then** fold `LEGACY` into the registry as a per-route `fallback:{}` and delete the
    sidecar.
 
@@ -458,3 +475,109 @@ whether it can honour them.
   [[DELIVERY_DESTINATION_BLOCKER]] — it is a separate workstream. POS may **read** existing delivery
   information; it must not begin writing another location format. Shell integration, native
   surfaces, printer/device architecture, routing and deployment all proceed independently.
+
+---
+
+## 7. The layer is wired into v1 — and the blanks are gone
+
+`merchant.html` now loads `sokoni-merchant-capability.js` and resolves every route through it
+before building any projection. This was **not optional**: both shells load the *same*
+`sokoni-merchant-routes.js`, so shipping the certified registry without the layer would have given
+the live shell the measured 9-route blank.
+
+### What the shell does now
+
+```js
+var NATIVE_CAPABILITY = ['analytics','availability','dashboard','devices','orders',
+                         'payments','reports','revenue','settings'];
+```
+
+Declared, because a running shell cannot parse its own source. It **cannot drift**: the capability
+gate parses `renderNative()` and asserts the declared list equals the measured one, so a renderer
+deleted without updating the declaration fails the gate.
+
+Three application points:
+
+| projection | behaviour |
+|---|---|
+| sidebar / More groups | withheld routes filtered out — no button may promise them |
+| `byId` (the router) | downgrades get `kind:'seller'` **and** `sec` together — a `seller` kind with no `sec` silently renders Overview |
+| deep link to a withheld route | `renderUnavailable(id)` — names the route, says it is not in this version, invents no figures |
+
+A degraded path is included for a stale cache serving the contract without the layer: it fails
+toward **withhold**, never toward blank, and never guesses a downgrade — the legacy mapping is in
+the layer, and guessing it from the route id gets `tax`, `store` and `team` wrong.
+
+### An 8th delta item the first census missed
+
+The certified registry also re-points the bottom nav's till slot: `pos` → `sell`. In v2 that is
+correct. In v1 `sell` is withheld, so **the most prominent control in the app would have opened a
+"not available" panel.** The projection guard caught it — the sidebar is not the only projection,
+and `BOTTOM_NAV` and the Settings hub build from their own arrays.
+
+Fixed in the **contract**, not the shell, so it is visible and auditable:
+
+```js
+{ id:'sell', icon:'💳', label:'Sell', fallback:'pos' },
+```
+
+**This is not the `sell` route falling back to POS.** The route still withholds in v1 — `#sell`
+renders the named unavailable panel, and Sell and POS remain separate destinations with the wall
+between them intact. This is a four-slot navigation projection declaring which till *this* shell
+offers in its till slot, and `pos` is exactly what `rc/combined` shipped there, so v1's bottom bar
+is unchanged rather than newly invented. `validate()` requires a `fallback` to be a real,
+mobile-safe, non-self route; the gate asserts the resolved slot is not withheld **and** that a
+fallback is only declared where a shell actually withholds the slot, so it cannot rot into dead
+configuration.
+
+> ⚠ **Open for review:** the identity of the till slot is a navigation decision, flagged in the
+> contract rather than decided silently.
+
+### Runtime result — the defect is measured gone
+
+`scripts/test-merchant-route-gate.js --all`, v1 + certified registry + the layer, iPhone SE and
+iPhone 14 Pro. This run **completed** (no watchdog skip):
+
+| | before the layer | after |
+|---|---|---|
+| `native module rendered real content` failures | **10** | **0** |
+| `native route "X" has no renderer` | 5 routes | **0** |
+| run completed | no — watchdog skip, exit 0 | **yes** |
+
+Withheld routes now answer honestly instead of blanking:
+
+```
+── WITHHELD: SELL  (#sell) ──
+  PASS  the hash is NOT silently rewritten to dashboard   [#sell]
+  PASS  it is this route's own native panel   [native-sell]
+  PASS  the panel names itself instead of blanking
+        [260 chars — "💳 Sell  This screen is not available in this version of Merchant…"]
+  PASS  it does not claim to be Dashboard   [Sell]
+  PASS  and it is absent from the sidebar (no button may promise it)
+```
+
+The seven downgraded routes mount the legacy seller panel and are reported as such
+(`── STAFF (#staff) [downgraded -> seller:team] ──`).
+
+### Two gate corrections made in the process
+
+- **The runtime gate expected the *declared* kind.** A downgraded route mounts an iframe, so
+  asserting `kind:'native'` failed the shell for behaving correctly. It now asserts the
+  **negotiated** descriptor — kind *and* `sec` — which is a precise identity check, not a relaxed
+  one. Withheld routes are removed from the click walk and get their own deep-link acceptance
+  instead of being tested for a button that deliberately does not exist.
+- **`#inventory` had a hard-coded meaning.** It was its own row, then an alias of `pos` after the
+  Cashier + Inventory merge, and now a first-class route again. The test asserted "mounts the POS
+  panel" and failed the shell for following the current contract. It now asks the contract what
+  `#inventory` resolves to and asserts what *that* implies — the invariant being that a bookmark
+  lands somewhere real, shows exactly one panel, and never dead-ends.
+
+`ROUTE_GATE_TIMEOUT_MS` was added (default 120000, unchanged for CI) so an evidence run can walk
+every route. A run cut short by the watchdog still exits `0` — that is a timeout artifact and must
+never be read as a pass.
+
+### Remaining failures are environment, not routing
+
+13 failures, all pre-existing and unrelated to the registry: CORS 204 on a headless origin (×7),
+`Can't find variable: firebase` (×2), and the `seller:products` deep-switch confirmation timing out
+(×2) — consistent with an unauthenticated offline run.

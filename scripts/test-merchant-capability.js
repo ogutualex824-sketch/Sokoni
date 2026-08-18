@@ -129,6 +129,26 @@ SHELLS.forEach(s => {
         m.ids.length + ' -> ' + m.ids.join(','));
 });
 
+/* A shell that WIRES the layer has to tell it what it can render, and a running shell
+   cannot parse its own source — so it declares a list. A declaration drifts the moment
+   someone deletes a renderer and forgets the list. This is the assertion that stops
+   that: the DECLARED list must equal the list measured out of renderNative() itself.
+   Delete a renderer without updating the declaration and this fails. */
+SHELLS.forEach(s => {
+  const src = R(s.file);
+  const decl = src.match(/var\s+NATIVE_CAPABILITY\s*=\s*\[([^\]]*)\]/);
+  if (!decl) {
+    check(s.key + ': declares no capability list (layer not wired — nothing to drift)', true, 'not wired');
+    return;
+  }
+  const declared = [...decl[1].matchAll(/'([a-z0-9-]+)'/g)].map(m => m[1]).sort();
+  check(s.key + ': DECLARED capability matches MEASURED renderNative()',
+        declared.join(',') === measured[s.key].ids.join(','),
+        declared.length === measured[s.key].ids.length
+          ? declared.join(',')
+          : 'declared=' + declared.join(',') + '  measured=' + measured[s.key].ids.join(','));
+});
+
 check('the two shells differ in capability (else there is nothing to negotiate)',
       measured.v1.ids.join(',') !== measured.v2.ids.join(','),
       'v1=' + measured.v1.ids.length + ' v2=' + measured.v2.ids.length);
@@ -181,6 +201,35 @@ check('seller.js DASH_PAGES parsed', realSecs.length > 5, realSecs.length + ' se
 v1.rows.filter(r => r.outcome === 'downgrade').forEach(r => {
   check('downgrade target is a REAL seller.js section: ' + r.id + ' -> "' + r.sec + '"',
         realSecs.includes(r.sec));
+});
+
+/* The sidebar is not the only projection. The Settings hub renders a card per id in
+   `settings.links`, and the bottom nav renders its own four. A withheld route reached
+   from either is the same defect as a withheld route in the sidebar — a control that
+   promises a destination the shell cannot mount. projectNav() filters the sidebar; these
+   two lists are built from their own arrays, so they are asserted directly. */
+const withheldSet = new Set(v1.rows.filter(r => r.outcome === 'withhold').map(r => r.id));
+const settingsLinks = (C.get('settings') || {}).links || [];
+check('Settings hub links to no withheld route', settingsLinks.every(id => !withheldSet.has(id)),
+      settingsLinks.filter(id => withheldSet.has(id)).join(',') ||
+      settingsLinks.length + ' links, none withheld');
+/* Resolved exactly as the shell resolves it: a slot whose preferred route is withheld uses
+   its contract-declared fallback. The assertion is on the RESOLVED slot, because that is
+   what the merchant's thumb actually lands on. */
+const resolveSlot = b => (b.id !== '__more' && withheldSet.has(b.id) && b.fallback && !withheldSet.has(b.fallback))
+  ? b.fallback : b.id;
+const bottomIds = C.BOTTOM_NAV.map(resolveSlot).filter(id => id !== '__more');
+check('bottom nav points at no withheld route (after fallback resolution)',
+      bottomIds.every(id => !withheldSet.has(id)),
+      bottomIds.filter(id => withheldSet.has(id)).join(',') || bottomIds.join(','));
+check('...and every resolved slot is a real, mobile-safe route',
+      bottomIds.every(id => { const r = C.get(id); return r && r.mobile === true; }),
+      bottomIds.filter(id => { const r = C.get(id); return !r || r.mobile !== true; }).join(',') || 'all 3 + More');
+/* A fallback must only be DECLARED where it can be needed. A slot that no shell withholds
+   carrying a fallback is dead configuration that will rot unnoticed. */
+C.BOTTOM_NAV.filter(b => b.fallback).forEach(b => {
+  check('bottom-nav fallback is declared only where a shell withholds the slot: ' + b.id,
+        withheldSet.has(b.id), withheldSet.has(b.id) ? b.id + ' -> ' + b.fallback : 'unnecessary fallback');
 });
 
 /* ── 4. PROOF 2 — v2 + certified registry ─────────────────────────────────── */

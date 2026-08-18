@@ -54,9 +54,23 @@ const BATCH_1 = [...new Set(['dashboard', 'plan', 'products', 'inventory', 'cash
    Availability of the page itself is asserted in depth by test-pos-setup-availability.js.
    This entry covers the other half: that the merchant shell can still route to it. */
 const REQUIRED_EXTRA = ['pos-setup'];
-const TARGETS = process.argv.includes('--all')
+const CAPMOD = (() => { try { return require(path.join(ROOT, 'sokoni-merchant-capability.js')); } catch (_) { return null; } })();
+const shellSrc = fs.readFileSync(path.join(ROOT, 'merchant.html'), 'utf8');
+const declMatch = shellSrc.match(/var\s+NATIVE_CAPABILITY\s*=\s*\[([^\]]*)\]/);
+const shellCaps = declMatch
+  ? { native: Object.fromEntries([...declMatch[1].matchAll(/'([a-z0-9-]+)'/g)].map((m) => [m[1], true])) }
+  : null;
+const isWithheld = (r) =>
+  !!(CAPMOD && shellCaps && CAPMOD.negotiate(r, shellCaps).outcome === 'withhold');
+
+
+/* A WITHHELD route has no sidebar button by design, so walking it here would look for a
+   control the shell deliberately does not offer. It is not skipped, though — it gets its own
+   acceptance below: a deep link must render a NAMED panel, never a blank and never Dashboard. */
+const WITHHELD = C.ROUTES.filter(isWithheld).map((r) => r.id);
+const TARGETS = (process.argv.includes('--all')
   ? [...new Set([...C.primary().map(r => r.id), ...REQUIRED_EXTRA])]
-  : BATCH_1;
+  : BATCH_1).filter((id) => !WITHHELD.includes(id));
 
 const VIEWPORTS = [
   { name: 'iPhone 14 Pro', width: 393, height: 852 },
@@ -95,7 +109,11 @@ const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon
    gate-classify.js) ON PURPOSE. At 300s it could never fire — the runner killed this suite
    at 150s and recorded TIMEOUT, a non-blocking verdict, so a run in which all 28 assertions
    had already passed left the blocking set without saying anything. */
-const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout'); process.exit(0); }, 120000);
+/* Default unchanged so CI keeps its 120s budget. ROUTE_GATE_TIMEOUT_MS lets an evidence run
+   walk every route without the watchdog cutting it short — and a run that IS cut short exits
+   0, which is a timeout artifact and must never be read as a pass. */
+const WATCHDOG_MS = Number(process.env.ROUTE_GATE_TIMEOUT_MS || 120000);
+const wd = setTimeout(() => { console.log('\nSKIP — webkit watchdog timeout after ' + WATCHDOG_MS + 'ms (NOT a pass)'); process.exit(0); }, WATCHDOG_MS);
 wd.unref && wd.unref();
 
 server.listen(0, async () => {
@@ -153,8 +171,42 @@ server.listen(0, async () => {
        moment a hidden route existed. Assert the projection in BOTH directions instead: every
        visible route present, and every hidden route absent. That is stricter than the count it
        replaces — a count cannot tell a missing row from an extra one. */
-    const visibleRoutes = C.ROUTES.filter((r) => r.tier !== 'hidden');
-    const hiddenRoutes  = C.ROUTES.filter((r) => r.tier === 'hidden');
+    /* A route can also be absent because THIS shell cannot render it and there is no legacy
+       equivalent — Sell and Inventory are native-only surfaces of Merchant v2. Those are
+       WITHHELD, deliberately: a button that promises a destination the shell cannot mount is
+       the blank-panel defect wearing a label. So the expectation is the NEGOTIATED projection,
+       not the raw contract.
+
+       This is not a loosening. It is computed by asking the capability layer the same question
+       the shell asks, using the shell's OWN declared capability parsed out of the file under
+       test — so a route that goes missing for any other reason still fails, and a shell that
+       withholds something it CAN render fails too. If the layer is absent, the expectation
+       falls back to the raw contract, which is the stricter of the two. */
+    const withheldIds = C.ROUTES.filter(isWithheld).map((r) => r.id);
+    if (withheldIds.length) console.log('    ····  withheld by capability: ' + withheldIds.join(', '));
+
+    /* The bottom nav is a SECOND projection and does not go through projectNav(), so it needs
+       its own assertion. A slot left pointing at a withheld route would be the blank defect in
+       the most prominent control in the app — and the certified registry does exactly that, by
+       re-pointing the till slot from `pos` to `sell`. Assert the RESOLVED slot: what the
+       merchant's thumb actually lands on. */
+    const bnav = await page.evaluate(() => [].map.call(document.querySelectorAll('.mbnav-item'),
+      (n) => ({ id: n.dataset.id, label: (n.querySelector('.bl') || {}).textContent })));
+    /* '__more' is the drawer sentinel, not a route — asking the contract about it would throw. */
+    const slotWithheld = (id) => { const r = id === '__more' ? null : C.get(id); return !!r && isWithheld(r); };
+    const expectedSlots = C.BOTTOM_NAV.map((b) =>
+      (slotWithheld(b.id) && b.fallback && !slotWithheld(b.fallback)) ? b.fallback : b.id);
+    check('bottom nav renders every declared slot', bnav.length === C.BOTTOM_NAV.length,
+          bnav.map((b) => b.id).join(',') || 'none');
+    check('every bottom-nav slot resolves to a route this shell can mount',
+          bnav.every((b) => !slotWithheld(b.id)),
+          bnav.filter((b) => slotWithheld(b.id)).map((b) => b.id).join(',') || 'all mountable');
+    check('...and the resolved slots match the contract after fallback',
+          bnav.map((b) => b.id).join(',') === expectedSlots.join(','),
+          bnav.map((b) => b.id).join(',') + ' (contract: ' + expectedSlots.join(',') + ')');
+
+    const visibleRoutes = C.ROUTES.filter((r) => r.tier !== 'hidden' && !isWithheld(r));
+    const hiddenRoutes  = C.ROUTES.filter((r) => r.tier === 'hidden' || isWithheld(r));
     const missing = visibleRoutes.filter((r) => !sb.items.some((i) => i.id === r.id)).map((r) => r.id);
     const leaked  = hiddenRoutes.filter((r) => sb.items.some((i) => i.id === r.id)).map((r) => r.id);
     check('every visible contract route has a sidebar button',
@@ -170,8 +222,18 @@ server.listen(0, async () => {
 
     /* ── Per-route acceptance ─────────────────────────────────────────────── */
     for (const id of TARGETS) {
-      const route = C.get(id);
-      console.log('\n  ── ' + route.name.toUpperCase() + '  (#' + id + ') ──');
+      const declared = C.get(id);
+      /* Assert what the shell will ACTUALLY mount, not what the contract would prefer. A
+         downgraded route mounts the legacy seller panel — an iframe — and asserting the
+         declared kind:'native' there would fail the shell for behaving correctly. The
+         negotiated descriptor carries the real kind AND the real sec, so this stays a
+         precise identity check rather than a relaxed one. */
+      const neg = (CAPMOD && shellCaps) ? CAPMOD.negotiate(declared, shellCaps) : null;
+      const route = (neg && neg.outcome === 'downgrade')
+        ? Object.assign({}, declared, { kind: neg.kind, sec: neg.sec })
+        : declared;
+      console.log('\n  ── ' + route.name.toUpperCase() + '  (#' + id + ')' +
+                  (neg && neg.outcome === 'downgrade' ? '  [downgraded -> seller:' + neg.sec + ']' : '') + ' ──');
       routeErrors = [];
 
       const before = await page.evaluate(() => {
@@ -286,14 +348,82 @@ server.listen(0, async () => {
       shown: document.querySelectorAll('.mpanel.show').length,
       frame: (document.querySelector('.mpanel.show iframe') || {}).id || null,
     }));
-    /* #inventory is an ALIAS of pos since the Cashier + Inventory merge — a bookmark on the old
-       hash must still land somewhere real, and the contract says that place is POS. Asserting
-       the hash stayed `inventory` was asserting the pre-merge architecture; what matters is that
-       the alias RESOLVES rather than dead-ends. */
-    check('deep link #inventory resolves through the alias to POS',
-          deep.hash === C.resolve('inventory'), '#' + deep.hash + ' (contract: ' + C.resolve('inventory') + ')');
-    check('deep link mounts the POS panel', deep.frame === 'mfx-pos', String(deep.frame));
+    /* What #inventory MEANS is the contract's call, and it has changed twice. It was its own
+       row; the Cashier + Inventory merge made it an ALIAS of pos; the certified registry makes
+       it a first-class route again, native-only, which this shell withholds. Hard-coding any
+       one of those three states is how a test ends up asserting a superseded architecture —
+       this one asserted "mounts the POS panel" and failed the shell for correctly following
+       the current contract.
+
+       So ask the contract what it resolves to, and assert the answer THAT implies. The
+       invariant that never changes, and the only one worth asserting here, is: the bookmark
+       lands somewhere real, exactly one panel shows, and it never dead-ends. */
+    const invTarget = C.resolve('inventory');
+    const invWithheld = isWithheld(C.get(invTarget) || {});
+    check('deep link #inventory resolves through the contract',
+          deep.hash === invTarget, '#' + deep.hash + ' (contract: ' + invTarget + ')');
+    if (invWithheld) {
+      /* Withheld here — full acceptance is in the WITHHELD section below. */
+      check('deep link mounts this shell\'s own panel (route is withheld, so no iframe)',
+            deep.frame === null, String(deep.frame));
+    } else if ((C.get(invTarget) || {}).kind === 'pos') {
+      check('deep link mounts the POS panel', deep.frame === 'mfx-pos', String(deep.frame));
+    } else {
+      check('deep link mounts a panel for ' + invTarget, deep.shown === 1, String(deep.frame));
+    }
     check('deep link shows exactly one panel', deep.shown === 1, String(deep.shown));
+
+    /* ── WITHHELD ROUTES ──────────────────────────────────────────────────────
+       Sell and Inventory are native-only surfaces of Merchant v2. This shell has no
+       renderer and there is no legacy equivalent, so they carry no sidebar button —
+       but they are still real contract destinations, and a bookmark or a shared link
+       will reach them. The acceptance is therefore the opposite of the primary walk:
+       NOT "a button mounted the module", but "the deep link was answered honestly".
+
+       This is the assertion that would have caught the defect this whole track exists
+       for. Before the capability layer, /merchant#sell mounted a panel and rendered
+       NOTHING while logging `native route "sell" has no renderer` — measured, on this
+       same harness. A blank is the failure; so is a silent bounce to Dashboard, which
+       is how a dead destination looks alive. */
+    for (const wid of WITHHELD) {
+      const w = C.get(wid);
+      console.log('\n  ── WITHHELD: ' + w.name.toUpperCase() + '  (#' + wid + ') ──');
+      routeErrors = [];
+      await page.goto(BASE + '/merchant.html#' + wid, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2600);
+
+      const st = await page.evaluate((id) => {
+        const panel = document.querySelector('.mpanel.show');
+        const host  = document.getElementById('native-' + id);
+        const txt   = host ? (host.innerText || '').trim() : '';
+        return {
+          hash: location.hash.replace('#', ''),
+          title: (document.getElementById('mtitle') || {}).textContent || '',
+          shown: document.querySelectorAll('.mpanel.show').length,
+          hostFound: !!host,
+          chars: txt.length,
+          nodes: host ? host.querySelectorAll('*').length : 0,
+          head: txt.slice(0, 80).replace(/\s+/g, ' '),
+          sidebarHasIt: !!document.querySelector('.mnav-item[data-id="' + id + '"]'),
+          panelIsNative: !!panel && !panel.querySelector('iframe'),
+        };
+      }, wid);
+
+      check('the hash is NOT silently rewritten to dashboard', st.hash === wid,
+            '#' + st.hash);
+      check('exactly one panel is showing', st.shown === 1, String(st.shown));
+      check('it is this route\'s own native panel', st.hostFound && st.panelIsNative,
+            st.hostFound ? 'native-' + wid : 'host missing');
+      /* The whole point: it must SAY something. */
+      check('the panel names itself instead of blanking', st.chars > 20 && st.nodes > 2,
+            st.chars + ' chars / ' + st.nodes + ' nodes — "' + st.head + '"');
+      check('it does not claim to be Dashboard', !/dashboard/i.test(st.title), st.title);
+      check('no "has no renderer" error — the blank defect is gone',
+            !routeErrors.some((e) => /no renderer/i.test(e)),
+            routeErrors.slice(0, 1).join('') || 'clean');
+      check('and it is absent from the sidebar (no button may promise it)',
+            !st.sidebarHasIt);
+    }
 
     /* Legacy alias must still land (back-compat, not a silent dashboard fallback). */
     await page.goto(BASE + '/merchant.html#finance', { waitUntil: 'domcontentloaded', timeout: 30000 });

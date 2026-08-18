@@ -530,7 +530,22 @@
   var BOTTOM_NAV = [
     { id:'home',      icon:'🏠', label:'Home'   },
     { id:'orders',    icon:'🧾', label:'Orders' },
-    { id:'sell',      icon:'💳', label:'Sell'   },
+    /* `fallback` exists for ONE reason: a shell may not be able to render the preferred
+       destination. Merchant v2 renders Sell natively; Merchant v1 has no Sell renderer and
+       no legacy equivalent, so Sell is WITHHELD there — and a bottom-nav button pointing at
+       a withheld route is precisely the defect the capability layer exists to prevent, in
+       the most prominent control in the app.
+
+       This is NOT the `sell` route falling back to POS. The route still withholds in v1:
+       #sell renders a named "not available in this version" panel, and Sell and POS remain
+       separate destinations with the wall between them intact. This is the BOTTOM NAV — a
+       four-slot projection — declaring which till THIS shell should offer in its till slot.
+       'pos' is exactly what rc/combined shipped in that slot, so v1's bottom bar is
+       unchanged rather than newly invented.
+
+       ⚠ REVIEW: the till slot's identity is a navigation decision. Recorded here, in the
+       contract, so it is visible and auditable rather than a substitution buried in a shell. */
+    { id:'sell',      icon:'💳', label:'Sell', fallback:'pos' },
     { id:'__more',    icon:'☰',  label:'More'   }
   ];
 
@@ -632,6 +647,13 @@
       if (b.id === '__more') return;
       if (!byId[b.id]) errs.push('bottom nav "' + b.id + '" is not a registered route');
       else if (byId[b.id].mobile !== true) errs.push('bottom nav "' + b.id + '" is not mobile-safe');
+      /* A fallback that is not itself a real, mobile-safe route would turn "the shell cannot
+         render this" into a dead button — the failure it exists to prevent. */
+      if (b.fallback != null) {
+        if (!byId[b.fallback])                       errs.push('bottom nav "' + b.id + '" falls back to unknown route "' + b.fallback + '"');
+        else if (byId[b.fallback].mobile !== true)   errs.push('bottom nav "' + b.id + '" falls back to "' + b.fallback + '", which is not mobile-safe');
+        else if (b.fallback === b.id)                errs.push('bottom nav "' + b.id + '" falls back to itself');
+      }
     });
 
     (byId.settings && byId.settings.links || []).forEach(function (l) {

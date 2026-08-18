@@ -513,6 +513,7 @@
      projections of this file; none of them may hold a private list. Must load
      BEFORE the shell script, which reads it at definition time. -->
 <script src="sokoni-merchant-routes.js"></script>
+<script src="sokoni-merchant-capability.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -549,16 +550,62 @@
      The fallback keeps the old single-"More" divider if an older cached copy of the
      contract is served without moreGroups(), so a stale script degrades to the previous
      sidebar rather than to a sidebar missing 13 destinations. */
-  var MODULES = CONTRACT.primary().slice();
+  /* ── CAPABILITY NEGOTIATION ──────────────────────────────────────────────────
+     ONE registry, TWO shells. The contract states the PREFERRED way a destination
+     mounts; it does NOT know what THIS shell can render. The certified registry
+     prefers kind:'native' for eighteen routes and this shell has renderers for
+     nine, so taken as an instruction it would open nine panels that mount and stay
+     empty — renderNative()'s final `else` is a console.error with no render, which
+     is a blank screen plus a line no merchant will ever read.
+
+     So every route is resolved against what this shell can actually do:
+       native     we have a renderer
+       downgrade  we do not, but the destination exists as a legacy seller.js
+                  section — mount that; the merchant gets there by the older road
+       withhold   we do not, and there is no legacy equivalent (Sell and Inventory
+                  are genuinely new). The route leaves navigation entirely so no
+                  button can promise it, and a deep-link gets a NAMED panel — never
+                  a blank, and never a silent bounce to Dashboard.
+
+     This list MUST match renderNative() below. It is declared rather than derived
+     because a running shell cannot read its own source — and it does not drift,
+     because scripts/test-merchant-capability.js measures renderNative() by parsing
+     it and asserts the two are equal. A renderer deleted without updating this line
+     fails the gate. */
+  var NATIVE_CAPABILITY = ['analytics','availability','dashboard','devices','orders',
+                           'payments','reports','revenue','settings'];
+
+  var CAP  = window.SokoniMerchantCapability;
+  var CAPS = { native: {} };
+  NATIVE_CAPABILITY.forEach(function (id) { CAPS.native[id] = true; });
+
+  /* Resolve once. NEG[id] is the descriptor to MOUNT, not the descriptor declared. */
+  var NEG = {};
+  CONTRACT.ROUTES.forEach(function (r) {
+    if (CAP) { NEG[r.id] = CAP.negotiate(r, CAPS); return; }
+    /* Degraded path: a stale cache served the contract without the capability layer.
+       Fail toward WITHHOLD, never toward blank — an absent destination is honest, an
+       empty panel is not. No downgrade here: the legacy mapping lives in the layer
+       and guessing it from the route id gets `tax`, `store` and `team` wrong. */
+    NEG[r.id] = (r.kind === 'native' && !CAPS.native[r.id])
+      ? { id: r.id, outcome: 'withhold', kind: null, name: r.name }
+      : { id: r.id, outcome: 'native', kind: r.kind, sec: r.sec, src: r.src, tab: r.tab, name: r.name };
+  });
+  var withheld   = function (r)  { return NEG[r.id] && NEG[r.id].outcome === 'withhold'; };
+  var withheldId = function (id) { return !!(NEG[id] && NEG[id].outcome === 'withhold'); };
+  var offered  = function (list) { return (list || []).filter(function (r) { return !withheld(r); }); };
+
+  var MODULES = offered(CONTRACT.primary());
   if (typeof CONTRACT.moreGroups === 'function') {
     CONTRACT.moreGroups().forEach(function (g) {
-      if (!g.routes.length) return;
+      var rows = offered(g.routes);
+      if (!rows.length) return;
       MODULES.push({ head: g.label });
-      g.routes.forEach(function (r) { MODULES.push(r); });
+      rows.forEach(function (r) { MODULES.push(r); });
     });
   } else {
     MODULES.push({ head: 'More' });
-    CONTRACT.more().forEach(function (r) { MODULES.push(r); });
+    offered(CONTRACT.more()).forEach(function (r) { MODULES.push(r); });
   }
   MODULES = MODULES.map(function (r) { return r.head ? r : Object.assign({}, r, { label: r.name }); });
   /* byId must cover EVERY contract route, not just the ones rendered as sidebar rows.
@@ -569,6 +616,15 @@
   var byId = {};
   CONTRACT.ROUTES.forEach(function (r) { if (r.id) byId[r.id] = Object.assign({}, r, { label: r.name }); });
   MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
+  /* Apply the negotiated outcome ON TOP of the declared route, so the router mounts what
+     this shell can actually honour. A downgrade becomes a real seller route — kind AND sec
+     together, because a `seller` kind with no sec silently renders Overview. A withheld
+     route keeps its identity (name/icon) so its panel can name itself instead of 404-ing. */
+  CONTRACT.ROUTES.forEach(function (r) {
+    var n = NEG[r.id]; if (!n || !byId[r.id]) return;
+    if (n.outcome === 'downgrade')     byId[r.id] = Object.assign({}, byId[r.id], { kind: 'seller', sec: n.sec });
+    else if (n.outcome === 'withhold') byId[r.id] = Object.assign({}, byId[r.id], { kind: 'unavailable' });
+  });
   /* My MiniShop is ALSO a header destination. It is a normal contract route (tier: more),
      so it is already in byId — its src is resolved from the canonical claimed-shop record
      at click time (window.__miniShopUrl): claimed → /shop/<handle>; unclaimed → claim flow. */
@@ -596,7 +652,20 @@
   /* ── Mobile bottom nav — projected from the contract (phone only). Exactly four
         entries; '__more' opens the full drawer. Plan is deliberately NOT here: it is a
         primary sidebar destination and must not crowd the four-up bar. ── */
-  var BOTTOM_NAV = CONTRACT.BOTTOM_NAV;
+  /* The bottom nav is four slots, and each slot names its PREFERRED destination. If this
+     shell withholds that destination the slot uses the contract's declared `fallback` —
+     never a substitution invented here, and never a button left pointing at something that
+     cannot mount, which would be the blank defect in the most prominent control in the app.
+     A slot whose preferred route is withheld with NO usable fallback keeps its declared id
+     so the failure is loud (the route gate asserts four working slots) rather than a
+     silently missing button. */
+  var BOTTOM_NAV = CONTRACT.BOTTOM_NAV.map(function (b) {
+    if (b.id === '__more' || !withheldId(b.id)) return b;
+    if (b.fallback && !withheldId(b.fallback)) {
+      return Object.assign({}, b, { id: b.fallback, preferred: b.id });
+    }
+    return b;
+  });
   var bnavEl = document.getElementById('mbnav');
   BOTTOM_NAV.forEach(function (b) {
     var el = document.createElement('button');
@@ -906,6 +975,11 @@
     _booted = true;
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
+    /* Withheld: this shell has no renderer and there is no legacy equivalent. Say so, by
+       name. A deep-link to /merchant#sell is a real request and deserves a real answer —
+       not a blank panel, and not a silent redirect to Dashboard, which is how a dead
+       destination looks alive. */
+    if (m.kind === 'unavailable') { showOnly(nativePanel(id)); renderUnavailable(id); return; }
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
     if (m.kind === 'pos')    {
       posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null;
@@ -1090,6 +1164,23 @@
       '<div class="an-empty" style="padding:28px 0">This screen is not built yet.<br>' +
       '<span style="color:var(--txt3);font-size:12px">It is a registered route, so nothing here is broken — ' +
       'the module simply has not shipped. No figures are shown rather than estimated ones.</span></div>' +
+      '</div></div>';
+  }
+
+  /* A route this SHELL cannot render, with no legacy equivalent to fall back to. It is a real
+     contract destination — Merchant v2 renders it natively — so the honest answer names it and
+     says where it lives, rather than blanking or bouncing to Dashboard. It is withheld from
+     every navigation projection, so this is only ever reached by a deep link or a stale
+     bookmark. No figures are shown: an unknown is never rendered as a zero. */
+  function renderUnavailable (id) {
+    var host = document.getElementById('native-' + id); if (!host) return;
+    var m = byId[id] || {};
+    host.innerHTML = '<div class="dwrap"><div class="an-wrap">' +
+      '<div class="an-head"><div class="an-title">' + (m.icon || '') + ' ' + _ordEsc(m.label || id) + '</div></div>' +
+      '<div class="an-empty" style="padding:28px 0">This screen is not available in this version of Merchant.<br>' +
+      '<span style="color:var(--txt3);font-size:12px">It is a registered destination, so the link is not broken — ' +
+      'this shell simply has no screen for it yet, and it has no older equivalent to open instead. ' +
+      'Nothing has been estimated or substituted.</span></div>' +
       '</div></div>';
   }
 
