@@ -222,6 +222,32 @@
            'express this as kind:page — iframing index.html would boot the customer application ' +
            'inside the merchant shell, the double-shell defect e0dbdca fixed.' },
 
+    /* Signing out is a REAL navigation out of the shell, so it is declared here rather than
+       performed by a raw location.assign() buried in a shell. That distinction is the whole
+       security property: a module's postMessage escalating to /login once threw a merchant out
+       of the app mid-session, and the route gate now refuses ANY navigation that is not a
+       contract-declared exit. A merchant pressing a Sign out button they can see is a
+       legitimate exit — but it has to say so in the contract to be told apart from the defect.
+
+       `terminatesSession:true` is what separates this from `home`: the shell MUST complete the
+       Firebase sign-out and await it BEFORE navigating. Navigating first would leave a live
+       session behind on a device the merchant believes they signed out of.
+
+       href is '/login' — root-relative, no host, no '.html' (cleanUrls:true 301-redirects
+       those). The return destination is declared separately as `next` rather than baked into
+       href, so it stays a validated clean URL instead of the hardcoded '/merchant-v2.html'
+       that shipped in the v2 shell: that target 301s on the way back AND names a file rather
+       than the route the contract establishes. */
+    { id:'signout', name:'Sign out', icon:'↩', tier:'hidden',
+      kind:'exit', href:'/login', next:'/merchant-v2', terminatesSession:true,
+      role:['seller','merchant','cashier'], ctx:[],
+      mobile:true, desktop:true, activeKey:'signout',
+      note:'Leaves the shell AND ends the session. The shell must await the auth sign-out ' +
+           'before navigating. `next` is consumed by auth.js, which reads ?next= through ' +
+           'URLSearchParams and re-validates it — so it must stay root-relative and free of ' +
+           '"//". Update `next` when the merchant route contract settles its final URL; it is ' +
+           'the ONE place that destination is written down.' },
+
     { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
       kind:'page', src:'minishop-admin.html?shell=merchant', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -576,6 +602,27 @@
         else if (!/^\/[^/]*$/.test(r.href))      errs.push(at + ': href "' + r.href + '" must be a root-relative path with no host');
         else if (/\.html$/.test(r.href))         errs.push(at + ': href "' + r.href + '" ends in .html — cleanUrls:true 301-redirects it');
         if (r.src || r.sec || r.tab)             errs.push(at + ': exit route must not declare src/sec/tab — it does not mount anything');
+        /* `next` is the destination the merchant returns to after the exit completes (today:
+           after signing back in). auth.js reads it with URLSearchParams and re-validates it
+           against /^[a-zA-Z0-9_\-.\/?=&%#]+$/ while rejecting '//', so anything this contract
+           accepts must already satisfy that or the return trip is silently dropped. The same
+           cleanUrls rule applies as for href: a '.html' target 301-redirects. */
+        if (r.next != null) {
+          if (typeof r.next !== 'string' || !r.next)
+            errs.push(at + ': next must be a non-empty string when declared');
+          else if (r.next.charAt(0) !== '/' || r.next.indexOf('//') > -1)
+            errs.push(at + ': next "' + r.next + '" must be a root-relative path with no host');
+          else if (/\.html$/.test(r.next))
+            errs.push(at + ': next "' + r.next + '" ends in .html — cleanUrls:true 301-redirects it');
+          else if (!/^[a-zA-Z0-9_\-.\/?=&%#]+$/.test(r.next))
+            errs.push(at + ': next "' + r.next + '" has characters auth.js will reject, so the return trip would be dropped');
+        }
+        /* An exit that ends the session is a different contract from one that merely leaves:
+           the shell must await the sign-out first. Only a boolean is meaningful. */
+        if (r.terminatesSession != null && r.terminatesSession !== true)
+          errs.push(at + ': terminatesSession must be true or omitted');
+      } else if (r.next != null || r.terminatesSession != null) {
+        errs.push(at + ': next/terminatesSession are exit-only — a route that mounts in-shell never navigates');
       }
       if (r.kind === 'native' && (r.src || r.sec || r.tab))
         errs.push(at + ': native route must not declare src/sec/tab');

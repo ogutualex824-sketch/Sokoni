@@ -230,6 +230,10 @@ MERCHANT_SHELL=merchant.html     ->  55 passed, 2 failed
 MERCHANT_SHELL=merchant-v2.html  ->  53 passed, 4 failed
 ```
 
+> **Both blockers below are now RESOLVED.** They are kept in full because the resolution only
+> makes sense against what was actually found. Current state: `merchant.html` **68 passed, 0
+> failed**; `merchant-v2.html` **68 passed, 0 failed**. See §6.
+
 ### BLOCKER 1 — the founder sidebar is a founder decision (fails in **both** shells)
 
 ```
@@ -293,12 +297,142 @@ the navigation assertion. Widening it re-opens the exact hole the assertion was 
 
 ---
 
-## 5. Sequence — what happens next, in order
+## 5. How the two blockers were resolved
 
-1. **Founder decides Blocker 1** — do Sell and Inventory become primary sidebar destinations, in
-   that position? Nothing below can proceed honestly until this is answered.
-2. **Model sign-out in the route contract** (Blocker 2), then fix the `next=` target to a
-   cleanUrls-safe root-relative path.
+Neither was silenced. Both gates got **stricter**, and each new assertion is proven falsifiable by
+a mutation control before it is trusted.
+
+### Blocker 1 — the sidebar is now an explicit product decision
+
+`FOUNDER_SIDEBAR` went 15 → 17 with `sell` and `inventory` in their agreed positions:
+
+```
+dashboard, plan, sell, products, inventory, pos, orders, analytics, revenue,
+payments, deliveries, returns, receipts, staff, messages, disputes, settings
+```
+
+A count of 17 alone would also be satisfied by two *different* routes appearing, so the two
+additions are asserted **by name and by position** — each must be a real `primary` route, must
+prefer a `native` surface, and must sit between its declared neighbours (`plan > sell > products`,
+`products > inventory > pos`).
+
+The list is still **declared, not derived**. Deriving it from `C.primary()` would make the
+assertion compare the contract to itself and stay green the day a route silently vanished. A
+negative control asserts the expected list is not the contract's own output, so the vacuity trap
+fails at the moment someone introduces it rather than the day it matters.
+
+### Blocker 2 — sign-out is now a declared exit route
+
+The registry gains one route. **This is the only change to the certified registry's route set**,
+and it adds a destination rather than altering any existing one — no `kind` was flipped:
+
+```js
+{ id:'signout', name:'Sign out', icon:'↩', tier:'hidden',
+  kind:'exit', href:'/login', next:'/merchant-v2', terminatesSession:true, … }
+```
+
+Three deliberate properties:
+
+- **`href` and `next` are separate.** `href:'/login'` stays root-relative with no `.html`, which is
+  what the contract already validated. The return destination is its own validated field, so the
+  hardcoded `/merchant-v2.html` — a `.html` target cleanUrls 301-redirects, naming a *file* rather
+  than the route the contract establishes — cannot come back. `validate()` now rejects a `next`
+  that is not root-relative, ends in `.html`, contains `//`, or carries characters **`auth.js`
+  itself would reject** (its real regex, so a value this contract accepts cannot be one the
+  consumer silently drops).
+- **`terminatesSession:true`** distinguishes it from `home`. The shell must complete and *await*
+  the Firebase sign-out before navigating; leaving first strands a live session on a device the
+  merchant believes they signed out of.
+- **`next` is written down in exactly one place.** When the merchant route contract settles its
+  final URL, that is the line to change.
+
+The shell now has **one** navigation primitive. `doSignOut()` no longer contains a `location.assign`
+at all:
+
+```js
+function leaveShell (rid, sessionEnded) {
+  var m = byId[rid];
+  if (!m || m.kind !== 'exit') { …refuse… }
+  if (m.terminatesSession && !sessionEnded) { …refuse… }
+  location.assign(exitTarget(m));
+}
+```
+
+### The gate distinguishes the two cases instead of counting
+
+The old check compared a global count of navigations to a literal `location.assign(m.href)` regex.
+That could not express "authorized exit vs unexpected navigation", and a global regex would pass a
+shell whose guard and navigation lived in *different functions*. It is now **per navigation site
+and structural**: for each `location.*` site, walk back to the enclosing function and require the
+`kind === 'exit'` / `kind !== 'exit'` proof to appear **inside that body**, before the navigation.
+Both shapes are sanctioned — v1's inline `if (m.kind === 'exit')` and v2's refusing primitive.
+
+Three further rules were added, all strictly narrowing:
+
+| rule | effect |
+|---|---|
+| no navigation target may be a **string literal** | the target must come from the contract |
+| no `?next=…​.html` composed anywhere in the shell | cleanUrls 301 protection at the shell layer |
+| a session-terminating exit must be guarded | but only in a shell that **offers** it |
+
+That last conditional matters and is not a weakening: `merchant.html` has no sign-out at all, and a
+contract declaring a capability **must not break a shell that does not implement it** — the same
+principle the capability layer exists for. A shell that *does* reach the route gets no latitude.
+
+The pre-existing rule — *no navigation to a literal login/auth destination* — is untouched and still
+passes, because the sign-out destination now arrives through a resolved route rather than a literal.
+**The property that caught the auth-boundary defect is preserved exactly.**
+
+### Proof that the new rules can fail — `scripts/test-merchant-exit-contract.js`, 18/0
+
+Four real regressions, each applied to a scratch copy of the shell, each required to be caught:
+
+| mutation | caught by |
+|---|---|
+| **M1** restore the hardcoded `/login?next=/merchant-v2.html` | literal-URL **+** `.html`-target **+** unguarded-site |
+| **M2** delete the `kind!=='exit'` guard from the primitive | unguarded-site |
+| **M3** navigate on a session-terminating exit without awaiting sign-out | terminatesSession rule |
+| **M4** bare `location.href='/login'` — the escalation shape | login/auth **+** literal-URL **+** unguarded-site |
+
+Plus contract-validator controls C1–C5: a `.html` `next`, an absolute `next`, and a `.html` `href`
+are each rejected, **and** the shipped values are accepted — without that converse, C1–C3 would pass
+for a validator that rejected everything.
+
+### Runtime proof — `scripts/test-merchant-exit-runtime.js`, 11/0
+
+The shell's navigation primitive was rewritten, so it owes proof it still boots. On webkit
+(393×852), serving the worktree with cleanUrls mirrored, navigations captured rather than followed:
+
+- boots with **no page error and no route error**, 39 route controls rendered
+- **no navigation to an auth destination on boot** — the escalation, absent
+- `signout` composes **`/login?next=/merchant-v2`** from the contract; no exit target contains
+  `.html`; the `next=` destination returns **HTTP 200** under cleanUrls
+- navigating to the `home` exit route **really leaves** to `/` — the primitive works
+- a non-exit route performs **no navigation at all**
+
+Not claimed: the sign-out button itself needs a signed-in merchant and was **not** exercised. What
+is proven is the primitive it now goes through.
+
+### Artifact identity after these changes
+
+The preservation branch is **untouched** — `merchant-v2-preservation` still holds
+`merchant-v2.html` `da8cd2df…` and `sokoni-merchant-routes.js` `2b8fc08d…`, byte-identical. The work
+branch necessarily evolves its copies, and their new identities are recorded here:
+
+| file | certified | on `fix/merchant-shell-capability` |
+|---|---|---|
+| `merchant-v2.html` | `da8cd2df…` (134,278 B) | `0ebf6f16…` (136,269 B) |
+| `sokoni-merchant-routes.js` | `2b8fc08d…` (48,364 B) | `a356ffdf…` (51,954 B) |
+
+Integration proceeds from the work branch; `168d54f` remains the immutable reference for what
+"certified" meant.
+
+## 6. Sequence — what happens next, in order
+
+1. ~~Founder decides Blocker 1~~ — **DONE.** Sell and Inventory are primary, asserted by name and
+   position.
+2. ~~Model sign-out in the route contract~~ — **DONE.** Declared exit route, contract-composed
+   clean-URL target, gate distinguishes authorized exit from unexpected navigation.
 3. **Wire `negotiate()` into both shells.** v2 first — it is the one under active certification and
    currently negotiates to full native, so wiring it changes no behaviour and proves the plumbing.
    Then v1, where the layer actually does work.
@@ -310,3 +444,17 @@ the navigation assertion. Widening it re-opens the exact hole the assertion was 
 The seven `seller → native` flips are **not** a step in this list. They already exist in the
 certified registry and stay exactly as certified; what changes is that a shell finally asks itself
 whether it can honour them.
+
+### Explicitly NOT on this list
+
+- **Do not teach v1 to render `sell` / `inventory` natively.** The capability boundary is the
+  answer: **v1 withholds them, v2 renders them.** Making v1 understand those routes would rebuild
+  the very surfaces the v2 shell exists to provide, and would erase the boundary that makes the two
+  shells safely coexist.
+- **Do not downgrade `sell` to POS.** The new till experience is deliberately separate from the
+  legacy POS module. A "graceful" fallback here would be a silent merge of two things the platform
+  decided to keep apart.
+- **Do not block this track on the delivery-destination schema.** See
+  [[DELIVERY_DESTINATION_BLOCKER]] — it is a separate workstream. POS may **read** existing delivery
+  information; it must not begin writing another location format. Shell integration, native
+  surfaces, printer/device architecture, routing and deployment all proceed independently.

@@ -21,7 +21,9 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const R = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
+/* resolve, not join: an absolute path (used by the exit-contract mutation controls
+   to point the gate at a deliberately broken copy of a shell) must survive. */
+const R = f => fs.readFileSync(path.resolve(ROOT, f), 'utf8');
 const SHELL_FILE = process.env.MERCHANT_SHELL || 'merchant.html';
 
 let pass = 0, fail = 0;
@@ -90,29 +92,56 @@ const shell = R(SHELL_FILE);
 const stripped = shell.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
 check('shell has no window.open',        !/window\.open\s*\(/.test(stripped));
 check('shell has no target="_blank"',    !/target\s*=\s*["']_blank/.test(stripped));
-/* ZERO top-level navigations. The shell's own auth-guard is the single authority on ending a
-   session, and it already waits for the auth bootstrap before redirecting. An escalation driven
-   by a MODULE's message was tried and removed: it threw a merchant out of the app mid-session
-   (opening My MiniShop navigated the whole tab to /login?next=/merchant#minishop and every route
-   after it was gone). A module cannot distinguish "auth not ready" from "signed out", so its
-   word must never end the session. Anything here navigating the tab is a shell escape. */
-/* The rule this enforces is "no navigation the MERCHANT did not ask for", and the count was a
-   proxy for it. The proxy stopped fitting once the shell gained a way out: /merchant contained
-   ZERO links to any external destination, so a merchant could reach the marketplace only by
-   editing the URL — the dead-end Navigation Contract rule 2 forbids.
+/* The rule is "no navigation the MERCHANT did not ask for", and it must keep catching the
+   escalation that caused the outage (a MODULE's postMessage ending the session) while
+   ALLOWING a merchant pressing a Sign out button they can see. Those two are told apart by
+   exactly one thing: whether the navigation resolves through a contract-declared kind:'exit'
+   route. So the check is per-navigation-site and structural, not a global count — a count
+   could be kept at zero by deleting an unrelated navigation, and a global regex would pass a
+   shell where the guard and the navigation live in different functions.
 
-   So the check is now the rule itself rather than the proxy, and it is STRICTER, not looser:
-   the ONLY navigation permitted anywhere in the shell is `location.assign(m.href)` reached
-   through a contract-declared kind:'exit' route. A `location.href = '/login…'` — the exact
-   escalation that was removed — still fails, and now fails by shape rather than by count, so
-   it cannot be reintroduced by deleting an unrelated navigation to keep the total at zero. */
-const navs = [...stripped.matchAll(/location\.(href|assign|replace)\s*[=(]/g)].map(m => m[0]);
-const EXIT_NAV = /if\s*\(\s*m\.kind\s*===\s*['"]exit['"]\s*\)\s*\{\s*location\.assign\(\s*m\.href\s*\)\s*;\s*return;\s*\}/;
-const exitNavs = [...stripped.matchAll(/location\.assign\(\s*m\.href\s*\)/g)].length;
-check('the only shell navigation is the declared exit route',
-      navs.length === exitNavs, navs.length ? navs.join(' ') : 'clean');
-check('...and it is guarded by kind === "exit" (never a bare navigation)',
-      exitNavs === 0 || EXIT_NAV.test(stripped));
+   Two sanctioned shapes, because the shells legitimately differ:
+     inline     if (m.kind === 'exit') { location.assign(m.href); return; }      (v1)
+     primitive  function leaveShell(rid){ … if (m.kind !== 'exit') return; … }   (v2)
+   Both are "the navigation is inside a body that first proved the route is an exit". */
+const EXIT_GUARD = /\bkind\s*(===|!==)\s*['"]exit['"]/;
+const navSites = [...stripped.matchAll(/location\.(href|assign|replace)\s*[=(]/g)];
+
+check('every shell navigation site is guarded by a contract exit check',
+      navSites.every(m => {
+        /* Walk back to the enclosing function and require the guard to precede the
+           navigation inside THAT body — not merely somewhere in the file. */
+        const fnAt = stripped.lastIndexOf('function', m.index);
+        if (fnAt < 0) return false;
+        return EXIT_GUARD.test(stripped.slice(fnAt, m.index));
+      }),
+      navSites.length + ' navigation site(s)');
+
+/* A navigation whose target is a string literal cannot have come from the contract. This is
+   what forbids the hardcoded '/login?next=/merchant-v2.html' the v2 shell shipped with. */
+check('...and none of them navigates to a literal URL (target must come from the contract)',
+      !/location\.(href|assign|replace)\s*[=(]\s*['"`]/.test(stripped));
+
+/* cleanUrls:true 301-redirects a .html target. The contract already refuses one in href and
+   next; this stops a shell from composing one by hand on the way out. */
+check('...and the shell composes no .html exit target (cleanUrls 301s it)',
+      !/[?&]next=[^'"`\s)]*\.html/.test(stripped));
+
+/* An exit that ends the session must not be reachable before the sign-out resolves, or the
+   merchant leaves with a live session behind them. If the contract declares one, the shell
+   has to show it knows. */
+/* Conditional on the shell actually OFFERING the exit, for the same reason the capability
+   layer exists: a contract that declares a capability must not break a shell that does not
+   implement it. merchant.html has no sign-out at all — it does not withhold the guard, it
+   withholds the whole control — so demanding the guard there would be demanding it build a
+   feature. A shell that DOES reach the route gets no such latitude. */
+const termExits = C.ROUTES.filter(r => r.kind === 'exit' && r.terminatesSession);
+const offered = termExits.filter(r => new RegExp("['\"]" + r.id + "['\"]").test(stripped));
+check('session-terminating exits are guarded until the sign-out completes',
+      offered.length === 0 || /terminatesSession/.test(stripped),
+      offered.length ? 'offers ' + offered.map(r => r.id).join(',')
+                     : 'shell offers no session-terminating exit (' +
+                       (termExits.map(r => r.id).join(',') || 'none declared') + ' declared)');
 /* The escalation that actually caused the outage: a module's postMessage ending the session.
    Assert no navigation reaches an auth destination from anywhere in the shell. */
 check('shell never navigates the tab to login/auth (module word cannot end a session)',
@@ -163,8 +192,39 @@ console.log('\n9. Founder sidebar coverage');
    src hash load-bearing. POS now owns the in-shop operation (Checkout / Inventory / Audit Log)
    through the POS app's own tabs, and opens on Checkout. Products stays separate: catalogue
    management is a different job from in-shop stock operations. Both old ids alias to 'pos'. */
-const FOUNDER_SIDEBAR = ['dashboard','plan','products','pos','orders','analytics',
+/* The founder sidebar and its ORDER are a product decision, so they are written out here in
+   full rather than read back out of the contract. Deriving this list from C.primary() would
+   make the assertion compare the contract to itself and pass for any sidebar whatsoever —
+   the check would still be green the day a route silently went missing.
+   Updated for the certified registry, which adds Sell and Inventory: 15 -> 17. That was a
+   deliberate decision about what a merchant sees first, NOT a count bumped to quiet a gate,
+   which is why the two additions are asserted BY NAME below in their agreed positions. */
+const FOUNDER_SIDEBAR = ['dashboard','plan','sell','products','inventory','pos','orders','analytics',
   'revenue','payments','deliveries','returns','receipts','staff','messages','disputes','settings'];
+
+/* The two additions, named and positioned. A count of 17 alone would also be satisfied by two
+   entirely different routes appearing. */
+const SIDEBAR_ADDITIONS = [
+  { id: 'sell',      after: 'plan',     before: 'products' },
+  { id: 'inventory', after: 'products', before: 'pos' }
+];
+SIDEBAR_ADDITIONS.forEach(a => {
+  const r = C.get(a.id);
+  check('founder addition is a real primary route: ' + a.id,
+        !!r && r.tier === 'primary', r ? r.tier + '/' + r.kind : 'MISSING');
+  check('founder addition prefers a native surface: ' + a.id,
+        !!r && r.kind === 'native', r ? r.kind : 'MISSING');
+  const i = FOUNDER_SIDEBAR.indexOf(a.id);
+  check('founder addition sits between ' + a.after + ' and ' + a.before + ': ' + a.id,
+        i > 0 && FOUNDER_SIDEBAR[i - 1] === a.after && FOUNDER_SIDEBAR[i + 1] === a.before,
+        FOUNDER_SIDEBAR.slice(Math.max(0, i - 1), i + 2).join(' > '));
+});
+/* Negative control: the expected list must NOT be a copy of the contract's own output. If a
+   future edit replaces it with C.primary(), this fails and the vacuous-assertion trap is
+   caught at the moment it is introduced rather than the day it matters. */
+check('the expected sidebar is declared, not derived from the contract',
+      FOUNDER_SIDEBAR !== C.PRIMARY_ORDER && !Object.is(FOUNDER_SIDEBAR, C.primary()),
+      'independent literal');
 
 FOUNDER_SIDEBAR.forEach(id => {
   const r = C.get(id);

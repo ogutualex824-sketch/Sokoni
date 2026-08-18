@@ -155,7 +155,7 @@ check('exactly 9 routes need negotiation in v1', negotiated.length === 9, negoti
 /* ── 3. PROOF 1 — v1 + certified registry: no blank native surfaces ──────── */
 console.log('\n3. PROOF — Merchant v1 loading the CERTIFIED registry');
 
-check('v1 opens NO blank panel on any of the 32 routes', v1.blanks.length === 0,
+check('v1 opens NO blank panel on any of the ' + C.ROUTES.length + ' routes', v1.blanks.length === 0,
       v1.blanks.length ? v1.blanks.map(b => b.id).join(',') : '0 blanks / ' + C.ROUTES.length + ' routes');
 
 const v1down = v1.rows.filter(r => r.outcome === 'downgrade').map(r => r.id).sort();
@@ -192,7 +192,7 @@ console.log('\n4. PROOF — Merchant v2 loading the CERTIFIED registry');
         !!row && row.outcome === 'native', row ? row.outcome : 'route missing');
 });
 
-check('v2 opens NO blank panel on any of the 32 routes', v2.blanks.length === 0,
+check('v2 opens NO blank panel on any of the ' + C.ROUTES.length + ' routes', v2.blanks.length === 0,
       v2.blanks.length ? v2.blanks.map(b => b.id).join(',') : '0 blanks / ' + C.ROUTES.length + ' routes');
 
 const v2unsupported = v2.rows.filter(r => r.outcome !== 'native');

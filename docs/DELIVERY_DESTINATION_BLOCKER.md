@@ -3,6 +3,12 @@
 **Status:** OPEN — **blocks any new write of a delivery destination, including from POS.**
 **Nothing in this document has been changed in code. It is a trace, not a fix.**
 
+> **Scope: this does NOT block the Merchant v2 integration build.** It is its own workstream.
+> POS may **consume** existing delivery information wherever the current order model already
+> provides it; what it must not do is start writing another location format. Shell integration,
+> native surfaces, POS native-workstream planning, printer/device architecture, routing and
+> production deployment all proceed independently of the decision below.
+
 Related: [[MERCHANT_SHELL_CAPABILITY]] · [[CANONICAL_COLLECTIONS]] · [[ODPC_COMPLIANCE]] ·
 [[MERCHANT_2D2_QUEUE]] · [[DELIVERY_PIN_PAYOUT]]
 
@@ -120,6 +126,11 @@ Adding rule validation now would freeze the ambiguity into the security layer, a
 defensively even if that were the right move.
 
 ### 2b. It already reaches ODPC compliance — a live finding
+
+> **This finding is now tracked separately in [[ODPC_PACKAGEREQUESTS_ERASURE]] and must not wait
+> behind this blocker.** It is a compliance question (does erasure erase?) with its own
+> verification plan and its own gate, not an architecture question. It is summarised here only
+> because this trace is where it surfaced.
 
 `functions/account-purge-spec.js:44` anonymises the `orders` collection and redacts exactly four
 destination fields:

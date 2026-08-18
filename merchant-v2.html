@@ -838,6 +838,40 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          of a page we are leaving and Back bounces forever
        · each user navigation PUSHES history so Back/Forward walk real routes */
   var booted = false;
+
+  /* ── THE ONLY NAVIGATION IN THIS SHELL ────────────────────────────────────────
+     Every way out of /merchant goes through here, and here refuses anything that is
+     not a contract-declared kind:'exit' route. That is the security property, not a
+     formality: a module's postMessage once escalated to /login and threw a merchant
+     out of the app mid-session, so the route gate forbids ANY navigation it cannot
+     trace to the contract. A merchant pressing a visible Sign out button is a
+     legitimate exit — it earns that by being declared, not by being hardcoded.
+
+     A route carrying terminatesSession must have its session ended BEFORE this is
+     called; leaving first would strand a live session on a device the merchant
+     believes they signed out of. The assertion below is a tripwire, not the
+     mechanism — doSignOut() awaits the real sign-out.
+
+     The destination is composed from the contract's href + next, never from a
+     literal in this file. `next` is a validated root-relative clean URL, so the
+     '/merchant-v2.html' that used to be baked in here — a .html target cleanUrls
+     301-redirects, naming a file rather than a route — cannot come back. */
+  function exitTarget (m) {
+    return m.href + (m.next ? '?next=' + m.next : '');
+  }
+  function leaveShell (rid, sessionEnded) {
+    var m = byId[rid];
+    if (!m || m.kind !== 'exit') {
+      console.error('[merchant-v2] leaveShell refused "' + rid + '" — not a declared exit route.');
+      return;
+    }
+    if (m.terminatesSession && !sessionEnded) {
+      console.error('[merchant-v2] leaveShell refused "' + rid + '" — session-terminating exit reached before the sign-out completed.');
+      return;
+    }
+    location.assign(exitTarget(m));
+  }
+
   function go (id) {
     var rid = CONTRACT.resolve(id);
     if (!rid) {
@@ -846,7 +880,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     var m = byId[rid];
 
-    if (m.kind === 'exit') { location.assign(m.href); return; }
+    if (m.kind === 'exit') { leaveShell(rid); return; }
 
     current = rid;
     titleEl.textContent = m.name || rid;
@@ -2428,7 +2462,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       var m = await sdk();
       await m.auth.signOut(m.authI);
       try { localStorage.removeItem('loggedIn'); } catch (_) {}
-      location.assign('/login?next=/merchant-v2.html');
+      /* Sign-out has COMPLETED — only now may the shell leave, and only through the
+         contract's declared exit. The destination lives in the route, not here. */
+      leaveShell('signout', true);
     } catch (e) { toast('Could not sign out: ' + ((e && e.code) || 'unknown')); }
   }
 
