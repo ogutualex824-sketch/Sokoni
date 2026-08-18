@@ -155,9 +155,33 @@ server.listen(0, async () => {
 
   const page = await ctx.newPage();
   let routeErrors = [];
+  let routeReqFails = [];
   const ENV_NOISE = /favicon|net::ERR|frame-ancestors|report-only/i;
   page.on('console', m => { if (m.type() === 'error' && !ENV_NOISE.test(m.text())) routeErrors.push(m.text().slice(0,170)); });
   page.on('pageerror', e => { if (!ENV_NOISE.test(String(e.message))) routeErrors.push('PAGEERROR: ' + String(e.message).slice(0,170)); });
+
+  /* WHICH REQUEST FAILED, not just that something did.
+     "Failed to load resource: 400" and "permission-denied" are unclassifiable on their
+     own — a 400 on the Firestore Listen channel, a 404 for a missing asset, and a 403
+     from an unbound Cloud Run invoker are four different problems wearing the same
+     console text. Recording method + status + trimmed URL turns each into evidence that
+     can be assigned to REAL / HARNESS / ENV / AUTHORIZATION without guessing. */
+  page.on('response', (r) => {
+    const st = r.status();
+    if (st < 400) return;
+    const u = r.url();
+    if (/favicon/i.test(u)) return;
+    let where = u;
+    try {
+      const p = new URL(u);
+      where = p.host + p.pathname.slice(0, 90);
+      /* The Firestore Listen/Write channel is the usual source of an opaque 400. */
+      if (/firestore\.googleapis\.com/.test(p.host) && /channel/i.test(p.pathname)) {
+        where += '  [Firestore ' + (p.searchParams.get('VER') ? 'WebChannel' : 'RPC') + ']';
+      }
+    } catch (_) {}
+    routeReqFails.push(st + ' ' + r.request().method() + ' ' + where);
+  });
 
   console.log('\n' + '='.repeat(74));
   console.log('  MERCHANT AUTHENTICATED CONTAINMENT GATE');
@@ -279,6 +303,7 @@ server.listen(0, async () => {
     curRoute = id;
     console.log('\n  ── ' + route.name.toUpperCase() + '  (#' + id + ') ──');
     routeErrors = [];
+    routeReqFails = [];
 
     if (route.tier === 'hidden') await page.evaluate(r => { location.hash = r; }, id);
     else {
@@ -327,17 +352,11 @@ server.listen(0, async () => {
       return { len: text.length, loading: skel > 0 || says };
     });
 
-    /* 40s, not 25s. Both surfaces that failed the 25s ceiling — Sell and Availability —
-       sit behind the same canonical products query, measured at ~30s for this shop's 103
-       products. Their bodies stayed textless because they were STILL LOADING: Sell's
-       load() sets phase='error' on rejection, which renders "Products could not be
-       loaded", so a body with no text means the promise had neither resolved nor rejected.
-
-       The ceiling has to clear the slowest real dependency or the gate measures its own
-       impatience. That the query takes ~30s at all is a genuine finding, tracked
-       separately — this timeout stops it being misreported as a blank surface, and does
-       not make it acceptable. */
-    const SETTLE_MAX = 40000, STEP = 500, STABLE_NEEDED = 1500;
+    /* 25s, deliberately NOT raised. Raising a ceiling until a surface fits under it is
+       not a diagnosis — it converts "this took 30 seconds" into silence, which is the one
+       outcome that must not be available. A surface still loading at 25s is reported as
+       still loading at 25s, and the reason is investigated on its own terms. */
+    const SETTLE_MAX = 25000, STEP = 500, STABLE_NEEDED = 1500;
     let prev = null, stableFor = 0, settledMs = 0, lastLoading = false;
     const t0 = Date.now();
     while (Date.now() - t0 < SETTLE_MAX) {
@@ -431,9 +450,35 @@ server.listen(0, async () => {
        !st.onboardMarkers, st.onboardMarkers ? 'onboarding markers: "' + st.textHead.slice(0,90) + '"' : 'clean');
     ck('no duplicate merchant navigation inside the child',
        st.childShellHdr === 0 && st.childShellNav === 0, 'childHdr=' + st.childShellHdr + ' childNav=' + st.childShellNav);
-    ck('no blank surface', st.textLen > 40, 'textLen=' + st.textLen + (st.textLen <= 40 ? ' "' + st.textHead + '"' : ''));
+    /* "Blank" and "still loading" are different findings and must not share a label.
+       A surface that never left its loading state has not rendered a blank page — it has
+       not finished, and reporting textLen=0 as "blank" sends the reader looking for a
+       rendering defect that is not there.
+
+       This does NOT relax anything: a stuck surface still fails, just under an accurate
+       name and with the elapsed time attached. The blank check still runs whenever the
+       surface actually settled, and a genuinely empty body still fails it. Every real
+       empty state in these modules renders its own copy — "This shop has no products
+       yet", "No shop is active yet", "Products could not be loaded" — so a settled body
+       under the threshold means nothing was rendered at all, which is worth failing. */
+    if (!settledMs && lastLoading) {
+      ck('surface finished loading', false,
+         'still in a loading state after ' + SETTLE_MAX + 'ms (textLen=' + st.textLen + ') — NOT a blank page');
+    } else {
+      if (!settledMs) console.log('    NOTE  content still changing at ' + SETTLE_MAX + 'ms — blank check applied to the last read');
+      ck('no blank surface', st.textLen > 40,
+         'textLen=' + st.textLen + (st.textLen <= 40 ? ' "' + st.textHead + '"' : '') +
+         (settledMs ? '  settled@' + settledMs + 'ms' : ''));
+    }
     ck('no error surface', !st.errorSurface, st.errorSurface ? st.textHead.slice(0,90) : 'clean');
     ck('no route/console error', routeErrors.length === 0, routeErrors[0] || 'clean');
+    /* Printed alongside, always — a failing request is the evidence that decides how the
+       console error above gets classified, and it is useless after the run has moved on. */
+    if (routeReqFails.length) {
+      const uniq = [...new Set(routeReqFails)];
+      console.log('    NOTE  failing requests (' + uniq.length + '):');
+      uniq.slice(0, 6).forEach((f) => console.log('            ' + f));
+    }
   }
 
   /* ── 5 · authorization still enforced ────────────────────────────────────── */
@@ -450,8 +495,24 @@ server.listen(0, async () => {
       return { denied:false, size:s.size, fromCache:s.metadata.fromCache };
     } catch (e) { return { denied:true, code:(e && e.code) || '' }; }
   });
-  ck('a merchant session cannot list all users', authz.denied === true,
-     authz.denied ? authz.code : 'READ SUCCEEDED size=' + authz.size + ' fromCache=' + authz.fromCache);
+  /* THIS CHECK IS NOT EVALUABLE WITH AN ELEVATED IDENTITY, and saying so is the only
+     honest outcome. The account under test carries admin:true and superAdmin:true as well
+     as seller:true, so reading `users` is CORRECT behaviour for it — a failure here would
+     be a false alarm, and a pass would certify nothing about an ordinary merchant.
+
+     Reported as an explicit un-evaluated result rather than skipped silently: a check that
+     quietly disappears reads as one that passed. Ordinary-merchant authorization needs a
+     plain approved merchant account and is tracked as an open acceptance item. */
+  const elevated = claims.admin === true || claims.superAdmin === true;
+  if (elevated) {
+    console.log('    NOT EVALUATED  a merchant session cannot list all users');
+    console.log('                   this identity is admin/superAdmin, so the read is legitimate: ' +
+                (authz.denied ? 'denied ' + authz.code : 'succeeded size=' + authz.size));
+    console.log('                   ordinary-merchant authorization REMAINS UNPROVEN — needs a plain approved merchant');
+  } else {
+    ck('a merchant session cannot list all users', authz.denied === true,
+       authz.denied ? authz.code : 'READ SUCCEEDED size=' + authz.size + ' fromCache=' + authz.fromCache);
+  }
 
   /* ── report ──────────────────────────────────────────────────────────────── */
   console.log('\n' + '='.repeat(74));
