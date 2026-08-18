@@ -162,6 +162,9 @@
 
 <script src="sokoni-intasend.js" defer></script>
 <script src="shared-header.js" defer></script>
+<!-- ONE merchant-entry resolver: approved+shop -> merchant.html, approved+no shop -> shop
+     setup, not approved -> intake. Replaces seven unconditional Start Selling links. -->
+<script src="sokoni-merchant-entry.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-home-v3.css">
 
@@ -243,12 +246,23 @@
         <span aria-hidden="true">🛒</span>
         <span id="sk-nav-cart-pip" style="display:none;" aria-label="0 items">0</span>
       </a>
-      <!-- Was href="login.html". For a signed-in user that landed on login.html,
-           where auth.js's already-logged-in guard immediately redirected to
-           index.html — so tapping Profile just reloaded the home page. profile.html
-           carries data-require-auth + auth-guard.js, so it sends a signed-OUT user
-           to login itself. This is also what the bottom nav already links to. -->
-      <a href="profile.html" id="sk-nav-avatar" aria-label="Profile">👤</a>
+      <!-- This is the ONLY page that bakes a static #sk-top-nav, so _inject()
+           skips _buildNav() here (shared-header.js:2546) and this markup is what
+           ships. It was an <a href="profile.html"> with no #sk-acct-wrap parent,
+           which meant Home had no account menu at all: the anchor navigated, and
+           even if _skToggleAcct had run, _buildAcctPopup ends with
+           `if (wrap) wrap.appendChild(popup)` — with no wrap the popup was built and
+           silently discarded. So the role switcher was unreachable from Home and
+           selecting a role looked like "redirect to Profile".
+
+           This mirrors shared-header.js:1398-1400 EXACTLY so Home uses the one
+           account popup, the one switcher and the one Role Authority path. Keep the
+           two in sync — they are the same contract expressed twice only because
+           this page renders its nav statically for zero-flash. -->
+      <div class="sk-acct-wrap" id="sk-acct-wrap">
+        <button type="button" id="sk-nav-avatar" aria-label="Account menu" aria-expanded="false"
+                onclick="window._skToggleAcct(event)">👤</button>
+      </div>
       <button type="button" class="sk-nav-icon-btn" id="sk-theme-btn" aria-label="Toggle theme" title="Toggle theme"
               onclick="if(window.SokoniTheme){SokoniTheme.toggle();}">
         <span id="sk-theme-icon" aria-hidden="true">🌙</span>
@@ -1631,7 +1645,7 @@
           <span>💸 Fast payouts</span>
           <span>📊 Analytics</span>
         </div>
-        <a href="seller.html" class="seller-visit-btn green-btn">
+        <a data-sk-merchant-entry href="seller.html" class="seller-visit-btn green-btn">
           <i class="fas fa-rocket"></i> Start Selling
         </a>
       </div>
@@ -1647,7 +1661,7 @@
     <p style="font-size:14px;color:rgba(255,255,255,0.45);margin:0 auto 20px;max-width:480px;">Gym, restaurant, mechanic, lawyer, dry cleaner, salon — any business type. Get listed in minutes and reach thousands of customers across Kenya.</p>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
       <button onclick="HubRegister.open()" style="padding:13px 28px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
-      <a href="onboarding-seller.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">🛍️ Start Selling Products</a>
+      <a data-sk-merchant-entry href="onboarding-seller.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">🛍️ Start Selling Products</a>
       <a href="earnings.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:14px;color:#71ff00;font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">💰 Pricing, Earnings &amp; Fees</a>
     </div>
     <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.2);">100+ business categories · Free to join · <a href="earnings.html" style="color:rgba(113,255,0,0.55);text-decoration:none;">See all fees &amp; commissions →</a></div>
@@ -2718,7 +2732,7 @@
       <!-- SELLER LINKS -->
       <div class="footer-links">
         <h3>Sell on Sokoni</h3>
-        <a href="seller.html">➕ Start Selling</a>
+        <a data-sk-merchant-entry href="seller.html">➕ Start Selling</a>
         <a href="ministore.html">🏪 My Store</a>
         <a href="seller.html#boosts">📢 Boost Product</a>
         <a href="seller.html#flash-sales">⚡ Flash Sale</a>

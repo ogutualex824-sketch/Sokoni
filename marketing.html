@@ -167,6 +167,9 @@
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
+<!-- ONE merchant-entry resolver: approved+shop -> merchant.html, approved+no shop -> shop
+     setup, not approved -> intake. Replaces seven unconditional Start Selling links. -->
+<script src="sokoni-merchant-entry.js" defer></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-intasend.js" defer></script>
@@ -400,7 +403,7 @@
     <h2 style="font-size:22px;font-weight:900;color:white;margin-bottom:8px;">🚀 Ready to Grow Your Business?</h2>
     <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:20px;">Join 500+ sellers already growing on Sokoni. Free to list, pay only when you boost.</p>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-      <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#fb923c,#f97316);color:white;font-weight:800;font-size:14px;border-radius:12px;text-decoration:none;">📦 Start Selling Free →</a>
+      <a data-sk-merchant-entry href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#fb923c,#f97316);color:white;font-weight:800;font-size:14px;border-radius:12px;text-decoration:none;">📦 Start Selling Free →</a>
       <button type="button" onclick="openBoostModal('pro')" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;font-weight:700;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;">🚀 Boost My Listing</button>
     </div>
   </div>

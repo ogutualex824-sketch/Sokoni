@@ -1688,7 +1688,11 @@
 
     /* ── Personal roles (non-workspace) ── */
     const roles   = Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : ['buyer']);
-    const active  = roles[0] || 'buyer';
+    /* The ACTING role, from the authority. This was roles[0] — the localStorage mirror —
+       so the pill highlight and the "Personal Account" sub-label could contradict the
+       "acting as" line directly above them, which already preferred the authority. One
+       resolver now feeds all three, so they cannot disagree. */
+    const active  = _skActingRole(roles[0] || 'buyer');
     const roleMap = { buyer:'Buyer', seller:'Seller', provider:'Provider', driver:'Driver',
                       rider:'Rider', admin:'Admin', superAdmin:'Super Admin', employer:'Employer' };
     const rName   = r => roleMap[r] || (r.charAt(0).toUpperCase() + r.slice(1));
@@ -1795,13 +1799,22 @@
      "who am I right now" before it offers to change it. Prefers the authority over
      the local mirror: if the two ever disagree, the authority is the true answer
      and showing the mirror would explain the wrong state confidently. */
-  function _skActiveRoleLine(active) {
-    var role = '';
+  /* THE acting-role resolver for the header. Authority first; the caller's mirror value
+     only while the authority is genuinely uninitialised or unverified — "unverified" means
+     UNKNOWN, and answering from the mirror is a first-paint stopgap, never a decision. */
+  function _skActingRole(fallback) {
     try {
       var RA = window.SokoniRoleAuthority;
-      if (RA && RA.isVerified && RA.isVerified() && RA.getActiveRole) role = RA.getActiveRole() || '';
+      if (RA && RA.isVerified && RA.isVerified() && RA.getActiveRole) {
+        var r = RA.getActiveRole();
+        if (r) return r;
+      }
     } catch (_) {}
-    if (!role) role = active || '';
+    return fallback || '';
+  }
+
+  function _skActiveRoleLine(active) {
+    var role = _skActingRole(active);
     if (!role) return '';
     var label = String(role).charAt(0).toUpperCase() + String(role).slice(1);
     return '<div class="sk-acct-role-now">' + _hesc(label) + '</div>';
@@ -1898,6 +1911,23 @@
     try {
       var u2 = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
       if (u2) _buildAcctPopup(u2);
+    } catch (_) {}
+
+    /* Route to the role's workspace. A switch that changes no UI and goes nowhere reads as
+       a broken button, which is what Home showed.
+
+       hubFor() returns null unless the authority approves the role, so this cannot become a
+       way INTO a workspace — the switch above already had to succeed, and the destination
+       page runs its own guardWorkspace regardless. Staying put when the destination is the
+       current page avoids a pointless reload (Buyer selected from Home). */
+    try {
+      var RA2 = window.SokoniRoleAuthority;
+      var hub = (RA2 && typeof RA2.hubFor === 'function') ? RA2.hubFor(role) : null;
+      if (hub) {
+        var here = (location.pathname.split('/').pop() || 'index.html');
+        if (here.indexOf('.') < 0) here += '.html';      /* cleanUrls serves /merchant */
+        if (here.toLowerCase() !== hub.toLowerCase()) location.href = hub;
+      }
     } catch (_) {}
   };
 

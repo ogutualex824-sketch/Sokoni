@@ -548,6 +548,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
   border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,0.1);border-bottom:none;
   padding:26px 20px 40px;
 }
+/* The sheet is bottom-aligned in a fixed overlay and openRoleModal() locks body
+   scrolling, so once the six role cards exceed the viewport the sheet overflows off
+   the TOP with nothing able to scroll — the list simply could not be reached.
+
+   The scroll boundary is the LIST, not the sheet and never the body: capping the
+   sheet would let Cancel scroll out of reach, and unlocking the body would scroll the
+   page behind the sheet. overscroll-behavior stops the scroll chaining to the locked
+   body when the list hits its end. */
+#roleOptionsList{
+  max-height:min(60vh, 420px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
 .up-role-option{
   display:flex;align-items:center;gap:14px;padding:14px 16px;
   background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);

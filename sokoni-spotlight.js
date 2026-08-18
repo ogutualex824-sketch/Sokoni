@@ -150,7 +150,7 @@ window.SokoniSpotlight = (function(){
       + '<h3>Become a Seller</h3>'
       + '<p class="seller-rating-text">Join 500+ sellers earning on Sokoni</p>'
       + '<div class="become-perks"><span>✅ Free listings</span><span>💸 Fast payouts</span><span>📊 Analytics</span></div>'
-      + '<a href="seller.html" class="seller-visit-btn green-btn"><i class="fas fa-rocket"></i> Start Selling</a></div>';
+      + '<a data-sk-merchant-entry href="seller.html" class="seller-visit-btn green-btn"><i class="fas fa-rocket"></i> Start Selling</a></div>';
     _fade(grid, function(){
       grid.innerHTML = chunk.map(_sellerCard).join('') + become;
     });

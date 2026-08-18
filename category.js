@@ -349,7 +349,7 @@ function renderProducts(list){
                 <div style="font-size:64px;margin-bottom:20px;">${meta.icon}</div>
                 <h2 style="color:white;font-size:24px;margin-bottom:10px;">No products in ${meta.title} yet</h2>
                 <p style="color:rgba(255,255,255,0.4);margin-bottom:28px;">Be the first to list something here</p>
-                <a href="seller.html" style="padding:14px 32px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;font-size:15px;">Start Selling</a>
+                <a data-sk-merchant-entry href="seller.html" style="padding:14px 32px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;font-size:15px;">Start Selling</a>
             </div>
           `;
         return;

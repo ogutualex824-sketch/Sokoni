@@ -162,7 +162,20 @@
       u.activeBusinessLogo = ws ? (ws.businessLogo || '') : null;
       u.activeBranchId     = ws ? (ws.activeBranchId   || null) : null;
       u.activeBranchName   = ws ? (ws.activeBranchName || null) : null;
-      u.activeRole         = ws ? ws.role : (u.roles && u.roles[0]) || 'buyer';
+      /* activeRole is DELIBERATELY not written here.
+
+         It is SokoniRoleAuthority's mirror of the acting PERSONAL role, whose vocabulary is
+         CANONICAL = buyer|seller|provider|mechanic|rider|health|legal|landlord|tenant. A
+         workspace role is a different vocabulary entirely — owner|manager|cashier|… — so
+         `u.activeRole = ws.role` wrote a non-canonical value into RA's mirror, and the
+         personal branch reset the acting role to roles[0], silently discarding a switch the
+         authority had persisted to users/{uid}.activeRole. Either way the mirror and the
+         server disagreed and no sokoniActiveRoleChanged fired.
+
+         Workspace membership and acting role are orthogonal: entering a workspace does not
+         change who you are acting as personally. The workspace role remains available on
+         u.activeWorkspace.role. If a workspace ever must change the acting role, it has to
+         go through RA.setActiveRole so entitlement is validated and the event fires. */
       localStorage.setItem('sokoniUser', JSON.stringify(u));
     } catch (_) {}
 

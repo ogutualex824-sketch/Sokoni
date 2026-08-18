@@ -1,3 +1,66 @@
+## [2026-08-18] — Role switching front door + one merchant-entry resolver
+
+Home had no role switcher at all. _inject() skips _buildNav() when #sk-top-nav exists, and
+index.html is the ONLY page baking one, so Home shipped an <a href="profile.html"> avatar with no
+#sk-acct-wrap. _buildAcctPopup ends at `if (wrap) wrap.appendChild(popup)`, so the popup was built
+and silently discarded. The reported "role switch redirects to Profile" was that anchor navigating
+- no handler in the switch chain navigates anywhere, and df1459a is not implicated. Home now uses
+the same #sk-acct-wrap + button + _skToggleAcct contract as the generated header.
+
+A successful switch also went nowhere. WORKSPACE_HUBS + hubFor() are added to
+sokoni-role-authority.js as the inverse of the existing WORKSPACE_ROUTES; every destination was
+already in use by profile.html ROLES[].hub, so no URL is invented. hubFor() returns null unless
+isApproved(role), so routing can never become a way INTO a workspace. admin/superAdmin are
+deliberately absent: they are not Role Authority roles, and adding them would be the second path
+to the same privilege that module exists to prevent. Admin routing stays with
+sokoni-permissions.js GUARDED_ROUTES, documented rather than silently assumed.
+
+Two authority/mirror divergences closed. The account popup highlighted roles[0] while the line
+directly above it read the authority, so the two could contradict each other; one _skActingRole()
+resolver now feeds both. SokoniWorkspace.switchTo wrote a workspace role (owner|cashier) into the
+canonical-personal-role mirror and reset it to roles[0] for Personal, discarding a switch the
+authority had persisted and firing no event; it no longer writes activeRole at all.
+
+Merchant entry: every Start Selling CTA was an unconditional anchor. Measured across the repo,
+ZERO consulted approval or shop existence, so an already-approved merchant landed on "Become a
+seller on SOKONI" - approved, then told to apply again. sokoni-merchant-entry.js resolves
+entitlement and destination as separate questions:
+
+    entitlement = RA.isApproved('seller')     the ONLY access test
+    destination = canonical shop resolution   routing, never authority
+
+    signed out                 -> login.html
+    not approved               -> profile.html        (intake)
+    approved + canonical shop  -> merchant.html
+    approved + no shop         -> merchant.html#shop  (setup, NOT the application)
+    approved + unreadable shop -> merchant.html#shop  (never re-apply on a read failure)
+
+An approved seller with no shop is still approved. Canonical resolution is
+users/{uid}.activeShopId -> shops/{activeShopId}, fallback shops/{uid}; sellers/{uid} is never
+read, because the applicant writes that document themselves.
+
+Nine CTAs converge on it, chosen semantically by visible text. "Start Selling / Offering" (a
+combined sell-or-offer landing), "Apply for Verification", the anchor carrying its own onclick,
+404 navigation and every Seller Dashboard / workspace link are excluded and asserted untouched. An
+earlier href-based sweep caught 15 anchors including a "+ Post" button and was reverted; this
+replaces it.
+
+shopEmployees exists (firestore.rules:1416, six Cloud Functions, seller.js) but holds zero
+production records, so no behaviour could be verified against it. Entitlement-by-claim already
+serves a staff member correctly. Documented, not built on.
+
+201 focused assertions pass: merchant-entry 38/0, role-switch 50/0, business-hub 36/0,
+seller-application 57/0, signup-barrier 20/0. Negative controls: dropping the entitlement gate
+from hubFor() routes a buyer-only account into merchant.html; a forged activeRole and a
+self-written sellers/{uid} both still resolve to intake. Hosting predeploy: 9/9 checkable hooks
+pass; gate-inventory scope-skipped (22 changed files, none inventory), with the forced run at
+df1459a (193/0 APPROVED) as the substantive evidence.
+
+Presentation and routing only. No rules, claims, applications, sellers, counters, shops or
+production data touched. NOT DEPLOYED - production remains hosting df1459a / rules 53e1185c.
+
+---
+
 ## [2026-08-18] — Business Hub follows the acting role (RC-freeze exception, not deployed)
 
 A shipped defect on hosting `8c6fd58`: switching the workspace role away from Seller left the

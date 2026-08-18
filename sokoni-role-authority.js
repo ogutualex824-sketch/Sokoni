@@ -441,6 +441,38 @@
      stay browsable by everyone — gating them would break public browsing, which
      CLAUDE.md requires. Management UI inside a hub uses the declarative attribute
      above instead. */
+  /* Role -> the workspace that role enters. The inverse of WORKSPACE_ROUTES below, which
+     answers "which role does this page require"; this answers "where does this role go".
+
+     Every destination here is one already in use by the Profile switcher's ROLES[].hub —
+     nothing is invented. It lives HERE rather than in profile.html so the Profile switcher
+     and the header switcher route identically; two copies is how they drift.
+
+     `admin` is deliberately absent, for the same reason it is absent from CANONICAL: it is
+     not a workspace role, and giving it an acting context here would be the second path to
+     administrative privilege this module exists to avoid. sokoni-permissions.js remains the
+     admin authority. */
+  var WORKSPACE_HUBS = {
+    buyer:    'index.html',
+    seller:   'merchant.html',
+    provider: 'providers.html',
+    rider:    'driver.html',
+    mechanic: 'car-hub.html',
+    health:   'healthcare.html',
+    legal:    'legal-hub.html',
+    landlord: 'landlord.html',
+    tenant:   'property.html',
+  };
+
+  /* The destination for a role, or null when the role has no workspace. Returns null for a
+     role the account does not hold: routing is a consequence of an authorised switch, never
+     a way to reach a workspace without one. */
+  function hubFor(role) {
+    var r = _canonical(role);
+    if (!r || !isApproved(r)) return null;
+    return WORKSPACE_HUBS[r] || null;
+  }
+
   var WORKSPACE_ROUTES = {
     'seller.html':   'seller',
     'driver.html':   'rider',
@@ -476,6 +508,8 @@
     guardPage: guardPage,
     applyDeclarativeGates: applyDeclarativeGates,
     WORKSPACE_ROUTES: WORKSPACE_ROUTES,
+    WORKSPACE_HUBS:   WORKSPACE_HUBS,
+    hubFor:           hubFor,
     getSnapshot: _snapshot,
     /* Exposed for tests and for consumers that need to normalise a legacy value. */
     canonicalise: _canonical,

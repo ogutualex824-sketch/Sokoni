@@ -221,6 +221,9 @@
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
+<!-- ONE merchant-entry resolver: approved+shop -> merchant.html, approved+no shop -> shop
+     setup, not approved -> intake. Replaces seven unconditional Start Selling links. -->
+<script src="sokoni-merchant-entry.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
@@ -269,7 +272,7 @@
     <div class="cm-sidebar-card" style="background:rgba(113,255,0,0.04);border-color:rgba(113,255,0,0.12);">
       <div style="font-size:13px;font-weight:800;color:white;margin-bottom:6px;">🏪 Sell on Sokoni</div>
       <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">Join 500+ sellers. List products, offer services, and grow your business.</div>
-      <a href="seller.html" style="display:block;padding:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-align:center;">Start Selling →</a>
+      <a data-sk-merchant-entry href="seller.html" style="display:block;padding:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-align:center;">Start Selling →</a>
     </div>
   </aside>
 
