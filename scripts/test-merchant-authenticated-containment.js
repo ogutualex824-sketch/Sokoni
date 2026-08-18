@@ -345,8 +345,23 @@ server.listen(0, async () => {
       const text = (scope.innerText || '').trim();
       /* Loading markers: the shell's own skeleton element, common spinner classes, and
          the copy a surface shows while it waits. */
+      /* VISIBLE indicators only. querySelectorAll finds an element that is still in the
+         DOM but display:none — and returns.html keeps its #auth-loading block (spinner
+         inside) in the document after hiding it. Counting that marked the surface as
+         loading forever no matter what it went on to render: it reported "still loading
+         after 25s" while the body had in fact painted. An indicator nobody can see is not
+         a loading state. */
+      /* Rect-only, deliberately: getComputedStyle is window-scoped and these elements can
+         live in the iframe's document, so calling the top window's copy on them is wrong.
+         A display:none element reports an all-zero rect in its own document either way. */
+      const vis = (el) => {
+        if (!el || !el.getBoundingClientRect) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
       const skel = scope.querySelectorAll
-        ? scope.querySelectorAll('.sk-line, .skeleton, .spinner, [aria-busy="true"]').length : 0;
+        ? [].filter.call(scope.querySelectorAll('.sk-line, .skeleton, .spinner, [aria-busy="true"]'), vis).length
+        : 0;
       const says = /^(authenticating|loading|please wait|checking)/i.test(text) ||
                    /loading…|loading\.\.\./i.test(text.slice(0, 80));
       return { len: text.length, loading: skel > 0 || says };

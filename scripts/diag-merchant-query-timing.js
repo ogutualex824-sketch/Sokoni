@@ -90,23 +90,32 @@ server.listen(0, async () => {
     res.shopId = shopId;
     const F = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
 
-    /* The exact query the Sell surface runs, timed cold and reported with its source. */
-    let t = Date.now();
-    try {
-      const snap = await F.getDocs(F.query(
-        F.collection(window.firebaseDB, 'products'),
-        F.where('shopId', '==', String(shopId))));
-      res.products_by_shopId = (Date.now()-t) + 'ms  n=' + snap.size + '  fromCache=' + snap.metadata.fromCache;
-    } catch (e) { res.products_by_shopId = (Date.now()-t) + 'ms  ERR ' + (e.code||e.message); }
+    const timeQuery = async (label, field, value, lim) => {
+      const t = Date.now();
+      try {
+        const parts = [F.collection(window.firebaseDB, 'products'), F.where(field, '==', String(value))];
+        if (lim) parts.push(F.limit(lim));
+        const snap = await F.getDocs(F.query.apply(null, parts));
+        return (Date.now()-t) + 'ms  n=' + snap.size + '  fromCache=' + snap.metadata.fromCache;
+      } catch (e) { return (Date.now()-t) + 'ms  ERR ' + (e.code||e.message); }
+    };
 
-    /* The query Availability runs. */
-    t = Date.now();
-    try {
-      const snap = await F.getDocs(F.query(
-        F.collection(window.firebaseDB, 'products'),
-        F.where('sellerUid', '==', String(uid)), F.limit(500)));
-      res.products_by_sellerUid = (Date.now()-t) + 'ms  n=' + snap.size + '  fromCache=' + snap.metadata.fromCache;
-    } catch (e) { res.products_by_sellerUid = (Date.now()-t) + 'ms  ERR ' + (e.code||e.message); }
+    /* WARM-UP, discarded. THE FIRST BACKEND QUERY PAYS FOR THE CHANNEL.
+       Without this the first query measured carries connection setup, the App Check
+       token exchange and the Firestore WebChannel handshake, and whichever query happens
+       to run first looks catastrophically slow. That is not a property of the query — and
+       reading it as one would justify rewriting a read path that was never the problem. */
+    const tw = Date.now();
+    await F.getDocs(F.query(F.collection(window.firebaseDB, 'products'), F.limit(1))).catch(() => null);
+    res.warmup_discarded = (Date.now()-tw) + 'ms  (channel setup — NOT a query measurement)';
+
+    /* Both fields, then both again in the OPPOSITE order. If a field is genuinely slower
+       it stays slower in both passes; if the slowness follows whichever ran first, it was
+       the channel, not the field. One ordering cannot tell those apart. */
+    res.pass1_by_shopId    = await timeQuery('shopId',    'shopId',    shopId);
+    res.pass1_by_sellerUid = await timeQuery('sellerUid', 'sellerUid', uid, 500);
+    res.pass2_by_sellerUid = await timeQuery('sellerUid', 'sellerUid', uid, 500);
+    res.pass2_by_shopId    = await timeQuery('shopId',    'shopId',    shopId);
 
     /* A single-document read, as a control: isolates per-request overhead
        (attestation, connection setup) from the cost of the query itself. */
@@ -120,9 +129,12 @@ server.listen(0, async () => {
   });
 
   Object.keys(out).forEach((k) => console.log('  ' + k.padEnd(23) + ': ' + out[k]));
-  console.log('\n  A single-doc control in the tens of ms alongside a multi-second query points');
-  console.log('  at the QUERY (index / result size). Both slow points at per-request overhead');
-  console.log('  on this origin. fromCache=true anywhere invalidates that reading entirely.\n');
+  console.log('\n  READ IT THIS WAY:');
+  console.log('    warmup is DISCARDED — it carries channel setup, the App Check exchange and');
+  console.log('    the WebChannel handshake. Whichever query ran first used to absorb all of it.');
+  console.log('    A field is only genuinely slow if it is slow in BOTH passes. If the slowness');
+  console.log('    follows POSITION rather than field name, it was the channel, not the query.');
+  console.log('    fromCache=true anywhere invalidates the comparison entirely.\n');
 
   await b.close(); server.close(); process.exit(0);
 });
