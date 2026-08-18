@@ -327,7 +327,17 @@ server.listen(0, async () => {
       return { len: text.length, loading: skel > 0 || says };
     });
 
-    const SETTLE_MAX = 25000, STEP = 500, STABLE_NEEDED = 1500;
+    /* 40s, not 25s. Both surfaces that failed the 25s ceiling — Sell and Availability —
+       sit behind the same canonical products query, measured at ~30s for this shop's 103
+       products. Their bodies stayed textless because they were STILL LOADING: Sell's
+       load() sets phase='error' on rejection, which renders "Products could not be
+       loaded", so a body with no text means the promise had neither resolved nor rejected.
+
+       The ceiling has to clear the slowest real dependency or the gate measures its own
+       impatience. That the query takes ~30s at all is a genuine finding, tracked
+       separately — this timeout stops it being misreported as a blank surface, and does
+       not make it acceptable. */
+    const SETTLE_MAX = 40000, STEP = 500, STABLE_NEEDED = 1500;
     let prev = null, stableFor = 0, settledMs = 0, lastLoading = false;
     const t0 = Date.now();
     while (Date.now() - t0 < SETTLE_MAX) {
