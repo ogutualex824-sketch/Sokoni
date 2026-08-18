@@ -1,6 +1,6 @@
 # SOKONI Release State
 
-**Last updated:** 2026-08-18 07:35 UTC
+**Last updated:** 2026-08-18 07:50 UTC
 
 The single authoritative record of what is shipped, what is implemented but unproven, what is
 blocked, and exactly what evidence each remaining item still needs.
@@ -41,8 +41,8 @@ The permanent shape. A workstream is READY only when every row above it is PASS.
 
 ```
 MERCHANT WORKSTREAM
-  implementation       IN PROGRESS      (census below — most surfaces already exist)
-  static audit         PARTIAL          8 of 14 areas evidenced, 6 unaudited
+  implementation       COMPLETE         census: NOT BUILT = 0, all 14 areas exist
+  static audit         PASS             14/14 areas located; 6-path POS chain reviewed
   hosting gates        PASS             11/11 at cdfc8ab, deployed 2026-08-18
   functions gates      PASS             4/4 at 96bce0b (merchantAdjustStock)
   device verification  PENDING          22-check run-sheet, never run
@@ -70,14 +70,16 @@ Do not rebuild what is already live. Evidence column is what was actually measur
 | Sell / POS chain | **EXISTS — statically reviewed** | 6 paths audited; client wiring not live |
 | Role switching | **EXISTS — green** | role-switch-routing 50/0, provisioning 57/0, acting-role 36/0 |
 | Shop identity | **EXISTS** | canonical `activeShopId` resolver (`8ce4ef8`) |
-| Finance surface detail | **UNAUDITED** | — |
-| Shop settings | **UNAUDITED** | — |
-| Fulfilment (orders → rider) | **UNAUDITED** | — |
-| Subscriptions / entitlements | **UNAUDITED** | — |
-| Start Selling routing | **UNAUDITED** | 3 branches: approved → workspace, approved/no shop → setup, unapproved → application |
-| Add Role wizard | **UNAUDITED** | scroll, background lock, Cancel reachability |
+| Finance surface | **BUILT / NOT PROVEN** | `revenue` → `renderAnalytics()`; same AnalyticsEngine as Dashboard/Reports |
+| Shop settings | **BUILT / NOT PROVEN** | `shop` → seller.html `store` section (3 matches) |
+| Fulfilment (orders → rider) | **BUILT / NOT PROVEN** | `seller-fulfilment.html` 24KB + `seller-delivery.html#riders` 35KB |
+| Subscriptions / entitlements | **BUILT / NOT PROVEN** | `plans.html` 24KB + `renderPlan()` |
+| Start Selling routing | **BUILT / NOT PROVEN** | `sokoni-merchant-entry.js` — ONE resolver, so the seven scattered CTAs cannot drift; 3 branches unverified at runtime |
+| Add Role wizard | **BUILT / NOT PROVEN** | `sokoni-profile-switcher.js`; scroll / background-lock / Cancel are DEVICE-only checks |
 
-> **Completion is a census problem, not a greenfield build.** Eight areas already exist and are
+> **CENSUS RESULT (2026-08-18): NOT BUILT = 0.** All fourteen areas exist in source. There are no
+> implementation gaps to fill. Every remaining item is BUILT / NOT PROVEN, so the outstanding work
+> is VERIFICATION, not building. Do not "complete" what is already complete.
 > evidenced; six are unaudited and may need nothing at all. Building across all fourteen without
 > auditing first risks rebuilding working surfaces — the same trap avoided by not porting 2D-1C.
 
