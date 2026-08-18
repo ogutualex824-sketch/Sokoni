@@ -14,10 +14,10 @@ Related: [[MERCHANT_SHELL_CAPABILITY]] · [[RELEASE_STATE]]
 behind `rc/combined`**, so any hosting deploy from here ships those 11 as well as our 7 — 18
 commits, not 7. They ride along whether or not they are ready, so each needs a decision.
 
-One more thing makes this urgent rather than tidy: **`version.json` on live reports
-`"dirtyWorkingTree": true`.** The live build was deployed from a tree with uncommitted changes, so
-live content is not reproducible from any commit. A clean deploy may revert something that is live
-and exists nowhere in git. Nobody should deploy from this lineage until that is understood.
+A second concern — **`version.json` on live reporting `"dirtyWorkingTree": true`** — looked like
+"production matches no commit". It is **RESOLVED**: production *is* reproducible from `cdfc8ab`,
+and the flag itself was broken in a way that made it permanently true. Full evidence in
+[Open questions §1](#1-dirtyworkingtree-true-on-live--resolved-production-is-reproducible).
 
 ## What actually reaches production
 
@@ -150,11 +150,145 @@ The rollback guard will **not** stop this deploy — `cdfc8ab` is an ancestor of
 move forward, not a rollback. The guard is silent on whether the 11 commits are *wanted*, which is
 what this document is for.
 
-## Open questions for the founder
+## Open questions — status
 
-1. **`dirtyWorkingTree: true` on live.** What was uncommitted at the last deploy? Until that is
-   known, any deploy risks reverting live content that exists in no commit.
-2. **`13515cb`** — ship the POS keyboard fix now, or hold it until POS is device-accepted? It fixes
-   a payment-blocking interaction, which argues for now.
-3. **Bottom-nav till slot** — the certified registry re-points it `pos` → `sell`. v1 resolves the
-   declared `fallback:'pos'`, so v1's bottom bar is unchanged. Confirm that is intended.
+### 1. `dirtyWorkingTree: true` on live — **RESOLVED. Production is reproducible.**
+
+Measured rather than assumed. Live bytes compared against the deployed commit `cdfc8ab` across
+eight shipped files — `seller.css`, `pos-mobile.js`, `pos-db.js`, `shared-header.js`,
+`sokoni-ui.js`, `auth.js`, `merchant.html`, `pos.html` — **all identical**.
+
+`merchant.html` and `pos.html` first appeared to differ. They did not: cleanUrls **301-redirects**
+a `.html` URL, so `curl` without `-L` was hashing a 24-byte redirect body. Fetched through the
+clean URL with `-L` they match exactly. That is the documented cleanUrls trap and it nearly
+produced a false alarm about production integrity.
+
+The one real difference is `service-worker.js`, and **only its `CACHE_VERSION` line** — live `v523`
+vs committed `v522`, byte-identical otherwise.
+
+**Cause:** `generate-version.js` runs as predeploy **step 4**, and **step 3**
+(`bump-sw-version.js`) has already rewritten `service-worker.js` in the tree; `version.json` is the
+script's own output. A blanket `git status --porcelain` therefore **cannot** report clean, so the
+flag was permanently `true` — and `release-gate.js:83` **fails on it unconditionally**. A gate that
+can never pass is worse than no gate.
+
+**Fixed** (`5853ddd`): dirtiness now means *edits the deploy pipeline did not make*.
+`service-worker.js` is excluded **only if** its sole difference from HEAD is the `CACHE_VERSION`
+line, so any other edit to it still counts; everything else counts. Exclusions publish as
+`pipelineArtifacts` and real dirt as `dirtyPaths`, so the exclusion is auditable rather than
+trusted. Proven on a clean throwaway worktree across five cases, including a stray edit alongside
+the bump and an edit to the worker beyond its version line.
+
+> **A clean release will now report `dirtyWorkingTree: false`**, which is the precondition you
+> asked for — and it will report `true`, with paths, when it should.
+
+### 2. `13515cb` — the POS keyboard fix · **NEEDS A REAL-DEVICE CHECK**
+
+Not certifiable from code gates, and it should not be labelled certified because it passed them.
+The focused check is below. If it passes, accept the fix; if it fails, it stays on its own POS
+workstream and does **not** hold the v2 architecture.
+
+### 3. Bottom-nav till slot — **ALREADY BEHAVIOURAL, evidence below**
+
+The concern was that the fallback might be a hidden registry field leaving a visible button
+pointing at a withheld route. It is not — the resolution happens when the bar is built, so the
+rendered button *is* the fallback:
+
+```
+BOTTOM NAV:  [{"id":"home"},{"id":"orders"},{"id":"pos","label":"Sell"},{"id":"__more"}]
+AFTER TAP:   {"hash":"#pos", "title":"POS", "frame":"mfx-pos"}
+```
+
+The slot renders `id=pos`, and tapping it lands on `#pos` with the POS panel mounted. **No merchant
+can reach "This screen is not available in this version of Merchant" from the till button** — that
+panel is only reachable by deep link, and the route gate asserts every bottom-nav slot resolves to
+something this shell can mount.
+
+The label reads "Sell" over a POS destination, which is **exactly what `rc/combined` ships today**
+(`{ id:'pos', label:'Sell' }`), so v1's bottom bar is unchanged. v2 renders Sell natively and gets
+the native surface. Confirm only if you want the *label* changed — the behaviour already matches
+what you asked for.
+
+---
+
+## The POS iOS keyboard check (`13515cb`)
+
+A human on a real iPhone. Simulators do not reproduce the visual-viewport behaviour this change
+depends on.
+
+| # | step | pass condition |
+|---|---|---|
+| 1 | Open `/pos` on a real iPhone, signed in as a merchant | POS loads, till visible |
+| 2 | Add any item to the cart | cart total shows |
+| 3 | Start checkout, choose **M-PESA** | payment panel opens |
+| 4 | Tap the **amount** field | keyboard opens; the amount field stays visible |
+| 5 | Tap the **phone number** field and type a number | **the STK-push button remains visible and tappable — this is the defect being fixed** |
+| 6 | Tap the STK-push button **without dismissing the keyboard** | the push initiates |
+| 7 | Dismiss the keyboard | layout returns with no gap or overlap left behind |
+| 8 | Rotate to landscape, repeat 5–6 | button still reachable |
+
+Also worth one pass on a **small** device (SE-class, 375×667), where the keyboard takes the largest
+share of the viewport.
+
+**If step 5 or 6 fails,** do not ship `13515cb` with the v2 deploy — it goes back to the POS
+workstream. Nothing in Merchant v2 depends on it.
+
+**If it passes,** it is accepted as a *fix*, not as POS certification. POS remains uncertified.
+
+---
+
+## Release gate board
+
+```
+MERCHANT V2
+────────────────────────────────────────────────────────────
+Shell preserved                    ✅  da8cd2df… byte-identical on the
+                                       preservation branch
+Certified route registry           ✅  2b8fc08d… byte-identical
+Compatibility layer                ✅  wired into v1, 42/0
+v1 blank routes                    ✅  0   (was 10, runtime-measured)
+v2 native surfaces                 ✅  9   (9 distinct panels, 41/0)
+Route gates                        ✅  v1 68/0 · v2 68/0 · runtime 500/12
+Exit contract                      ✅  18/0 mutation controls
+Exit runtime                       ✅  11/0
+18 modules integrated              ✅  byte-identical, files not commits
+
+POS Functions dependency           🔴  MUST DEPLOY/VERIFY
+                                       contract agreement proven 25/0;
+                                       logic proven 39/0; NOT deployed
+Dirty production artifact          🟢  RESOLVED — production reproducible from
+                                       cdfc8ab; flag fixed so a clean release
+                                       now reports false (5853ddd)
+SW floor                           🟢  VERIFIED ISOLATED — one hosting-ignored
+                                       file; next deploy = v531 > live v523
+POS iOS keyboard fix               🟡  REAL DEVICE TEST — checklist above
+Till → Sell navigation             🟢  BEHAVIOURAL — renders id=pos, taps to
+                                       #pos/mfx-pos; label unchanged from live
+
+MERCHANT_URL                       /merchant        ← UNCHANGED, not flipped
+PRODUCTION CUTOVER                 ❌  NOT YET
+```
+
+### What still stands between here and a deploy
+
+1. **Deploy `merchantAdjustStock`** (+ `functions/merchant-inventory.js`) and verify an
+   authenticated merchant stock adjustment against the deployed callable. This is the one red item
+   and it is a hard prerequisite — `pos-mobile.js:445` already calls it.
+2. **Real-device POS keyboard check** (checklist above) — decides whether `13515cb` rides along.
+3. Then hosting, from a clean tree, with `version.json` expected to read
+   `"dirtyWorkingTree": false`.
+
+`MERCHANT_URL` stays `/merchant` throughout. The cutover is a separate, later decision that needs
+production smoke tests, real-seller certification and the P58E human test first.
+
+### Note on the authenticated stock-adjustment test
+
+It cannot be run before the function is deployed. The Functions emulator is not configured in
+`firebase.json` (only `firestore` and `auth` ports) and `functions/node_modules` is absent, so an
+emulator run would need both added first — and it still would not exercise App Check, which this
+callable enforces.
+
+What **is** proven without deploying: the transaction logic against a Firestore double (39/0 —
+ownership, idempotency, the zero floor, `sold` untouched), and the full client↔server wire contract
+(25/0). What is **not** proven is the deployed callable answering a real authenticated merchant.
+That is a post-deploy verification, and it is the thing to run first after the functions deploy.
