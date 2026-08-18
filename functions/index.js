@@ -10297,6 +10297,12 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
      (No extra secrets needed — uses ANTHROPIC_API_KEY already defined)
      firebase deploy --only functions,firestore:indexes,firestore:rules,hosting
 ============================================================ */
+/* Canonical `products.stock` CORRECTIONS. Distinct from inventoryEngine below,
+   which governs the enterprise warehouse model (tenants/{id}/inventory_levels).
+   These are two different counters on purpose — see merchant-inventory.js. */
+const merchantInventory = require("./merchant-inventory");
+exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
+
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;

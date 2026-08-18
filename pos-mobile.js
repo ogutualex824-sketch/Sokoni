@@ -394,6 +394,10 @@ const PosMobile = (() => {
   }
 
   let _stockInSelected = null;
+  /* Stable per SELECTION, not per tap: a retry of the same stock-in replays the
+     same adjustmentId so merchantAdjustStock applies it exactly once. Reset when
+     a different product is chosen, so the next correction is its own event. */
+  let _stockInAttemptId = null;
 
   async function _stockSearch(query) {
     if (!query || query.length < 2) return;
@@ -411,6 +415,7 @@ const PosMobile = (() => {
   async function _selectStockIn(id, name) {
     const products = await PosDB.products.getAll();
     _stockInSelected = products.find(p => p.id === id);
+    _stockInAttemptId = String(Date.now()) + "_" + Math.random().toString(36).slice(2, 10);
     const inp = document.getElementById('stock-in-product');
     if (inp) inp.value = name;
     const el = document.getElementById('stock-in-search-results');
@@ -427,11 +432,27 @@ const PosMobile = (() => {
     }
     const cost = parseFloat(document.getElementById('stock-in-cost')?.value || 0);
     const note = document.getElementById('stock-in-note')?.value || 'manual_stock_in';
-    await PosDB.products.adjustStock(_stockInSelected.id, qty, note, SPos?.state?.currentCashier?.id);
+    /* A stock-in is a CORRECTION, so it goes to the server authority
+       (merchantAdjustStock) — not the local cache primitive. The id is derived
+       from the product and this attempt, so a double tap on a slow connection
+       replays the SAME adjustmentId and the server applies it once.
+
+       Success is only ever rendered from the server's result: if the call
+       fails, nothing local changed and the merchant is told it was not saved,
+       rather than being shown a quantity the server never accepted. */
+    const adjustmentId = `stockin_${_stockInSelected.id}_${_stockInAttemptId}`;
+    try {
+      await PosDB.products.correctStock(_stockInSelected.id, qty, 'restock', {
+        adjustmentId, note,
+      });
+    } catch (err) {
+      if (window.SPos) SPos.toast(err && err.message ? err.message : 'Stock not saved', 'error');
+      return;
+    }
     if (cost > 0) {
       await PosDB.products.update(_stockInSelected.id, { costPrice: cost });
     }
-    if (window.PosAudit) PosAudit.log('stock_adjusted', { productId: _stockInSelected.id, qty, note });
+    if (window.PosAudit) PosAudit.log('stock_adjusted', { productId: _stockInSelected.id, qty, note, adjustmentId });
     if (window.SPos) { SPos.toast(`✓ +${qty} ${_stockInSelected.name}`, 'success'); SPos.products.reload(); }
     closeSheet();
     await refreshDashboard();

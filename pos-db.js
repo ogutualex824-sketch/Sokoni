@@ -239,6 +239,69 @@ const PosDB = (function () {
       return _put('products', rec).then(() => rec);
     },
 
+    /* ── correctStock — the SERVER-AUTHORITATIVE manual correction ──────────
+       Use this for a merchant counting stock off the shelf: damage, theft,
+       expiry, a recount, a restock. It calls merchantAdjustStock, which owns
+       canonical `products.stock`, and only writes the local record AFTER the
+       server has agreed — with the server's number, not a locally computed one.
+
+       IndexedDB is a CACHE here, never the authority. On failure nothing local
+       changes and the error propagates, so a caller can surface an honest
+       "not saved" rather than showing a corrected quantity the server never
+       accepted. That was the defect: adjustStock() wrote IndexedDB first and
+       pushed canonical "best-effort, online-only", so an offline correction
+       looked applied and could silently never persist.
+
+       NOT for sales. A sale's canonical decrement is owned by
+       posCompleteCheckout; routing one through here would deduct the same units
+       twice. adjustStock() below stays the local-cache primitive for the sale,
+       rollback and purchase-order paths for exactly that reason.
+
+       `adjustmentId` is REQUIRED and must be stable across retries of the same
+       user action — that is what makes a double tap idempotent server-side. */
+    correctStock: async (id, delta, reason, opts = {}) => {
+      const adjustmentId = opts.adjustmentId;
+      if (!adjustmentId) throw new Error('correctStock requires a stable adjustmentId');
+      const shopId = opts.shopId
+        || (typeof window !== 'undefined' && window.SokoniShell && window.SokoniShell.activeShopId)
+        || null;
+      if (!shopId) throw new Error('correctStock requires a resolved shopId');
+
+      /* Resolved the same way pos.js reaches posCompleteCheckout — a dynamic
+         import of the Firebase functions module against the live app. Requires
+         a connection by design: a correction that cannot reach the authority
+         has not happened, and must not be shown as though it had. */
+      if (typeof window === 'undefined' || !window.firebaseApp)
+        throw new Error('Stock corrections need a connection — not saved.');
+      const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const callable = fnMod.httpsCallable(
+        fnMod.getFunctions(window.firebaseApp), 'merchantAdjustStock');
+
+      /* Server first. Nothing local moves until this resolves. */
+      const out = await callable({
+        productId: id, shopId, adjustmentId,
+        delta: Number(delta), reason: reason || 'count_correction',
+        note: opts.note || '',
+      });
+      const r = (out && out.data) || out || {};
+      if (!r.ok) throw new Error('Stock correction was not accepted.');
+
+      /* Cache refresh — the server's `after`, never a local recomputation, so
+         the phone can never display a quantity the server did not return. */
+      const p = await _get('products', id);
+      if (p) {
+        if (typeof r.after === 'number') p.stock = r.after;
+        if (typeof r.inventoryVersion === 'number') p.inventoryVersion = r.inventoryVersion;
+        p.updatedAt = Date.now();
+        products._invalidateIndex();
+        await _put('products', p);
+      }
+      return { ...r, product: p || null };
+    },
+
+    /* LOCAL CACHE primitive. Canonical `products.stock` for these paths is owned
+       elsewhere: a sale by posCompleteCheckout, a correction by correctStock()
+       above. Do not route a manual correction through here. */
     adjustStock: async (id, delta, reason, cashierId) => {
       const p = await _get('products', id);
       if (!p) return null;
