@@ -1,6 +1,6 @@
 # SOKONI Release State
 
-**Last updated:** 2026-08-18 06:55 UTC
+**Last updated:** 2026-08-18 07:20 UTC
 
 The single authoritative record of what is shipped, what is implemented but unproven, what is
 blocked, and exactly what evidence each remaining item still needs.
@@ -120,6 +120,80 @@ aborts (measured: **103 aborted requests**, tab bar `0×0`). Every element measu
 `ce68078` layout work returned `h=0`. That change proved the CSS **resolves**; it did not prove the
 surface **renders**, and no link of the chain above has been exercised.
 
+### POS prerequisite status
+
+```
+STATIC ARCHITECTURE
+  Checkout path              STATICALLY REVIEWED
+  Payment prompt             STATICALLY REVIEWED
+  Payment result             STATICALLY REVIEWED
+  Receipt                    STATICALLY REVIEWED
+  Inventory synchronization  STATICALLY REVIEWED
+  Dashboard synchronization  STATICALLY REVIEWED
+
+PRODUCTION AUTHORITY (authenticated calls)
+  merchant correction        NOT PROVEN
+  wrong-shop rejection       NOT PROVEN
+  idempotency                NOT PROVEN
+
+CLIENT
+  POS client integration     PENDING
+  ce68078 merge              PENDING
+
+DEVICE
+  Device E2E                 BLOCKED
+
+ACCEPTANCE
+  Production acceptance      NOT READY
+```
+
+> **What STATICALLY REVIEWED means, and does not.**
+> Static review establishes that the intended authority chain exists in source. It does **not**
+> establish that production runtime behavior, Firestore transactions, App Check, Safaricom
+> callbacks, device behavior, Bluetooth/printing, or cross-surface convergence work.
+
+**Audited chain** (source reading, 2026-08-18):
+
+```
+Sell → canonical stock → checkout → payment request
+     → server callback/result → receipt → Orders/Analytics → Dashboard
+```
+
+| Path | Authority | Failure states | Duplicate / retry | Writes | Next consumer |
+|---|---|---|---|---|---|
+| Checkout | `posCompleteCheckout` | insufficient-stock pre-check in tx; all-or-nothing | `idempotencyKey` claimed in `posIdempotency` **inside** the tx | `products.stock`↓, `inventoryVersion`↑, `sold`↑, `posRetailSales`, `posDaily`, `posCheckoutMetrics` | OrderService |
+| Payment prompt | `darajaSTKPush`, seller creds from `shopSettings` | Daraja auth failure throws before any prompt | caller `orderId`; Safaricom returns `CheckoutRequestID` | `posPayments/{CheckoutRequestID}` | `darajaSTKCallback` |
+| Payment result | `darajaSTKCallback` (onRequest) + `posCheckPaymentStatus` | explicit `pending` / `completed` / `failed` / `cancelled` | poll is read-only; falls back to `posIdempotency` | `posPayments`, `posPaymentStatus` | POS realtime listener |
+| Receipt | created by `posCompleteCheckout`; `posLogReprint` counts reprints | — | reprint counter transactional (`posReprintCounters`) | receipt doc + counter | `sokoni-pos-print-service.js` → Bluetooth / label / network |
+| Inventory sync | `posCompleteCheckout` (sale) / `merchantAdjustStock` (correction) | below-zero refused on both | both idempotent, different keys | canonical `products/{id}.stock` — **one field** | catalogue, POS cache |
+| Dashboard sync | `AnalyticsEngine.compute()` over OrderService | — | read-only | none | Dashboard = Reports = Finance = Analytics |
+
+**Money never confirms from a request response.** `darajaSTKPush` only *sends*; Safaricom calls
+`darajaSTKCallback` server-side; the client polls `posCheckPaymentStatus`. Prompt and result are
+separated by a server boundary.
+
+### Stock convergence invariant
+
+```
+sale:        stock ↓     inventoryVersion ↑     sold ↑
+correction:  stock ↑/↓   inventoryVersion ↑     sold UNCHANGED
+```
+
+Two authorities, one canonical field, and **no server-side reconciliation between them**. Each is
+individually safe; nothing cross-checks them. `inventoryVersion` is the tell — if a device run ever
+shows `stock` moving without `inventoryVersion` advancing, or `sold` moving on a correction, that is
+this seam failing.
+
+### Orders observability — required on device
+
+`posCompleteCheckout` writes **`posRetailSales`, not `orders`**. That is correct by design —
+OrderService unifies both and de-duplicates the local twin ("same sale, two stores → one row") —
+but it means anything reading `collection('orders')` directly will not see a POS sale.
+
+The device run must therefore prove the merchant's **Orders surface actually exposes the POS sale
+through OrderService**, not merely that a `posRetailSales` record was created. A written record is
+not observability.
+
 ### Device acceptance command
 
 **DO NOT run until every prerequisite is green:**
@@ -132,7 +206,7 @@ surface **renders**, and no link of the chain above has been exercised.
 - [ ] adjustment idempotency verified
 - [ ] `ce68078` merged into `rc/combined`
 - [ ] POS client wired to the authoritative correction path **and deployed to hosting**
-- [ ] checkout / payment-prompt / payment-result / receipt / inventory / dashboard paths reviewed statically
+- [x] checkout / payment-prompt / payment-result / receipt / inventory / dashboard paths reviewed statically
 - [ ] hosting gates green
 - [ ] no unrelated production changes
 - [ ] this file updated
@@ -145,6 +219,10 @@ surface **renders**, and no link of the chain above has been exercised.
 > behaviour, payment prompt, receipt/printer path, stock decrement, order creation, and live
 > dashboard convergence. Report every failure with exact step, screenshot, timestamp,
 > order/reference ID, and expected vs actual result. **Do not retry a financial operation blindly.**
+>
+> Include explicitly: **the merchant's Orders surface must show the sale** (via OrderService, since
+> `posCompleteCheckout` writes `posRetailSales` and not `orders`), and `inventoryVersion` /
+> `sold` must move per the convergence invariant above.
 
 ### The convergence check that matters most
 
