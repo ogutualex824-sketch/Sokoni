@@ -91,6 +91,19 @@ const SERVER = [
     why: 'Click-and-collect reserve + cancel restore. TOCTOU-safe re-read inside the txn.' },
   { file: 'functions/pos-zero-friction.js',    sites: 2,
     why: 'POS sale deduction and its symmetric refund restore.' },
+  { file: 'functions/merchant-inventory.js',   sites: 1,
+    why: 'merchantAdjustStock — the FIRST server authority over a stock CORRECTION, as ' +
+         'distinct from a SALE. Registered as a deliberate new authority, not an escape: ' +
+         'before it, the only path to canonical products.stock for a correction was ' +
+         'PosDB.products.adjustStock() writing IndexedDB first and pushing canonical ' +
+         '"best-effort, online-only", so an offline correction could look applied and never ' +
+         'persist. Transactional; idempotent under a caller-supplied adjustmentId claimed ' +
+         'inside the txn; floored at zero; ownership is products.sellerUid === uid or a ' +
+         'platform-admin claim (NEVER shopEmployees, which any client can self-create). ' +
+         'Writes stock + inventoryVersion + updatedAt together and deliberately NEVER ' +
+         'touches `sold` — a correction is not a sale and must not enter sales aggregates. ' +
+         'inventoryAdjustStock (inventory-engine) is NOT this authority: it writes ' +
+         'tenants/{id}/inventory_levels, a different counter.' },
   { file: 'functions/pos-retail.js',           sites: 1,
     why: 'posSyncToMarketplace — batch FieldValue.increment so concurrent branch syncs merge.' },
   { file: 'functions/pos-retail-engine.js',    sites: 2,
