@@ -46,9 +46,24 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    test-inventory --gate failed the whole deploy.
 
    Counter derivation: continue from the existing "-vNN" when present, else
-   resume above the highest version already shipped (v115, deployed 2026-07-26)
-   so the sequence never goes backwards after the timestamp-only interlude. */
-const LAST_SHIPPED_V = 115;
+   resume above the highest version already shipped so the sequence never goes
+   backwards after the timestamp-only interlude.
+
+   RAISED 115 -> 530 on 2026-08-18. `prevN` is read from the COMMITTED
+   service-worker.js, but deploys have repeatedly been cut from dirty worktrees
+   (live version.json carried "dirtyWorkingTree": true), so the bumps that shipped
+   v523..v530 were never committed. The committed file still said v522. Restoring
+   that worktree to its committed state for the cdfc8ab release therefore produced
+   v523 — a counter that had already shipped seven versions earlier.
+
+   Cache freshness never depended on it (the timestamp is the unique part, and it
+   advanced), but contract 2 above says the counter is monotonic, and
+   test-navigation.js compares NN to prove users received a corrected worker rather
+   than merely a different one. A floor is what makes that true independently of
+   whether anyone remembered to commit the bump — which is exactly what this
+   constant was introduced for. Raise it again if production ever ships higher than
+   this floor from an uncommitted tree. */
+const LAST_SHIPPED_V = 530;
 const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
 const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
 const newVer = `sokoni-${stamp}-v${nextN}`;
