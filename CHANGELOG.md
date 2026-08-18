@@ -1,3 +1,129 @@
+## [2026-08-19] — Certified route registry preserved; shell capability negotiation designed and proven
+
+Two preservation problems and one integration problem. No shell was modified, no route `kind` was
+flipped, no Firestore/functions/rules/claims change, and no destination was added, removed, renamed
+or re-targeted.
+
+### Preservation — the certified route registry had no commit
+
+`sokoni-merchant-routes.js` in its certified form existed only as a modified-but-uncommitted file in
+one working tree: 48,364 bytes, `sha256 2b8fc08d…`, one `git checkout --` from not existing. The
+same failure mode `merchant-v2.html` was in at `9d84f77`, and the same remedy — committed verbatim,
+no reformatting, no cutover edit. Round-trip verified: source, staged blob and a true fresh checkout
+all hash identically.
+
+It went onto `merchant-v2-preservation` rather than a new branch because the branch was internally
+**inconsistent** without it: `merchant-v2.html:587` loads the registry and its header documents "32
+routes", but the branch carried `rc/combined`'s 30-route version, which has neither route the shell
+renders natively. The pair only means something together.
+
+Measured delta against `rc/combined` (`c5f7151`), derived by evaluating both files rather than
+reading them: 30 → **32 routes**; `sell` and `inventory` added as native; **7** routes upgraded
+`seller` → `native` (`customers`, `disputes`, `kra-tax`, `marketing`, `messages`, `shop`, `staff`);
+7 page `src` values gain `?shell=merchant`; new `ACTIONS` / `ACTION_OWNERS` / `actions` /
+`plannedActions` exports.
+
+### The integration problem those 7 upgrades cause — now runtime-proven
+
+v1's `renderNative()` ends in `console.error(…)` with **no render**. An unhonoured `kind:'native'`
+is therefore a literally empty panel plus a console line no merchant will read.
+
+`scripts/test-merchant-route-gate.js --all`, run against v1 + the certified registry on iPhone SE
+and iPhone 14 Pro viewports, confirms it. The shell drew a sidebar button for all 30 visible routes,
+entered each one, mounted a panel — and rendered nothing inside it for `sell`, `inventory`, `staff`,
+`messages` and `disputes`:
+
+```
+PASS  correct module mounted (native)      [native-sell]
+FAIL  native module rendered real content
+FAIL  no route/console error   [[merchant] native route "sell" has no renderer]
+```
+
+That run **did not complete** (`SKIP — webkit watchdog timeout`, 487 PASS / 30 FAIL) and exited `0`
+regardless — a timeout artifact, not a pass. It reached only `primary`-tier routes, so `customers`,
+`shop`, `marketing` and `kra-tax` are **unmeasured, not proven safe**.
+
+### `sokoni-merchant-capability.js` — new, and deliberately not wired in
+
+The registry states the *preferred* capability; each shell states what it can *actually render*; a
+pure resolver intersects them into one of three honest outcomes — `native`, `downgrade` (the legacy
+`seller.js` section), or `withhold` (removed from every nav projection; a deep-link gets a named
+panel, never a blank and never a silent bounce to Dashboard).
+
+`sell` and `inventory` **withhold rather than downgrade**, deliberately: falling `sell` back to POS
+would merge exactly what the platform decided to keep apart, and `inventory` no longer aliases the
+POS tab. A capability with no equivalent is absent, not approximated.
+
+The 7 fallback `sec` values are **recovered verbatim** from `rc/combined`'s own descriptors, not
+authored — three would have been guessed wrong from the route id (`kra-tax`→`tax`, `shop`→`store`,
+`staff`→`team`). The map is a sidecar, not a registry field, so the certified artifact stays
+byte-identical; it folds into the registry as `fallback:{}` when integration is agreed.
+
+### `scripts/test-merchant-capability.js` — new gate, 36 passed / 0 failed
+
+Shell capability is **measured by parsing each shell's own `renderNative()` body**, never declared —
+v1 has 9 native renderers, v2 has 18. A manifest drifts; the code cannot.
+
+* v1 + certified registry: **0 blanks** across 32 routes — the 7 downgrade, 2 withhold, nav = 30/32
+* every downgrade target confirmed a real `DASH_PAGES` key in `seller.js` (7/7)
+* v2 + certified registry: `sell` and `inventory` native, **0 blanks**, no downgrade needed
+* v2's downgrade path still works for a future unported surface, and v2 really does mount `seller`
+
+Three negative controls run every time, because a gate that cannot fail proves nothing. **NC3** is
+the load-bearing one: remove the `staff` fallback while the projection keeps showing the button, and
+the blank assertion must fail — it does. If NC3 ever passes, the v1 proof is vacuous.
+
+### `scripts/test-merchant-routes.js` — shell is now parameterised
+
+`MERCHANT_SHELL` env var, defaulting to `merchant.html`, so CI and every existing caller are
+unchanged. Two shells reading one registry is the whole point of the contract; a gate that can only
+see one of them cannot prove it.
+
+```
+merchant.html     ->  55 passed,  2 failed
+merchant-v2.html  ->  53 passed,  4 failed
+```
+
+### Two blockers this surfaced
+
+**Founder sidebar (fails in BOTH shells).** The certified registry makes `sell` and `inventory`
+`primary`, giving 17 sidebar destinations against the gate's hardcoded `FOUNDER_SIDEBAR` of 15. The
+constant is named for a reason — this is a product decision, not a constant to quietly edit so the
+gate goes green.
+
+**v2 has a navigation shape the contract cannot express.** `merchant-v2.html:2431` does
+`location.assign('/login?next=/merchant-v2.html')` on sign-out. This is *not* the outage defect the
+assertion was written to catch — that was a module's `postMessage` ending a session; this is a
+merchant pressing a button they can see, and `merchant.html` has no sign-out at all. But the
+contract sanctions only `kind:'exit'` navigations, and the `next=` target is a `.html` path, which
+the same gate forbids three checks earlier because cleanUrls 301-redirects it — and it hardcodes a
+pre-integration filename. Model sign-out as a route kind rather than widening the assertion;
+widening re-opens the hole it was written to close.
+
+### `docs/DELIVERY_DESTINATION_BLOCKER.md` — new, blocks POS destination writes
+
+Traced, not fixed. **Eight** spellings of the order destination in live code. The order writer
+(`functions/index.js:2834-2842`) stores the same destination **three times** — `deliveryAddress`,
+`dropoffLat`/`dropoffLng`, and `deliveryCoords` — all derived from the same two variables with no
+authority among them. A second path (`index.js:8170`, and `pos-marketplace-sync.js:250-268`) writes
+`deliveryCoords: null` with no coordinates at all. `functions/dispatch.js:327-328` reads
+`delivery.dropoffLat || delivery.deliveryCoords?.lat` **on the proof-of-delivery path** — a consumer
+hedging across two spellings is one that can rely on neither.
+
+Two findings worth separating out:
+
+* **ODPC gap.** `functions/account-purge-spec.js:44` redacts four destination fields on `orders` and
+  does not mention `packageRequests` **at all** — yet that document is created carrying `buyerName`,
+  `buyerPhone`, `buyerUid` and `deliveryAddress`. A deleted customer's name, phone and home address
+  remain. Derived from the spec's contents; still to be confirmed by running the purge worker.
+* **`deliveryLocations/{riderId}` is the rider's live GPS, not the customer's destination** —
+  confirmed from `firestore.rules:1823` (keyed by `riderId`, written by that rider, read via an
+  explicit `viewers` list). Conflating the two would be wrong data *and* a privacy boundary crossed.
+
+**POS must not write any destination field** — not a new spelling and not one of the eight, since
+picking one without authority is still authoring a convention. POS may read one for display,
+tolerating absence with a neutral state and never an invented address.
+
 ## [2026-08-18] — Merchant product form + grouped rail; the "black rectangles" were a specificity war
 
 Presentation only. No Firestore, functions, rules, claims or write-path change; no destination

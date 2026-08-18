@@ -22,6 +22,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const R = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const SHELL_FILE = process.env.MERCHANT_SHELL || 'merchant.html';
 
 let pass = 0, fail = 0;
 const check = (label, ok, detail) => {
@@ -29,7 +30,7 @@ const check = (label, ok, detail) => {
   ok ? pass++ : fail++;
 };
 
-console.log('\nMERCHANT ROUTE CONTRACT GATE');
+console.log('\nMERCHANT ROUTE CONTRACT GATE  \u2014  shell: ' + SHELL_FILE);
 console.log('='.repeat(70));
 
 const C = require(path.join(ROOT, 'sokoni-merchant-routes.js'));
@@ -79,7 +80,12 @@ const legacy = C.ROUTES.filter(r => r.src && /dashboard\.html|seller-dashboard|^
 check('no route targets a legacy dashboard or external URL', legacy.length === 0,
       legacy.map(r => r.id).join(',') || 'clean');
 
-const shell = R('merchant.html');
+/* Which shell is under test. Defaults to merchant.html so CI and every existing
+   caller are unchanged; MERCHANT_SHELL=merchant-v2.html runs the SAME contract
+   assertions against the certified v2 shell. Two shells reading ONE registry is
+   the whole point of the contract — a gate that can only see one of them cannot
+   prove that. */
+const shell = R(SHELL_FILE);
 /* Only real navigation escapes count — the words appearing inside comments do not. */
 const stripped = shell.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
 check('shell has no window.open',        !/window\.open\s*\(/.test(stripped));
