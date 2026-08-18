@@ -425,6 +425,31 @@
   </div>
 </div>
 
+<!-- Firebase, IN THE SHELL. Everything below assumed it was already here and nothing loaded it.
+     `git log -S` shows the tag was never present, so this is not a regression — the shell has
+     simply never had a Firebase client, and the whole native data layer has been inert since it
+     was written:
+
+       · _resolveCanonicalShop()  returns on `!window.firebaseDB`, so activeShopId stayed null
+         and every shop-scoped surface rendered "no shop yet" / "Sign in to manage your shop"
+       · SokoniBranch            reads global.firebaseDB for the same purpose (sokoni-branch.js:67)
+       · _mdb.queryProducts()    throws "The product catalogue is not available yet."
+       · _callable()             throws "SOKONI is still starting up" — posCompleteCheckout,
+                                 merchantAdjustStock, 5 Staff, 8 Marketing and 3 Disputes callables
+
+     Measured in an authenticated production session before this line existed: firebaseApp=false,
+     firebaseDB=false, firebase=undefined, activeShopId=null.
+
+     ORDERING IS WHY THIS WORKS UNCHANGED ELSEWHERE. type="module" is deferred, so it runs AFTER
+     the classic inline scripts below have registered their listeners — including the
+     `sokoniAuthReady` listener that calls _resolveCanonicalShop with the uid. firebase.js
+     dispatches that event once auth settles, so the existing wiring fires as it was always
+     written to. No consumer changes; the dependency they all declare is simply present now.
+
+     It is FIRST so that any classic script below observing window.firebaseAuth synchronously
+     is not made newly racy by load order — deferred execution means it still runs after them. -->
+<script type="module" src="firebase.js"></script>
+
 <!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
      so it is owned by the shell (not a module) and survives all navigation. -->
 <script src="sokoni-universal-printer.js"></script>
@@ -1345,14 +1370,64 @@
       '<span class="av-state">' + (on ? 'On' : 'Off') + '</span></button>';
   }
   function _avStat (n, l, cls) { return '<div class="av-stat ' + (cls || '') + '"><div class="av-n">' + n + '</div><div class="av-l">' + l + '</div></div>'; }
+  /* An explicit dead end, replacing the skeleton. The skeleton is .sk-line divs —
+     styling with no text — so a load that never completes leaves a surface that says
+     nothing at all, offers nothing to do, and never stops. Measured in an authenticated
+     session: still textless after 25 seconds. */
+  function _avFail (msg) {
+    var body = document.getElementById('av-body'); if (!body) return;
+    body.innerHTML =
+      '<div class="av-wrap" style="text-align:center;padding:34px 16px">' +
+        '<div style="font-size:30px;margin-bottom:10px">⚠️</div>' +
+        '<div style="font-weight:800;margin-bottom:6px">Availability could not load</div>' +
+        '<div style="font-size:13px;color:var(--txt2);line-height:1.6">' + msg + '</div>' +
+        '<button class="av-chip" style="margin-top:16px" onclick="__avRetry()">Try again</button>' +
+      '</div>';
+  }
+  /* Retry restores the loading state before re-reading. renderAvailability() only paints
+     the skeleton when host.dataset.av is unset, so without clearing it the merchant would
+     press Try again and watch the error sit there unchanged while the read ran. */
+  window.__avRetry = function () {
+    var host = document.getElementById('native-availability');
+    if (host) delete host.dataset.av;
+    renderAvailability();
+  };
+
   function _avLoad () {
     var body = document.getElementById('av-body');
-    if (!body || !window.AvailabilityService) return;
-    Promise.all([AvailabilityService.readShop(), AvailabilityService.readProducts()]).then(function (res) {
-      if (current !== 'availability') return;
+    if (!body) return;
+    /* Was a silent `return` alongside the body check — if the service script had not
+       loaded, the skeleton simply stayed. Say so instead. */
+    if (!window.AvailabilityService) {
+      _avFail('The availability service did not load. Reopen SOKONI Merchant.');
+      return;
+    }
+    /* The reads resolve their own failures internally (readShop falls back to open
+       defaults, readProducts to []), so a rejection here is unexpected — but "unexpected"
+       is precisely what the empty catch used to swallow. A deadline is added because a
+       read that never settles is indistinguishable from one that never started, and a
+       single shops/{id} read has been measured taking ~30s against this project.
+       _avPaint() already tolerates a null shop and an empty product list, so a partial
+       result still renders a real surface rather than a placeholder. */
+    var timer;
+    var deadline = new Promise(function (_, rej) {
+      timer = setTimeout(function () { rej(new Error('timeout')); }, 20000);
+    });
+    Promise.race([
+      Promise.all([AvailabilityService.readShop(), AvailabilityService.readProducts()]),
+      deadline
+    ]).then(function (res) {
+      clearTimeout(timer);
+      if (current !== 'availability') return;      /* navigated away — nothing to paint */
       _avState.shop = res[0]; _avState.products = res[1];
       _avPaint();
-    }).catch(function () {});
+    }).catch(function (e) {
+      clearTimeout(timer);
+      if (current !== 'availability') return;
+      _avFail((e && /timeout/.test(e.message))
+        ? 'This is taking longer than expected. Check your connection and try again.'
+        : 'Your shop and products could not be read just now.');
+    });
   }
   function _avPaint () {
     var body = document.getElementById('av-body'); if (!body) return;
