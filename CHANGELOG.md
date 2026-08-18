@@ -1,3 +1,91 @@
+## [2026-08-19] — Merchant v2 modules integrated; capability layer wired into v1; 10 runtime blanks → 0
+
+No Firestore, functions, rules or claims change. No delivery destination field added, removed,
+renamed or re-targeted. No route `kind` flipped. `MERCHANT_URL` not flipped — v2 is not yet the
+merchant entry point.
+
+### The 18 modules — taken as FILES, not commits
+
+`merchant-v2.html` loads 19 scripts; exactly one existed on this branch. All 18 others live on
+`fix/algolia-batch-poisoning` (added in `bdc966b`), **not** on `merchant-v2-integration`. That
+branch carries ~110 unrelated diverged files, so it was never merged or cherry-picked —
+`git checkout <branch> -- <18 paths>` brought across those paths and nothing else. 395,361 bytes,
+**18/18 byte-identical** to the source, and each also identical to the main worktree copy.
+
+### `scripts/test-merchant-v2-modules.js` — new, 41/0 — and its first version was wrong
+
+It asks the question v1 already failed at runtime: click the route, does anything actually
+**render**? All nine negotiated routes render real content, all 11 module globals are defined, no
+module 404s.
+
+**The first version passed 40/0 while measuring the wrong element**, and that failure mode is worth
+recording. It selected `.mpanel.show` — v1's class. v2 names panels `#panel-<id>` and marks the
+visible one `.show`, so a loose `[class*="panel"]` fallback matched `#panel-dashboard` for every
+route and reported nine identical passes of "362 chars / 31 nodes". Convincing and entirely false.
+Fixed by addressing each route's **own** panel by id, asserting it is the shown one, and adding a
+**distinctness control**: nine surfaces rendering byte-identical content is the signature of a
+mis-aimed selector, not of nine working modules. Now 9 distinct of 9, each with its own honest
+unauthenticated state — "No shop is active yet", "Sign in to see your messages". Neutral states, no
+fabricated figures.
+
+### The capability layer is wired into v1 — this was the deploy blocker
+
+Both shells load the **same** `sokoni-merchant-routes.js`, so shipping the certified registry
+without the layer would have handed the live shell the measured nine-route blank.
+
+| | before | after |
+|---|---|---|
+| `native module rendered real content` failures | **10** | **0** |
+| `native route "X" has no renderer` | 5 routes | **0** |
+| run completed | no — watchdog skip, exit 0 | **yes** |
+| totals | 487 / 30 | **500 / 12** |
+
+All 12 remaining failures are pre-existing headless noise (CORS 204 ×6, `seller:products`
+deep-switch timeout ×2, `PAGEERROR: cancelled` ×2, `firebase` undefined ×2). None is attributable
+to the registry.
+
+Withheld routes now answer honestly: `#sell` keeps its hash, mounts its own native panel, and
+renders "💳 Sell — This screen is not available in this version of Merchant", absent from the
+sidebar so no button promises it. The seven downgraded routes mount the legacy seller panel and are
+reported as `[downgraded -> seller:team]`.
+
+v1 declares `NATIVE_CAPABILITY` (9 ids) because a running shell cannot parse its own source — and
+it **cannot drift**, because the capability gate parses `renderNative()` and asserts declared equals
+measured. A stale cache serving the contract without the layer fails toward **withhold**, never
+toward blank, and never guesses a downgrade.
+
+### An 8th delta item the first census missed
+
+The certified registry also re-points the bottom nav's till slot `pos` → `sell`. In v2 that is
+correct; in v1 `sell` is withheld, so **the most prominent control in the app** would have opened a
+"not available" panel. A new projection guard caught it — the sidebar is not the only projection.
+
+Fixed in the **contract**, not the shell: `{ id:'sell', label:'Sell', fallback:'pos' }`. This is
+**not** the `sell` route falling back to POS — `#sell` still withholds, and Sell and POS remain
+separate destinations. It is a four-slot projection declaring which till *this* shell offers, and
+`pos` is exactly what `rc/combined` shipped there. Runtime-confirmed: slot 3 renders `id=pos`
+labelled "Sell"; tapping it lands on `#pos` with `mfx-pos` mounted.
+
+> ⚠ **Open for review:** the identity of the till slot is a navigation decision, flagged in the
+> contract rather than decided silently.
+
+### Two gate corrections — both stricter, neither relaxed
+
+- **The runtime gate expected the *declared* kind.** A downgraded route mounts an iframe, so
+  asserting `kind:'native'` failed the shell for behaving correctly. It now asserts the
+  **negotiated** descriptor — kind *and* `sec`.
+- **`#inventory` had a hard-coded meaning.** Its own row, then an alias of `pos` after the Cashier +
+  Inventory merge, now a first-class route again. The test asserted "mounts the POS panel". It now
+  asks the contract what `#inventory` resolves to and asserts what *that* implies.
+
+`ROUTE_GATE_TIMEOUT_MS` added (default 120000, unchanged for CI). **A run cut short by the watchdog
+still exits `0` — a timeout artifact, never a pass.**
+
+### Gate totals
+
+`capability` 42/0 · `routes` v1 68/0, v2 68/0 · `exit-contract` 18/0 · `exit-runtime` 11/0 ·
+`v2-modules` 41/0 · `route-gate --all` 500/12.
+
 ## [2026-08-19] — Two contract blockers closed: founder sidebar made explicit, sign-out made a declared exit
 
 Neither blocker was silenced. Both gates got **stricter**, and every new assertion is proven
