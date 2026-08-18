@@ -58,14 +58,29 @@
   })();
 
   (function(){
-    /* iOS visual viewport keyboard avoidance for #pos-wizard */
+    /* iOS visual viewport keyboard avoidance.
+       Two consumers, one measurement:
+         · #pos-wizard  — padded directly (first-run setup, pre-CSS).
+         · the CHECKOUT surface — exposed as --pos-kb-inset on <html>, which
+           pos-mobile.css adds to the payment panel and the M-PESA modal.
+       The payment prompt previously had NO keyboard handling at all: typing a
+       customer's phone number raised the keyboard directly over the button that
+       sends the STK push, so the merchant could enter the number and then not
+       reach the control that charges it. Publishing the inset as a variable
+       keeps the layout decision in CSS and this handler purely a sensor. */
     function _adjustForKeyboard() {
-      var wizard = document.getElementById('pos-wizard');
-      if (!wizard || wizard.style.display === 'none') return;
       if (!window.visualViewport) return;
       var vv = window.visualViewport;
       var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
-      if (keyboardH > 50) {
+      var open = keyboardH > 50;
+
+      /* Checkout surface — CSS decides what to do with it. */
+      document.documentElement.style.setProperty(
+        '--pos-kb-inset', open ? Math.round(keyboardH) + 'px' : '0px');
+
+      var wizard = document.getElementById('pos-wizard');
+      if (!wizard || wizard.style.display === 'none') return;
+      if (open) {
         /* Keyboard is open — add extra bottom padding */
         wizard.style.paddingBottom = Math.max(keyboardH + 40, 140) + 'px';
       } else {

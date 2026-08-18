@@ -1129,3 +1129,152 @@
     -webkit-backdrop-filter: blur(10px);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHONE-FIRST CHECKOUT SURFACE  —  sell → cart → charge → pay
+   ═══════════════════════════════════════════════════════════════════════════
+   WHY THIS EXISTS
+   The POS shell already has phone-first work: pos-mobile.js builds the bottom
+   nav, home panel, sheets and device pairing, and this stylesheet handles the
+   surrounding chrome. What it did NOT cover — measured, zero matching rules —
+   is the surface a merchant actually sells through: `.cart-mobile-pay-btn`,
+   `.pos-payment`, `.pos-pay-btn` and the M-PESA modal had no phone rules at
+   all. They inherited pos.css's ≤900px overlay, which was written for a tablet
+   at a counter, not a phone held in one hand.
+
+   This block changes PRESENTATION ONLY. Nothing here touches the transaction:
+   the charge button still calls SPos.payment.process() → posCompleteCheckout
+   (idempotent, transactional, server-authoritative) and status still comes from
+   posCheckPaymentStatus (webhook-backed). No second authority, no new state.
+
+   SCOPE: 767px and below — the same phone breakpoint the rest of this file uses.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+
+  /* ── Charge bar ──────────────────────────────────────────────────────────
+     The single most important control on the surface, and it was scrolling away
+     with the cart. Pinned to the bottom so the running total and the charge
+     action are reachable with a thumb at any scroll position.
+
+     It owns the bottom safe inset itself, so on an iPhone it clears the home
+     indicator rather than sitting under it. `.sk-in-shell` guard: inside the
+     merchant shell the SHELL owns the bottom nav, and this bar must sit ABOVE
+     it, not fight it — the same reasoning that already suppresses
+     .pos-quick-nav in that context. */
+  .cart-mobile-pay-btn {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    display: block;
+    width: 100%;
+    min-height: 56px;                 /* primary action — larger than the 48px floor */
+    margin: 8px 0 0;
+    padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .cart-mobile-pay-btn:disabled { opacity: .45; }
+
+  /* The cart footer is the charge bar's containing block; it must not clip a
+     sticky child, and it must leave room for the bar's safe-area padding. */
+  .pos-cart-footer {
+    overflow: visible;
+    padding-bottom: 4px;
+  }
+
+  /* ── Payment panel ───────────────────────────────────────────────────────
+     Full-screen on a phone rather than a column: a payment prompt competing for
+     width with a product grid is how a merchant mis-taps a charge. Its own
+     scroll container, so the page body never scrolls sideways behind it. */
+  .pos-payment {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pos-pay-btn {
+    min-height: 56px;
+    font-size: 16px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    touch-action: manipulation;
+  }
+  /* Back out of payment without hunting for a small target. */
+  .pos-pay-back-btn {
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 15px;
+    touch-action: manipulation;
+  }
+
+  /* ── Keyboard avoidance ──────────────────────────────────────────────────
+     Paired with the visualViewport handler in pos.html, which sets
+     --pos-kb-inset while a keyboard is open. Without this the M-PESA phone
+     field raises the keyboard directly over the confirm button — the merchant
+     types a number and cannot reach the control that sends the prompt.
+     Defaults to 0px so the rule is inert with no keyboard. */
+  .pos-payment,
+  #mpesa-modal .modal-content {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px) + var(--pos-kb-inset, 0px));
+    transition: padding-bottom .18s ease;
+  }
+
+  /* ── Touch targets ───────────────────────────────────────────────────────
+     48px is the floor for anything that mutates the cart or the sale. Quantity
+     controls get square targets and tabular digits so the number does not jump
+     width as it changes. */
+  .cart-action-btn,
+  .pos-cart-clear,
+  .pos-scan-btn,
+  .cat-chip {
+    min-height: 48px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .qty-btn {
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 20px;
+    touch-action: manipulation;
+  }
+  .cart-item-qty,
+  .cart-total-val { font-variant-numeric: tabular-nums; }
+
+  /* 16px prevents iOS Safari zooming the page when the field takes focus —
+     the same rule the merchant product form needs. */
+  .pos-search-input,
+  #pos-customer-phone { font-size: 16px; min-height: 48px; }
+
+  /* ── Category chips ──────────────────────────────────────────────────────
+     A horizontal scroll rail that scrolls ITSELF. Without the containment the
+     chip row is what makes the whole page pan sideways on a narrow phone. */
+  .pos-categories {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .pos-categories::-webkit-scrollbar { display: none; }
+  .cat-chip { flex: 0 0 auto; white-space: nowrap; }
+
+  /* Nothing in the sell surface may widen the document. */
+  .pos-panel,
+  .pos-products,
+  .pos-cart,
+  .pos-payment { max-width: 100%; overflow-x: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pos-payment,
+  #mpesa-modal .modal-content { transition: none; }
+}
