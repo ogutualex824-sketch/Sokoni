@@ -1,3 +1,81 @@
+## [2026-08-19] — Deploy prerequisites: dirty-flag fixed, adjust-stock contract proven, POS device check specified
+
+**Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore, rules or claims change.
+
+### `dirtyWorkingTree` could never be `false`
+
+Live `version.json` reporting `"dirtyWorkingTree": true` read as "production matches no commit".
+Measured instead: eight shipped files compared live-vs-`cdfc8ab` — `seller.css`, `pos-mobile.js`,
+`pos-db.js`, `shared-header.js`, `sokoni-ui.js`, `auth.js`, `merchant.html`, `pos.html` — **all
+identical**.
+
+`merchant.html` and `pos.html` first appeared to differ. They did not: **cleanUrls 301-redirects a
+`.html` URL**, so `curl` without `-L` was hashing a 24-byte redirect body. Through the clean URL
+with `-L` they match exactly. That trap nearly produced a false alarm about production integrity.
+
+The only real difference is `service-worker.js`, and only its `CACHE_VERSION` line — live `v523`
+vs committed `v522`, byte-identical otherwise. **Production is reproducible from `cdfc8ab` plus two
+deterministic pipeline artifacts.**
+
+The flag was structurally broken. `generate-version.js` runs as predeploy **step 4**; step 3
+(`bump-sw-version.js`) has already rewritten `service-worker.js`, and `version.json` is the
+script's own output — so a blanket `git status --porcelain` **cannot** report clean, and
+`release-gate.js:83` fails on it unconditionally. A gate that can never pass is one people learn to
+ignore.
+
+Now reports what was always meant: **edits the deploy pipeline did not make.** `version.json` is
+excluded as the script's own output; `service-worker.js` is excluded **only if** its sole
+difference from HEAD is the `CACHE_VERSION` line. Exclusions publish as `pipelineArtifacts` and
+real dirt as `dirtyPaths`, so the exclusion is auditable. Proven on a clean throwaway worktree:
+
+| case | expected | result |
+|---|---|---|
+| clean tree | false | ✅ |
+| SW version bump only (pipeline) | false | ✅ |
+| SW bump **+ stray `merchant.html`** | true | ✅ `dirtyPaths:["merchant.html"]` |
+| SW edited beyond the version line | true | ✅ `dirtyPaths:["service-worker.js"]` |
+| untracked new file | true | ✅ `dirtyPaths:["stray-new-file.js"]` |
+
+Case 2 initially failed with `dirtyPaths:["ervice-worker.js"]` — a character eaten, because `git()`
+trims its output so the leading space of an unstaged `" M path"` is gone and `slice(3)` was one
+off. Every path was mangled, so nothing matched an exclusion. Porcelain is now parsed by shape,
+handling staged/unstaged/untracked, `R old -> new` renames and quoted paths.
+
+### `scripts/test-merchant-adjust-contract.js` — new, 25/0 + 1 note
+
+`test-merchant-adjust-stock.js` proves the function's **logic** against a Firestore double (39/0).
+It proves nothing about whether callers and callable agree **on the wire** — the same shape as the
+POS field divergence already in this repo, where rule, writer and reader each believed a slightly
+different contract and writes landed but never showed up.
+
+It is also a deploy guard, since `merchantAdjustStock` is called by shipped client code and is not
+deployed: re-exported **by name** from `functions/index.js` (an orphan aborts a functions deploy);
+both files parse; reason vocabularies **identical 8/8**; every required key sent by every caller;
+region pinned `us-central1` matching `getFunctions(app)`'s default; App Check still **enforced**;
+the Sell module still cannot express a correction; `sold` never written.
+
+One FAIL was the detector, not the code — `pos-db.js` uses ES6 shorthand
+(`{ productId: id, shopId, adjustmentId }`) and a `key:`-only regex called them missing. The
+extractor now reads both forms and carries its own negative control.
+
+**Note (non-blocking):** `sokoni-merchant-stock.js` accepts a 500-char note; the server keeps 200.
+Silently truncated — a merchant-visible honesty gap, recorded not fixed.
+
+### SW floor `1ea4d35` verified isolated
+
+One file (`scripts/deploy/bump-sw-version.js`), hosting-ignored. `LAST_SHIPPED_V = 530`, committed
+SW is `v522`, so the next deploy produces **v531 > live v523** — monotonic. Safe to take first.
+
+### Till slot and the POS device check
+
+The till slot is **behavioural, not a hidden field**: the bar renders `id=pos` and tapping it lands
+on `#pos` with `mfx-pos` mounted — no merchant can reach the "not available" panel from it. The
+label reads "Sell" over a POS destination, exactly as `rc/combined` ships today.
+
+An 8-step real-device checklist for `13515cb` is in `docs/UNDEPLOYED_RC_COMBINED_REVIEW.md`.
+Simulators do not reproduce the visual-viewport behaviour. If steps 5–6 fail, the fix does not ride
+along with the v2 deploy; if they pass it is accepted as a **fix**, not as POS certification.
+
 ## [2026-08-19] — Merchant v2 modules integrated; capability layer wired into v1; 10 runtime blanks → 0
 
 No Firestore, functions, rules or claims change. No delivery destination field added, removed,
