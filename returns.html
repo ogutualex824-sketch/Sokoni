@@ -415,6 +415,41 @@ function toast(msg, type = 'ok') {
   el._t = setTimeout(() => { el.className = 'toast'; }, 3500);
 }
 
+/* ── The loading screen must always be dismissible ─────────────────────────────
+   #auth-loading covers the whole surface, and exactly ONE line dismisses it —
+   `display='none'` further down, reached only after the auth callback fires AND a
+   forced token refresh resolves. Anything that stalls or throws in between leaves
+   "Authenticating…" on screen indefinitely: no message, no retry, no timeout.
+   Measured in an authenticated merchant session, that is what happened — the surface
+   was still showing it after 25 seconds.
+
+   _returnsError() cannot report this, because it writes into #app-root's tables and
+   #app-root is display:none until the same line that would have dismissed the spinner.
+   An error rendered there is invisible by construction. So a fatal auth-stage failure
+   needs to replace the loading screen itself. */
+function _authFatal(msg) {
+  const el = document.getElementById('auth-loading');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="max-width:340px;text-align:center;line-height:1.6">' +
+      '<div style="font-size:30px;margin-bottom:10px">⚠️</div>' +
+      '<div style="font-weight:700;margin-bottom:6px">Returns could not open</div>' +
+      '<div style="font-size:13px;color:var(--muted)">' + esc(msg || 'Your session could not be verified.') + '</div>' +
+      '<button class="btn btn-outline btn-sm" style="margin-top:16px" onclick="location.reload()">Try again</button>' +
+    '</div>';
+}
+
+/* A promise that cannot outlive its deadline. Used only for the auth-stage call that
+   gates the loading screen — a slow network becomes a message the merchant can act on
+   instead of a spinner that never stops. */
+function _deadline(promise, ms, what) {
+  let t;
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error((what || 'Request') + ' timed out')), ms); })
+  ]).finally(() => clearTimeout(t));
+}
+
 // ── Auth guard + role detection ────────────────────────────────
 auth.onAuthStateChanged(async user => {
   /* In-shell, navigating to login renders a full login screen INSIDE the merchant panel
@@ -427,7 +462,21 @@ auth.onAuthStateChanged(async user => {
   }
   currentUser = user;
 
-  const token = await user.getIdTokenResult(true);
+  /* FORCED refresh (the `true`), so this is a network round trip to the token service,
+     not a read of a cached claim — and it sits directly between the auth callback and
+     the only line that dismisses the loading screen. Unguarded, a stall or a rejection
+     here strands the surface on "Authenticating…" forever, which is exactly the failure
+     the containment gate caught. Bounded and handled; the forced refresh is kept because
+     role context below must not be decided from stale claims. */
+  let token;
+  try {
+    token = await _deadline(user.getIdTokenResult(true), 15000, 'Session check');
+  } catch (e) {
+    _authFatal((e && /timed out/i.test(e.message))
+      ? 'Verifying your session took too long. Check your connection and try again.'
+      : 'Your session could not be verified. Sign in again, then reopen Returns.');
+    return;
+  }
 
   /* ── ROUTE CONTEXT FIRST, PERMISSIONS SECOND ───────────────────────────────
      Two bugs came from getting this backwards, and both are instructive.
