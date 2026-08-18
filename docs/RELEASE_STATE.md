@@ -1,6 +1,6 @@
 # SOKONI Release State
 
-**Last updated:** 2026-08-18 07:50 UTC
+**Last updated:** 2026-08-18 08:05 UTC
 
 The single authoritative record of what is shipped, what is implemented but unproven, what is
 blocked, and exactly what evidence each remaining item still needs.
@@ -50,8 +50,9 @@ MERCHANT WORKSTREAM
 
 POS WORKSTREAM
   architecture         6/6 STATICALLY REVIEWED
+  merge verification   8/8 AUTOMATED TESTED   (see POS merge check below)
   authority runtime    0/3 NOT PROVEN
-  client integration   PENDING          correctStock not in live hosting
+  client integration   BUILT            ce68078 merged at 13515cb; correctStock wired
   device E2E           BLOCKED
   acceptance           NOT READY
 ```
@@ -94,8 +95,8 @@ Do not rebuild what is already live. Evidence column is what was actually measur
 | Role switching & authorization | `8ce4ef8` | ✅ hosting | 7 checks | **PENDING** |
 | SW counter floor | `1ea4d35` | ⏸ rides next hosting deploy | n/a | READY |
 | **Stock authority** (`merchantAdjustStock`) | `96bce0b` | ✅ functions | **REQUIRED** | **PENDING** |
-| **POS phone-first UI** | `ce68078` | ❌ held | **REQUIRED** | **BLOCKED** |
-| POS client → authority wiring | `96bce0b` (`correctStock`) | ❌ not in live hosting | **REQUIRED** | **BLOCKED** |
+| **POS phone-first UI** | `13515cb` | ❌ not deployed | **REQUIRED** | **BUILT / NOT PROVEN** |
+| POS client → authority wiring | `96bce0b` (`correctStock`) | ❌ not in live hosting | **REQUIRED** | **BUILT / NOT PROVEN** |
 | Payments (M-PESA/STK) | pre-existing | ✅ | **REQUIRED** | UNPROVEN |
 | Receipt / printer path | pre-existing | ✅ | **REQUIRED** | UNPROVEN |
 
@@ -384,3 +385,28 @@ twice. Only manual corrections moved to `correctStock()`.
 
 `merchantAdjustStock` is deployed with no client consumer, and that is deliberate. It becomes
 reachable only when POS ships — which is gated behind the device run above.
+
+---
+
+## POS merge check — 13515cb (AUTOMATED TESTED)
+
+`ce68078` cherry-picked onto `rc/combined`. Eight invariants verified mechanically:
+
+| # | Check | Result |
+|---|---|---|
+| 1 | merge touches only presentation | `pos-mobile.css`, `pos.html` — 2 files |
+| 2 | checkout code unchanged | `functions/pos-zero-friction.js` UNCHANGED |
+| 3 | payment/sale code unchanged | `pos.js` UNCHANGED |
+| 4 | receipt path unchanged | `pos-receipt-engine.js`, `sokoni-pos-print-service.js` UNCHANGED |
+| 5 | correction uses `correctStock()` | 1 call site (`pos-mobile.js` stock-in) |
+| 6 | sale path still `adjustStock()` | `pos.js` sale call intact — no double-decrement |
+| 7 | no new claims / rules / indexes | 0 changed |
+| 8 | no desktop regression | every new rule inside `max-width:767px` or `prefers-reduced-motion`; CSS braces balanced; JS parses |
+
+**Still NOT deployed.** Hosting remains `cdfc8ab`, so `correctStock` has no live consumer and POS
+behaviour is unchanged for every merchant.
+
+### State vocabulary
+
+`BUILT` → `STATICALLY REVIEWED` → `AUTOMATED TESTED` → `RUNTIME PROVEN` → `DEVICE VERIFIED`.
+No item may be recorded as "done".
