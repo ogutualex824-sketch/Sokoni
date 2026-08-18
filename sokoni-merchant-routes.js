@@ -60,6 +60,19 @@
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
 
+    { id:'sell', name:'Sell', icon:'💳', tier:'primary',
+      kind:'native',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'sell',
+      note:'The phone-first till (sokoni-merchant-sell.js). Native, NOT the POS iframe: POS is a ' +
+           'desktop-scale in-shop application whose checkout assumes a counter, a drawer and a ' +
+           'wide viewport. This is the surface for a merchant standing up with a phone. ' +
+           'It reads canonical `products` scoped by shopId through SokoniMerchantData and ' +
+           'submits sales to posCompleteCheckout — the SAME server authority POS uses, so the two ' +
+           'cannot produce different stock or different revenue. It writes nothing itself: an ' +
+           'abandoned cart reserves nothing and decrements nothing, and success is only ever ' +
+           'rendered from a server result. POS is preserved unchanged as its own destination.' },
+
     { id:'pos', name:'POS', icon:'🧮', tier:'primary',
       kind:'pos', tab:'pos',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
@@ -73,6 +86,19 @@
            'suppressed here — it is now the navigation for this surface. #cashier and #inventory ' +
            'alias here so existing links keep working. Products stays separate: catalogue ' +
            'management is a different job from in-shop stock operations.' },
+
+    { id:'inventory', name:'Inventory', icon:'📦', tier:'primary',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'inventory',
+      note:'Stock on hand + CORRECTIONS, via merchantAdjustStock — the first and only server ' +
+           'authority over a correction to canonical `products.stock`. It was an ALIAS to the POS ' +
+           'inventory tab until 2D-1C; that tab reaches the canonical field through ' +
+           'sokoni-db.updateProductStock(), which also increments `sold`, so counting three ' +
+           'damaged units off the shelf silently recorded three SALES. This route exists because ' +
+           'a correction is not a sale: it moves stock, writes a stockMovements record with a ' +
+           'mandatory reason, and leaves `sold`, revenue and every sales aggregate untouched. ' +
+           'Selling remains Sell/POS -> posCompleteCheckout.' },
 
     { id:'orders', name:'Orders', icon:'🧾', tier:'primary',
       kind:'native',
@@ -103,7 +129,7 @@
            'client-side — unknown renders as — , never 0.' },
 
     { id:'deliveries', name:'Delivery Hub', icon:'🛵', tier:'primary',
-      kind:'page', src:'seller-delivery.html',
+      kind:'page', src:'seller-delivery.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'deliveries',
       note:'Was dispatch.html — the ADMIN dispatch console (data-require-role="admin"). It ' +
@@ -120,25 +146,48 @@
       mobile:true, desktop:true, activeKey:'receipts' },
 
     { id:'returns', name:'Returns', icon:'↩️', tier:'primary',
-      kind:'page', src:'returns.html',
+      kind:'page', src:'returns.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'returns',
       note:'Bounded 12s load with terminal error+Retry — always reaches READY/EMPTY/ERROR (1d81f11).' },
 
     { id:'staff', name:'Staff', icon:'👥', tier:'primary',
-      kind:'seller', sec:'team',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'staff' },
+      mobile:true, desktop:true, activeKey:'staff',
+      note:'Native team surface (sokoni-merchant-team.js) on the canonical shopEmployees contract: ' +
+           'listShopEmployees / listShopInvites / inviteShopEmployee / revokeShopInvite / ' +
+           'removeShopEmployee, all owner-scoped and corroborated against shops/{shopId}. ' +
+           'Was kind:seller (seller.html#team), whose remove path called deleteDoc on ' +
+           'shopEmployees/{id} AND users/{id} straight from the browser, and which mirrored the ' +
+           'roster into localStorage.sokoniEmployees so a revoked cashier kept appearing as staff ' +
+           'on that device. Neither behaviour is reachable from the merchant workspace any more.' },
 
     { id:'messages', name:'Messages', icon:'💬', tier:'primary',
-      kind:'seller', sec:'messages',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
-      mobile:true, desktop:true, activeKey:'messages' },
+      mobile:true, desktop:true, activeKey:'messages',
+      note:'Native surface (sokoni-merchant-messages-ui.js) through the deployed messagesDispatch ' +
+           'router — the individual handlers are not re-exported, the router is, and it routes into ' +
+           'the same messages._h ops. Every mutation is an op; the only Firestore access is a READ ' +
+           'of conversations/{id}/messages, which firestore.rules gates on participation and whose ' +
+           'client creates are blocked outright (allow create: if false), so sendMessage stays the ' +
+           'sole writer. PARTICIPANT-scoped, not shop-scoped, and labelled so. Was kind:seller ' +
+           '(seller.html#messages), whose inbox lived in localStorage.sokoniMessages — a thread read ' +
+           'on one device stayed unread on another.' },
 
     { id:'marketing', name:'Marketing', icon:'📣', tier:'more',
-      kind:'seller', sec:'marketing',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'marketing' },
+      mobile:true, desktop:true, activeKey:'marketing',
+      note:'Native surface (sokoni-merchant-marketing.js) built ONLY on the authorities the ' +
+           'Marketing census classified SAFE: createMinishopCampaign / getMinishopCampaigns / ' +
+           'pauseMinishopCampaign / deleteMinishopCampaign (all four now shop-scoped) plus the ' +
+           'minishop promotions path. Ads are ACCOUNT-scoped and labelled as such, because ' +
+           'sokoAds carries no shopId in the writer or either reader. Orders and ROI are NOT ' +
+           'displayed: those counters come from trackCampaignClick, an endpoint needing no ' +
+           'sign-in, so they are not business results. The eleven marketing-engine callables ' +
+           'stay out — un-re-exported, and their role gate admits any string claim.' },
 
     { id:'plan', name:'Plan', icon:'💎', tier:'primary',
       kind:'page', src:'plans.html?shell=merchant',
@@ -174,7 +223,7 @@
            'inside the merchant shell, the double-shell defect e0dbdca fixed.' },
 
     { id:'minishop', name:'My MiniShop', icon:'🏪', tier:'hidden',
-      kind:'page', src:'minishop-admin.html', dynamic:true,
+      kind:'page', src:'minishop-admin.html?shell=merchant', dynamic:true,
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'minishop',
       note:'src resolves at click time from the canonical claimed-shop record (window.__miniShopUrl): ' +
@@ -186,11 +235,19 @@
       mobile:true, desktop:true, activeKey:'flash-sale' },
 
     { id:'kra-tax', name:'KRA Tax', icon:'🧾', tier:'more',
-      kind:'seller', sec:'tax',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'kra-tax',
-      note:'DASH_PAGES.tax existed but had NO merchant sidebar button before Phase 2 — the surface ' +
-           'was built and unreachable. eTIMS certification is separate (BLOCKED on KRA spec).' },
+      note:'Native tax surface (sokoni-merchant-tax-ui.js) on the eight authorities the ' +
+           'Receipts/Tax census classified SAFE: etimsGetProfile, etimsRegisterSeller, ' +
+           'etimsUpdateProfile, etimsValidatePin, etimsGetSellerStats, etimsGenerateInvoice, ' +
+           'etimsBulkGenerate, etimsResubmitInvoice. ctx is SELLER_UID ALONE and deliberately not ' +
+           'SHOP_ID: tax identity is etimsProfiles/{auth.uid} — the uid IS the document id, so no ' +
+           'merchant identifier is sent by any call and there is no shop dimension to scope. One ' +
+           'KRA PIN and one invoice sequence per ACCOUNT, which the surface states in its header ' +
+           'rather than letting a two-shop merchant find out by surprise. Was kind:\'seller\' ' +
+           'sec:\'tax\' — an iframe of seller.html#tax. eTIMS certification is separate ' +
+           '(BLOCKED on KRA spec).' },
 
     { id:'stories', name:'Stories', icon:'📸', tier:'more',
       kind:'seller', sec:'stories',
@@ -198,14 +255,33 @@
       mobile:true, desktop:true, activeKey:'stories' },
 
     { id:'disputes', name:'Disputes', icon:'⚖️', tier:'primary',
-      kind:'seller', sec:'disputes',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'disputes' },
+      mobile:true, desktop:true, activeKey:'disputes',
+      note:'Native surface (sokoni-merchant-disputes-ui.js) on the party-scoped dispute ' +
+           'authorities: getSellerDisputes / getDisputeDetail / sellerRespondToDispute / ' +
+           'addDisputeEvidence. A merchant CANNOT open a dispute (createDispute refuses a ' +
+           'non-buyer), cancel one (cancelDispute is the buyer withdrawing) or resolve one ' +
+           '(adminResolveDispute is admin-gated) — the screen explains each instead of ' +
+           'offering a control the server refuses. ACCOUNT-scoped and labelled so: a dispute ' +
+           'carries orderId/buyerId/sellerId and NO shopId, so filtering by the active shop ' +
+           'would invent a boundary the server never applied.' },
 
     { id:'customers', name:'Customers', icon:'🧑‍🤝‍🧑', tier:'more',
-      kind:'seller', sec:'customers',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'customers' },
+      mobile:true, desktop:true, activeKey:'customers',
+      note:'Native surface. List + search read crmCustomerProfiles through firestore.rules, which ' +
+           'scope on resource.data.merchantId == auth.uid and refuse client writes outright — so a ' +
+           'merchant cannot receive another merchant\'s rows however the query is written. Profile ' +
+           'and summary use getCustomerProfile / getCRMDashboard. DELIBERATELY NOT BOUND: ' +
+           'posLookupCustomer (searches posCustomers platform-wide with no merchant filter — a ' +
+           'cross-tenant PII disclosure), posGetCustomerInsights (client-supplied merchantId, ' +
+           'unverified) and getCustomerGrowthMetrics (gated on a sellerId claim nothing mints). ' +
+           'The two callables assert ownership via merchants/{merchantId}, a POS-only record a ' +
+           'marketplace merchant does not have; the screen states that plainly and does NOT create ' +
+           'one — resurrecting the POS identity model to satisfy a legacy CRM callable would undo ' +
+           'the shops/{shopId} identity work.' },
 
     { id:'reports', name:'Reports', icon:'📊', tier:'more',
       kind:'native',
@@ -218,17 +294,24 @@
       mobile:true, desktop:true, activeKey:'availability' },
 
     { id:'shop', name:'Shop Details', icon:'🏬', tier:'more',
-      kind:'seller', sec:'store',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'shop' },
+      mobile:true, desktop:true, activeKey:'shop',
+      note:'Native storefront surface (sokoni-merchant-store-ui.js) on the six authorities the ' +
+           'Store census classified SAFE: getMyMinishop, saveMinishopConfig, claimMinishopHandle, ' +
+           'getMinishopAnalytics, generateMinishopShareCard. The shopId is LEARNED from ' +
+           'getMyMinishop, which resolves shops where sellerUid == uid — never taken from ' +
+           'SokoniShell.activeShopId, the URL, or anything a browser can edit, and never defaulted ' +
+           'to the uid. The follower count has ONE source, getMinishopAnalytics, whose value ' +
+           'derives from the shopFollowers relationship made CF-only in Store Stage 1B.' },
 
     { id:'fulfilment', name:'Fulfilment', icon:'🚚', tier:'more',
-      kind:'page', src:'seller-fulfilment.html',
+      kind:'page', src:'seller-fulfilment.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'fulfilment' },
 
     { id:'riders', name:'Riders', icon:'🏍️', tier:'more',
-      kind:'page', src:'seller-delivery.html#riders',
+      kind:'page', src:'seller-delivery.html?shell=merchant#riders',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'riders',
       note:'Was driver.html — the RIDER-FACING app. A seller tapping "Riders" in their own ' +
@@ -238,7 +321,7 @@
            'account, this = the seller\'s delivery operation, track.html = a buyer\'s own order.' },
 
     { id:'verification', name:'Verification', icon:'✅', tier:'more',
-      kind:'page', src:'verification.html',
+      kind:'page', src:'verification.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'verification' },
 
@@ -249,7 +332,7 @@
       note:'Printer/device state lives in the SHELL context so the GATT connection survives navigation.' },
 
     { id:'pos-setup', name:'POS Setup', icon:'🖨️', tier:'more',
-      kind:'page', src:'pos-printer-setup.html',
+      kind:'page', src:'pos-printer-setup.html?shell=merchant',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID],
       mobile:true, desktop:true, activeKey:'pos-setup' },
 
@@ -261,7 +344,7 @@
      by accident when a route definition moves. Every id here must be tier:'primary', and every
      tier:'primary' route must appear here — validate() enforces both directions. */
   var PRIMARY_ORDER = [
-    'dashboard', 'plan', 'products', 'pos', 'orders', 'analytics', 'revenue',
+    'dashboard', 'plan', 'sell', 'products', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
     'payments', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
@@ -290,13 +373,107 @@
       ids:['kra-tax','devices','pos-setup'] }
   ];
 
+  /* ── ROUTE ACTION CHIPS ─────────────────────────────────────────────────────────
+     THE SHELL DECLARES. THE SURFACE OWNER RENDERS.
+
+     Every contextual chip bar in /merchant is declared here, and nowhere else, so that
+     "what controls does this destination offer" is a reviewable property of the registry
+     rather than a fact you can only discover by reading four renderers.
+
+     What this is NOT: a shell-owned chip bar. Orders, Analytics, Revenue, Reports,
+     Payments and Availability already render their own filter bars, and those bars own
+     real state (_ordState, _anRange, _payTab). Rendering a second row from the shell
+     would put two filter bars on Orders — the same "two of everything" defect that
+     test-merchant-shell-boundary.js exists to prevent, just one layer down. So the
+     registry ADOPTS the existing bars: it names their handler, and the gate proves the
+     handler is really there. Nothing is re-plumbed and no proven surface is touched.
+
+     `owner` is the surface that renders the bar, and therefore the file the gate greps:
+       native → merchant.html's own renderer      seller → seller.html / seller.js
+       pos    → pos.html
+     `status`:
+       live    → rendered today. MUST name a handler, and the gate asserts that handler
+                 is defined in the owner's file. A live bar whose handler has been renamed
+                 or deleted fails the gate rather than becoming a dead control.
+       planned → declared, deliberately NOT rendered, and MUST NOT name a handler. This is
+                 how a capability we have agreed to build stays visible without shipping a
+                 button that does nothing. A planned bar renders no chips at all — the
+                 registry never causes a control to appear before its capability exists.
+
+     The whole point of the `status` split is that a chip cannot be decorative. Either it
+     is bound to a handler the gate can find, or it is not on screen. ── */
+  var ACTION_OWNERS = ['native','seller','pos'];
+  var ACTION_STATUS = ['live','planned'];
+
+  var ACTIONS = {
+    /* Adopted — these bars exist and are rendered by merchant.html today. */
+    orders: { owner:'native', bars:[
+      { key:'tab', status:'live', handler:'__ordTab', chips:[
+        { id:'all',       label:'All'       }, { id:'pickup',    label:'Pickup'    },
+        { id:'pending',   label:'Pending'   }, { id:'completed', label:'Completed' },
+        { id:'refunded',  label:'Refunded'  }, { id:'cancelled', label:'Cancelled' } ] },
+      { key:'range', status:'live', handler:'__ordRange', chips:[
+        { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+        { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] }
+    ] },
+
+    /* Analytics, Revenue and Reports are three views of ONE renderer (renderAnalytics),
+       so they share one handler that takes the view as its first argument. Declared per
+       route anyway — a merchant reading Revenue is on the Revenue destination, and the
+       registry should say what Revenue offers without the reader having to know that
+       three ids collapse into one function. */
+    analytics: { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'analytics', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+    revenue:   { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'revenue', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+    reports:   { owner:'native', bars:[ { key:'range', status:'live', handler:'__anRange', view:'reports', chips:[
+      { id:'today', label:'Today' }, { id:'week', label:'This Week' },
+      { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
+
+    payments: { owner:'native', bars:[ { key:'tab', status:'live', handler:'__payTab', chips:[
+      { id:'payouts', label:'Payouts' }, { id:'methods', label:'Methods' } ] } ] },
+
+    availability: { owner:'native', bars:[ { key:'shop', status:'live', handler:'__avToggleShop', chips:[
+      { id:'shop', label:'Shop open' } ] } ] },
+
+    /* ── Declared, not yet rendered ────────────────────────────────────────────────
+       Products and POS are owned by seller.html and pos.html respectively. Their chips
+       are agreed but unbuilt; they stay `planned` so the completion matrix can track
+       them and the gate can report them, without a single dead button reaching a shop.
+
+       Dashboard's Export is the honest case that proves the rule: there is no export
+       capability anywhere in merchant.html today, so Export is declared and NOT drawn.
+       Rendering it as a live chip would be exactly the "hard-coded fake button" this
+       registry exists to make impossible. */
+    products: { owner:'seller', bars:[
+      { key:'actions', status:'planned', chips:[
+        { id:'add',   label:'Add Product' }, { id:'stock', label:'Stock' },
+        { id:'flash', label:'Flash Sale'  }, { id:'scan',  label:'Scan'  } ] } ] },
+
+    pos: { owner:'pos', bars:[
+      { key:'actions', status:'planned', chips:[
+        { id:'scan',     label:'Scan'     }, { id:'cart',     label:'Cart'     },
+        { id:'customer', label:'Customer' }, { id:'discount', label:'Discount' },
+        { id:'pay',      label:'Pay'      } ] } ] },
+
+    dashboard: { owner:'native', bars:[
+      { key:'export', status:'planned', chips:[ { id:'export', label:'Export' } ] } ] }
+  };
+
   /* Legacy route ids -> canonical ids. Phase 2 renamed several destinations; a merchant
      with a bookmark, an open tab, or a deep link on the old id must land on the right
      module rather than hit the unknown-route failure. Aliases resolve BEFORE the
      unknown-id check, so they are back-compat — not a silent fallback to Dashboard. */
   var ALIASES = {
     cashier:     'pos',       /* merged: Cashier was this same app at its checkout tab */
-    inventory:   'pos',       /* merged: Inventory is a TAB inside POS, not a second app */
+    /* `inventory` used to alias to POS, because Inventory was a TAB inside that app. It is a
+       REAL native route again as of 2D-1C — not a reinstated duplicate, but the move of stock
+       corrections onto their own server authority (merchantAdjustStock). The POS tab writes the
+       canonical field through a path that also increments `sold`; the native route does not. So
+       `#inventory` must resolve to the route that cannot record a correction as a sale.
+       resolve() checks byId before ALIASES, so the entry is simply gone rather than shadowed. */
     /* Audit Log and POS Settings are POS TABS, not sidebar destinations. They were removed as
        rows once POS became the single in-shop surface — two sidebar entries that opened the same
        app at a different tab is exactly what the merge existed to end. Kept as aliases so any
@@ -320,10 +497,14 @@
      a bottom bar means "the shop", and the merchant had no way back to it at all. Making the
      dashboard the thing called Home was what hid that: the button looked like an exit and
      behaved like a no-op for anyone already on it. */
+  /* The Sell tab points at the NATIVE till, not the POS iframe. The label always said
+     "Sell"; what it opened was a desktop-scale in-shop application inside a phone-sized
+     panel. POS is unchanged and still reachable as its own sidebar destination — this
+     retargets one button, it does not remove a surface. */
   var BOTTOM_NAV = [
     { id:'home',      icon:'🏠', label:'Home'   },
     { id:'orders',    icon:'🧾', label:'Orders' },
-    { id:'pos',       icon:'💳', label:'Sell'   },
+    { id:'sell',      icon:'💳', label:'Sell'   },
     { id:'__more',    icon:'☰',  label:'More'   }
   ];
 
@@ -444,6 +625,59 @@
         errs.push('route "' + r.id + '" is tier:more but in no MORE_GROUPS group — it would have no sidebar position');
     });
 
+    /* ── ACTION CHIPS ────────────────────────────────────────────────────────────
+       The invariant: a chip is bound to a real handler, or it is not rendered. Both
+       halves are enforced here. Whether a `live` handler actually exists in the owner's
+       file is a cross-file fact this dependency-free module cannot see — that half is
+       proven by scripts/test-merchant-actions.js, which greps the owning surface. */
+    Object.keys(ACTIONS).forEach(function (id) {
+      var a = ACTIONS[id], at = 'actions "' + id + '"';
+      if (!byId[id])                            errs.push(at + ': not a registered route');
+      else if (byId[id].kind === 'exit')        errs.push(at + ': an exit route mounts nothing and cannot own chips');
+      if (ACTION_OWNERS.indexOf(a.owner) < 0)   errs.push(at + ': invalid owner "' + a.owner + '"');
+      /* The declared owner must match how the route is actually mounted, or the gate would
+         grep the wrong file and "prove" a handler that the merchant never reaches. */
+      if (byId[id] && a.owner === 'native' && byId[id].kind !== 'native')
+        errs.push(at + ': owner "native" but route kind is "' + byId[id].kind + '"');
+      if (byId[id] && a.owner === 'seller' && byId[id].kind !== 'seller')
+        errs.push(at + ': owner "seller" but route kind is "' + byId[id].kind + '"');
+      if (byId[id] && a.owner === 'pos' && byId[id].kind !== 'pos')
+        errs.push(at + ': owner "pos" but route kind is "' + byId[id].kind + '"');
+
+      if (!Array.isArray(a.bars) || !a.bars.length) { errs.push(at + ': declares no bars'); return; }
+
+      var barKeys = {}, handlers = {};
+      a.bars.forEach(function (b) {
+        var bat = at + ' bar "' + b.key + '"';
+        if (!b.key)                             errs.push(at + ': a bar has no key');
+        if (barKeys[b.key])                     errs.push(bat + ': duplicate bar key');
+        barKeys[b.key] = true;
+        if (ACTION_STATUS.indexOf(b.status) < 0) errs.push(bat + ': invalid status "' + b.status + '"');
+
+        /* The two halves of the no-fake-button rule. */
+        if (b.status === 'live' && !b.handler)  errs.push(bat + ': live bar must name a handler — an unbound chip is a decorative control');
+        if (b.status === 'planned' && b.handler) errs.push(bat + ': planned bar must not name a handler — it is not rendered, so a handler here is a lie about what ships');
+
+        /* Two bars on one route sharing a handler means one of them silently drives the
+           other's state — the Orders tab bar and range bar are separate for a reason. */
+        if (b.handler) {
+          if (handlers[b.handler])              errs.push(bat + ': handler "' + b.handler + '" is already used by bar "' + handlers[b.handler] + '"');
+          handlers[b.handler] = b.key;
+          if (!/^__[A-Za-z][A-Za-z0-9]*$/.test(b.handler))
+            errs.push(bat + ': handler "' + b.handler + '" must be a __-prefixed global, matching the shell\'s existing chip handlers');
+        }
+
+        if (!Array.isArray(b.chips) || !b.chips.length) { errs.push(bat + ': declares no chips'); return; }
+        var chipIds = {};
+        b.chips.forEach(function (c) {
+          if (!c.id)                            errs.push(bat + ': a chip has no id');
+          if (!c.label)                         errs.push(bat + ' chip "' + c.id + '": has no label');
+          if (chipIds[c.id])                    errs.push(bat + ' chip "' + c.id + '": duplicate id');
+          chipIds[c.id] = true;
+        });
+      });
+    });
+
     return errs;
   }
 
@@ -480,6 +714,35 @@
           routes: g.ids.map(function (id) { return byId[id]; }).filter(Boolean)
         };
       });
+    },
+    ACTIONS: ACTIONS,
+    ACTION_OWNERS: ACTION_OWNERS,
+    /* Chips a destination offers. `status` filters to what is actually on screen:
+       actions(id,'live') is what a merchant can touch right now, actions(id) is
+       everything declared including the planned gaps. Returns [] for a route with no
+       chips, so a caller never has to null-check before rendering. */
+    actions: function (id, status) {
+      var a = ACTIONS[this.resolve(id) || id];
+      if (!a) return [];
+      return a.bars
+        .filter(function (b) { return !status || b.status === status; })
+        .map(function (b) {
+          return { key:b.key, owner:a.owner, status:b.status, handler:b.handler || null,
+                   view:b.view || null, chips:b.chips.slice() };
+        });
+    },
+    /* Every declared-but-unrendered bar, for the completion matrix and the gate report.
+       This is the list that must shrink to empty before Merchant OS is "chip complete". */
+    plannedActions: function () {
+      var out = [];
+      Object.keys(ACTIONS).forEach(function (id) {
+        ACTIONS[id].bars.forEach(function (b) {
+          if (b.status === 'planned')
+            out.push({ route:id, bar:b.key, owner:ACTIONS[id].owner,
+                       chips:b.chips.map(function (c) { return c.id; }) });
+        });
+      });
+      return out;
     },
     /* Context sufficiency — a route is refused BEFORE mount when its context is
        missing, so the merchant sees an honest reason instead of a blank panel. */
