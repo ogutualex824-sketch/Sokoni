@@ -59,9 +59,17 @@ const EMAIL    = process.env.MERCHANT_EMAIL || '';
 const PASSWORD = process.env.MERCHANT_PASSWORD || '';
 
 /* ── Loud skip. A gate that vanishes quietly is worse than one that fails. ──── */
-if (!TOKEN || !EMAIL || !PASSWORD) {
-  const miss = [!TOKEN && 'APPCHECK_DEBUG_TOKEN', !EMAIL && 'MERCHANT_EMAIL',
-                !PASSWORD && 'MERCHANT_PASSWORD'].filter(Boolean);
+/* An unsubstituted placeholder is not a credential. A run started with
+   MERCHANT_PASSWORD="<>" spends App Check attestation and a real sign-in attempt before
+   Firebase returns auth/invalid-credential — a result that reads exactly like a rotated
+   or wrong password and costs a cycle to tell apart. Catch it here, where the cause is
+   still obvious, rather than letting the identity provider report it. */
+const PLACEHOLDER = (v) => !v || /^<.*>$/.test(v) || /^(YOUR|THE)[_-]/i.test(v) ||
+                           /^(password|changeme|xxx+)$/i.test(v);
+if (PLACEHOLDER(TOKEN) || PLACEHOLDER(EMAIL) || PLACEHOLDER(PASSWORD)) {
+  const miss = [PLACEHOLDER(TOKEN) && 'APPCHECK_DEBUG_TOKEN',
+                PLACEHOLDER(EMAIL) && 'MERCHANT_EMAIL',
+                PLACEHOLDER(PASSWORD) && 'MERCHANT_PASSWORD'].filter(Boolean);
   console.log('\n' + '='.repeat(74));
   console.log('  SKIPPED — NOT A PASS. NOTHING WAS PROVEN.');
   console.log('='.repeat(74));
