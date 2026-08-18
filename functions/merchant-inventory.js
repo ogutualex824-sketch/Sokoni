@@ -62,6 +62,20 @@ const logger = require('firebase-functions/logger');
 const _db = () => getFirestore();
 const _ts = () => FieldValue.serverTimestamp();
 
+/* Runtime config matches the POS/payment functions this is called alongside
+   (pos-zero-friction.js `cfg`), NOT inventory-engine's warehouse callables:
+
+     · region        pinned. The client reaches this through
+                     getFunctions(window.firebaseApp) with no region argument,
+                     which resolves us-central1 by default — pinning makes that
+                     agreement explicit instead of leaving it to a default that
+                     could drift.
+     · enforceAppCheck  every POS money/stock callable enforces it, and this
+                     mutates canonical stock. Omitting it would have left the
+                     one NEW write surface as the only unattested one. */
+const REGION = 'us-central1';
+const CFG = { region: REGION, enforceAppCheck: true, memory: '256MiB', timeoutSeconds: 30 };
+
 /* Why the stock moved. A correction without a stated reason is an unexplained
    inventory change, which is exactly what an audit cannot work with. */
 const REASONS = Object.freeze([
@@ -85,7 +99,7 @@ async function _isPlatformAdmin (uid) {
 }
 
 exports.merchantAdjustStock = onCall(
-  { timeoutSeconds: 30, memory: '256MiB' },
+  CFG,
   async (req) => {
     const uid = req.auth && req.auth.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in to adjust stock.');
@@ -133,10 +147,24 @@ exports.merchantAdjustStock = onCall(
       if (!prodSnap.exists) throw new HttpsError('not-found', 'Product not found.');
       const p = prodSnap.data() || {};
 
-      /* Ownership. `sellerUid` is the field firestore.rules gates product
-         updates on, so this callable enforces the same owner invariant rather
-         than a weaker one. A caller may not adjust another seller's stock by
-         naming their own shopId. */
+      /* ── Ownership: exactly three answers, deliberately ───────────────────
+           SELLER OWNER    products/{id}.sellerUid === uid    → allowed
+           PLATFORM ADMIN  role admin | superAdmin            → allowed
+           SHOP EMPLOYEE   —                                  → BLOCKED
+
+         `sellerUid` is the field firestore.rules gates product updates on, so
+         this callable enforces the same owner invariant rather than a weaker
+         one. A caller may not adjust another seller's stock by naming their own
+         shopId.
+
+         The employee case is blocked ON PURPOSE and must stay blocked until an
+         employee authorization model is formally defined. The only existing
+         signal is a `shopEmployees/{shopId}_{uid}` document, and firestore.rules
+         permits ANY authenticated client to create a shopEmployees document
+         whose payload names itself (`shopOwnerId == request.auth.uid`). Treating
+         that as stock-write authority would let a caller mint their own
+         permission. Do not add an employee branch here by reading that
+         collection — it needs a verified contract first. */
       if (!isAdmin && p.sellerUid !== uid)
         throw new HttpsError('permission-denied', 'That product does not belong to this seller.');
 
