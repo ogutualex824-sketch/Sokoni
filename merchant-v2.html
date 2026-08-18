@@ -1,0 +1,2543 @@
+<!doctype html>
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     SOKONI MERCHANT — shell v2
+
+     A NEW shell, not a new application. The chrome (header, sidebar, bottom nav,
+     content host, layout) is rebuilt from scratch phone-first; everything that
+     actually does the work is reused unchanged:
+
+       sokoni-merchant-routes.js   the route contract — 32 routes, still the single
+                                   authority. Sidebar and bottom nav are PROJECTIONS
+                                   of it, so a button can never drift from a route.
+       existing modules            Products / POS / Orders / Plan / MiniShop … mount
+                                   exactly as before (iframe for page|seller|pos).
+
+     WHAT v1 GOT WRONG, and what this file does instead — all four measured in a
+     browser at 390x844 and 1440x900 before this was written:
+
+       1. Sidebar clipped a row. A flex column with no `min-height:0` cannot shrink,
+          so its scroll container overflowed instead of scrolling. Fixed with an
+          explicit `min-height:0` + `overflow-y:auto` on the scrolling region.
+       2. The MOBILE bottom nav rendered on DESKTOP, duplicating the sidebar. It is
+          now inside `@media (max-width: 899px)` and cannot appear beside a sidebar.
+       3. The stat row overflowed the phone viewport — the third card was sliced off.
+          Fixed cards are gone; the grid is `auto-fit`/`minmax` and wraps.
+       4. A large dead area under Quick Actions. The content host is now a normal
+          document flow with bounded max-width, so short content sits at the top
+          rather than being stretched by a full-height grid row.
+
+     Phone-first by decision: the sidebar is an off-canvas drawer below 900px and a
+     fixed rail at or above it. No layout is written desktop-first and then undone.
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<html lang="en" data-require-auth="true">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover so the safe-area insets below actually resolve on a notched
+     iPhone; without it env(safe-area-inset-*) is always 0. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050505">
+<title>SOKONI Merchant</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#050505;
+  --surface:#0d0d0d;
+  --surface-2:#141414;
+  --line:rgba(255,255,255,.09);
+  --txt:#f4f4f4;
+  --txt2:#a8a8a8;
+  --txt3:#6d6d6d;
+  --acc:#71ff00;
+  --acc-dim:rgba(113,255,0,.12);
+  --acc-line:rgba(113,255,0,.32);
+  --danger:#ff5252;
+
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+
+  --header-h:56px;
+  --bnav-h:60px;
+  --rail-w:232px;
+  --rail-collapsed:64px;   /* icon-only rail — matches v1 */
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{background:var(--bg);-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--txt);
+  font:400 15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* Never let a module or a wide table scroll the whole application sideways.
+     Wide content scrolls inside its own container instead. */
+  overflow-x:hidden;
+  min-height:100vh;
+  min-height:100dvh;   /* dvh so the mobile URL bar cannot crop the bottom nav */
+}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+
+/* ── APP FRAME ───────────────────────────────────────────────────────────────
+   Phone: one column, header fixed on top, bottom nav fixed underneath.
+   Desktop (>=900px): a two-column grid, sidebar rail + content. */
+.app{
+  min-height:100vh;min-height:100dvh;
+  padding-top:calc(var(--header-h) + var(--safe-top));
+  padding-bottom:calc(var(--bnav-h) + var(--safe-bot));
+  padding-left:var(--safe-l);padding-right:var(--safe-r);
+}
+
+/* ── HEADER ──────────────────────────────────────────────────────────────────*/
+.hdr{
+  position:fixed;top:0;left:0;right:0;z-index:40;
+  height:calc(var(--header-h) + var(--safe-top));
+  padding:var(--safe-top) 12px 0;
+  display:flex;align-items:center;gap:10px;
+  background:rgba(5,5,5,.92);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.hdr-btn{
+  width:38px;height:38px;flex:0 0 auto;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);background:var(--surface);font-size:16px;
+}
+.hdr-btn:active{transform:scale(.94)}
+.hdr-title{
+  font-size:16px;font-weight:800;letter-spacing:-.01em;
+  /* The title is the flexible element: it truncates so the actions never get
+     pushed off-screen on a narrow phone. */
+  flex:1 1 auto;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hdr-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.hdr-shop{
+  display:none;align-items:center;gap:8px;height:38px;padding:0 12px;
+  border-radius:11px;background:var(--acc-dim);border:1px solid var(--acc-line);
+  color:var(--acc);font-size:12.5px;font-weight:800;max-width:190px;
+}
+.hdr-shop span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (min-width:560px){ .hdr-shop{display:flex} }
+
+/* HEADER PRINTER CHIP — the shell owns the printer, so its state is global and
+   belongs in the top bar. Hidden on the narrowest phones where the title and the
+   two icon buttons already fill the row; the sidebar chip still carries it there. */
+.hdr-chip{
+  display:none;align-items:center;gap:6px;height:38px;padding:0 11px;
+  border-radius:11px;border:1px solid var(--line);background:var(--surface);
+  font-size:12px;font-weight:700;color:var(--txt2);white-space:nowrap;
+}
+@media (min-width:420px){ .hdr-chip{display:flex} }
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────────────────
+   Phone: off-canvas drawer. Desktop: static rail. ONE markup tree either way. */
+.side{
+  position:fixed;top:0;bottom:0;left:0;z-index:60;
+  width:min(84vw,var(--rail-w));
+  background:var(--surface);border-right:1px solid var(--line);
+  transform:translateX(-100%);
+  transition:transform .22s cubic-bezier(.4,0,.2,1);
+  /* THE FIX for v1's clipped row: a flex column whose scrolling child is allowed to
+     shrink. Without min-height:0 the child refuses to shrink below its content and
+     the overflow is clipped by the parent instead of scrolled. */
+  display:flex;flex-direction:column;min-height:0;
+  padding-top:var(--safe-top);padding-bottom:var(--safe-bot);
+}
+.side.open{transform:translateX(0)}
+/* BRAND — the real SOKONI mark, and the entry point to the shop/branch switcher.
+   A button, not a div: it is the same control v1 exposes as "Switch shop / branch". */
+.side-head{
+  flex:0 0 auto;width:100%;display:flex;align-items:center;gap:10px;
+  padding:13px 12px;border-bottom:1px solid var(--line);text-align:left;
+}
+.side-head:hover{background:rgba(255,255,255,.04)}
+.side-logo{
+  width:36px;height:36px;border-radius:10px;flex:0 0 auto;object-fit:contain;
+  background:var(--acc-dim);border:1px solid var(--acc-line);padding:3px;
+  transition:width .18s,height .18s;
+}
+.side-shop{min-width:0;flex:1 1 auto;transition:opacity .18s}
+.side-shop b{display:block;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-shop small{display:block;font-size:11px;color:var(--txt3)}
+.side-caret{flex:0 0 auto;color:var(--txt3);font-size:11px;transition:opacity .18s}
+
+/* STATUS CHIPS — printer / sync / identity. Live state, never decorative:
+   the dot colour is driven by paintStatus() below, so a dead printer reads as dead. */
+.side-status{
+  flex:0 0 auto;border-top:1px solid var(--line);
+  padding:10px 14px;display:flex;flex-direction:column;gap:8px;
+}
+.chip{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--txt2);white-space:nowrap;min-width:0}
+.dot{width:8px;height:8px;border-radius:50%;background:#555;flex:0 0 auto}
+.dot.ok{background:var(--acc);box-shadow:0 0 7px var(--acc)}
+.dot.bad{background:var(--danger)}
+.dot.warn{background:#ffb400;box-shadow:0 0 7px rgba(255,180,0,.7)}
+.chip .ctxt{min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s}
+
+/* The scrolling region. min-height:0 is what makes it scroll instead of clip. */
+.side-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 8px 4px}
+.side-group{margin:10px 6px 4px;font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--txt3)}
+.nav-item{
+  width:100%;display:flex;align-items:center;gap:11px;
+  padding:10px 11px;border-radius:11px;margin-bottom:2px;
+  font-size:14px;font-weight:600;color:var(--txt2);text-align:left;
+}
+.nav-item .ico{flex:0 0 auto;width:20px;text-align:center;font-size:15px}
+.nav-item .lbl{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-item:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.nav-item.on{background:var(--acc-dim);color:var(--acc);border:1px solid var(--acc-line);padding:9px 10px}
+
+/* The exit sits in the footer so it can never be mistaken for an in-shell route. */
+.side-foot{flex:0 0 auto;border-top:1px solid var(--line);padding:8px}
+.side-foot .nav-item{color:var(--txt3)}
+.scrim{
+  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;transition:opacity .22s;
+}
+.scrim.on{opacity:1;pointer-events:auto}
+
+/* ── CONTENT ─────────────────────────────────────────────────────────────────*/
+.main{ padding:14px 14px 24px; max-width:1180px; }
+.panel{display:none}
+.panel.show{display:block}
+/* An iframe module fills the viewport minus the chrome. It is the ONLY thing that
+   gets a fixed height, because it hosts its own scrolling document. */
+.frame-wrap{
+  position:relative;
+  height:calc(100vh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
+  height:calc(100dvh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
+  margin:-14px -14px -24px;
+}
+.frame-wrap iframe{display:block;width:100%;height:100%;border:0;background:var(--bg)}
+.frame-load{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--txt3);font-size:13px;background:var(--bg);
+}
+.frame-wrap.loaded .frame-load{display:none}
+
+/* ── DASHBOARD ───────────────────────────────────────────────────────────────*/
+.greet{margin:2px 2px 18px}
+.greet b{display:block;font-size:21px;font-weight:900;letter-spacing:-.015em}
+.greet small{display:block;font-size:12.5px;color:var(--txt2);margin-top:4px}
+.sec-t{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--txt3);margin:0 2px 10px}
+
+/* THE FIX for v1's phone overflow: auto-fit + minmax means cards WRAP to the next
+   row instead of running off the right edge. No fixed widths anywhere. */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:22px}
+.stat{
+  position:relative;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 13px 12px;
+}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--acc);opacity:.5}
+.stat b{display:block;font-size:20px;font-weight:900;color:var(--acc);letter-spacing:-.02em;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt3);margin-top:5px}
+/* A neutral figure is NOT an accent figure — an unknown must never look like a
+   result (CLAUDE.md, UI Data Integrity). */
+.stat.neutral b{color:var(--txt3)}
+.stat.neutral::before{background:var(--line);opacity:1}
+
+.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.act{
+  display:flex;align-items:center;gap:9px;padding:13px 14px;border-radius:13px;
+  background:var(--acc-dim);border:1px solid var(--acc-line);color:var(--acc);
+  font-size:13.5px;font-weight:800;
+}
+.act.ghost{background:var(--surface-2);border-color:var(--line);color:var(--txt)}
+.act:active{transform:scale(.98)}
+
+.note{
+  margin-top:22px;padding:13px 14px;border-radius:13px;
+  background:var(--surface);border:1px solid var(--line);
+  color:var(--txt2);font-size:12.5px;line-height:1.5;
+}
+.note b{color:var(--txt);font-weight:800}
+
+/* ── SURFACE TOOLBAR — segmented filter + search ─────────────────────────────
+   Sticky to the top of the SCROLLER (not the viewport), so filters stay reachable
+   while a long order list scrolls under them. */
+.toolbar{
+  position:sticky;top:-14px;z-index:5;margin:-14px -14px 12px;padding:12px 14px 10px;
+  background:linear-gradient(var(--bg) 78%,rgba(5,5,5,0));
+}
+.segs{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;padding-bottom:2px}
+.segs::-webkit-scrollbar{display:none}
+.seg{
+  flex:0 0 auto;padding:8px 13px;border-radius:999px;font-size:12.5px;font-weight:700;
+  background:var(--surface);border:1px solid var(--line);color:var(--txt2);white-space:nowrap;
+}
+.seg.on{background:var(--acc-dim);border-color:var(--acc-line);color:var(--acc)}
+.seg .n{opacity:.7;margin-left:5px;font-weight:800}
+.search{
+  margin-top:9px;display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:0 11px;height:40px;
+}
+.search input{
+  flex:1 1 auto;min-width:0;background:none;border:none;outline:none;color:var(--txt);
+  font:inherit;font-size:13.5px;
+}
+.search input::placeholder{color:var(--txt3)}
+
+/* ── ORDER LIST ──────────────────────────────────────────────────────────────*/
+.ord-group{margin-bottom:18px}
+.ord-list{display:grid;gap:9px}
+.ord{
+  width:100%;text-align:left;display:grid;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;
+}
+.ord:hover{border-color:rgba(255,255,255,.16)}
+.ord:active{transform:scale(.995)}
+.ord-top{display:flex;align-items:baseline;gap:10px;min-width:0}
+.ord-id{font-size:13px;font-weight:800;letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ord-amt{margin-left:auto;flex:0 0 auto;font-size:14.5px;font-weight:900;color:var(--acc)}
+.ord-sub{display:flex;align-items:center;gap:8px;min-width:0;color:var(--txt2);font-size:12px}
+.ord-sub .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ord-sub .when{margin-left:auto;flex:0 0 auto;color:var(--txt3);font-size:11.5px}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+.badge{
+  font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+  padding:4px 8px;border-radius:7px;border:1px solid var(--line);color:var(--txt2);background:var(--surface-2);
+}
+.badge.paid{color:var(--acc);border-color:var(--acc-line);background:var(--acc-dim)}
+.badge.pending{color:#ffb400;border-color:rgba(255,180,0,.3);background:rgba(255,180,0,.1)}
+.badge.failed,.badge.cancelled{color:var(--danger);border-color:rgba(255,82,82,.3);background:rgba(255,82,82,.1)}
+
+/* ── SKELETON — shown INSTANTLY on click, before any data ────────────────────*/
+.sk{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:grid;gap:9px}
+.sk-line{height:11px;border-radius:6px;background:linear-gradient(90deg,#161616 25%,#1f1f1f 37%,#161616 63%);
+         background-size:400% 100%;animation:sh 1.3s ease-in-out infinite}
+@keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media (prefers-reduced-motion:reduce){ .sk-line{animation:none} }
+
+/* ── EMPTY / ERROR — honest states, never a fake figure ──────────────────────*/
+.state{text-align:center;padding:44px 20px;color:var(--txt2)}
+.state .ico{font-size:30px;display:block;margin-bottom:10px;opacity:.75}
+.state b{display:block;font-size:14.5px;font-weight:800;color:var(--txt);margin-bottom:5px}
+.state small{display:block;font-size:12.5px;line-height:1.5;max-width:340px;margin:0 auto}
+.state .act{display:inline-flex;margin-top:14px}
+
+/* ── CHARTS — CSS bars, no library, no network ───────────────────────────────*/
+.chart{
+  position:relative;height:132px;margin-bottom:6px;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+}
+.bars{position:absolute;inset:8px 10px}
+.bar{position:absolute;bottom:0;background:var(--acc);opacity:.85;border-radius:3px 3px 0 0;min-height:2px}
+.bar:hover{opacity:1}
+.chart-x{display:flex;justify-content:space-between;gap:8px;margin:0 2px 20px;
+         font-size:10.5px;color:var(--txt3);font-weight:700}
+.chart-x span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.bd{display:grid;gap:8px;margin-bottom:20px}
+.bd-row{display:flex;align-items:center;gap:10px;font-size:12.5px;min-width:0}
+.bd-k{flex:0 0 34%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      color:var(--txt2);font-weight:700;text-transform:capitalize}
+.bd-track{flex:1 1 auto;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;min-width:0}
+.bd-fill{display:block;height:100%;background:var(--acc);opacity:.8;border-radius:99px}
+.bd-v{flex:0 0 auto;font-weight:800;font-size:12px;white-space:nowrap}
+@media (max-width:420px){ .bd-k{flex-basis:42%} }
+
+/* Custom range row. The display rule lives HERE, not inline: an inline `display:flex`
+   beats the [hidden] attribute's display:none, so the date pickers stayed on screen
+   for every range. `hidden` must always win. */
+#an-custom{margin-top:9px;display:flex;gap:8px}
+#an-custom[hidden]{display:none}
+input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0;flex:1 1 0}
+
+/* ── DEVICE / SETTINGS CARDS ─────────────────────────────────────────────────*/
+.dev{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.dev-head{display:flex;align-items:center;gap:12px;min-width:0}
+.dev-ico{font-size:24px;flex:0 0 auto}
+.dev-id{min-width:0}
+.dev-id b{display:block;font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev-id small{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt2);margin-top:3px}
+.ta{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    padding:11px 12px;color:var(--txt);font:inherit;font-size:13.5px;resize:vertical;min-height:96px}
+.ta:focus{outline:none;border-color:var(--acc-line)}
+
+.setgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.setcard{
+  display:flex;align-items:center;gap:12px;text-align:left;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;
+}
+.setcard:hover:not([disabled]){border-color:rgba(255,255,255,.18)}
+.setcard[disabled]{opacity:.45;cursor:not-allowed}
+.sc-ico{font-size:20px;flex:0 0 auto}
+.sc-t{min-width:0;flex:1 1 auto}
+.sc-t b{display:block;font-size:13.5px;font-weight:800}
+.sc-t small{display:block;font-size:11.5px;color:var(--txt3);margin-top:2px;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-go{color:var(--txt3);font-size:18px;flex:0 0 auto}
+
+/* ── TOAST ───────────────────────────────────────────────────────────────────*/
+.toast{
+  position:fixed;left:50%;transform:translate(-50%,20px);z-index:90;
+  bottom:calc(var(--bnav-h) + var(--safe-bot) + 14px);
+  max-width:min(92vw,420px);padding:12px 16px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt);
+  font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (min-width:900px){ .toast{bottom:22px} }
+
+/* ── COMMAND PALETTE ─────────────────────────────────────────────────────────*/
+.pal-wrap{
+  position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);
+  display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;
+  opacity:0;pointer-events:none;transition:opacity .16s;
+}
+.pal-wrap.on{opacity:1;pointer-events:auto}
+.pal{
+  width:min(560px,100%);background:var(--surface);border:1px solid var(--line);
+  border-radius:16px;overflow:hidden;display:flex;flex-direction:column;max-height:70vh;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+}
+.pal-in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.pal-in input{flex:1 1 auto;min-width:0;background:none;border:none;outline:none;color:var(--txt);font:inherit;font-size:15px}
+.pal-in input::placeholder{color:var(--txt3)}
+.pal-list{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px}
+.pal-row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+         padding:10px 12px;border-radius:10px;font-size:13.5px;font-weight:600;color:var(--txt2)}
+.pal-row.on,.pal-row:hover{background:var(--acc-dim);color:var(--acc)}
+.pal-ico{width:20px;text-align:center;flex:0 0 auto}
+.pal-empty{padding:22px 16px;text-align:center;color:var(--txt3);font-size:13px}
+.pal-foot{flex:0 0 auto;padding:9px 16px;border-top:1px solid var(--line);color:var(--txt3);font-size:11px;font-weight:700}
+
+/* ── DETAIL SHEET — opens IN-SHELL, never a page ─────────────────────────────
+   Bottom sheet on phone, right-hand panel on desktop. The shell stays mounted
+   underneath: the sidebar and header never move. */
+.sheet-scrim{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet-scrim.on{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;z-index:71;background:var(--surface);border:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+  left:0;right:0;bottom:0;max-height:88dvh;border-radius:18px 18px 0 0;
+  transform:translateY(101%);transition:transform .24s cubic-bezier(.4,0,.2,1);
+  padding-bottom:var(--safe-bot);
+}
+.sheet.on{transform:none}
+.sheet-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.sheet-head b{font-size:15px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-x{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);
+         display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.sheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 16px 20px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px;margin-bottom:16px}
+.kv dt{color:var(--txt3);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.kv dd{margin:0;color:var(--txt);min-width:0;overflow-wrap:anywhere}
+.items{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.item{display:flex;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:13px}
+.item:last-child{border-bottom:none}
+.item .q{color:var(--txt3);flex:0 0 auto}
+.item .n{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.item .p{margin-left:auto;flex:0 0 auto;font-weight:800}
+.sheet-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px}
+@media (min-width:900px){
+  .sheet{
+    left:auto;top:0;right:0;bottom:0;width:min(460px,42vw);max-height:none;
+    border-radius:0;border-right:none;transform:translateX(101%);
+  }
+  .sheet.on{transform:none}
+}
+
+/* ── BOTTOM NAV — PHONE ONLY ─────────────────────────────────────────────────
+   THE FIX for v1's desktop duplication: this lives inside a max-width query, so it
+   is not merely hidden on desktop — it cannot be rendered beside a sidebar at all. */
+.bnav{display:none}
+@media (max-width:899px){
+  .bnav{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:grid;grid-template-columns:repeat(4,1fr);
+    height:calc(var(--bnav-h) + var(--safe-bot));
+    padding-bottom:var(--safe-bot);
+    background:rgba(5,5,5,.94);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+  }
+  .bnav button{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    font-size:10px;font-weight:700;color:var(--txt3);min-width:0;
+  }
+  .bnav button .ico{font-size:17px;line-height:1}
+  .bnav button.on{color:var(--acc)}
+  .bnav button span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+}
+
+/* ── DESKTOP ─────────────────────────────────────────────────────────────────*/
+@media (min-width:900px){
+  /* ── DESKTOP SCROLL ARCHITECTURE ───────────────────────────────────────────
+     The page itself does NOT scroll. The frame is exactly one viewport tall and
+     only the content column scrolls, so the sidebar and header never move and
+     never fight the document for the scrollbar.
+
+       .app      100vh, overflow hidden        <- the page cannot scroll
+       .side     own column, own internal scroll
+       .col      flex column, 100vh
+         .hdr    flex:0 0 auto                 <- fixed by layout, not by position
+         .main   flex:1 1 auto; min-height:0; overflow-y:auto   <- the ONLY scroller
+
+     min-height:0 on .main is load-bearing: a flex child defaults to min-height:auto
+     and refuses to shrink below its content, which makes the column grow and hands
+     the scrollbar back to the page. */
+  .app{
+    display:grid;
+    grid-template-columns:var(--rail-w) minmax(0,1fr);   /* minmax(0,1fr) or a wide
+                                                            child would stretch the
+                                                            column and reintroduce a
+                                                            horizontal scrollbar */
+    height:100vh;height:100dvh;overflow:hidden;
+    padding:0;
+    transition:grid-template-columns .18s cubic-bezier(.4,0,.2,1);
+  }
+  .side{position:relative;height:100vh;height:100dvh;transform:none;width:var(--rail-w);z-index:10;
+        transition:width .18s cubic-bezier(.4,0,.2,1)}
+  .scrim{display:none}
+  .col{display:flex;flex-direction:column;min-width:0;height:100vh;height:100dvh}
+  .hdr{position:static;height:var(--header-h);padding:0 16px;flex:0 0 auto;left:auto;right:auto}
+  .main{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 32px}
+  /* An iframe module fills the scroller exactly and scrolls its own document —
+     no nested scrollbar, no double scroll trap. */
+  .frame-wrap{height:100%;margin:-20px -24px -32px}
+  .greet b{font-size:24px}
+
+  /* ── COLLAPSED RAIL ────────────────────────────────────────────────────────
+     Icon-only. Labels collapse to zero width rather than `display:none` so the
+     transition animates and the icons stay put instead of jumping. The rail is
+     never collapsed on phone — there it is a drawer, and a 64px permanent strip
+     would eat the content area. */
+  .app.collapsed{grid-template-columns:var(--rail-collapsed) minmax(0,1fr)}
+  .app.collapsed .side{width:var(--rail-collapsed)}
+  .app.collapsed .hdr{left:var(--rail-collapsed)}
+  .app.collapsed .side-head{justify-content:center;padding:13px 6px}
+  .app.collapsed .side-logo{width:34px;height:34px}
+  .app.collapsed .side-shop,
+  .app.collapsed .side-caret{opacity:0;width:0;overflow:hidden;flex:0 0 0}
+  .app.collapsed .nav-item{justify-content:center;padding:10px 0}
+  .app.collapsed .nav-item.on{padding:9px 0}
+  .app.collapsed .nav-item .lbl{opacity:0;width:0;overflow:hidden}
+  .app.collapsed .side-group{opacity:0;height:6px;padding:0;margin:4px 0;overflow:hidden}
+  .app.collapsed .side-status{align-items:center;padding:10px 6px}
+  .app.collapsed .chip .ctxt{opacity:0;width:0;overflow:hidden}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .side{transition:none}
+  .scrim{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR — rendered from the registry, never hand-listed -->
+  <aside class="side" id="side" aria-label="Merchant navigation">
+    <button class="side-head" id="brand" type="button"
+            title="Switch shop / branch" aria-label="Switch shop or branch">
+      <img class="side-logo" src="assets/logosokoni.png" alt="SOKONI">
+      <span class="side-shop">
+        <b id="shop-name">SOKONI</b>
+        <small id="shop-sub">Main Branch</small>
+      </span>
+      <span class="side-caret" aria-hidden="true">▾</span>
+    </button>
+    <nav class="side-scroll" id="side-nav"></nav>
+    <div class="side-foot" id="side-foot"></div>
+    <!-- Live shell state. Driven by paintStatus(); the dot colour is never decorative. -->
+    <div class="side-status">
+      <div class="chip"><span class="dot" id="st-print"></span><span class="ctxt" id="st-print-t">Printer</span></div>
+      <div class="chip"><span class="dot ok" id="st-sync"></span><span class="ctxt" id="st-sync-t">Online</span></div>
+      <div class="chip"><span class="dot ok" id="st-role"></span><span class="ctxt" id="st-user">Merchant</span></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="col">
+    <header class="hdr">
+      <button class="hdr-btn hdr-menu" id="menu" aria-label="Open menu">☰</button>
+      <div class="hdr-title" id="title">Dashboard</div>
+      <div class="hdr-actions">
+        <button class="hdr-shop" id="minishop-btn"><span>🏬 My MiniShop</span></button>
+        <button class="hdr-btn" id="search-btn" aria-label="Search">🔍</button>
+        <div class="hdr-chip" title="Receipt printer status">
+          <span class="dot" id="top-print"></span><span id="top-print-t">Printer</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main" id="content"></main>
+  </div>
+</div>
+
+<!-- BOTTOM NAV — phone only, rendered from CONTRACT.BOTTOM_NAV -->
+<nav class="bnav" id="bnav" aria-label="Primary"></nav>
+
+<!-- The SHELL owns authentication and data.
+
+     v1 deliberately did NOT load firebase.js here — it imported Firestore lazily,
+     per module — which is why nothing in that shell could ever answer "who is signed
+     in?". Every hosted module had to resolve identity for itself, and the shell's own
+     auth-guard had no bootstrap to wait for. Loading it once, here, is what lets a
+     single query path and a single cache serve every surface.
+
+     type="module" so it is deferred: the shell renders its chrome without waiting for
+     the SDK, and the data layer awaits it only when a surface actually needs data. -->
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-merchant-routes.js"></script>
+
+<!-- The NINE native surfaces v1 already implements, as modules. Nothing here is
+     rewritten: each exposes the same mount(host, ctx) / destroy() contract that
+     merchant.html:1936-2105 calls, so v2 loads the identical files and drives them
+     through the identical API. Porting these was wiring, not reimplementation.
+
+     Order matters where a UI module depends on its data module (stock before sell,
+     campaigns before marketing, disputes/messages/customers/store/tax before their
+     -ui counterparts), so this list mirrors v1's load order exactly. -->
+<script src="sokoni-merchant-data.js"></script>
+<script src="sokoni-merchant-stock.js"></script>
+<script src="sokoni-merchant-sell.js"></script>
+<script src="sokoni-merchant-inventory-ui.js"></script>
+<script src="sokoni-merchant-staff.js"></script>
+<script src="sokoni-merchant-team.js"></script>
+<script src="sokoni-merchant-campaigns.js"></script>
+<script src="sokoni-merchant-marketing.js"></script>
+<script src="sokoni-merchant-disputes.js"></script>
+<script src="sokoni-merchant-disputes-ui.js"></script>
+<script src="sokoni-merchant-messages.js"></script>
+<script src="sokoni-merchant-messages-ui.js"></script>
+<script src="sokoni-merchant-customers.js"></script>
+<script src="sokoni-merchant-customers-ui.js"></script>
+<script src="sokoni-merchant-store.js"></script>
+<script src="sokoni-merchant-store-ui.js"></script>
+<script src="sokoni-merchant-tax.js"></script>
+<script src="sokoni-merchant-tax-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CONTRACT = window.SokoniMerchantRoutes;
+  if (!CONTRACT) { document.getElementById('content').textContent = 'Route contract failed to load.'; return; }
+
+  var byId = {};
+  CONTRACT.ROUTES.forEach(function (r) { byId[r.id] = r; });
+
+  var content = document.getElementById('content');
+  var titleEl = document.getElementById('title');
+  var side    = document.getElementById('side');
+  var scrim   = document.getElementById('scrim');
+  var panels  = {};
+  var current = null;
+
+  /* ── NAV IS A PROJECTION OF THE REGISTRY ──────────────────────────────────
+     Nothing here lists a route by hand. Add a route to the contract and it appears;
+     remove one and its button disappears with it. That is what makes "every button
+     has a destination" structural rather than a thing to remember. */
+  function buildSidebar () {
+    var nav = document.getElementById('side-nav');
+    var frag = document.createDocumentFragment();
+
+    CONTRACT.primary().forEach(function (r) { frag.appendChild(navItem(r)); });
+
+    (typeof CONTRACT.moreGroups === 'function' ? CONTRACT.moreGroups() : []).forEach(function (g) {
+      var h = document.createElement('div');
+      h.className = 'side-group';
+      h.textContent = g.label || g.key || 'More';
+      frag.appendChild(h);
+      (g.routes || g.items || []).forEach(function (r) { frag.appendChild(navItem(r)); });
+    });
+    nav.appendChild(frag);
+
+    /* The exit lives in the footer, visually separated, because it is the ONE control
+       that leaves the application. */
+    var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit'; })[0];
+    if (exit) {
+      var f = document.getElementById('side-foot');
+      var h2 = document.createElement('div');
+      h2.className = 'side-group';
+      h2.style.margin = '2px 6px 6px';
+      h2.textContent = 'Marketplace';
+      f.appendChild(h2);
+      f.appendChild(navItem(exit, '← '));
+    }
+  }
+
+  function navItem (r, prefix) {
+    var b = document.createElement('button');
+    b.className = 'nav-item';
+    b.type = 'button';
+    b.dataset.route = r.id;
+    b.innerHTML = '<span class="ico">' + (r.icon || '•') + '</span>' +
+                  '<span class="lbl">' + (prefix || '') + (r.name || r.id) + '</span>';
+    return b;
+  }
+
+  function buildBottomNav () {
+    var el = document.getElementById('bnav');
+    CONTRACT.BOTTOM_NAV.forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.route = b.id;
+      btn.innerHTML = '<span class="ico">' + b.icon + '</span><span>' + b.label + '</span>';
+      el.appendChild(btn);
+    });
+  }
+
+  /* ── DRAWER + COLLAPSE ────────────────────────────────────────────────────
+     ONE button, two behaviours, decided by viewport — the same contract as v1:
+       phone   (<900px)  toggles the off-canvas drawer
+       desktop (>=900px) toggles the icon-only rail, and REMEMBERS the choice
+     The preference is only applied on desktop; restoring "collapsed" on a phone
+     would leave a 64px strip permanently eating the content area. */
+  var app = document.querySelector('.app');
+  var COLLAPSE_KEY = 'sk_merchant_rail_collapsed';
+  function isPhone () { return window.matchMedia('(max-width:899px)').matches; }
+
+  function openDrawer (on) {
+    side.classList.toggle('open', on);
+    scrim.classList.toggle('on', on);
+  }
+  function setCollapsed (on) {
+    app.classList.toggle('collapsed', on);
+    try { localStorage.setItem(COLLAPSE_KEY, on ? '1' : '0'); } catch (_) {}
+  }
+  document.getElementById('menu').addEventListener('click', function () {
+    if (isPhone()) openDrawer(!side.classList.contains('open'));
+    else setCollapsed(!app.classList.contains('collapsed'));
+  });
+  scrim.addEventListener('click', function () { openDrawer(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openDrawer(false); });
+  try { if (localStorage.getItem(COLLAPSE_KEY) === '1' && !isPhone()) app.classList.add('collapsed'); } catch (_) {}
+  /* Crossing the breakpoint must clear the other mode's state, or a drawer left open
+     on a phone reappears as a stuck overlay once the window is widened. */
+  window.matchMedia('(max-width:899px)').addEventListener('change', function (e) {
+    if (e.matches) app.classList.remove('collapsed');
+    else { openDrawer(false); try { if (localStorage.getItem(COLLAPSE_KEY) === '1') app.classList.add('collapsed'); } catch (_) {} }
+  });
+
+  /* The brand button is the shop/branch switcher's entry point, exactly as in v1.
+     SokoniBranch is not loaded in this shell yet, so it says so rather than doing
+     nothing — a control that silently no-ops is the defect this project keeps finding. */
+  document.getElementById('brand').addEventListener('click', function () {
+    if (window.SokoniBranch && typeof window.SokoniBranch.open === 'function') { window.SokoniBranch.open(); return; }
+    console.warn('[merchant-v2] branch switcher not loaded in this shell yet');
+  });
+
+  /* ── LIVE SHELL STATUS ────────────────────────────────────────────────────
+     Printer, connectivity and identity. Online/offline is real (browser events).
+     The printer is owned by the shell in v1 and reports up from the POS module by
+     postMessage; until that is wired here the dot stays neutral grey and the label
+     reads "Printer" — it must never show a confident "connected" it cannot know. */
+  function paintStatus () {
+    var online = navigator.onLine !== false;
+    setDot('st-sync', online ? 'ok' : 'bad');
+    text('st-sync-t', online ? 'Online' : 'Offline');
+
+    /* Printer — five honest states. "saved" is not "connected", and an unsupported
+       browser says so rather than sitting on a hopeful grey dot forever. */
+    var p = DEV.printer, pc = '', pt = 'Printer';
+    if (p.state === 'connected')        { pc = 'ok';   pt = p.name || 'Printer ready'; }
+    else if (p.state === 'connecting')  { pc = 'warn'; pt = 'Connecting…'; }
+    else if (p.state === 'saved')       { pc = '';     pt = 'Printer saved'; }
+    else if (p.state === 'unsupported') { pc = '';     pt = 'Printer (unsupported)'; }
+    setDot('st-print', pc); setDot('top-print', pc);
+    text('st-print-t', pt);
+    text('top-print-t', p.state === 'connected' ? (p.name || 'Ready') : 'Printer');
+
+    /* Identity — the third chip now reports the REAL session, not a fixed label. */
+    if (S.state === 'in') {
+      setDot('st-role', 'ok');
+      text('st-user', S.shop && (S.shop.name || S.shop.shopName) ? (S.shop.name || S.shop.shopName) : (S.email || 'Merchant'));
+      text('shop-name', (S.shop && (S.shop.name || S.shop.shopName)) || 'SOKONI');
+      text('shop-sub', S.activeShopId ? 'Shop · ' + S.activeShopId.slice(0, 10) : (S.email || 'Merchant'));
+    } else if (S.state === 'out') {
+      setDot('st-role', 'bad'); text('st-user', 'Signed out');
+    } else {
+      setDot('st-role', 'warn'); text('st-user', 'Checking…');
+    }
+  }
+  function setDot (id, cls) { var el = document.getElementById(id); if (el) el.className = 'dot' + (cls ? ' ' + cls : ''); }
+  function text (id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+  window.addEventListener('online',  paintStatus);
+  window.addEventListener('offline', paintStatus);
+
+  /* A hosted module (POS) reports printer state up to the shell. Same message shape
+     v1 uses, so the existing POS app needs no change to drive this. */
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    if (!d.__sokoniPos) return;
+    /* A module reports the printer it just connected — the shell RECORDS it, so the
+       next module (and the next session) gets it without pairing again. */
+    if (d.type === 'printerStatus') {
+      DEV.printer.state = d.connected ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
+      DEV.printer.name = d.name || DEV.printer.name;
+      if (d.connected && d.deviceId) {
+        saveDevice({ type: 'printer', id: d.deviceId, name: d.name || 'Printer', at: Date.now() });
+      } else { emit('devices'); paintStatus(); }
+    }
+    /* A module asking what the shell already knows, instead of rediscovering. */
+    if (d.type === 'requestShellState') { broadcastSession(); broadcastDevices(); }
+  });
+
+  /* ── PANELS ───────────────────────────────────────────────────────────────
+     Cached by key and reused, so returning to a route never mounts it twice. */
+  function nativePanel (id) {
+    var k = 'native:' + id;
+    if (!panels[k]) {
+      var p = document.createElement('div');
+      p.className = 'panel';
+      p.id = 'panel-' + id;
+      content.appendChild(p);
+      panels[k] = p;
+    }
+    return panels[k];
+  }
+  function framePanel (key, src, label) {
+    if (!panels[key]) {
+      var p = document.createElement('div');
+      p.className = 'panel';
+      var w = document.createElement('div');
+      w.className = 'frame-wrap';
+      var load = document.createElement('div');
+      load.className = 'frame-load';
+      load.textContent = 'Opening ' + label + '…';
+      var f = document.createElement('iframe');
+      f.setAttribute('title', label);
+      f.setAttribute('loading', 'lazy');
+      /* Hand the module everything the shell already knows the moment it boots, so it
+         never repeats auth resolution or device discovery. */
+      f.addEventListener('load', function () {
+        w.classList.add('loaded');
+        try {
+          f.contentWindow.postMessage({ __sokoniShell: true, type: 'session', state: S.state,
+            uid: S.uid, sellerUid: S.sellerUid, activeShopId: S.activeShopId }, location.origin);
+          f.contentWindow.postMessage({ __sokoniShell: true, type: 'devices',
+            printer: { state: DEV.printer.state, name: DEV.printer.name, saved: !!DEV.printer.saved },
+            devices: DEV.list }, location.origin);
+        } catch (_) {}
+      });
+      f.src = src;
+      w.appendChild(f); w.appendChild(load); p.appendChild(w);
+      content.appendChild(p);
+      panels[key] = p;
+    }
+    return panels[key];
+  }
+  function showOnly (panel) {
+    Object.keys(panels).forEach(function (k) {
+      panels[k].classList.toggle('show', panels[k] === panel);
+    });
+  }
+
+  /* ── ROUTER ───────────────────────────────────────────────────────────────
+     Same semantics as the verified v1 router, deliberately:
+       · resolve through the contract; an unknown id is REFUSED, not silently
+         redirected to Dashboard (a silent fallback is how a dead button looks alive)
+       · an EXIT returns before any state is written, or "#home" lands in the history
+         of a page we are leaving and Back bounces forever
+       · each user navigation PUSHES history so Back/Forward walk real routes */
+  var booted = false;
+  function go (id) {
+    var rid = CONTRACT.resolve(id);
+    if (!rid) {
+      console.error('[merchant-v2] unknown route "' + id + '" — not in the contract. Refused.');
+      return;
+    }
+    var m = byId[rid];
+
+    if (m.kind === 'exit') { location.assign(m.href); return; }
+
+    current = rid;
+    titleEl.textContent = m.name || rid;
+    setActive(rid);
+    openDrawer(false);
+
+    if (location.hash.replace('#', '') !== rid) {
+      if (booted) history.pushState({ r: rid }, '', '#' + rid);
+      else        history.replaceState({ r: rid }, '', '#' + rid);
+    }
+    booted = true;
+
+    if (m.kind === 'native') { showOnly(nativePanel(rid)); renderNative(rid); return; }
+    if (m.kind === 'pos')    { showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return; }
+    if (m.kind === 'seller') { showOnly(framePanel('seller:' + (m.sec || ''), 'seller.html' + (m.sec ? '#' + m.sec : ''), m.name)); return; }
+    if (m.kind === 'page')   { showOnly(framePanel('page:' + rid, m.src, m.name)); return; }
+  }
+  window.__mgo = go;
+  window.SokoniShell = window.SokoniShell || {};
+  window.SokoniShell.go = go;
+
+  function setActive (id) {
+    var r = byId[id] || {};
+    var key = r.activeKey || id;
+    [].forEach.call(document.querySelectorAll('[data-route]'), function (b) {
+      var br = byId[b.dataset.route] || {};
+      b.classList.toggle('on', (br.activeKey || b.dataset.route) === key);
+    });
+  }
+
+  /* One delegated listener for every control in the shell. */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-route]');
+    if (!b) return;
+    e.preventDefault();
+    var id = b.dataset.route;
+    if (id === '__more') { openDrawer(true); return; }   /* the More tab opens the drawer */
+    go(id);
+  });
+
+  /* ══ DATA LAYER ═══════════════════════════════════════════════════════════
+     The SHELL owns data, not each module. One authenticated identity, one query
+     path, one cache — which is what makes a second visit instant.
+
+     OWNERSHIP IS RULES-DERIVED, not guessed. `orders` allows a read when
+     resource.data.sellerUid == request.auth.uid (it also allows the buyer, the
+     rider and admin — so "readable" does not mean "mine"). The query therefore
+     filters on sellerUid and nothing else.
+     See docs/MERCHANT_DATA_OWNERSHIP.md. */
+  /* ── SESSION — resolved ONCE, then read synchronously ──────────────────────
+     The whole point of a native shell. v1 made every module rediscover identity,
+     so switching Orders -> POS -> Analytics re-imported the SDK and re-resolved auth
+     each time. Here the SDK is imported once, ONE onAuthStateChanged listener runs
+     for the life of the document, and modules read `S.uid` synchronously.
+
+     `S.state` is deliberately three-valued. 'resolving' is NOT 'signed-out' — a
+     surface that treats "not yet known" as "no session" is exactly how a signed-in
+     merchant gets told to sign in. */
+  var S = {
+    state: 'resolving',      /* resolving | in | out */
+    shopError: null,         /* why activeShopId is null, when it is */
+    uid: null, email: null, sellerUid: null,
+    activeShopId: null, shop: null, roles: [],
+  };
+  var _mods = null, _readyResolve, _ready = new Promise(function (r) { _readyResolve = r; });
+  var _listeners = { session: [], devices: [] };
+  function emit (evt) { (_listeners[evt] || []).forEach(function (f) { try { f(); } catch (_) {} }); }
+
+  /* One import of the SDK for the document. Everything else awaits this.
+
+     IT MUST WAIT FOR THE APP, NOT ASSUME IT. firebase.js is loaded as type="module"
+     and is therefore DEFERRED — it has not executed when this script runs. An earlier
+     version threw 'no-firebase-app' the instant getApps() came back empty, which made
+     initSession() give up at t=0, pin the session to 'out' and never attach a
+     listener. A genuinely signed-in merchant then saw "Not signed in" on every
+     surface, while Firebase itself had restored their user perfectly.
+     Measured: currentUser resolved, the IndexedDB auth record was present, and the
+     shell still reported state:'out'. Found by the v2 certification dry run. */
+  function whenApp (appMod) {
+    if (appMod.getApps().length) return Promise.resolve();
+    return new Promise(function (res, rej) {
+      var waited = 0;
+      var t = setInterval(function () {
+        if (appMod.getApps().length) { clearInterval(t); res(); return; }
+        waited += 60;
+        /* Bounded: a page that genuinely never initialises Firebase must fail, not hang. */
+        if (waited > 15000) { clearInterval(t); rej(new Error('no-firebase-app')); }
+      }, 60);
+    });
+  }
+  async function sdk () {
+    if (_mods) return _mods;
+    var app = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    await whenApp(app);
+    var auth = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    var fs   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var a = app.getApp();
+    _mods = { app: app, auth: auth, fs: fs, a: a, db: fs.getFirestore(a), authI: auth.getAuth(a) };
+    return _mods;
+  }
+
+  async function initSession () {
+    var m;
+    try { m = await sdk(); }
+    catch (e) { S.state = 'out'; _readyResolve(S); emit('session'); paintStatus(); return; }
+
+    /* ONE listener, for the life of the shell. Re-auth, token refresh and sign-out all
+       flow through it, so no surface has to poll or re-check. */
+    /* A FIRST null is not proof of sign-out. Measured: the SDK can emit null before the
+       persisted user is restored from IndexedDB, and committing 'out' there made every
+       surface render "Not signed in" for a signed-in merchant — a visible flash, and a
+       re-render storm as listeners fired twice. A null BEFORE we have ever seen a user
+       keeps the state at 'resolving' for a short grace period; only then is it a real
+       sign-out. A null AFTER a user has been seen is genuine and commits immediately. */
+    var everIn = false, graceTimer = null;
+    m.auth.onAuthStateChanged(m.authI, function (u) {
+      if (!u) {
+        if (graceTimer) clearTimeout(graceTimer);
+        var commitOut = function () {
+          S.state = 'out'; S.uid = S.sellerUid = S.activeShopId = null; S.shop = null; S.email = null;
+          _readyResolve(S); emit('session'); paintStatus();
+        };
+        if (everIn) return commitOut();          /* a real sign-out */
+        /* Restore is still plausible — say "checking", not "signed out". */
+        S.state = 'resolving'; paintStatus();
+        graceTimer = setTimeout(commitOut, 3000);
+        return;
+      }
+      if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+      everIn = true;
+      S.uid = u.uid; S.email = u.email || null;
+      /* The seller IS the authenticated account — products.sellerUid and orders.sellerUid
+         are both compared to request.auth.uid by the rules. There is no separate id to
+         look up, and inventing one would be a second identity authority. */
+      S.sellerUid = u.uid;
+      S.state = 'in';
+      emit('session'); paintStatus();
+      resolveShop().then(function () { _readyResolve(S); emit('session'); paintStatus(); });
+    });
+  }
+
+  /* Active shop. shops/{uid} is the canonical doc (the rule is `match /shops/{uid}`,
+     keyed BY the owner's uid), so it is read directly rather than searched for. */
+  async function resolveShop () {
+    if (!S.uid) return;
+    /* MEASURED against a real seller: this read fired the instant auth resolved, RACED App
+       Check attestation, failed, and an empty catch swallowed it — so `activeShopId` stayed
+       null for the whole session even though shops/{uid} existed, was `status:'active'` and
+       is publicly readable. Every later read in the same page succeeded, because by then
+       attestation had settled.
+
+       So: wait for App Check, then retry with backoff, and NEVER fail silently — the reason
+       is kept on S.shopError so a missing shop is diagnosable instead of merely absent. */
+    for (var attempt = 0; attempt < 3; attempt++) {
+      /* TRY IMMEDIATELY, wait only before RETRYING. An earlier version awaited App Check up
+         front, which made the shop unavailable for up to 12s after sign-in even when
+         attestation was already done — the merchant's own shop name and id are needed by the
+         first paint, and every consumer saw null until then. Attestation is usually already
+         complete by the time auth resolves; when it is not, the retry path covers it. */
+      if (attempt > 0) {
+        try {
+          await Promise.race([
+            Promise.resolve(window.__sokoniAppCheckReady).catch(function () {}),
+            new Promise(function (r) { setTimeout(r, 8000); }),
+          ]);
+        } catch (_) {}
+      }
+      try {
+        var m = await sdk();
+        var snap = await m.fs.getDoc(m.fs.doc(m.db, 'shops', S.uid));
+        if (snap.exists()) {
+          S.shop = snap.data() || {};
+          S.activeShopId = snap.id;
+          S.shopError = null;
+          return;
+        }
+        /* Genuinely absent is a real answer — record it and stop retrying. */
+        S.shopError = 'no-shop-document';
+        return;
+      } catch (e) {
+        S.shopError = (e && e.code) || 'read-failed';
+        await new Promise(function (r) { setTimeout(r, 1200 * (attempt + 1)); });
+      }
+    }
+    console.warn('[merchant-v2] could not resolve shops/' + S.uid + ': ' + S.shopError);
+  }
+
+  async function firestore () {
+    var m = await sdk();
+    return { m: m.fs, db: m.db };
+  }
+  /* Modules call this instead of re-resolving auth. It awaits the FIRST resolution only;
+     afterwards it is synchronous-fast. */
+  async function uid () {
+    if (S.state === 'resolving') await Promise.race([_ready, new Promise(function (r) { setTimeout(r, 8000); })]);
+    return S.uid;
+  }
+
+  /* ══ DEVICE LAYER ═════════════════════════════════════════════════════════
+     The shell owns saved devices so a module never has to rediscover them.
+
+     Why this belongs in the shell specifically: a Bluetooth GATT connection dies
+     with the document. In a multi-page merchant, every navigation dropped the
+     printer and POS had to pair again. v2 never navigates, so a connection opened
+     here survives Orders -> POS -> Analytics -> Products for the whole session.
+
+     The printer ENGINE (PosPrintService + its stack) is ~130KB and is therefore
+     loaded LAZILY — only when a saved device actually needs reconnecting, or when a
+     module asks. A merchant with no printer never pays for it. */
+  var DEV = { printer: { state: 'unknown', name: null, saved: null }, list: [] };
+  function devKey () { return 'sk_devices_' + (S.uid || 'anon'); }
+  function loadDevices () {
+    /* Keyed BY UID so a shared till never shows the previous merchant's devices. */
+    try { DEV.list = JSON.parse(localStorage.getItem(devKey()) || '[]') || []; } catch (_) { DEV.list = []; }
+    DEV.printer.saved = DEV.list.filter(function (d) { return d.type === 'printer'; })[0] || null;
+    if (DEV.printer.saved && DEV.printer.state === 'unknown') DEV.printer.state = 'saved';
+  }
+  function saveDevice (d) {
+    loadDevices();
+    DEV.list = DEV.list.filter(function (x) { return !(x.type === d.type && x.id === d.id); }).concat([d]);
+    try { localStorage.setItem(devKey(), JSON.stringify(DEV.list)); } catch (_) {}
+    loadDevices(); emit('devices'); paintStatus(); broadcastDevices();
+  }
+
+  async function printerEngine () {
+    if (window.PosPrintService) return window.PosPrintService;
+    await loadScript('sokoni-pos-print-service.js').catch(function () {});
+    return window.PosPrintService || null;
+  }
+  function loadScript (src) {
+    return new Promise(function (res, rej) {
+      if (document.querySelector('script[src="' + src + '"]')) return res();
+      var s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = res; s.onerror = function () { rej(new Error('load-failed ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  /* Silent reconnect. navigator.bluetooth.getDevices() re-links a previously granted
+     device with NO chooser and NO user gesture — but only where the browser supports
+     it (Chromium). Everywhere else the honest answer is "saved, not connected", never
+     a hopeful "connected". */
+  async function autoConnectPrinter () {
+    if (!DEV.printer.saved) return;
+    var supported = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+    if (!supported) { DEV.printer.state = 'unsupported'; emit('devices'); paintStatus(); return; }
+    DEV.printer.state = 'connecting'; emit('devices'); paintStatus();
+    var eng = await printerEngine();
+    if (!eng) { DEV.printer.state = 'saved'; emit('devices'); paintStatus(); return; }
+    try {
+      var ok = await (eng.autoReconnect ? eng.autoReconnect() : Promise.resolve(false));
+      DEV.printer.state = ok ? 'connected' : 'saved';
+      if (ok) DEV.printer.name = DEV.printer.saved.name || 'Printer';
+    } catch (e) { DEV.printer.state = 'saved'; }
+    emit('devices'); paintStatus(); broadcastDevices();
+  }
+
+  /* Tell every hosted module what the shell already knows, so POS does not repeat
+     discovery. Sent on device change and whenever an iframe finishes loading. */
+  function broadcastDevices () {
+    var msg = { __sokoniShell: true, type: 'devices',
+                printer: { state: DEV.printer.state, name: DEV.printer.name, saved: !!DEV.printer.saved },
+                devices: DEV.list };
+    [].forEach.call(document.querySelectorAll('.panel iframe'), function (f) {
+      try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+    });
+  }
+  function broadcastSession () {
+    var msg = { __sokoniShell: true, type: 'session', state: S.state,
+                uid: S.uid, sellerUid: S.sellerUid, activeShopId: S.activeShopId };
+    [].forEach.call(document.querySelectorAll('.panel iframe'), function (f) {
+      try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+    });
+  }
+
+  var CACHE = { orders: null, ordersAt: 0, payments: null, paymentsAt: 0 };
+
+  /* ── PAYMENT AUTHORITIES — traced from the LIVE ruleset before use ─────────
+     Payment data is exactly where several collections look interchangeable and are
+     not. Each was checked the same three ways as Orders: what the rule authorises,
+     what the writer emits, what the client filters on.
+
+       sellerPayments   read: sellerUid == uid  OR  callerUid == uid
+                        writer: functions/index.js:4146 emits sellerUid, callerUid,
+                        orderId, amount, status, createdAt, phone, mpesaCode…
+                        client: where('sellerUid','==',uid)
+                        -> all three agree. THIS is the merchant payment authority.
+
+       payments         read: buyerId == uid            <- BUYER-scoped.
+                        A merchant cannot read it at all. Using it here would produce
+                        a permanently empty list that looked like "no payments".
+
+       posWalletTransactions  read: sellerId == uid. Readable, but it records store
+                        CREDIT movement, not payments taken. A different authority;
+                        folding it in would double-count.
+
+       orders.payment*  the payment STATE denormalised onto the order. Also a
+                        different record from the payment itself — which is why the
+                        method breakdown in Analytics is labelled order-derived and
+                        is not presented as the transaction ledger.
+
+     Only sellerPayments is used below. */
+  var PAYST = {
+    paid:     function (p) { return /completed|paid|success|settled/.test(p.status); },
+    pending:  function (p) { return /pending|processing|initiated|awaiting/.test(p.status); },
+    failed:   function (p) { return /fail|declin|cancel|error/.test(p.status); },
+    refunded: function (p) { return /refund|revers/.test(p.status); },
+  };
+
+  async function loadPayments (force) {
+    if (!force && CACHE.payments && (Date.now() - CACHE.paymentsAt) < 60000) {
+      return { rows: CACHE.payments, cached: true };
+    }
+    var u = await uid();
+    if (!u) return { error: 'signed-out' };
+    var f = await firestore().catch(function () { return null; });
+    if (!f) return { error: 'no-firebase' };
+    var m = f.m;
+    try {
+      var snap = await m.getDocs(m.query(
+        m.collection(f.db, 'sellerPayments'),
+        m.where('sellerUid', '==', u),
+        m.limit(100)
+      ));
+      var rows = snap.docs.map(function (d) { return normalisePayment(d.id, d.data() || {}); });
+      rows.sort(function (a, b) { return b.ts - a.ts; });
+      CACHE.payments = rows; CACHE.paymentsAt = Date.now();
+      return { rows: rows, cached: false };
+    } catch (e) { return { error: (e && e.code) || 'read-failed' }; }
+  }
+
+  function normalisePayment (id, d) {
+    var t = d.createdAt && typeof d.createdAt.toDate === 'function' ? d.createdAt.toDate()
+          : (d.createdAt instanceof Date ? d.createdAt : null);
+    /* Method: use what the writer recorded. An M-Pesa confirmation code only exists
+       for an M-Pesa payment, so its presence is evidence — not a guess. Anything else
+       stays "Unspecified" rather than being assigned a plausible method. */
+    var method = d.paymentMethod || d.method || (d.mpesaCode ? 'M-Pesa' : '');
+    return {
+      id: id,
+      ref: d.mpesaCode || d.reference || id,
+      orderId: d.orderId || null,
+      amount: Number(d.amount || 0),
+      currency: d.currency || 'KES',
+      status: String(d.status || 'pending').toLowerCase(),
+      method: method,
+      phone: d.phone || '',
+      hub: d.hub || '',
+      description: d.description || '',
+      ts: t ? t.getTime() : 0,
+      when: t,
+    };
+  }
+
+  async function loadOrders (force) {
+    /* Serve the cache instantly, then refresh. Never block the first paint on a
+       network round trip. */
+    if (!force && CACHE.orders && (Date.now() - CACHE.ordersAt) < 60000) return { rows: CACHE.orders, cached: true };
+    var u = await uid();
+    if (!u) return { error: 'signed-out' };
+    var f = await firestore().catch(function () { return null; });
+    if (!f) return { error: 'no-firebase' };
+    var m = f.m;
+    try {
+      var snap = await m.getDocs(m.query(
+        m.collection(f.db, 'orders'),
+        m.where('sellerUid', '==', u),
+        m.limit(100)
+      ));
+      var rows = snap.docs.map(function (d) { return normaliseOrder(d.id, d.data() || {}); });
+      rows.sort(function (a, b) { return b.ts - a.ts; });
+      CACHE.orders = rows; CACHE.ordersAt = Date.now();
+      return { rows: rows, cached: false, fromCache: snap.metadata.fromCache };
+    } catch (e) {
+      return { error: (e && e.code) || 'read-failed' };
+    }
+  }
+
+  /* One shape for the UI, so the renderer never reasons about field aliases. */
+  function normaliseOrder (id, d) {
+    var t = d.createdAt && typeof d.createdAt.toDate === 'function' ? d.createdAt.toDate()
+          : (d.createdAt instanceof Date ? d.createdAt : (d.date ? new Date(d.date) : null));
+    var status = String(d.status || d.orderStatus || 'pending').toLowerCase();
+    return {
+      id: id,
+      ref: d.orderNumber || d.orderId || d.ref || id,
+      customer: d.customerName || (d.customer && d.customer.name) || d.buyerName || 'Walk-in',
+      phone: d.customerPhone || (d.customer && d.customer.phone) || d.phoneNumber || '',
+      total: Number(d.total != null ? d.total : (d.amount != null ? d.amount : 0)),
+      currency: d.currency || 'KES',
+      status: status,
+      payment: String(d.paymentStatus || d.payment || (d.paid ? 'paid' : 'pending')).toLowerCase(),
+      method: d.paymentMethod || d.method || '',
+      fulfilment: String(d.fulfilmentStatus || d.deliveryStatus || d.fulfillment || '').toLowerCase(),
+      channel: d.channel || d.orderType || '',
+      items: Array.isArray(d.items) ? d.items : [],
+      ts: t ? t.getTime() : 0,
+      when: t,
+    };
+  }
+
+  /* ── ONE SET OF PREDICATES ────────────────────────────────────────────────
+     Orders, Analytics and Revenue all classify an order through THESE functions and
+     nowhere else. That is the mechanism that stops the Orders tab counting 12
+     completed while Analytics decides there are 14 — they are not "kept in sync",
+     they are literally the same code. */
+  var ST = {
+    completed: function (o) { return /completed|delivered|fulfilled|done/.test(o.status); },
+    cancelled: function (o) { return /cancel|refund|failed|returned/.test(o.status); },
+    refunded:  function (o) { return /refund|returned/.test(o.status); },
+    pending:   function (o) { return !ST.completed(o) && !ST.cancelled(o); },
+    paid:      function (o) { return /paid|success|complete/.test(o.payment); },
+    /* Cancelled money is not revenue. Every total below excludes it. */
+    live:      function (o) { return !ST.cancelled(o); },
+  };
+
+  function money (n, cur) {
+    var v = Number(n || 0);
+    return (cur || 'KES') + ' ' + v.toLocaleString('en-KE', { maximumFractionDigits: 2 });
+  }
+  function ago (d) {
+    if (!d) return '';
+    var s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    var days = Math.floor(s / 86400);
+    if (days < 7) return days + 'd ago';
+    return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+  }
+  function isToday (d) {
+    if (!d) return false;
+    var n = new Date();
+    return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+  }
+
+  /* ── NATIVE VIEWS ─────────────────────────────────────────────────────────
+     Dashboard and Orders are rebuilt here. Every other native route renders an
+     honest placeholder that names itself rather than an empty panel — a blank
+     screen is indistinguishable from a broken button. */
+  function renderNative (id) {
+    var p = nativePanel(id);
+    if (id === 'orders') return renderOrders(p);
+    if (id === 'payments') return renderPayments(p);
+    if (id === 'devices') return renderDevices(p);
+    if (id === 'availability') return renderAvailability(p);
+    if (id === 'settings') return renderSettings(p);
+    /* The nine ported surfaces — driven through their own mount(host, ctx) contract. */
+    if (MODULES[id]) return renderModule(id, p);
+    /* analytics | revenue | reports share ONE renderer and ONE engine, exactly as v1
+       mapped them — two implementations would be two sets of numbers. */
+    if (id === 'analytics' || id === 'revenue' || id === 'reports') {
+      return renderAnalytics(p, id === 'revenue' ? 'revenue' : 'analytics');
+    }
+    if (p.dataset.rendered === '1' && id !== 'dashboard') return;
+    p.dataset.rendered = '1';
+    if (id === 'dashboard') return renderDashboard(p);
+    var r = byId[id] || {};
+    p.innerHTML =
+      '<div class="greet"><b>' + esc(r.name || id) + '</b>' +
+      '<small>This surface is not rebuilt in shell v2 yet.</small></div>' +
+      '<div class="note"><b>Not yet ported.</b> The v1 shell renders this natively. ' +
+      'It is listed here so the route is reachable and visibly accounted for, rather ' +
+      'than opening a blank panel.</div>';
+  }
+
+  /* Figures are NEVER invented. Until a canonical source is wired, every metric shows
+     a neutral em-dash and is styled as neutral — not a green zero, which would read as
+     a real result (CLAUDE.md, UI Data Integrity). */
+  var TILES = [
+    { k: 'revenue',  label: 'Revenue' },
+    { k: 'orders',   label: 'Orders' },
+    { k: 'walkin',   label: 'Walk-in sales' },
+    { k: 'online',   label: 'Online orders' },
+    { k: 'aov',      label: 'Avg order' },
+    { k: 'refunds',  label: 'Refunds' },
+  ];
+  function renderDashboard (p) {
+    var hour = new Date().getHours();
+    var part = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    p.innerHTML =
+      '<div class="greet"><b>' + part + '</b><small>Shop overview · today’s activity</small></div>' +
+      '<div class="sec-t">Today</div>' +
+      '<div class="stats">' +
+        TILES.map(function (t) {
+          return '<div class="stat neutral"><b>—</b><small>' + esc(t.label) + '</small></div>';
+        }).join('') +
+      '</div>' +
+      '<div class="sec-t">Quick actions</div>' +
+      '<div class="actions">' +
+        '<button class="act" data-route="sell">💳 New sale</button>' +
+        '<button class="act ghost" data-route="orders">🧾 View orders</button>' +
+        '<button class="act ghost" data-route="inventory">📦 Inventory</button>' +
+        '<button class="act ghost" data-route="products">🏷️ Products</button>' +
+      '</div>' +
+      '<div class="note"><b>Figures show — until a canonical source is connected.</b> ' +
+      'This shell does not compute revenue locally; an unknown is shown as a dash rather ' +
+      'than as a zero, because a zero reads as a real result.</div>';
+  }
+
+  /* ══ MODULE ADAPTER ═══════════════════════════════════════════════════════
+     What the nine ported surfaces are handed. Deliberately the SAME shape v1 builds
+     (merchant.html:1783-1916) so the modules need no change at all.
+
+     Two properties are load-bearing and must not be "simplified":
+       · `db` is READ-ONLY. Every mutation in this workspace goes through a server
+         callable; there is no client write path here, by construction.
+       · `scope` comes from AUTH + the canonically resolved shop, never from the URL
+         and never from localStorage alone. A missing shop resolves NOT-ok and the
+         surfaces render their own "no shop yet" state instead of querying a guess. */
+  function _callable (name) {
+    return function (payload) {
+      return sdk().then(function (m) {
+        if (!window.firebaseApp) throw new Error('SOKONI is still starting up. Try again in a moment.');
+        return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js').then(function (fn) {
+          return fn.httpsCallable(fn.getFunctions(window.firebaseApp), name)(payload);
+        });
+      });
+    };
+  }
+
+  var _mdb = {
+    queryProducts: function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
+    queryProfiles: function (spec) { return _q(spec, 'Customers are not available yet.'); },
+    queryMovements: function (spec) { return _q(spec, 'Adjustment history is not available yet.'); },
+    /* The one subcollection read: a conversation's messages. `path` is an array so the
+       caller never assembles a string and a conversation id cannot be spliced into the
+       wrong one. */
+    queryMessages: function (spec) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Messages are not available yet.');
+        var parts = [m.fs.collection.apply(null, [window.firebaseDB].concat(spec.path))];
+        if (spec.orderBy) parts.push(m.fs.orderBy(spec.orderBy[0], spec.orderBy[1]));
+        if (spec.limit) parts.push(m.fs.limit(spec.limit));
+        return m.fs.getDocs(m.fs.query.apply(null, parts));
+      }).then(_rows);
+    },
+  };
+  function _q (spec, msg) {
+    return sdk().then(function (m) {
+      if (!window.firebaseDB) throw new Error(msg);
+      var parts = (spec.where || []).map(function (w) { return m.fs.where(w[0], w[1], w[2]); });
+      if (spec.orderBy) parts.push(m.fs.orderBy(spec.orderBy[0], spec.orderBy[1]));
+      if (spec.limit) parts.push(m.fs.limit(spec.limit));
+      return m.fs.getDocs(m.fs.query.apply(null, [m.fs.collection(window.firebaseDB, spec.collection)].concat(parts)));
+    }).then(_rows);
+  }
+  function _rows (snap) {
+    return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+  }
+
+  function _scope () {
+    if (!window.SokoniMerchantData) return { ok: false, reason: 'data-module-missing' };
+    return window.SokoniMerchantData.resolveScope({ uid: S.uid, activeShopId: S.activeShopId });
+  }
+  function _scopeKey (s) { return (s && s.ok) ? s.shopId : ('!' + ((s && s.reason) || 'unknown')); }
+  function _shopName () { return (S.shop && (S.shop.name || S.shop.shopName)) || null; }
+
+  function _ctx () {
+    return {
+      scope: _scope(), db: _mdb, shopName: _shopName(),
+      callSale: _callable('posCompleteCheckout'),
+      callAdjust: _callable('merchantAdjustStock'),
+      onToast: toast,
+      onPrint: function (job) {
+        /* Routed through the shell's device layer, so a receipt printed from Sell uses
+           the SAME connection POS uses — that is the point of owning devices here. */
+        return printerEngine().then(function (eng) {
+          if (eng && eng.printReceipt) return eng.printReceipt(job);
+          toast('No printer service is loaded.');
+        });
+      },
+      openScanner: function () {
+        /* Not wired in v2 yet. Say so rather than resolving with a fake code — a
+           silent no-op here would look like a broken scan to a merchant at the till. */
+        toast('Barcode scanning is not available in this workspace yet.');
+        return Promise.resolve(null);
+      },
+    };
+  }
+
+  /* ══ PORTED NATIVE SURFACES ═══════════════════════════════════════════════
+     One table instead of nine near-identical render functions. Each entry names the
+     global the module publishes and builds the context that module expects — taken
+     from v1's call sites, not invented.
+
+     A mounted surface is BOUND TO THE SHOP it was mounted for. The scope resolves
+     asynchronously and can change when the merchant switches branch, so "already
+     mounted" is not grounds to reuse: if the shop differs, tear down and rebuild
+     rather than refreshing a surface that would query the previous shop's data. */
+  var MODULES = {
+    sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
+    inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
+    staff:      { global: 'SokoniMerchantTeam',        ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    callList: _callable('listShopEmployees'), callInvites: _callable('listShopInvites'),
+                    callInvite: _callable('inviteShopEmployee'), callRevoke: _callable('revokeShopInvite'),
+                    callRemove: _callable('removeShopEmployee'), onToast: toast }; } },
+    marketing:  { global: 'SokoniMerchantMarketing',   ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    callList: _callable('getMinishopCampaigns'), callCreate: _callable('createMinishopCampaign'),
+                    callPause: _callable('pauseMinishopCampaign'), callDelete: _callable('deleteMinishopCampaign'),
+                    callPromos: _callable('miniShopGetPromotions'), callCreatePromo: _callable('miniShopCreatePromotion'),
+                    callUpdatePromo: _callable('miniShopUpdatePromotion'), callCreateAd: _callable('createAdCampaign'),
+                    onToast: toast }; } },
+    disputes:   { global: 'SokoniMerchantDisputesUI',  ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    callList: _callable('getSellerDisputes'), callDetail: _callable('getDisputeDetail'),
+                    callRespond: _callable('sellerRespondToDispute'), callEvidence: _callable('addDisputeEvidence'),
+                    onToast: toast }; } },
+    messages:   { global: 'SokoniMerchantMessagesUI',  ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    db: _mdb, onToast: toast }; } },
+    customers:  { global: 'SokoniMerchantCustomersUI', ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin, db: _mdb,
+                    callProfile: _callable('getCustomerProfile'), callDashboard: _callable('getCRMDashboard'),
+                    onToast: toast }; } },
+    shop:       { global: 'SokoniMerchantStoreUI',     ctx: function () { return {
+                    scope: _scope(), origin: location.origin, shopName: _shopName(),
+                    callIdentity: _callable('getMyMinishop'), callSave: _callable('saveMinishopConfig'),
+                    callClaim: _callable('claimMinishopHandle'), callAnalytics: _callable('getMinishopAnalytics'),
+                    callShare: _callable('generateMinishopShareCard'), onToast: toast }; } },
+    'kra-tax':  { global: 'SokoniMerchantTaxUI',       ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    callProfile: _callable('etimsGetProfile'), callRegister: _callable('etimsRegisterSeller'),
+                    callUpdate: _callable('etimsUpdateProfile'), callValidate: _callable('etimsValidatePin'),
+                    callStats: _callable('etimsGetSellerStats'), callInvoice: _callable('etimsGenerateInvoice'),
+                    callBulk: _callable('etimsBulkGenerate'), callResubmit: _callable('etimsResubmitInvoice'),
+                    onToast: toast }; } },
+  };
+  var _mounted = {};   /* id -> { ui, shopKey } */
+
+  function renderModule (id, p) {
+    var def = MODULES[id];
+    var G = window[def.global];
+    if (!G || typeof G.mount !== 'function') {
+      p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(id) + ' could not load</b>' +
+        '<small>The module script did not load, so this surface is unavailable. It is NOT empty — ' +
+        'nothing was fetched. Reload, and report this if it persists.</small></div>';
+      console.error('[merchant-v2] ' + def.global + ' missing — its script did not load');
+      return;
+    }
+    var key = _scopeKey(_scope());
+    var cur = _mounted[id];
+    if (cur && cur.shopKey === key) { try { cur.ui.refresh && cur.ui.refresh(); } catch (_) {} return; }
+    if (cur) { try { cur.ui.destroy && cur.ui.destroy(); } catch (_) {} _mounted[id] = null; }
+    p.innerHTML = '';
+    var ui = G.mount(p, def.ctx());
+    _mounted[id] = ui ? { ui: ui, shopKey: key } : null;
+  }
+
+  /* ══ ORDERS ═══════════════════════════════════════════════════════════════
+     Click -> skeleton NOW -> cached rows if we have them -> fresh rows.
+     The panel is never blank and never blocks on the network. */
+  var ORD = { tab: 'all', q: '', rows: null, loading: false };
+  var ORD_TABS = [
+    { k: 'all',       label: 'All' },
+    { k: 'today',     label: 'Today' },
+    { k: 'pending',   label: 'Pending' },
+    { k: 'completed', label: 'Completed' },
+    { k: 'cancelled', label: 'Cancelled' },
+  ];
+
+  function renderOrders (p) {
+    if (!p.dataset.built) {
+      p.dataset.built = '1';
+      p.innerHTML =
+        '<div class="toolbar">' +
+          '<div class="segs" id="ord-segs"></div>' +
+          '<div class="search"><span>🔍</span>' +
+            '<input id="ord-q" type="search" placeholder="Search order, customer or phone…" autocomplete="off">' +
+          '</div>' +
+        '</div>' +
+        '<div id="ord-body"></div>';
+      p.querySelector('#ord-q').addEventListener('input', function (e) {
+        ORD.q = e.target.value.trim().toLowerCase();
+        paintOrders();
+      });
+      p.querySelector('#ord-segs').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-tab]'); if (!b) return;
+        ORD.tab = b.dataset.tab; paintOrders();
+      });
+    }
+    /* Instant response: skeleton first, on the same tick as the click. */
+    if (!ORD.rows) skeleton(p.querySelector('#ord-body'), 5);
+    paintSegs();
+    if (ORD.rows) paintOrders();
+
+    if (ORD.loading) return;
+    ORD.loading = true;
+    loadOrders().then(function (r) {
+      ORD.loading = false;
+      if (r.error) { ORD.rows = null; return paintError(r.error); }
+      ORD.rows = r.rows;
+      paintSegs(); paintOrders();
+      if (r.cached) loadOrders(true).then(function (fresh) {   /* revalidate quietly */
+        if (fresh && fresh.rows) { ORD.rows = fresh.rows; paintSegs(); paintOrders(); }
+      });
+    }).catch(function () { ORD.loading = false; paintError('read-failed'); });
+  }
+
+  function skeleton (host, n) {
+    if (!host) return;
+    var s = '';
+    for (var i = 0; i < n; i++) {
+      s += '<div class="sk" style="margin-bottom:9px">' +
+             '<div class="sk-line" style="width:45%"></div>' +
+             '<div class="sk-line" style="width:70%;height:9px"></div>' +
+             '<div class="sk-line" style="width:30%;height:9px"></div>' +
+           '</div>';
+    }
+    host.innerHTML = s;
+  }
+
+  function ordFiltered () {
+    var rows = ORD.rows || [];
+    return rows.filter(function (o) {
+      /* Same predicates the analytics engine uses — see ST above. */
+      if (ORD.tab === 'today' && !isToday(o.when)) return false;
+      if (ORD.tab === 'pending' && !ST.pending(o)) return false;
+      if (ORD.tab === 'completed' && !ST.completed(o)) return false;
+      if (ORD.tab === 'cancelled' && !ST.cancelled(o)) return false;
+      if (ORD.q) {
+        var hay = (o.ref + ' ' + o.customer + ' ' + o.phone + ' ' + o.id).toLowerCase();
+        if (hay.indexOf(ORD.q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function paintSegs () {
+    var el = document.getElementById('ord-segs'); if (!el) return;
+    var rows = ORD.rows;
+    el.innerHTML = ORD_TABS.map(function (t) {
+      var n = '';
+      if (rows) {
+        var save = ORD.tab; ORD.tab = t.k;
+        var c = ordFiltered().length; ORD.tab = save;
+        n = '<span class="n">' + c + '</span>';
+      }
+      return '<button class="seg' + (ORD.tab === t.k ? ' on' : '') + '" data-tab="' + t.k + '">' +
+             esc(t.label) + n + '</button>';
+    }).join('');
+  }
+
+  function paintOrders () {
+    var host = document.getElementById('ord-body'); if (!host) return;
+    paintSegs();
+    var rows = ordFiltered();
+    if (!rows.length) {
+      host.innerHTML = '<div class="state"><span class="ico">🧾</span>' +
+        '<b>' + (ORD.q ? 'Nothing matches that search' : 'No orders here yet') + '</b>' +
+        '<small>' + (ORD.q ? 'Try an order number, customer name or phone.'
+                           : 'Orders placed with your shop will appear here as they come in.') +
+        '</small></div>';
+      return;
+    }
+    host.innerHTML = '<div class="ord-list">' + rows.map(ordCard).join('') + '</div>';
+  }
+
+  function ordCard (o) {
+    var payCls = /paid|success|complete/.test(o.payment) ? 'paid'
+               : /fail|declin/.test(o.payment) ? 'failed' : 'pending';
+    var stCls  = /cancel|refund|failed/.test(o.status) ? 'cancelled'
+               : /completed|delivered|fulfilled|done/.test(o.status) ? 'paid' : 'pending';
+    return '<button class="ord" data-order="' + esc(o.id) + '">' +
+      '<span class="ord-top">' +
+        '<span class="ord-id">#' + esc(o.ref) + '</span>' +
+        '<span class="ord-amt">' + esc(money(o.total, o.currency)) + '</span>' +
+      '</span>' +
+      '<span class="ord-sub">' +
+        '<span class="who">' + esc(o.customer) + (o.phone ? ' · ' + esc(o.phone) : '') + '</span>' +
+        '<span class="when">' + esc(ago(o.when)) + '</span>' +
+      '</span>' +
+      '<span class="badges">' +
+        '<span class="badge ' + stCls + '">' + esc(o.status) + '</span>' +
+        '<span class="badge ' + payCls + '">' + esc(o.payment) + (o.method ? ' · ' + esc(o.method) : '') + '</span>' +
+        (o.fulfilment ? '<span class="badge">' + esc(o.fulfilment) + '</span>' : '') +
+        (o.channel ? '<span class="badge">' + esc(o.channel) + '</span>' : '') +
+      '</span>' +
+    '</button>';
+  }
+
+  /* Honest failure states. None of these invent a figure or a row. */
+  function paintError (code) {
+    var host = document.getElementById('ord-body'); if (!host) return;
+    var body;
+    if (code === 'signed-out' || code === 'no-firebase') {
+      body = '<b>Not signed in on this device</b><small>Orders are scoped to your seller account, ' +
+             'so they load once you are signed in. Nothing is shown rather than showing someone ' +
+             'else’s or a placeholder figure.</small>';
+    } else if (code === 'permission-denied') {
+      body = '<b>This account cannot read these orders</b><small>The request reached the server and ' +
+             'was refused by the security rules. That is a permissions result, not an empty shop.</small>';
+    } else {
+      body = '<b>Orders could not be loaded</b><small>The request failed (<code>' + esc(code) + '</code>). ' +
+             'Nothing is guessed here — retry, and if it persists this is a real fault worth reporting.</small>';
+    }
+    host.innerHTML = '<div class="state"><span class="ico">🔒</span>' + body +
+      '<button class="act ghost" data-retry="orders">↻ Try again</button></div>';
+  }
+
+  /* ── ORDER DETAIL — an in-shell sheet. The shell never unmounts. ───────────*/
+  var sheet, sheetScrim;
+  function ensureSheet () {
+    if (sheet) return;
+    sheetScrim = document.createElement('div');
+    sheetScrim.className = 'sheet-scrim';
+    sheet = document.createElement('aside');
+    sheet.className = 'sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.innerHTML = '<div class="sheet-head"><b id="sheet-t">Order</b>' +
+                      '<button class="sheet-x" id="sheet-x" aria-label="Close">✕</button></div>' +
+                      '<div class="sheet-body" id="sheet-b"></div>';
+    document.body.appendChild(sheetScrim);
+    document.body.appendChild(sheet);
+    sheetScrim.addEventListener('click', closeSheet);
+    sheet.querySelector('#sheet-x').addEventListener('click', closeSheet);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+  }
+  function closeSheet () {
+    if (!sheet) return;
+    sheet.classList.remove('on'); sheetScrim.classList.remove('on');
+  }
+  function openOrder (id) {
+    var o = (ORD.rows || []).filter(function (x) { return x.id === id; })[0];
+    if (!o) return;
+    ensureSheet();
+    document.getElementById('sheet-t').textContent = '#' + o.ref;
+    document.getElementById('sheet-b').innerHTML =
+      '<dl class="kv">' +
+        row('Customer', o.customer) +
+        (o.phone ? row('Phone', o.phone) : '') +
+        row('Placed', o.when ? o.when.toLocaleString('en-KE') : '—') +
+        row('Status', o.status) +
+        row('Payment', o.payment + (o.method ? ' · ' + o.method : '')) +
+        (o.fulfilment ? row('Fulfilment', o.fulfilment) : '') +
+        (o.channel ? row('Channel', o.channel) : '') +
+        row('Total', money(o.total, o.currency)) +
+      '</dl>' +
+      (o.items.length
+        ? '<div class="items">' + o.items.map(function (it) {
+            return '<div class="item"><span class="q">' + esc(it.qty || it.quantity || 1) + '×</span>' +
+                   '<span class="n">' + esc(it.name || it.title || 'Item') + '</span>' +
+                   '<span class="p">' + esc(money((it.price || 0) * (it.qty || it.quantity || 1), o.currency)) + '</span></div>';
+          }).join('') + '</div>'
+        : '<div class="note" style="margin:0 0 16px">This order record carries no line items.</div>') +
+      '<div class="sheet-actions">' +
+        '<button class="act ghost" data-route="receipts">🧾 Receipts</button>' +
+        '<button class="act ghost" data-route="deliveries">🛵 Delivery Hub</button>' +
+      '</div>';
+    sheet.classList.add('on'); sheetScrim.classList.add('on');
+  }
+  function row (k, v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'; }
+
+  document.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-order]');
+    if (o) { openOrder(o.dataset.order); return; }
+    var pay = e.target.closest('[data-payment]');
+    if (pay) { openPayment(pay.dataset.payment); return; }
+    var r = e.target.closest('[data-retry]');
+    if (r) {
+      if (r.dataset.retry === 'payments') { PAY.rows = null; CACHE.payments = null; renderPayments(nativePanel('payments')); }
+      else { ORD.rows = null; CACHE.orders = null; renderOrders(nativePanel('orders')); }
+    }
+  });
+
+  /* ══ ANALYTICS ENGINE ═════════════════════════════════════════════════════
+     ONE aggregation over the SAME cached orders Orders renders. Analytics and
+     Revenue are two views of this bundle, not two implementations.
+
+     SOURCE COMPLETENESS — stated, not hidden. The only source here is the `orders`
+     collection. POS retail sales are NOT included, because `posRetailSales` cannot
+     currently be read by any merchant: the live rule authorises `sellerId`/
+     `cashierUid`, its sole writer emits `merchantId`/`cashierId`, and the client
+     filters on `merchantId`. Every read is denied and the denial is swallowed, so
+     silently adding that source would understate revenue while looking complete.
+     The surfaces therefore say "online orders only" rather than presenting a total
+     they cannot stand behind. When the rules defect is fixed, this engine gains one
+     more source and every view updates with it. */
+  function aggregate (rows) {
+    var a = {
+      count: rows.length, revenue: 0, paidRevenue: 0, pendingAmount: 0, cancelledAmount: 0,
+      units: 0, aov: 0,
+      completed: 0, pending: 0, cancelled: 0, refunded: 0,
+      byStatus: {}, byMethod: {}, byChannel: {}, products: {},
+      days: {}, hasMethod: false, hasChannel: false,
+    };
+    rows.forEach(function (o) {
+      var live = ST.live(o);
+      if (live) a.revenue += o.total; else a.cancelledAmount += o.total;
+      if (live && ST.paid(o)) a.paidRevenue += o.total;
+      if (live && !ST.paid(o)) a.pendingAmount += o.total;
+
+      if (ST.completed(o)) a.completed++;
+      else if (ST.cancelled(o)) a.cancelled++;
+      else a.pending++;
+      if (ST.refunded(o)) a.refunded++;
+
+      a.byStatus[o.status] = (a.byStatus[o.status] || 0) + 1;
+      /* Revenue breakdowns count LIVE orders only — a bucket is created solely when it
+         actually carries revenue. Recording a cancelled order's method produced a
+         "Card · KES 0" row: a payment category the shop never took money through,
+         presented alongside real ones. A zero row here is worse than a missing one. */
+      if (live && o.method)  { a.hasMethod = true;  a.byMethod[o.method]   = (a.byMethod[o.method]   || 0) + o.total; }
+      if (live && o.channel) { a.hasChannel = true; a.byChannel[o.channel] = (a.byChannel[o.channel] || 0) + o.total; }
+
+      (o.items || []).forEach(function (it) {
+        var q = Number(it.qty || it.quantity || 1) || 1;
+        if (live) a.units += q;
+        var k = it.name || it.title || 'Item';
+        var p = a.products[k] || { qty: 0, revenue: 0 };
+        p.qty += q; p.revenue += (Number(it.price) || 0) * q;
+        a.products[k] = p;
+      });
+
+      if (o.when) {
+        var key = o.when.getFullYear() + '-' + pad(o.when.getMonth() + 1) + '-' + pad(o.when.getDate());
+        var d = a.days[key] || { revenue: 0, orders: 0 };
+        d.orders++; if (live) d.revenue += o.total;
+        a.days[key] = d;
+      }
+    });
+    /* AOV over orders that actually count as revenue — dividing by cancelled ones too
+       would quietly depress it. */
+    var billable = a.count - a.cancelled;
+    a.aov = billable > 0 ? a.revenue / billable : 0;
+    return a;
+  }
+  function pad (n) { return n < 10 ? '0' + n : '' + n; }
+
+  /* ── RANGE ────────────────────────────────────────────────────────────────*/
+  var AN = { view: 'analytics', range: '7d', from: null, to: null };
+  var RANGES = [
+    { k: 'today', label: 'Today' }, { k: '7d', label: '7 days' },
+    { k: '30d', label: '30 days' }, { k: 'custom', label: 'Custom' },
+  ];
+  function rangeStart () {
+    var n = new Date(); n.setHours(0, 0, 0, 0);
+    if (AN.range === 'today') return n.getTime();
+    if (AN.range === '7d')  return n.getTime() - 6 * 864e5;
+    if (AN.range === '30d') return n.getTime() - 29 * 864e5;
+    if (AN.range === 'custom' && AN.from) return new Date(AN.from + 'T00:00:00').getTime();
+    return 0;
+  }
+  function rangeEnd () {
+    if (AN.range === 'custom' && AN.to) return new Date(AN.to + 'T23:59:59').getTime();
+    return Date.now();
+  }
+  function inRange (rows) {
+    var a = rangeStart(), b = rangeEnd();
+    return (rows || []).filter(function (o) { return o.ts >= a && o.ts <= b; });
+  }
+  function rangeDays () {
+    if (AN.range === 'today') return 1;
+    if (AN.range === '7d') return 7;
+    if (AN.range === '30d') return 30;
+    return Math.max(1, Math.min(90, Math.round((rangeEnd() - rangeStart()) / 864e5) + 1));
+  }
+
+  /* ── ANALYTICS + REVENUE — one renderer, two views ────────────────────────*/
+  function renderAnalytics (p, view) {
+    AN.view = view;
+    if (!p.dataset.built) {
+      p.dataset.built = '1';
+      p.innerHTML =
+        '<div class="toolbar">' +
+          '<div class="segs" id="an-segs"></div>' +
+          '<div id="an-custom" hidden>' +
+            '<input class="search" type="date" id="an-from" aria-label="From">' +
+            '<input class="search" type="date" id="an-to" aria-label="To">' +
+          '</div>' +
+        '</div>' +
+        '<div id="an-body"></div>';
+      p.querySelector('#an-segs').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-range]'); if (!b) return;
+        AN.range = b.dataset.range;
+        p.querySelector('#an-custom').hidden = AN.range !== 'custom';
+        paintAnalytics();
+      });
+      ['an-from', 'an-to'].forEach(function (id) {
+        p.querySelector('#' + id).addEventListener('change', function (e) {
+          AN[id === 'an-from' ? 'from' : 'to'] = e.target.value; paintAnalytics();
+        });
+      });
+    }
+    if (!ORD.rows) skeleton(p.querySelector('#an-body'), 4);
+    paintRangeSegs();
+    if (ORD.rows) paintAnalytics();
+
+    if (ORD.loading) return;
+    ORD.loading = true;
+    loadOrders().then(function (r) {
+      ORD.loading = false;
+      if (r.error) { return paintAnError(r.error); }
+      ORD.rows = r.rows;                       /* the SAME cache Orders uses */
+      paintAnalytics();
+      if (r.cached) loadOrders(true).then(function (f) {
+        if (f && f.rows) { ORD.rows = f.rows; paintAnalytics(); }
+      });
+    }).catch(function () { ORD.loading = false; paintAnError('read-failed'); });
+  }
+
+  function paintRangeSegs () {
+    var el = document.getElementById('an-segs'); if (!el) return;
+    el.innerHTML = RANGES.map(function (r) {
+      return '<button class="seg' + (AN.range === r.k ? ' on' : '') + '" data-range="' + r.k + '">' +
+             esc(r.label) + '</button>';
+    }).join('');
+  }
+
+  function paintAnError (code) {
+    var host = document.getElementById('an-body'); if (!host) return;
+    host.innerHTML = '<div class="state"><span class="ico">🔒</span>' +
+      '<b>' + (code === 'signed-out' ? 'Not signed in on this device' : 'Could not load the data') + '</b>' +
+      '<small>' + (code === 'signed-out'
+        ? 'These figures are computed from your own orders, so they load once you are signed in. Nothing is estimated in the meantime.'
+        : 'The request failed (<code>' + esc(code) + '</code>). No figure is shown rather than a guessed one.') +
+      '</small><button class="act ghost" data-retry="orders">↻ Try again</button></div>';
+  }
+
+  function paintAnalytics () {
+    var host = document.getElementById('an-body'); if (!host) return;
+    paintRangeSegs();
+    var rows = inRange(ORD.rows);
+    var a = aggregate(rows);
+    host.innerHTML = (AN.view === 'revenue' ? revenueView(a, rows) : analyticsView(a, rows)) + sourceNote();
+  }
+
+  /* The source caveat travels WITH the numbers, not in a footnote nobody reads. */
+  function sourceNote () {
+    return '<div class="note" style="margin-top:20px"><b>Online order revenue only.</b> ' +
+      'These figures come from your <code>orders</code> records. In-shop POS sales are <b>not</b> included: ' +
+      'the POS sales collection cannot currently be read by a merchant account (its security rule authorises ' +
+      'different fields than the writer records), so including it would understate your totals while looking ' +
+      'complete. This surface will pick POS up automatically once that is fixed.</div>';
+  }
+
+  function tile (label, value, neutral) {
+    return '<div class="stat' + (neutral ? ' neutral' : '') + '"><b>' + esc(value) + '</b>' +
+           '<small>' + esc(label) + '</small></div>';
+  }
+
+  function analyticsView (a, rows) {
+    var empty = !rows.length;
+    return '' +
+      '<div class="sec-t">Overview · ' + esc(rangeLabel()) + '</div>' +
+      '<div class="stats">' +
+        tile('Revenue', empty ? '—' : money(a.revenue), empty) +
+        tile('Orders', empty ? '—' : a.count, empty) +
+        tile('Units sold', empty ? '—' : a.units, empty) +
+        tile('Avg order', empty ? '—' : money(a.aov), empty) +
+        tile('Pending', empty ? '—' : a.pending, empty) +
+        tile('Completed', empty ? '—' : a.completed, empty) +
+      '</div>' +
+      (empty ? emptyRange() :
+        trendBlock(a) +
+        breakdown('Order status', a.byStatus, false) +
+        (a.hasMethod ? breakdown('Payment method', a.byMethod, true)
+                     : missing('Payment method', 'None of these orders record a payment method.')) +
+        topProducts(a));
+  }
+
+  function revenueView (a, rows) {
+    var empty = !rows.length;
+    return '' +
+      '<div class="sec-t">Revenue · ' + esc(rangeLabel()) + '</div>' +
+      '<div class="stats">' +
+        tile('Gross revenue', empty ? '—' : money(a.revenue), empty) +
+        tile('Paid', empty ? '—' : money(a.paidRevenue), empty) +
+        tile('Awaiting payment', empty ? '—' : money(a.pendingAmount), empty) +
+        tile('Cancelled / refunded', empty ? '—' : money(a.cancelledAmount), empty) +
+        tile('Orders', empty ? '—' : a.count, empty) +
+        tile('Avg order', empty ? '—' : money(a.aov), empty) +
+      '</div>' +
+      (empty ? emptyRange() :
+        trendBlock(a) +
+        (a.hasChannel ? breakdown('Channel', a.byChannel, true)
+                      : missing('Channel', 'None of these orders record a sales channel.')) +
+        (a.hasMethod ? breakdown('Payment method', a.byMethod, true)
+                     : missing('Payment method', 'None of these orders record a payment method.')) +
+        breakdown('Order status', a.byStatus, false));
+  }
+
+  function rangeLabel () {
+    var r = RANGES.filter(function (x) { return x.k === AN.range; })[0];
+    if (AN.range === 'custom') return (AN.from || 'start') + ' → ' + (AN.to || 'today');
+    return r ? r.label : '';
+  }
+  function emptyRange () {
+    return '<div class="state"><span class="ico">📊</span><b>No orders in this period</b>' +
+           '<small>Nothing is estimated to fill the gap. Widen the range, or check back once orders come in.</small></div>';
+  }
+  function missing (title, why) {
+    return '<div class="sec-t">' + esc(title) + '</div>' +
+           '<div class="note" style="margin:0 0 20px">' + esc(why) +
+           ' No chart is drawn rather than one implying a single unknown category.</div>';
+  }
+
+  /* Inline SVG bars — no chart library, no network, fast on a phone. */
+  function trendBlock (a) {
+    var days = rangeDays(), start = rangeStart(), out = [], max = 0;
+    for (var i = 0; i < days; i++) {
+      var d = new Date(start + i * 864e5);
+      var k = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      var v = a.days[k] || { revenue: 0, orders: 0 };
+      out.push({ d: d, revenue: v.revenue, orders: v.orders });
+      if (v.revenue > max) max = v.revenue;
+    }
+    var w = 100 / out.length;
+    var bars = out.map(function (p, i) {
+      var h = max > 0 ? Math.max(1.5, (p.revenue / max) * 100) : 1.5;
+      return '<div class="bar" style="left:' + (i * w) + '%;width:' + (w * 0.72) + '%;height:' + h + '%" ' +
+             'title="' + esc(p.d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) +
+             ' · ' + money(p.revenue) + ' · ' + p.orders + ' orders') + '"></div>';
+    }).join('');
+    return '<div class="sec-t">Revenue trend</div>' +
+      '<div class="chart"><div class="bars">' + bars + '</div></div>' +
+      '<div class="chart-x"><span>' + esc(out[0].d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })) + '</span>' +
+      '<span>' + esc(max > 0 ? 'peak ' + money(max) : 'no revenue in range') + '</span>' +
+      '<span>' + esc(out[out.length - 1].d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })) + '</span></div>';
+  }
+
+  function breakdown (title, obj, isMoney) {
+    var keys = Object.keys(obj);
+    if (!keys.length) return '';
+    var total = keys.reduce(function (s, k) { return s + obj[k]; }, 0) || 1;
+    keys.sort(function (x, y) { return obj[y] - obj[x]; });
+    return '<div class="sec-t">' + esc(title) + '</div><div class="bd">' +
+      keys.map(function (k) {
+        var pct = Math.round((obj[k] / total) * 100);
+        return '<div class="bd-row"><span class="bd-k">' + esc(k) + '</span>' +
+               '<span class="bd-track"><span class="bd-fill" style="width:' + pct + '%"></span></span>' +
+               '<span class="bd-v">' + esc(isMoney ? money(obj[k]) : obj[k]) + '</span></div>';
+      }).join('') + '</div>';
+  }
+
+  function topProducts (a) {
+    var keys = Object.keys(a.products);
+    if (!keys.length) {
+      return missing('Top products', 'These orders carry no line items, so there is nothing to rank.');
+    }
+    keys.sort(function (x, y) { return a.products[y].revenue - a.products[x].revenue; });
+    return '<div class="sec-t">Top products</div><div class="items" style="margin-bottom:20px">' +
+      keys.slice(0, 8).map(function (k) {
+        var p = a.products[k];
+        return '<div class="item"><span class="q">' + esc(p.qty) + '×</span>' +
+               '<span class="n">' + esc(k) + '</span>' +
+               '<span class="p">' + esc(money(p.revenue)) + '</span></div>';
+      }).join('') + '</div>';
+  }
+
+  /* ══ PAYMENTS ═════════════════════════════════════════════════════════════
+     Same shape as Orders: skeleton -> cache -> fresh, native, in-shell detail. */
+  var PAY = { tab: 'all', q: '', rows: null, loading: false };
+  var PAY_TABS = [
+    { k: 'all',      label: 'All' },
+    { k: 'paid',     label: 'Paid' },
+    { k: 'pending',  label: 'Pending' },
+    { k: 'failed',   label: 'Failed' },
+    { k: 'refunded', label: 'Refunded' },
+  ];
+
+  function renderPayments (p) {
+    if (!p.dataset.built) {
+      p.dataset.built = '1';
+      p.innerHTML =
+        '<div class="toolbar">' +
+          '<div class="segs" id="pay-segs"></div>' +
+          '<div class="search"><span>🔍</span>' +
+            '<input id="pay-q" type="search" placeholder="Search code, phone or order…" autocomplete="off">' +
+          '</div>' +
+        '</div>' +
+        '<div id="pay-body"></div>';
+      p.querySelector('#pay-q').addEventListener('input', function (e) {
+        PAY.q = e.target.value.trim().toLowerCase(); paintPayments();
+      });
+      p.querySelector('#pay-segs').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-paytab]'); if (!b) return;
+        PAY.tab = b.dataset.paytab; paintPayments();
+      });
+    }
+    if (!PAY.rows) skeleton(p.querySelector('#pay-body'), 5);
+    paintPaySegs();
+    if (PAY.rows) paintPayments();
+
+    if (PAY.loading) return;
+    PAY.loading = true;
+    loadPayments().then(function (r) {
+      PAY.loading = false;
+      if (r.error) return paintPayError(r.error);
+      PAY.rows = r.rows;
+      paintPaySegs(); paintPayments();
+      if (r.cached) loadPayments(true).then(function (f) {
+        if (f && f.rows) { PAY.rows = f.rows; paintPaySegs(); paintPayments(); }
+      });
+    }).catch(function () { PAY.loading = false; paintPayError('read-failed'); });
+  }
+
+  function payFiltered () {
+    return (PAY.rows || []).filter(function (p) {
+      if (PAY.tab !== 'all' && !PAYST[PAY.tab](p)) return false;
+      if (PAY.q) {
+        var hay = (p.ref + ' ' + p.phone + ' ' + (p.orderId || '') + ' ' + p.method + ' ' + p.id).toLowerCase();
+        if (hay.indexOf(PAY.q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function paintPaySegs () {
+    var el = document.getElementById('pay-segs'); if (!el) return;
+    el.innerHTML = PAY_TABS.map(function (t) {
+      var n = '';
+      if (PAY.rows) {
+        var save = PAY.tab; PAY.tab = t.k; var c = payFiltered().length; PAY.tab = save;
+        n = '<span class="n">' + c + '</span>';
+      }
+      return '<button class="seg' + (PAY.tab === t.k ? ' on' : '') + '" data-paytab="' + t.k + '">' +
+             esc(t.label) + n + '</button>';
+    }).join('');
+  }
+
+  function paintPayments () {
+    var host = document.getElementById('pay-body'); if (!host) return;
+    paintPaySegs();
+    var all = PAY.rows || [];
+    var rows = payFiltered();
+
+    /* Totals are over EVERY payment record, not the current filter — a merchant
+       reading "Total amount" expects the ledger total, not the tab's subtotal. */
+    var paid = all.filter(PAYST.paid), pend = all.filter(PAYST.pending);
+    var fail = all.filter(PAYST.failed), refd = all.filter(PAYST.refunded);
+    var sum = function (a) { return a.reduce(function (s, x) { return s + x.amount; }, 0); };
+    var byMethod = {};
+    paid.forEach(function (p) { if (p.method) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount; });
+    var empty = !all.length;
+
+    host.innerHTML =
+      '<div class="sec-t">Payments received</div>' +
+      '<div class="stats">' +
+        tile('Paid', empty ? '—' : money(sum(paid)), empty) +
+        tile('Pending', empty ? '—' : money(sum(pend)), empty) +
+        tile('Failed', empty ? '—' : money(sum(fail)), empty) +
+        tile('Refunded', empty ? '—' : money(sum(refd)), empty) +
+        tile('Transactions', empty ? '—' : all.length, empty) +
+        tile('Total amount', empty ? '—' : money(sum(all)), empty) +
+      '</div>' +
+      /* Methods appear ONLY where the record carries one. No "Other" bucket is
+         invented to make the chart look whole. */
+      (Object.keys(byMethod).length
+        ? breakdown('Payment method · received', byMethod, true)
+        : (empty ? '' : missing('Payment method',
+            'These payment records do not carry a method field.'))) +
+      '<div class="sec-t">Transactions</div>' +
+      (rows.length
+        ? '<div class="ord-list">' + rows.map(payCard).join('') + '</div>'
+        : '<div class="state"><span class="ico">💳</span><b>' +
+            (PAY.q ? 'Nothing matches that search'
+                   : empty ? 'No payments recorded yet' : 'Nothing in this tab') + '</b>' +
+          '<small>' + (PAY.q ? 'Try an M-Pesa code, phone number or order id.'
+                             : 'Payments confirmed for your shop appear here as they settle.') +
+          '</small></div>') +
+      paySourceNote();
+  }
+
+  function payCard (p) {
+    var cls = PAYST.paid(p) ? 'paid' : PAYST.failed(p) ? 'failed'
+            : PAYST.refunded(p) ? 'cancelled' : 'pending';
+    return '<button class="ord" data-payment="' + esc(p.id) + '">' +
+      '<span class="ord-top">' +
+        '<span class="ord-id">' + esc(p.ref) + '</span>' +
+        '<span class="ord-amt">' + esc(money(p.amount, p.currency)) + '</span>' +
+      '</span>' +
+      '<span class="ord-sub">' +
+        '<span class="who">' + esc(p.method || 'Unspecified method') +
+          (p.phone ? ' · ' + esc(p.phone) : '') + '</span>' +
+        '<span class="when">' + esc(ago(p.when)) + '</span>' +
+      '</span>' +
+      '<span class="badges">' +
+        '<span class="badge ' + cls + '">' + esc(p.status) + '</span>' +
+        (p.orderId ? '<span class="badge">order ' + esc(String(p.orderId).slice(0, 12)) + '</span>' : '') +
+        (p.hub ? '<span class="badge">' + esc(p.hub) + '</span>' : '') +
+      '</span>' +
+    '</button>';
+  }
+
+  /* The scope of this ledger, attached to it — same principle as the revenue note. */
+  function paySourceNote () {
+    return '<div class="note" style="margin-top:20px"><b>These are your confirmed payment records.</b> ' +
+      'They come from <code>sellerPayments</code>, the only payment collection scoped to a seller. ' +
+      'Two things are deliberately <b>not</b> merged in: the buyer-side <code>payments</code> ledger, ' +
+      'which a merchant account is not authorised to read at all, and in-shop POS sales, which remain ' +
+      'unreadable because of the field mismatch noted on Revenue. The payment status shown on an ' +
+      'individual order is a separate record from these transactions.</div>';
+  }
+
+  function paintPayError (code) {
+    var host = document.getElementById('pay-body'); if (!host) return;
+    host.innerHTML = '<div class="state"><span class="ico">🔒</span><b>' +
+      (code === 'signed-out' ? 'Not signed in on this device'
+       : code === 'permission-denied' ? 'This account cannot read these payments'
+       : 'Payments could not be loaded') + '</b><small>' +
+      (code === 'signed-out'
+        ? 'Payment records are scoped to your seller account and load once you are signed in.'
+        : code === 'permission-denied'
+        ? 'The request reached the server and was refused by the security rules — a permissions result, not an empty ledger.'
+        : 'The request failed (<code>' + esc(code) + '</code>). Nothing is estimated in its place.') +
+      '</small><button class="act ghost" data-retry="payments">↻ Try again</button></div>';
+  }
+
+  function openPayment (id) {
+    var p = (PAY.rows || []).filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    ensureSheet();
+    document.getElementById('sheet-t').textContent = p.ref;
+    document.getElementById('sheet-b').innerHTML =
+      '<dl class="kv">' +
+        row('Amount', money(p.amount, p.currency)) +
+        row('Status', p.status) +
+        row('Method', p.method || 'Unspecified') +
+        (p.phone ? row('Phone', p.phone) : '') +
+        (p.ref ? row('Reference', p.ref) : '') +
+        (p.orderId ? row('Order', p.orderId) : '') +
+        (p.hub ? row('Hub', p.hub) : '') +
+        row('Received', p.when ? p.when.toLocaleString('en-KE') : '—') +
+        (p.description ? row('Note', p.description) : '') +
+      '</dl>' +
+      (p.orderId
+        ? '<div class="sheet-actions"><button class="act ghost" data-route="orders">🧾 Open Orders</button></div>'
+        : '<div class="note" style="margin:0">This payment is not linked to an order record.</div>');
+    sheet.classList.add('on'); sheetScrim.classList.add('on');
+  }
+
+  /* ══ DEVICES ══════════════════════════════════════════════════════════════
+     A control centre over the registry the SHELL already owns — not a status page,
+     and not another discovery implementation. */
+  function renderDevices (p) {
+    var d = DEV.printer;
+    var bt = !!(navigator.bluetooth);
+    var silent = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+    var saved = d.saved;
+
+    var stateLabel = { connected: 'Connected', connecting: 'Connecting…', saved: 'Saved · not connected',
+                       unsupported: 'Not supported by this browser', unknown: 'No printer saved' }[d.state] || d.state;
+    var dotCls = d.state === 'connected' ? 'ok' : d.state === 'connecting' ? 'warn' : '';
+
+    p.innerHTML =
+      '<div class="sec-t">Receipt printer</div>' +
+      '<div class="dev">' +
+        '<div class="dev-head">' +
+          '<span class="dev-ico">🖨️</span>' +
+          '<span class="dev-id"><b>' + esc(saved ? (saved.name || 'Saved printer') : 'No printer saved') + '</b>' +
+            '<small><span class="dot ' + dotCls + '"></span>' + esc(stateLabel) + '</small></span>' +
+        '</span></div>' +
+        '<dl class="kv" style="margin:14px 0 0">' +
+          row('Type', saved ? (saved.type || 'printer') : '—') +
+          row('Last saved', saved && saved.at ? new Date(saved.at).toLocaleString('en-KE') : '—') +
+          row('Silent reconnect', silent ? 'Supported — no pairing prompt needed'
+                                         : 'Not supported by this browser') +
+          row('Bluetooth', bt ? 'Available' : 'Unavailable in this browser') +
+        '</dl>' +
+        '<div class="sheet-actions" style="margin-top:14px">' +
+          (d.state === 'connected'
+            ? '<button class="act ghost" data-dev="disconnect">⏹ Disconnect</button>' +
+              '<button class="act" data-dev="test">🧾 Test print</button>'
+            : '<button class="act" data-dev="connect">' + (saved ? '↻ Reconnect' : '＋ Connect a printer') + '</button>') +
+          (saved ? '<button class="act ghost" data-dev="forget">🗑 Forget device</button>' : '') +
+        '</div>' +
+      '</div>' +
+      (!bt ? '<div class="note" style="margin-top:14px"><b>This browser cannot reach Bluetooth printers.</b> ' +
+             'Web Bluetooth is unavailable here (Safari and iOS do not implement it). The saved device is kept, ' +
+             'and will reconnect on a browser that supports it — nothing is lost.</div>' : '') +
+      '<div class="sec-t" style="margin-top:22px">Other devices</div>' +
+      (DEV.list.filter(function (x) { return x.type !== 'printer'; }).length
+        ? '<div class="items">' + DEV.list.filter(function (x) { return x.type !== 'printer'; }).map(function (x) {
+            return '<div class="item"><span class="q">' + esc(x.type) + '</span>' +
+                   '<span class="n">' + esc(x.name || x.id) + '</span>' +
+                   '<span class="p">' + esc(x.at ? ago(new Date(x.at)) : '') + '</span></div>';
+          }).join('') + '</div>'
+        : '<div class="note" style="margin:0">No other devices are registered on this browser profile.</div>') +
+      '<div class="note" style="margin-top:20px"><b>The connection stays alive across the whole workspace.</b> ' +
+      'The shell owns this connection, not the screen you happen to be on, so moving Devices → POS → Orders → ' +
+      'Analytics keeps the printer connected. In the old multi-page merchant every navigation dropped it and ' +
+      'POS had to pair again.</div>' +
+      '<div class="note" style="margin-top:12px">Devices are remembered per signed-in account on this browser, ' +
+      'so a shared till never shows the previous merchant’s hardware.</div>';
+  }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-dev]'); if (!b) return;
+    var act = b.dataset.dev;
+    if (act === 'forget') {
+      DEV.list = DEV.list.filter(function (x) { return x.type !== 'printer'; });
+      try { localStorage.setItem(devKey(), JSON.stringify(DEV.list)); } catch (_) {}
+      DEV.printer = { state: 'unknown', name: null, saved: null };
+      emit('devices'); paintStatus(); renderDevices(nativePanel('devices')); return;
+    }
+    if (act === 'connect') { deviceConnect(b); return; }
+    if (act === 'disconnect') { deviceDisconnect(b); return; }
+    if (act === 'test') { deviceTest(b); return; }
+  });
+
+  function busy (btn, txt) { btn.disabled = true; btn.dataset.old = btn.textContent; btn.textContent = txt; }
+  function done (btn) { btn.disabled = false; if (btn.dataset.old) btn.textContent = btn.dataset.old; }
+
+  async function deviceConnect (btn) {
+    busy(btn, 'Connecting…');
+    DEV.printer.state = 'connecting'; paintStatus();
+    var eng = await printerEngine();
+    if (!eng) { DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown'; done(btn); paintStatus();
+                return toast('The printer service could not be loaded.'); }
+    try {
+      /* A SAVED device reconnects silently — no chooser. Only a first-time pairing
+         opens the browser prompt, and that needs the user gesture we are inside. */
+      var ok = DEV.printer.saved && eng.autoReconnect ? await eng.autoReconnect() : false;
+      if (!ok && eng.connect) ok = await eng.connect();
+      DEV.printer.state = ok ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
+      if (ok) {
+        DEV.printer.name = DEV.printer.name || 'Printer';
+        saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
+      } else { toast('No printer connected.'); }
+    } catch (e) { DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown'; toast('Could not connect: ' + (e.message || e)); }
+    done(btn); paintStatus(); broadcastDevices(); renderDevices(nativePanel('devices'));
+  }
+  async function deviceDisconnect (btn) {
+    busy(btn, 'Disconnecting…');
+    var eng = await printerEngine();
+    try { if (eng && eng.disconnect) await eng.disconnect(); } catch (_) {}
+    DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown';
+    done(btn); paintStatus(); broadcastDevices(); renderDevices(nativePanel('devices'));
+  }
+  async function deviceTest (btn) {
+    busy(btn, 'Printing…');
+    var eng = await printerEngine();
+    try {
+      if (eng && eng.testPrint) await eng.testPrint();
+      else if (eng && eng.printTest) await eng.printTest();
+      else toast('This printer service exposes no test-print method.');
+    } catch (e) { toast('Test print failed: ' + (e.message || e)); }
+    done(btn);
+  }
+  function toast (msg) {
+    var t = document.getElementById('sk-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'sk-toast'; t.className = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(t._x); t._x = setTimeout(function () { t.classList.remove('on'); }, 3600);
+  }
+
+  /* ══ AVAILABILITY ═════════════════════════════════════════════════════════
+     TRACED BEFORE BUILT, and the trace changed what this screen can be.
+
+       Authority: shops/{sellerUid} { acceptingOrders, online, delivery, pickup },
+       ABSENT = available. Enforced server-side at checkout by
+       functions/availability-enforce.js -> reason 'shop-closed'.
+
+       Can a merchant TOGGLE it?  No — twice over:
+         · the live rule limits an owner's shops/{uid} update to an allowlist of 28
+           fields (hasOnly([...])), and acceptingOrders / online / delivery / pickup
+           are NOT in it. A client write is refused.
+         · the callable that would do it server-side, setLiveStatus, is defined in
+           functions/availability.js but never re-exported in functions/index.js and
+           has no dispatcher — so it is not deployed.
+
+     A switch here would therefore fail every time. It is not built. What IS writable
+     is `hours`/`openingHours`, which the allowlist does permit, so the schedule is a
+     real editor. */
+  function renderAvailability (p) {
+    if (S.state !== 'in') {
+      p.innerHTML = '<div class="state"><span class="ico">🔒</span><b>Not signed in on this device</b>' +
+        '<small>Your shop’s availability loads once you are signed in.</small></div>';
+      return;
+    }
+    var shop = S.shop || {};
+    var accepting = shop.acceptingOrders !== false;   /* absent = open, per the enforcer */
+    p.innerHTML =
+      '<div class="sec-t">Current status</div>' +
+      '<div class="dev"><div class="dev-head">' +
+        '<span class="dev-ico">' + (accepting ? '🟢' : '🔴') + '</span>' +
+        '<span class="dev-id"><b>' + (accepting ? 'Accepting orders' : 'Not accepting orders') + '</b>' +
+        '<small>' + (accepting
+          ? 'Customers can place orders with your shop.'
+          : 'Checkout refuses new orders with “shop-closed”.') + '</small></span>' +
+      '</div>' +
+      '<dl class="kv" style="margin:14px 0 0">' +
+        row('Accepting orders', accepting ? 'Yes' : 'No') +
+        row('Online', shop.online === false ? 'Off' : 'On') +
+        row('Delivery', shop.delivery === false ? 'Off' : 'On') +
+        row('Pickup', shop.pickup === false ? 'Off' : 'On') +
+      '</dl></div>' +
+      '<div class="note" style="margin-top:14px"><b>This status is read-only from here, and that is a platform ' +
+      'limitation rather than a design choice.</b> The open/closed flag lives on your shop record, but the ' +
+      'security rules do not let a shop owner change that particular field from the app, and the server function ' +
+      'that would change it (<code>setLiveStatus</code>) is not currently deployed. Rather than show a switch ' +
+      'that silently fails, the state is shown as it is. This is on the release list to fix.</div>' +
+      '<div class="sec-t" style="margin-top:22px">Opening hours</div>' +
+      '<div class="note" style="margin:0 0 12px">Hours <b>are</b> editable — they are on the permitted list for a ' +
+      'shop owner. They describe your shop to customers; they do not open or close checkout by themselves.</div>' +
+      '<div class="dev">' +
+        '<textarea id="av-hours" class="ta" rows="6" placeholder="e.g. Mon–Sat 8:00–18:00, Sun closed">' +
+        esc(shop.openingHours || shop.hours || '') + '</textarea>' +
+        '<div class="sheet-actions" style="margin-top:12px">' +
+          '<button class="act" data-av="save">💾 Save hours</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-av]'); if (!b) return;
+    saveHours(b);
+  });
+  async function saveHours (btn) {
+    var ta = document.getElementById('av-hours'); if (!ta) return;
+    busy(btn, 'Saving…');
+    try {
+      var f = await firestore();
+      /* Only allowlisted keys are sent. Anything else would be refused wholesale —
+         the rule uses hasOnly(), so ONE stray field fails the entire write. */
+      await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid), {
+        openingHours: ta.value, hours: ta.value, updatedAt: new Date(),
+      });
+      if (S.shop) { S.shop.openingHours = ta.value; S.shop.hours = ta.value; }
+      toast('Opening hours saved.');
+    } catch (e) {
+      toast(e && e.code === 'permission-denied'
+        ? 'The server refused that change.'
+        : 'Could not save: ' + ((e && e.code) || e.message || 'unknown'));
+    }
+    done(btn);
+  }
+
+  /* ══ SETTINGS ═════════════════════════════════════════════════════════════
+     A hub of real sections. A section is listed ONLY where the underlying capability
+     exists; where it does not, it says so plainly instead of offering a control that
+     does not persist. */
+  function renderSettings (p) {
+    var shop = S.shop || {};
+    var signedIn = S.state === 'in';
+    p.innerHTML =
+      '<div class="sec-t">Shop</div>' +
+      '<div class="setgrid">' +
+        setCard('🏪', 'Business profile', 'Name, contact, address, socials, policies', 'profile', signedIn) +
+        setCard('🟢', 'Availability', 'Opening hours and current order status', 'route:availability', true) +
+        setCard('🖨️', 'Devices', 'Printer and saved hardware', 'route:devices', true) +
+        setCard('💳', 'Payments', 'Your confirmed payment records', 'route:payments', true) +
+        setCard('🛵', 'Delivery', 'Methods, times and zones', 'profile', signedIn) +
+        setCard('📄', 'Plan', 'Subscription and billing', 'route:plan', true) +
+      '</div>' +
+      '<div class="sec-t" style="margin-top:22px">Account</div>' +
+      '<dl class="kv">' +
+        row('Signed in as', signedIn ? (S.email || S.uid) : 'Not signed in') +
+        row('Seller id', signedIn ? S.uid : '—') +
+        row('Active shop', S.activeShopId || '—') +
+        row('Shop name', shop.name || shop.storeName || '—') +
+      '</dl>' +
+      (signedIn ? '<div class="sheet-actions"><button class="act ghost" data-set="signout">↩ Sign out</button></div>' : '') +
+      '<div class="sec-t" style="margin-top:22px">Not built yet</div>' +
+      '<div class="note" style="margin:0">Notifications and security settings (session management, two-factor) ' +
+      'are <b>not</b> offered here. The underlying controls do not exist yet, and a switch that does not persist ' +
+      'is worse than an honest gap.</div>';
+  }
+  function setCard (ico, title, sub, action, enabled) {
+    return '<button class="setcard" data-set="' + esc(action) + '"' + (enabled ? '' : ' disabled') + '>' +
+      '<span class="sc-ico">' + ico + '</span>' +
+      '<span class="sc-t"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' +
+      '<span class="sc-go">›</span></button>';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-set]'); if (!b) return;
+    var a = b.dataset.set;
+    if (a.indexOf('route:') === 0) return go(a.slice(6));
+    if (a === 'signout') return doSignOut();
+    if (a === 'profile') return toast('The shop profile editor is not built yet — Availability covers hours today.');
+  });
+  async function doSignOut () {
+    try {
+      var m = await sdk();
+      await m.auth.signOut(m.authI);
+      try { localStorage.removeItem('loggedIn'); } catch (_) {}
+      location.assign('/login?next=/merchant-v2.html');
+    } catch (e) { toast('Could not sign out: ' + ((e && e.code) || 'unknown')); }
+  }
+
+  /* ══ COMMAND PALETTE ══════════════════════════════════════════════════════
+     Built ON the registry and ON go(). There is no second navigation table to drift
+     from the sidebar: sidebar, bottom nav, palette and header all call the same
+     resolver, so a route added to the contract appears in all four at once. */
+  var PAL = { open: false, q: '', sel: 0, items: [] };
+  function palItems () {
+    var out = CONTRACT.ROUTES.filter(function (r) { return r.kind !== 'exit'; }).map(function (r) {
+      return { label: 'Go to ' + (r.name || r.id), icon: r.icon || '•', route: r.id };
+    });
+    var exit = CONTRACT.ROUTES.filter(function (r) { return r.kind === 'exit'; })[0];
+    if (exit) out.push({ label: 'Leave for ' + (exit.name || 'the marketplace'), icon: '←', route: exit.id });
+    return out;
+  }
+  function openPalette () {
+    ensurePalette();
+    PAL.open = true; PAL.q = ''; PAL.sel = 0;
+    document.getElementById('pal-i').value = '';
+    paintPalette();
+    document.getElementById('pal-wrap').classList.add('on');
+    setTimeout(function () { document.getElementById('pal-i').focus(); }, 30);
+  }
+  function closePalette () { PAL.open = false; var w = document.getElementById('pal-wrap'); if (w) w.classList.remove('on'); }
+  function ensurePalette () {
+    if (document.getElementById('pal-wrap')) return;
+    var w = document.createElement('div');
+    w.id = 'pal-wrap'; w.className = 'pal-wrap';
+    w.innerHTML = '<div class="pal">' +
+      '<div class="pal-in"><span>🔍</span><input id="pal-i" placeholder="Search Merchant…" autocomplete="off"></div>' +
+      '<div class="pal-list" id="pal-l"></div>' +
+      '<div class="pal-foot">↑↓ to move · ↵ to open · Esc to close</div></div>';
+    document.body.appendChild(w);
+    w.addEventListener('click', function (e) { if (e.target === w) closePalette(); });
+    var input = w.querySelector('#pal-i');
+    input.addEventListener('input', function (e) { PAL.q = e.target.value.toLowerCase(); PAL.sel = 0; paintPalette(); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); PAL.sel = Math.min(PAL.sel + 1, PAL.items.length - 1); paintPalette(); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); PAL.sel = Math.max(PAL.sel - 1, 0); paintPalette(); }
+      if (e.key === 'Enter')     { e.preventDefault(); runPalette(PAL.sel); }
+      if (e.key === 'Escape')    { closePalette(); }
+    });
+    w.querySelector('#pal-l').addEventListener('click', function (e) {
+      var r = e.target.closest('[data-pal]'); if (r) runPalette(+r.dataset.pal);
+    });
+  }
+  function paintPalette () {
+    PAL.items = palItems().filter(function (i) { return !PAL.q || i.label.toLowerCase().indexOf(PAL.q) >= 0; });
+    var l = document.getElementById('pal-l');
+    l.innerHTML = PAL.items.length
+      ? PAL.items.map(function (i, n) {
+          return '<button class="pal-row' + (n === PAL.sel ? ' on' : '') + '" data-pal="' + n + '">' +
+                 '<span class="pal-ico">' + i.icon + '</span><span>' + esc(i.label) + '</span></button>';
+        }).join('')
+      : '<div class="pal-empty">Nothing matches “' + esc(PAL.q) + '”.</div>';
+  }
+  function runPalette (n) {
+    var i = PAL.items[n]; if (!i) return;
+    closePalette();
+    go(i.route);          /* the SAME controller the sidebar uses */
+  }
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); PAL.open ? closePalette() : openPalette(); }
+  });
+  document.getElementById('search-btn').addEventListener('click', openPalette);
+
+  function esc (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ── BOOT ─────────────────────────────────────────────────────────────────*/
+  buildSidebar();
+  buildBottomNav();
+  loadDevices();
+  paintStatus();
+
+  /* Session resolves in the background — the chrome is already interactive. When it
+     lands, re-key the device registry to the real uid (devices are stored per account)
+     and silently reconnect a saved printer. */
+  initSession();
+  _listeners.session.push(function () {
+    loadDevices(); paintStatus(); broadcastSession();
+    if (S.state === 'in') autoConnectPrinter();
+    /* A surface rendered while auth was still resolving must refresh once it lands,
+       or a signed-in merchant keeps staring at "not signed in". */
+    if (current === 'orders' && S.state === 'in') { ORD.rows = null; renderOrders(nativePanel('orders')); }
+  });
+
+  /* Public surface for modules and for the certification harness. */
+  window.SokoniShell.session = S;
+  window.SokoniShell.devices = DEV;
+  window.SokoniShell.ready = _ready;
+  window.SokoniShell.on = function (evt, fn) { (_listeners[evt] || (_listeners[evt] = [])).push(fn); };
+  Object.defineProperty(window.SokoniShell, 'activeShopId', { get: function () { return S.activeShopId; } });
+
+  window.addEventListener('hashchange', function () {
+    var id = CONTRACT.resolve(location.hash.replace('#', ''));
+    if (id && id !== current) go(id);
+  });
+
+  var boot = CONTRACT.resolve(location.hash.replace('#', '')) || 'dashboard';
+  /* Never boot straight into the exit: a stale "#home" would bounce the merchant out
+     of the application before it had finished opening. */
+  if ((byId[boot] || {}).kind === 'exit') boot = 'dashboard';
+  go(boot);
+})();
+</script>
+</body>
+</html>
