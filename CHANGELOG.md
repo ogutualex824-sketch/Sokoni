@@ -1,3 +1,82 @@
+## [2026-08-18] — Merchant product form + grouped rail; the "black rectangles" were a specificity war
+
+Presentation only. No Firestore, functions, rules, claims or write-path change; no destination
+added, removed, renamed or re-targeted.
+
+### The product form
+
+`.upload-box input/select/textarea` was declared **five** times in `seller.css`. Two painted the
+field `background:#000 !important` and a fifth did it as `#productCategory{…}` — an **ID**
+selector. The best-designed rule (`rgba(255,255,255,.04)`) was last in the file and lost to all of
+them, so it never applied. Measured on the composited colours:
+
+* fill `#000` against the `#070808` page → **≈1.03:1** — no perceivable surface
+* border `rgba(255,255,255,.12)` over that fill → **≈1.5:1** — no perceivable edge
+* placeholder `rgba(255,255,255,.35)` → **≈3.0:1**, under the 4.5:1 WCAG AA minimum
+
+The placeholder was carrying the whole load, because name, price, category, location, description
+and KEBS had **no `<label>`**. A field a merchant cannot see, whose only name they cannot read, and
+which disappears the moment they type into it.
+
+Fixed by **deleting** the three competing rules rather than adding a sixth, so the canonical block
+needs no `!important`. Scope held to the upload form — `.flash-select`, `.bor-status-select` and
+`.seller-section-card` keep their styling, and `option`/`optgroup` stay black because native
+dropdown popups need it. Every control now carries a visible `<label for>`; 29 controls, **0
+unlabelled, 0 black**, measured.
+
+Two further defects found while measuring, not by reading:
+
+* `#adultCategoryNote` and `#ownershipVerifyBox` are siblings of the two selects and therefore
+  **children of the 2-column grid** — unhidden, the full ownership-verification panel (serial, two
+  file uploads, a source select, a declaration) was squeezed into half a row. Both now span it.
+  They are `display:none` by default, which is why this only surfaced on an age-restricted or
+  high-value category.
+* The 600px breakpoint dropped inputs to 14px, which makes iOS Safari zoom the page on focus.
+  Re-asserted to 16px, with 48px minimum touch targets.
+
+**Interop with the parallel `:not([class])` fix.** Another agent has an uncommitted change in
+`seller.html` adding `input:not([class]):not([type="hidden"])…` — six chained `:not()` clauses,
+specificity **(0,6,1)**. Measured: on its own it does **not** fix this defect (fields stayed
+`rgb(0,0,0)`), because it carries no `!important` and lost to the `#000 !important` rules; but once
+those are deleted it *outranks* this block and would silently restore a 10%-white border (≈1.3:1).
+The 13 controls therefore carry `class="sk-input"`, which opts them out of a rule whose own comment
+says it is meant to reach only controls with no styling of their own. That is not an escalation and
+needs no `!important`. **Removing that class silently regresses the border contrast.**
+
+### Merchant shell
+
+`MORE_GROUPS` in `sokoni-merchant-routes.js` declares **Main** / **Growth** / **Operations**, with a
+**Marketplace** heading over the existing exit link, replacing a single "More" divider over 13
+destinations in declaration order. It sits beside `PRIMARY_ORDER` so the shell stays a projection
+and holds no list of its own — the rule that file states about itself. `validate()` enforces a
+**total partition in both directions**, so a regroup cannot orphan a destination. Measured after:
+4 headings, **28 nav items — unchanged**.
+
+The bottom nav, previously `display:none` above 820px, now shows on desktop as a quiet strip
+anchored at the rail edge and following it when it collapses. `__more` is hidden there: it adds
+`.mobile-open`, and every rule reading that class is inside the `max-width:820px` block, so it
+would have been a dead control. *This carried the regression risk:* `.mpanel` is
+`position:absolute;inset:0`, resolving against `.mcontent`'s **padding** box — clearance must
+shorten `.mmain`. Verified at 1440px: padding-bottom 45px, content bottom 855px, bar top 855px,
+content clears the bar.
+
+The dashboard opens with a time-of-day greeting. It is **read-only** over
+`SokoniShell.activeShopName` — the value `_applyShop` already assigns — and never writes it,
+because `_merchantPrint()` reads the same field as a receipt's `businessName`. With no shop
+resolved it renders "Good morning" rather than a placeholder. Written with `textContent`, so a shop
+name containing markup cannot inject.
+
+**Files:** `seller.css`, `seller.html`, `merchant.html`, `sokoni-merchant-routes.js`.
+**Database / API / security changes:** none. **Breaking changes:** none — every element id, handler
+and `addProduct()` read path unchanged; added markup is wrapper `<div>`s, `<label>`s and one class.
+**Tests:** merchant-routes, merchant-runtime, product-form-parity, product-schema,
+product-visibility, seller-dashboard, pos-seller-authz, audit-duplicate-ids all green;
+merchant-route-gate 138/0 across 3 runs (an earlier 137/1 was a flake — baseline reproduces 138/0).
+Pre-existing failures reproduced on clean `rc/combined` and therefore NOT caused here:
+`test-role-authority` 147/1 ("…and was not repurposed for roles") and predeploy
+`verify-receipt-naming` (117 deprecated uses, "109 -> 117") — identical with and without this change.
+**Deployment:** hosting only. Note `verify-receipt-naming` currently blocks the predeploy chain on
+`rc/combined` independently of this work.
 ## [2026-08-18] — Role switching front door + one merchant-entry resolver
 
 Home had no role switcher at all. _inject() skips _buildNav() when #sk-top-nav exists, and

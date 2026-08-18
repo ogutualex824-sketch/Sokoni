@@ -516,14 +516,33 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <h2 style="margin-bottom:16px;">🚀 Upload New Product</h2>
 
+        <!-- Every control below carries a VISIBLE <label for>. These fields were
+             placeholder-only: the placeholder is the sole field identification, it
+             disappears the moment the merchant types, and it is not a label to a
+             screen reader. -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;" class="upload-name-price-row">
-          <input type="text" id="productName" placeholder="Product Name" style="margin:0;">
-          <input type="number" id="productPrice" placeholder="Price (KES)" style="margin:0;">
+          <div class="sk-field">
+            <label class="sk-label" for="productName">Product name<span class="req">*</span></label>
+            <input type="text" id="productName" class="sk-input" placeholder="e.g. Samsung A54 128GB" style="margin:0;" required>
+            <div class="sk-error" id="err-productName">⚠ Enter a product name</div>
+          </div>
+          <div class="sk-field">
+            <label class="sk-label" for="productPrice">Price (KES)<span class="req">*</span></label>
+            <input type="number" id="productPrice" class="sk-input" placeholder="0.00" min="0" step="0.01" style="margin:0;" required>
+            <div class="sk-error" id="err-productPrice">⚠ Enter a price greater than 0</div>
+          </div>
         </div>
         <style>@media(max-width:480px){.upload-name-price-row{grid-template-columns:1fr!important;}}</style>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <select id="productCategory" style="margin:0;">
+        <!-- 2-col grid. #adultCategoryNote and #ownershipVerifyBox are ALSO children of
+             it, so once either unhides it takes a single 1fr cell and squeezes a full
+             disclosure panel into half the row. Both are spanned to the full width in
+             .upload-cat-loc-row below; they are display:none by default, which is why
+             this only ever showed up on an age-restricted or high-value category. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;" class="upload-cat-loc-row">
+        <div class="sk-field">
+        <label class="sk-label" for="productCategory">Category<span class="req">*</span></label>
+        <select id="productCategory" class="sk-input" style="margin:0;">
           <optgroup label="🛍️ Fashion & Style">
             <option value="fashion">👕 Clothing & Fashion</option>
             <option value="accessories">⌚ Accessories & Jewelry</option>
@@ -664,6 +683,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="adult">🔞 Adult Products &amp; Novelties</option>
           </optgroup>
         </select>
+        <div class="sk-error" id="err-productCategory">⚠ Choose a category</div>
+        </div><!-- /.sk-field category -->
 
         <div id="adultCategoryNote" class="adult-category-note" style="display:none;">
             ⚠️ This is an age-restricted product. Buyers will be required to verify they are 18+ before purchasing. You confirm you are legally permitted to sell this product in Kenya.
@@ -681,16 +702,16 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
           <!-- Serial / IMEI / Chassis -->
           <div style="margin-bottom:10px;">
-            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;" id="serialLabel">Serial / IMEI Number *</label>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;" id="serialLabel" for="ownerSerial">Serial / IMEI Number *</label>
             <input type="text" id="ownerSerial" placeholder="e.g. 354812091234567"
-              style="width:100%;padding:12px 14px;background:#000;border:1px solid rgba(255,100,0,0.3);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;letter-spacing:0.5px;">
+              style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,140,60,0.55);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;letter-spacing:0.5px;">
             <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;" id="serialHint">Dial *#06# on a phone to find the IMEI</div>
           </div>
 
           <!-- Purchase receipt upload -->
           <div style="margin-bottom:10px;">
             <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;">Purchase Receipt / Invoice *</label>
-            <label for="ownerReceiptFile" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#000;border:1px solid rgba(255,100,0,0.25);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);transition:border-color .2s;" id="receiptLabel">
+            <label for="ownerReceiptFile" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,140,60,0.45);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);transition:border-color .2s;" id="receiptLabel">
               <i class="fas fa-file-alt" style="color:#fb923c;"></i>
               <span id="receiptFileName">Click to upload receipt (photo or PDF)</span>
             </label>
@@ -700,7 +721,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <!-- Ownership document (logbook for cars, etc.) -->
           <div style="margin-bottom:10px;" id="ownerDocRow">
             <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;" id="ownerDocLabel">Ownership Document *</label>
-            <label for="ownerDocFile" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#000;border:1px solid rgba(255,100,0,0.25);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);transition:border-color .2s;">
+            <label for="ownerDocFile" style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,140,60,0.45);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);transition:border-color .2s;">
               <i class="fas fa-id-card" style="color:#fb923c;"></i>
               <span id="ownerDocFileName">Click to upload (logbook, purchase agreement, etc.)</span>
             </label>
@@ -709,8 +730,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
           <!-- Previous owner / source (optional) -->
           <div style="margin-bottom:12px;">
-            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;">Where did you get this item? (optional but helps faster approval)</label>
-            <select id="ownerSource" style="width:100%;padding:12px 14px;background:#000;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;cursor:pointer;font-family:inherit;">
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:5px;" for="ownerSource">Where did you get this item? (optional but helps faster approval)</label>
+            <select id="ownerSource" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.30);border-radius:10px;color:white;font-size:16px;outline:none;cursor:pointer;font-family:inherit;">
               <option value="">-- Select source --</option>
               <option value="bought-new">🛒 Bought new (shop/dealer)</option>
               <option value="bought-second">🤝 Bought second-hand (private seller)</option>
@@ -729,7 +750,9 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <div style="font-size:10px;color:rgba(255,100,0,0.6);margin-top:8px;">⚠️ Your listing will be <strong>held for admin review</strong> before going live. Approved listings get a ✅ Verified Owner badge. False declarations will result in account suspension and police reporting.</div>
         </div>
 
-        <select id="productLocation" style="margin:0;">
+        <div class="sk-field">
+        <label class="sk-label" for="productLocation">Location<span class="req">*</span></label>
+        <select id="productLocation" class="sk-input" style="margin:0;">
             <option value="nairobi">📍 Nairobi</option>
             <option value="mombasa">📍 Mombasa</option>
             <option value="kisumu">📍 Kisumu</option>
@@ -753,7 +776,9 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="kenya">🌍 All Kenya</option>
             <option value="remote">💻 Online / Remote</option>
             <option value="worldwide">🌐 Worldwide</option>
-        </select></div><!-- end cat+location grid -->
+        </select>
+        </div><!-- /.sk-field location -->
+        </div><!-- end cat+location grid -->
 
         <!-- Category-dependent variants (colours, sizes, storage, pack size …).
              Rendered by SokoniProductSchema.renderVariants() from the selected
@@ -763,16 +788,17 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <div style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.05em;">Description <span style="color:rgba(255,255,255,0.25);font-weight:400;text-transform:none;">(optional)</span></label>
+                <label class="sk-label" for="productDescription" style="margin-bottom:0;">Description <span class="opt">(optional)</span></label>
                 <button type="button" id="aiWriteBtn" onclick="quickAIDesc(this)" title="Generate with AI">
                     ✨ AI Write
                 </button>
             </div>
-            <input type="text" id="productDescription" placeholder="Short description of your product…" style="width:100%;margin:0;">
+            <input type="text" id="productDescription" class="sk-input" placeholder="Short description of your product…" style="width:100%;margin:0;">
         </div>
 
         <div id="kebsField" style="margin-bottom:10px;">
-            <input type="text" id="kebsCert" placeholder="KEBS Cert No. (optional — e.g. KS EAS 67-3)" maxlength="40" style="margin:0;">
+            <label class="sk-label" for="kebsCert">KEBS certificate no. <span class="opt">(optional)</span></label>
+            <input type="text" id="kebsCert" class="sk-input" placeholder="e.g. KS EAS 67-3" maxlength="40" style="margin:0;">
             <div class="kebs-notice" id="kebsNotice" style="display:none;">
                 🏅 <strong>KEBS Recommended:</strong> Optional — adds a verified badge. <a href="https://www.kebs.org" target="_blank" style="color:#71ff00;">kebs.org</a>
             </div>
@@ -783,27 +809,27 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <div style="font-size:12px;font-weight:800;color:#00c878;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;">🥩 Food Safety & Licensing — Kenya</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">County Food Business Permit No. <span style="color:#ff9800;">*Required</span></label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodPermit">County Food Business Permit No. <span style="color:#ff9800;">*Required</span></label>
               <input type="text" id="foodPermit" placeholder="e.g. NRB-FBP-2024-XXXXX" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
             </div>
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">KEBS / KEFRI Food Safety No. <span style="color:rgba(255,255,255,0.3);">(optional)</span></label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodKEBS">KEBS / KEFRI Food Safety No. <span style="color:rgba(255,255,255,0.3);">(optional)</span></label>
               <input type="text" id="foodKEBS" placeholder="e.g. KS 05-459" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">Kenya Meat Commission (KMC) No. <span id="kmcReqLabel" style="color:rgba(255,255,255,0.3);">(for meat sellers)</span></label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodKMC">Kenya Meat Commission (KMC) No. <span id="kmcReqLabel" style="color:rgba(255,255,255,0.3);">(for meat sellers)</span></label>
               <input type="text" id="foodKMC" placeholder="e.g. KMC-NAI-XXXX" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
             </div>
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">Halal / KEBS Halal Certificate <span style="color:rgba(255,255,255,0.3);">(optional)</span></label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodHalal">Halal / KEBS Halal Certificate <span style="color:rgba(255,255,255,0.3);">(optional)</span></label>
               <input type="text" id="foodHalal" placeholder="e.g. HALAL-KE-XXXX" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">Storage / Cold Chain Type</label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodStorage">Storage / Cold Chain Type</label>
               <select id="foodStorage" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
                 <option value="">Select storage method</option>
                 <option value="refrigerated">❄️ Refrigerated (2–8°C)</option>
@@ -814,7 +840,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               </select>
             </div>
             <div>
-              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;">Slaughter / Processing</label>
+              <label style="font-size:11px;color:rgba(255,255,255,0.45);display:block;margin-bottom:4px;" for="foodSlaughter">Slaughter / Processing</label>
               <select id="foodSlaughter" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
                 <option value="">Not applicable</option>
                 <option value="kmc-certified">KMC Certified Abattoir</option>
@@ -832,28 +858,28 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <!-- Pricing & Stock Row -->
         <div class="upload-field-row">
             <div class="upload-field-group">
-                <label class="upload-label">Cost Price (KES)</label>
-                <input type="number" id="costPrice" placeholder="e.g. 500" min="0">
+                <label class="upload-label" for="costPrice">Cost Price (KES)</label>
+                <input type="number" id="costPrice" class="sk-input" placeholder="e.g. 500" min="0">
             </div>
             <div class="upload-field-group">
-                <label class="upload-label">Delivery Cost (KES)</label>
-                <input type="number" id="deliveryCost" placeholder="0 = free" min="0" value="0">
+                <label class="upload-label" for="deliveryCost">Delivery Cost (KES)</label>
+                <input type="number" id="deliveryCost" class="sk-input" placeholder="0 = free" min="0" value="0">
             </div>
             <div class="upload-field-group">
-                <label class="upload-label">Stock Quantity</label>
-                <input type="number" id="stockQty" placeholder="e.g. 10" min="0" value="1">
+                <label class="upload-label" for="stockQty">Available quantity</label>
+                <input type="number" id="stockQty" class="sk-input" placeholder="e.g. 10" min="0" value="1">
             </div>
         </div>
 
         <!-- Wholesale Row -->
         <div class="upload-field-row" style="margin-top:0;">
             <div class="upload-field-group">
-                <label class="upload-label">Wholesale Price (KES) <span style="color:rgba(255,255,255,0.3);font-weight:400;">optional</span></label>
-                <input type="number" id="wholesalePrice" placeholder="0 = no wholesale" min="0" value="0">
+                <label class="upload-label" for="wholesalePrice">Wholesale Price (KES) <span style="color:rgba(255,255,255,0.3);font-weight:400;">optional</span></label>
+                <input type="number" id="wholesalePrice" class="sk-input" placeholder="0 = no wholesale" min="0" value="0">
             </div>
             <div class="upload-field-group">
-                <label class="upload-label">Min Wholesale Qty <span style="color:rgba(255,255,255,0.3);font-weight:400;">optional</span></label>
-                <input type="number" id="minWholesaleQty" placeholder="e.g. 10" min="1" value="10">
+                <label class="upload-label" for="minWholesaleQty">Min Wholesale Qty <span style="color:rgba(255,255,255,0.3);font-weight:400;">optional</span></label>
+                <input type="number" id="minWholesaleQty" class="sk-input" placeholder="e.g. 10" min="1" value="10">
             </div>
         </div>
         <div id="wholesalePreviewStrip" style="display:none;background:rgba(0,170,255,0.07);border:1px solid rgba(0,170,255,0.2);border-radius:10px;padding:10px 14px;font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:4px;gap:12px;flex-wrap:wrap;align-items:center;">
@@ -884,19 +910,19 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         </div>
         <div id="digitalFields" style="display:none;background:rgba(0,170,255,0.04);border:1px solid rgba(0,170,255,0.12);border-radius:12px;padding:14px 16px;margin-bottom:4px;">
           <div class="upload-field-group" style="margin-bottom:10px;">
-            <label class="upload-label">Download URL / File Link</label>
-            <input type="url" id="digitalUrl" placeholder="https://drive.google.com/... or direct download link">
+            <label class="upload-label" for="digitalUrl">Download URL / File Link</label>
+            <input type="url" id="digitalUrl" class="sk-input" placeholder="https://drive.google.com/... or direct download link">
           </div>
           <div class="upload-field-group">
-            <label class="upload-label">License Key / Access Code (optional)</label>
-            <input type="text" id="digitalLicense" placeholder="e.g. ABC-1234-XYZ or leave blank">
+            <label class="upload-label" for="digitalLicense">License Key / Access Code (optional)</label>
+            <input type="text" id="digitalLicense" class="sk-input" placeholder="e.g. ABC-1234-XYZ or leave blank">
           </div>
           <div style="font-size:11px;color:rgba(0,170,255,0.7);margin-top:8px;">⭐ Buyers earn 3× loyalty points on digital purchases</div>
         </div>
 
         <!-- Photo Upload — Premium mobile touch zone -->
         <div style="margin-bottom:12px;">
-          <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:8px;">Product Photos * <span style="color:#71ff00;font-size:10px;">✨ AI enhanced · up to 5 views</span></label>
+          <label class="sk-label" for="productImageInput">Product images<span class="req">*</span> <span style="color:#71ff00;font-size:10px;font-weight:700;">✨ AI enhanced · up to 5 views</span></label>
           <div id="productImagesGrid" style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;min-height:72px;align-items:center;"></div>
           <input type="file" id="productImageInput" accept="image/*" multiple style="display:none;" onchange="addProductImages(this.files); this.value=''">
           <button type="button" onclick="document.getElementById('productImageInput').click()"
@@ -908,7 +934,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <!-- Optional Product Video -->
         <div style="margin-bottom:8px;margin-top:12px;">
-          <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px;">Product Video (optional) <span style="color:#00aaff;font-size:10px;">🎥 Auto-enhanced · max 50MB</span></label>
+          <label class="sk-label" for="productVideoFile">Product video <span class="opt">(optional)</span> <span style="color:#00aaff;font-size:10px;font-weight:700;">🎥 Auto-enhanced · max 50MB</span></label>
           <input type="file" id="productVideoFile" accept="video/*" onchange="handleProductVideoUpload(event)" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px dashed rgba(0,170,255,0.25);border-radius:12px;color:rgba(255,255,255,0.6);font-size:16px;cursor:pointer;font-family:inherit;">
           <div id="productVideoPreviewArea" style="display:none;margin-top:10px;position:relative;border-radius:12px;overflow:hidden;text-align:center;">
             <video id="productVideoPreview" muted playsinline controls style="max-width:100%;width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;background:#000;"></video>
@@ -918,9 +944,17 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <input type="hidden" id="productVideoPoster">
         </div>
 
-        <button type="button" onclick="addProduct()">
-            🚀 Upload Product
-        </button>
+        <!-- ONE submit action. The brief also asked for "Save Draft"; it is deliberately
+             absent. `draft` is a status the visibility engine already HIDES
+             (sokoni-product-visibility.js), but no write path in addProduct() ever
+             creates one — so the button would either be dead or would need a new
+             product write. That is business logic, not presentation, and it is not
+             something to slip into a UI commit during the RC freeze. -->
+        <div class="sk-actions">
+            <button type="button" onclick="addProduct()">
+                🚀 Publish Product
+            </button>
+        </div>
 
     </div>
 

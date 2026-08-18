@@ -265,6 +265,31 @@
     'payments', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
+  /* ── Sidebar grouping for the `more` tier ──────────────────────────────────────
+     The primary tier is one flat ordered list (PRIMARY_ORDER). Everything below it
+     rendered under a single "More" divider: 13 unrelated destinations in declaration
+     order — Marketing next to Riders next to POS Setup. That is a list, not navigation.
+
+     Declared explicitly, like PRIMARY_ORDER, so regrouping is a one-line reviewable
+     change. validate() enforces a TOTAL PARTITION in both directions: every tier:'more'
+     route appears in exactly one group, and no group names a route that is not
+     tier:'more'. A destination therefore cannot be silently dropped from the sidebar by
+     a regroup, which is the same guarantee PRIMARY_ORDER already gives the tier above.
+
+     This is grouping only. No destination is added, removed, renamed or re-targeted —
+     the sidebar renders exactly the same 13 routes it did before, under headings. */
+  var MORE_GROUPS = [
+    { key:'main',       label:'Main',
+      ids:['reports','availability','shop','fulfilment','riders','verification'] },
+    { key:'growth',     label:'Growth',
+      ids:['marketing','flash-sale','stories','customers'] },
+    /* KRA Tax groups with Operations rather than Main: it is back-office compliance
+       configured once alongside Devices and POS Setup, not a surface a merchant reads
+       daily the way they read Reports. */
+    { key:'operations', label:'Operations',
+      ids:['kra-tax','devices','pos-setup'] }
+  ];
+
   /* Legacy route ids -> canonical ids. Phase 2 renamed several destinations; a merchant
      with a bookmark, an open tab, or a deep link on the old id must land on the right
      module rather than hit the unknown-route failure. Aliases resolve BEFORE the
@@ -399,6 +424,26 @@
         errs.push('route "' + r.id + '" is tier:primary but missing from PRIMARY_ORDER — it would have no sidebar position');
     });
 
+    /* MORE_GROUPS must be a TOTAL PARTITION of the `more` tier — same both-directions
+       guarantee PRIMARY_ORDER gets above, so a regroup cannot orphan a destination. */
+    var grouped = {};
+    MORE_GROUPS.forEach(function (g) {
+      if (!g.key)   errs.push('a more-group has no key');
+      if (!g.label) errs.push('more-group "' + g.key + '" has no label');
+      (g.ids || []).forEach(function (id) {
+        if (!byId[id]) errs.push('more-group "' + g.key + '" lists unknown route "' + id + '"');
+        else if (byId[id].tier !== 'more')
+          errs.push('more-group "' + g.key + '" lists "' + id + '" but its tier is "' + byId[id].tier + '"');
+        if (grouped[id])
+          errs.push('route "' + id + '" is in more-groups "' + grouped[id] + '" AND "' + g.key + '"');
+        grouped[id] = g.key;
+      });
+    });
+    ROUTES.forEach(function (r) {
+      if (r.tier === 'more' && !grouped[r.id])
+        errs.push('route "' + r.id + '" is tier:more but in no MORE_GROUPS group — it would have no sidebar position');
+    });
+
     return errs;
   }
 
@@ -424,6 +469,18 @@
       return PRIMARY_ORDER.map(function (id) { return byId[id]; }).filter(Boolean);
     },
     more:    function () { return ROUTES.filter(function (r) { return r.tier === 'more'; }); },
+    MORE_GROUPS: MORE_GROUPS,
+    /* The grouped projection of the `more` tier. Returns [{key,label,routes[]}] in
+       sidebar order. Because validate() enforces a total partition, the concatenation
+       of every group's routes is exactly more() — the sidebar cannot show fewer. */
+    moreGroups: function () {
+      return MORE_GROUPS.map(function (g) {
+        return {
+          key: g.key, label: g.label,
+          routes: g.ids.map(function (id) { return byId[id]; }).filter(Boolean)
+        };
+      });
+    },
     /* Context sufficiency — a route is refused BEFORE mount when its context is
        missing, so the merchant sees an honest reason instead of a blank panel. */
     missingContext: function (id, ctx) {
