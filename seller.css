@@ -4050,3 +4050,33 @@ body.light-mode .upload-box .sk-actions .sk-secondary{
     .upload-name-price-row,
     .upload-cat-loc-row{ grid-template-columns:1fr !important; }
 }
+
+/* ══ MERCHANT HOST MODE ═══════════════════════════════════════════════════════
+   When seller.html is embedded in merchant.html, the SHELL owns navigation and
+   this document contributes CONTENT ONLY.
+
+   Why this is declared here, in the document that owns these elements: the
+   .sk-in-shell flag is set by the inline snippet in <head>, so suppression lands
+   at FIRST PAINT. Waiting for a deferred script would flash the duplicate bars.
+   Same mechanism pos.html already uses for .pos-quick-nav.
+
+   THE PRODUCTION DEFECT THIS CLOSES
+   These three regions each carry an <a href="/">. Inside an iframe that targets
+   _self, so tapping "Home" navigated the PANEL — not the tab — and loaded
+   index.html inside Merchant OS: the customer homepage and a customer bottom nav
+   rendered underneath the merchant rail, with Products still highlighted.
+   Observed in production at cdfc8ab on /merchant#products.
+
+   Suppressing them removes BOTH symptoms at once: the duplicate navigation, and
+   the escape hatch out of the merchant surface.
+
+   Standalone /seller is UNAFFECTED — no parent frame means no .sk-in-shell, so
+   the seller navbar, tab bar and bottom nav all mount exactly as before. This
+   hides them in host mode; it does not delete them. */
+.sk-in-shell .seller-navbar { display: none !important; }
+.sk-in-shell #sdmTabBar     { display: none !important; }
+.sk-in-shell .bottom-nav    { display: none !important; }
+
+/* The bottom nav reserved space at the page foot for itself. With it suppressed,
+   that padding would leave a dead strip above the merchant shell's own bar. */
+.sk-in-shell body { padding-bottom: 0 !important; }
