@@ -226,9 +226,19 @@ server.listen(0, async () => {
      'seller=' + claims.seller + ' merchant=' + claims.merchant + ' admin=' + claims.admin +
      ' roles=' + JSON.stringify(claims.roles) + ' role=' + JSON.stringify(claims.role));
 
-  /* Carry the session into the workspace. */
+  /* Carry the session into the workspace, then WAIT FOR THE CONDITION rather than
+     guessing how long it takes. The previous fixed 9s sleep read activeShopId while the
+     canonical resolve was still in flight — measured, it completes at ~11.4s — and
+     reported a fully intact identity chain as a missing shop. A sleep asserts nothing
+     about readiness; it only asserts that the author guessed high enough. */
   await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 40000 }).catch(() => null);
-  await page.waitForTimeout(9000);
+  const shopT0 = Date.now();
+  const shopArrived = await page.waitForFunction(
+    () => !!((window.SokoniShell || {}).activeShopId), null, { timeout: 45000 }
+  ).then(() => true).catch(() => false);
+  const shopMs = Date.now() - shopT0;
+  console.log('    NOTE  canonical shop resolve: ' +
+              (shopArrived ? 'settled after ' + shopMs + 'ms' : 'DID NOT SETTLE within 45000ms'));
 
   /* The shell's Firebase reality, recorded rather than assumed. This is informational,
      not an assertion: if the shell legitimately delegates all data to its modules then
@@ -270,7 +280,60 @@ server.listen(0, async () => {
       }, id);
       if (!ck('sidebar button exists and was clicked', clicked)) continue;
     }
-    await page.waitForTimeout(id === 'dashboard' ? 2000 : 4200);
+    /* SETTLE, don't sleep. Availability paints at ~7.8s (a real 103-product query); the
+       old fixed 4.2s sampled its skeleton — divs with styling and no text — and reported
+       textLen=0 as a blank surface.
+
+       Settling on STABILITY, deliberately, not on "textLen > 40": waiting until the
+       assertion would pass is not measurement, it is waiting for the answer you want. A
+       surface that is genuinely blank stabilises at 0 and still fails, which is the case
+       that must keep working. */
+    /* A LOADING PLACEHOLDER IS STABLE. That is the trap text-length alone walks into:
+       Availability's skeleton is <div class="sk-line"> — styling, no text — so its
+       textLen sits at a rock-steady 0 from t=0 until it paints at ~7.8s. Any
+       "unchanged for N ms" rule therefore declares it settled while it is still loading,
+       and the suite reports a blank surface. Returns behaves the same way at a constant
+       "Authenticating…".
+
+       So settling asks two questions, not one: is the content stable, AND has the surface
+       stopped SAYING it is loading. A panel still showing a skeleton or a loading string
+       is not settled no matter how still it is — and one that never stops saying it is
+       loading times out and is reported as exactly that, which is the honest answer for a
+       genuinely stuck surface. */
+    const readPanel = () => page.evaluate(() => {
+      const s = document.querySelector('.mpanel.show');
+      if (!s) return { len: -1, loading: false };
+      const ifr = s.querySelector('iframe'), nat = s.querySelector('.native');
+      let scope = nat, doc = document;
+      if (ifr) {
+        try { doc = ifr.contentDocument; scope = doc ? doc.body : null; } catch (e) { scope = null; }
+      }
+      if (!scope) return { len: -2, loading: false };
+      const text = (scope.innerText || '').trim();
+      /* Loading markers: the shell's own skeleton element, common spinner classes, and
+         the copy a surface shows while it waits. */
+      const skel = scope.querySelectorAll
+        ? scope.querySelectorAll('.sk-line, .skeleton, .spinner, [aria-busy="true"]').length : 0;
+      const says = /^(authenticating|loading|please wait|checking)/i.test(text) ||
+                   /loading…|loading\.\.\./i.test(text.slice(0, 80));
+      return { len: text.length, loading: skel > 0 || says };
+    });
+
+    const SETTLE_MAX = 25000, STEP = 500, STABLE_NEEDED = 1500;
+    let prev = null, stableFor = 0, settledMs = 0, lastLoading = false;
+    const t0 = Date.now();
+    while (Date.now() - t0 < SETTLE_MAX) {
+      await page.waitForTimeout(STEP);
+      const p = await readPanel();
+      lastLoading = p.loading;
+      if (p.len === prev) stableFor += STEP; else { stableFor = 0; prev = p.len; }
+      if (!p.loading && stableFor >= STABLE_NEEDED) { settledMs = Date.now() - t0; break; }
+    }
+    if (!settledMs) {
+      console.log('    NOTE  never settled within ' + SETTLE_MAX + 'ms — ' +
+                  (lastLoading ? 'STILL SHOWING A LOADING STATE (surface is stuck)'
+                               : 'content still changing'));
+    }
 
     const st = await page.evaluate(() => {
       const shown = [].filter.call(document.querySelectorAll('.mpanel'), p => p.classList.contains('show'));
