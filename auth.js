@@ -909,6 +909,38 @@ async function completeRoleSelection(){
    Firebase Auth sends a secure email link — no client-side
    token or DOB check needed.
 ══════════════════════════════════════════════════════════════ */
+/* Codes that would CONFIRM OR DENY that an address is registered. They must never
+   reach the user, so they take the same neutral path as success — that is what
+   enumeration protection means here. Everything else is a real, actionable failure
+   and is surfaced honestly.
+
+   `auth/user-disabled` is in this list deliberately: "this account is disabled" tells
+   an attacker the account exists. A disabled account holder can still contact support,
+   which costs them little; leaking the whole user table costs a lot more. */
+const _RESET_ENUMERATION_SAFE = [
+    'auth/user-not-found',
+    'auth/user-disabled',
+    'auth/invalid-recipient-email'
+];
+
+/* Reset-specific mapping. Deliberately NOT _fbErr(): that maps auth/user-not-found to
+   "Wrong email or password", which is right for a login attempt and an enumeration leak
+   for a reset. */
+function _resetErr(code){
+    switch(code){
+        case 'auth/invalid-email':          return 'Please enter a valid email address.';
+        case 'auth/too-many-requests':      return 'Too many attempts. Please wait a few minutes and try again.';
+        case 'auth/network-request-failed': return 'Connection error. Check your internet connection and try again.';
+        case 'auth/internal-error':         return 'Password reset is temporarily unavailable. Please try again shortly.';
+        default:                            return 'Could not send the reset email. Please try again.';
+    }
+}
+
+/* Format only. Existence is Firebase's business and is never revealed here. */
+function _isPlausibleEmail(v){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+}
+
 async function requestPasswordReset(){
     const email = (document.getElementById("resetEmail")?.value || "").trim().toLowerCase();
 
@@ -917,23 +949,46 @@ async function requestPasswordReset(){
         return;
     }
 
+    /* Validate BEFORE spending a rate-limit slot or a network round trip. */
+    if(!_isPlausibleEmail(email)){
+        showAuthMsg("Please enter a valid email address.", "error");
+        return;
+    }
+
     /* Rate limit: 3 reset attempts per 15 minutes per email */
     if(typeof SokoniSecurity !== 'undefined' && SokoniSecurity.persistentRateLimit){
         if(!SokoniSecurity.persistentRateLimit('pw_reset_' + email, 3, 900000)){
-            showAuthMsg("Too many reset attempts. Try again in 15 minutes.", "error");
+            showAuthMsg("Too many reset attempts. Please try again in 15 minutes.", "error");
             return;
         }
+    }
+
+    /* Firebase must actually be initialised. This used to be `if(window.firebaseAuth)`
+       wrapped around the send, with no else — so when the SDK had not finished booting,
+       NOTHING WAS SENT and the confirmation panel below was shown anyway. A merchant was
+       told to check their inbox for an email that was never requested. */
+    if(!window.firebaseAuth){
+        showAuthMsg("SOKONI is still starting up. Please try again in a moment.", "error");
+        return;
     }
 
     try {
         const { sendPasswordResetEmail } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
-        if(window.firebaseAuth){
-            await sendPasswordResetEmail(window.firebaseAuth, email);
-        }
+        await sendPasswordResetEmail(window.firebaseAuth, email);
     } catch(e){
-        /* Always show the same message — never confirm whether the email exists */
+        const code = (e && e.code) || '';
+        /* The empty catch that used to be here swallowed every failure — expired network,
+           unconfigured project, malformed address — and then fell through to the success
+           panel. Only enumeration-revealing codes may continue to the neutral panel now. */
+        if(_RESET_ENUMERATION_SAFE.indexOf(code) === -1){
+            showAuthMsg(_resetErr(code), "error");
+            if(typeof SokoniSecurity !== 'undefined'){
+                SokoniSecurity.audit && SokoniSecurity.audit('PASSWORD_RESET_FAILED', { email, code });
+            }
+            return;
+        }
     }
 
     if(typeof SokoniSecurity !== 'undefined'){
@@ -947,12 +1002,22 @@ async function requestPasswordReset(){
             <div style="text-align:center;padding:10px 0;">
                 <div style="font-size:40px;margin-bottom:12px;">&#128231;</div>
                 <p style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.7;">
-                    If <strong id="_resetEmailDisplay" style="color:#71ff00;"></strong> is registered,<br>
-                    a password reset link has been sent.<br><br>
+                    If <strong id="_resetEmailDisplay" style="color:#71ff00;"></strong> is registered
+                    with a password,<br>a reset link has been sent.<br><br>
                     <span style="font-size:12px;color:rgba(255,255,255,0.4);">
                         Click the link in your email to set a new password.<br>
                         Check your spam folder if it doesn&#x27;t arrive.
                     </span>
+                </p>
+                <!-- Applies to EVERY reader, so it hints at nothing about this particular
+                     address. An account created with Google has no password credential:
+                     Firebase cannot send a reset link for one, and saying so generically is
+                     the only way to tell that merchant what to do without confirming to an
+                     attacker that the address exists. -->
+                <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;
+                          margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
+                    Signed up with Google? A reset link will not arrive &mdash;<br>
+                    use <strong style="color:rgba(255,255,255,0.8);">Continue with Google</strong> to sign in.
                 </p>
             </div>`;
         const _resetEl = step1.querySelector('#_resetEmailDisplay');
