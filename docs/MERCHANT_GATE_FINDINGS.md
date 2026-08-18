@@ -128,3 +128,67 @@ production-origin measurement before anyone optimises anything.
 2. `registerDevice` name collision, above.
 3. Production-origin timing measurement.
 4. Availability fix still uncommitted — `merchant.html` carries another process's work.
+
+---
+
+## Certification baseline
+
+| Class | State |
+|---|---|
+| REAL | **0** |
+| AUTHORIZATION | **UNPROVEN** — no ordinary approved seller exists (`c22f17e`) |
+| UNPROVEN | Inventory / Returns — traced below |
+| TEST-HARNESS | `/api/catalogue`; Verification attribution drift |
+| EXTERNAL | Unsplash ×10; `chart.googleapis.com` |
+| ENV | loopback CORS ×13 |
+| FUNCTIONS BLOCKER | `registerDevice` collision — untouched, awaiting Functions-owner decision |
+
+LIVE: `cdfc8ab`, unchanged. Nothing deployed.
+
+---
+
+## Inventory — `permission-denied` in a snapshot listener
+
+**Classification: UNPROVEN (not user-visible, degrades by design).**
+
+Traced: `#inventory` is native and calls `_startOnlineFeed()` (`merchant.html:1553`),
+which mounts `seller.html` hidden so its authenticated order feed runs. That file holds
+the two listeners:
+
+| Listener | Query | Rule | Verdict |
+|---|---|---|---|
+| `seller.html:7262` | `orders where sellerUid == uid limit 500` | `firestore.rules:583` allows `resource.data.sellerUid == request.auth.uid` | **query matches the rule** |
+| `seller.html:7288` | `posRetailSales where merchantId == uid limit 500` | not yet compared | — |
+
+**Both pass an error callback** and fall back to 15s polling, and both add an 8s
+"never delivered" poll. So neither can produce the SDK's *"Uncaught Error in snapshot
+listener"*, which is logged only for a listener with NO error handler.
+
+**The denied listener is therefore NOT yet identified.** It is not one of these two, and
+it is not `sokoni-analytics.js:74` (also guarded, also polls). Inventory rendered 5,068
+characters, so nothing is user-visible.
+
+Compounding it: the gate attributes async failures to whichever route is active when
+they land, and the seller panel is shared across several routes — so the listener may
+not belong to Inventory at all.
+
+**Next test:** capture the collection and query shape at the moment of denial, rather
+than inferring from callers. Do NOT relax the `orders` rule; the query that route runs
+already satisfies it.
+
+## Returns — `400` on the Firestore WebChannel
+
+**Classification: ENV (transport), pending production-origin confirmation.**
+
+Evidence:
+
+* `returns.html` contains **zero** `onSnapshot` calls — this is not a Returns listener.
+* The failing request is `firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel`,
+  the shared WebChannel transport, not a query.
+* It matches the uniform ~30.0s ceiling seen across *every* Firestore operation
+  including a single-document `getDoc` — one transport story, not a per-surface defect.
+
+Returns itself now renders (textLen 100, settled 3.6s) after `4e5df2d`.
+
+**Next test:** the production-origin timing run. If the ceiling and the WebChannel 400
+both disappear off loopback, this is confirmed ENV. If either survives, it is promoted.
