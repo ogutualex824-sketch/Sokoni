@@ -1,6 +1,6 @@
 # SOKONI Release State
 
-**Last updated:** 2026-08-18 07:20 UTC
+**Last updated:** 2026-08-18 07:35 UTC
 
 The single authoritative record of what is shipped, what is implemented but unproven, what is
 blocked, and exactly what evidence each remaining item still needs.
@@ -32,6 +32,54 @@ Related: [[MERCHANT_ROUTE_MATRIX]] · [[NAVIGATION_CONTRACT]] · [[CANONICAL_COL
 > `--only functions:merchantAdjustStock`. It has **not** been read back from the Rules API —
 > `firestore:releases:list` is not a CLI command and the API needs an interactive token. Treat the
 > ID as asserted, not measured, until someone reads it from the console.
+
+---
+
+## Workstream gates
+
+The permanent shape. A workstream is READY only when every row above it is PASS.
+
+```
+MERCHANT WORKSTREAM
+  implementation       IN PROGRESS      (census below — most surfaces already exist)
+  static audit         PARTIAL          8 of 14 areas evidenced, 6 unaudited
+  hosting gates        PASS             11/11 at cdfc8ab, deployed 2026-08-18
+  functions gates      PASS             4/4 at 96bce0b (merchantAdjustStock)
+  device verification  PENDING          22-check run-sheet, never run
+  production           NOT READY
+
+POS WORKSTREAM
+  architecture         6/6 STATICALLY REVIEWED
+  authority runtime    0/3 NOT PROVEN
+  client integration   PENDING          correctStock not in live hosting
+  device E2E           BLOCKED
+  acceptance           NOT READY
+```
+
+### Merchant completion census
+
+Do not rebuild what is already live. Evidence column is what was actually measured, not assumed.
+
+| Area | State | Evidence |
+|---|---|---|
+| Navigation (28 dests, grouped rail, bottom nav) | **EXISTS — verified on production** | rendered live: 4 headings, 28 items, bar `flex`, 45px clearance |
+| Products form | **EXISTS — verified** | 29 controls, 0 black, 0 unlabelled, no h-overflow @390px |
+| Dashboard / Analytics / Finance | **EXISTS** | one `AnalyticsEngine.compute()` over OrderService; Dashboard = Reports = Finance = Analytics |
+| Orders | **EXISTS** | OrderService reads `posRetailSales`, de-dupes the local twin |
+| Inventory authority | **EXISTS — deployed** | `merchantAdjustStock`, 39/39, us-central1 |
+| Sell / POS chain | **EXISTS — statically reviewed** | 6 paths audited; client wiring not live |
+| Role switching | **EXISTS — green** | role-switch-routing 50/0, provisioning 57/0, acting-role 36/0 |
+| Shop identity | **EXISTS** | canonical `activeShopId` resolver (`8ce4ef8`) |
+| Finance surface detail | **UNAUDITED** | — |
+| Shop settings | **UNAUDITED** | — |
+| Fulfilment (orders → rider) | **UNAUDITED** | — |
+| Subscriptions / entitlements | **UNAUDITED** | — |
+| Start Selling routing | **UNAUDITED** | 3 branches: approved → workspace, approved/no shop → setup, unapproved → application |
+| Add Role wizard | **UNAUDITED** | scroll, background lock, Cancel reachability |
+
+> **Completion is a census problem, not a greenfield build.** Eight areas already exist and are
+> evidenced; six are unaudited and may need nothing at all. Building across all fourteen without
+> auditing first risks rebuilding working surfaces — the same trap avoided by not porting 2D-1C.
 
 ---
 
