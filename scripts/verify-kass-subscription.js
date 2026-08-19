@@ -52,8 +52,37 @@ console.log('='.repeat(74));
   }
 
   if (!TARGET) {
-    console.log('\n  Usage: node scripts/verify-kass-subscription.js <shopUid|email>\n');
+    console.log('\n  Usage: node scripts/verify-kass-subscription.js <shopUid|email>');
+    console.log('         node scripts/verify-kass-subscription.js --find <name fragment>\n');
     process.exit(2);
+  }
+
+  /* ── FIND MODE ─────────────────────────────────────────────────────────────
+     The verification needs the SHOP uid, and a shop uid is not something anyone
+     remembers. This scans shop names for a fragment and prints only id + name —
+     no contact details, no customer data. Still read-only. */
+  if (TARGET === '--find') {
+    const frag = String(process.argv[3] || '').toLowerCase();
+    if (!frag) { console.log('\n  --find needs a name fragment\n'); process.exit(2); }
+    head('Shops matching "' + frag + '"');
+    /* Firestore has no substring search, so this pages and filters client-side.
+       Bounded so a typo cannot walk the whole collection. */
+    let scanned = 0, shown = 0, last = null;
+    while (scanned < 5000) {
+      let q = db.collection('shops').orderBy('__name__').limit(500);
+      if (last) q = q.startAfter(last);
+      const page = await q.get();
+      if (page.empty) break;
+      page.forEach((d) => {
+        scanned++;
+        const n = String((d.data() || {}).name || (d.data() || {}).storeName || '');
+        if (n.toLowerCase().indexOf(frag) > -1) { shown++; line(d.id, n); }
+      });
+      last = page.docs[page.docs.length - 1];
+      if (page.size < 500) break;
+    }
+    console.log('\n  ' + shown + ' match(es) in ' + scanned + ' shops scanned. Nothing was written.\n');
+    process.exit(0);
   }
 
   /* Resolve the uid without writing anything. */

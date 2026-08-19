@@ -10,6 +10,22 @@ Related: [[RELEASE_BOARD_MERCHANT_V2]] · [[MERCHANT_IDENTITY_AUTHORITY]] · [[P
 
 ---
 
+## ⚠ CORRECTED 2026-08-19 — this diagnosis was WRONG for KASS
+
+Production verification (docs/KASS_PRODUCTION_VERIFICATION.md) shows **aiSubscriptions is
+empty platform-wide (0 documents)** and KASS has no AI subscription. The  findings
+below are REAL code defects and the fix is worth keeping — but they affect **zero
+production merchants today** and are **not** what blocks KASS.
+
+I matched KES 499 to `s price and stopped there. The actual plan id is
+ ("SOKONI Starter Plan", IntaSend), which already resolved to STARTER/100 before
+any change of mine. **The real defect is that KASS is two accounts**: the paid subscription
+is on a uid with no shop, and the shop is on a uid with no subscription.
+
+Read the KASS verification FIRST. Everything below stands as a code audit only.
+
+---
+
 ## The headline, reproduced
 
 ```

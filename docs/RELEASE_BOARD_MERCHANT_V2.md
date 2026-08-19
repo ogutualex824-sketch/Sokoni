@@ -18,8 +18,10 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Entitlement authority** | 🟢 79/0 code-certified | — |
 | **Trial single-use** | 🟢 79/0 code-certified | — |
 | **Inventory entitlement** | 🟢 79/0 code-certified | — |
-| **KASS live account** | 🔴 UNPROVEN | run verify-kass-subscription.js with credentials |
-| **Payment / webhook** | 🔴 UNPROVEN | not traced |
+| **KASS live account** | 🔴 VERIFIED BROKEN — two accounts | see docs/KASS_PRODUCTION_VERIFICATION.md |
+| **KASS shop↔subscription link** | 🔴 THE ACTUAL DEFECT | paid uid has no shop; shop uid has no subscription |
+| **productCounters (KASS shop)** | 🔴 −23 vs 103 real | cap BYPASSED, not enforced |
+| **Payment / webhook** | 🟢 PROVEN on the paying uid | KES 499 COMPLETE, webhook received in 30s |
 | **Renewal lifecycle** | 🔴 UNPROVEN | not traced |
 | **Production trigger** | 🔴 UNPROVEN | not deployed |
 | **KASS KES 499 entitlement** | 🔴 UNPROVEN | what was purchased must be established first |
