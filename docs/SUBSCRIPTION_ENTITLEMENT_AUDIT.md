@@ -1,6 +1,8 @@
 # Subscription & Entitlements Audit
 
-**Status:** AUDIT ONLY — **no code changed, subscriptions frozen**
+**Status:** AUDIT DONE · **REPAIR STEPS 1-4 BUILT, 55/0 (+4 unproven), NOT DEPLOYED**
+**Repair:** `functions/entitlement-authority.js` · `scripts/test-entitlement-authority.js`
+**Live check:** `scripts/verify-kass-subscription.js <uid>` — READ ONLY, needs production credentials
 **Trigger:** a paid/active Starter (KES 499) that is not usable; free trials not rendering.
 **Verdict:** the chain is broken in **four independent places**. Any one alone reproduces the symptom.
 

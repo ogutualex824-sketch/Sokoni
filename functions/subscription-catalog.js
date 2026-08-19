@@ -117,7 +117,50 @@ const ALIASES = Object.freeze({
   starter: 'STARTER', seller_basic: 'STARTER', provider_basic: 'STARTER',
   pro: 'GROWTH', growth: 'GROWTH', seller_pro: 'GROWTH', provider_pro: 'GROWTH',
   business: 'ENTERPRISE', enterprise: 'ENTERPRISE', seller_enterprise: 'ENTERPRISE',
+
+  /* ── THE AI FAMILY ────────────────────────────────────────────────────────
+     These were absent, and their absence was not visible: resolve() falls back
+     to FREE for an unknown id (correct — a typo must not take a shop offline),
+     so a PAID ai_starter merchant silently received the free allowance of 10
+     while their subscription still reported ACTIVE. A paid plan resolving to
+     FREE looks exactly like a free plan, which is why it went unnoticed.
+     ai-subscriptions.js:31 is the definition these mirror. */
+  ai_free: 'FREE', ai_starter: 'STARTER', ai_pro: 'GROWTH', ai_enterprise: 'ENTERPRISE',
+
+  /* Written by business-bootstrap as the SmartPOS trial's `plan` field. It is a
+     STATUS word sitting in a plan field; mapping it keeps it off the unknown
+     path, and the trial's real allowance comes from its planId. */
+  trial: 'FREE',
 });
+
+/* Every plan id known to be written by any subsystem. A new catalogue that
+   forgets to register here fails `unmappedPlanIds()` in the suite rather than
+   quietly resolving its paying customers to FREE — which is precisely the defect
+   the AI family caused. Keep this list SORTED BY SOURCE and complete. */
+const KNOWN_PLAN_IDS = Object.freeze([
+  /* sub-billing.js PLANS */
+  'seller_free', 'seller_basic', 'seller_pro', 'seller_enterprise',
+  /* ai-subscriptions.js PLANS */
+  'ai_free', 'ai_starter', 'ai_pro', 'ai_enterprise',
+  /* entitlement-adapters.js VALID_PLANS + index.js validPlans */
+  'free', 'starter', 'pro', 'business',
+  /* business-bootstrap.js trial document */
+  'trial',
+  /* this catalogue's own ids */
+  'FREE', 'STARTER', 'GROWTH', 'ENTERPRISE',
+]);
+
+/* Ids that do NOT resolve to a real plan — i.e. would land on FREE by accident
+   rather than by intent. `expectFree` lists the ones that are legitimately free. */
+function unmappedPlanIds(ids, expectFree) {
+  const free = new Set((expectFree || []).map((s) => String(s).toLowerCase()));
+  return (ids || []).filter((id) => {
+    const key = String(id || '').trim();
+    if (free.has(key.toLowerCase())) return false;
+    const canonical = PLANS[key.toUpperCase()] ? key.toUpperCase() : ALIASES[key.toLowerCase()];
+    return !canonical;
+  });
+}
 
 /**
  * resolve(planId) — the entitlement a subsystem should act on.
@@ -143,7 +186,10 @@ function resolve(planId) {
 function entitlementFor(subscription) {
   const sub = subscription || {};
   const status = String(sub.status || 'none').toLowerCase();
-  const entitled = ['active', 'trialing', 'grace'].includes(status);
+  /* 'trial' is ai-subscriptions.js's spelling of 'trialing' (see its status
+     queries). Treating it as unentitled meant every AI trial silently received
+     the FREE allowance — the trial existed and bought nothing. */
+  const entitled = ['active', 'trialing', 'trial', 'grace'].includes(status);
   const plan = entitled ? resolve(sub.plan || sub.planId || sub.tier) : PLANS.FREE;
 
   return {
@@ -183,4 +229,5 @@ function listingLimitFor(subscription) {
   return entitlementFor(subscription).listingLimit;
 }
 
-module.exports = { PLANS, ALIASES, resolve, entitlementFor, listingLimitFor };
+module.exports = { PLANS, ALIASES, KNOWN_PLAN_IDS, resolve, entitlementFor,
+                   listingLimitFor, unmappedPlanIds };
