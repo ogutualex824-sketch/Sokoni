@@ -88,6 +88,18 @@
   var CYCLE = qs.get('cycle') === 'annual' ? 'annual' : 'monthly';
   var STORE_KEY = 'sokoni.subcheckout.' + PLAN_ID + '.' + CYCLE;
 
+  /* ── EVERY ATTEMPT CARRIES A REFERENCE ──────────────────────────────────────
+     A failure the merchant can quote is a failure support can find. The raw
+     error goes to the console and the server; the merchant gets the reference
+     and the stage, so the next production failure is traceable without guessing
+     which checkout surface or cached build produced it. */
+  var CHK = 'CHK-' + Math.random().toString(36).slice(2, 10).toUpperCase();
+  function report(stage, err) {
+    var msg = (err && (err.message || err.code)) || String(err || 'unknown');
+    try { console.error('[checkout] ' + CHK + ' failed at ' + stage + ': ' + msg, err); } catch (_) {}
+    return msg;
+  }
+
   var S = {
     phase: 'loading',      /* loading | choose | paying | error */
     plan: null,
@@ -148,8 +160,12 @@
       bar.innerHTML = ''; return;
     }
     if (S.phase === 'error') {
-      root.innerHTML = '<div class="state"><div class="t">We could not load this plan</div>' +
-        '<div class="b">' + esc(S.error || '') + '</div></div>';
+      /* The merchant sees a reference, never a raw internal message. "Internal
+         error" told them nothing and told support less — not which surface, not
+         which build, not which call. The console and the server carry the real
+         error; this carries the thread back to it. */
+      root.innerHTML = '<div class="state"><div class="t">Payment could not be started.</div>' +
+        '<div class="b">Reference: ' + esc(CHK) + '<br>Please try again.</div></div>';
       bar.innerHTML = '<button class="pay" data-act="retry">Try again</button>'; return;
     }
     if (S.phase === 'paying') { paintPayment(); return; }
@@ -244,7 +260,7 @@
       S.phase = 'choose';
     } catch (e) {
       S.phase = 'error';
-      S.error = (e && e.message) || 'Please try again.';
+      S.error = report('load', e);
     }
     paint();
   }
@@ -276,7 +292,7 @@
       await settle();
     } catch (e) {
       S.payStatus = 'failed';
-      S.error = (e && e.message) || '';
+      S.error = report('pay:' + (S.selected || 'none'), e);
       paint();
     } finally { _busy = false; }
   }
