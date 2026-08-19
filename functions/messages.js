@@ -931,17 +931,117 @@ async function _postStatusMessage(db, transactionType, transactionId, newStatus)
    16. onOrderStatusChanged
    Posts a system message whenever an order's status changes.
 ═══════════════════════════════════════════════════════════════ */
+/* ── DYNAMIC PARTICIPANTS ────────────────────────────────────────────────────
+   A rider is assigned AFTER the order exists, so the participant list cannot be
+   fixed at creation. It is re-derived from the transaction whenever the
+   transaction changes.
+
+   WHY A TRIGGER, and not a call from the assignment code: assignment is written
+   from at least four places (dispatch.js:144, index.js:3299, index.js:7237,
+   logistics-plus.js). Asking each of them to remember to update a conversation is
+   how one of them eventually forgets. The trigger reads the TRANSACTION — the
+   thing only trusted paths can write — so every assignment route is covered
+   automatically and the messaging client is never involved.
+
+   REVOCATION IS INCLUDED. When a rider is unassigned or replaced, they are
+   removed from `participants`, and firestore.rules denies their next read
+   immediately, because that array IS the access control.
+
+   ⚠ HISTORY SCOPING IS NOT SOLVED HERE, and must not be assumed. A newly assigned
+   rider becomes a participant of a conversation that may already contain
+   buyer↔merchant messages, and rules cannot scope reads per-message by join time
+   without a separate rule change. `participantsMeta` records joinedAt/leftAt so a
+   future rule or UI can scope history, but TODAY a new rider can read prior
+   messages. That is a product decision, recorded rather than silently taken. */
+async function _syncParticipants (db, transactionType, transactionId, tx) {
+  const derived = _partiesOf(transactionType, tx);
+  if (!derived || !derived.length) return null;          /* underivable: leave alone */
+
+  const convId  = `${transactionType}_${transactionId}`;
+  const convRef = db.collection('conversations').doc(convId);
+  const snap    = await convRef.get();
+  if (!snap.exists) return null;   /* no conversation yet — created on demand by a party */
+
+  const cur  = snap.data() || {};
+  const have = Array.isArray(cur.participants) ? cur.participants : [];
+  const added   = derived.filter((p) => have.indexOf(p) === -1);
+  const removed = have.filter((p) => derived.indexOf(p) === -1);
+  if (!added.length && !removed.length) return null;
+
+  const meta = Object.assign({}, cur.participantsMeta || {});
+  added.forEach((p) => { meta[p] = Object.assign({}, meta[p], { joinedAt: _now(), leftAt: null }); });
+  removed.forEach((p) => { meta[p] = Object.assign({}, meta[p], { leftAt: _now() }); });
+
+  const names   = Object.assign({}, cur.participantNames || {});
+  const avatars = Object.assign({}, cur.participantAvatars || {});
+  await Promise.all(added.map(async (p) => {
+    const u = await db.collection('users').doc(p).get().catch(() => null);
+    const d = (u && u.data()) || {};
+    names[p]   = d.displayName || d.name || 'User';
+    avatars[p] = d.photoURL || d.avatar || null;
+  }));
+
+  const unread = Object.assign({}, cur.unreadCounts || {});
+  added.forEach((p) => { if (unread[p] == null) unread[p] = 0; });
+
+  await convRef.update({
+    participants:       derived,
+    participantsMeta:   meta,
+    participantNames:   names,
+    participantAvatars: avatars,
+    unreadCounts:       unread,
+    updatedAt:          _now(),
+  });
+
+  /* Index maintenance: a joiner must see it, a leaver must not. */
+  await Promise.all([
+    ...added.map((p) => db.collection('userConversations').doc(p).collection('items').doc(convId).set({
+      conversationId: convId, transactionType, transactionId,
+      title: cur.transactionTitle || convId,
+      participantName: derived.filter((x) => x !== p).map((x) => names[x]).join(', '),
+      lastMessageAt: cur.lastMessageAt || null, lastMessageText: cur.lastMessage || null,
+      unreadCount: 0, status: cur.status || 'active', createdAt: _now(), updatedAt: _now(),
+    }, { merge: true })),
+    ...removed.map((p) =>
+      db.collection('userConversations').doc(p).collection('items').doc(convId).delete().catch(() => null)),
+  ]);
+
+  logger.info('[messages] participants synced', { convId, added, removed });
+  return { convId, added, removed };
+}
+exports._syncParticipants = _syncParticipants;
+
 exports.onOrderStatusChanged = onDocumentUpdated(
   { document: 'orders/{orderId}', region: REGION, timeoutSeconds: 30 },
   async (event) => {
     const before = event.data?.before?.data();
     const after  = event.data?.after?.data();
     if (!before || !after) return null;
+
+    /* BEFORE the status early-return. Assignment frequently changes no status at
+       all, so gating this on a status change would miss the rider entirely. */
+    await _syncParticipants(_db(), 'order', event.params.orderId, after)
+      .catch(e => logger.warn('[messages] participant sync (order)', { error: e.message }));
+
     const oldS = before.status || before.orderStatus;
     const newS = after.status  || after.orderStatus;
     if (!newS || oldS === newS) return null;
     await _postStatusMessage(_db(), 'order', event.params.orderId, newS)
       .catch(e => logger.warn('[messages] onOrderStatusChanged', { error: e.message }));
+    return null;
+  }
+);
+
+/* packageRequests is where a rider is actually assigned for a delivery, and it
+   carries the OTHER rider spelling (assignedDriverId). Without this trigger the
+   delivery conversation would never gain its rider. */
+exports.onPackageRequestChanged = onDocumentUpdated(
+  { document: 'packageRequests/{deliveryId}', region: REGION, timeoutSeconds: 30 },
+  async (event) => {
+    const after = event.data?.after?.data();
+    if (!after) return null;
+    await _syncParticipants(_db(), 'logistics_request', event.params.deliveryId, after)
+      .catch(e => logger.warn('[messages] participant sync (delivery)', { error: e.message }));
     return null;
   }
 );

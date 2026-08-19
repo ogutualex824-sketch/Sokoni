@@ -35,7 +35,23 @@ function makeDb (docs) {
   const store = new Map(Object.entries(docs || {}));
   const writes = [];
   const snap = (p) => ({ exists: store.has(p), id: p.split('/').pop(), data: () => store.get(p) });
-  const ref = (p) => ({ _p: p, get: async () => snap(p), collection: (c) => col(p + '/' + c) });
+  /* Document refs need the WRITE methods too. Without them _syncParticipants threw
+     "convRef.update is not a function" — a harness gap that reads exactly like a
+     product bug until you look. */
+  const ref = (p) => ({
+    _p: p,
+    get: async () => snap(p),
+    collection: (c) => col(p + '/' + c),
+    set: async (v, opt) => {
+      writes.push({ op: 'set', path: p, data: v, merge: !!(opt && opt.merge) });
+      store.set(p, opt && opt.merge ? Object.assign({}, store.get(p) || {}, v) : v);
+    },
+    update: async (v) => {
+      writes.push({ op: 'update', path: p, data: v });
+      store.set(p, Object.assign({}, store.get(p) || {}, v));
+    },
+    delete: async () => { writes.push({ op: 'delete', path: p }); store.delete(p); },
+  });
   const col = (c) => ({ doc: (id) => ref(c + '/' + id) });
   return {
     collection: col,
@@ -220,6 +236,77 @@ const PKG_DOCS = { 'packageRequests/p1': PKG };
      !forgedList.ok && forgedList.code === 'permission-denied');
   ck('MC the two implementations genuinely disagree — the suite is not vacuous',
      attack.ok !== forgedList.ok);
+
+  /* ── 7. RIDER LIFECYCLE ───────────────────────────────────────────────────
+     A rider is assigned AFTER the order exists, so participants cannot be fixed at
+     creation. These gates hold the line that the TRANSACTION drives membership. */
+  head('7 - rider lifecycle: participants follow the transaction');
+  const modS = loadModule(() => makeDb({}));
+  ck('_syncParticipants is exported', typeof modS._syncParticipants === 'function');
+
+  async function sync (type, id, tx, docs) {
+    const db = makeDb(docs);
+    const mod = loadModule(() => db);
+    const r = await mod._syncParticipants(db, type, id, tx);
+    return { r, db, upd: db._writes.find((w) => w.path === 'conversations/' + type + '_' + id && w.op === 'update') };
+  }
+  const CONV = (parts) => ({ participants: parts, participantNames: {}, unreadCounts: {} });
+  const RIDER2 = 'u_rider2';
+
+  const a = await sync('order', 'o1', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverUid: RIDER },
+    { 'conversations/order_o1': CONV([BUYER, SELLER]) });
+  ck('rider assigned -> becomes a participant',
+     !!a.upd && a.upd.data.participants.indexOf(RIDER) > -1, a.upd ? a.upd.data.participants.join(',') : 'no update');
+  ck('...reported as added', a.r && a.r.added.join(',') === RIDER, a.r ? a.r.added.join(',') : 'null');
+  ck('...joinedAt recorded (history scoping is a later decision, but the data is there)',
+     !!a.upd && !!(a.upd.data.participantsMeta || {})[RIDER] && !!a.upd.data.participantsMeta[RIDER].joinedAt);
+  ck('...buyer and merchant undisturbed',
+     !!a.upd && a.upd.data.participants.indexOf(BUYER) > -1 && a.upd.data.participants.indexOf(SELLER) > -1);
+  ck('...the joiner gets an inbox entry',
+     a.db._writes.some((w) => w.path === 'userConversations/' + RIDER + '/items/order_o1'));
+
+  const b = await sync('order', 'o1', { buyerUid: BUYER, sellerUid: SELLER },
+    { 'conversations/order_o1': CONV([BUYER, SELLER, RIDER]) });
+  ck('rider UNASSIGNED -> removed, so rules deny the next read',
+     !!b.upd && b.upd.data.participants.indexOf(RIDER) === -1, b.upd ? b.upd.data.participants.join(',') : 'no update');
+  ck('...reported as removed', b.r && b.r.removed.join(',') === RIDER, b.r ? b.r.removed.join(',') : 'null');
+  ck('...leftAt recorded', !!b.upd && !!(b.upd.data.participantsMeta || {})[RIDER].leftAt);
+  /* This assertion was written vacuously first (`length >= 0 && true`, which can
+     never fail) and is corrected here rather than left as a fake green — the exact
+     defect this suite exists to catch, committed by its own author. */
+  ck('...and the leaver loses the inbox entry',
+     b.db._writes.some((w) => w.op === 'delete' && w.path === 'userConversations/' + RIDER + '/items/order_o1'),
+     b.db._writes.filter((w) => w.op === 'delete').map((w) => w.path).join(',') || 'no delete');
+
+  const c = await sync('order', 'o1', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverUid: RIDER2 },
+    { 'conversations/order_o1': CONV([BUYER, SELLER, RIDER]) });
+  ck('reassignment removes the OLD rider', !!c.upd && c.upd.data.participants.indexOf(RIDER) === -1);
+  ck('...and admits the NEW rider', !!c.upd && c.upd.data.participants.indexOf(RIDER2) > -1,
+     c.upd ? c.upd.data.participants.join(',') : '');
+
+  const d = await sync('logistics_request', 'p1', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverId: RIDER },
+    { 'conversations/logistics_request_p1': CONV([BUYER, SELLER]) });
+  ck('delivery rider via assignedDriverId is admitted',
+     !!d.upd && d.upd.data.participants.indexOf(RIDER) > -1, d.upd ? d.upd.data.participants.join(',') : 'no update');
+
+  const e = await sync('order', 'o9', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverUid: RIDER }, {});
+  ck('no conversation yet -> the sync invents nothing', e.r === null && e.db._writes.length === 0);
+
+  const f = await sync('order', 'o1', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverUid: RIDER },
+    { 'conversations/order_o1': CONV([BUYER, SELLER, RIDER]) });
+  ck('no change -> no write (idempotent)', f.r === null && f.db._writes.length === 0, String(f.db._writes.length));
+
+  ck('a stranger is never admitted by any of the above',
+     !!a.upd && a.upd.data.participants.indexOf(STRANGER) === -1);
+
+  head('8 - MUTATION CONTROL: client-driven membership must fail');
+  const clientDriven = (payload) => payload.participantUids;
+  const forgedMembers = clientDriven({ participantUids: [BUYER, SELLER, STRANGER] });
+  const serverMembers = modS._partiesOf('order', { buyerUid: BUYER, sellerUid: SELLER, assignedDriverUid: RIDER });
+  ck('MC a client-driven list ADMITS the stranger', forgedMembers.indexOf(STRANGER) > -1);
+  ck('MC the transaction-derived list REFUSES the stranger', serverMembers.indexOf(STRANGER) === -1, serverMembers.join(','));
+  ck('MC the two genuinely disagree',
+     (forgedMembers.indexOf(STRANGER) > -1) !== (serverMembers.indexOf(STRANGER) > -1));
 
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');

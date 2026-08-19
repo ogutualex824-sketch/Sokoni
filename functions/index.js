@@ -11151,6 +11151,10 @@ exports.archiveCompletedConversations = _messagesMod.archiveCompletedConversatio
 exports.cleanupChatStorage            = _messagesMod.cleanupChatStorage;
 exports.onOrderStatusChanged          = _messagesMod.onOrderStatusChanged;
 exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
+/* Re-exported BY NAME, like every other trigger here: a trigger that is not
+   re-exported simply never deploys, and the delivery conversation would silently
+   never gain its rider. */
+exports.onPackageRequestChanged       = _messagesMod.onPackageRequestChanged;
 exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
