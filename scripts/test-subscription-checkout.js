@@ -48,14 +48,23 @@ ck('an unknown limit is OMITTED, not shown as 0',
    C.planSummary({}).products === null);
 ck('capabilities are listed', sum.includes.length === 5 && sum.includes.every((i) => i.on));
 
-head('2 - AIRTEL renders visible and UNPRESSABLE');
+head('2 - AIRTEL is NOT OFFERED (no verified provider adapter)');
 const m = C.methods(SERVER);
 const airtel = m.filter((x) => x.id === 'AIRTEL_MONEY')[0];
-ck('Airtel is still shown — the roadmap stays honest', !!airtel);
-ck('...but is NOT selectable', airtel.selectable === false);
-ck('...labelled Coming soon', airtel.hint === 'Coming soon');
-ck('...with the way out named',
-   /isn't available yet\. Choose SOKONI Wallet or M-PESA\./.test(airtel.disabledReason), airtel.disabledReason);
+/* It used to render greyed out as "Coming soon". That is a promise on a payment
+   screen with nothing behind it, and one mis-click from a dead rail at the exact
+   moment a merchant is trying to pay. A rail is offered only once its provider
+   adapter exists AND has been verified end to end.
+
+   This is an EXPOSURE change, not an architecture change — see the next
+   assertion. */
+ck('Airtel is NOT offered to the merchant', !airtel, airtel ? 'still rendered' : 'absent');
+ck('the server still DECLARES it — exposure, not amnesia',
+   SERVER.some((x) => x.id === 'AIRTEL_MONEY'),
+   'the rail stays in the payment registry, ready for a verified adapter');
+ck('it cannot be selected even if named directly',
+   C.payability(SERVER, 'AIRTEL_MONEY', '254712345678').ok === false,
+   C.payability(SERVER, 'AIRTEL_MONEY', '254712345678').reason);
 ck('NC the wired rails ARE selectable',
    m.filter((x) => x.id === 'SOKONI_WALLET')[0].selectable === true &&
    m.filter((x) => x.id === 'MPESA')[0].selectable === true);

@@ -261,17 +261,24 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 
   head('3 - the rails render exactly as the server described them');
   ck('the wallet balance is shown', /Balance: KES 1,240/.test(await page.textContent('#root')));
-  const airtelDisabled = await page.getAttribute('[data-m="AIRTEL_MONEY"]', 'disabled');
-  ck('Airtel is present but DISABLED', airtelDisabled !== null);
-  ck('...with the way out shown',
-     /Choose SOKONI Wallet or M-PESA/.test(await page.textContent('#root')));
+  ck('Airtel is NOT rendered at all',
+     (await page.$('[data-m="AIRTEL_MONEY"]')) === null,
+     'no verified provider adapter — the rail is not offered');
+  ck('only the wired rails are offered',
+     (await page.$('[data-m="SOKONI_WALLET"]')) !== null && (await page.$('[data-m="MPESA"]')) !== null);
   ck('the wallet is preselected when affordable',
      (await page.getAttribute('[data-m="SOKONI_WALLET"]', 'class')).indexOf('on') > -1);
 
-  head('4 - Airtel cannot be submitted');
-  await page.click('[data-m="AIRTEL_MONEY"]', { force: true });
-  const sel = await page.evaluate('window.__checkoutState().selected');
-  ck('clicking a disabled rail does not select it', sel !== 'AIRTEL_MONEY', String(sel));
+  head('4 - an unoffered rail cannot be paid with');
+  /* The server still DECLARES Airtel (the stub returns it), so this proves the
+     merchant cannot reach it — not that it stopped existing. Naming it directly
+     is the attack a disabled button would not have prevented. */
+  const airtelPayable = await page.evaluate(
+    "window.SokoniSubscriptionCheckout.payability(" +
+    "[{id:'SOKONI_WALLET',balance:1240,available:true},{id:'MPESA',available:true}," +
+    "{id:'AIRTEL_MONEY',available:false,reason:'provider-not-available'}]," +
+    "'AIRTEL_MONEY','254712345678').ok");
+  ck('payability refuses AIRTEL_MONEY even when named directly', airtelPayable === false);
   ck('Confirm & Pay is still enabled for the VALID selection',
      (await page.getAttribute('[data-act="pay"]', 'disabled')) === null);
 

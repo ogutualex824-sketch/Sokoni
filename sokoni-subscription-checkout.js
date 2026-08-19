@@ -74,9 +74,29 @@
   /* ── THE METHOD LIST ───────────────────────────────────────────────────────
      `methods` is exactly what subscriptionPaymentMethods returned. This adds
      copy; it does not add availability. */
+  /* ── RAILS WITH NO VERIFIED PROVIDER ADAPTER ────────────────────────────────
+     NOT an architecture change. AIRTEL_MONEY remains a first-class member of the
+     payment registry and flows through the same payment-intent and activation
+     authority as every other rail; nothing about the money path is special-cased
+     for it. What changes is EXPOSURE: a rail is not offered to a merchant until
+     an actual provider adapter exists and has been verified end to end.
+
+     Showing it greyed out as "Coming soon" was a promise on a payment screen with
+     nothing behind it — and one mis-click away from a dead rail at the exact
+     moment a merchant is trying to pay.
+
+     TO RE-ENABLE: implement and verify the adapter, then delete the entry here.
+     No other change is required — that is the point of keeping it in the
+     registry. */
+  var UNVERIFIED_RAILS = {
+    AIRTEL_MONEY: 'no verified provider adapter',
+  };
+
   function methods(serverMethods) {
     var list = Array.isArray(serverMethods) ? serverMethods : [];
-    return list.map(function (m) {
+    return list.filter(function (m) {
+      return !Object.prototype.hasOwnProperty.call(UNVERIFIED_RAILS, m && m.id);
+    }).map(function (m) {
       var copy = METHOD_COPY[m.id] || { title: m.label || m.id, hint: '' };
       var usable = m.available === true;
       return {
