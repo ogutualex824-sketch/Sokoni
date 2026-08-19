@@ -27,7 +27,11 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Trial activation** | 🟢 43/0 — gate wired, THEN field fixed | — |
 | **Trial one-time per IDENTITY** | 🟢 43/0 | linked logins share one ledger claim |
 | **Subscription lifecycle vocabulary** | 🟢 9 states, shared by every vertical | — |
-| **Seller Basic PAID path** | 🔴 NOT BUILT | checkout.html reads no URL params; no STK |
+| **Seller Basic PAID path** | 🟡 EXISTS on subscriptions.html | plans.html now routes there instead of the dead end |
+| **SOKONI Wallet rail** | 🟢 33/0 — atomic debit, idempotent | activation-from-PAID still open |
+| **M-PESA rail** | 🟡 works via createPaymentIntent -> initiateSTKPush | not yet unified behind one method dispatch |
+| **Airtel Money rail** | 🔴 DECLARED, no provider binding | — |
+| **Webhook idempotency** | 🔴 UNTRACED | — |
 | **Trial eligibility in subActivate** | 🟢 WIRED, gate above the payment branch | — |
 | **STK / paid subscription flow** | 🔴 NOT BUILT | no phone step, no STK_SENT/PENDING/PAID states |
 | **Link revoke safety** | 🟢 41/0 | revoke changes resolution only; no data touched |

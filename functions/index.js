@@ -11293,6 +11293,12 @@ exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
 /* ONE source for who the shop is, who is serving, and what role they hold.
    NOT DEPLOYED YET — see docs/MERCHANT_IDENTITY_AUTHORITY.md. Exported by name
    so the release is a deploy rather than an edit. */
+/* Subscription payment rails — wallet / M-PESA / Airtel behind ONE intent.
+   NOT DEPLOYED YET; exported by name so releasing is a deploy, not an edit. */
+const subPayMethods = require('./subscription-pay-methods');
+exports.subscriptionPaymentMethods = subPayMethods.subscriptionPaymentMethods;
+exports.payIntentWithWallet        = subPayMethods.payIntentWithWallet;
+
 const merchantIdentity = require('./merchant-identity');
 exports.merchantIdentity       = merchantIdentity.merchantIdentity;
 exports.employeeSaleAuthorize  = merchantIdentity.employeeSaleAuthorize;

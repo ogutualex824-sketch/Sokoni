@@ -454,7 +454,11 @@ async function confirmSubscribe() {
         toast('This plan isn’t available for online checkout yet — please contact support.', 'error');
         return;
       }
-      location.href = `checkout.html?type=subscription&planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}&amount=${priceKES}&name=${encodeURIComponent(plan.name)}`;
+      /* checkout.html reads NO url parameters and has no subscription branch —
+         every one of these was ignored, which is why the paid path went nowhere.
+         subscriptions.html is where the proven flow lives: createPaymentIntent
+         (server-derived amount, duplicate guard) -> initiateSTKPush -> PIN. */
+      location.href = `subscriptions.html?planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}`;
     }
   } catch(err) {
     toast('Error: '+err.message, 'error');
