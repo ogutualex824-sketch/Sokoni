@@ -217,10 +217,16 @@
     return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  global.SokoniReceipt = { render: render, toText: toText, formatTime: formatTime,
-                           BRAVILEX: BRAVILEX, TAGLINE: TAGLINE };
+  /* ── WHY NOT `SokoniReceipt` ────────────────────────────────────────────────
+     That global is ALREADY TAKEN. pos-checkout.html, pos-marketplace.html and
+     pos-printer.js all call `window.SokoniReceipt.print()` / `.doc()`, and this
+     module has neither method. Claiming the name would have silently broken POS
+     printing on any page that loads both — a page would look fine until a merchant
+     tried to print. The existing POS receipt path is left exactly as it is. */
+  global.SokoniReceiptDoc = { render: render, toText: toText, formatTime: formatTime,
+                              BRAVILEX: BRAVILEX, TAGLINE: TAGLINE };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = (typeof window !== 'undefined' ? window : globalThis).SokoniReceipt;
+  module.exports = (typeof window !== 'undefined' ? window : globalThis).SokoniReceiptDoc;
 }

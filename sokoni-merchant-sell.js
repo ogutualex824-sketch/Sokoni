@@ -204,7 +204,7 @@
   /* ── THE COMPOSED AUTHORITIES ───────────────────────────────────────────────
      This screen owns no arithmetic and no schema. Change comes from SokoniCash,
      pickup/delivery from SokoniFulfilment, the address from SokoniBuyerLocations,
-     the printed document from SokoniReceipt, and the idempotency key from
+     the printed document from SokoniReceiptDoc, and the idempotency key from
      SokoniSaleSubmit. Each is separately proven; composing them here means the
      till and online checkout cannot drift into two different arithmetics.
 
@@ -216,7 +216,7 @@
   var CASH = function () { return G().SokoniCash || null; };
   var FUL  = function () { return G().SokoniFulfilment || null; };
   var LOC  = function () { return G().SokoniBuyerLocations || null; };
-  var RCPT = function () { return G().SokoniReceipt || null; };
+  var RCPT = function () { return G().SokoniReceiptDoc || null; };
 
   var METHODS = [
     { id: 'cash',  icon: '💵', label: 'Cash'   },
@@ -821,7 +821,7 @@
       var toM = function (v) { return (C && typeof v === 'number') ? C.toMinor(v) : null; };
       return {
         receiptId: r.receiptNo || null,
-        /* SERVER time. When the sale carries none, SokoniReceipt prints
+        /* SERVER time. When the sale carries none, SokoniReceiptDoc prints
            "Time not recorded" rather than reaching for the device clock. */
         createdAt: r.timestamp || null,
         items: (r.items || []).map(function (it) {

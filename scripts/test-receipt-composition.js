@@ -189,6 +189,28 @@ ck('NC CHANGE does appear when cash produced it (so section 3 is not vacuous)', 
 ck('NC an empty order produces warnings rather than a clean receipt',
    R.render({}).warnings.length >= 3, String(R.render({}).warnings.length));
 
+head('11 - it does not squat on a global that is already in use');
+/* `window.SokoniReceipt` belongs to the EXISTING POS receipt path and carries a
+   .print()/.doc() API this module does not have. Claiming it would break printing
+   on any page that loads both — and the page would look fine right up until a
+   merchant tried to print. */
+const fs2 = require('fs');
+const self = fs2.readFileSync(path.join(ROOT, 'sokoni-receipt.js'), 'utf8');
+ck('this module publishes SokoniReceiptDoc', /global\.SokoniReceiptDoc =/.test(self));
+ck('...and never assigns window/global SokoniReceipt',
+   !/(global|window)\.SokoniReceipt\s*=/.test(self));
+/* Prove the name really is occupied, rather than trusting the claim. */
+const OWNERS = ['pos-checkout.html', 'pos-marketplace.html', 'pos-printer.js'];
+const users = OWNERS.filter((f) => {
+  try { return /window\.SokoniReceipt\b(?!Doc|Engine)/.test(fs2.readFileSync(path.join(ROOT, f), 'utf8')); }
+  catch (_) { return false; }
+});
+ck('the old name IS in use by the existing POS path', users.length === 3, users.join(', '));
+ck('NC ...and the detector does not confuse it with SokoniReceiptEngine',
+   !/window\.SokoniReceipt\b(?!Doc|Engine)/.test('window.SokoniReceiptEngine.print()'));
+ck('NC ...nor with the new name', !/window\.SokoniReceipt\b(?!Doc|Engine)/.test('window.SokoniReceiptDoc.render()'));
+ck('NC ...but DOES catch a real squat', /window\.SokoniReceipt\b(?!Doc|Engine)/.test('window.SokoniReceipt = {}'));
+
 console.log('\n' + '='.repeat(74));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('='.repeat(74) + '\n');

@@ -6,7 +6,7 @@
      SokoniCash            change, balance, overpayment — integer cents
      SokoniFulfilment      pickup vs delivery, destinationSnapshot, rider
      SokoniBuyerLocations  the address shape
-     SokoniReceipt         the branded document
+     SokoniReceiptDoc         the branded document
      SokoniSaleSubmit      the idempotency key
 
    Two things must be true here, and they pull in opposite directions:
@@ -76,8 +76,8 @@ ck('change comes from SokoniCash', /SokoniCash/.test(code) && /\bC\.settle\(/.te
 ck('fulfilment comes from SokoniFulfilment', /SokoniFulfilment/.test(code) && /buildFulfilment\(/.test(code));
 ck('the address shape comes from SokoniBuyerLocations',
    /SokoniBuyerLocations/.test(code) && /L\.normalise\(/.test(code) && /L\.snapshot\(/.test(code));
-ck('the receipt comes from SokoniReceipt',
-   /SokoniReceipt/.test(code) && /R\.render\(/.test(code) && /R\.toText\(/.test(code));
+ck('the receipt comes from SokoniReceiptDoc',
+   /SokoniReceiptDoc/.test(code) && /R\.render\(/.test(code) && /R\.toText\(/.test(code));
 ck('the OLD inline change arithmetic is gone',
    !/given\s*-\s*t\.subtotal/.test(code), (code.match(/given\s*-\s*t\.subtotal/) || ['absent'])[0]);
 ck('...and no other local subtraction stands in for it',
