@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Checkout · SOKONI</title>
+<link rel="stylesheet" href="override.css">
+<style>
+  :root{ --bg:#050505; --card:#0e0e0e; --line:rgba(255,255,255,.10);
+         --txt:#fff; --txt2:rgba(255,255,255,.62); --accent:#71ff00; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       font-variant-numeric:tabular-nums}
+  .wrap{max-width:520px;margin:0 auto;padding:18px 16px 120px}
+  .plan{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+  .plan h1{margin:0 0 4px;font-size:20px;letter-spacing:-.01em}
+  .price{font-size:32px;font-weight:800;letter-spacing:-.02em}
+  .cycle{color:var(--txt2);font-size:13px;margin-left:6px;font-weight:600}
+  .feat{color:var(--txt2);font-size:13px;line-height:1.9;margin-top:10px}
+  .lbl{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+       color:var(--txt2);margin:26px 0 10px}
+  /* Touch targets ≥48px; nothing wider than its container at 320px. */
+  .m{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;
+     background:var(--card);border:1px solid var(--line);border-radius:16px;
+     padding:15px;margin-bottom:10px;color:inherit;font:inherit;min-height:64px;cursor:pointer}
+  .m.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .m[disabled]{opacity:.45;cursor:not-allowed}
+  .m .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;margin-top:2px}
+  .m.on .dot{border-color:var(--accent);background:var(--accent)}
+  .m .t{font-weight:700;font-size:15px}
+  .m .s{color:var(--txt2);font-size:13px;margin-top:3px}
+  .why{color:#ffb020;font-size:12.5px;margin:-4px 0 12px;padding-left:3px;line-height:1.5}
+  .inp{width:100%;background:#141414;border:1px solid var(--line);border-radius:12px;
+       color:var(--txt);padding:14px;font-size:16px;margin-top:2px}
+  .bar{position:fixed;left:0;right:0;bottom:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+       background:linear-gradient(180deg,rgba(5,5,5,0),rgba(5,5,5,.96) 22%)}
+  .pay{max-width:488px;margin:0 auto;display:block;width:100%;min-height:54px;border:0;
+       border-radius:15px;background:var(--accent);color:#04170a;font-weight:800;font-size:16px;cursor:pointer}
+  .pay[disabled]{opacity:.4;cursor:not-allowed}
+  .state{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 20px;text-align:center}
+  .state .t{font-weight:800;font-size:17px}
+  .state .b{color:var(--txt2);font-size:14px;margin-top:8px;line-height:1.6}
+  .spin{width:22px;height:22px;border:2.5px solid rgba(255,255,255,.18);border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .ok{color:var(--accent);font-size:34px;line-height:1}
+</style>
+</head>
+<body>
+<div class="wrap" id="root" aria-live="polite"></div>
+<div class="bar" id="bar"></div>
+
+<script src="sokoni-subscription-checkout.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════════
+   SUBSCRIPTION CHECKOUT — the surface
+   ══════════════════════════════════════════════════════════════════════════════
+   Presentation only. Every figure — price, entitlement, balance, availability —
+   arrives resolved from the server. This file decides what a merchant is TOLD,
+   never what they are charged.
+
+   ── ONE INTENT PER ATTEMPT ──────────────────────────────────────────────────
+   The payment intent id is persisted the moment it is minted, keyed by plan and
+   cycle. A refresh, a back-navigation or a double-tap RECOVERS that intent
+   instead of minting a second one — two intents for one purchase is how a
+   merchant ends up paying twice for a plan they hold once.
+
+   ── THE BUTTON CANNOT REACH AN IMPOSSIBLE STATE ─────────────────────────────
+   Confirm & Pay is disabled unless SokoniSubscriptionCheckout.payability() says
+   the chosen rail is usable, so there is no generic submit that can dispatch to
+   a rail with no adapter or a wallet with no funds.
+   ══════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var C = window.SokoniSubscriptionCheckout;
+  var qs = new URLSearchParams(location.search);
+  var PLAN_ID = qs.get('planId') || '';
+  var CYCLE = qs.get('cycle') === 'annual' ? 'annual' : 'monthly';
+  var STORE_KEY = 'sokoni.subcheckout.' + PLAN_ID + '.' + CYCLE;
+
+  var S = {
+    phase: 'loading',      /* loading | choose | paying | error */
+    plan: null,
+    methods: [],
+    selected: null,
+    phone: '',
+    intentId: null,
+    payStatus: null,
+    error: null,
+  };
+
+  var root = document.getElementById('root');
+  var bar = document.getElementById('bar');
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  /* ── the persisted attempt ──────────────────────────────────────────────── */
+  /* The whole intent is stored, not just its id: on recovery the page must be
+     able to render the plan WITHOUT minting a second intent to learn the price. */
+  function saveIntent(intent) {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify({ intent: intent, at: Date.now() })); } catch (_) {}
+  }
+  function loadIntent() {
+    try {
+      var raw = sessionStorage.getItem(STORE_KEY);
+      if (!raw) return null;
+      var v = JSON.parse(raw);
+      return (v && v.intent && v.intent.paymentIntentId) ? v.intent : null;
+    } catch (_) { return null; }
+  }
+  function clearIntent() { try { sessionStorage.removeItem(STORE_KEY); } catch (_) {} }
+
+  function callable(name) {
+    if (typeof window.sokoniCallable === 'function') return window.sokoniCallable(name);
+    return function () { return Promise.reject(new Error('SOKONI is still starting up.')); };
+  }
+
+  /* ── render ─────────────────────────────────────────────────────────────── */
+  function paint() {
+    if (S.phase === 'loading') {
+      root.innerHTML = '<div class="state"><div class="spin"></div><div class="t">Loading your plan…</div></div>';
+      bar.innerHTML = ''; return;
+    }
+    if (S.phase === 'error') {
+      root.innerHTML = '<div class="state"><div class="t">We could not load this plan</div>' +
+        '<div class="b">' + esc(S.error || '') + '</div></div>';
+      bar.innerHTML = '<button class="pay" data-act="retry">Try again</button>'; return;
+    }
+    if (S.phase === 'paying') { paintPayment(); return; }
+
+    var p = S.plan || {};
+    var ms = C.methods(S.methods);
+    var able = C.payability(S.methods, S.selected, S.phone);
+
+    root.innerHTML =
+      '<div class="plan">' +
+        '<h1>' + esc(p.name || 'Plan') + '</h1>' +
+        '<div><span class="price">' + esc(p.price || '—') + '</span>' +
+          '<span class="cycle">' + esc(p.cycleLabel || '') + '</span></div>' +
+        '<div class="feat">' +
+          (p.products ? esc(p.products) + '<br>' : '') +
+          (p.includes || []).filter(function (i) { return i.on; })
+            .map(function (i) { return '✓ ' + esc(i.label); }).join(' · ') +
+        '</div>' +
+      '</div>' +
+      '<div class="lbl">Pay with</div>' +
+      ms.map(function (m) {
+        return '<button class="m' + (S.selected === m.id ? ' on' : '') + '"' +
+            (m.selectable ? '' : ' disabled') + ' data-act="pick" data-m="' + esc(m.id) + '">' +
+            '<span class="dot"></span><span>' +
+              '<span class="t">' + esc(m.title) + '</span>' +
+              (m.detail ? '<span class="s">' + esc(m.detail) + '</span>' : '') +
+              '<span class="s">' + esc(m.hint) + '</span>' +
+            '</span></button>' +
+          (!m.selectable && m.disabledReason
+            ? '<div class="why">' + esc(m.disabledReason) + '</div>' : '') +
+          (m.selectable && m.needsPhone && S.selected === m.id
+            ? '<input class="inp" id="phone" inputmode="tel" autocomplete="tel" ' +
+              'placeholder="0712 345 678" value="' + esc(S.phone) + '" aria-label="M-PESA number">' +
+              (S.phone && !C.validPhone(S.phone)
+                ? '<div class="why">Enter a valid Kenyan mobile number.</div>' : '')
+            : '');
+      }).join('');
+
+    bar.innerHTML = '<button class="pay" data-act="pay"' + (able.ok ? '' : ' disabled') + '>' +
+      (able.ok ? 'Confirm &amp; Pay' : esc(able.message || 'Choose a payment method')) + '</button>';
+  }
+
+  function paintPayment() {
+    var v = C.paymentView(S.payStatus);
+    root.innerHTML = '<div class="state">' +
+      (v.done ? '<div class="ok">✓</div>' : (v.busy ? '<div class="spin"></div>' : '')) +
+      '<div class="t">' + esc(v.title) + '</div>' +
+      (v.body ? '<div class="b">' + esc(v.body) + '</div>' : '') +
+    '</div>';
+    bar.innerHTML = v.done
+      ? '<button class="pay" data-act="done">Go to my business</button>'
+      : (v.busy ? '' : '<button class="pay" data-act="retry-pay">Try again</button>');
+  }
+
+  /* ── data ───────────────────────────────────────────────────────────────── */
+  async function load() {
+    S.phase = 'loading'; paint();
+    if (!PLAN_ID) { S.phase = 'error'; S.error = 'No plan was selected.'; return paint(); }
+    try {
+      /* RECOVER before minting. A refresh mid-payment must not start a second
+         purchase — see the note at the top of this file. */
+      var existing = loadIntent();
+      var intent = null;
+      if (existing) {
+        /* RECOVERY, in this order:
+           1. already reconciled -> show the finished state
+           2. otherwise REUSE the stored intent — never mint a second one for
+              the same purchase. A refresh mid-payment that minted a fresh
+              intent would let a merchant pay twice for one plan. */
+        S.intentId = existing.paymentIntentId;
+        var st = await callable('reconcileSubscriptionPayment')({ paymentIntentId: S.intentId })
+          .then(function (r) { return r && r.data; }).catch(function () { return null; });
+        if (st && st.ok) { S.phase = 'paying'; S.payStatus = 'active'; clearIntent(); return paint(); }
+        intent = existing;
+      }
+      if (!intent) {
+        intent = await callable('createPaymentIntent')({ planId: PLAN_ID, billingCycle: CYCLE })
+          .then(function (r) { return r && r.data; });
+        if (!intent || !intent.paymentIntentId) throw new Error('Payment could not be started.');
+        S.intentId = intent.paymentIntentId;
+        saveIntent(intent);
+      }
+
+      var mm = await callable('subscriptionPaymentMethods')({ amount: intent.amount })
+        .then(function (r) { return (r && r.data && r.data.methods) || []; });
+      S.methods = mm;
+      S.plan = C.planSummary({
+        label: intent.planName, priceKES: intent.amount,
+        listingLimit: intent.listingLimit, billingCycle: intent.billingCycle || CYCLE,
+      });
+      S.selected = C.defaultMethod(mm);
+      S.phase = 'choose';
+    } catch (e) {
+      S.phase = 'error';
+      S.error = (e && e.message) || 'Please try again.';
+    }
+    paint();
+  }
+
+  /* ── pay ────────────────────────────────────────────────────────────────── */
+  var _busy = false;
+  async function pay() {
+    /* A double tap must not mint or charge twice. */
+    if (_busy) return;
+    var able = C.payability(S.methods, S.selected, S.phone);
+    if (!able.ok) return;
+    _busy = true;
+    S.phase = 'paying';
+
+    try {
+      if (S.selected === 'SOKONI_WALLET') {
+        S.payStatus = 'processing'; paint();
+        await callable('payIntentWithWallet')({ paymentIntentId: S.intentId });
+        S.payStatus = 'paid'; paint();
+      } else if (S.selected === 'MPESA') {
+        S.payStatus = 'stk_sent'; paint();
+        await callable('initiateSTKPush')({
+          paymentIntentId: S.intentId, phone: C.normalisePhone(S.phone),
+        });
+        S.payStatus = 'pending'; paint();
+      }
+      /* The server decides. This polls the reconciliation authority; it never
+         concludes success on its own. */
+      await settle();
+    } catch (e) {
+      S.payStatus = 'failed';
+      S.error = (e && e.message) || '';
+      paint();
+    } finally { _busy = false; }
+  }
+
+  async function settle() {
+    for (var i = 0; i < 20; i++) {
+      var r = await callable('reconcileSubscriptionPayment')({ paymentIntentId: S.intentId })
+        .then(function (x) { return x && x.data; }).catch(function () { return null; });
+      if (r && r.ok) { S.payStatus = 'active'; clearIntent(); paint(); return; }
+      await new Promise(function (res) { setTimeout(res, 1500); });
+      paint();
+    }
+    /* Still unresolved. NOT a failure and NOT a success — the merchant is told
+       the truth and given a way to check again. */
+    S.payStatus = 'pending'; paint();
+  }
+
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest && ev.target.closest('[data-act]');
+    if (!el) return;
+    var act = el.getAttribute('data-act');
+    if (act === 'pick') { S.selected = el.getAttribute('data-m'); paint(); return; }
+    if (act === 'pay') { pay(); return; }
+    if (act === 'retry') { load(); return; }
+    if (act === 'retry-pay') { S.phase = 'choose'; S.payStatus = null; paint(); return; }
+    if (act === 'done') { location.href = 'merchant-v2.html'; return; }
+  });
+  document.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.id === 'phone') {
+      S.phone = ev.target.value;
+      var b = document.getElementById('bar');
+      var able = C.payability(S.methods, S.selected, S.phone);
+      if (b) b.innerHTML = '<button class="pay" data-act="pay"' + (able.ok ? '' : ' disabled') + '>' +
+        (able.ok ? 'Confirm &amp; Pay' : esc(able.message || 'Choose a payment method')) + '</button>';
+    }
+  });
+
+  window.__checkoutState = function () { return S; };   /* certification seam */
+  load();
+})();
+</script>
+<script src="sw-register.js" defer></script>
+</body>
+</html>

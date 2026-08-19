@@ -458,7 +458,7 @@ async function confirmSubscribe() {
          every one of these was ignored, which is why the paid path went nowhere.
          subscriptions.html is where the proven flow lives: createPaymentIntent
          (server-derived amount, duplicate guard) -> initiateSTKPush -> PIN. */
-      location.href = `subscriptions.html?planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}`;
+      location.href = `subscription-checkout.html?planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}`;
     }
   } catch(err) {
     toast('Error: '+err.message, 'error');

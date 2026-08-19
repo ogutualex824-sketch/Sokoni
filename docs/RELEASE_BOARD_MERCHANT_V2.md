@@ -32,7 +32,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Subscription activation** | 🟢 51/0 — exactly once, entitlement follows | real production purchase still open |
 | **M-PESA rail** | 🟡 works via createPaymentIntent -> initiateSTKPush | not yet unified behind one method dispatch |
 | **Airtel Money rail** | 🔴 DECLARED, server reports UNAVAILABLE | provider adapter, then flip the flag |
-| **Subscription checkout logic** | 🟢 64/0 | the HTML surface is not built |
+| **Subscription checkout logic** | 🟢 64/0 | — |
+| **Checkout surface + journey** | 🟢 37/0 in Chromium | real production purchase still open |
 | **Webhook idempotency** | 🔴 UNTRACED | — |
 | **Trial eligibility in subActivate** | 🟢 WIRED, gate above the payment branch | — |
 | **STK / paid subscription flow** | 🔴 NOT BUILT | no phone step, no STK_SENT/PENDING/PAID states |
