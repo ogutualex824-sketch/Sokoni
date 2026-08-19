@@ -188,11 +188,26 @@ const TRIAL_LEDGER = 'trialLedger';
 
 async function trialState(uid) {
   if (!uid) return { eligible: false, used: false, reason: 'no-uid' };
-  const [ledgerSnap, ent] = await Promise.all([
-    _db().collection(TRIAL_LEDGER).doc(uid).get().catch(() => null),
+
+  /* ── ONE TRIAL PER MERCHANT IDENTITY, NOT PER LOGIN ──────────────────────
+     A merchant with two linked accounts is one business and gets one trial.
+     Checking only their own uid would hand a second trial to anyone holding a
+     second login — which is the same hole as one-per-browser or one-per-email,
+     just harder to spot. The ledger is therefore read across every uid in the
+     identity, and the FIRST claim found is the one that counts. */
+  let uids = [uid];
+  try {
+    const mi = require('./merchant-identity');
+    if (mi._internal && mi._internal.linkedUids) uids = await mi._internal.linkedUids(uid);
+  } catch (_) { uids = [uid]; }
+
+  const [ledgers, ent] = await Promise.all([
+    Promise.all(uids.map((u) => _db().collection(TRIAL_LEDGER).doc(u).get().catch(() => null))),
     resolveEffective(uid),
   ]);
-  const used = !!(ledgerSnap && ledgerSnap.exists);
+  const claimed = ledgers.filter((s) => s && s.exists);
+  const ledgerSnap = claimed.length ? claimed[0] : null;
+  const used = claimed.length > 0;
   const led = used ? (ledgerSnap.data() || {}) : {};
   const endsAt = led.trialEndsAt && led.trialEndsAt.toMillis ? led.trialEndsAt.toMillis() : null;
   const active = !!(endsAt && Date.now() < endsAt);

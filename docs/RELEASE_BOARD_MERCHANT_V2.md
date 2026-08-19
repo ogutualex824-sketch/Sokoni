@@ -24,8 +24,11 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Counter recount tool** | 🟡 DRY-RUN VERIFIED | --apply NOT run; 103 and 0 are the measured truths |
 | **KASS repair command** | 🔴 BLOCKED by lifecycle | refuses: archived defined 3 ways, 8 union / 5 agreed |
 | **Product lifecycle** | 🔴 NOT CANONICAL | Active/Archived/Deleted; 3 disagreeing spellings in production |
-| **Seller Basic checkout** | 🔴 BROKEN, traced | startTrial/isTrial mismatch; checkout.html ignores type=subscription |
-| **Trial eligibility in subActivate** | 🔴 MISSING — fix FIRST | the mismatch is currently the only thing stopping unlimited trials |
+| **Trial activation** | 🟢 43/0 — gate wired, THEN field fixed | — |
+| **Trial one-time per IDENTITY** | 🟢 43/0 | linked logins share one ledger claim |
+| **Subscription lifecycle vocabulary** | 🟢 9 states, shared by every vertical | — |
+| **Seller Basic PAID path** | 🔴 NOT BUILT | checkout.html reads no URL params; no STK |
+| **Trial eligibility in subActivate** | 🟢 WIRED, gate above the payment branch | — |
 | **STK / paid subscription flow** | 🔴 NOT BUILT | no phone step, no STK_SENT/PENDING/PAID states |
 | **Link revoke safety** | 🟢 41/0 | revoke changes resolution only; no data touched |
 | **productCounters (KASS shop)** | 🔴 −23 vs 103 real | cap BYPASSED, not enforced |

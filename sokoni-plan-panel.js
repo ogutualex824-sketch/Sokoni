@@ -65,6 +65,21 @@
     };
   }
 
+  /* ── THE COUNTDOWN ─────────────────────────────────────────────────────────
+     Derived from the SERVER's trialEndsAt, never the phone clock — a device
+     whose date is wrong must not change how much trial a merchant appears to
+     have. And it never says "1 days remaining": a plural where a singular
+     belongs is the kind of detail that makes a product feel unfinished. */
+  function trialCountdown (trial) {
+    var t = trial || {};
+    if (!t.active) return t.used ? 'Trial ended' : 'Free plan';
+    var n = _num(t.daysRemaining);
+    if (n === null) return 'Trial active';
+    if (n <= 0) return 'Expires today';
+    if (n === 1) return '1 day remaining';
+    return n + ' days remaining';
+  }
+
   /* The panel, as a structure. The shell renders it; this decides WHAT it says.
      Every string here is written for a merchant, not for an engineer. */
   function render (ent) {
@@ -78,7 +93,7 @@
 
     var sub = {
       free: 'Free plan',
-      trial: (trial.daysRemaining === 1 ? '1 day remaining' : (trial.daysRemaining || 0) + ' days remaining'),
+      trial: trialCountdown(trial),
       active: 'Active',
       grace: 'Payment overdue — your plan is still active',
       ended: 'Trial ended',
@@ -144,6 +159,7 @@
   }
 
   global.SokoniPlanPanel = { STATE: STATE, stateOf: stateOf, products: products,
+                             trialCountdown: trialCountdown,
                              render: render, summary: summary };
 })(typeof window !== 'undefined' ? window : globalThis);
 

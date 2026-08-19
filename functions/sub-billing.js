@@ -257,7 +257,19 @@ exports.subActivate = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
-    const { planId, billingCycle, paymentRef, isTrial } = req.data || {};
+    const d = req.data || {};
+    const { planId, billingCycle, paymentRef } = d;
+    /* ── THE FIELD-NAME MISMATCH, AND WHY THE ORDER MATTERED ─────────────────
+       plans.html sends `startTrial`; this destructured `isTrial`. The names
+       never met, so a trial request fell through to the PAID verification
+       branch, looked up a payment reference the client had fabricated, and threw
+       "Payment not confirmed. Complete payment first." — the reported bug.
+
+       That mismatch was ALSO the only thing preventing an unlimited free trial,
+       because nothing here checked eligibility. So accepting both spellings is
+       safe only BELOW the eligibility gate added further down; it must never be
+       moved above it. */
+    const isTrial = d.isTrial === true || d.startTrial === true;
     if (!planId) throw new HttpsError('invalid-argument', 'planId required');
 
     const cycle = billingCycle === 'annual' ? 'annual' : 'monthly';
@@ -271,6 +283,38 @@ exports.subActivate = onCall(
       const idKey  = `subact_${uid}_${paymentRef}`;
       const idem   = await fsdb.collection('finosIdempotency').doc(idKey).get();
       if (idem.exists) return { status: 'already_active', subscriptionId: idem.data().subscriptionId };
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       THE TRIAL GATE — a trial is granted ONCE per merchant identity, ever
+       ══════════════════════════════════════════════════════════════════════
+       Before this, nothing recorded that a trial had been used, so a second
+       call was a second free trial indefinitely. entitlement-authority claims
+       trialLedger/{uid} with create(), so the claim is atomic and a double-tap
+       cannot mint two.
+
+       ONE-TIME PER MERCHANT IDENTITY — not per browser, per shop, per email or
+       per subscription document. The ledger is keyed by uid and resolved
+       through the account link, so a merchant with two logins gets one trial.
+
+       No payment reference is accepted for a trial. The client used to
+       fabricate `trial_<plan>_<ts>`; a trial has no payment, and pretending
+       otherwise is what routed it into the paid branch in the first place. */
+    let trialGrant = null;
+    if (isTrial) {
+      if (!(plan.trial && plan.trial.days > 0)) {
+        throw new HttpsError('failed-precondition', 'this plan has no trial');
+      }
+      const ea = require('./entitlement-authority');
+      trialGrant = await ea.startTrial(uid, planId, plan.trial.days);
+      if (!trialGrant.ok) {
+        const why = trialGrant.reason === 'trial-already-used'
+          ? 'You have already used your free trial.'
+          : trialGrant.reason === 'already-on-a-paid-plan'
+            ? 'You are already on a paid plan.'
+            : 'This trial is not available.';
+        throw new HttpsError('failed-precondition', why, { reason: trialGrant.reason });
+      }
     }
 
     /* Verify payment for paid plans (skip for free / trial) */

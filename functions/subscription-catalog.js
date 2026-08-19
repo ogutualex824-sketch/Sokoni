@@ -38,6 +38,42 @@
    one resolved v1 and that one resolved v2". */
 const CATALOG_VERSION = 1;
 
+/* ── THE ONE SUBSCRIPTION LIFECYCLE ─────────────────────────────────────────
+   Every SOKONI package moves through these states and no vertical invents its
+   own. Seller packaging, seller basic, hotel, accommodation, restaurant,
+   mechanic, pharmacy, services and the AI plans all use this vocabulary, so a
+   new vertical inherits billing rather than reimplementing it.
+
+   ENTITLED is the only question a consumer should ask. A screen must never ask
+   "is this merchant on seller_basic" — it asks what they are entitled to do. */
+const LIFECYCLE = Object.freeze({
+  FREE:                 { entitled: false, label: "Free" },
+  TRIALING:             { entitled: true,  label: "Trial" },
+  PENDING_PAYMENT:      { entitled: false, label: "Awaiting payment" },
+  PROCESSING:           { entitled: false, label: "Payment processing" },
+  ACTIVE:               { entitled: true,  label: "Active" },
+  GRACE:                { entitled: true,  label: "Payment overdue" },
+  CANCEL_AT_PERIOD_END: { entitled: true,  label: "Active until period end" },
+  EXPIRED:              { entitled: false, label: "Expired" },
+  CANCELLED:            { entitled: false, label: "Cancelled" },
+});
+
+/* Legacy status spellings seen in the stores, mapped to the lifecycle. A status
+   nobody defined resolves to FREE rather than silently entitling anyone. */
+const STATUS_ALIASES = Object.freeze({
+  active: "ACTIVE", trialing: "TRIALING", trial: "TRIALING", grace: "GRACE",
+  past_due: "GRACE", pending: "PENDING_PAYMENT", pending_payment: "PENDING_PAYMENT",
+  processing: "PROCESSING", expired: "EXPIRED", cancelled: "CANCELLED",
+  canceled: "CANCELLED", cancel_at_period_end: "CANCEL_AT_PERIOD_END",
+  none: "FREE", free: "FREE", superseded: "EXPIRED", revoked: "CANCELLED",
+});
+
+function lifecycleOf(status) {
+  const key = STATUS_ALIASES[String(status || "").toLowerCase()] || "FREE";
+  return { state: key, ...LIFECYCLE[key] };
+}
+function isEntitled(status) { return lifecycleOf(status).entitled; }
+
 /* COMMISSION IS NOT DEFINED HERE — functions/commission-config.js owns it.
  *
  * This file originally carried a commissionRate per plan: 8/6/5/3 percent. It
@@ -229,5 +265,6 @@ function listingLimitFor(subscription) {
   return entitlementFor(subscription).listingLimit;
 }
 
-module.exports = { PLANS, ALIASES, KNOWN_PLAN_IDS, resolve, entitlementFor,
+module.exports = { PLANS, ALIASES, KNOWN_PLAN_IDS, LIFECYCLE, STATUS_ALIASES,
+                   lifecycleOf, isEntitled, resolve, entitlementFor,
                    listingLimitFor, unmappedPlanIds };

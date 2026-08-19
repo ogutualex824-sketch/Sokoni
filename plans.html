@@ -429,11 +429,14 @@ async function confirmSubscribe() {
   try {
     if (plan.trialDays > 0) {
       /* Start trial — no payment needed */
+      /* No fabricated paymentRef. A trial has no payment, and inventing one
+         is what routed this request into the PAID verification branch and
+         produced 'Payment not confirmed. Complete payment first.' The server
+         now checks trial eligibility and refuses a second trial. */
       await fns.httpsCallable('subActivate')({
         planId: plan.id,
         billingCycle,
-        paymentRef: `trial_${plan.id}_${Date.now()}`,
-        startTrial: true,
+        isTrial: true,
       });
       currentSubs[plan.hubType] = { planId: plan.id, status: 'trialing' };
       toast(`${plan.name} trial started!`, 'success');
