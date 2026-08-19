@@ -218,7 +218,33 @@ exports.autoOnSubscriptionCreate = onDocumentCreated(
     const rule = await _getRule('subscriptions');
     if (!rule.enabled) return;
 
-    const cycleDays  = sub.billingCycleDays || 30;
+    /* ── IT MUST NOT OVERWRITE A PERIOD SOMEONE ELSE ALREADY SET ────────────
+       This trigger used to recompute currentPeriodEnd on EVERY subscription
+       creation, from `sub.billingCycleDays || 30` — a field nothing in the
+       payment chain writes. So an ANNUAL subscription activated by
+       reconcilePaidIntent with a 365-day period was silently rewritten to 30
+       days about a second later: the customer paid for a year and received a
+       month. It went unnoticed because monthly plans produce the same answer,
+       so every monthly test looked correct.
+
+       A creator that already established the period is the authority on it.
+       This now fills in only for legacy documents that arrive without one. */
+    if (sub.currentPeriodEnd) {
+      await event.data.ref.update({ automationProcessed: true })
+        .catch(e => logger.error('autoOnSubscriptionCreate: flag failed', { subId, error: e.message }));
+      logger.info('autoOnSubscriptionCreate: period already set by the creator — left alone', {
+        subId, plan: sub.planId || sub.plan, billingCycle: sub.billingCycle,
+      });
+      return;
+    }
+
+    /* ── AND WHEN IT DOES COMPUTE, THE CATALOGUE IS THE AUTHORITY ───────────
+       A missing field must never silently become 30 days. */
+    let cycleDays;
+    const cycle = sub.billingCycle === 'annual' ? 'annual' : 'monthly';
+    if (Number(sub.billingCycleDays) > 0) cycleDays = Number(sub.billingCycleDays);
+    else cycleDays = (cycle === 'annual') ? 365 : 30;
+
     const trialDays  = sub.trialDays || 0;
     const endDate    = new Date();
     endDate.setDate(endDate.getDate() + cycleDays + trialDays);
@@ -228,6 +254,7 @@ exports.autoOnSubscriptionCreate = onDocumentCreated(
       status,
       currentPeriodStart: _ts(),
       currentPeriodEnd: admin.firestore.Timestamp.fromDate(endDate),
+      expiresAt: admin.firestore.Timestamp.fromDate(endDate),
       automationProcessed: true,
       activatedBy: 'automation',
     }).catch(e => logger.error('autoOnSubscriptionCreate: update failed', { subId, error: e.message }));
