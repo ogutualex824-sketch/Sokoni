@@ -168,6 +168,19 @@ exports.purchaseDigitalProduct = onCall(CF_OPTS, async (req) => {
   const { productId, idempotencyKey } = req.data;
   if (!productId || !idempotencyKey) throw new HttpsError('invalid-argument', 'productId and idempotencyKey required');
 
+  /* ── THE CLAIM IS MADE INSIDE THE TRANSACTION, WITH create() ──────────────
+     This read used to BE the guard: get() here, and the matching set() ~56
+     lines below INSIDE the transaction — which never read it back. Two
+     concurrent requests carrying the same idempotencyKey therefore both found
+     it absent, both proceeded, and both committed: two purchase documents and
+     `totalRevenue` incremented twice for one purchase.
+
+     The read is kept ONLY as an early exit for an obvious replay. The binding
+     claim is t.create(idemRef) in the transaction below, which fails the whole
+     commit with ALREADY_EXISTS — taking the revenue increment with it.
+
+     audit-financial-safety did not catch this: its V3 window is 7 lines and the
+     read and write were 56 apart. */
   const idemRef = db().collection('digitalPurchaseIdempotency').doc(idempotencyKey);
   const idemSnap = await idemRef.get();
   if (idemSnap.exists) return { purchaseId: idemSnap.data().purchaseId, idempotent: true };
@@ -204,6 +217,7 @@ exports.purchaseDigitalProduct = onCall(CF_OPTS, async (req) => {
   const licenseKey = product.price === 0 ? null : crypto.randomBytes(12).toString('hex').toUpperCase();
 
   const purchaseRef = db().collection('digitalPurchases').doc();
+  try {
   await db().runTransaction(async t => {
     t.set(purchaseRef, {
       purchaseId: purchaseRef.id, buyerUid: uid, productId,
@@ -223,8 +237,21 @@ exports.purchaseDigitalProduct = onCall(CF_OPTS, async (req) => {
       totalRevenue: FieldValue.increment(product.price),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    t.set(idemRef, { purchaseId: purchaseRef.id, createdAt: FieldValue.serverTimestamp() });
+    /* create(), not set(): set() cannot fail on an existing document, so it
+       could never have stopped the second concurrent purchase. */
+    t.create(idemRef, { purchaseId: purchaseRef.id, createdAt: FieldValue.serverTimestamp() });
   });
+  } catch (e) {
+    /* The claim held: another request with this idempotencyKey won. Its purchase
+       is the real one, so return THAT id rather than this attempt's — returning
+       a purchaseRef that was never committed would hand the caller a dangling
+       reference. */
+    if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+      const winner = await idemRef.get();
+      if (winner.exists) return { purchaseId: winner.data().purchaseId, idempotent: true };
+    }
+    throw e;
+  }
 
   return {
     purchaseId: purchaseRef.id, licenseKey,
