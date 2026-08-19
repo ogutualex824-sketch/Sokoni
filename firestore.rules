@@ -948,12 +948,33 @@ service cloud.firestore {
                     && request.resource.data.participants.size() <= 2;
       allow delete: if isAdmin();
       match /messages/{msgId} {
-        function inConvo() {
-          return isAuthed()
-            && get(/databases/$(database)/documents/conversations/$(convId))
-                 .data.participants.hasAny([request.auth.uid]);
+        function _conv() {
+          return get(/databases/$(database)/documents/conversations/$(convId)).data;
         }
-        allow read: if inConvo();
+        function inConvo() {
+          return isAuthed() && _conv().participants.hasAny([request.auth.uid]);
+        }
+        /* JOIN-TIME HISTORY SCOPING. A rider is added to an order conversation when
+           they are assigned, and must NOT thereby gain the buyer/merchant history that
+           preceded them. `participantsMeta[uid].joinedAt` is written server-side by
+           _syncParticipants; a client cannot set it (see the conversation update rule,
+           which permits only lastMessage/lastMessageAt/lastSenderId/unread).
+
+           Enforced HERE rather than in the UI on purpose: a filter in the client is a
+           presentation choice, and a rider could simply query Firestore directly. For a
+           LIST query this is fail-closed — an unscoped query returns a pre-join message,
+           the rule refuses it, and the whole query is denied rather than partially served.
+
+           A participant with no joinedAt (buyer, merchant, legacy conversations) is
+           unscoped and sees everything, which preserves existing behaviour. */
+        function joinedAt() {
+          return 'participantsMeta' in _conv()
+              && request.auth.uid in _conv().participantsMeta
+              && 'joinedAt' in _conv().participantsMeta[request.auth.uid]
+              ? _conv().participantsMeta[request.auth.uid].joinedAt : null;
+        }
+        allow read: if inConvo()
+                    && (joinedAt() == null || resource.data.createdAt >= joinedAt());
         // MSG-1: creates go through the sendMessage CF (admin SDK, bypasses rules).
         // Direct client creates are blocked to prevent senderId/senderName spoofing.
         allow create: if false;
