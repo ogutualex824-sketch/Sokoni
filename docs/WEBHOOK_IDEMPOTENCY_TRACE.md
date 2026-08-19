@@ -65,14 +65,28 @@ proves a genuinely different `apiRef` still activates.
 ## CONVERGED 2026-08-19 — the destination is now the implementation
 
 Both webhooks were changed to **stamp the intent PAID and stop**. Neither writes
- any more — 0 rival guards remain, and  is the
+`subscriptions/{uid}` any more — 0 rival guards remain, and `reconcilePaidIntent` is the
 only writer of a subscription document, for the wallet rail, the mobile rails, and every
 rail added later. Finding 1 is therefore closed as well: the M-PESA path now marks the
-intent PAID, so  fires and the checkout can report success truthfully.
+intent PAID, so `onPaymentIntentPaid` fires and the checkout can report success truthfully.
 
-The compatibility fields (, ) are still WRITTEN as a projection for
-existing readers, but nothing guards on them any more — they are a projection, not a
-second authority.
+The compatibility fields (`paymentRef`, `expiresAt`) are still WRITTEN as a projection for
+existing readers, but nothing guards on them any more — a projection, not a second
+authority.
+
+```
+Provider webhook
+      ├─ verify challenge          (INTASEND_WEBHOOK_CHALLENGE)
+      ├─ identify payment          (apiRef → payments/{apiRef})
+      ├─ resolve intent            (existing.intentRef || apiRef)
+      └─ paymentIntent.status = PAID
+                    ↓
+          onPaymentIntentPaid
+                    ↓
+          reconcilePaidIntent          ← the ONLY activation authority
+             ├─ subscription ACTIVE
+             └─ entitlement + maxProducts
+```
 
 ## The destination, for the release
 
