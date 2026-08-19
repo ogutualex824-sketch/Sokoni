@@ -263,11 +263,33 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
 
   /* ══ 11 · workspace isolation is separate from EMPLOYMENT workspaces ══ */
   head('11 · role workspaces do not touch the business/employment layer');
-  const WS = fs.readFileSync(path.join(ROOT, 'sokoni-workspace.js'), 'utf8');
+  /* The rule is "no CODE coupling between the two layers". Read against raw source it was
+     also failing on PROSE: sokoni-workspace.js carries a comment explaining why `activeRole`
+     is deliberately NOT written there, and naming the other layer to say "that one owns this,
+     not us" is the boundary being documented — the opposite of the coupling this looks for.
+
+     So comments are stripped first, exactly as test-merchant-routes.js already does before
+     its own navigation checks. This is narrower, not looser: a real reference in executable
+     code still fails, and the negative controls below prove it rather than assert it. */
+  const decomment = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+  const WS_RAW = fs.readFileSync(path.join(ROOT, 'sokoni-workspace.js'), 'utf8');
+  const WS = decomment(WS_RAW);
   ck('sokoni-workspace.js still owns business memberships', /getWorkspaces/.test(WS));
-  ck('...and was not repurposed for roles', !/SokoniRoleAuthority/.test(WS));
-  const RASRC = fs.readFileSync(path.join(ROOT, 'sokoni-role-authority.js'), 'utf8');
+  ck('...and was not repurposed for roles', !/SokoniRoleAuthority/.test(WS),
+     /SokoniRoleAuthority/.test(WS) ? 'referenced in CODE' :
+       (/SokoniRoleAuthority/.test(WS_RAW) ? 'named only in a comment (the documented boundary)' : 'absent'));
+  const RASRC = decomment(fs.readFileSync(path.join(ROOT, 'sokoni-role-authority.js'), 'utf8'));
   ck('role authority does not reach into the employment layer', !/SokoniWorkspace/.test(RASRC));
+
+  /* Negative controls — a stripped check that cannot fail would be worse than the false
+     positive it replaced. Real coupling in code must still be caught, in both directions. */
+  ck('NC a real code reference to the role layer IS still caught',
+     /SokoniRoleAuthority/.test(decomment('var x = window.SokoniRoleAuthority.getActiveRole();')));
+  ck('NC ...and a comment naming it is NOT',
+     !/SokoniRoleAuthority/.test(decomment('/* SokoniRoleAuthority owns this, not us */')));
+  ck('NC ...including a line comment',
+     !/SokoniRoleAuthority/.test(decomment('// see SokoniRoleAuthority for the acting role')));
   ck('role authority never reads sokoniUser for authority',
      !/getItem\('sokoniUser'\)[^;]*roles/.test(RASRC));
   ck('role authority never reads the permissions cache', !/sokoniPermissionsCache/.test(RASRC));
