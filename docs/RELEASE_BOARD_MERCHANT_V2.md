@@ -36,8 +36,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Checkout surface + journey** | 🟢 37/0 in Chromium | real production purchase still open |
 | **Webhook idempotency** | 🟢 64/0 replay-proof | see docs/WEBHOOK_IDEMPOTENCY_TRACE.md |
 | **M-PESA -> intent PAID** | 🟢 both webhooks stamp it | — |
-| **Single activation authority** | 🟡 THIRD writer found + fixed, NOT deployed | automation-engine overwrote the period |
-| **Annual billing** | 🔴 TRUNCATED to 30 days in production | fix written, needs deploy + live proof |
+| **Single activation authority** | 🟢 LIVE-VERIFIED 50/0 | activatedBy (none) on both cycles |
+| **Annual billing** | 🟢 365 days, verified in production | currentPeriodEnd === expiresAt exactly |
 | **Subscription writer census** | 🟢 24/0 | 4 triggers classified, 1 may write a period |
 | **Trial eligibility in subActivate** | 🟢 WIRED, gate above the payment branch | — |
 | **STK / paid subscription flow** | 🔴 NOT BUILT | no phone step, no STK_SENT/PENDING/PAID states |
