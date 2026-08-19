@@ -1792,5 +1792,20 @@
     "dateAdded": "2026-08-09",
     "expectedLifespan": "permanent",
     "addedBy": "e529a33"
+  },
+  "subscriptions|status:ASCENDING,currentPeriodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|status:ASCENDING,graceEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|status:ASCENDING,trialEndsAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }

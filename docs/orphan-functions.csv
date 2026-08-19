@@ -1,1 +1,2 @@
 name,gen,triggerClass,trigger,location,runtime,sourceModule,dispatcher,clientCallers,invocations30d,status,recommendation,rationale
+foundationScheduledRecurring,v2,scheduler,scheduled,us-central1,nodejs22,,,0,UNAVAILABLE,UNKNOWN,RECOVER_SOURCE,"EVENT trigger (scheduler). An onCall dispatcher CANNOT replace an event trigger, so it was NOT consolidated. Must be exported from index.js before any full deploy."
