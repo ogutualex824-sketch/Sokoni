@@ -72,6 +72,32 @@ const GEO = ['deliveryCoords', 'dropoffCoords', 'dropoff',
   if (!auth.ok) { console.error('\n  Sign-in failed: ' + auth.why + '\n'); await b.close(); process.exit(1); }
   console.log('\n  seller uid: ' + auth.uid);
 
+  /* ATTESTATION PRE-FLIGHT. App Check gates Firestore BEFORE rules are evaluated, so a
+     failed attestation returns permission-denied on the orders query — which reads
+     exactly like "this seller has no orders" or "the rules are wrong". Both are the
+     wrong conclusion, and diagnosing that mistake once already cost a full cycle.
+     `shops` is world-readable (allow read: if true), so a refusal there cannot be a
+     rule and can only be attestation. fromCache:false is the assertion — a cached
+     answer would mean the backend was never reached. */
+  const attest = await page.evaluate(async () => {
+    try {
+      const { getApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const s = await m.getDocs(m.query(m.collection(m.getFirestore(getApp()), 'shops'), m.limit(1)));
+      return { size: s.size, fromCache: s.metadata.fromCache };
+    } catch (e) { return 'ERR ' + ((e && e.code) || e.message); }
+  }).catch((e) => 'ERR ' + e.message);
+
+  if (!(attest && typeof attest === 'object' && attest.fromCache === false)) {
+    console.error('\n  STOPPING — App Check did not attest: ' + JSON.stringify(attest));
+    console.error('  A world-readable collection was refused, which no rule can do, so every');
+    console.error('  count below would be zero for a reason unrelated to your data.');
+    console.error('  This run is headed; if it still fails, report the error rather than');
+    console.error('  adding a debug token.\n');
+    await b.close(); process.exit(1);
+  }
+  console.log('  App Check: attested (backend answered a world-readable read)');
+
   const out = await page.evaluate(async ({ uid, TEXT, GEO }) => {
     const { getApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
