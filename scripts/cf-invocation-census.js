@@ -63,19 +63,31 @@ function get(url, tok) {
 
   /* Aggregate to ONE point per service over the whole window: we only need
      "was it called at all", not a time series. */
+  /* ── ONLY REAL HTTP TRAFFIC ─────────────────────────────────────────────
+     An unfiltered request_count includes Cloud Run's own internal operations:
+     1071 of 1494 services showed exactly ONE "request", and reading the log for
+     one of them showed /InternalServices.ReplaceInternalService — a deployment
+     replacing the service, timestamped to a deploy, not a user call.
+
+     Counting those as invocations makes every deployed function look alive and
+     destroys the half of the removal invariant this census exists to supply.
+     Grouping by response_code_class keeps only requests that produced an actual
+     HTTP response. */
   const params = new URLSearchParams({
-    filter: 'metric.type="run.googleapis.com/request_count"',
+    filter: 'metric.type="run.googleapis.com/request_count" AND ' +
+            'metric.labels.response_code_class!=""',
     'interval.startTime': start.toISOString(),
     'interval.endTime': end.toISOString(),
     'aggregation.alignmentPeriod': DAYS * 86400 + 's',
     'aggregation.perSeriesAligner': 'ALIGN_SUM',
     'aggregation.crossSeriesReducer': 'REDUCE_SUM',
-    'aggregation.groupByFields': 'resource.label."service_name"',
+    'aggregation.groupByFields': 'resource.labels.service_name',
     'view': 'FULL',
     'pageSize': '2000',
   });
 
   const counts = {};
+  const byClass = {};
   let pageToken = '';
   let pages = 0;
   do {
@@ -86,12 +98,17 @@ function get(url, tok) {
     for (const ts of (j.timeSeries || [])) {
       const name = ((ts.resource || {}).labels || {}).service_name;
       if (!name) continue;
+      /* The FILTER already excluded series with no response_code_class, and the
+         group-by aggregates that label away, so it is not re-checked here —
+         checking it per-series would drop every result. */
+      const cls = ((ts.metric || {}).labels || {}).response_code_class || 'aggregated';
       let n = 0;
       for (const p of (ts.points || [])) {
         const v = p.value || {};
         n += Number(v.int64Value != null ? v.int64Value : (v.doubleValue || 0));
       }
       counts[name] = (counts[name] || 0) + n;
+      byClass[cls] = (byClass[cls] || 0) + n;
     }
     pageToken = j.nextPageToken || '';
   } while (pageToken && pages < 40);
@@ -111,6 +128,8 @@ function get(url, tok) {
     },
     generatedAt: end.toISOString(),
     servicesWithTraffic: Object.keys(counts).length,
+    byResponseClass: byClass,
+    excludes: 'Cloud Run internal operations (no response_code_class) are NOT counted',
     counts,
   };
 

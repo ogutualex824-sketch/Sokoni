@@ -83,12 +83,29 @@ dispatchers, moving every client call site with them.
 The 531 defined-but-unexported functions are a separate hygiene question. They
 must never be counted as progress toward 1480.
 
-## Why the invariant earned its place
+## MEASUREMENT CORRECTION — what an "invocation" actually was
 
-Of 181 `onCall` names with no reference anywhere in source, **15 had been invoked
-in production** inside the census window — among them `posInitiateTerminalPaymentV1`
-and `replayWebhookDLQ`. Static analysis alone would have deleted live payment
-terminal surface. The invariant is not bureaucracy; it caught real ones.
+An earlier revision claimed 15 unreferenced functions "had been invoked in
+production", naming `posInitiateTerminalPaymentV1` and `replayWebhookDLQ`, and
+concluded the invariant had caught live payment surface. **That was wrong.**
+
+`run.googleapis.com/request_count` counts Cloud Run internal operations as
+requests. 1071 of 1494 services showed exactly ONE request; reading the log for
+one of them returned `/InternalServices.ReplaceInternalService` — a deployment
+replacing the service, timestamped to a deploy. Filtering on
+`response_code_class` removed only ~115 of them.
+
+Re-checked with a threshold of >1 request, the true figure is **1**, not 15:
+`repairCatalogue`, with 3.
+
+**Standing rule for this programme:** `hits <= 1` is NO EVIDENCE OF TRAFFIC, and
+no individual number is acted on without a per-service log check. The limitation
+is recorded inside `docs/cf-invocation-census.json` itself, next to the coverage
+window, so the artefact cannot be read later without it.
+
+The invariant still stands — it was the supporting reasoning that was unsound,
+not the rule. But it has not yet demonstrably saved anything, and saying
+otherwise overstated the evidence.
 
 ## The shape of the answer
 
@@ -144,28 +161,49 @@ webhook -> PAID -> onPaymentIntentPaid -> reconcilePaidIntent
 No dispatcher or factory may introduce a second subscription writer. Any module
 containing a protected name is excluded from consolidation wholesale.
 
-### Recommended order — yield per client file touched
+### `impact` was DISQUALIFIED as slice 1 — read the module before ranking it
 
-Money, subscription and protected-bearing modules excluded. **32 modules** reach
-212. Ordered so the earliest slices prove the pattern at the lowest blast radius:
+Ranking by "yield per client file" chose `impact` (24 onCall, 1 client file).
+Reading it before writing any code disqualified it:
+
+* `impactAuthorizeDisbursement` executes a real **IntaSend M-PESA B2C payout**
+* it declares `secrets: [INTASEND_PRIVATE_KEY]` — the only function in the module
+  that does
+* it implements a **four-eyes control**: the approver must differ from the
+  initiator (`impact.js:632`), and the final authorizer from the approver
+  (`impact.js:662`)
+
+A dispatcher must declare the **union** of its operations' secrets. Consolidating
+`impact` would hand the live payout key to the code path that also serves
+`impactGetPublicDashboard`. That is a security regression *produced by* the
+consolidation, and no amount of behavioural test coverage makes it acceptable.
+Collapsing three deliberately separate authorization levels behind one `op`
+parameter weakens a segregation-of-duties control besides.
+
+`scripts/cf-slice-selector.js` now encodes this. A module is disqualified if it
+contains a protected authority, **declares any secret**, moves money, or
+implements segregation of duties.
+
+### Eligible order — yield per client file touched
 
 | # | Module | onCall | saves | client files | cumulative |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `impact` | 24 | 23 | **1** | 23 |
-| 2 | `algolia-admin` | 10 | 9 | 0 | 32 |
-| 3 | `digital-hub` | 10 | 9 | 0 | 41 |
-| 4 | `pos-shift-scheduler` | 10 | 9 | 0 | 50 |
-| 5 | `vehicle-hub` | 10 | 9 | 0 | 59 |
-| 6 | `entertainment-hub` | 9 | 8 | 0 | 67 |
-| 7 | `kass-knowledge` | 7 | 6 | 0 | 73 |
-| 8 | `reliability-engine` | 7 | 6 | 0 | 79 |
-| 9 | `pos-integrations-api` | 6 | 5 | 0 | 84 |
-| 10 | `healthcare-hub` | 15 | 14 | 2 | 98 |
+| 1 | `digital-hub` | 10 | 9 | 0 | 9 |
+| 2 | `pos-shift-scheduler` | 10 | 9 | 0 | 18 |
+| 3 | `vehicle-hub` | 10 | 9 | 0 | 27 |
+| 4 | `entertainment-hub` | 9 | 8 | 0 | 35 |
+| 5 | `kass-knowledge` | 7 | 6 | 0 | 41 |
+| 6 | `reliability-engine` | 7 | 6 | 0 | 47 |
+| 7 | `pos-integrations-api` | 6 | 5 | 0 | 52 |
+| 8 | `healthcare-hub` | 15 | 14 | 2 | 66 |
 
-`impact` is the recommended first slice: 23 exports removed against a single
-client file.
+**89 eligible modules, 493 achievable** against a target of 212 — the budget is
+reachable without touching a single money, secret-bearing or protected module.
 
-> `algolia-admin` here is the **admin/ops surface**, not the 90 `algoliaSync`
+Every candidate must still be read before it is consolidated. The selector is a
+filter, not a verdict: it is what `impact` taught.
+
+> `algolia-admin` is the **admin/ops surface**, not the 90 `algoliaSync`
 > triggers. Those stay out of scope entirely — degraded is not dead.
 
 ### Phase 1 — dispatcher consolidation, one module per deploy
