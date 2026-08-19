@@ -14,7 +14,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 
 | Area | State | Finish condition |
 |---|---|---|
-| **Role switching** | 🔴 MUST CERTIFY | Instagram-style switcher, authoritative roles, no cross-account/shop leakage |
+| **Role boundary (data layer)** | 🟢 44/0 vs LIVE rules (+1 unproven) | — |
+| **Role switcher (UI)** | 🔴 MUST BUILD + CERTIFY | Instagram-style switcher; A-clears-before-B in the rendered workspace |
 | **Opening cash** | 🟡 WIRED, UNIT-CERTIFIED 60/0 | needs journey certification + a real shift end-to-end |
 | **Sell** | 🟡 COMPOSED 40/0 | one supermarket flow, journey-certified |
 | **Online orders** | 🔴 MUST JOURNEY-CERTIFY | managed beside physical sales in one workspace |
@@ -32,9 +33,13 @@ Unit suites currently green: receipt contract 113/0 · shift/cash 60/0 (+1 unpro
 cash 55/0 · sell composition 40/0 · fulfilment 38/0 · idempotency 38/0 · buyer
 locations 26/0 (+1 unproven) · capability 42/0 · exit 18/0.
 
-**Neither "unproven" is a pass.** Buyer-location ownership isolation needs the Firestore
-emulator (unavailable); whether any merchant has hit the cash-drawer defect below needs a
-production query that has not been run.
+Role boundary: **44 passed, 0 failed, 1 unproven** against `firestore.rules.live` in the
+Firestore emulator — real rules, not mocks.
+
+**No "unproven" is a pass.** Three stand: buyer-location ownership isolation (emulator was
+unavailable for that suite); whether any merchant has hit the cash-drawer defect (needs a
+production query); and whether `firestore.rules.live` still matches the deployed ruleset
+(no gcloud token this session, so the releases API was not queried).
 
 ---
 
@@ -97,7 +102,30 @@ The till captures, displays and prints a destination but **does not write one**.
 at runtime: zero of 14 known spellings appear in the checkout payload at any depth. Do
 not open this without the broader multi-seller census — see [[CANONICAL_ORDER_DESTINATION]].
 
-### 4. `rc/combined` deploy blocker
+### 4. An employee has NO data access to the shop they work for — measured
+
+Certified in `scripts/test-role-boundary.js` §7 against the live rules. `products` and
+`orders` are keyed to `sellerUid == request.auth.uid`, so an employee of shop A:
+
+- cannot create or edit a product for their employer;
+- cannot read their employer's orders.
+
+The boundary is airtight — that is the *good* news. But it means **an employee sale
+cannot go through client writes at all.** It must go through a server callable that
+checks `shopEmployees`. Journey D is blocked on that callable existing, not just on
+`servedBy` having a source.
+
+### 5. `products/create` has no approved-seller gate — measured
+
+An ordinary buyer with **no seller claim** successfully created a product against the
+live rules (§9). The rule is `isActive() && isAuthed() && sellerUid == request.auth.uid`
+— pure uid-ownership, with no claim and no approval check anywhere in the products
+block. Seller approval is therefore enforced *above* the rules, not at the data layer.
+
+Consistent with the frozen seller-approval finding. Recorded, not fixed — tightening it
+touches a live write path used by every seller.
+
+### 6. `rc/combined` deploy blocker
 
 Production is behind and a hosting-only deploy breaks POS restock
 (`merchantAdjustStock` undeployed). Any deploy must be functions-first.
