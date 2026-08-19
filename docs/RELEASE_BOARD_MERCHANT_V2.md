@@ -22,6 +22,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **KASS shop↔subscription link** | 🟡 REPAIR BUILT 34/0, NOT APPLIED | admin link + resolution; production write pending decision |
 | **Merchant account link** | 🟢 34/0 code-certified | admin-only, auditable, ambiguity refused |
 | **Counter recount tool** | 🟡 DRY-RUN VERIFIED | --apply NOT run; 103 and 0 are the measured truths |
+| **KASS repair command** | 🟡 READY, dry-run clean | scripts/apply-kass-repair.js --apply — NOT run |
+| **Link revoke safety** | 🟢 41/0 | revoke changes resolution only; no data touched |
 | **productCounters (KASS shop)** | 🔴 −23 vs 103 real | cap BYPASSED, not enforced |
 | **Payment / webhook** | 🟢 PROVEN on the paying uid | KES 499 COMPLETE, webhook received in 30s |
 | **Renewal lifecycle** | 🔴 UNPROVEN | not traced |

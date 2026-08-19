@@ -132,11 +132,40 @@ ck('...and the ruleset has no catch-all allow to undo that',
   ck('NC once the rival claim is gone, the link works again',
      (await MI.linkedUids(SHOP)).length === 2);
 
-  head('8 - a REVOKED link grants nothing');
+  head('8 - REVOKE changes entitlement resolution, NOT customer data');
+  /* The safety property the whole design rests on: revoking a link must be a
+     resolution change and nothing else. If revocation could touch a subscription,
+     a counter or a product, then linking would be a destructive operation and no
+     admin could safely undo a mistake. */
+  const paidSubBefore = JSON.stringify((await db.doc('subscriptions/' + PAID).get()).data());
+  const shopSubBefore = JSON.stringify((await db.doc('subscriptions/' + SHOP).get()).data());
+  const counterBefore = JSON.stringify((await db.doc('productCounters/' + SHOP).get()).data());
+  const productsBefore = (await db.collection('products').where('sellerUid', '==', SHOP).count().get()).data().count;
+
   await db.doc('merchantAccountLinks/' + PAID).set({ status: 'revoked' }, { merge: true });
-  ck('a revoked link is ignored', (await MI.linkedUids(SHOP)).length === 1);
-  ck('...and the shop drops back to FREE', (await EA.resolveEffective(SHOP)).plan === 'FREE');
-  ck('...without deleting anything', (await db.doc('productCounters/' + SHOP).get()).data().count === 99);
+
+  ck('a revoked link no longer contributes', (await MI.linkedUids(SHOP)).length === 1);
+  ck('...so the shop drops back to FREE', (await EA.resolveEffective(SHOP)).plan === 'FREE');
+  /* The paid side must be entirely unharmed — revocation is not a punishment. */
+  ck('the PAID subscription document is byte-identical',
+     JSON.stringify((await db.doc('subscriptions/' + PAID).get()).data()) === paidSubBefore);
+  ck('...and the paid account STILL resolves STARTER / 100 on its own',
+     (await EA.resolveEffective(PAID)).listingLimit === 100);
+  ck('the shop subscription document is byte-identical too',
+     JSON.stringify((await db.doc('subscriptions/' + SHOP).get()).data()) === shopSubBefore);
+  ck('the product counter is untouched',
+     JSON.stringify((await db.doc('productCounters/' + SHOP).get()).data()) === counterBefore);
+  ck('no product was deleted',
+     (await db.collection('products').where('sellerUid', '==', SHOP).count().get()).data().count === productsBefore);
+  /* And it is reversible: re-activating restores entitlement with no data change. */
+  await db.doc('merchantAccountLinks/' + PAID).set({ status: 'active' }, { merge: true });
+  ck('re-activating the link restores STARTER / 100',
+     (await EA.resolveEffective(SHOP)).listingLimit === 100);
+  ck('...with the subscription still byte-identical after the round trip',
+     JSON.stringify((await db.doc('subscriptions/' + PAID).get()).data()) === paidSubBefore);
+  ck('NC the round trip really did change resolution both ways',
+     before.plan === 'FREE' && (await EA.resolveEffective(SHOP)).plan === 'STARTER');
+  await db.doc('merchantAccountLinks/' + PAID).set({ status: 'revoked' }, { merge: true });
 
   head('9 - what is NOT proven');
   un('that the link has been created in production', 'no production write was made — decision pending');

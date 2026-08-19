@@ -109,3 +109,35 @@ repairs. Each is a business decision, not a code one:
 Whichever is chosen, `productCounters` for the shop must be recounted from reality (103) and
 `maxProducts` re-synced from the entitlement — otherwise the merchant swaps a bypassed cap
 for a wrong one.
+
+---
+
+## The repair, prepared and dry-run (2026-08-19)
+
+`scripts/apply-kass-repair.js` performs exactly two writes and refuses everything else.
+Parameters are fixed in the file, not typed at a prompt — a uid entered by hand is how the
+wrong merchant gets linked. Dry run against production is clean:
+
+| precondition | result |
+|---|---|
+| paid subscription | `starter` / `active` |
+| shop document | KASS SHOP |
+| payment evidence `SKN51E7BD480` | 499 KES / COMPLETE |
+| existing identities | none — both uids free |
+
+| operation | change |
+|---|---|
+| link | canonical `xrH21J5GF…` → linked `D5Ql2…`, shopId `D5Ql2…` |
+| recount shop | counter **−23 → 103** |
+| recount paid | counter **10 → 0** |
+
+**Predicted result:** shop resolves **STARTER / 100** with **103 products** — over limit, so
+existing products stay and new creation is blocked until 100 or below. The limit is
+deliberately NOT raised to 103 to make the UI green; a migration allowance would be a
+separate, explicitly recorded commercial decision.
+
+It never modifies a subscription, changes a price, touches `maxProducts`, or deletes a
+product. If any precondition fails it stops before writing anything — a half-applied
+identity repair is worse than none.
+
+**`--apply` has NOT been run.**
