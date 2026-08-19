@@ -1,0 +1,127 @@
+# Merchant v2 — Release Board
+
+**This board is deliberately honest.** A green unit suite is not a shipped feature, and
+"written" is not "runtime proven". Nothing here is marked done because a page rendered.
+
+**Branch:** `fix/merchant-shell-capability` · **Worktree:** `C:/temp/sok-compat`
+**Production:** `c1df168` / v534 · `MERCHANT_URL` = `/merchant` · **V2 CUTOVER: BLOCKED**
+
+Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V2_TARGET_ARCHITECTURE]] · [[MESSAGES_PARTICIPANT_ANCHORING]]
+
+---
+
+## The board
+
+| Area | State | Finish condition |
+|---|---|---|
+| **Role switching** | 🔴 MUST CERTIFY | Instagram-style switcher, authoritative roles, no cross-account/shop leakage |
+| **Opening cash** | 🟡 WIRED, UNIT-CERTIFIED 60/0 | needs journey certification + a real shift end-to-end |
+| **Sell** | 🟡 COMPOSED 40/0 | one supermarket flow, journey-certified |
+| **Online orders** | 🔴 MUST JOURNEY-CERTIFY | managed beside physical sales in one workspace |
+| **Receipts** | 🟡 CONTRACT GREEN 113/0 | **identity wiring OPEN** — nothing populates `servedBy` |
+| **Messaging authority** | 🟢 51/0 | — |
+| **Message history rules** | 🟢 21/0 | — |
+| **Messaging production** | 🔴 OPEN | Function + live rules deployed together, then production verified |
+| **Locations** | 🔴 OPEN INTEGRATION | buyer location → Sell → delivery receipt → rider |
+| **V2 production cert** | 🟢 18/0 | extend with Sell / role / receipt journeys |
+| **P58E** | 🔴 HUMAN | real printer walk |
+| **POS iOS** | 🔴 HUMAN | real-device keyboard test |
+| **`MERCHANT_URL`** | `/merchant` | flip only when every gate above is genuinely green |
+
+Unit suites currently green: receipt contract 113/0 · shift/cash 60/0 (+1 unproven) ·
+cash 55/0 · sell composition 40/0 · fulfilment 38/0 · idempotency 38/0 · buyer
+locations 26/0 (+1 unproven) · capability 42/0 · exit 18/0.
+
+**Neither "unproven" is a pass.** Buyer-location ownership isolation needs the Firestore
+emulator (unavailable); whether any merchant has hit the cash-drawer defect below needs a
+production query that has not been run.
+
+---
+
+## Journeys — the gate that actually matters
+
+None of these are certified yet. Counting isolated green suites as "finished" is the
+failure mode this section exists to prevent.
+
+| | journey | state |
+|---|---|---|
+| **A** | open shift → search → cart → customer here → cash → change → receipt | 🔴 |
+| **B** | cart → delivery → saved/new location → rider choice → payment → receipt | 🔴 |
+| **C** | new online order → accept → prepare → message → fulfil → receipt → complete | 🔴 |
+| **D** | switch to employee → sell → receipt names the EMPLOYEE → switch back | 🔴 |
+| **E** | buyer → merchant → employee → merchant → buyer | 🔴 |
+| **F** | each of the above under refresh · back · double-tap · slow network · session restore | 🔴 |
+
+Invariants every journey must hold: **one sale, one order, one stock mutation, one
+receipt.**
+
+---
+
+## Open findings
+
+### 1. `cdGetShiftSummary` disagrees with the canonical till formula — LIVE
+
+`functions/pos-cash-drawer.js:283` is deployed (`functions/index.js` exports it) and
+computes expected drawer cash from the same event stream as
+`functions/pos-cash-manager.js:90` — with **three** differences, all of which overstate
+the drawer:
+
+| | canonical (`pos-cash-manager`) | `cdGetShiftSummary` | effect |
+|---|---|---|---|
+| cash pickup | `- cashPickups` | `+ till.cashPickup` | **2× the pickup too high** |
+| cash refund | `- cashRefunds` | *absent entirely* | full refund value too high |
+| cash sales | sale events | `posDrawerLog` drawer-**opens** | a phone till reports **zero** |
+
+Measured in `scripts/test-shift-cash.js` §10: a 5,000 pickup reports 18,000 against a
+canonical 8,000. It also requires **manager claims**, which a solo merchant does not
+have — so a merchant running the till from their phone cannot call it at all.
+
+The client `pos-cash-manager.js:197` agrees with the canonical formula, so
+`cdGetShiftSummary` is the outlier of three implementations.
+
+**Not fixed here.** It is a deployed money-reporting path and the fix changes reported
+figures; it needs an explicit decision, not a drive-by edit. New code does not inherit
+it: `sokoni-shift.js` uses the canonical formula, asserted character-for-character
+against the deployed one.
+
+### 2. `servedBy` has no source
+
+The receipt contract names the person who served — employee for an employee sale, owner
+for an owner sale, omitted when unknowable. `sokoni-merchant-sell.js` passes
+`ctx.servedBy` straight through and never synthesises it. **No shell populates it.**
+Until the merchant identity authority lands, real receipts omit the line.
+
+### 3. The order destination migration gate is still closed
+
+The till captures, displays and prints a destination but **does not write one**. Proven
+at runtime: zero of 14 known spellings appear in the checkout payload at any depth. Do
+not open this without the broader multi-seller census — see [[CANONICAL_ORDER_DESTINATION]].
+
+### 4. `rc/combined` deploy blocker
+
+Production is behind and a hosting-only deploy breaks POS restock
+(`merchantAdjustStock` undeployed). Any deploy must be functions-first.
+
+---
+
+## Money invariants now enforced
+
+Both are certified with **mutation controls** — the defect is constructed and the
+assertion is shown to catch it. An invariant test that cannot fail is not evidence.
+
+1. **Opening cash is not revenue.** The float is the merchant's own money for making
+   change. It moves the drawer and nothing else — structurally, because it is not in the
+   set of event types `salesTotal()` sums. A summariser that counted it would report
+   12,950 where the truth is 7,950.
+2. **M-PESA is not cash in the drawer.** Phone payments are revenue but not physical
+   money and cannot fund change. Only `cash` tenders move the drawer, and they move it
+   **net of the change handed back** — recording the gross tender overstates the drawer
+   by the change on every cash sale.
+
+---
+
+## Cutover rule
+
+`MERCHANT_URL` stays `/merchant` until every gate above is genuinely green. That
+preserves the current production merchant experience while the operating system
+underneath it is finished.

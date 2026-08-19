@@ -217,6 +217,7 @@
   var FUL  = function () { return G().SokoniFulfilment || null; };
   var LOC  = function () { return G().SokoniBuyerLocations || null; };
   var RCPT = function () { return G().SokoniReceiptDoc || null; };
+  var SHIFT = function () { return G().SokoniShift || null; };
 
   var METHODS = [
     { id: 'cash',  icon: '💵', label: 'Cash'   },
@@ -788,6 +789,25 @@
              so it cannot keep reading live state that a stray tap could still move. */
           S.settled = settlement();
           S.fulfilled = fulfilment();
+          /* ── THE DRAWER ────────────────────────────────────────────────────
+             Only what physically moved. SokoniShift emits nothing for an M-PESA or
+             card tender — that money is revenue but it is not in the drawer and
+             cannot fund change — and a cash tender is recorded NET of the change
+             handed back. Emitted only AFTER the server confirmed the sale, so a
+             failed sale never moves the till. */
+          var SH = SHIFT();
+          if (SH && S.settled) {
+            var moves = SH.eventsForSale(S.settled, {
+              saleId: sale.saleId || (S.receipt && S.receipt.receiptNo) || null,
+              shiftId: ctx.shiftId || null, registerId: ctx.registerId || null,
+            });
+            /* The SERVER owns the stored record — this only hands the movements to
+               the shell, which persists them through cdRecordCashEvent. */
+            if (moves.length && typeof ctx.onTillEvents === 'function') {
+              try { ctx.onTillEvents(moves); } catch (_) {}
+            }
+            S.tillMoves = moves;
+          }
           S.sale = 'done';
           paint();
           toast('Sale complete', 'success');
