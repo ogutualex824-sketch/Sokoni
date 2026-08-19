@@ -109,6 +109,38 @@ const DECLARED = {
 
      EXPIRES: before the Merchant v2 cutover / next release certification.
      Quarantined 2026-08-19 for the subscription release. */
+  /* ── THE OTHER HALF OF THE SAME CHECKPOINT ────────────────────────────────
+     Provenance, established before classifying: this suite predates the cutover
+     (created at 8ce4ef8, expecting `merchant.html`). Commit ecb2d1e then did
+     three things in one change —
+
+       · introduced MERCHANT_URL = '/merchant-v2' (the constant did not exist)
+       · rewrote these expectations merchant.html -> /merchant-v2
+       · ADDED test-auth-post-login-routing, which asserts MERCHANT === '/merchant'
+
+     — so that single commit both performed the cutover and shipped a suite
+     asserting it had not happened. The two suites encode opposite product
+     decisions and cannot both pass at any value of MERCHANT_URL.
+
+     Its /merchant-v2 expectations describe the POST-CUTOVER contract, which is
+     the deliberately deferred v2 release. The assertions are kept exactly as
+     they are: editing them to expect /merchant would destroy the only record of
+     what v2 must do, and changing the code to satisfy them would perform the
+     cutover by accident. Quarantined instead.
+
+     TO REMOVE: complete the Merchant v2 entry/cutover work and flip
+     MERCHANT_URL, then run BOTH suites unchanged — they become consistent only
+     when the cutover is real.
+
+     EXPIRES: with test-auth-post-login-routing, before the v2 cutover.
+     Quarantined 2026-08-19 for the subscription release. */
+  'test-merchant-entry': {
+    verdict: 'QUARANTINE',
+    reason: 'Its /merchant-v2 expectations were written by ecb2d1e, the same commit that ' +
+            'prematurely set MERCHANT_URL and added the contradicting auth suite. Describes ' +
+            'the deferred v2 cutover contract, not a defect in what ships. Remove by ' +
+            'completing the v2 cutover and running both suites unchanged.',
+  },
   'test-auth-post-login-routing': {
     verdict: 'QUARANTINE',
     reason: 'Tests fix/auth-post-login-routing, deliberately unmerged. 13/23 pass; ' +

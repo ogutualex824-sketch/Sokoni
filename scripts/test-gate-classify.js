@@ -183,7 +183,11 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      deliberately unmerged. This guard did its job and refused the addition until
      it was declared here, which is the point of it: a registry may grow, but never
      quietly. Raising this number is the ONLY sanctioned way to add an entry. */
-  ok('DECLARED still holds exactly its six entries', Object.keys(DECLARED).length === 6,
+  /* Seven since 2026-08-19: test-merchant-entry joined test-auth-post-login-routing.
+     Both belong to the checkpointed v2 entry workstream and encode OPPOSITE sides of
+     a cutover that is deliberately half-done, so no value of MERCHANT_URL makes both
+     pass. They leave quarantine together, when the cutover is real. */
+  ok('DECLARED still holds exactly its seven entries', Object.keys(DECLARED).length === 7,
      Object.keys(DECLARED).join(', '));
   ok('the quarantined suite names WHY and HOW it is removed',
      /deliberately unmerged/.test(DECLARED['test-auth-post-login-routing'].reason) &&
