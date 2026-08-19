@@ -34,7 +34,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Airtel Money rail** | 🔴 DECLARED, server reports UNAVAILABLE | provider adapter, then flip the flag |
 | **Subscription checkout logic** | 🟢 64/0 | — |
 | **Checkout surface + journey** | 🟢 37/0 in Chromium | real production purchase still open |
-| **Webhook idempotency** | 🔴 UNTRACED | — |
+| **Webhook idempotency** | 🟢 64/0 replay-proof | see docs/WEBHOOK_IDEMPOTENCY_TRACE.md |
+| **M-PESA -> intent PAID** | 🔴 NO webhook marks it | blocks M-PESA success reporting; fix in the release |
 | **Trial eligibility in subActivate** | 🟢 WIRED, gate above the payment branch | — |
 | **STK / paid subscription flow** | 🔴 NOT BUILT | no phone step, no STK_SENT/PENDING/PAID states |
 | **Link revoke safety** | 🟢 41/0 | revoke changes resolution only; no data touched |

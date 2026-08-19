@@ -284,6 +284,20 @@ async function reconcilePaidIntent(intentId) {
       lastPaymentAmountCents: intent.amountCents || null,
       lastPaymentMethod: intent.method || null,
       lastPaymentAt: _now(),
+      /* ── COMPATIBILITY WITH THE DEPLOYED WEBHOOKS ─────────────────────────
+         intasendWebhook (index.js:6848) and webhookMpesa (index.js:8333) both
+         activate subscriptions themselves, and both guard on
+         `subData.paymentRef !== apiRef`. Writing only `lastPaymentRef` would
+         leave `paymentRef` undefined, their guard would read
+         `undefined !== apiRef` as TRUE, and they would activate AGAIN with a
+         fresh 30-day expiresAt — the period extended twice for one payment.
+
+         Writing the field they guard on makes them skip. This is a bridge, not
+         the destination: the webhooks should mark the intent PAID and let this
+         reconciler be the only writer. That is a change to a deployed money
+         path and belongs in the subscription release, not here. */
+      paymentRef: id,
+      expiresAt: admin.firestore.Timestamp.fromMillis(endMs),
       updatedAt: _now(),
     };
 

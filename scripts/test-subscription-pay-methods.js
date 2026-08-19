@@ -228,10 +228,44 @@ ck('functions/wallet.js is untouched — the frozen backend stays frozen',
   ck('the enforced ceiling was re-synced to 100',
      ctr.exists && ctr.data().maxProducts === 100, ctr.exists ? String(ctr.data().maxProducts) : 'MISSING');
 
-  head('12 - what is NOT built');
+  head('12 - WEBHOOK REPLAY: the deployed webhooks cannot double-activate');
+  /* intasendWebhook and webhookMpesa both activate subscriptions themselves and
+     both guard on subData.paymentRef !== apiRef. Reproduced here exactly. */
+  const idx = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+  const guards = (idx.match(/subData.paymentRef !== apiRef/g) || []).length;
+  ck('two deployed webhooks guard on paymentRef', guards === 2, String(guards));
+  const subNow = (await db.doc('subscriptions/' + UID).get()).data();
+  ck('the reconciler writes the field they guard on',
+     subNow.paymentRef === 'int_ok', String(subNow.paymentRef));
+  /* THE REPLAY, as the webhook would evaluate it. */
+  const webhookWouldActivate = function (sub, apiRef) { return !sub || sub.paymentRef !== apiRef; };
+  ck('webhook #1 after our activation: SKIPS', webhookWouldActivate(subNow, 'int_ok') === false);
+  ck('webhook #2 replay: SKIPS', webhookWouldActivate(subNow, 'int_ok') === false);
+  ck('webhook #3 replay: SKIPS', webhookWouldActivate(subNow, 'int_ok') === false);
+  ck('MC without the compat field it WOULD have activated again',
+     webhookWouldActivate({ lastPaymentRef: 'int_ok' }, 'int_ok') === true,
+     'period would be extended twice');
+  ck('NC a DIFFERENT payment ref still activates (guard is not vacuous)',
+     webhookWouldActivate(subNow, 'some_other_ref') === true);
+  ck('the period was not extended by the replays',
+     subNow.currentPeriodEnd.toMillis() === sub.currentPeriodEnd.toMillis());
+  ck('lastPaymentRef is unchanged', subNow.lastPaymentRef === 'int_ok');
+  ck('exactly ONE subscription document exists for this uid',
+     (await db.collection('subscriptions').where('uid', '==', UID).get()).size === 1);
+  ck('the wallet was not debited again', (await db.doc('wallets/' + UID).get()).data().balance === 241);
+
+  head('13 - a webhook for ANOTHER payment cannot activate this intent');
+  const foreign = await SP.reconcilePaidIntent('int_theirs');
+  ck('an intent owned by someone else does not touch this merchant',
+     foreign.ok === false || foreign.uid !== UID, foreign.reason || foreign.uid);
+  ck('...and this merchant subscription is untouched',
+     (await db.doc('subscriptions/' + UID).get()).data().lastPaymentRef === 'int_ok');
+
+  head('14 - what is NOT built');
   un('M-PESA STK through this intent', 'subscriptions.html already runs createPaymentIntent -> initiateSTKPush; not yet unified here');
   un('Airtel Money', 'declared as a method; no provider binding');
-  un('webhook idempotency for the mobile rails', 'untraced');
+  un('that the M-PESA webhook marks the intent PAID at all',
+     'TRACED and it does NOT — no webhook writes paymentIntents.status; see docs/WEBHOOK_IDEMPOTENCY_TRACE.md');
 
 
   console.log('\n' + '='.repeat(74));
