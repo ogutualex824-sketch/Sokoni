@@ -138,6 +138,28 @@ ck('item ORDER does not change the key (same cart, different sort)',
   ck('MC section 5\'s assertion REJECTS the naive key', !(naiveRetryKey === good));
   ck('MC ...and ACCEPTS the preserved one', S.keyFor(CART) === good);
 
+  head('10 - the SHIPPED Sell module survives a refresh');
+  /* The gap that mattered: the token was held only in memory. A double-tap was
+     covered; a REFRESH mid-submission was not — reload and the next attempt minted a
+     fresh key, bypassing a server guard that had never seen it. */
+  const sell = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-sell.js'), 'utf8');
+  const sellCode = sell.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  ck('mintToken RESUMES a persisted attempt', /prev\.token && prev\.scope === scope/.test(sellCode));
+  ck('...persisted where it survives reload but dies with the tab',
+     /sessionStorage/.test(sellCode) && !/localStorage/.test(sellCode));
+  ck('...scoped by shop, so two tabs cannot inherit each other',
+     /scope: _shopScope\(\)|prev\.scope === scope/.test(sellCode));
+  ck('clearToken removes the persisted attempt', /removeItem\(TOKEN_KEY\)/.test(sellCode));
+  /* The critical half: WHERE it is cleared. */
+  const bare = (sellCode.match(/S\.saleToken = null/g) || []).length;
+  ck('the ONLY bare token clear is inside clearToken()', bare === 1, bare + ' occurrence(s)');
+  const clears = (sellCode.match(/clearToken\(\)/g) || []).length;
+  ck('clearToken is called from exactly the finished/abandoned paths', clears === 3, clears + ' sites (1 def + 2 calls)');
+  ck('a FAILED sale does not clear the token — the retry must reuse it',
+     !/S\.sale = 'error'[^\n]*clearToken/.test(sellCode));
+  ck('the receipt screen does not clear it either (a refresh there must not re-sell)',
+     !/S\.sale = 'done';\s*clearToken/.test(sellCode));
+
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   console.log('='.repeat(74) + '\n');

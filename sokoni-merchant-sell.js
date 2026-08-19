@@ -519,11 +519,47 @@
     /* One sale token per ATTEMPT — minted when the payment sheet opens and kept
        across every retry, so `idempotencyKey` is identical and the server can
        recognise the retry. Cleared only on a completed sale or a new sale. */
+    /* PERSISTED, and that is the whole point of the change. The token was held only
+       in memory, which covers a double-tap but NOT a refresh: reload the page
+       mid-submission and S.saleToken is gone, the next attempt mints a fresh key,
+       and the server's idempotency guard is bypassed because it has never seen that
+       key. The customer is then charged twice by a guard that worked perfectly.
+
+       sessionStorage survives a reload and dies with the tab, which is exactly the
+       lifetime of one sale attempt. It is scoped by shop so two shops open in two
+       tabs cannot inherit each other's attempt. */
+    var TOKEN_KEY = 'sokoni.sell.token';
+
+    function _tokenStore() {
+      try { return root.sessionStorage || null; } catch (_) { return null; }
+    }
+    function _shopScope() {
+      return String((ctx.scope && (ctx.scope.shopId || ctx.scope.sellerUid)) || 'nos');
+    }
+
     function mintToken() {
       if (S.saleToken) return S.saleToken;
+      var st = _tokenStore(), scope = _shopScope();
+      if (st) {
+        try {
+          var prev = JSON.parse(st.getItem(TOKEN_KEY) || 'null');
+          /* Only resume an attempt belonging to THIS shop. */
+          if (prev && prev.token && prev.scope === scope) { S.saleToken = prev.token; return S.saleToken; }
+        } catch (_) {}
+      }
       var rnd = Math.random().toString(36).slice(2, 10);
       S.saleToken = String(Date.now().toString(36)) + rnd;
+      if (st) { try { st.setItem(TOKEN_KEY, JSON.stringify({ token: S.saleToken, scope: scope })); } catch (_) {} }
       return S.saleToken;
+    }
+
+    /* Cleared ONLY when the sale is genuinely finished or abandoned. A failed call
+       must never clear it — the retry has to reuse the same key or the guard is
+       bypassed exactly as described above. */
+    function clearToken() {
+      S.saleToken = null;
+      var st = _tokenStore();
+      if (st) { try { st.removeItem(TOKEN_KEY); } catch (_) {} }
     }
 
     function openPay() {
@@ -535,7 +571,7 @@
     }
 
     function newSale() {
-      S.cart = []; S.saleToken = null; S.sheet = null; S.sale = 'idle';
+      S.cart = []; clearToken(); S.sheet = null; S.sale = 'idle';
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
@@ -705,7 +741,7 @@
                                     } else S.sheet = null;
                                     paint(); return; }
       if (act === 'charge')       { S.startedAt = Date.now(); openPay(); return; }
-      if (act === 'clear-cart')   { S.cart = []; S.sheet = null; S.saleToken = null; paint(); return; }
+      if (act === 'clear-cart')   { S.cart = []; S.sheet = null; clearToken(); paint(); return; }
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
