@@ -14,6 +14,10 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 
 | Area | State | Finish condition |
 |---|---|---|
+| **Subscription audit** | 🔴 DONE as an audit — 4 root causes | see docs/SUBSCRIPTION_ENTITLEMENT_AUDIT.md |
+| **Starter entitlement** | 🔴 BROKEN — reproduced | ai_starter resolves to FREE while reporting ACTIVE |
+| **Free trials** | 🔴 NOT IMPLEMENTED | no eligibility machinery exists at all |
+| **Inventory entitlement** | 🔴 DEPENDENT | one canCreateProduct() authority for add + inventory |
 | **Role boundary (data layer)** | 🟢 44/0 vs LIVE rules (+1 unproven) | — |
 | **Merchant identity** | 🟢 51/0 (+2 unproven), NOT DEPLOYED | a real employee completes a real sale |
 | **Employee sale authority** | 🟡 BUILT, enforcement OPEN | posCompleteCheckout must consult the attribution |
