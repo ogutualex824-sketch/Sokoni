@@ -367,4 +367,8 @@ module.exports = {
   resetAIUsage,
   getAISubscriptionStats,
   updateAIPlan,
+  /* Exported so the entitlement authority can report what a merchant ACTUALLY
+     bought alongside the tier it maps to, rather than duplicating these prices
+     into a seventh table. A duplicated price is a price that will disagree. */
+  PLANS,
 };

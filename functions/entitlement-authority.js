@@ -93,15 +93,59 @@ async function resolveEffective(uid) {
     if (!best || _rank(ent) > _rank(best)) { best = ent; bestSub = sub; }
   });
 
+  const purchasedId = bestSub ? _planIdOf(bestSub) : null;
   return {
     ...best,
     uid: uid,
     /* Which record won, so a surprising allowance is a question with an answer
        rather than another investigation. */
     resolvedFrom: bestSub ? bestSub.source : null,
-    resolvedPlanId: bestSub ? _planIdOf(bestSub) : null,
+    resolvedPlanId: purchasedId,
     resolvedStatus: bestSub ? bestSub.status : null,
     considered: subs.length,
+    /* WHAT WAS ACTUALLY BOUGHT, never silently replaced by what it maps to. */
+    purchase: purchaseProvenance(purchasedId, best),
+  };
+}
+
+/* ── DO NOT SILENTLY CONVERT A PURCHASE ────────────────────────────────────
+   Mapping `ai_starter` onto the STARTER tier is what unblocks the merchant, and
+   it is correct as an ENTITLEMENT decision. It is NOT a pricing decision: the AI
+   catalogue sells ai_starter at KES 499 while the entitlement catalogue prices
+   STARTER at KES 999. Granting the tier without recording that gap would quietly
+   convert a 499 purchase into a 999 plan, and the discrepancy would surface later
+   as a billing dispute with no trace of how it happened.
+
+   So the purchase is carried alongside the entitlement, with the mismatch named.
+   Nothing here changes a price — that is a commercial decision, not a code one. */
+function purchaseProvenance(planId, ent) {
+  if (!planId) return null;
+  const id = String(planId);
+  let sourceCatalogue = null;
+  let pricePaidKES = null;
+
+  try {
+    const ai = require('./ai-subscriptions');
+    if (ai.PLANS && ai.PLANS[id]) {
+      sourceCatalogue = 'ai-subscriptions';
+      pricePaidKES = Number(ai.PLANS[id].price);
+    }
+  } catch (_) { /* the AI catalogue is optional at resolve time */ }
+
+  const tier = catalog.PLANS[ent.plan] || null;
+  /* NOTE: the catalogue field is named priceKES but holds CENTS — 99900 is
+     KES 999, matching sub-billing's seller_basic price:{monthly:99900}. */
+  const tierPriceKES = tier ? tier.priceKES / 100 : null;
+
+  return {
+    planId: id,
+    sourceCatalogue: sourceCatalogue,
+    pricePaidKES: pricePaidKES,
+    mappedTier: ent.plan,
+    tierPriceKES: tierPriceKES,
+    /* null when we cannot compare — never a confident `false`. */
+    priceMatchesTier: (pricePaidKES == null || tierPriceKES == null)
+      ? null : pricePaidKES === tierPriceKES,
   };
 }
 
@@ -202,6 +246,8 @@ async function getMerchantEntitlement(shopId) {
     resolvedFrom: ent.resolvedFrom || null,
     resolvedPlanId: ent.resolvedPlanId || null,
     considered: ent.considered,
+    /* Carried through to the UI so a merchant sees the plan they BOUGHT. */
+    purchase: ent.purchase || null,
     trial: { active: !!trial.active, daysRemaining: trial.daysRemaining || 0,
              used: !!trial.used, eligible: !!trial.eligible },
     limits: {

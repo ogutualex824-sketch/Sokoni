@@ -207,7 +207,72 @@ un('which price is commercially correct for Starter',
   ck('a merchant on a PAID plan is not eligible for a trial',
      st2.eligible === false && st2.reason === 'already-on-a-paid-plan', st2.reason);
 
-  head('12 - what is NOT proven');
+  head('12 - the purchase is never silently converted');
+  const kEnt = await EA.getMerchantEntitlement(KASS);
+  const pur = kEnt.purchase;
+  ck('the entitlement records WHAT WAS BOUGHT', pur && pur.planId === 'ai_starter', pur && pur.planId);
+  ck('...the price actually paid', pur && pur.pricePaidKES === 499, pur && ('KES ' + pur.pricePaidKES));
+  ck('...the tier it maps to', pur && pur.mappedTier === 'STARTER');
+  ck('...and that tier list price', pur && pur.tierPriceKES === 999, pur && ('KES ' + pur.tierPriceKES));
+  ck('the price MISMATCH is named, not hidden', pur && pur.priceMatchesTier === false);
+  ck('the source catalogue is named too', pur && pur.sourceCatalogue === 'ai-subscriptions');
+  /* A plan we cannot price must report null, never a confident `false` — an
+     unknown mismatch is not a known match. */
+  await db.doc('aiSubscriptions/unknownPlanShop').set({ uid: 'unknownPlanShop', plan: 'seller_basic', status: 'active', currentPeriodEnd: future });
+  const unk = (await EA.resolveEffective('unknownPlanShop')).purchase;
+  ck('NC a plan absent from the AI catalogue reports priceMatchesTier null',
+     unk && unk.priceMatchesTier === null && unk.pricePaidKES === null, JSON.stringify(unk && unk.sourceCatalogue));
+  ck('NC ...while still naming the tier it mapped to', unk && unk.mappedTier === 'STARTER');
+
+  head('13 - the merchant-facing panel says the right sentence');
+  const P = require(path.join(ROOT, 'sokoni-plan-panel.js'));
+  /* Back to the state a real merchant would be in. */
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 23, maxProducts: 10 });
+  const vKass = P.render(await EA.getMerchantEntitlement(KASS));
+  ck('KASS reads as STARTER / Active', vKass.heading === 'Starter' && vKass.subheading === 'Active');
+  ck('...products 23 / 100', vKass.products.text === '23 / 100', vKass.products.text);
+  ck('...and add-product is offered', vKass.canAddProduct === true);
+  /* Asserted on the STRUCTURE. A substring search for '"limit":10' matches
+     '"limit":100' — the same collision that has bitten this repo four times now.
+     The stale ceiling is productCounters.maxProducts:10; what must be true is
+     that the panel took the ENTITLED limit instead. */
+  ck('...with the entitled 100, not the stale counter ceiling of 10',
+     vKass.products.limit === 100 && vKass.products.remaining === 77,
+     'limit ' + vKass.products.limit + ', remaining ' + vKass.products.remaining);
+  ck('NC and the stale ceiling really was 10 in the counter',
+     (await db.doc('productCounters/' + KASS).get()).data().maxProducts === 10);
+
+  head('13b - FREE, TRIAL and AT-LIMIT read correctly too');
+  await db.doc('aiSubscriptions/freeShop').set({ uid: 'freeShop', plan: 'ai_free', status: 'active', currentPeriodEnd: future });
+  await db.doc('productCounters/freeShop').set({ uid: 'freeShop', count: 4 });
+  const vFree = P.render(await EA.getMerchantEntitlement('freeShop'));
+  ck('FREE reads as Free / 4 / 10', vFree.heading === 'Free' && vFree.products.text === '4 / 10', vFree.products.text);
+  ck('...and offers Upgrade', vFree.actions.some((a) => a.id === 'upgrade'));
+  const vTrial = P.render({ plan: 'STARTER', label: 'Starter', status: 'ACTIVE',
+    trial: { active: true, daysRemaining: 12, used: true }, limits: { products: 100, productsUsed: 5, productsRemaining: 95 }, features: {} });
+  ck('TRIAL reads as Starter Trial / 12 days remaining',
+     vTrial.heading === 'Starter Trial' && vTrial.subheading === '12 days remaining', vTrial.subheading);
+  ck('...and offers Continue selling', vTrial.actions.some((a) => a.id === 'continue'));
+  ck('a 1-day trial is singular, not "1 days"',
+     P.render({ plan: 'STARTER', label: 'Starter', status: 'ACTIVE', trial: { active: true, daysRemaining: 1 },
+       limits: {}, features: {} }).subheading === '1 day remaining');
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 100, maxProducts: 100 });
+  const vFull = P.render(await EA.getMerchantEntitlement(KASS));
+  ck('AT LIMIT says so in the merchant’s words',
+     vFull.notice && /reached your Starter limit/.test(vFull.notice.text), vFull.notice && vFull.notice.text);
+  ck('...offers Manage products AND Upgrade, not "contact support"',
+     vFull.notice.actions.map((a) => a.id).join(',') === 'manage-products,upgrade');
+  ck('...and add-product is withheld', vFull.canAddProduct === false);
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 99, maxProducts: 100 });
+  const vAfter = P.render(await EA.getMerchantEntitlement(KASS));
+  ck('after deleting one, 99 / 100 and add-product returns',
+     vAfter.products.text === '99 / 100' && vAfter.canAddProduct === true, vAfter.products.text);
+  const vUnknown = P.render(await EA.getMerchantEntitlement('noCounter'));
+  ck('an unreadable count shows a dash, NEVER 0',
+     vUnknown.products.text.indexOf('—') === 0 && vUnknown.products.used === null, vUnknown.products.text);
+  ck('...and add-product is withheld rather than guessed', vUnknown.canAddProduct === false);
+
+  head('14 - what is NOT proven');
   un('the KASS payment / webhook / renewal chain',
      'not traced; scripts/verify-kass-subscription.js runs it against production');
   un('that the live KASS account now resolves to STARTER',
