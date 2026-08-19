@@ -253,8 +253,132 @@ exports.employeeSaleAuthorize = onCall(OPTS, async ({ data, auth }) => {
   };
 });
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   THE MERCHANT ACCOUNT LINK — one business, more than one login
+   ══════════════════════════════════════════════════════════════════════════════
+   KASS is two accounts. A KES 499 `starter` subscription is ACTIVE on
+   `xrH21J5GF…`, which has no shop; the shop `D5Ql2…` has no paid subscription.
+   Entitlement resolves per-uid, so the shop resolves FREE — correctly, given the
+   data it can see. Nothing in the entitlement engine is misbehaving.
+
+   The repair is an EXPLICIT, AUDITABLE relationship, not a special case scattered
+   through subscription resolution and not a heuristic.
+
+   ── SAME NAME IS NOT SAME MERCHANT ──────────────────────────────────────────
+   There is deliberately no matching on name, phone or email. Two accounts called
+   KASS may be one business or two, and guessing wrong merges a stranger's paid
+   plan into someone else's shop. A link exists only because an ADMIN created it,
+   with a reason and evidence recorded.
+
+   ── A LINK CANNOT BE SELF-DECLARED ──────────────────────────────────────────
+   `merchantAccountLinks` is server-owned: unlisted in firestore.rules means the
+   default DENY applies, and the proposed explicit rule (docs/) keeps client
+   writes at `if false`. The callable additionally requires an admin claim. Either
+   layer alone would stop a customer linking themselves to a paid account; both
+   are present because this one grants money-backed entitlement.
+
+   ── AMBIGUITY IS REFUSED ────────────────────────────────────────────────────
+   A uid may belong to AT MOST ONE canonical identity. A second claim on the same
+   uid is rejected rather than silently overwriting, because two competing
+   identities for one merchant is the defect this exists to end, not to duplicate.
+   ══════════════════════════════════════════════════════════════════════════════ */
+const LINKS = 'merchantAccountLinks';
+
+/* Every uid that belongs to the same business as `uid` — including itself.
+   Returns exactly [uid] when no link exists, so an unlinked account behaves
+   precisely as it does today. */
+async function linkedUids(uid) {
+  if (!uid) return [];
+  const self = _s(uid, 64);
+  try {
+    /* Canonical? */
+    const own = await _db().collection(LINKS).doc(self).get();
+    if (own.exists && _activeLink(own.data())) {
+      return _dedupe([self].concat(own.data().linkedAccountUids || []));
+    }
+    /* Linked as a member? */
+    const q = await _db().collection(LINKS)
+      .where('linkedAccountUids', 'array-contains', self).limit(2).get();
+    if (q.empty) return [self];
+    /* Two canonical identities claiming one uid is ambiguous. Refuse to guess —
+       returning just the uid keeps today's behaviour rather than picking one. */
+    if (q.size > 1) return [self];
+    const d = q.docs[0];
+    if (!_activeLink(d.data())) return [self];
+    return _dedupe([self, d.id].concat(d.data().linkedAccountUids || []));
+  } catch (_) {
+    /* A link store that cannot be read must not blank an account's own identity. */
+    return [self];
+  }
+}
+
+function _activeLink(d) { return !!d && _s(d.status, 20).toLowerCase() !== 'revoked'; }
+function _dedupe(a) { const out = []; (a || []).forEach((x) => { const v = _s(x, 64); if (v && out.indexOf(v) === -1) out.push(v); }); return out; }
+
+/* The canonical identity record for a uid, or null. */
+async function merchantLink(uid) {
+  const all = await linkedUids(uid);
+  if (all.length <= 1) return null;
+  for (const candidate of all) {
+    const snap = await _db().collection(LINKS).doc(candidate).get().catch(() => null);
+    if (snap && snap.exists && _activeLink(snap.data())) {
+      return { canonicalUid: candidate, ...snap.data() };
+    }
+  }
+  return null;
+}
+
+/* ── adminLinkMerchantAccounts — the ONLY way a link is created ──────────────
+   Admin-only, refuses ambiguity, and records who did it and why. Deliberately
+   does NOT move, copy or rewrite a subscription: the KES 499 record stays
+   exactly as billing wrote it, and the link is what lets it be found. */
+exports.adminLinkMerchantAccounts = onCall(OPTS, async ({ data, auth }) => {
+  const uid = _uid(auth);
+  const t = (auth && auth.token) || {};
+  if (!t.admin && !t.superAdmin) throw new HttpsError('permission-denied', 'Admin access required.');
+
+  const d = data || {};
+  const canonicalUid = _s(d.canonicalUid, 64);
+  const linked = _dedupe(d.linkedAccountUids || []);
+  const shopId = _s(d.shopId, 64);
+  const reason = _s(d.reason, 300);
+  if (!canonicalUid) throw new HttpsError('invalid-argument', 'canonicalUid required');
+  if (!linked.length) throw new HttpsError('invalid-argument', 'linkedAccountUids required');
+  if (!reason) throw new HttpsError('invalid-argument', 'reason required — a link must be explainable');
+  if (linked.indexOf(canonicalUid) > -1) {
+    throw new HttpsError('invalid-argument', 'canonicalUid must not repeat in linkedAccountUids');
+  }
+
+  /* Every uid must be free of any other identity. */
+  for (const u of [canonicalUid].concat(linked)) {
+    const existing = await linkedUids(u);
+    if (existing.length > 1) {
+      throw new HttpsError('failed-precondition', 'uid already belongs to a merchant identity: ' + u);
+    }
+  }
+
+  const rec = {
+    canonicalUid: canonicalUid,
+    linkedAccountUids: linked,
+    shopId: shopId || null,
+    reason: reason,
+    /* Evidence is free-form but recorded — a payment ref, a ticket, a decision. */
+    evidence: (d.evidence && typeof d.evidence === 'object') ? d.evidence : null,
+    status: 'active',
+    createdBy: uid,
+    createdAt: _now(),
+  };
+  try {
+    await _db().collection(LINKS).doc(canonicalUid).create(rec);
+  } catch (_) {
+    throw new HttpsError('already-exists', 'a link already exists for this canonicalUid');
+  }
+  return { ok: true, canonicalUid: canonicalUid, linkedAccountUids: linked, shopId: rec.shopId };
+});
+
 /* Internals exported for the certification suite. Not part of the callable API. */
 exports._internal = {
   resolveActor, shopIdentity, ROLE_CAPABILITIES, EMPLOYEE_ROLES,
   ACTIVE_EMPLOYMENT, _employmentActive,
+  LINKS, linkedUids, merchantLink,
 };

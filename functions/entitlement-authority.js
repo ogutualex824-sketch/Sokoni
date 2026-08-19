@@ -83,9 +83,30 @@ async function resolveEffective(uid) {
   const free = catalog.entitlementFor({});
   if (!uid) return { ...free, uid: null, source: 'no-uid', considered: 0 };
 
+  /* ── ONE BUSINESS MAY HOLD MORE THAN ONE LOGIN ───────────────────────────
+     KASS pays for `starter` on one uid and trades from a shop on another. The
+     subscription is not missing and the engine is not misbehaving — it simply
+     cannot see across accounts. An ADMIN-CREATED link (merchantAccountLinks)
+     says which uids are one business; without one this reduces to exactly the
+     single-uid behaviour, so an unlinked merchant is unaffected.
+
+     The link is never self-declared: the collection is server-owned and the
+     callable that writes it requires an admin claim. */
+  let uids = [uid];
+  try {
+    const mi = require('./merchant-identity');
+    if (mi._internal && mi._internal.linkedUids) uids = await mi._internal.linkedUids(uid);
+  } catch (_) { uids = [uid]; }
+
   let subs = [];
-  try { subs = await _allSubscriptions(uid); } catch (_) { subs = []; }
-  if (!subs.length) return { ...free, uid: uid, source: 'no-subscription', considered: 0 };
+  try {
+    const per = await Promise.all(uids.map((u) => _allSubscriptions(u).catch(() => [])));
+    per.forEach((list, i) => (list || []).forEach((s) => { s._uid = uids[i]; subs.push(s); }));
+  } catch (_) { subs = []; }
+  if (!subs.length) {
+    return { ...free, uid: uid, source: 'no-subscription', considered: 0,
+             linkedUids: uids.length > 1 ? uids : null };
+  }
 
   let best = null, bestSub = null;
   subs.forEach((sub) => {
@@ -103,6 +124,11 @@ async function resolveEffective(uid) {
     resolvedPlanId: purchasedId,
     resolvedStatus: bestSub ? bestSub.status : null,
     considered: subs.length,
+    /* Which uid the winning subscription actually sits on, and the identity it
+       was found through — so a shop entitled via a linked account is traceable
+       rather than mysterious. */
+    resolvedUid: bestSub ? (bestSub._uid || uid) : null,
+    linkedUids: uids.length > 1 ? uids : null,
     /* WHAT WAS ACTUALLY BOUGHT, never silently replaced by what it maps to. */
     purchase: purchaseProvenance(purchasedId, best),
   };
