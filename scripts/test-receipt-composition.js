@@ -108,9 +108,11 @@ const noTime = R.render(order({ createdAt: null, settlement: settleCash,
   fulfilment: Ful.buildFulfilment({ type: 'pickup' }) }));
 ck('a missing server time is STATED', R.toText(noTime).indexOf('Time not recorded') > -1);
 ck('...and warned about', noTime.warnings.some((w) => /server timestamp/.test(w)), noTime.warnings.join('; '));
-ck('...and the device clock is NOT substituted',
-   R.toText(noTime).indexOf(String(new Date().getFullYear()) + '-') === -1 &&
-   !new RegExp(R.formatTime(Date.now()) || 'xxx').test(R.toText(noTime)));
+/* The device clock must not appear ANYWHERE on a receipt with no server time —
+   including the copyright year, which previously fell back to new Date(). */
+ck('...and the device clock is NOT substituted, anywhere',
+   !new RegExp(String(new Date().getFullYear())).test(R.toText(noTime)),
+   (R.toText(noTime).match(/©.*/) || [])[0]);
 ck('a Firestore Timestamp is accepted', /19 Aug 2026/.test(
    R.toText(R.render(order({ createdAt: { toDate: () => TS }, settlement: settleCash,
      fulfilment: Ful.buildFulfilment({ type: 'pickup' }) })))));
@@ -131,6 +133,53 @@ ck('toText is derived from the same blocks the screen renders',
    R.toText(rDel).indexOf('Brian') > -1 && rDel.blocks.some((b) =>
      (b.lines || []).some((l) => typeof l === 'string' && l.indexOf('Brian') > -1)));
 ck('a receipt with no printer is still complete', R.toText(rPick).split('\n').length > 6);
+
+head('8 - branded merchant identity, every line conditional');
+const full = R.render(order({ settlement: settleCash, fulfilment: Ful.buildFulfilment({ type: 'pickup' }),
+  shop: { name: "Alex's Store", phone: '0712345678', email: 'shop@x.co.ke',
+          address: 'Ngong Rd', city: 'Nairobi', logo: 'https://x/logo.png' },
+  tax: { kraPin: 'P051234567X' }, terminalId: 'TILL-2', cashierName: 'Mary' }));
+const tFull = R.toText(full);
+ck('the shop name leads', tFull.split(String.fromCharCode(10))[0] === "Alex's Store", tFull.split(String.fromCharCode(10))[0]);
+ck('SOKONI is named', tFull.indexOf('SOKONI') > -1);
+ck('powered by Bravilex', tFull.indexOf('Powered by ' + R.BRAVILEX) > -1);
+ck('phone, email and location appear', /0712345678/.test(tFull) && /shop@x.co.ke/.test(tFull) && /Ngong Rd, Nairobi/.test(tFull));
+ck('KRA PIN appears when the merchant has one', tFull.indexOf('KRA PIN: P051234567X') > -1);
+ck('the logo is carried as a URL for the screen', full.blocks[0].logo === 'https://x/logo.png');
+ck('a REAL terminal is named', tFull.indexOf('Terminal: TILL-2') > -1);
+ck('the cashier is named', tFull.indexOf('Served by: Mary') > -1);
+
+const bare = R.render(order({ settlement: settleCash, fulfilment: Ful.buildFulfilment({ type: 'pickup' }),
+  shop: { name: 'Kiosk' } }));
+const tBare = R.toText(bare);
+ck('NO terminal on a phone sale — the line is ABSENT, not invented', tBare.indexOf('Terminal') === -1);
+ck('no KRA PIN when the merchant has none', tBare.indexOf('KRA PIN') === -1);
+ck('no cashier line when unknown', tBare.indexOf('Served by') === -1);
+ck('no email or address lines when unset', !/@/.test(tBare.split('------')[0]));
+ck('...but the SOKONI + Bravilex identity is still present',
+   tBare.indexOf('SOKONI') > -1 && tBare.indexOf(R.BRAVILEX) > -1);
+
+head('9 - itemised totals');
+const priced = R.render(order({ settlement: settleCash, fulfilment: Ful.buildFulfilment({ type: 'pickup' }),
+  items: [{ name: 'Blue Phone', qty: 2, unitMinor: K(9000) }],
+  totals: { subtotalMinor: K(18000), discountMinor: K(500), deliveryMinor: K(150), taxMinor: K(80), totalMinor: K(17730) } }));
+const tPriced = R.toText(priced);
+ck('unit price and line total both shown', /9,000 ea/.test(tPriced) && /18,000/.test(tPriced));
+ck('subtotal shown', /Subtotal   18,000/.test(tPriced));
+ck('discount shown as a deduction', /Discount   -500/.test(tPriced), (tPriced.match(/Discount.*/) || [])[0]);
+ck('delivery fee shown', /Delivery   150/.test(tPriced));
+ck('tax shown', /Tax   80/.test(tPriced));
+ck('a zero discount is OMITTED, not printed as 0',
+   R.toText(R.render(order({ settlement: settleCash, fulfilment: Ful.buildFulfilment({ type: 'pickup' }),
+     totals: { subtotalMinor: K(100), discountMinor: 0, totalMinor: K(100) } }))).indexOf('Discount') === -1);
+
+head('10 - the close brings the customer back to SOKONI');
+ck('thanks the customer', tFull.indexOf('Thank you for shopping with us') > -1);
+ck('offers help INSIDE SOKONI', tFull.indexOf('Message us on SOKONI') > -1);
+ck('...and does NOT send them to WhatsApp', !/whatsapp/i.test(tFull));
+ck('carries the SOKONI tagline', tFull.indexOf(R.TAGLINE) > -1);
+ck('carries the Bravilex copyright', /© 2026 BRAVILEX INTERNATIONAL CO. LIMITED/.test(tFull),
+   (tFull.match(/©.*/) || [])[0]);
 
 head('7 - negative controls');
 ck('NC the destination DOES appear on a delivery (so section 1 is not vacuous)',

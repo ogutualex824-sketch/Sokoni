@@ -1,3 +1,60 @@
+## [2026-08-19] — Commerce authority layer: location, fulfilment, cash, idempotency, branded receipt
+
+**Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore write path, rules deploy, or
+production data touched. These are the five authorities the premium Sell screen will compose;
+they are built and proven *before* any UI is assembled on top of them.
+
+| module | what it owns | suite |
+|---|---|---|
+| `sokoni-buyer-locations.js` | buyer saved places, manual entry, geolocation | 26/0 + 1 UNPROVEN |
+| `sokoni-fulfilment.js` | pickup vs delivery, `destinationSnapshot`, rider | 38/0 |
+| `sokoni-cash.js` | tenders, change, balance, overpayment (integer minor units) | 55/0 |
+| `sokoni-sale-submit.js` | idempotency key, in-flight handling, retry discipline | 38/0 |
+| `sokoni-receipt.js` | the branded SOKONI document | 59/0 |
+
+`test-buyer-locations` reports **1 UNPROVEN**, not a pass: ownership isolation needs the Firestore
+emulator, and the emulator was unavailable. An unrun rules check is not a passed rules check.
+
+### The receipt is a branded business document, not a POS slip
+
+`render()` returns a *structure*, not a printer job — the screen renders it, Share sends it, and
+the P58E prints it if one is paired. **A merchant with no printer still has a complete receipt**,
+and nobody has to visit POS Setup before they can sell.
+
+Identity comes from ONE source (the shop record), never a receipt-only copy: logo, shop name,
+`SOKONI`, `Powered by BRAVILEX INTERNATIONAL CO. LIMITED`, phone, email, address, KRA PIN. It
+closes by bringing the customer *back into SOKONI* — "Need help with your order? Message us on
+SOKONI" — not out to WhatsApp.
+
+**Every identity line is conditional.** No logo, no email, no KRA PIN, no terminal, no cashier —
+those lines are simply ABSENT. `Terminal:` prints only when a real terminal exists, because a phone
+sale has none and a fabricated terminal id on a tax-adjacent document is a fiction. Asserted in both
+directions: the lines appear when the data exists, and are proven absent when it does not.
+
+KRA PIN note: `shops/{uid}` has **no tax field** today (see `firestore.rules` — the updatable set is
+name/phone/email/address/city/…). It is read from a supplied tax profile and omitted otherwise. Not
+invented, not stored as a duplicate.
+
+### Time comes from the server, and the copyright year proved it
+
+A phone clock is user-settable and must never be the authority on a financial record; the device
+only *formats* it. A receipt with no server timestamp prints `Time not recorded` rather than
+quietly substituting `new Date()`.
+
+The suite caught this file breaking its own rule: the closing copyright fell back to
+`new Date().getFullYear()`. The year now comes from the server timestamp or is **omitted** — a
+copyright without a year is ordinary; a device clock on a document that spends two blocks promising
+it never uses one is a small lie. The assertion was widened from "no device date-stamp" to *the
+device year appears nowhere at all*.
+
+**Files:** `sokoni-buyer-locations.js`, `sokoni-fulfilment.js`, `sokoni-cash.js`,
+`sokoni-sale-submit.js`, `sokoni-receipt.js`, `sokoni-merchant-sell.js`, and five suites under
+`scripts/`.
+**Database changes:** none. **API changes:** none. **Security:** none deployed; the
+`userLocations/{uid}/places/{placeId}` rule remains staged, unreleased. **Breaking:** none.
+
+---
+
 ## [2026-08-19] — Deploy prerequisites: dirty-flag fixed, adjust-stock contract proven, POS device check specified
 
 **Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore, rules or claims change.
