@@ -1,3 +1,84 @@
+## [2026-08-19] — The universal SOKONI receipt contract, LOCKED
+
+**Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore, rules, Functions or
+production data change. Full contract: `docs/RECEIPT_CONTRACT.md`.
+
+ONE renderer for every receipt SOKONI produces — owner sale, employee sale, pickup,
+delivery, online order, sample and test alike. There is no production renderer plus a
+separate development one, because the moment those exist they drift and the branded
+document you tested stops being the one the customer receives. A sample receipt differs
+from a real one by *exactly one notice block*, asserted structurally.
+
+Certification: `scripts/test-receipt-contract.js` — **113/0** across all seven states
+(owner · employee · pickup · delivery · no-logo shop · sample/test · P58E), with
+negative controls throughout.
+
+### Served by is authoritative or absent
+
+An **employee** sale names the employee and the owner appears **nowhere on it**. A
+receipt crediting the owner for a sale an employee rang up is a false record, and it is
+the record a shift dispute turns on. A nameless employee does not fall through to the
+owner — the line is omitted and a warning raised; an unrecognised role is refused.
+
+> **OPEN:** no shell yet populates `ctx.servedBy` from a staff record, so real receipts
+> will omit the line until the merchant identity authority lands. The contract is
+> correct; the source is not wired.
+
+### No logo is not a broken logo
+
+Without an uploaded logo the identity block emits a **wordmark** of the shop name with
+the SOKONI mark still present — never an empty frame or a broken-image icon. Most
+merchants have no logo on day one, and a receipt that looks broken makes the shop look
+broken. A shop with no name at all falls back to the SOKONI wordmark.
+
+### The QR is functional, and carries nothing sensitive
+
+`https://mysokoni.co.ke/payment-receipt.html?ref={receiptNo}` — **exactly** the URL
+`payment-trust.js:83` and `fulfilment-scan.js:142` already build, asserted against those
+files rather than trusted. A third spelling of the customer receipt surface would be the
+same defect as a twelfth spelling of a delivery destination.
+
+It encodes the receipt number and nothing else. That number is already printed on the
+paper the customer holds, so the QR discloses nothing the receipt does not — while a
+photographed receipt must never leak a phone number, an amount or a name to whoever
+scans the picture. **No receipt number → no QR**, because one pointing nowhere is worse
+than none.
+
+### Two adapters, one composition
+
+The phone is canonical; the P58E is optional physical output. The paper adapter
+transliterates to ASCII (a heart or a middle dot is garbage on a single-byte codepage),
+reflows long product names rather than truncating them — a truncated name is a
+*different product* — and keeps the QR url unwrapped, because a split url is not
+tappable in WhatsApp.
+
+### Defects the suite caught in its own runs
+
+- a plain `.trim()` on the composed text was eating the leading spaces of the first
+  line, flattening `SOKONI` to the left margin on **every single receipt**;
+- index-based block lookup broke the moment a sample receipt prepended a notice block —
+  every index shifted by one and it reported a missing logo on a receipt that had one.
+
+### Separately: the module was squatting on a global already in use
+
+`window.SokoniReceipt` belongs to the existing POS receipt path — `pos-checkout.html`,
+`pos-marketplace.html` and `pos-printer.js` all call `.print()`/`.doc()` on it, and this
+module has neither. Any page loading both would have looked healthy right up until a
+merchant pressed Print. Published as `SokoniReceiptDoc`; the POS path is untouched.
+
+**Files:** `sokoni-receipt.js`, `sokoni-fulfilment.js`, `sokoni-merchant-sell.js`,
+`docs/RECEIPT_CONTRACT.md`, `scripts/test-receipt-contract.js` (replaces
+`test-receipt-composition.js`), `scripts/test-sell-composition.js`,
+`scripts/test-fulfilment-contract.js`.
+**Database changes:** none. **API changes:** the printer callback takes an additive
+second argument (the branded document); an existing printer reading only the server
+receipt is unaffected. **Security:** the QR carries no sensitive field — asserted.
+**Breaking:** `receiptFulfilment` headings changed (`FULFILMENT` → `PICKUP`/`DELIVERY`)
+and `cashierName` was replaced by `servedBy`; both are pre-deployment modules with no
+live consumers.
+
+---
+
 ## [2026-08-19] — Commerce authority layer: location, fulfilment, cash, idempotency, branded receipt
 
 **Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore write path, rules deploy, or
