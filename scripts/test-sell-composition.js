@@ -145,7 +145,8 @@ const SALE = {
 const text = Rcpt.toText(Rcpt.render(SALE, {}));
 ck('the DELIVERY destination appears on the receipt', text.indexOf('Kilimani') > -1);
 ck('the change appears on the receipt', /CHANGE/.test(text));
-ck('the branded identity is on it', /SOKONI/.test(text) && /BRAVILEX/.test(text));
+ck('the branded identity is on it',
+   /SOKONI/.test(text) && text.replace(/\s+/g, ' ').indexOf(Rcpt.BRAVILEX) > -1);
 
 head('5 - the receipt time is the SERVER time, or it says so');
 ck('a sale WITH a server timestamp prints that date',
@@ -183,6 +184,23 @@ ck('...and so is the fulfilment',
 ck('a new sale clears both', /S\.settled = null; S\.fulfilled = null;/.test(code));
 ck('the terminal id is only ever a REAL one',
    /terminalId: ctx\.terminalId \|\| null/.test(code) && !/terminalId: ['"]/.test(code));
+
+head('9 - who served comes from the session, and is never synthesised');
+ck('the till passes servedBy straight through from the shell',
+   /servedBy: ctx\.servedBy \|\| null/.test(code));
+ck('...and never substitutes the shop name or owner for it',
+   !/servedBy:[^\n]*(shopName|ownerName|shop\.name)/.test(code));
+ck('the OLD cashierName field is gone', !/cashierName/.test(code));
+/* Proven against the contract, not just the shape: an employee sale names the
+   employee and no one else. */
+const RD = require(path.join(ROOT, 'sokoni-receipt.js'));
+ck('an employee sale names the EMPLOYEE',
+   RD.servedByLine({ servedBy: { name: 'Mary', role: 'employee' } }) === 'Served by: Mary');
+ck('an owner sale names the OWNER',
+   RD.servedByLine({ servedBy: { name: 'Alex Ogutu', role: 'owner' } }) === 'Served by: Alex Ogutu');
+ck('an unresolved server yields NO line rather than a guess',
+   RD.servedByLine({ servedBy: { role: 'employee' } }) === null &&
+   RD.servedByLine({}) === null);
 
 console.log('\n' + '='.repeat(74));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');

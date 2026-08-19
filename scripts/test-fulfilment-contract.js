@@ -70,7 +70,11 @@ const rSokoni = F.receiptFulfilment(F.buildFulfilment({
   type: 'delivery', destinationSnapshot: DEST, assignment: { method: 'sokoni' } }));
 ck('method sokoni with NO rider still says not yet assigned',
    rSokoni.lines.some((l) => l.indexOf(F.RIDER_UNASSIGNED) > -1), rSokoni.lines[0]);
-ck('...while the heading still reflects the method chosen', rSokoni.subheading === 'SOKONI DELIVERY');
+/* The heading is now the word the customer looks for — DELIVERY — and the method
+   is a named line, so a receipt states BOTH where it is going and who brings it. */
+ck('...while the METHOD is still named on the receipt',
+   rSokoni.heading === 'DELIVERY' && rSokoni.lines.indexOf('Method: SOKONI Rider') > -1,
+   rSokoni.lines.join(' | '));
 
 const rShop = F.receiptFulfilment(reassigned.fulfilment);
 ck('an assigned shop rider IS named', rShop.lines.some((l) => l.indexOf('Brian') > -1), rShop.lines[0]);
@@ -79,13 +83,16 @@ const rExt = F.receiptFulfilment(F.buildFulfilment({
   type: 'delivery', destinationSnapshot: DEST,
   assignment: { method: 'external', rider: { name: 'John', phone: '0722000111', plate: 'KCA 123A' } } }));
 ck('an external rider is named with phone and plate',
-   rExt.subheading === 'EXTERNAL RIDER' && rExt.lines.join(' ').indexOf('KCA 123A') > -1, rExt.lines.join(' | '));
+   rExt.lines.indexOf('Method: External rider') > -1 && rExt.lines.join(' ').indexOf('KCA 123A') > -1 &&
+   rExt.lines.join(' ').indexOf('John') > -1, rExt.lines.join(' | '));
 
 head('3 - pickup carries no destination');
 const forced = F.buildFulfilment({ type: 'pickup', destinationSnapshot: DEST, note: 'deliver please' });
 ck('a destination handed to a pickup is DISCARDED', forced.destinationSnapshot === undefined);
 const rPick = F.receiptFulfilment(forced);
-ck('the pickup receipt says CUSTOMER PICKUP', rPick.lines.join(' ') === 'CUSTOMER PICKUP', rPick.lines.join(' '));
+ck('the pickup receipt is headed PICKUP and says where to collect',
+   rPick.heading === 'PICKUP' && rPick.lines.join(' ') === 'Collected at the shop',
+   rPick.heading + ': ' + rPick.lines.join(' '));
 ck('...and prints no address', !/Green Estate|Nairobi|House 14/.test(rPick.lines.join(' ')));
 ck('...and no rider line, because there is no delivery', !/Rider/.test(rPick.lines.join(' ')));
 

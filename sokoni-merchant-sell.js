@@ -839,7 +839,11 @@
         /* Absent unless REAL. A phone till has no terminal, and inventing one puts a
            fiction on a tax-adjacent document. */
         terminalId: ctx.terminalId || null,
-        cashierName: ctx.cashierName || null,
+        /* WHO SERVED — supplied by the shell from the authenticated session, never
+           synthesised here. An employee sale must name the employee; if the shell
+           could not resolve who served, the receipt OMITS the line rather than
+           falling back to the shop owner, which would be a false record. */
+        servedBy: ctx.servedBy || null,
         customer: ctx.customer || null,
       };
     }

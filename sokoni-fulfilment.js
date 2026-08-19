@@ -108,39 +108,52 @@
   /* ── receipt block ─────────────────────────────────────────────────────── */
   var RIDER_UNASSIGNED = 'Not yet assigned';
 
+  /* ── THE RECEIPT BLOCK ──────────────────────────────────────────────────────
+     Headed DELIVERY or PICKUP, because that is the word the customer is looking
+     for. The address is broken into ONE COMPONENT PER LINE rather than joined with
+     separators: on 32-column paper a joined address wraps at an arbitrary point
+     and a rider reads a mangled street. Method and rider come last, together,
+     because they answer the same question — who is bringing it. */
+  var METHOD_LABEL = {
+    sokoni: 'SOKONI Rider',
+    external: 'External rider',
+    shop: 'Shop delivery',
+  };
+
   function receiptFulfilment (f) {
     if (!f || !f.type) return { heading: 'FULFILMENT', lines: ['Not recorded'] };
 
     if (f.type === 'pickup') {
-      return { heading: 'FULFILMENT', lines: ['CUSTOMER PICKUP'] };
+      return { heading: 'PICKUP', lines: ['Collected at the shop'] };
     }
 
     var a = f.assignment || {};
     var lines = [];
-    var head = a.method === 'sokoni' ? 'SOKONI DELIVERY'
-             : a.method === 'external' ? 'EXTERNAL RIDER'
-             : a.method === 'shop' ? 'DELIVERY'
-             : 'DELIVERY';
+    var d = f.destinationSnapshot || {};
 
+    /* WHERE it is going, first — one component per line. */
+    if (d.label) lines.push(_s(d.label, 40));
+    if (d.recipientName) lines.push(_s(d.recipientName, 60));
+    if (d.phone) lines.push(_s(d.phone, 32));
+    var parts = [d.building, d.unit, d.street, d.area, d.town]
+      .map(function (x) { return _s(x, 80); }).filter(Boolean);
+    if (parts.length) parts.forEach(function (x) { lines.push(x); });
+    else if (d.formatted) lines.push(_s(d.formatted, 160));
+    if (d.instructions) lines.push('Note: ' + _s(d.instructions, 300));
+    if (f.note) lines.push('Note: ' + _s(f.note, 300));
+
+    /* WHO is bringing it, last. */
     if (a.rider && (a.rider.name || a.rider.uid)) {
-      lines.push('Rider: ' + (a.rider.name || a.rider.uid));
-      if (a.rider.phone) lines.push(a.rider.phone);
-      if (a.rider.plate) lines.push(a.rider.plate);
+      lines.push('Rider: ' + _s(a.rider.name || a.rider.uid, 60));
+      if (a.rider.phone) lines.push(_s(a.rider.phone, 32));
+      if (a.rider.plate) lines.push(_s(a.rider.plate, 32));
     } else {
       /* The whole point. No rider means the receipt SAYS no rider. */
       lines.push('Rider: ' + RIDER_UNASSIGNED);
     }
+    if (a.method && METHOD_LABEL[a.method]) lines.push('Method: ' + METHOD_LABEL[a.method]);
 
-    var d = f.destinationSnapshot || {};
-    if (d.recipientName) lines.push(d.recipientName);
-    if (d.phone) lines.push(d.phone);
-    var addr = d.formatted || [d.building, d.unit, d.street, d.area, d.town]
-      .filter(Boolean).join(' · ');
-    if (addr) lines.push(addr);
-    if (d.instructions) lines.push('Note: ' + d.instructions);
-    if (f.note) lines.push('Note: ' + f.note);
-
-    return { heading: 'FULFILMENT', subheading: head, lines: lines };
+    return { heading: 'DELIVERY', lines: lines };
   }
 
   /* ── the projection, deliberately inert ────────────────────────────────── */
