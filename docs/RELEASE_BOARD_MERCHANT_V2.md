@@ -28,7 +28,8 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | **Trial one-time per IDENTITY** | 🟢 43/0 | linked logins share one ledger claim |
 | **Subscription lifecycle vocabulary** | 🟢 9 states, shared by every vertical | — |
 | **Seller Basic PAID path** | 🟡 EXISTS on subscriptions.html | plans.html now routes there instead of the dead end |
-| **SOKONI Wallet rail** | 🟢 33/0 — atomic debit, idempotent | activation-from-PAID still open |
+| **SOKONI Wallet rail** | 🟢 51/0 — atomic debit, idempotent | — |
+| **Subscription activation** | 🟢 51/0 — exactly once, entitlement follows | real production purchase still open |
 | **M-PESA rail** | 🟡 works via createPaymentIntent -> initiateSTKPush | not yet unified behind one method dispatch |
 | **Airtel Money rail** | 🔴 DECLARED, no provider binding | — |
 | **Webhook idempotency** | 🔴 UNTRACED | — |

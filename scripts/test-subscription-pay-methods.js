@@ -61,7 +61,12 @@ ck('...the same shape the frozen wallet uses',
    /const txId = `\$\{uid\}_\$\{sanitizedOrderId\}_spend`/.test(wallet));
 ck('NC neither derives the id from a clock or a random value',
    !/Date\.now\(\)[^\n]*_spend|Math\.random\(\)[^\n]*_spend/.test(CODE + wallet));
-ck('this file does NOT modify wallet.js', true, 'wallet.js unchanged in this commit');
+/* Proven against git, not asserted: the frozen wallet must be byte-identical
+   to HEAD. A literal true here would have proved nothing. */
+const walletDirty = require('child_process')
+  .execSync('git status --porcelain functions/wallet.js', { cwd: ROOT }).toString().trim();
+ck('functions/wallet.js is untouched — the frozen backend stays frozen',
+   walletDirty === '', walletDirty || 'clean vs git HEAD');
 
 (async () => {
   let admin;
@@ -173,11 +178,61 @@ ck('this file does NOT modify wallet.js', true, 'wallet.js unchanged in this com
   ck('NC the happy path still works after all those refusals',
      (await db.doc('wallets/' + UID).get()).data().balance === 241);
 
-  head('8 - what is NOT built');
+  head('8 - ACTIVATION: a PAID intent becomes a subscription, exactly once');
+  const SP = require(path.join(ROOT, 'functions/subscription-pay-methods.js'))._internal;
+  const a1 = await SP.reconcilePaidIntent('int_ok');
+  ck('the paid intent activates', a1.ok === true && a1.replayed === false, a1.reason || a1.subscriptionId);
+  const sub = (await db.doc('subscriptions/' + UID).get()).data();
+  ck('the subscription is ACTIVE', sub && sub.status === 'active');
+  ck('...on the plan from the INTENT, not from any caller', sub.planId === 'seller_basic');
+  ck('...with a 30-day monthly period',
+     Math.round((sub.currentPeriodEnd.toMillis() - sub.currentPeriodStart.toMillis()) / 86400000) === 30);
+  ck('...and traceable to the payment that bought it',
+     sub.lastPaymentRef === 'int_ok' && sub.lastPaymentMethod === 'SOKONI_WALLET');
+  const doneIntent = (await db.doc('paymentIntents/int_ok').get()).data();
+  ck('activationPending is cleared', doneIntent.activationPending === false);
+  ck('...and the intent names the subscription it created', doneIntent.subscriptionId === UID);
+
+  head('9 - EXACTLY ONCE');
+  const a2 = await SP.reconcilePaidIntent('int_ok');
+  ck('a replay returns the SAME subscription', a2.ok === true && a2.replayed === true &&
+     a2.subscriptionId === a1.subscriptionId);
+  const subAfter = (await db.doc('subscriptions/' + UID).get()).data();
+  ck('...and does not extend the period a second time',
+     subAfter.currentPeriodEnd.toMillis() === sub.currentPeriodEnd.toMillis());
+  const conc = await Promise.all([SP.reconcilePaidIntent('int_ok'), SP.reconcilePaidIntent('int_ok')]);
+  ck('concurrent calls both replay, neither re-activates',
+     conc.every(function (r) { return r.ok && r.replayed; }));
+
+  head('10 - a request is still not a payment');
+  await mkIntent('int_unpaid');
+  const u1 = await SP.reconcilePaidIntent('int_unpaid');
+  ck('a CREATED intent does not activate', u1.ok === false && /not-paid/.test(u1.reason), u1.reason);
+  await db.doc('paymentIntents/int_pending').set({ uid: UID, planId: 'seller_basic', status: 'pending', purpose: 'subscription', amount: 999 });
+  const u2 = await SP.reconcilePaidIntent('int_pending');
+  ck('a PENDING intent does not activate', u2.ok === false && /not-paid/.test(u2.reason), u2.reason);
+  await db.doc('paymentIntents/int_proc').set({ uid: UID, planId: 'seller_basic', status: 'processing', purpose: 'subscription', amount: 999 });
+  ck('a PROCESSING intent does not activate',
+     (await SP.reconcilePaidIntent('int_proc')).ok === false);
+  ck('a missing intent is refused', (await SP.reconcilePaidIntent('nope')).ok === false);
+  await db.doc('paymentIntents/int_order').set({ uid: UID, status: 'paid', purpose: 'order', amount: 100 });
+  ck('a NON-subscription paid intent is left alone',
+     (await SP.reconcilePaidIntent('int_order')).reason === 'not-a-subscription-intent');
+
+  head('11 - the entitlement follows the activation');
+  const EA2 = require(path.join(ROOT, 'functions/entitlement-authority.js'));
+  const ent = await EA2.resolveEffective(UID);
+  ck('the merchant now resolves the PAID plan', ent.plan === 'STARTER', ent.plan);
+  ck('...with 100 products', ent.listingLimit === 100, String(ent.listingLimit));
+  const ctr = await db.doc('productCounters/' + UID).get();
+  ck('the enforced ceiling was re-synced to 100',
+     ctr.exists && ctr.data().maxProducts === 100, ctr.exists ? String(ctr.data().maxProducts) : 'MISSING');
+
+  head('12 - what is NOT built');
   un('M-PESA STK through this intent', 'subscriptions.html already runs createPaymentIntent -> initiateSTKPush; not yet unified here');
   un('Airtel Money', 'declared as a method; no provider binding');
   un('webhook idempotency for the mobile rails', 'untraced');
-  un('activation from a PAID intent', 'the reconciliation step that consumes activationPending');
+
 
   console.log('\n' + '='.repeat(74));
   console.log('  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' unproven');

@@ -194,3 +194,142 @@ exports.payIntentWithWallet = onCall(OPTS, async ({ data, auth }) => {
 
 /* Internals for the certification suite. */
 exports._internal = { METHODS, isMethod };
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ACTIVATION RECONCILIATION — a PAID intent becomes a subscription, exactly once
+   ══════════════════════════════════════════════════════════════════════════════
+   This closes the dangerous gap: money collected without the merchant receiving
+   what they bought. Until this existed, a wallet payment debited the balance,
+   stamped the intent PAID, and stopped there.
+
+   ── EXACTLY ONCE ────────────────────────────────────────────────────────────
+   The subscription write and the intent's `reconciledAt` claim happen in ONE
+   transaction. A replay reads the claim and returns the original subscription id
+   without activating again — so a retry, a double-tap, a webhook redelivery and
+   a sweeper can all call this safely.
+
+   ── THE PLAN COMES FROM THE INTENT ──────────────────────────────────────────
+   Never from the caller. The intent was minted server-side by
+   createPaymentIntent, which derived the amount from the canonical catalogue.
+   Re-deriving anything from a request here would reopen the hole that authority
+   was built to close.
+
+   ── A REQUEST IS STILL NOT A PAYMENT ────────────────────────────────────────
+   Only `status === 'paid'` reconciles. `created`, `pending` and `processing` are
+   refused, so no rail can activate a subscription by asking. */
+
+const PERIOD_DAYS = { monthly: 30, annual: 365 };
+
+async function reconcilePaidIntent(intentId) {
+  const id = String(intentId || '').slice(0, 128);
+  if (!id) return { ok: false, reason: 'no-intent-id' };
+
+  const intentRef = _db().collection('paymentIntents').doc(id);
+  let out = null;
+
+  await _db().runTransaction(async (t) => {
+    const snap = await t.get(intentRef);
+    if (!snap.exists) { out = { ok: false, reason: 'intent-not-found' }; return; }
+    const intent = snap.data();
+
+    /* Already reconciled — return what was created, do not create it again. */
+    if (intent.reconciledAt && intent.subscriptionId) {
+      out = { ok: true, replayed: true, subscriptionId: intent.subscriptionId,
+              planId: intent.planId, uid: intent.uid };
+      return;
+    }
+
+    if (intent.status !== 'paid') {
+      out = { ok: false, reason: 'not-paid:' + (intent.status || 'unknown') };
+      return;
+    }
+    if (intent.purpose && intent.purpose !== 'subscription') {
+      out = { ok: false, reason: 'not-a-subscription-intent' };
+      return;
+    }
+
+    const uid = intent.uid;
+    const planId = intent.planId;
+    if (!uid || !planId) { out = { ok: false, reason: 'intent-incomplete' }; return; }
+
+    const cycle = intent.billingCycle === 'annual' ? 'annual' : 'monthly';
+    const startMs = Date.now();
+    const endMs = startMs + PERIOD_DAYS[cycle] * 86400000;
+
+    /* One subscription per uid per hub. An upgrade REPLACES rather than
+       accumulating a second document — two active subscriptions for one hub is
+       how a merchant ends up billed twice and entitled once. */
+    const subRef = _db().collection('subscriptions').doc(uid);
+
+    const subDoc = {
+      uid: uid,
+      planId: planId,
+      plan: planId,
+      planName: intent.planName || planId,
+      hubType: intent.hubType || null,
+      billingCycle: cycle,
+      status: 'active',
+      currentPeriodStart: admin.firestore.Timestamp.fromMillis(startMs),
+      currentPeriodEnd: admin.firestore.Timestamp.fromMillis(endMs),
+      /* Provenance: which payment bought this, and how it was paid. A
+         subscription whose origin cannot be traced is a support ticket. */
+      lastPaymentRef: id,
+      lastPaymentAmountCents: intent.amountCents || null,
+      lastPaymentMethod: intent.method || null,
+      lastPaymentAt: _now(),
+      updatedAt: _now(),
+    };
+
+    t.set(subRef, subDoc, { merge: true });
+    t.update(intentRef, {
+      activationPending: false,
+      reconciledAt: _now(),
+      subscriptionId: subRef.id,
+    });
+
+    out = { ok: true, replayed: false, subscriptionId: subRef.id, planId: planId, uid: uid,
+            currentPeriodEnd: endMs };
+  });
+
+  /* OUTSIDE the transaction: the enforced ceiling follows the new entitlement.
+     A failure here leaves the subscription active and the ceiling stale — which
+     is recoverable — whereas holding the transaction open across it would risk
+     losing the activation itself. */
+  if (out && out.ok && !out.replayed && out.uid) {
+    try {
+      const pl = require('./product-limit');
+      if (pl._internal && pl._internal.syncLimit) await pl._internal.syncLimit(out.uid);
+    } catch (e) {
+      out.ceilingSyncFailed = String((e && e.message) || e).slice(0, 120);
+    }
+  }
+  return out || { ok: false, reason: 'unknown' };
+}
+
+/* Fires the moment an intent is stamped PAID, whichever rail did it. */
+exports.onPaymentIntentPaid = require('firebase-functions/v2/firestore').onDocumentWritten(
+  { document: 'paymentIntents/{ref}', region: REGION, memory: '256MiB' },
+  async (event) => {
+    const after = event.data && event.data.after && event.data.after.data();
+    if (!after || after.status !== 'paid' || after.reconciledAt) return;
+    if (after.purpose && after.purpose !== 'subscription') return;
+    const r = await reconcilePaidIntent(event.params.ref);
+    if (!r.ok) console.error('[activation] reconcile failed', event.params.ref, r.reason);
+  }
+);
+
+/* Manual retry, and the path a client polls after paying with the wallet. */
+exports.reconcileSubscriptionPayment = onCall(OPTS, async ({ data, auth }) => {
+  const uid = _uid(auth);
+  const id = String((data || {}).paymentIntentId || '').slice(0, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'paymentIntentId required');
+  const snap = await _db().collection('paymentIntents').doc(id).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Payment not found.');
+  if (snap.data().uid !== uid) throw new HttpsError('permission-denied', 'This payment is not yours.');
+  const r = await reconcilePaidIntent(id);
+  if (!r.ok) throw new HttpsError('failed-precondition', r.reason);
+  return r;
+});
+
+exports._internal.reconcilePaidIntent = reconcilePaidIntent;
+exports._internal.PERIOD_DAYS = PERIOD_DAYS;

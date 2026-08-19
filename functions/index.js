@@ -11298,6 +11298,8 @@ exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
 const subPayMethods = require('./subscription-pay-methods');
 exports.subscriptionPaymentMethods = subPayMethods.subscriptionPaymentMethods;
 exports.payIntentWithWallet        = subPayMethods.payIntentWithWallet;
+exports.onPaymentIntentPaid        = subPayMethods.onPaymentIntentPaid;
+exports.reconcileSubscriptionPayment = subPayMethods.reconcileSubscriptionPayment;
 
 const merchantIdentity = require('./merchant-identity');
 exports.merchantIdentity       = merchantIdentity.merchantIdentity;
