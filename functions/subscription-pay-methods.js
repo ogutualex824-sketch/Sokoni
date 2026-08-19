@@ -93,7 +93,14 @@ exports.subscriptionPaymentMethods = onCall(OPTS, async ({ data, auth }) => {
               : affordable === null ? 'balance-unavailable' : null,
       },
       { ...METHODS.MPESA, available: true, reason: null },
-      { ...METHODS.AIRTEL_MONEY, available: true, reason: null },
+      /* ── AIRTEL IS DECLARED, NOT WIRED ────────────────────────────────────
+         There is no Airtel provider adapter. Reporting it available would put a
+         button in front of a merchant that cannot take their money — the exact
+         failure this project keeps finding, where something looks usable
+         because it renders. It stays visible so the roadmap is honest, and
+         unavailable so nobody can press it. Flip this ONLY when an adapter
+         exists and has been verified against the provider. */
+      { ...METHODS.AIRTEL_MONEY, available: false, reason: 'provider-not-available' },
     ],
     amount: Number.isFinite(amountKES) ? amountKES : null,
     currency: 'KES',
