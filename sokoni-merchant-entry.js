@@ -55,13 +55,36 @@
   /* Existing destinations only — every one of these is already in use elsewhere in
      the platform (profile.html ROLES[].hub and the Business Hub module links). No
      new URL is introduced by this module. */
+  /* THE cutover constant. One place decides which merchant shell an approved seller
+     enters from a Start Selling CTA, so the destination can never be scattered across
+     call sites and drift.
+
+     '/merchant-v2' — the v2 shell, DEPLOYED and certified 18/0 against production Auth,
+     App Check, shop resolution, Orders and sellerPayments ownership, the 12-route walk
+     and refresh persistence. Only that certification justifies pointing a live CTA here.
+
+     SCOPE, deliberately narrow: this governs the Start Selling family
+     (data-sk-merchant-entry) and nothing else. My Store, Business and the workspace
+     cutover do NOT resolve through this module — measured: no file outside this one
+     references SokoniMerchantEntry — so they remain on /merchant under their own gate.
+
+     Clean routes, not '.html'. firebase.json sets cleanUrls:true, so 'merchant-v2.html'
+     301-redirects; a CTA must reach the shell in ONE navigation, not a redirect chain. */
+  var MERCHANT_URL = '/merchant-v2';
+  var ONBOARD_URL  = '/offer';        /* not approved — seller intake             */
+  var SIGNIN_URL   = '/login';
+
+  /* All three are NAMED constants rather than literals inside DEST, so a gate can read
+     the destination the module will actually use instead of restating it — a restated
+     copy keeps passing after someone flips the real one. scripts/test-auth-post-login-
+     routing.js reads exactly these three and refuses to run if they are absent. */
   var DEST = {
-    workspace: 'merchant.html',        /* has a shop  — the merchant shell        */
-    setup:     'merchant.html#shop',   /* no shop yet — shop setup INSIDE the shell,
+    workspace: MERCHANT_URL,           /* has a shop  — the merchant shell        */
+    setup:     MERCHANT_URL + '#shop', /* no shop yet — shop setup INSIDE the shell,
                                           which is what keeps an approved seller out
                                           of the application flow                  */
-    intake:    'profile.html',         /* not approved — Become a Seller lives here */
-    signedOut: 'login.html',
+    intake:    ONBOARD_URL,
+    signedOut: SIGNIN_URL,
   };
 
   function _auth() { try { return window.firebaseAuth || null; } catch (_) { return null; } }

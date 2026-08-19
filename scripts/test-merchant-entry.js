@@ -54,7 +54,18 @@ function load(o) {
       getActiveRole: () => o.activeRole || 'buyer',
     },
     __FS: async () => fsMod,
-    location: { href: '' },
+    location: (() => {
+      /* Every assignment is recorded. This is what makes "ONE direct navigation"
+         assertable at all: the final value alone cannot distinguish a direct hop from
+         a redirect chain that happened to end in the right place. */
+      const nav = [];
+      const o = { _navs: nav };
+      Object.defineProperty(o, 'href', {
+        get() { return nav.length ? nav[nav.length - 1] : ''; },
+        set(v) { nav.push(String(v)); },
+      });
+      return o;
+    })(),
     document: { readyState: 'complete', addEventListener() {} },
   };
   const patched = SRC.replace(IMPORT_RE, STUB);
@@ -72,12 +83,12 @@ function load(o) {
      !/getDoc\([\s\S]{0,80}'sellers'/.test(SRC) && !/doc\(db, 'sellers'/.test(SRC));
 
   head('1 - signed out');
-  ck('signed out -> login.html', (await load({ signedOut: true }).api.resolve()).destination === 'login.html');
+  ck('signed out -> /login', (await load({ signedOut: true }).api.resolve()).destination === '/login');
 
   head('2 - a buyer gets the legitimate application flow');
   {
     const r = await load({ approved: ['buyer'] }).api.resolve();
-    ck('buyer -> intake (profile.html)', r.destination === 'profile.html', r.destination);
+    ck('buyer -> intake (/offer)', r.destination === '/offer', r.destination);
     ck('state is not-approved', r.state === 'not-approved', r.state);
   }
 
@@ -86,24 +97,24 @@ function load(o) {
     const withShop = load({ approved: ['buyer', 'seller'],
       docs: { 'users/u1': { activeShopId: 'shopA' }, 'shops/shopA': { status: 'active' } } });
     const r = await withShop.api.resolve();
-    ck('approved + canonical shop -> merchant.html', r.destination === 'merchant.html', r.destination);
+    ck('approved + canonical shop -> /merchant-v2', r.destination === '/merchant-v2', r.destination);
     ck('resolved via the canonical chain', r.via === 'activeShopId', r.via);
     ck('read users/{uid} then shops/{activeShopId}', withShop.reads.join(' ') === 'users/u1 shops/shopA', withShop.reads.join(' '));
 
     const fallback = load({ approved: ['seller'], docs: { 'users/u1': {}, 'shops/u1': { status: 'active' } } });
     const rf = await fallback.api.resolve();
-    ck('no activeShopId -> shops/{uid} fallback -> merchant.html', rf.destination === 'merchant.html', rf.destination);
+    ck('no activeShopId -> shops/{uid} fallback -> /merchant-v2', rf.destination === '/merchant-v2', rf.destination);
     ck('fallback source recorded', rf.via === 'shops/{uid}', rf.via);
 
     const noShop = load({ approved: ['seller'], docs: { 'users/u1': {} } });
     const rn = await noShop.api.resolve();
-    ck('approved + NO shop -> merchant.html#shop (setup)', rn.destination === 'merchant.html#shop', rn.destination);
-    ck('approved + NO shop is NOT sent to intake', rn.destination !== 'profile.html');
+    ck('approved + NO shop -> /merchant-v2#shop (setup)', rn.destination === '/merchant-v2#shop', rn.destination);
+    ck('approved + NO shop is NOT sent to intake', rn.destination !== '/offer');
     ck('state names it', rn.state === 'approved-no-shop', rn.state);
 
     const unreadable = load({ approved: ['seller'], throwOnRead: true });
     const ru = await unreadable.api.resolve();
-    ck('shop unreadable -> setup, never re-apply', ru.destination === 'merchant.html#shop', ru.destination);
+    ck('shop unreadable -> setup, never re-apply', ru.destination === '/merchant-v2#shop', ru.destination);
     ck('unreadable state is distinguished', ru.state === 'approved-shop-unknown', ru.state);
   }
 
@@ -112,7 +123,7 @@ function load(o) {
     const forged = load({ approved: ['buyer'], activeRole: 'seller',
       docs: { 'users/u1': { activeShopId: 'shopA' }, 'shops/shopA': { status: 'active' } } });
     const r = await forged.api.resolve();
-    ck('activeRole=seller without the claim -> intake', r.destination === 'profile.html', r.destination);
+    ck('activeRole=seller without the claim -> intake', r.destination === '/offer', r.destination);
     ck('...even with a real shop present', r.state === 'not-approved', r.state);
     ck('the shop was never even read', forged.reads.length === 0, forged.reads.join(','));
   }
@@ -122,14 +133,16 @@ function load(o) {
     const selfWritten = load({ approved: ['buyer'],
       docs: { 'sellers/u1': { status: 'active' }, 'users/u1': {}, 'shops/u1': { status: 'active' } } });
     const r = await selfWritten.api.resolve();
-    ck('applicant-written sellers/{uid} -> still intake', r.destination === 'profile.html', r.destination);
+    ck('applicant-written sellers/{uid} -> still intake', r.destination === '/offer', r.destination);
     ck('sellers/{uid} was never read', selfWritten.reads.indexOf('sellers/u1') < 0, selfWritten.reads.join(','));
   }
 
   head('6 - no authority is present when RA is missing');
   {
     const r = await load({ noRA: true, docs: { 'shops/u1': {} } }).api.resolve();
-    ck('no Role Authority -> intake, never merchant', r.destination === 'profile.html', r.destination);
+    ck('no Role Authority -> intake, never merchant', r.destination === '/offer', r.destination);
+    /* The half that actually matters: absent authority must fail CLOSED. */
+    ck('...and specifically not the merchant shell', r.destination.indexOf('merchant') === -1, r.destination);
   }
 
   head('7 - all nine CTAs converge on the one resolver');
@@ -174,6 +187,62 @@ function load(o) {
   ck('control: stripping left the resolver intact', /function resolve\(\)/.test(CODE));
 
   console.log('\n' + '='.repeat(72));
+  head('9 - Start Selling cutover: the destination a real tap reaches');
+
+  /* Expected destinations are DECLARED here, not read back from the module. Deriving them
+     from DESTINATIONS would compare the module to itself and pass for any routing at all. */
+  const WANT = { approved: '/merchant-v2', unapproved: '/offer', signedOut: '/login' };
+
+  {
+    const env = load({ approved: ['seller'], docs: { 'users/u1': { activeShopId: 'shopA' }, 'shops/shopA': { name: 'KASS' } } });
+    const r = await env.api.go();
+    ck('approved seller -> ' + WANT.approved, r.destination === WANT.approved, r.destination);
+    /* THE assertion this section exists for. */
+    ck('...in exactly ONE navigation', env.g.location._navs.length === 1, JSON.stringify(env.g.location._navs));
+    ck('...with no intermediate /offer hop', !env.g.location._navs.some((u) => u.indexOf('/offer') > -1), JSON.stringify(env.g.location._navs));
+    ck('...and no intermediate onboarding-seller hop', !env.g.location._navs.some((u) => /onboarding-seller/.test(u)), JSON.stringify(env.g.location._navs));
+    ck('...and it is a clean route, so no 301 on the way in', !/\.html/.test(env.g.location._navs[0] || ''), env.g.location._navs[0]);
+  }
+
+  {
+    const env = load({ approved: [], docs: { 'shops/u1': { name: 'KASS' } } });
+    const r = await env.api.go();
+    ck('authenticated but UNAPPROVED -> ' + WANT.unapproved, r.destination === WANT.unapproved, r.destination);
+    ck('...in exactly one navigation', env.g.location._navs.length === 1, JSON.stringify(env.g.location._navs));
+    ck('...and never reaches the merchant shell', !env.g.location._navs.some((u) => u.indexOf('merchant') > -1), JSON.stringify(env.g.location._navs));
+  }
+
+  {
+    const env = load({ signedOut: true });
+    const r = await env.api.go();
+    ck('signed out -> ' + WANT.signedOut, r.destination === WANT.signedOut, r.destination);
+    ck('...and never reaches the merchant shell', !env.g.location._navs.some((u) => u.indexOf('merchant') > -1), JSON.stringify(env.g.location._navs));
+  }
+
+  /* FORGED client-controlled signals must not buy entry. Each of these is settable by the
+     client, so each must be ignored in favour of the role-authority claim. */
+  for (const forged of [
+    { name: 'activeRole=seller', env: { approved: [], activeRole: 'seller' } },
+    { name: 'applicant-written sellers/{uid}', env: { approved: [], docs: { 'sellers/u1': { status: 'approved' } } } },
+    { name: 'registeredAs.seller on users/{uid}', env: { approved: [], docs: { 'users/u1': { registeredAs: { seller: true }, activeShopId: 'shopA' }, 'shops/shopA': { name: 'KASS' } } } },
+    { name: 'isSeller flag on users/{uid}', env: { approved: [], docs: { 'users/u1': { isSeller: true, approved: true } } } },
+  ]) {
+    const env = load(forged.env);
+    const r = await env.api.go();
+    ck('forged ' + forged.name + ' -> ' + WANT.unapproved, r.destination === WANT.unapproved, r.destination);
+    ck('...never reaches the merchant shell', !env.g.location._navs.some((u) => u.indexOf('merchant') > -1), JSON.stringify(env.g.location._navs));
+  }
+
+  /* Negative control: the matrix above must be capable of failing. If the module ever
+     stopped navigating at all, every "never reaches the merchant shell" row would pass
+     vacuously — so prove a navigation is actually recorded. */
+  {
+    const env = load({ approved: ['seller'], docs: { 'users/u1': { activeShopId: 'shopA' }, 'shops/shopA': { name: 'KASS' } } });
+    await env.api.go();
+    ck('NC the harness really records navigations', env.g.location._navs.length > 0, JSON.stringify(env.g.location._navs));
+    ck('NC ...and the recorded value is the destination', env.g.location.href === WANT.approved, env.g.location.href);
+  }
+
   console.log('  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('SUITE CRASHED:', e && e.stack); process.exit(1); });

@@ -747,7 +747,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     /* Identity — the third chip now reports the REAL session, not a fixed label. */
     if (S.state === 'in') {
       setDot('st-role', 'ok');
-      text('st-user', S.shop && (S.shop.name || S.shop.shopName) ? (S.shop.name || S.shop.shopName) : (S.email || 'Merchant'));
+      text('st-user', merchantDisplayName() || S.email || 'Merchant');
       text('shop-name', (S.shop && (S.shop.name || S.shop.shopName)) || 'SOKONI');
       text('shop-sub', S.activeShopId ? 'Shop · ' + S.activeShopId.slice(0, 10) : (S.email || 'Merchant'));
     } else if (S.state === 'out') {
@@ -945,6 +945,20 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     uid: null, email: null, sellerUid: null,
     activeShopId: null, shop: null, roles: [],
   };
+  /* ONE display-name authority for the whole shell. The header chip and the dashboard
+     greeting both read it, so they cannot drift into showing different names for the
+     same merchant — which is how a "polish" change quietly becomes an identity bug.
+
+     Source is the canonical shop record the shell already resolved (shops/{uid}), not a
+     URL parameter, not localStorage, not a signup flag. Returns null rather than a
+     placeholder when the name is genuinely not known yet, so each caller decides its own
+     fallback: the header can show the email, a greeting must not. */
+  function merchantDisplayName () {
+    var s = S.shop || {};
+    var n = String(s.name || s.shopName || '').trim();
+    return n || null;
+  }
+
   var _mods = null, _readyResolve, _ready = new Promise(function (r) { _readyResolve = r; });
   var _listeners = { session: [], devices: [] };
   function emit (evt) { (_listeners[evt] || []).forEach(function (f) { try { f(); } catch (_) {} }); }
@@ -1360,10 +1374,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     { k: 'refunds',  label: 'Refunds' },
   ];
   function renderDashboard (p) {
+    /* getHours() is the DEVICE's local time, which is the merchant's own — not UTC and
+       not a server clock. A merchant in Nairobi at 09:00 must read "Good morning". */
     var hour = new Date().getHours();
     var part = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    /* Name it only when we actually have one. An unresolved name renders the greeting
+       ALONE — never "Good afternoon, undefined", and never an email address, which is a
+       login credential rather than a display name. */
+    var who = merchantDisplayName();
     p.innerHTML =
-      '<div class="greet"><b>' + part + '</b><small>Shop overview · today’s activity</small></div>' +
+      '<div class="greet"><b>' + part + (who ? ', ' + esc(who) : '') + '</b>' +
+      '<small>Here’s what’s happening with your business today.</small></div>' +
       '<div class="sec-t">Today</div>' +
       '<div class="stats">' +
         TILES.map(function (t) {
@@ -2554,6 +2575,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     /* A surface rendered while auth was still resolving must refresh once it lands,
        or a signed-in merchant keeps staring at "not signed in". */
     if (current === 'orders' && S.state === 'in') { ORD.rows = null; renderOrders(nativePanel('orders')); }
+    /* Same reason for the Dashboard: it is the FIRST surface a merchant sees, so it is
+       routinely painted before shops/{uid} has resolved. Without this the greeting would
+       stay permanently nameless for the whole session even once the name is known. */
+    if (current === 'dashboard' && S.state === 'in') renderDashboard(nativePanel('dashboard'));
   });
 
   /* Public surface for modules and for the certification harness. */
