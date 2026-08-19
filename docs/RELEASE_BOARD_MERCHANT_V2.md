@@ -15,11 +15,15 @@ Related: [[RECEIPT_CONTRACT]] · [[CANONICAL_ORDER_DESTINATION]] · [[MERCHANT_V
 | Area | State | Finish condition |
 |---|---|---|
 | **Role boundary (data layer)** | 🟢 44/0 vs LIVE rules (+1 unproven) | — |
+| **Merchant identity** | 🟢 51/0 (+2 unproven), NOT DEPLOYED | a real employee completes a real sale |
+| **Employee sale authority** | 🟡 BUILT, enforcement OPEN | posCompleteCheckout must consult the attribution |
+| **Product create approval** | 🔴 SEPARATE security decision | do not bundle with the employee-sale fix |
+| **cdGetShiftSummary** | 🔴 SEPARATE money-reporting issue | decision before relying on that summary |
 | **Role switcher (UI)** | 🔴 MUST BUILD + CERTIFY | Instagram-style switcher; A-clears-before-B in the rendered workspace |
 | **Opening cash** | 🟡 WIRED, UNIT-CERTIFIED 60/0 | needs journey certification + a real shift end-to-end |
 | **Sell** | 🟡 COMPOSED 40/0 | one supermarket flow, journey-certified |
 | **Online orders** | 🔴 MUST JOURNEY-CERTIFY | managed beside physical sales in one workspace |
-| **Receipts** | 🟡 CONTRACT GREEN 113/0 | **identity wiring OPEN** — nothing populates `servedBy` |
+| **Receipts** | 🟡 CONTRACT GREEN 113/0 + Role line | served-by wiring: authority BUILT, shell not wired |
 | **Messaging authority** | 🟢 51/0 | — |
 | **Message history rules** | 🟢 21/0 | — |
 | **Messaging production** | 🔴 OPEN | Function + live rules deployed together, then production verified |

@@ -11289,6 +11289,14 @@ exports.cdGetShiftSummary   = posCashDrawer.cdGetShiftSummary;
 exports.cdGetReconciliation = posCashDrawer.cdGetReconciliation;
 exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
 
+/* ── Merchant Identity Authority + Employee Sale Authority ───────────── */
+/* ONE source for who the shop is, who is serving, and what role they hold.
+   NOT DEPLOYED YET — see docs/MERCHANT_IDENTITY_AUTHORITY.md. Exported by name
+   so the release is a deploy rather than an edit. */
+const merchantIdentity = require('./merchant-identity');
+exports.merchantIdentity       = merchantIdentity.merchantIdentity;
+exports.employeeSaleAuthorize  = merchantIdentity.employeeSaleAuthorize;
+
 /* ── SmartPOS Multi-Till + Cash Manager → smartPosDispatch ──────────── */
 /* mt* and cm* ops are routed via smartPosDispatch({op:'...',...})       */
 

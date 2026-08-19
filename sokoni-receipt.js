@@ -109,6 +109,22 @@
     return 'Served by: ' + name;
   }
 
+  /* The role, as a customer-facing word. `label` is preferred because the merchant
+     identity authority computes it server-side; the map is only a fallback for a
+     caller that supplied a bare role. An unknown role yields NO line rather than a
+     guess — and there is no line at all without a valid Served by, so a role can
+     never appear attached to nobody. */
+  var ROLE_LABEL = { owner: 'Owner', manager: 'Manager', cashier: 'Staff',
+                     staff: 'Staff', employee: 'Staff' };
+
+  function servedRoleLine (order) {
+    if (!servedByLine(order)) return null;
+    var sb = order.servedBy;
+    var label = _s(sb.label, 24);
+    if (!label) label = ROLE_LABEL[_s(sb.role, 20).toLowerCase()] || '';
+    return label ? 'Role: ' + label : null;
+  }
+
   function render (order, opts) {
     var o = order || {};
     var settings = opts || {};
@@ -158,8 +174,11 @@
       when ? when.date + ' · ' + when.time : 'Time not recorded',
     ];
     var served = servedByLine(o);
-    if (served) saleLines.push(served);
-    else out.warnings.push('who served this sale is not recorded');
+    if (served) {
+      saleLines.push(served);
+      var roleLine = servedRoleLine(o);
+      if (roleLine) saleLines.push(roleLine);
+    } else out.warnings.push('who served this sale is not recorded');
     /* A terminal id ONLY when a real terminal exists. */
     if (_s(o.terminalId)) saleLines.push('Terminal: ' + _s(o.terminalId, 40));
     out.blocks.push({ type: 'reference', lines: saleLines });
@@ -377,7 +396,8 @@
   }
 
   global.SokoniReceiptDoc = {
-    render: render, toText: toText, formatTime: formatTime, servedByLine: servedByLine,
+    render: render, toText: toText, formatTime: formatTime,
+    servedByLine: servedByLine, servedRoleLine: servedRoleLine, ROLE_LABEL: ROLE_LABEL,
     PLATFORM: PLATFORM, BRAVILEX: BRAVILEX, POWERED_BY: POWERED_BY, TAGLINE: TAGLINE,
     SAMPLE_NOTICE: SAMPLE_NOTICE, RECEIPT_URL_BASE: RECEIPT_URL_BASE,
     DEFAULT_COLS: DEFAULT_COLS, SERVER_ROLES: SERVER_ROLES,
