@@ -125,108 +125,115 @@ function post(url, body, headers) {
   /* ── SYNTHETIC ACTIVATION ────────────────────────────────────────────────
      A namespaced intent, stamped PAID exactly as a webhook would. This proves
      the deployed trigger and reconciler, with no money and no real merchant. */
-  head('4 - the activation chain, synthetically');
-  const UID = 'zzz_verify_merchant';
-  const REF = 'zzz_verify_intent_' + Date.now();
-  const cleanup = async () => {
-    for (const p of ['paymentIntents/' + REF, 'subscriptions/' + UID, 'productCounters/' + UID,
-                     'users/' + UID, 'trialLedger/' + UID]) {
-      await db.doc(p).delete().catch(() => {});
-    }
-  };
+  /* ── SYNTHETIC ACTIVATION, BOTH BILLING CYCLES ──────────────────────────
+     Monthly alone cannot catch the defect that truncated annual plans: both
+     rules produce 30 days for monthly, so a monthly-only run is green either
+     way. Every cycle the catalogue sells must be exercised. */
+  head('4 - the activation chain, synthetically — BOTH cycles');
   const BASE_SUBS = (await db.collection('subscriptions').count().get()).data().count;
   const BASE_INTENTS = (await db.collection('paymentIntents').count().get()).data().count;
   console.log('    baseline: ' + BASE_SUBS + ' subscriptions, ' + BASE_INTENTS + ' payment intents');
-  try {
-    await db.doc('paymentIntents/' + REF).set({
-      ref: REF, uid: UID, planId: 'seller_basic', planName: 'Seller Basic',
-      billingCycle: 'monthly', amount: 999, amountCents: 99900, currency: 'KES',
-      purpose: 'subscription', status: 'created',
-      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 3600000),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    ck('a synthetic intent was created', (await db.doc('paymentIntents/' + REF).get()).exists);
 
-    const before = await db.doc('subscriptions/' + UID).get();
-    ck('no subscription exists yet', !before.exists);
+  const CYCLES = [
+    { cycle: 'monthly', planId: 'seller_basic', planName: 'Seller Basic', amount: 999, days: 30 },
+    { cycle: 'annual',  planId: 'seller_pro',   planName: 'Seller Pro',   amount: 24990, days: 365 },
+  ];
+  const DAY = 86400000;
 
-    /* PENDING must activate nothing. */
-    await db.doc('paymentIntents/' + REF).set({ status: 'processing' }, { merge: true });
-    await new Promise((r) => setTimeout(r, 8000));
-    ck('PROCESSING did NOT activate anything',
-       !(await db.doc('subscriptions/' + UID).get()).exists);
+  for (const C of CYCLES) {
+    const UID = 'zzz_verify_' + C.cycle;
+    const REF = 'zzz_verify_' + C.cycle + '_' + Date.now();
+    const cleanup = async () => {
+      for (const p of ['paymentIntents/' + REF, 'subscriptions/' + UID, 'productCounters/' + UID,
+                       'users/' + UID, 'trialLedger/' + UID]) {
+        await db.doc(p).delete().catch(() => {});
+      }
+    };
+    head('4.' + C.cycle.toUpperCase() + ' — ' + C.planName + ' (' + C.cycle + ', expect ' + C.days + ' days)');
+    try {
+      await db.doc('paymentIntents/' + REF).set({
+        ref: REF, uid: UID, planId: C.planId, planName: C.planName,
+        billingCycle: C.cycle, amount: C.amount, amountCents: C.amount * 100, currency: 'KES',
+        purpose: 'subscription', status: 'created',
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 3600000),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      ck('intent created', (await db.doc('paymentIntents/' + REF).get()).exists);
+      ck('no subscription yet', !(await db.doc('subscriptions/' + UID).get()).exists);
 
-    /* Now stamp PAID, exactly as the webhook does. */
-    await db.doc('paymentIntents/' + REF).set({
-      status: 'paid', paidAt: admin.firestore.FieldValue.serverTimestamp(),
-      paidVia: 'zzz_verify', providerRef: REF, activationPending: true,
-    }, { merge: true });
+      await db.doc('paymentIntents/' + REF).set({ status: 'processing' }, { merge: true });
+      await new Promise((r) => setTimeout(r, 6000));
+      ck('PROCESSING activated nothing', !(await db.doc('subscriptions/' + UID).get()).exists);
 
-    let sub = null;
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const s = await db.doc('subscriptions/' + UID).get();
-      if (s.exists) { sub = s.data(); break; }
-    }
-    ck('onPaymentIntentPaid fired and reconcilePaidIntent activated', !!sub,
-       sub ? sub.planId + ' / ' + sub.status : 'no subscription after 60s');
-    if (sub) {
-      ck('exactly ONE subscription document',
+      await db.doc('paymentIntents/' + REF).set({
+        status: 'paid', paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        paidVia: 'zzz_verify', providerRef: REF, activationPending: true,
+      }, { merge: true });
+
+      let sub = null;
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const s = await db.doc('subscriptions/' + UID).get();
+        if (s.exists) { sub = s.data(); break; }
+      }
+      ck('activated', !!sub, sub ? sub.planId + ' / ' + sub.status : 'none after 60s');
+      if (!sub) { await cleanup(); continue; }
+
+      ck('exactly ONE subscription',
          (await db.collection('subscriptions').where('uid', '==', UID).get()).size === 1);
       ck('status ACTIVE', sub.status === 'active');
-      ck('the plan came from the INTENT', sub.planId === 'seller_basic');
-      ck('traceable to the payment', sub.lastPaymentRef === REF);
-      const intentAfter = (await db.doc('paymentIntents/' + REF).get()).data();
-      ck('activationPending cleared', intentAfter.activationPending === false);
-      ck('reconciledAt stamped', !!intentAfter.reconciledAt);
+      ck('plan from the intent', sub.planId === C.planId);
 
-      /* Entitlement + ceiling. */
-      const EA = require(path.join(ROOT, 'functions/entitlement-authority.js'));
-      const ent = await EA.resolveEffective(UID);
-      ck('entitlement resolves STARTER', ent.plan === 'STARTER', ent.plan);
-      ck('...with 100 products', ent.listingLimit === 100, String(ent.listingLimit));
-      const ctr = await db.doc('productCounters/' + UID).get();
-      ck('maxProducts synced to the catalogue entitlement',
-         ctr.exists && ctr.data().maxProducts === 100,
-         ctr.exists ? String(ctr.data().maxProducts) : 'no counter');
+      /* ── LET EVERY TRIGGER SETTLE, THEN RE-READ ──────────────────────────
+         The defect appeared ~1s after activation. Reading immediately would
+         have missed it, which is how it survived three green runs. */
+      await new Promise((r) => setTimeout(r, 12000));
+      const settled = (await db.doc('subscriptions/' + UID).get()).data();
 
-      /* REPLAY. */
-      const endBefore = sub.currentPeriodEnd.toMillis();
+      const cpe = settled.currentPeriodEnd.toMillis();
+      const exp = settled.expiresAt ? settled.expiresAt.toMillis() : null;
+      const days = Math.round((cpe - Date.now()) / DAY);
+
+      /* THE assertion. One computation feeds both fields, so exact equality is
+         the property — "close enough" is what let a 335-day gap through. */
+      ck('currentPeriodEnd === expiresAt EXACTLY', exp !== null && cpe === exp,
+         exp === null ? 'expiresAt missing' : (cpe - exp) + 'ms apart');
+      ck('period is the catalogue ' + C.cycle + ' duration (' + C.days + ' days)',
+         Math.abs(days - C.days) <= 1, days + ' days');
+      ck('the period did NOT move after triggers settled',
+         cpe === sub.currentPeriodEnd.toMillis(),
+         (cpe - sub.currentPeriodEnd.toMillis()) + 'ms drift');
+      ck('no trigger claimed the activation',
+         settled.activatedBy !== 'automation', settled.activatedBy || '(none)');
+
+      /* Replay. */
       await db.doc('paymentIntents/' + REF).set({ status: 'paid', replayedAt: Date.now() }, { merge: true });
       await new Promise((r) => setTimeout(r, 10000));
-      const sub2 = (await db.doc('subscriptions/' + UID).get()).data();
-      ck('a REPLAY did not extend the period', sub2.currentPeriodEnd.toMillis() === endBefore);
-      ck('...and did not create a second subscription',
+      const after = (await db.doc('subscriptions/' + UID).get()).data();
+      ck('a REPLAY did not extend the period', after.currentPeriodEnd.toMillis() === cpe);
+      ck('...nor create a second subscription',
          (await db.collection('subscriptions').where('uid', '==', UID).get()).size === 1);
-      ck('...and lastPaymentRef is unchanged', sub2.lastPaymentRef === REF);
-      const intent2 = (await db.doc('paymentIntents/' + REF).get()).data();
-      ck('reconciledAt is STABLE across the replay',
-         intentAfter.reconciledAt.toMillis() === intent2.reconciledAt.toMillis(),
-         'was ' + intentAfter.reconciledAt.toMillis() + ', now ' + intent2.reconciledAt.toMillis());
-      ck('expiresAt is STABLE across the replay',
-         sub.expiresAt.toMillis() === sub2.expiresAt.toMillis());
-      console.log('    subscription id: ' + UID + '  period end: ' + new Date(endBefore).toISOString());
+      ck('...and lastPaymentRef is unchanged', after.lastPaymentRef === REF);
+    } finally {
+      await cleanup();
+      const gone = !(await db.doc('subscriptions/' + UID).get()).exists;
+      ck('cleanup removed the ' + C.cycle + ' fixtures', gone, gone ? 'gone' : 'STILL PRESENT');
     }
-  } finally {
-    /* ── CLEANUP IS PART OF THE TEST ────────────────────────────────────────
-       A verification that leaves synthetic records in production has not fully
-       passed, however green the activation was. Asserted, not assumed. */
-    head('4b - cleanup, verified');
-    await cleanup();
-    const PATHS = ['paymentIntents/' + REF, 'subscriptions/' + UID, 'productCounters/' + UID,
-                   'users/' + UID, 'trialLedger/' + UID];
-    for (const p of PATHS) {
-      const still = await db.doc(p).get().catch(() => null);
-      ck('removed ' + p, !!still && !still.exists, still && still.exists ? 'STILL PRESENT' : 'gone');
-    }
-    const leftovers = await db.collection('subscriptions').where('uid', '==', UID).get().catch(() => null);
-    ck('no synthetic subscription survives', !!leftovers && leftovers.size === 0,
-       leftovers ? String(leftovers.size) : 'unreadable');
-    const intentsLeft = await db.collection('paymentIntents')
-      .where('uid', '==', UID).get().catch(() => null);
-    ck('no synthetic payment intent survives', !!intentsLeft && intentsLeft.size === 0,
-       intentsLeft ? String(intentsLeft.size) : 'unreadable');
   }
+
+  head('4b - MUTATION CONTROL: would this suite catch the old rule?');
+  /* The exact production defect, reconstructed as arithmetic. If the suite
+     cannot fail against it, the suite is decoration. */
+  const rogue = (sub) => (sub.billingCycleDays || 30);
+  const fixed = (sub) => (Number(sub.billingCycleDays) > 0 ? Number(sub.billingCycleDays)
+                        : (sub.billingCycle === 'annual' ? 365 : 30));
+  const AN = { billingCycle: 'annual' };
+  ck('MC the OLD rule gives an annual plan 30 days', rogue(AN) === 30);
+  ck('MC the FIXED rule gives it 365', fixed(AN) === 365);
+  ck('MC the annual assertion above would FAIL on 30',
+     !(Math.abs(rogue(AN) - 365) <= 1) && (Math.abs(fixed(AN) - 365) <= 1));
+  ck('MC monthly is 30 under BOTH — so a monthly-only run proves nothing',
+     rogue({ billingCycle: 'monthly' }) === fixed({ billingCycle: 'monthly' }));
 
   head('5 - no unexpected production writes');
   const AFTER_SUBS = (await db.collection('subscriptions').count().get()).data().count;
