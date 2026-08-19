@@ -1,6 +1,65 @@
 # Cloud Function Consolidation Programme
 
-**Status:** started 2026-08-19 · **Gate:** `scripts/verify-architecture.js` · **Blocks:** the subscription release deploy
+**Status: STOPPED 2026-08-19 — capacity debt accepted and documented**
+**Gate:** `scripts/verify-architecture.js` — remains **RED**, deliberately
+
+---
+
+## DECISION — stop at the measured safe ceiling
+
+```
+Production services              1691
+Hard budget                      1480
+Reduction required                212
+
+Safe + wired upper bound          182
+Safe gap                          >=30
+
+Protected boundaries
+  money                          FROZEN
+  secrets                        FROZEN
+  identity                       FROZEN
+  four-eyes / segregation        FROZEN
+  subscription authority         FROZEN
+
+Dormant consolidation            DEFERRED
+Excluded consolidation           PROHIBITED
+
+Decision                         STOP — capacity debt accepted
+```
+
+The programme **cannot** honestly claim *"we can reach 1480 safely."*
+
+It **can** honestly claim:
+
+> The audited safe consolidation population cannot reach the 1480 target without
+> crossing protected boundaries or consolidating dormant code.
+
+And 182 is already optimistic: it assumes all 26 wired, structurally-eligible
+modules survive semantic review. Two of the three reviewed so far did not —
+`impact` was disqualified outright and `digital-hub` was deferred despite
+passing on security grounds.
+
+### The gate stays red on purpose
+
+`verify-architecture` is **not** adjusted, and its budget is **not** lowered.
+
+* **Red because the platform cannot safely meet the budget** is an engineering
+  finding.
+* **Green because the standard was lowered** would be a misleading record.
+
+The failure now cites this document so the reason travels with the result, but
+the assertion, the threshold and the exit code are unchanged.
+
+### What would change this
+
+A genuine capacity decision — raising the Cloud Run quota, or a product decision
+to retire a capability (e.g. retiring Algolia, which would free ~90 sync
+triggers). Neither is an engineering workaround, and neither is in scope here.
+
+---
+
+**Started:** 2026-08-19 · **Blocked:** the subscription release deploy (superseded by the decision above)
 
 Related: [[Payments]] · [[SmartPOS]] · [[Marketplace]] · [[Authentication]]
 

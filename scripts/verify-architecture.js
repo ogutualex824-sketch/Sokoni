@@ -125,7 +125,23 @@ try {
 /* 4. CF budget */
 const total = exportNames.length;
 if (total > CF_BUDGET_HARD) {
+  /* ── THE BUDGET IS NOT ADJUSTED TO MAKE THIS PASS ────────────────────────
+     A consolidation programme audited the whole exported population in
+     August 2026 and measured a safe ceiling of 182 against a required 212.
+     The remaining ~30 could only come from modules holding money, secrets,
+     identity, four-eyes controls or the subscription authority — or from
+     dormant code that proves nothing.
+
+     The excess is therefore ACCEPTED AND DOCUMENTED capacity debt, and this
+     gate stays RED to say so. Red because the platform cannot safely meet the
+     budget is an engineering finding; green because someone lowered the
+     threshold would be a misleading one. Do not raise CF_BUDGET_HARD to clear
+     this — the honest remedies are a real capacity decision (Cloud Run quota)
+     or a product decision to retire a capability. */
   errors.push(`CF export count ${total} exceeds HARD budget ${CF_BUDGET_HARD} — consolidate before deploying.`);
+  errors.push(`  ^ ACCEPTED CAPACITY DEBT — safe consolidation ceiling measured at 182 of the 212 `
+    + `required. See docs/CF_CONSOLIDATION_PROGRAMME.md (STOPPED 2026-08-19). This gate is `
+    + `intentionally red; the budget must NOT be raised to clear it.`);
 } else if (total > CF_BUDGET_WARN) {
   /* CAPACITY WATCH — an architectural signal, NOT a deployment failure.
      Deployment safety is governed solely by scripts/deployment-integrity.js

@@ -1,3 +1,66 @@
+## [2026-08-19] — CF consolidation programme STOPPED at the measured safe ceiling
+
+**Nothing deployed.** Decision record: docs/CF_CONSOLIDATION_PROGRAMME.md
+
+`verify-architecture` blocks on 1692 CF exports against a HARD budget of 1480.
+A full audit of the exported population establishes that the target cannot be
+reached safely.
+
+| | count |
+| --- | --- |
+| Production services | 1691 |
+| Hard budget | 1480 |
+| Reduction required | 212 |
+| **Safe + wired upper bound** | **182** |
+| **Safe gap** | **>=30** |
+
+182 is already optimistic — it assumes all 26 wired, structurally-eligible
+modules survive semantic review. Two of the three reviewed did not.
+
+### What the audit established
+
+* **No dead exported surface exists.** All 1203 exported `onCall` functions are
+  referenced in source or invoked in production. The reduction cannot come from
+  removal — only from consolidating live functionality.
+* **531 functions are defined but never exported.** They are not deployed and
+  are worth ZERO against the budget. Source hygiene, tracked separately.
+* **`impact` was disqualified**: it declares `secrets: [INTASEND_PRIVATE_KEY]`,
+  executes an IntaSend M-PESA B2C payout, and implements a four-eyes control. A
+  dispatcher declares the UNION of its operations' secrets, so consolidating it
+  would hand the live payout key to the code path serving the public dashboard.
+* **`digital-hub` was deferred** despite passing the security review: no client
+  callers, no traffic, and a documented defect in its paid path. Proving the
+  dispatcher pattern against dormant code proves little.
+
+### The gate stays RED on purpose
+
+The budget is **not** lowered and the assertion is **not** weakened. The failure
+now cites the decision record so the reason travels with the result.
+
+> Red because the platform cannot safely meet the budget is an engineering
+> finding. Green because the standard was lowered would be misleading.
+
+Protected boundaries frozen throughout: money, secrets, identity, four-eyes /
+segregation of duties, and the single subscription activation authority.
+
+### Measurement corrections recorded, not hidden
+
+Two of my own errors are written into the programme document rather than edited
+out: classifying module-level definitions instead of exports (59 confident
+SAFE_REMOVE candidates, none of them exported), and reading Cloud Run internal
+deploy operations as invocations (`hits <= 1` is now defined as no evidence of
+traffic, recorded inside the census artefact itself).
+
+### Files
+
+`docs/CF_CONSOLIDATION_PROGRAMME.md` · `docs/CF_SLICE_01_DIGITAL_HUB_CONTRACT.md` ·
+`scripts/cf-inventory.js` · `scripts/cf-consolidation-candidates.js` ·
+`scripts/cf-reachability.js` · `scripts/cf-invocation-census.js` ·
+`scripts/cf-removal-classify.js` · `scripts/cf-slice-selector.js` ·
+`scripts/cf-wired-candidates.js` · `scripts/verify-architecture.js`
+
+**Breaking:** none. **Security:** no boundary crossed; no function consolidated.
+
 ## [2026-08-19] — Buying a plan is not asking for a free trial
 
 **Nothing deployed.** Functions changed but NOT pushed; hosting unchanged. `MERCHANT_URL`
