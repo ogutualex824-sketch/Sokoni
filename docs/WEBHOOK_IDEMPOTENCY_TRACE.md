@@ -62,6 +62,18 @@ exactly one subscription document exists, and the wallet is not debited again. A
 control proves the guard *would* have fired without the compat field, and a negative control
 proves a genuinely different `apiRef` still activates.
 
+## CONVERGED 2026-08-19 — the destination is now the implementation
+
+Both webhooks were changed to **stamp the intent PAID and stop**. Neither writes
+ any more — 0 rival guards remain, and  is the
+only writer of a subscription document, for the wallet rail, the mobile rails, and every
+rail added later. Finding 1 is therefore closed as well: the M-PESA path now marks the
+intent PAID, so  fires and the checkout can report success truthfully.
+
+The compatibility fields (, ) are still WRITTEN as a projection for
+existing readers, but nothing guards on them any more — they are a projection, not a
+second authority.
+
 ## The destination, for the release
 
 The webhooks should **mark the intent PAID and stop there**, letting `onPaymentIntentPaid` →

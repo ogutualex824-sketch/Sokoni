@@ -228,12 +228,32 @@ ck('functions/wallet.js is untouched — the frozen backend stays frozen',
   ck('the enforced ceiling was re-synced to 100',
      ctr.exists && ctr.data().maxProducts === 100, ctr.exists ? String(ctr.data().maxProducts) : 'MISSING');
 
-  head('12 - WEBHOOK REPLAY: the deployed webhooks cannot double-activate');
-  /* intasendWebhook and webhookMpesa both activate subscriptions themselves and
-     both guard on subData.paymentRef !== apiRef. Reproduced here exactly. */
+  head('12 - ONE ACTIVATION AUTHORITY');
   const idx = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
-  const guards = (idx.match(/subData.paymentRef !== apiRef/g) || []).length;
-  ck('two deployed webhooks guard on paymentRef', guards === 2, String(guards));
+  ck('NO webhook activates a subscription directly any more',
+     (idx.match(/subData.paymentRef !== apiRef/g) || []).length === 0,
+     String((idx.match(/subData.paymentRef !== apiRef/g) || []).length) + ' rival guards left');
+  ck('...both webhooks stamp the intent PAID instead',
+     (idx.match(/intent stamped PAID; reconciler owns activation/g) || []).length === 2);
+  ck('...and neither writes subscriptions/{uid}',
+     (idx.match(/collection("subscriptions").doc(intent.uid)/g) || []).length === 0);
+  ck('reconcilePaidIntent is the only writer of a subscription document',
+     CODE.indexOf('t.set(subRef, subDoc') > -1);
+  ck('the stamp is merge-safe, so a redelivery changes nothing',
+     idx.indexOf('status:     "paid",') > -1 && idx.indexOf('{ merge: true });') > -1);
+  ck('NC the stamp still records which rail paid',
+     /paidVia:    "intasendWebhook"/.test(idx) && /paidVia:    "webhookIntasend"/.test(idx));
+
+  head('12b - and the replays remain safe through the ONE authority');
+  /* The rival guards are GONE — convergence removed them. Replay safety now rests
+     entirely on the reconciler own reconciledAt claim, which section 9 proved.
+     What must still hold is that a REDELIVERED webhook stamp cannot disturb an
+     already-activated subscription. */
+  const subNow0 = (await db.doc('subscriptions/' + UID).get()).data();
+  ck('a redelivered stamp leaves the period untouched',
+     (await SP.reconcilePaidIntent('int_ok')).replayed === true &&
+     (await db.doc('subscriptions/' + UID).get()).data().currentPeriodEnd.toMillis() ===
+       subNow0.currentPeriodEnd.toMillis());
   const subNow = (await db.doc('subscriptions/' + UID).get()).data();
   ck('the reconciler writes the field they guard on',
      subNow.paymentRef === 'int_ok', String(subNow.paymentRef));
@@ -264,8 +284,8 @@ ck('functions/wallet.js is untouched — the frozen backend stays frozen',
   head('14 - what is NOT built');
   un('M-PESA STK through this intent', 'subscriptions.html already runs createPaymentIntent -> initiateSTKPush; not yet unified here');
   un('Airtel Money', 'declared as a method; no provider binding');
-  un('that the M-PESA webhook marks the intent PAID at all',
-     'TRACED and it does NOT — no webhook writes paymentIntents.status; see docs/WEBHOOK_IDEMPOTENCY_TRACE.md');
+  ck('the M-PESA webhook now marks the intent PAID',
+     idx.indexOf('intent stamped PAID') > -1);
 
 
   console.log('\n' + '='.repeat(74));

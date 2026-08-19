@@ -6841,38 +6841,31 @@ exports.intasendWebhook = onRequest(
         if (intentSnap.exists) {
           const intent = intentSnap.data();
           if (intent.purpose === "subscription" && intent.planId && intent.uid) {
-            const subRef  = db.collection("subscriptions").doc(intent.uid);
-            const subSnap = await subRef.get();
-            const subData = subSnap.exists ? subSnap.data() : null;
-            /* Only write if no active subscription exists for this payment ref */
-            if (!subData || subData.paymentRef !== apiRef) {
-              const expiresAt = new Date(Date.now() + 30 * 86400000);
-              await subRef.set({
-                uid:          intent.uid,
-                plan:         intent.planId,
-                planName:     intent.planName || intent.planId,
-                billingCycle: intent.billingCycle || "monthly",
-                status:       "active",
-                paymentRef:   apiRef,
-                amountPaid:   amount,
-                source:       "intasend_webhook",
-                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
-                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-              });
-              console.log("[intasendWebhook] Subscription auto-activated",
-                { uid: intent.uid, plan: intent.planId, ref: apiRef });
-              /* Audit trail for webhook-path activations */
-              db.collection("subscriptionAuditLog").add({
-                uid:       intent.uid,
-                plan:      intent.planId,
-                paymentRef: apiRef,
-                action:    "ACTIVATED",
-                source:    "intasend_webhook",
-                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-              }).catch(e => console.error("[intasendWebhook] Sub-audit log failed:", e.message));
-            }
+            /* ── ONE ACTIVATION AUTHORITY ─────────────────────────────────
+               This webhook used to activate subscriptions/{uid} itself. It no
+               longer does. It stamps the payment intent PAID and stops; the
+               onPaymentIntentPaid trigger then runs reconcilePaidIntent, which
+               is the ONLY writer of a subscription — for the wallet rail, this
+               rail, and every rail added later.
+
+               Two authorities activating the same purchase is how one payment
+               extended a period twice: each guarded on its own field name, and
+               neither could see the other. Bridging their vocabularies made
+               them compatible; removing one makes them singular.
+
+               create()-free set with merge: the trigger is idempotent, and a
+               redelivered webhook re-stamping an already-PAID intent changes
+               nothing. */
+            await db.collection("paymentIntents").doc(intentRef).set({
+              status:     "paid",
+              paidAt:     admin.firestore.FieldValue.serverTimestamp(),
+              paidVia:    "intasendWebhook",
+              providerRef: apiRef,
+              amountPaidKES: amount,
+              activationPending: true,
+            }, { merge: true });
+            console.log("[intasendWebhook] intent stamped PAID; reconciler owns activation",
+              { intentRef, apiRef, uid: intent.uid, plan: intent.planId });
           }
         }
       } catch (subErr) {
@@ -8327,62 +8320,31 @@ exports.webhookIntasend = onRequest(
         if (intentSnap.exists) {
           const intent = intentSnap.data();
           if (intent.purpose === "subscription" && intent.planId && intent.uid) {
-            const subRef  = db.collection("subscriptions").doc(intent.uid);
-            const subSnap = await subRef.get();
-            const subData = subSnap.exists ? subSnap.data() : null;
-            if (!subData || subData.paymentRef !== apiRef) {
-              const expiresAt = new Date(Date.now() + 30 * 86400000);
-              await subRef.set({
-                uid:          intent.uid,
-                plan:         intent.planId,
-                planName:     intent.planName || intent.planId,
-                billingCycle: intent.billingCycle || "monthly",
-                status:       "active",
-                paymentRef:   apiRef,
-                amountPaid:   amount,
-                source:       "webhookIntasend",
-                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
-                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-              });
-              console.log("[webhookIntasend] Subscription auto-activated",
-                { uid: intent.uid, plan: intent.planId, ref: apiRef });
+            /* ── ONE ACTIVATION AUTHORITY ─────────────────────────────────
+               This webhook used to activate subscriptions/{uid} itself. It no
+               longer does. It stamps the payment intent PAID and stops; the
+               onPaymentIntentPaid trigger then runs reconcilePaidIntent, which
+               is the ONLY writer of a subscription — for the wallet rail, this
+               rail, and every rail added later.
 
-              /* Activation used to end here, and that was the incident: this
-                 writes subscriptions/{uid}, but the seller UI reads
-                 users/{uid}.subscription.seller — a document only sub-billing.js
-                 maintains and which this path never invoked. With nothing at the
-                 read location the client fell back to its hard-coded free
-                 allowance and showed a 10-product limit to a merchant who had
-                 paid for 100, while canPublishProduct (reading the authoritative
-                 path) correctly allowed the 13th upload.
+               Two authorities activating the same purchase is how one payment
+               extended a period twice: each guarded on its own field name, and
+               neither could see the other. Bridging their vocabularies made
+               them compatible; removing one makes them singular.
 
-                 Materialise the entitlement now so both readers agree. This is
-                 deliberately awaited rather than fire-and-forget: a merchant who
-                 has just paid reloads within seconds, and a background write that
-                 loses the race reproduces the original symptom. It cannot fail
-                 the webhook — materialiseEntitlements swallows its own errors and
-                 the subscription is already authoritative in subscriptions/{uid}.
-                 onSubscriptionChangedSyncEntitlements also fires on that write,
-                 so this is belt-and-braces against trigger latency, not the only
-                 path. */
-              /* Required locally rather than via the module-scope binding
-                 declared ~1300 lines below: that const is in its temporal dead
-                 zone until module evaluation reaches it, and depending on
-                 handler timing to stay safe is a latent ReferenceError. Node
-                 caches modules, so this costs nothing after the first call. */
-              await require('./subscription-authority')._internal
-                .materialiseEntitlements(intent.uid, "payment-complete");
-              db.collection("subscriptionAuditLog").add({
-                uid:       intent.uid,
-                plan:      intent.planId,
-                paymentRef: apiRef,
-                action:    "ACTIVATED",
-                source:    "webhookIntasend",
-                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-              }).catch(e => console.error("[webhookIntasend] Sub-audit log failed:", e.message));
-            }
+               create()-free set with merge: the trigger is idempotent, and a
+               redelivered webhook re-stamping an already-PAID intent changes
+               nothing. */
+            await db.collection("paymentIntents").doc(intentRef).set({
+              status:     "paid",
+              paidAt:     admin.firestore.FieldValue.serverTimestamp(),
+              paidVia:    "webhookIntasend",
+              providerRef: apiRef,
+              amountPaidKES: amount,
+              activationPending: true,
+            }, { merge: true });
+            console.log("[webhookIntasend] intent stamped PAID; reconciler owns activation",
+              { intentRef, apiRef, uid: intent.uid, plan: intent.planId });
           }
         }
       } catch (subErr) {
