@@ -244,7 +244,24 @@ exports.subGetStatus = onCall(
       if (!cur || (PRIORITY[s.status] || 0) > (PRIORITY[cur.status] || 0)) byHub[s.hubType] = s;
     });
 
-    return { subscriptions: byHub, all };
+    /* ── Trial eligibility is reported, never inferred by the browser ───────
+       The pricing page needs this to decide whether to OFFER a free trial. It
+       must not be used to decide whether a plan can be BOUGHT: purchase and
+       promotional-trial eligibility are different questions, and conflating
+       them is what produced "you have already used your free plan" on a paid
+       checkout. Read-only; the authority remains the trialLedger claim in
+       subActivate. */
+    let trial = { eligible: false, used: false, reason: 'unresolved' };
+    try {
+      const EA = require('./entitlement-authority');
+      const t  = await EA.trialState(uid);
+      trial = { eligible: t.eligible === true, used: t.used === true,
+                active: t.active === true, reason: t.reason || null };
+    } catch (e) {
+      logger.warn('[sub] trialState unavailable', { uid, err: e.message });
+    }
+
+    return { subscriptions: byHub, all, trial };
   }
 );
 
@@ -776,6 +793,31 @@ exports.adminSubExportBilling = onCall(
    • In grace past graceEnd → EXPIRED (downgrade to free)
    • CancelAtPeriodEnd past currentPeriodEnd → CANCELLED
 ════════════════════════════════════════════════════════ */
+/* ── The two questions the trial sweep must answer ────────────────────────────
+   Exported so certification exercises THESE functions rather than a test-local
+   copy of the same reasoning — a re-implemented predicate agrees with itself by
+   construction and proves nothing.
+
+   _trialEndMs: when does the trial end?
+     A paid plan's trial carries its own trialEnd, because its currentPeriodEnd
+     is the PAID period and is months away. A promotional trial never had a
+     trialEnd — its currentPeriodEnd IS the trial end. Reading trialEnd first and
+     falling back keeps every existing trial behaving exactly as it did.
+
+   _isPaidTrial: has this already been paid for?
+     If yes, the trial ending starts the period they bought. If no, the trial
+     ending is a request for payment. Getting this backwards bills a paying
+     merchant twice, so it keys on the recorded payment, never on plan price. */
+function _trialEndMs(sub) {
+  const v = sub || {};
+  const te = v.trialEnd && v.trialEnd.toMillis ? v.trialEnd.toMillis() : null;
+  if (te) return te;
+  return v.currentPeriodEnd && v.currentPeriodEnd.toMillis ? v.currentPeriodEnd.toMillis() : null;
+}
+function _isPaidTrial(sub) {
+  return !!(sub && sub.paymentStatus === 'paid');
+}
+
 exports.subProcessExpirations = onSchedule(
   { schedule: '0 * * * *', timeZone: 'Africa/Nairobi', timeoutSeconds: 540, memory: '512MiB', region: REGION },
   async () => {
@@ -848,20 +890,53 @@ exports.subProcessExpirations = onSchedule(
       logger.info('[sub] Expired', { count: toExpire.length });
     }
 
-    /* 3 — Trialing past trialEnd → PAST_DUE (require payment) */
+    /* 3 — Trial ended. Where it goes depends on whether it was PAID FOR ──────
+       Two different things wear status TRIALING:
+
+         promotional trial — no payment ever taken  → PAST_DUE, ask for money
+         paid plan's trial — already settled in full → ACTIVE, ask for nothing
+
+       Sending a merchant who has already paid to PAST_DUE with "Subscribe now
+       to keep your features" bills them twice for one purchase. paymentStatus
+       is the discriminator; trialSource records which kind it was.
+
+       trialEnd is read first and currentPeriodEnd second: a paid trial carries
+       its own trialEnd (currentPeriodEnd is the PAID period, months away),
+       while legacy promotional trials only ever had currentPeriodEnd. The
+       fallback keeps every existing trial behaving exactly as before. */
     const trialSnap = await fsdb.collection('subscriptions')
       .where('status', '==', S.TRIALING).limit(500).get();
 
     const trialExpired = trialSnap.docs.filter(d => {
-      const end = d.data().currentPeriodEnd?.toMillis?.();
+      const end = _trialEndMs(d.data());
       return end && end <= now_ms;
     });
 
+    const paidTrials = trialExpired.filter(d => _isPaidTrial(d.data()));
+    const freeTrials = trialExpired.filter(d => !_isPaidTrial(d.data()));
+
     if (trialExpired.length) {
       const b = fsdb.batch();
-      trialExpired.forEach(d => b.update(d.ref, { status: S.PAST_DUE, updatedAt: now_ts }));
+      /* Paid: the trial simply ends and the period they bought begins. */
+      paidTrials.forEach(d => b.update(d.ref, {
+        status: S.ACTIVE, subscriptionStatus: 'active',
+        trialStatus: 'ended', trialEndedAt: now_ts, updatedAt: now_ts,
+      }));
+      /* Promotional: unchanged — no payment was ever taken. */
+      freeTrials.forEach(d => b.update(d.ref, {
+        status: S.PAST_DUE, trialStatus: 'ended', trialEndedAt: now_ts, updatedAt: now_ts,
+      }));
       await b.commit();
-      for (const doc of trialExpired) {
+
+      for (const doc of paidTrials) {
+        const sub = doc.data();
+        await _notify(sub.uid, 'trial_ended', {
+          title: 'Your subscription is now active',
+          body: `Your ${sub.planName} trial has ended and your paid subscription has started. Nothing more to pay.`,
+          subscriptionId: doc.id, planId: sub.planId,
+        }).catch(() => {});
+      }
+      for (const doc of freeTrials) {
         const sub = doc.data();
         await _notify(sub.uid, 'trial_ended', {
           title: 'Free trial ended',
@@ -869,7 +944,7 @@ exports.subProcessExpirations = onSchedule(
           subscriptionId: doc.id, planId: sub.planId,
         }).catch(() => {});
       }
-      logger.info('[sub] Trial expired → PAST_DUE', { count: trialExpired.length });
+      logger.info('[sub] Trial ended', { paid: paidTrials.length, promotional: freeTrials.length });
     }
   }
 );
@@ -919,3 +994,11 @@ exports.subSendRenewalReminders = onSchedule(
 /* Exported so payment-intents.js derives prices from THIS catalogue rather
    than growing a second copy. One price, one source. */
 exports.PLANS = PLANS;
+
+/* Certification seam: the trial sweep's two decisions, exercised directly.
+   The scheduled function cannot be invoked from a test, but its judgement can —
+   and its judgement is where a paying merchant gets billed twice. */
+exports._internal = Object.assign(exports._internal || {}, {
+  trialEndMs: _trialEndMs,
+  isPaidTrial: _isPaidTrial,
+});

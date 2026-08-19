@@ -101,8 +101,12 @@
   }
 
   var S = {
-    phase: 'loading',      /* loading | choose | paying | error */
+    phase: 'loading',      /* loading | cycle | choose | paying | error */
     plan: null,
+    planDoc: null,         /* the catalogue entry, for the cycle screen */
+    cycle: null,           /* what the merchant picked — preselected, not assumed */
+    cycleConfirmed: false, /* false until they confirm; nothing is minted before */
+    trialDays: 0,          /* from the intent, so the disclosure is the real term */
     methods: [],
     selected: null,
     phone: '',
@@ -153,6 +157,54 @@
     };
   }
 
+  /* ── the billing cycle, chosen BEFORE any money is committed ──────────────
+     The checkout must not assume monthly. The merchant sees both catalogue
+     prices side by side and picks one; only then is an intent minted, for the
+     cycle they picked.
+
+     Prices come from subGetPlans — the same catalogue the pricing page and
+     createPaymentIntent read. Nothing here is hardcoded, and nothing here is
+     authoritative: this screen DISPLAYS a price, the server DERIVES the one it
+     charges from (planId, billingCycle). A browser that claimed "I chose
+     yearly" cannot make the server charge a yearly amount it did not compute. */
+  function money(cents) {
+    var n = Number(cents);
+    if (!isFinite(n)) return null;
+    return 'KES ' + Math.round(n / 100).toLocaleString('en-KE');
+  }
+  function paintCycle() {
+    var pl = S.planDoc || {};
+    var price = pl.price || {};
+    var td = Number((pl.trial || {}).days) || 0;
+    var opts = [
+      { id: 'monthly', label: 'Monthly', cents: price.monthly, per: 'per month', note: '' },
+      { id: 'annual',  label: 'Yearly',  cents: price.annual,  per: 'per year',
+        note: isFinite(Number(price.annual)) ? '≈ ' + money(Number(price.annual) / 12) + '/mo' : '' },
+    ].filter(function (o) { return isFinite(Number(o.cents)) && Number(o.cents) > 0; });
+
+    root.innerHTML =
+      '<div class="plan"><h1>' + esc(pl.name || PLAN_ID) + '</h1>' +
+        '<div class="feat">Choose how you’d like to be billed.</div></div>' +
+      '<div class="lbl">Billing cycle</div>' +
+      opts.map(function (o) {
+        return '<button class="m' + (S.cycle === o.id ? ' on' : '') + '" data-act="cycle" data-c="' + esc(o.id) + '">' +
+          '<span class="dot"></span><span>' +
+            '<span class="t">' + esc(o.label) + ' — ' + esc(money(o.cents) || '—') + '</span>' +
+            '<span class="s">' + esc(o.per) + (o.note ? ' · ' + esc(o.note) : '') + '</span>' +
+            (td > 0 ? '<span class="s">' + esc(td) + '-day trial included</span>' : '') +
+          '</span></button>';
+      }).join('') +
+      /* Say exactly when money moves. A merchant must never have to work out
+         whether "trial" means they are being charged today. */
+      (td > 0
+        ? '<div class="why">You’re paying today. Your ' + esc(td) + '-day trial starts immediately. ' +
+          'Your paid subscription begins automatically when the trial ends — there is nothing more to pay then.</div>'
+        : '');
+
+    bar.innerHTML = '<button class="pay"' + (S.cycle ? '' : ' disabled') +
+      ' data-act="cycle-next">Continue</button>';
+  }
+
   /* ── render ─────────────────────────────────────────────────────────────── */
   function paint() {
     if (S.phase === 'loading') {
@@ -169,6 +221,7 @@
       bar.innerHTML = '<button class="pay" data-act="retry">Try again</button>'; return;
     }
     if (S.phase === 'paying') { paintPayment(); return; }
+    if (S.phase === 'cycle') { paintCycle(); return; }
 
     var p = S.plan || {};
     var ms = C.methods(S.methods);
@@ -185,6 +238,13 @@
             .map(function (i) { return '✓ ' + esc(i.label); }).join(' · ') +
         '</div>' +
       '</div>' +
+      /* Restated on the screen where the merchant actually pays, not only on
+         the one before it. Charging today and starting the paid period later
+         is unusual enough that it must be said where the money button is. */
+      (Number(S.trialDays) > 0
+        ? '<div class="why">You’re paying today. Your ' + esc(S.trialDays) + '-day trial starts immediately. ' +
+          'Your paid subscription begins automatically when the trial ends.</div>'
+        : '') +
       '<div class="lbl">Pay with</div>' +
       ms.map(function (m) {
         return '<button class="m' + (S.selected === m.id ? ' on' : '') + '"' +
@@ -220,6 +280,18 @@
       : (v.busy ? '' : '<button class="pay" data-act="retry-pay">Try again</button>');
   }
 
+  /* Mint for ONE cycle. The client names the cycle; the server derives the
+     amount for it. Those are different powers and only the second is money. */
+  async function mintIntent(cycle) {
+    var c = cycle === 'annual' ? 'annual' : 'monthly';
+    var intent = await callable('createPaymentIntent')({ planId: PLAN_ID, billingCycle: c })
+      .then(function (r) { return r && r.data; });
+    if (!intent || !intent.paymentIntentId) throw new Error('Payment could not be started.');
+    S.intentId = intent.paymentIntentId;
+    saveIntent(intent);
+    return intent;
+  }
+
   /* ── data ───────────────────────────────────────────────────────────────── */
   async function load() {
     S.phase = 'loading'; paint();
@@ -242,16 +314,35 @@
         intent = existing;
       }
       if (!intent) {
-        intent = await callable('createPaymentIntent')({ planId: PLAN_ID, billingCycle: CYCLE })
-          .then(function (r) { return r && r.data; });
-        if (!intent || !intent.paymentIntentId) throw new Error('Payment could not be started.');
-        S.intentId = intent.paymentIntentId;
-        saveIntent(intent);
+        /* ── ASK BEFORE COMMITTING ──────────────────────────────────────────
+           No intent exists yet, so nothing has been committed and the cycle is
+           still an open question. Present both catalogue prices and let the
+           merchant choose. The URL's `cycle` only PRESELECTS — it never decides
+           silently, and it is not what the server charges from.
+
+           Once an intent exists the cycle is settled: it is stamped on the
+           intent, so recovery above skips this step rather than re-asking. */
+        var plans = await callable('subGetPlans')({})
+          .then(function (r) { return (r && r.data && r.data.plans) || []; });
+        var doc = plans.filter(function (x) { return x && x.id === PLAN_ID; })[0];
+        if (!doc) throw new Error('Unknown plan: ' + PLAN_ID);
+        S.planDoc = doc;
+        var pr = doc.price || {};
+        var hasBoth = isFinite(Number(pr.monthly)) && Number(pr.monthly) > 0 &&
+                      isFinite(Number(pr.annual)) && Number(pr.annual) > 0;
+        if (hasBoth && !S.cycleConfirmed) {
+          S.cycle = CYCLE;                 /* preselected from the URL, not decided */
+          S.phase = 'cycle';
+          return paint();
+        }
+        intent = await mintIntent(S.cycle || CYCLE);
+        if (!intent) return;
       }
 
       var mm = await callable('subscriptionPaymentMethods')({ amount: intent.amount })
         .then(function (r) { return (r && r.data && r.data.methods) || []; });
       S.methods = mm;
+      S.trialDays = Number(intent.trialDays) || 0;
       S.plan = C.planSummary({
         label: intent.planName, priceKES: intent.amount,
         listingLimit: intent.listingLimit, billingCycle: intent.billingCycle || CYCLE,
@@ -314,6 +405,12 @@
     var el = ev.target.closest && ev.target.closest('[data-act]');
     if (!el) return;
     var act = el.getAttribute('data-act');
+    if (act === 'cycle') { S.cycle = el.getAttribute('data-c') === 'annual' ? 'annual' : 'monthly'; paint(); return; }
+    if (act === 'cycle-next') {
+      if (!S.cycle) return;
+      S.cycleConfirmed = true;              /* now, and only now, mint for it */
+      load(); return;
+    }
     if (act === 'pick') { S.selected = el.getAttribute('data-m'); paint(); return; }
     if (act === 'pay') { pay(); return; }
     if (act === 'retry') { load(); return; }

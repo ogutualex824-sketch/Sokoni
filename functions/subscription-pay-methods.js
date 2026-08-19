@@ -260,8 +260,26 @@ async function reconcilePaidIntent(intentId) {
     if (!uid || !planId) { out = { ok: false, reason: 'intent-incomplete' }; return; }
 
     const cycle = intent.billingCycle === 'annual' ? 'annual' : 'monthly';
-    const startMs = Date.now();
+
+    /* ── Trial period vs PAID period ────────────────────────────────────────
+       A trial that ships with a paid plan delays the paid period; it does not
+       consume it. Paying on the 19th with a 3-day trial means:
+
+         trial   19 Aug → 22 Aug   (already paid for, nothing more to collect)
+         paid    22 Aug → 22 Sep   (monthly)  or  22 Aug 2026 → 22 Aug 2027
+         renewal 22 Sep
+
+       Charging on the 19th and ending the paid month on the 19th would sell
+       30 days and deliver 27. The paid period therefore STARTS at trial end.
+
+       trialDays comes from the intent — the terms quoted when the merchant
+       paid — not from today's catalogue. */
+    const paidAtMs  = Date.now();
+    const trialDays = Math.max(0, Math.min(90, Number(intent.trialDays) || 0));
+    const trialEndMs = paidAtMs + trialDays * 86400000;
+    const startMs = trialEndMs;                       /* paid period begins after the trial */
     const endMs = startMs + PERIOD_DAYS[cycle] * 86400000;
+    const onTrial = trialDays > 0;
 
     /* One subscription per uid per hub. An upgrade REPLACES rather than
        accumulating a second document — two active subscriptions for one hub is
@@ -275,7 +293,23 @@ async function reconcilePaidIntent(intentId) {
       planName: intent.planName || planId,
       hubType: intent.hubType || null,
       billingCycle: cycle,
-      status: 'active',
+      /* `status` stays the one field every reader already consults — rules,
+         entitlement-authority, the sweep, the UI. TRIALING and ACTIVE are both
+         entitled (subscription-catalog LIFECYCLE), so the merchant has full
+         access from the moment they pay. */
+      status: onTrial ? 'trialing' : 'active',
+      /* ── The three orthogonal facts, stated separately ──────────────────
+         Collapsing them into one field is what made a paid subscription
+         indistinguishable from an unpaid promotional trial. */
+      paymentStatus: 'paid',                          /* the money arrived */
+      subscriptionStatus: onTrial ? 'trialing' : 'active',
+      trialStatus: onTrial ? 'active' : 'none',
+      trialDays: trialDays,
+      trialSource: onTrial ? 'paid_plan' : null,      /* NOT a promotional trial */
+      trialStart: onTrial ? admin.firestore.Timestamp.fromMillis(paidAtMs) : null,
+      trialEnd: onTrial ? admin.firestore.Timestamp.fromMillis(trialEndMs) : null,
+      /* Already settled — the trial ending must never ask for money again. */
+      renewalDueAt: admin.firestore.Timestamp.fromMillis(endMs),
       currentPeriodStart: admin.firestore.Timestamp.fromMillis(startMs),
       currentPeriodEnd: admin.firestore.Timestamp.fromMillis(endMs),
       /* Provenance: which payment bought this, and how it was paid. A
@@ -309,7 +343,9 @@ async function reconcilePaidIntent(intentId) {
     });
 
     out = { ok: true, replayed: false, subscriptionId: subRef.id, planId: planId, uid: uid,
-            currentPeriodEnd: endMs };
+            billingCycle: cycle, trialDays: trialDays, onTrial: onTrial,
+            trialEnd: onTrial ? trialEndMs : null,
+            currentPeriodStart: startMs, currentPeriodEnd: endMs };
   });
 
   /* OUTSIDE the transaction: the enforced ceiling follows the new entitlement.

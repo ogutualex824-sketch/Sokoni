@@ -78,12 +78,24 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
       localStorage.setItem('loggedIn', 'true');
       localStorage.setItem('sokoniUser', JSON.stringify({ uid: 'zzz_journey_merchant' }));
     } catch (e) {}
+    window.__calls.subGetPlans = 0;
     window.sokoniCallable = function (name) {
       return async function (args) {
+        /* The checkout asks the CATALOGUE for both cycle prices before it mints
+           anything, so the merchant chooses monthly or yearly against real
+           figures. The stub answers with the seller_basic catalogue entry. */
+        if (name === 'subGetPlans') {
+          window.__calls.subGetPlans++;
+          return { data: { plans: [ { id: 'seller_basic', name: 'Seller Basic',
+                   hubType: 'seller', tier: 'basic',
+                   price: { monthly: 99900, annual: 999000 }, trial: { days: 3 } } ] } };
+        }
         if (name === 'createPaymentIntent') {
           window.__calls.createPaymentIntent++;
           return { data: { paymentIntentId: 'pi_' + window.__calls.createPaymentIntent,
-                           planId: args.planId, planName: 'Seller Basic', amount: 999,
+                           planId: args.planId, planName: 'Seller Basic', amount:
+                             args.billingCycle === 'annual' ? 9990 : 999,
+                           trialDays: 3,
                            /* INTERPOLATED at Node level: this string is injected into the
                               BROWSER, where STARTER_LIMIT does not exist. Referencing it
                               bare made the stub throw, createPaymentIntent reject, and the
@@ -130,6 +142,25 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
     if (scenario) await page.addInitScript('window.__scenario = ' + JSON.stringify(scenario) + ';');
     await page.goto(url || (BASE + '/subscription-checkout.html?planId=seller_basic&cycle=monthly'));
     await page.waitForFunction('window.__checkoutState && window.__checkoutState().phase !== "loading"', null, { timeout: 8000 });
+    /* The billing cycle is now chosen BEFORE anything is minted, so a fresh
+       checkout opens on the cycle screen. Walk it exactly as a merchant would.
+       This is not a bypass: section 2b asserts what that screen shows and that
+       no intent exists until Continue is pressed. */
+    if (await page.evaluate('window.__checkoutState().phase') === 'cycle') {
+      await page.click('[data-act="cycle-next"]');
+      await page.waitForFunction('window.__checkoutState().phase !== "cycle"', null, { timeout: 8000 });
+    }
+    return page;
+  }
+
+  /* Opens and STOPS on the cycle screen, for assertions about that step. */
+  async function openAtCycle(url) {
+    const page = await ctx.newPage();
+    await page.route('**/sokoni-init.js', function (r) { return r.fulfill({ contentType: 'text/javascript', body: '' }); });
+    await page.route('**/firebase.js', function (r) { return r.fulfill({ contentType: 'text/javascript', body: '' }); });
+    await page.addInitScript(STUB);
+    await page.goto(url || (BASE + '/subscription-checkout.html?planId=seller_basic&cycle=monthly'));
+    await page.waitForFunction('window.__checkoutState && window.__checkoutState().phase !== "loading"', null, { timeout: 8000 });
     return page;
   }
 
@@ -157,6 +188,42 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
      pageSrc.indexOf('whenReady') > -1);
   ck('NC the detector would notice if the bootstrap were removed',
      '<script src="only-my-logic.js"></script>'.indexOf('sokoni-init.js') === -1);
+
+  head('2a - the billing cycle is chosen before any money is committed');
+  /* A checkout that assumed monthly would sell the wrong product silently. The
+     merchant sees both catalogue prices and picks; nothing is minted until they
+     do, so backing out costs nothing. */
+  const cyc = await openAtCycle();
+  ck('a fresh checkout opens on the cycle step',
+     await cyc.evaluate('window.__checkoutState().phase') === 'cycle');
+  ck('NO payment intent has been minted yet',
+     await cyc.evaluate('window.__calls.createPaymentIntent') === 0,
+     'choosing a cycle must not commit a purchase');
+  ck('the catalogue was consulted for the prices',
+     await cyc.evaluate('window.__calls.subGetPlans') === 1);
+  const cycText = await cyc.textContent('#root');
+  /* No \b after the figure: textContent concatenates the price and its unit into
+     "KES 999per month", and 9->p is not a word boundary. "KES 9,990" does not
+     contain "KES 999", so the plain form stays unambiguous. */
+  ck('the monthly price is shown', /KES 999per month/.test(cycText), 'from the catalogue');
+  ck('the yearly price is shown', /KES 9,990/.test(cycText));
+  ck('the included trial is stated', /3-day trial included/.test(cycText));
+  ck('the merchant is told they are paying TODAY',
+     /paying today/i.test(cycText) && /begins automatically when the trial ends/i.test(cycText),
+     'no ambiguity about whether a card is charged now');
+  /* Choosing yearly must mint YEARLY — the cycle the merchant picked, not the
+     one the URL happened to carry. */
+  await cyc.click('[data-c="annual"]');
+  await cyc.click('[data-act="cycle-next"]');
+  await cyc.waitForFunction('window.__checkoutState().phase !== "cycle"', null, { timeout: 8000 });
+  ck('exactly one intent is minted on Continue',
+     await cyc.evaluate('window.__calls.createPaymentIntent') === 1);
+  ck('...for the cycle the merchant chose, not the URL default',
+     await cyc.evaluate('window.__checkoutState().plan.cycleLabel') === 'per year',
+     await cyc.evaluate('window.__checkoutState().plan.cycleLabel'));
+  ck('the yearly price is what is presented for payment',
+     /KES 9,990/.test(await cyc.textContent('.plan')));
+  await cyc.close();
 
   head('2 - the plan and price come from the SERVER');
   let page = await open();

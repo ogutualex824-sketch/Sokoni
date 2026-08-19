@@ -174,6 +174,18 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
     logger.warn('[intent] active-subscription check failed, continuing', { uid, err: e.message });
   }
 
+  /* ── Trial terms are part of the PURCHASE, derived here ──────────────────
+     The trial that ships with a paid plan is a package feature, not the
+     promotional free trial. It is resolved from the catalogue at mint time and
+     carried on the intent so the reconciler activates on the terms that were
+     quoted, not on whatever the catalogue says days later when the webhook
+     lands. The browser cannot influence it.
+
+     This is deliberately NOT a trialLedger question. trialLedger governs
+     eligibility for the FREE promotional trial; asking it here is what made
+     "you have already used your free plan" block a paid purchase. */
+  const trialDays = Math.max(0, Math.min(90, Number((plan.trial || {}).days) || 0));
+
   const ref = _mintRef();
   const now = Date.now();
 
@@ -183,6 +195,7 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
     planId,
     planName:     plan.name || planId,
     billingCycle: cycle,
+    trialDays,                        /* quoted terms, honoured at activation */
     amount:       amountKES,          /* the figure initiateSTKPush enforces */
     amountCents:  cents,
     currency:     'KES',
@@ -215,6 +228,9 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
     amount: amountKES,
     currency: 'KES',
     billingCycle: cycle,
+    /* So the checkout can state plainly when money moves and when the paid
+       period starts. Display only — the reconciler reads the stored intent. */
+    trialDays,
     expiresAt: now + TTL_MS,
   };
 });

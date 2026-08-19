@@ -1,3 +1,116 @@
+## [2026-08-19] — Buying a plan is not asking for a free trial
+
+**Nothing deployed.** Functions changed but NOT pushed; hosting unchanged. `MERCHANT_URL`
+still `/merchant`. KASS untouched.
+
+A merchant pressing **Pay** for Seller Basic was told *"you have already used your free
+plan"*. Two unrelated questions had been collapsed into one:
+
+| Question | Authority |
+| --- | --- |
+| Am I eligible for a promotional free trial? | `trialLedger` |
+| May I buy this plan? | nothing to do with trials |
+
+### The defect
+
+`plans.html` rendered ONE button per plan, labelled from the plan's trial days, and
+`confirmSubscribe()` branched the same way:
+
+```js
+if (plan.trialDays > 0) { /* trial */ } else { /* checkout */ }
+```
+
+Seller Basic ships with `trial: {days: 3}`, so its **paid branch was unreachable**. No
+payment intent could ever be minted for it, by anyone — which is also why the earlier
+failed purchase produced no intent. The page now branches on the **action the merchant
+chose**, and a paid plan always renders a Subscribe button.
+
+### Two concepts, separated
+
+* **Free trial eligibility** — `trialLedger`, consulted ONLY by the explicit
+  *Start free trial* action. `subGetStatus` now reports eligibility so the offer is
+  hidden rather than shown and refused; an unresolved answer defaults to hiding it.
+* **Paid subscription** — never consults the ledger. Certified structurally:
+  `createPaymentIntent` and `reconcilePaidIntent` contain no reference to
+  `trialLedger` or `trialState` in code.
+
+### A paid trial delays the paid period; it does not consume it
+
+Paying on 19 Aug with a 3-day trial:
+
+```
+trial    19 Aug -> 22 Aug     (already paid for)
+paid     22 Aug -> 22 Sep     (monthly)   or  22 Aug 2026 -> 22 Aug 2027
+renewal  22 Sep
+```
+
+Charging for 30 days and delivering 27 is a refund request. `currentPeriodStart` is now
+the trial end. Trial terms are quoted by the server at mint time and stamped on the
+intent, so activation honours the terms the merchant **paid against**, not whatever the
+catalogue says when the webhook lands.
+
+The subscription document states the three facts separately —
+`paymentStatus` / `subscriptionStatus` / `trialStatus` — plus `trialSource`,
+`trialEnd` and `renewalDueAt`. `status` remains the single field every existing reader
+consults; `trialing` and `active` are both entitled, so access starts the moment they pay.
+
+### The trial sweep no longer bills a paying merchant twice
+
+`subProcessExpirations` sent **any** `TRIALING` subscription past its end to
+`PAST_DUE` — *"Subscribe now to keep your features"*. A paid trial would have landed
+there. It now discriminates on `paymentStatus`:
+
+* paid trial ends -> `ACTIVE`, *"nothing more to pay"*
+* promotional trial ends -> `PAST_DUE`, unchanged
+
+`trialEnd` is read first and `currentPeriodEnd` second, so **existing promotional
+trials behave exactly as before** — asserted as a legacy control.
+
+### The checkout asks for the cycle before committing money
+
+Monthly/Yearly are chosen on a step that mints nothing; the URL only *preselects*.
+Prices come from `subGetPlans`, never a constant. Both screens state plainly:
+*"You're paying today. Your 3-day trial starts immediately. Your paid subscription
+begins automatically when the trial ends."*
+
+### Certification
+
+`scripts/test-paid-trial-boundary.js` — **82/0, 2 unproven**, including all four
+combinations against the Firestore emulator:
+
+| Plan | Cycle | Trial | Result |
+| --- | --- | --- | --- |
+| Seller Basic | Monthly | 3-day | 30-day paid period starting +3d, `trialing` |
+| Seller Basic | Annual | 3-day | 365-day paid period starting +3d, `trialing` |
+| Seller Basic | Monthly | none | 30-day paid period starting now, `active` |
+| Seller Basic | Annual | none | 365-day paid period starting now, `active` |
+
+Plus the promotional path (`FREE -> trial -> expires -> FREE`, read through
+`entitlementFor`: 100 listings during trial, 10 after) and negative controls that
+reconstruct the original defect and confirm the detector fails on it.
+
+Regression: checkout journey **52/0** (new cycle-step section), subscription checkout
+**64/0**, bootstrap-real **18/0**, pay-methods **71/0**, entitlement authority **79/0**.
+
+### Files
+
+`plans.html` · `subscription-checkout.html` · `functions/payment-intents.js` ·
+`functions/subscription-pay-methods.js` · `functions/sub-billing.js` ·
+`scripts/test-paid-trial-boundary.js` · `scripts/test-checkout-journey.js`
+
+**Security:** trial terms and price are both server-derived; the browser names a cycle,
+never an amount or a trial length. **Breaking:** none — new fields are additive and the
+legacy trial shape is preserved.
+
+> **OPEN (flagged, not fixed):** a merchant who spends the promotional trial and then
+> buys still receives the plan's bundled trial. Per the stated commercial flow the paid
+> path attaches the trial unconditionally; gating it is a one-line change if that
+> double-dip is not intended.
+
+> **OPEN:** `isEntitled('past_due')` returns true while
+> `entitlementFor({status:'past_due'})` resolves to free-tier limits. The authority path
+> uses the latter and is correct; the two should be reconciled.
+
 ## [2026-08-19] — The universal SOKONI receipt contract, LOCKED
 
 **Nothing deployed.** `MERCHANT_URL` unchanged. No Firestore, rules, Functions or
