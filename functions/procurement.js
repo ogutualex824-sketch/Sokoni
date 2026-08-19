@@ -835,6 +835,22 @@ const approveAndPayInvoice = onCall(OPT, async (request) => {
   const now   = F.serverTimestamp();
   const batch = db.batch();
 
+  /* ── THE ATOMIC CLAIM ─────────────────────────────────────────────────────
+     The `inv.paidAt !== null` check above is a READ, and the writes below are a
+     separate batch. Two concurrent payments for one invoice both read paidAt as
+     null, both pass the guard, and both run
+     `currentBalance: F.increment(-inv.total)` — the supplier's balance reduced
+     twice for a single payment, with two ledger entries to match.
+
+     One payment per invoice, claimed atomically. The read guard is kept: it
+     gives the caller a clear message on an obvious replay, while this is what
+     actually decides. */
+  batch.create(db.collection('procInvoicePayments').doc(invoiceId), {
+    invoiceId, paidBy: uid, supplierId: inv.supplierId,
+    amount: inv.total, paymentMethod: _san(paymentMethod, 50),
+    paymentRef: paymentRef ? _san(paymentRef, 200) : null, claimedAt: now,
+  });
+
   /* Update invoice */
   batch.update(invRef, {
     status:        'paid',
@@ -897,7 +913,17 @@ const approveAndPayInvoice = onCall(OPT, async (request) => {
     });
   }
 
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (e) {
+    /* The claim held: this invoice was already paid by a concurrent caller, so
+       the whole batch — supplier balance and ledger included — was rejected.
+       Reported as a duplicate payment, exactly as the read guard would have. */
+    if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+      _err('Invoice has already been paid. Duplicate payment prevented.', 'already-exists');
+    }
+    throw e;
+  }
 
   await _audit(uid, 'supplier_invoice_paid', invoiceId, {
     merchantId: inv.merchantId, supplierId: inv.supplierId,

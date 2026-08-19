@@ -264,6 +264,22 @@ const sasosAllocateCredits = onCall(
     const batch   = db().batch();
     const credRef = db().collection('aiCredits').doc(targetUid);
 
+    /* ── THE ATOMIC CLAIM ───────────────────────────────────────────────────
+       This granted credits with no idempotency key of any kind: an admin
+       double-click, or a retry after a dropped response, ran
+       `increment(amount)` twice and there is no way to un-grant credits.
+
+       sasos-admin.html now mints one allocationId per intended allocation and
+       reuses it across retries. A caller that does not supply one (an older
+       cached client) still works exactly as before — its generated key is
+       unique per call — so this is backward compatible while the shipped client
+       is genuinely protected. */
+    const allocationId = san(req.data.allocationId || '', 128) ||
+      ('srv_' + adminUid + '_' + now + '_' + Math.random().toString(36).slice(2, 10));
+    batch.create(db().collection('sasosAllocationClaims').doc(allocationId), {
+      allocationId, uid: targetUid, adminUid, amount, reason, claimedAt: now,
+    });
+
     batch.set(credRef, {
       uid: targetUid,
       balance:        FieldValue.increment(amount),
@@ -281,7 +297,17 @@ const sasosAllocateCredits = onCall(
       ts: FieldValue.serverTimestamp(), server: true,
     });
 
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* The claim did its job — this allocationId was already granted, so the
+         whole batch including the increments was rejected. */
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+        logger.info(`[SASOS-Usage] Duplicate allocation refused: ${allocationId}`);
+        return { success: true, allocated: amount, duplicate: true };
+      }
+      throw e;
+    }
     logger.info(`[SASOS-Usage] Credits allocated: uid=${targetUid} amount=${amount} by=${adminUid}`);
     return { success: true, allocated: amount };
   }

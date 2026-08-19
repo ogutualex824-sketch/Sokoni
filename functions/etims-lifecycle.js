@@ -115,13 +115,28 @@ async function applyLifecycleOp(db, { op, originalInvoice, items, reason, vatSta
   const id  = docId(op, doc.origInvoiceId, idempotencyKey);
   const ref = db.collection(COLL[op]).doc(id);
 
-  const existing = await ref.get();
-  if (existing.exists) return { id, deduplicated: true, doc: existing.data() };
-
   const kraPayload    = KraAdapter.buildPayload(op, doc);   // isolated — PENDING until spec
   const transmittable = KraAdapter.isTransmittable(kraPayload);
   const record = { ...doc, id, idempotencyKey: idempotencyKey || null, kraPayload, transmittable, createdAt: now, updatedAt: now, actor };
-  await ref.set(record);
+
+  /* ── create(), not get()-then-set() ───────────────────────────────────────
+     A tax document must exist exactly once. The old read-then-set let two
+     concurrent calls with the same idempotencyKey both see it absent and both
+     write, producing a duplicate KRA submission record and a second audit event
+     for one invoice.
+
+     create() is the atomic claim; on ALREADY_EXISTS the winner's document is
+     read back and returned, so the caller still receives the canonical record
+     rather than an error. */
+  try {
+    await ref.create(record);
+  } catch (e) {
+    if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+      const winner = await ref.get();
+      return { id, deduplicated: true, doc: winner.exists ? winner.data() : record };
+    }
+    throw e;
+  }
 
   await Audit.recordAuditEvent(db, {
     entityType: 'invoice', entityId: doc.origInvoiceId, event: op, newStatus: doc.status,

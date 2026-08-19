@@ -101,9 +101,17 @@ const activateAIPlan = onCall(
       }, { merge: true });
     }
 
-    /* Mark payment ref as used (idempotency lock) */
+    /* ── THE IDEMPOTENCY CLAIM — create(), never set() ─────────────────────
+       set() cannot fail on an existing document, so the read above was the only
+       thing standing between two concurrent deliveries of the same paymentRef
+       and a doubled credit grant. Both would find the ref absent, both would
+       commit, and `increment(plan.aiCreditsIncluded)` would run twice.
+
+       create() makes the claim atomic: the second commit fails whole with
+       ALREADY_EXISTS, taking the increments with it. Same fix, same collection,
+       as subscription-os.js:326. */
     if (paymentRef) {
-      batch.set(db().collection('aiPaymentRefs').doc(paymentRef), {
+      batch.create(db().collection('aiPaymentRefs').doc(paymentRef), {
         uid, planId, billing, processedAt: now,
       });
     }
@@ -189,10 +197,10 @@ const topupAICredits = onCall(
     if (!pack) throw new HttpsError('invalid-argument', `Unknown credit pack: ${packId}`);
     if (!paymentRef) throw new HttpsError('invalid-argument', 'paymentRef required.');
 
-    /* Idempotency */
-    const existing = await db().collection('aiPaymentRefs').doc(paymentRef).get();
-    if (existing.exists) return { success: true, idempotent: true };
-
+    /* No read-then-check here. The batch.create() below IS the idempotency
+       claim, and it is atomic; a preceding get() could only ever be an
+       optimisation that reproduced the racy shape it was meant to avoid.
+       A replay is recognised by ALREADY_EXISTS on commit. */
     const batch = db().batch();
     batch.set(db().collection('aiCredits').doc(uid), {
       uid,
@@ -203,10 +211,23 @@ const topupAICredits = onCall(
     batch.set(db().collection('aiCreditLedger').doc(), {
       uid, type: 'topup', credits: pack.credits, price: pack.price, packId, paymentRef, ts: Date.now(),
     });
-    batch.set(db().collection('aiPaymentRefs').doc(paymentRef), {
+    /* create(), not set() — the atomic claim. See the note in subscribe():
+       a set() here let two concurrent deliveries of one paymentRef both commit
+       and grant the credit pack twice. */
+    batch.create(db().collection('aiPaymentRefs').doc(paymentRef), {
       uid, packId, processedAt: Date.now(),
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* The claim did its job: this paymentRef was already granted, so the
+         whole batch — increments included — was rejected. That is the correct
+         outcome and the caller's request is already satisfied. */
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+        return { success: true, idempotent: true };
+      }
+      throw e;
+    }
 
     logger.info(`[AISubs] Credits topped up: uid=${uid} pack=${packId} credits=${pack.credits}`);
     return { success: true, credits: pack.credits };
@@ -250,21 +271,46 @@ const resetAIUsage = onSched(
     const subsSnap = await db().collection('aiSubscriptions')
       .where('status', '==', 'active').limit(1000).get();
 
-    const creditBatch = db().batch();
-    let credited = 0;
-    subsSnap.docs.forEach(doc => {
+    /* ── ONE GRANT PER SUBSCRIBER PER PERIOD ────────────────────────────────
+       This ran `increment(plan.aiCreditsIncluded)` with no idempotency key of
+       any kind. A scheduled function is delivered AT LEAST once, not exactly
+       once: a retry, an overlapping run, or a manual re-invocation credited
+       every active subscriber a second time, and an increment cannot be undone
+       by re-running anything.
+
+       The grant is now claimed per (uid, period) with create(). Each subscriber
+       is committed in their OWN batch so that one already-granted subscriber
+       fails alone with ALREADY_EXISTS instead of aborting the whole run — a
+       single shared batch would make one replayed grant block every remaining
+       subscriber from being credited at all. */
+    let credited = 0, alreadyGranted = 0, failed = 0;
+    for (const doc of subsSnap.docs) {
       const sub  = doc.data();
       const plan = PLANS[sub.plan];
-      if (!plan || plan.aiCreditsIncluded === 0) return;
-      creditBatch.set(db().collection('aiCredits').doc(sub.uid), {
-        uid:           sub.uid,
-        balance:       admin.firestore.FieldValue.increment(plan.aiCreditsIncluded),
+      if (!plan || plan.aiCreditsIncluded === 0) continue;
+
+      const b = db().batch();
+      b.create(db().collection('aiCreditGrants').doc(sub.uid + '_' + period), {
+        uid: sub.uid, period, plan: sub.plan,
+        credits: plan.aiCreditsIncluded, grantedAt: Date.now(),
+      });
+      b.set(db().collection('aiCredits').doc(sub.uid), {
+        uid:            sub.uid,
+        balance:        admin.firestore.FieldValue.increment(plan.aiCreditsIncluded),
         totalPurchased: admin.firestore.FieldValue.increment(plan.aiCreditsIncluded),
-        lastCredited:  Date.now(),
+        lastCredited:   Date.now(),
       }, { merge: true });
-      credited++;
-    });
-    if (credited > 0) await creditBatch.commit();
+
+      try { await b.commit(); credited++; }
+      catch (e) {
+        /* ALREADY_EXISTS is the claim doing its job on a replay, not a fault. */
+        if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) alreadyGranted++;
+        else { failed++; logger.error('[AISubs] grant failed', { uid: sub.uid, period, err: e && e.message }); }
+      }
+    }
+    if (alreadyGranted || failed) {
+      logger.info('[AISubs] resetAIUsage claims', { credited, alreadyGranted, failed, period });
+    }
 
     logger.info(`[AISubs] resetAIUsage: credited ${credited} active subscribers for period ${period}`);
     return null;

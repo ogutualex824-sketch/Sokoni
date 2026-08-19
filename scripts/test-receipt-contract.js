@@ -196,18 +196,24 @@ head('9 - branded merchant identity, every line conditional');
 const full = R.render(order({ settlement: settleCash, fulfilment: pickup(),
   shop: { name: "Alex's Store", phone: '0712345678', email: 'shop@x.co.ke',
           address: 'Ngong Rd', city: 'Nairobi', logo: 'https://x/logo.png' },
-  tax: { kraPin: 'P051234567X' }, terminalId: 'TILL-2', servedBy: EMPLOYEE }));
+  tax: { kraPin: 'P052468135M' }, terminalId: 'TILL-2', servedBy: EMPLOYEE }));
 const tFull = R.toText(full);
 const fullLines = tFull.split(NL).map((l) => l.trim());
 ck('SOKONI leads the receipt', fullLines[0] === 'SOKONI', fullLines[0]);
 ck('...with the shop name directly under it', fullLines[1] === "Alex's Store", fullLines[1]);
 ck('phone, email and location appear',
    /0712345678/.test(tFull) && /shop@x.co.ke/.test(tFull) && /Ngong Rd, Nairobi/.test(tFull));
-ck('KRA PIN appears when the merchant has one', tFull.indexOf('KRA PIN: P051234567X') > -1);
+ck('KRA PIN appears when the merchant has one', tFull.indexOf('KRA PIN: P052468135M') > -1);
 ck('the logo is carried as a URL for the screen', blockOf(full,'identity').logo === 'https://x/logo.png');
 ck('a REAL terminal is named', tFull.indexOf('Terminal: TILL-2') > -1);
 ck('Powered by SOKONI is on it', tFull.indexOf(R.POWERED_BY) > -1);
+/* Asserted against the LITERAL canonical legal name, not only R.BRAVILEX. If the
+   constant were ever edited to a shortened or stale form, comparing it to itself
+   would still pass — the receipt would carry the wrong legal identity and this
+   suite would agree with it. The company-identity gate reads this literal too. */
 ck('the Bravilex operating identity is on it', tFull.replace(/\s+/g, ' ').indexOf(R.BRAVILEX) > -1);
+ck('...spelled as the canonical legal name',
+   R.BRAVILEX === 'Bravilex International Co. Limited', R.BRAVILEX);
 ck('the tagline is carried in the structure for the digital footer',
    closeOf(full).tagline === R.TAGLINE);
 /* Bravilex must appear ONCE on 32-column paper. The copyright line stays in the

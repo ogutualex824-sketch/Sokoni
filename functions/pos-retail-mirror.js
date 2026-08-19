@@ -38,11 +38,20 @@ exports.mirrorPosTransactionToRetail = onDocumentCreated(
     if (!mirror.merchantId || !saleId) return;   /* need an owner to scope by */
 
     const ref = db.collection('posRetailSales').doc(String(saleId));
-    /* Idempotent: if a mirror already exists, do nothing (never re-stamp createdAt). */
-    const existing = await ref.get().catch(() => null);
-    if (existing && existing.exists) return;
+    /* ── create(), not get()-then-set() ─────────────────────────────────────
+       Trigger delivery is AT LEAST once. The old read-then-set let two
+       deliveries of one sale both find the mirror absent and both write it,
+       re-stamping createdAt — the field the guard existed to protect — and
+       moving the sale in every report that orders by it.
 
+       create() decides the winner atomically. ALREADY_EXISTS means another
+       delivery got there first, which is success, not failure. */
     mirror.createdAt = FieldValue.serverTimestamp();   /* the only non-pure field */
-    await ref.set(mirror, { merge: true });
+    try {
+      await ref.create(mirror);
+    } catch (e) {
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) return;
+      throw e;
+    }
   }
 );

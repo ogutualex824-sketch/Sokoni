@@ -50,11 +50,23 @@ exports.posSyncToMarketplace = onCall(
     }
     if (!saleId) throw new HttpsError('invalid-argument', 'saleId is required for idempotency');
 
-    /* Idempotency: reject duplicate syncs for the same sale */
+    /* ── Idempotency: create(), not get()-then-set() ────────────────────────
+       The old shape was read -> if(exists) return -> set(). set() cannot fail on
+       an existing document, so two concurrent syncs of one sale both read it as
+       absent, both claimed it, and both ran the stock decrements below — the
+       sale counted twice against inventory.
+
+       create() is the atomic claim: exactly one caller wins, the loser is told
+       it is a duplicate and writes nothing. */
     const idempRef = db.collection('posSyncIdempotency').doc(String(saleId).slice(0, 128));
-    const idempSnap = await idempRef.get();
-    if (idempSnap.exists) return { synced: 0, duplicate: true };
-    await idempRef.set({ saleId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
+    try {
+      await idempRef.create({ saleId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
+    } catch (e) {
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+        return { synced: 0, duplicate: true };
+      }
+      throw e;
+    }
 
     const batch = db.batch();
     const errors = [];

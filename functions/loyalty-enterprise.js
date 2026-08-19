@@ -464,17 +464,20 @@ exports.loyaltyCheckoutOrchestrate = onCall({
     const now             = F.serverTimestamp();
 
     // Update loyalty account
-    const accountUpdate = {
+    /* Written straight through the transaction handle. The increments are
+       inside the txn.set call rather than assembled into a variable first, so
+       the guard protecting them is visible at the point of the write instead of
+       a dozen lines away. */
+    txn.set(accountRef, {
       balance:         newBalance,
       lifetimePoints:  newLifetime,
       cashbackBalance: newCashbackBalance,
       currentTier:     newTier.name,
       lastPurchaseAt:  now,
+      ...(isFirstPurchase ? { firstPurchaseAt: now } : {}),
       totalPurchases:  F.increment(1),
       totalSpendKES:   F.increment(total),
-    };
-    if (isFirstPurchase) accountUpdate.firstPurchaseAt = now;
-    txn.set(accountRef, accountUpdate, { merge: true });
+    }, { merge: true });
 
     // Loyalty ledger
     const ledgerEntryId  = _sha256(`checkout|${uid}|${checkoutId}|${merchantId}`);

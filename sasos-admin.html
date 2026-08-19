@@ -1079,15 +1079,34 @@ async function lookupUsage() {
   } catch (e) { toast('Usage lookup failed: ' + e.message, true); }
 }
 
+/* One idempotency key per intended allocation. It is minted when the admin
+   submits and only replaced once the server has accepted, so a double-click, an
+   impatient second press or a retry after a dropped response all carry the SAME
+   key — and the server grants the credits once. Granting credits twice cannot be
+   undone by pressing anything. */
+let _allocationId = null;
 async function allocateCredits() {
   const uid    = document.getElementById('cr-uid').value.trim();
   const amount = Number(document.getElementById('cr-amount').value);
   const reason = document.getElementById('cr-reason').value.trim();
   if (!uid || !amount) return toast('UID and amount required.', true);
+  const btn = document.querySelector('[onclick="allocateCredits()"]');
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+  if (!_allocationId) {
+    _allocationId = 'alloc_' + Date.now().toString(36) + '_' +
+      Math.random().toString(36).slice(2, 10);
+  }
   try {
-    await CF('sasosAllocateCredits')({ uid, amount, reason });
-    toast(`${amount} credits allocated to ${uid.slice(0,12)}…`);
-  } catch (e) { toast('Credit allocation failed: ' + e.message, true); }
+    const res = await CF('sasosAllocateCredits')({ uid, amount, reason, allocationId: _allocationId });
+    _allocationId = null;                        /* accepted — the next click is a NEW allocation */
+    if (res && res.data && res.data.duplicate) toast('Already allocated — not granted twice.');
+    else toast(`${amount} credits allocated to ${uid.slice(0,12)}…`);
+  } catch (e) {
+    /* The key is deliberately KEPT so a retry is recognised as the same
+       allocation rather than becoming a second grant. */
+    toast('Credit allocation failed: ' + e.message, true);
+  } finally { if (btn) btn.disabled = false; }
 }
 
 async function checkCredits() {

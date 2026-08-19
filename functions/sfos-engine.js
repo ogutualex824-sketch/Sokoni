@@ -325,37 +325,45 @@ async function _writeAuditLog(db, uid, action, entityType, entityId, details = {
  * Increment velocity counters on sfosIdentity.
  * Resets the counter if the day / month has rolled over.
  */
+/* ── READ AND WRITE IN ONE TRANSACTION ────────────────────────────────────────
+   The rollover decision is derived from the document's own reset markers, so a
+   bare get() followed by an update() is a read-modify-write with a gap in the
+   middle. Two concurrent spends at a day boundary could both read the stale
+   marker and both take the reset branch, each SETTING dailySpent to its own
+   amount — the other spend erased rather than counted. Off the boundary they
+   could both take the increment branch against a stale read.
+
+   These counters gate spending limits, so under-counting silently raises a
+   merchant's effective limit. runTransaction makes the decision and the write
+   one atomic step. */
 async function _updateVelocity(db, uid, amount) {
   try {
-    const ref  = db.collection('sfosIdentity').doc(uid);
-    const snap = await ref.get();
-    if (!snap.exists) return;
+    const ref = db.collection('sfosIdentity').doc(uid);
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) return;
 
-    const now   = new Date();
-    const data  = snap.data();
-    const update = { updatedAt: Timestamp.now() };
+      const now  = new Date();
+      const data = snap.data();
 
-    const todayStr  = now.toISOString().slice(0, 10);
-    const monthStr  = now.toISOString().slice(0, 7);
+      const todayStr  = now.toISOString().slice(0, 10);
+      const monthStr  = now.toISOString().slice(0, 7);
+      const lastDay   = data.velocityDayReset   ? data.velocityDayReset.toDate().toISOString().slice(0, 10) : null;
+      const lastMonth = data.velocityMonthReset ? data.velocityMonthReset.toDate().toISOString().slice(0, 7) : null;
 
-    const lastDay   = data.velocityDayReset   ? data.velocityDayReset.toDate().toISOString().slice(0, 10) : null;
-    const lastMonth = data.velocityMonthReset ? data.velocityMonthReset.toDate().toISOString().slice(0, 7) : null;
-
-    if (lastDay !== todayStr) {
-      update.dailySpent        = amount;
-      update.velocityDayReset  = Timestamp.now();
-    } else {
-      update.dailySpent = FieldValue.increment(amount);
-    }
-
-    if (lastMonth !== monthStr) {
-      update.monthlySpent        = amount;
-      update.velocityMonthReset  = Timestamp.now();
-    } else {
-      update.monthlySpent = FieldValue.increment(amount);
-    }
-
-    await ref.update(update);
+      /* Rolled over -> start the window at this amount. Same window -> add to it.
+         Written through the transaction handle, so the branch and the write
+         cannot be separated by a concurrent spend. */
+      t.update(ref, {
+        updatedAt: Timestamp.now(),
+        ...(lastDay !== todayStr
+          ? { dailySpent: amount, velocityDayReset: Timestamp.now() }
+          : { dailySpent: FieldValue.increment(amount) }),
+        ...(lastMonth !== monthStr
+          ? { monthlySpent: amount, velocityMonthReset: Timestamp.now() }
+          : { monthlySpent: FieldValue.increment(amount) }),
+      });
+    });
   } catch (e) {
     _log('warn', '_updateVelocity error', { uid, err: e.message });
   }

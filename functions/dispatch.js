@@ -335,8 +335,18 @@ exports.captureProofOfDelivery = onCall(
       otp, photoUrl, gpsLat, gpsLng, gpsAccuracyM, signatureDataUrl: signatureDataUrl || null,
       qrVerified: qrVerified === true,
     });
+    /* ── ONE PROOF PER DELIVERY, CLAIMED ATOMICALLY ─────────────────────────
+       Nothing here checked whether the delivery was ALREADY marked delivered.
+       A retry, a double-tap on the rider's handset, or a replayed call ran the
+       batch again — and `totalEarnings: increment(delivery.driverNet)` below
+       credited the rider a second time for one delivery. An increment cannot be
+       reversed by repeating anything.
+
+       deliveryProofs/{deliveryRef} is by definition one-per-delivery, so it is
+       the natural claim. create() makes it atomic: the second caller's batch
+       fails whole with ALREADY_EXISTS, taking the earnings increment with it. */
     const batchOp = firestore.batch();
-    batchOp.set(firestore.collection('deliveryProofs').doc(deliveryRef), { ...proofRecord, createdAt: _now() });
+    batchOp.create(firestore.collection('deliveryProofs').doc(deliveryRef), { ...proofRecord, createdAt: _now() });
     batchOp.update(firestore.collection('packageRequests').doc(deliveryRef), {
       status:           'delivered',
       deliveredAt:      _now(),
@@ -355,7 +365,18 @@ exports.captureProofOfDelivery = onCall(
       totalEarnings:    admin.firestore.FieldValue.increment(delivery.driverNet || 0),
       updatedAt:        _now(),
     });
-    await batchOp.commit();
+    try {
+      await batchOp.commit();
+    } catch (e) {
+      /* The claim held: this delivery was already proven and already paid. The
+         rider's app should see success, not an error that invites a retry —
+         but nothing is credited a second time. */
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+        logger.info('[dispatch] proof replay ignored', { deliveryRef, riderId });
+        return { status: 'delivered', alreadyCaptured: true };
+      }
+      throw e;
+    }
 
     /* Unified multi-channel notification (push + SMS + email + WhatsApp) */
     await _sendNotification('delivered', delivery, deliveryRef);

@@ -611,7 +611,13 @@ const sasosSubscribe = onCall(
 
     /* Idempotency key */
     if (payRef) {
-      batch.set(db().collection('sasosPaymentRefs').doc(payRef), {
+      /* create(), NOT set(). This is the atomic idempotency claim for the
+         payment reference: if another delivery of the same payRef already holds
+         it, the whole batch — including the AI credit increments below — fails
+         with ALREADY_EXISTS and is discarded. set() cannot fail on an existing
+         document, so both deliveries would have committed and the plan's
+         credits would have been granted twice for one payment. */
+      batch.create(db().collection('sasosPaymentRefs').doc(payRef), {
         uid, planId, billing, processedAt: now,
         subscription: { planId, productId, tier, status: newState.status },
       });
@@ -651,7 +657,18 @@ const sasosSubscribe = onCall(
     /* Invalidate entitlement cache */
     batch.set(db().collection('entitlements').doc(uid), { updatedAt: now, needsRefresh: true }, { merge: true });
 
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* The payRef claim above is atomic. ALREADY_EXISTS means another delivery
+         of this same payment already applied the subscription and its credits;
+         this batch was rejected whole, which is the correct outcome. */
+      if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') > -1)) {
+        logger.info(`[SASOS] subscribe replay ignored: uid=${uid} payRef=${payRef}`);
+        return { success: true, subscription: newState, idempotent: true };
+      }
+      throw e;
+    }
     logger.info(`[SASOS] subscribe: uid=${uid} plan=${planId} billing=${billing} trial=${isTrial}`);
 
     return { success: true, subscription: newState };

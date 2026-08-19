@@ -1096,14 +1096,21 @@ async function _svcNotification({ to, template, data, channels }, inst) {
   /* Use instanceId+stepId for idempotency — prevents duplicate notifications on retry */
   const notifId = `${inst.id}_notif_${template}`;
   const ref     = db.collection("notificationQueue").doc(notifId);
-  const existing = await ref.get();
-  if (existing.exists) return { sent: true, notificationId: notifId };
-  await ref.set({
-    to, template, data: data ?? {},
-    channels: channels ?? ["push", "inapp"],
-    status: "queued", queuedAt: Date.now(), wf: inst.id,
-    serverTs: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  /* create(), not get()-then-set(): set() cannot fail on an existing document,
+     so two concurrent step retries both saw the queue entry absent and both
+     queued it — the recipient got the notification twice. create() lets exactly
+     one win; ALREADY_EXISTS means it is already queued, which is the outcome
+     the caller wanted. */
+  try {
+    await ref.create({
+      to, template, data: data ?? {},
+      channels: channels ?? ["push", "inapp"],
+      status: "queued", queuedAt: Date.now(), wf: inst.id,
+      serverTs: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    if (!(e && (e.code === 6 || String(e.message || "").indexOf("ALREADY_EXISTS") > -1))) throw e;
+  }
   return { sent: true, notificationId: notifId };
 }
 
