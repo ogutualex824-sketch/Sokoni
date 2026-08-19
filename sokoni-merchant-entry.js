@@ -70,7 +70,14 @@
 
      Clean routes, not '.html'. firebase.json sets cleanUrls:true, so 'merchant-v2.html'
      301-redirects; a CTA must reach the shell in ONE navigation, not a redirect chain. */
-  var MERCHANT_URL = '/merchant-v2';
+  /* ── THE CUTOVER IS A SEPARATE RELEASE ─────────────────────────────────────
+     This was /merchant-v2. Hosting publishes the TREE, so shipping it inside the
+     subscription release would have flipped every merchant to v2 as a side
+     effect — an uncertified cutover riding along with an unrelated release.
+     v2 still owes its own browser certification: role switching, the Sell
+     journey, online orders, Messages, receipts, employee/owner attribution and
+     a phone-viewport pass. Flip this in the v2 release, not this one. */
+  var MERCHANT_URL = '/merchant';
   var ONBOARD_URL  = '/offer';        /* not approved — seller intake             */
   var SIGNIN_URL   = '/login';
 
