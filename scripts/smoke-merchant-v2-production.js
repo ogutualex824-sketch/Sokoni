@@ -46,9 +46,15 @@ const check = (l, ok, d) => {
    than swallowed by a broad pattern so a genuine shell error can never hide behind it. */
 const NOISE = /App Check|appCheck|appcheck|recaptcha|Security verification failed|firebase|Firebase|401|403|Failed to load resource|net::|ERR_|installations|gstatic|permission-denied|Missing or insufficient/i;
 
+/* Collect BUFFERS. Concatenating chunks as strings splits multi-byte UTF-8 across chunk
+   boundaries and corrupts the emoji this shell is full of — which made a byte-identical
+   artifact report as different. Hash the bytes, decode only for text matching. */
 const get = (url) => new Promise((res) => {
-  https.get(url, (r) => { let d = ''; r.on('data', c => d += c); r.on('end', () => res({ status: r.statusCode, body: d })); })
-    .on('error', () => res({ status: 0, body: '' }));
+  https.get(url, (r) => {
+    const chunks = [];
+    r.on('data', (c) => chunks.push(c));
+    r.on('end', () => { const buf = Buffer.concat(chunks); res({ status: r.statusCode, buf, body: buf.toString('utf8') }); });
+  }).on('error', () => res({ status: 0, buf: Buffer.alloc(0), body: '' }));
 });
 
 (async () => {
@@ -57,12 +63,12 @@ const get = (url) => new Promise((res) => {
 
   console.log('\n1. The deployed artifact is the one we committed');
   const live = await get(ORIGIN + '/merchant-v2');
-  check('/merchant-v2 serves 200', live.status === 200, 'HTTP ' + live.status + '  ' + live.body.length + 'B');
+  check('/merchant-v2 serves 200', live.status === 200, 'HTTP ' + live.status + '  ' + live.buf.length + 'B');
   const localSha = cp.execSync('git show HEAD:merchant-v2.html', { cwd: ROOT, encoding: 'buffer', maxBuffer: 1 << 26 });
   const crypto = require('crypto');
   const h = (b) => crypto.createHash('sha256').update(b).digest('hex').slice(0, 16);
-  check('...byte-identical to HEAD:merchant-v2.html', h(Buffer.from(live.body)) === h(localSha),
-        h(Buffer.from(live.body)) + ' vs ' + h(localSha));
+  check('...byte-identical to HEAD:merchant-v2.html', h(live.buf) === h(localSha),
+        h(live.buf) + ' vs ' + h(localSha));
 
   const ver = await get(ORIGIN + '/version.json');
   let vj = {}; try { vj = JSON.parse(ver.body); } catch (_) {}
@@ -85,8 +91,12 @@ const get = (url) => new Promise((res) => {
   page.on('pageerror', e => { if (!NOISE.test(String(e.message))) pageErrors.push(String(e.message).slice(0, 160)); });
   page.on('framenavigated', f => { if (f === page.mainFrame()) topNav.push(f.url()); });
 
-  await page.goto(ORIGIN + '/merchant-v2', { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.waitForTimeout(6000);
+  /* 'load', not 'domcontentloaded': /sw-register.js is DEFERRED, so it does not even run
+     until after DOMContentLoaded and then registers asynchronously. Waiting on the earlier
+     event reported 'no service worker' for a page that registers one perfectly well —
+     verified against /merchant and / , which both register on the same wait. */
+  await page.goto(ORIGIN + '/merchant-v2', { waitUntil: 'load', timeout: 45000 });
+  await page.waitForTimeout(7000);
 
   check('no uncaught page error', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || 'clean');
   check('no route/console error', routeErrors.length === 0, routeErrors.slice(0, 2).join(' | ') || 'clean');
