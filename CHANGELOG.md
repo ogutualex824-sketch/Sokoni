@@ -47,8 +47,42 @@ copyright without a year is ordinary; a device clock on a document that spends t
 it never uses one is a small lie. The assertion was widened from "no device date-stamp" to *the
 device year appears nowhere at all*.
 
+### The Sell screen now COMPOSES those authorities
+
+Change is read off `SokoniCash.settle()` in integer cents — the old inline
+`given - t.subtotal` is gone, and no other local subtraction replaced it. A missing
+authority DEGRADES the feature (the screen says the change could not be worked out, and
+refuses the sale) rather than falling back to a second implementation of the same maths.
+
+A fulfilment step now sits *above* payment: **Taking it now / Deliver it**. A delivery
+needs somewhere to go before Complete enables, switching back to pickup DROPS the captured
+destination, and `buildFulfilment` strips a destination from a pickup — so a pickup receipt
+cannot print an address the customer never gave.
+
+The receipt is composed by `SokoniReceipt` from a settlement and fulfilment **frozen at
+completion** rather than re-derived at render, so a stray tap after the sale cannot change
+what the document says. The printer callback gained a second argument (the branded
+document); an existing printer that reads only the server receipt is unaffected.
+
+**The destination is captured, shown and printed — but NOT written to the order.**
+Production carries it under two live spellings (`deliveryAddress`, `address`, both 100%)
+and nine dead ones, geometry entirely absent. Adding a twelfth from the till while those
+are still being reconciled would only make the migration harder. `test-sell-composition`
+proves this at runtime against the real payload builder — **zero of 14 spellings** appear
+at any depth — and three negative controls prove the walker detects planted ones.
+
+Two defects the suite caught on its own first run, both worth recording:
+
+- section 6's "a pickup receipt never prints Kilimani" was **vacuous** — the delivery
+  receipt did not print it either. The negative control failed, which is what a control
+  is for.
+- the till was normalising a typed address as `line1`, **a field that does not exist in
+  the locations contract** (it is `building`/`unit`/`street`/`area`/`town`). Inventing a
+  field name there is the same defect as inventing a twelfth destination spelling. Now
+  mapped to `street`.
+
 **Files:** `sokoni-buyer-locations.js`, `sokoni-fulfilment.js`, `sokoni-cash.js`,
-`sokoni-sale-submit.js`, `sokoni-receipt.js`, `sokoni-merchant-sell.js`, and five suites under
+`sokoni-sale-submit.js`, `sokoni-receipt.js`, `sokoni-merchant-sell.js`, and six suites under
 `scripts/`.
 **Database changes:** none. **API changes:** none. **Security:** none deployed; the
 `userLocations/{uid}/places/{placeId}` rule remains staged, unreleased. **Breaking:** none.
