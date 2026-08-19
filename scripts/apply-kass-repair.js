@@ -109,30 +109,62 @@ console.log('='.repeat(74));
       .then((s) => s.data().count).catch(() => null);
     if (real === null) stop('could not count products for ' + uid);
     const snap = await db.doc('productCounters/' + uid).get();
-    const prev = snap.exists && typeof snap.data().count === 'number' ? snap.data().count : null;
-    plan.push({ uid, real, prev });
+    const d = snap.exists ? snap.data() : {};
+    const prev = typeof d.count === 'number' ? d.count : null;
+    const prevMax = typeof d.maxProducts === 'number' ? d.maxProducts : null;
+    /* A grandfathered floor would raise the ceiling ABOVE the plan, which is
+       Option B by the back door. Refuse rather than apply it silently. */
+    const floor = typeof d.grandfatheredFloor === 'number' ? d.grandfatheredFloor : null;
+    plan.push({ uid, real, prev, prevMax, floor });
     line(uid.slice(0, 14) + '…', 'counter ' + String(prev) + ' -> ' + real + ' (real products)');
   }
 
-  head('RESULTING STATE (predicted)');
+  /* ── OPERATION 3 — the ceiling the RULES actually enforce ──────────────────
+     Without this the repair makes the merchant WORSE. The rule is
+     `count < maxProducts`. Today KASS is count −23 / max 10, and −23 < 10 passes,
+     which is the only reason they can add products at all. Setting count to 103
+     and leaving max at 10 gives 103 < 10 (blocked, correct) — but ALSO 99 < 10
+     after they delete four, so they would be blocked permanently. */
+  head('OPERATION 3 — re-sync the enforced ceiling from the LINKED entitlement');
   const predicted = await EA.resolveEffective(PAID);
-  line('shop entitlement after link', predicted.plan + ' / ' +
+  line('entitlement after link', predicted.plan + ' / ' +
     (predicted.listingLimit === -1 ? 'unlimited' : predicted.listingLimit));
+  line('resolvedUid', String(predicted.resolvedUid));
+  if (predicted.plan !== 'STARTER' || predicted.listingLimit !== 100) {
+    stop('the linked entitlement is not STARTER/100 — it resolved ' +
+         predicted.plan + '/' + predicted.listingLimit);
+  }
+  if (predicted.resolvedUid !== PAID) stop('the entitlement did not resolve from the paying uid');
+  for (const p of plan) {
+    if (p.floor !== null && p.floor > 100) {
+      stop('a grandfatheredFloor of ' + p.floor + ' on ' + p.uid +
+           ' would raise the ceiling above the plan — that is Option B and needs its own decision');
+    }
+    line('maxProducts ' + p.uid.slice(0, 14) + '…', String(p.prevMax) + ' -> 100');
+  }
+
+  head('RESULTING STATE (predicted)');
   const shopReal = plan.find((p) => p.uid === SHOP).real;
   line('shop products', String(shopReal));
-  const over = predicted.listingLimit !== -1 && shopReal > predicted.listingLimit;
+  line('shop ceiling', '100');
+  const over = shopReal > 100;
   line('over limit?', over
-    ? 'YES — ' + shopReal + ' > ' + predicted.listingLimit + '. Existing products STAY; new creation is blocked until ' + predicted.listingLimit + ' or below.'
+    ? 'YES — ' + shopReal + ' > 100. Existing products STAY; creation blocked until 100 or below.'
     : 'no');
+  line('rule check now', shopReal + ' < 100 -> ' + (shopReal < 100 ? 'ALLOWED' : 'DENIED (correct)'));
+  line('rule check after deleting 4', (shopReal - 4) + ' < 100 -> ' +
+       ((shopReal - 4) < 100 ? 'ALLOWED (correct)' : 'DENIED'));
   console.log('\n  NOTE: the limit is NOT being raised to ' + shopReal + ' to make the UI green.');
   console.log('  A migration allowance would be a separate, explicitly recorded commercial decision.');
 
   if (!APPLY) {
-    console.log('\n  DRY RUN — nothing was written. Re-run with --apply to perform both operations.\n');
+    console.log('\n  DRY RUN — nothing was written. Re-run with --apply to perform all THREE writes.\n');
     process.exit(0);
   }
 
   head('APPLYING');
+  /* Order matters: the link must exist before the ceiling is resolved, or
+     syncLimit would compute the unlinked FREE allowance and write 10 again. */
   await db.doc('merchantAccountLinks/' + PAID).create({
     canonicalUid: PAID,
     linkedAccountUids: [SHOP],
@@ -156,7 +188,19 @@ console.log('='.repeat(74));
     line('counter ' + p.uid.slice(0, 14) + '…', p.prev + ' -> ' + p.real);
   }
 
-  console.log('\n  Applied. maxProducts was NOT touched — syncLimit owns it.');
+  /* syncLimit derives the ceiling from the resolved entitlement — which now
+     follows the link — rather than this script hardcoding 100. */
+  const PL = require(path.join(ROOT, 'functions/product-limit.js'))._internal;
+  for (const p of plan) {
+    const r = await PL.syncLimit(p.uid);
+    if (!r || r.maxProducts !== 100) {
+      console.log('\n  WARNING: ceiling for ' + p.uid + ' resolved to ' +
+                  (r && r.maxProducts) + ', not 100. Verify before letting the merchant trade.');
+    }
+    line('maxProducts ' + p.uid.slice(0, 14) + '…', String(p.prevMax) + ' -> ' + (r && r.maxProducts));
+  }
+
+  console.log('\n  Applied: link + counters + ceilings. No subscription, price or product was touched.');
   console.log('  Verify with: node scripts/verify-kass-subscription.js ' + SHOP + '\n');
   process.exit(0);
 })().catch((e) => { console.error('\n  Repair aborted: ' + (e && e.message) + '\n'); process.exit(1); });

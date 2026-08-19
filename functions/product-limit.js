@@ -95,12 +95,17 @@ async function resolveMaxProducts(uid) {
       };
     }
 
-    const ent = catalog.entitlementFor(sub || {});
+    /* THE EFFECTIVE entitlement, which follows an admin account link and picks
+       the best record across every store. Using `sub` here — the first-hit
+       resolution — is what left a paid merchant on the free ceiling, and it is
+       what this line previously did while the comment above claimed otherwise. */
     return {
-      max:            ent.listingLimit,
-      status:         ent.subscriptionStatus,
-      source:         ent.source,
-      catalogVersion: ent.catalogVersion,
+      max:            eff.listingLimit,
+      status:         eff.subscriptionStatus,
+      source:         eff.resolvedUid && eff.resolvedUid !== uid
+                        ? 'linked:' + eff.resolvedUid
+                        : (eff.source || 'entitlement-authority'),
+      catalogVersion: eff.catalogVersion,
     };
   } catch (_) {
     /* Resolution failed. Fall back to the catalogue's FREE allowance rather

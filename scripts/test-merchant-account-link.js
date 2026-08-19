@@ -167,6 +167,25 @@ ck('...and the ruleset has no catch-all allow to undo that',
      before.plan === 'FREE' && (await EA.resolveEffective(SHOP)).plan === 'STARTER');
   await db.doc('merchantAccountLinks/' + PAID).set({ status: 'revoked' }, { merge: true });
 
+  head('8b - the CEILING the rules enforce follows the link too');
+  await db.doc('merchantAccountLinks/' + PAID).set({ status: 'active' }, { merge: true });
+  const PL = require(path.join(ROOT, 'functions/product-limit.js'))._internal;
+  const ceiling = await PL.resolveMaxProducts(SHOP);
+  ck('resolveMaxProducts returns the PAID 100, not the free 10',
+     ceiling.max === 100, String(ceiling.max));
+  ck('...and records that it came from a linked uid',
+     String(ceiling.source).indexOf('linked:') === 0, ceiling.source);
+  const synced = await PL.syncLimit(SHOP);
+  ck('syncLimit writes maxProducts = 100', synced.maxProducts === 100, String(synced.maxProducts));
+  ck('...so the RULES cap (count < maxProducts) becomes the paid one',
+     (await db.doc('productCounters/' + SHOP).get()).data().maxProducts === 100);
+  /* The trap this closes: without the re-sync, maxProducts stays 10 and a
+     recounted 99 fails 99 < 10 — the merchant would be blocked even after
+     deleting products. */
+  ck('NC with maxProducts still 10, a recounted 99 would FAIL the rule',
+     !(99 < 10));
+  ck('NC ...and with 100 it passes', 99 < 100);
+
   head('9 - what is NOT proven');
   un('that the link has been created in production', 'no production write was made — decision pending');
   un('the full KASS journey after repair', 'needs the link, the recount, then a real add/delete test');
