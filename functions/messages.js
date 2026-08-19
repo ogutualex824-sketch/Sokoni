@@ -450,8 +450,19 @@ exports.onMessageCreated = onDocumentCreated(
     /* Update conversation summary */
     const unreadIncrement = {};
     others.forEach(p => { unreadIncrement[`unreadCounts.${p}`] = _inc(); });
+    /* NO MESSAGE TEXT ON THE SHARED CONVERSATION DOCUMENT.
+       Every participant can read this doc, including a rider who joined later —
+       and Firestore rules cannot hide a single field, so a preview stored here
+       would leak the most recent pre-join message straight past the join-time
+       scoping the messages subcollection enforces.
+
+       The preview lives in userConversations/{uid}/items/{convId} instead, which
+       is already per-participant and is what the inbox actually reads
+       (messages.html reads lastMessageText from there; nothing in SOKONI reads
+       lastMessage.text from here). Sender, time and type stay — they carry no
+       message content and the inbox sorts on them. */
     batch.update(convRef, {
-      lastMessage: { text: preview, senderId: msg.senderId, timestamp: msg.timestamp, type: msg.type },
+      lastMessage: { senderId: msg.senderId, timestamp: msg.timestamp, type: msg.type },
       lastMessageAt: msg.timestamp,
       ...unreadIncrement,
       updatedAt: _now(),
@@ -999,7 +1010,12 @@ async function _syncParticipants (db, transactionType, transactionId, tx) {
       conversationId: convId, transactionType, transactionId,
       title: cur.transactionTitle || convId,
       participantName: derived.filter((x) => x !== p).map((x) => names[x]).join(', '),
-      lastMessageAt: cur.lastMessageAt || null, lastMessageText: cur.lastMessage || null,
+      /* A joiner starts with NO preview. The conversation document no longer carries
+         message text at all, so there is nothing here to copy — and copying one would
+         have handed a rider the last pre-join message in their inbox, the same leak
+         one layer out. Their preview fills in from their first post-join message. */
+      lastMessageAt: cur.lastMessageAt || null,
+      lastMessageText: null,
       unreadCount: 0, status: cur.status || 'active', createdAt: _now(), updatedAt: _now(),
     }, { merge: true })),
     ...removed.map((p) =>

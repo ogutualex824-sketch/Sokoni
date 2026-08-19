@@ -125,7 +125,22 @@ const JOIN = T(10);                                         /* rider joined at m
      await assertFails(as(BUYER).doc('conversations/' + CONV + '/messages/forged')
        .set({ senderId: SELLER, text: 'spoofed', createdAt: T(40) })).then(() => true, () => false));
 
-  head('6 - non-vacuity');
+  head('6 - the conversation document leaks no message text');
+  /* Rules cannot hide a single field: any participant can read the whole
+     conversation doc. So the defence is that the text is NOT THERE — the preview
+     lives in the per-participant userConversations index instead. This asserts the
+     absence at the read a rider can actually perform. */
+  const convDoc = await as(RIDER2).doc('conversations/' + CONV).get();
+  ck('a scoped rider CAN read the conversation document (rules allow it)', convDoc.exists);
+  const cd = convDoc.data() || {};
+  ck('...and it carries NO message text',
+     !cd.lastMessage || typeof cd.lastMessage.text === 'undefined',
+     JSON.stringify(cd.lastMessage || null));
+  ck('...no other field carries message text either',
+     !JSON.stringify(cd).includes('old ') && !JSON.stringify(cd).includes('new '),
+     'no seeded message body found in the document');
+
+  head('7 - non-vacuity');
   /* If NO message existed after the rider's join, "rider sees only new messages"
      would pass for the wrong reason. Prove the fixture actually contains both. */
   let counts = { before: 0, after: 0 };
