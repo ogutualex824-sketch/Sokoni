@@ -53,6 +53,43 @@ necessary but not sufficient evidence — production invocation data is.
 
 ---
 
+## CORRECTION — the first pass measured the wrong population
+
+An earlier revision of this document concluded that "the overage is mostly
+unreferenced surface, not functions needing clever merging." **That was wrong**,
+and the error is recorded here rather than quietly edited out.
+
+The gate measures `Object.keys(require(functions/index.js))`. A function defined
+in a module but never re-exported there is **not deployed and does not count**.
+The first pass classified *module-level definitions*, producing 59 confident
+`SAFE_REMOVE` candidates — of which **zero were exported**. Removing all 59 would
+have moved the number by nothing.
+
+Re-run against the exported population:
+
+```
+EXPORTED onCall examined  : 1203      (only these count toward the 1692)
+SAFE_REMOVE               :    0
+REVIEW_REQUIRED           :    1
+KEEP                      : 1202
+defined but NOT exported  :  531      source hygiene, worth ZERO to the budget
+```
+
+**There is no dead exported surface.** Every exported `onCall` is either
+referenced in source or invoked in production. The 212 therefore cannot come from
+removal at all: it must come from consolidating *live, in-use* functions behind
+dispatchers, moving every client call site with them.
+
+The 531 defined-but-unexported functions are a separate hygiene question. They
+must never be counted as progress toward 1480.
+
+## Why the invariant earned its place
+
+Of 181 `onCall` names with no reference anywhere in source, **15 had been invoked
+in production** inside the census window — among them `posInitiateTerminalPaymentV1`
+and `replayWebhookDLQ`. Static analysis alone would have deleted live payment
+terminal surface. The invariant is not bureaucracy; it caught real ones.
+
 ## The shape of the answer
 
 `scripts/cf-reachability.js` classifies every `onCall` by whether anything can
@@ -99,19 +136,82 @@ A function is only a removal candidate when it is **unreferenced in source AND
 un-invoked in production**. Either alone is insufficient: source can miss a cached
 client, and logs only cover the retention window.
 
-### Phase 1 — remove the provably unused
+### Protected authorities — never removed, never dispatched
 
-Per module, in ascending blast-radius order. Each step: remove from source, deploy,
-delete the orphaned deployed functions, re-measure. Never batch two modules into one
-deploy — an aborted deploy should name one cause.
+Frozen for the duration of the programme:
 
-### Phase 2 — dispatcher consolidation
+`createPaymentIntent` · `initiateSTKPush` · `intasendWebhook` · `webhookIntasend` ·
+`onPaymentIntentPaid` · `reconcileSubscriptionPayment` · `payIntentWithWallet` ·
+`subActivate` · `getMerchantEntitlements` · `subscriptionPaymentMethods` ·
+`onSubscriptionChangedSyncLimit` · `onAiSubscriptionChangedSyncLimit` ·
+`merchantIdentity` · `employeeSaleAuthorize` · `adminLinkMerchantAccounts`
 
-For the remainder, follow the existing pattern (`bookingDispatch` and the other 12
-dispatchers): one `onCall` taking an `op`, with every client call site moved in the
-same change and the individual exports deleted.
+The principle is larger than the names. The **single activation authority** must
+survive intact:
 
-### Phase 3 — re-measure and lower the ratchet
+```
+webhook -> PAID -> onPaymentIntentPaid -> reconcilePaidIntent
+                -> subscription -> entitlement
+```
+
+No dispatcher or factory may introduce a second subscription writer. Any module
+containing a protected name is excluded from consolidation wholesale.
+
+### Recommended order — yield per client file touched
+
+Money, subscription and protected-bearing modules excluded. **32 modules** reach
+212. Ordered so the earliest slices prove the pattern at the lowest blast radius:
+
+| # | Module | onCall | saves | client files | cumulative |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `impact` | 24 | 23 | **1** | 23 |
+| 2 | `algolia-admin` | 10 | 9 | 0 | 32 |
+| 3 | `digital-hub` | 10 | 9 | 0 | 41 |
+| 4 | `pos-shift-scheduler` | 10 | 9 | 0 | 50 |
+| 5 | `vehicle-hub` | 10 | 9 | 0 | 59 |
+| 6 | `entertainment-hub` | 9 | 8 | 0 | 67 |
+| 7 | `kass-knowledge` | 7 | 6 | 0 | 73 |
+| 8 | `reliability-engine` | 7 | 6 | 0 | 79 |
+| 9 | `pos-integrations-api` | 6 | 5 | 0 | 84 |
+| 10 | `healthcare-hub` | 15 | 14 | 2 | 98 |
+
+`impact` is the recommended first slice: 23 exports removed against a single
+client file.
+
+> `algolia-admin` here is the **admin/ops surface**, not the 90 `algoliaSync`
+> triggers. Those stay out of scope entirely — degraded is not dead.
+
+### Phase 1 — dispatcher consolidation, one module per deploy
+
+There is no Phase "remove the provably unused": the measurement above showed that
+population is empty among exported functions. Every slice is a consolidation of
+live surface.
+
+Per module, in the order above. Each slice runs the proof gate:
+
+```
+candidate identified
+      -> unreferenced in source? / invoked in production?
+      -> product-owner review where the window is insufficient
+      -> consolidate behind a dispatcher
+      -> move EVERY client call site in the same change
+      -> deploy
+      -> verify the function surface (functions:list)
+      -> verify the protected payment/subscription invariants
+      -> re-measure the budget
+      -> repeat
+```
+
+Never batch two modules into one deploy — an aborted deploy should name one cause.
+Delete orphans explicitly in the same step.
+
+### Phase 2 — source hygiene (separate, zero budget value)
+
+531 `onCall` functions are defined but never exported. They cost nothing against
+the budget and must not be counted as progress, but they are dead weight and
+mislead every future analysis. Tracked separately.
+
+### Phase 3 — re-measure and hold the ratchet
 
 Once under 1480, keep it there: the budget already warns at 1350.
 
@@ -139,7 +239,9 @@ subscription release stays undeployed until the budget is met.
 
 ## Open
 
-- Production invocation history not yet joined to the 180 candidates.
+- Census window is 30 days (Cloud Monitoring request_count). Every classification
+  record carries coverageStart/coverageEnd/coverageDays so a later reader cannot
+  mistake a quiet window for a dead function.
 - Retention window for the `_Default` log bucket not yet confirmed; if it is 30
   days, a function used quarterly would look dead. Seasonal/rare functions need a
   longer signal than logs can give — candidates in that class must be reviewed by
