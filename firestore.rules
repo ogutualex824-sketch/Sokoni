@@ -1842,6 +1842,24 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* BUYER SAVED PLACES. Deliberately NOT named deliveryLocations — that collection,
+       immediately below, is a RIDER's live GPS keyed by riderId. Different data,
+       different owner, and conflating them is a privacy boundary crossed.
+
+       Owned by the buyer ALONE. No seller, no rider, no other buyer may read or write
+       them. A seller receives a destination only through an ORDER that authorises
+       them to see it — a saved place is never copied into a shop document, and the
+       order takes an immutable SNAPSHOT so editing "Home" later cannot rewrite the
+       address on a past purchase. */
+    match /userLocations/{uid}/places/{placeId} {
+      function mine() { return isAuthed() && request.auth.uid == uid; }
+      allow read, delete: if mine();
+      allow create, update: if mine()
+                            && request.resource.data.label is string
+                            && (!('lat' in request.resource.data) || request.resource.data.lat is number)
+                            && (!('lng' in request.resource.data) || request.resource.data.lng is number);
+    }
+
     match /deliveryLocations/{riderId} {
       /* GPS privacy: scoped to the rider themselves, assigned delivery participants
          (buyers/sellers whose order has this rider), and admins. The `viewers` array
