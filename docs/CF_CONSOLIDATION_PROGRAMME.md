@@ -97,28 +97,15 @@ reach it. A name counts as reachable if a client file **or** another server modu
 references it; modules that build callable names dynamically are excluded wholesale.
 "Mentioned only in docs/tests" is reported but never treated as reachable.
 
-```
-total onCall examined                    : 1734
-NO reference anywhere but its own module :  180
-target reduction                         :  212
-```
+Applied to the **exported** population — the only one that counts — and joined to
+the invocation census, it yields no removal candidates at all (see the correction
+above). The reachability tool remains useful for two things:
 
-So the overage is mostly **unreferenced surface**, not functions needing clever
-merging. The programme is therefore primarily *removal*, with dispatcher
-consolidation making up the remainder.
+* finding the 531 defined-but-unexported functions (Phase 2 hygiene), and
+* proving, before each consolidation slice, that every call site of a module has
+  been found — the dispatcher cannot ship until they have.
 
-Largest unreferenced populations:
-
-| Module | onCall | client-ref | server-ref | no reference |
-| --- | --- | --- | --- | --- |
-| `finance-os-sprint43` | 37 | 20 | 0 | **17** |
-| `marketplace-extensions` | 30 | 14 | 0 | **16** |
-| `index` | 55 | 38 | 18 | **14** |
-| `pos-inventory-pro` | 21 | 9 | 2 | **12** |
-| `analytics-engine` | 33 | 22 | 0 | **11** |
-| `logistics-plus` | 30 | 19 | 0 | **11** |
-| `marketing-engine` | 11 | 1 | 0 | **10** |
-| `property-hub` | 12 | 2 | 0 | **10** |
+The programme is therefore **consolidation of live surface**, not removal.
 
 ---
 
