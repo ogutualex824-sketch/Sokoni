@@ -92,16 +92,72 @@ async function _sendFcm(token, title, body, data) {
 /* ═══════════════════════════════════════════════════════════════
    1. createConversation
 ═══════════════════════════════════════════════════════════════ */
+/* ── WHO IS A PARTY TO A TRANSACTION ────────────────────────────────────────
+   Every field here is MEASURED, not guessed: it is exactly the set of fields
+   firestore.rules compares to request.auth.uid for that collection, extracted by
+   scripts/census-conversation-parties.js. The rules are the authoritative naming,
+   because they already decide who may read the record.
+
+   Two measurements this map exists to respect:
+
+     · `orders` names its buyer FOUR ways — buyerId, buyerUid, uid, userId — and
+       `bookings` three. Reading only one would drop a legitimate party and lock a
+       real buyer out of their own conversation.
+     · the RIDER is spelled differently in the two collections that matter most:
+       orders uses `assignedDriverUid`, packageRequests uses `assignedDriverId`.
+       Same role, two names. Honouring one spelling would silently exclude riders
+       from half the deliveries.
+
+   A transaction type ABSENT from this map cannot have its parties derived and is
+   refused. Nine of the seventeen accepted types have no rules block at all. */
+const PARTY_FIELDS = {
+  order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
+  service_booking:     ['buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],
+  food_order:          ['buyerUid', 'restaurantId'],
+  property_inquiry:    ['uid'],
+  job_application:     ['uid'],
+  legal_consultation:  ['clientUid', 'providerId'],
+  logistics_request:   ['buyerUid', 'uid', 'sellerUid', 'assignedDriverId'],
+  support_ticket:      ['uid'],
+};
+
+/* The parties actually present on THIS document, de-duplicated, order-stable.
+   Returns null when the type is underivable — which is NOT the same as an empty
+   list, and the caller must treat them differently. */
+function _partiesOf (transactionType, tx) {
+  const fields = PARTY_FIELDS[transactionType];
+  if (!fields) return null;
+  const out = [];
+  fields.forEach((f) => {
+    const v = tx && tx[f];
+    if (typeof v === 'string' && v && out.indexOf(v) === -1) out.push(v);
+  });
+  return out;
+}
+exports._PARTY_FIELDS = PARTY_FIELDS;
+exports._partiesOf = _partiesOf;
+
 exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.createConversation = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
-  const { transactionType, transactionId, participantUids, metadata } = req.data;
+  /* participantUids is DELIBERATELY NOT read from req.data any more. It used to BE
+     the participant list, checked only for the caller's own self-inclusion — so a
+     caller could name any uid as a co-participant, and firestore.rules, which gates
+     every read and write on that array, would then honour it. The security
+     guarantee sat downstream of an unverified client write. It is now derived from
+     the transaction below. */
+  const { transactionType, transactionId, metadata } = req.data;
 
-  if (!transactionType || !transactionId || !Array.isArray(participantUids) || !participantUids.length) {
-    throw new HttpsError('invalid-argument', 'transactionType, transactionId, and participantUids required');
+  if (!transactionType || !transactionId) {
+    throw new HttpsError('invalid-argument', 'transactionType and transactionId are required');
   }
-  if (!participantUids.includes(uid)) {
-    throw new HttpsError('permission-denied', 'Caller must be listed as a participant');
+  if (!PARTY_FIELDS[transactionType]) {
+    /* Accepted as an anchor, but its collection has no rules naming parties, so
+       there is nothing authoritative to derive from. Refused loudly rather than
+       defaulted: an empty participant list would create a conversation nobody can
+       read, which is a different bug rather than a fix. */
+    throw new HttpsError('failed-precondition',
+      'Conversations are not yet available for "' + transactionType + '" — its parties cannot be derived.');
   }
   if (!TX_COLLECTIONS[transactionType]) {
     throw new HttpsError('invalid-argument', `Unknown transactionType: ${transactionType}`);
@@ -117,12 +173,29 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   /* Fast path: already exists */
   const existingSnap = await convRef.get();
   if (existingSnap.exists) {
+    /* Confirm the caller belongs BEFORE acknowledging existence. Returning
+       {existing:true} to a non-party would confirm that a given transaction has a
+       conversation — an existence oracle — which the previous code did. */
+    const cur = existingSnap.data() || {};
+    if (!Array.isArray(cur.participants) || cur.participants.indexOf(uid) === -1) {
+      throw new HttpsError('permission-denied', 'Not a party to this transaction');
+    }
     return { conversationId, existing: true };
   }
 
   /* Verify transaction exists */
   const txSnap = await db.collection(TX_COLLECTIONS[transactionType]).doc(transactionId).get().catch(() => null);
   if (!txSnap?.exists) throw new HttpsError('not-found', `Transaction ${transactionId} not found in ${TX_COLLECTIONS[transactionType]}`);
+
+  /* THE CHECK THAT WAS MISSING. Parties come from the transaction itself, and the
+     caller must be one of them — being able to name yourself is not entitlement. */
+  const participantUids = _partiesOf(transactionType, txSnap.data());
+  if (!participantUids || !participantUids.length) {
+    throw new HttpsError('failed-precondition', 'This transaction names no parties; a conversation cannot be opened.');
+  }
+  if (participantUids.indexOf(uid) === -1) {
+    throw new HttpsError('permission-denied', 'Not a party to this transaction');
+  }
 
   /* Fetch participant profiles */
   const profileSnaps = await Promise.all(participantUids.map(p =>
