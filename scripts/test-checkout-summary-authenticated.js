@@ -248,7 +248,26 @@ server.listen(0, async () => {
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
   clearTimeout(wd);
-  await browser.close();
+
+  /* ── TEARDOWN MUST NOT OUTLIVE THE TEST ────────────────────────────────────
+     `await browser.close()` HANGS when the page holds a live Firestore Listen
+     channel against the emulator. Every assertion had already passed and been
+     printed; the process then sat in teardown until something killed it.
+
+     In the deploy gate that read as TIMEOUT at the 150s budget — and a timeout
+     DROPS the suite from the blocking set, so a fully-passing run was recorded
+     as lost coverage on authenticated checkout. The suite's own 180s watchdog
+     never fired because the gate's budget is shorter.
+
+     Measured: 40s with only the Auth emulator (no live listener, close returns),
+     versus >500s with Auth + Firestore. The work was never slow; the exit was.
+
+     The close is now bounded. A teardown that cannot finish must not decide the
+     verdict of a test that already has one. */
+  await Promise.race([
+    browser.close().catch(() => {}),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
   server.close();
   process.exit(fail ? 1 : 0);
 });
