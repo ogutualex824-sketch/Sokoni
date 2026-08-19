@@ -1,10 +1,10 @@
 {
-  "commit": "c026adf97267811d934603535043d20d4b61b8c4",
-  "commitShort": "c026adf",
+  "commit": "2f8abfeffd4ddeeed8c88aa4f3a4a53e88602e74",
+  "commitShort": "2f8abfe",
   "branch": "fix/merchant-shell-capability",
-  "buildTime": "2026-08-19T16:30:12.966Z",
+  "buildTime": "2026-08-19T17:17:49.838Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260819163012-v536",
+  "cacheVersion": "sokoni-20260819171749-v537",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [

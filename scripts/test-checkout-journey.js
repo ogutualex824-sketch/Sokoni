@@ -76,7 +76,12 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
           window.__calls.createPaymentIntent++;
           return { data: { paymentIntentId: 'pi_' + window.__calls.createPaymentIntent,
                            planId: args.planId, planName: 'Seller Basic', amount: 999,
-                           listingLimit: STARTER_LIMIT, billingCycle: args.billingCycle, currency: 'KES' } };
+                           /* INTERPOLATED at Node level: this string is injected into the
+                              BROWSER, where STARTER_LIMIT does not exist. Referencing it
+                              bare made the stub throw, createPaymentIntent reject, and the
+                              page render its error state — so .plan never appeared and the
+                              suite timed out looking for it. */
+                           listingLimit: ${STARTER_LIMIT}, billingCycle: args.billingCycle, currency: 'KES' } };
         }
         if (name === 'subscriptionPaymentMethods') {
           window.__calls.subscriptionPaymentMethods++;
