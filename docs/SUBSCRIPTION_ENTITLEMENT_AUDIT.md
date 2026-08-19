@@ -4,7 +4,7 @@
 **Repair:** `functions/entitlement-authority.js` · `scripts/test-entitlement-authority.js`
 **Live check:** `scripts/verify-kass-subscription.js <uid>` — READ ONLY, needs production credentials
 **Trigger:** a paid/active Starter (KES 499) that is not usable; free trials not rendering.
-**Verdict:** the chain is broken in **four independent places**. Any one alone reproduces the symptom.
+**Verdict:** SUPERSEDED for KASS — see the correction below and `docs/KASS_PRODUCTION_VERIFICATION.md`.
 
 Related: [[RELEASE_BOARD_MERCHANT_V2]] · [[MERCHANT_IDENTITY_AUTHORITY]] · [[Payments]]
 
@@ -13,12 +13,12 @@ Related: [[RELEASE_BOARD_MERCHANT_V2]] · [[MERCHANT_IDENTITY_AUTHORITY]] · [[P
 ## ⚠ CORRECTED 2026-08-19 — this diagnosis was WRONG for KASS
 
 Production verification (docs/KASS_PRODUCTION_VERIFICATION.md) shows **aiSubscriptions is
-empty platform-wide (0 documents)** and KASS has no AI subscription. The  findings
+empty platform-wide (0 documents)** and KASS has no AI subscription. The `ai_*` findings
 below are REAL code defects and the fix is worth keeping — but they affect **zero
 production merchants today** and are **not** what blocks KASS.
 
-I matched KES 499 to `s price and stopped there. The actual plan id is
- ("SOKONI Starter Plan", IntaSend), which already resolved to STARTER/100 before
+I matched KES 499 to the `ai_starter` price and stopped there. The actual plan id is
+`starter` ("SOKONI Starter Plan", IntaSend), which already resolved to STARTER/100 before
 any change of mine. **The real defect is that KASS is two accounts**: the paid subscription
 is on a uid with no shop, and the shop is on a uid with no subscription.
 
