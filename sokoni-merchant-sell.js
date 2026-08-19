@@ -201,6 +201,23 @@
     return (typeof globalThis !== 'undefined' && globalThis.SokoniMerchantData) || null;
   };
 
+  /* ── THE COMPOSED AUTHORITIES ───────────────────────────────────────────────
+     This screen owns no arithmetic and no schema. Change comes from SokoniCash,
+     pickup/delivery from SokoniFulfilment, the address from SokoniBuyerLocations,
+     the printed document from SokoniReceipt, and the idempotency key from
+     SokoniSaleSubmit. Each is separately proven; composing them here means the
+     till and online checkout cannot drift into two different arithmetics.
+
+     Each accessor may return null. A missing authority DEGRADES the feature that
+     needs it — it never falls back to a local reimplementation, because a second
+     implementation of change or of a destination is the exact defect these
+     modules exist to prevent. */
+  var G = function () { return (typeof globalThis !== 'undefined') ? globalThis : {}; };
+  var CASH = function () { return G().SokoniCash || null; };
+  var FUL  = function () { return G().SokoniFulfilment || null; };
+  var LOC  = function () { return G().SokoniBuyerLocations || null; };
+  var RCPT = function () { return G().SokoniReceipt || null; };
+
   var METHODS = [
     { id: 'cash',  icon: '💵', label: 'Cash'   },
     { id: 'mpesa', icon: '📱', label: 'M-Pesa' },
@@ -235,6 +252,13 @@
       sheet: null,             /* null | 'cart' | 'pay' */
       method: 'cash',
       cashGiven: null,
+      /* Pickup until the merchant says otherwise. A default of 'delivery' would
+         make an unstated fulfilment look like a stated one. */
+      ful: { type: 'pickup', dest: null, note: '' },
+      destText: '',
+      destErr: null,
+      settled: null,        /* frozen at completion, never re-derived */
+      fulfilled: null,
       saleToken: null,         /* ONE per attempt, held across retries */
       sale: 'idle',            /* idle | checking | charging | done | failed */
       saleError: null,
@@ -271,6 +295,39 @@
     /* ── Derived ──────────────────────────────────────────────────────────── */
     function visible() { return md.searchProducts(S.products, S.term); }
     function totals()  { return md.cartTotals(S.cart); }
+
+    /* The money question, answered by SokoniCash in integer cents — never by
+       subtracting two shilling floats on this screen. Returns null when the cash
+       authority is absent, and the caller then refuses to complete rather than
+       guessing at the change. */
+    function settlement() {
+      var C = CASH();
+      if (!C) return null;
+      var dueMinor = C.toMinor(totals().subtotal);
+      if (dueMinor == null) return null;
+      var amountMinor = (S.method === 'cash')
+        ? (S.cashGiven == null ? null : C.toMinor(S.cashGiven))
+        : dueMinor;                     /* a recorded M-Pesa/card tender is the exact amount */
+      if (amountMinor == null) amountMinor = 0;
+      try {
+        return C.settle({ totalMinor: dueMinor, tenders: [{ method: S.method, amountMinor: amountMinor }] });
+      } catch (_) { return null; }
+    }
+
+    /* The fulfilment, built by the contract rather than assembled here. A delivery
+       without a destination THROWS in buildFulfilment, so an address-less delivery
+       cannot reach the receipt. */
+    function fulfilment() {
+      var F = FUL();
+      if (!F) return null;
+      try {
+        return F.buildFulfilment({
+          type: S.ful.type,
+          destinationSnapshot: S.ful.dest,
+          note: S.ful.note || null,
+        });
+      } catch (_) { return null; }
+    }
     function inCart(id) {
       for (var i = 0; i < S.cart.length; i++) if (S.cart[i].productId === id) return S.cart[i].qty;
       return 0;
@@ -439,7 +496,18 @@
       var busy = (S.sale === 'checking' || S.sale === 'charging');
       var cash = (S.method === 'cash');
       var given = (S.cashGiven == null) ? null : Number(S.cashGiven);
-      var change = (cash && given != null && given >= t.subtotal) ? given - t.subtotal : null;
+      var st = settlement();
+      var C = CASH();
+      /* Change and balance are read off the settlement, never recomputed here. When
+         the cash authority is missing there is NO change figure — the screen says so
+         and refuses the sale, rather than printing a number it cannot stand behind. */
+      var change = (st && st.changeMinor > 0 && C) ? C.fromMinor(st.changeMinor) : null;
+      var shortBy = (st && st.balanceMinor > 0 && C) ? C.fromMinor(st.balanceMinor) : null;
+      var canPay = st ? st.canComplete : false;
+      var delivering = (S.ful.type === 'delivery');
+      /* A delivery with no destination is not ready to charge. buildFulfilment
+         refuses it, and so does this button. */
+      var fulReady = !delivering || !!fulfilment();
 
       return '<div class="msl-sh-h"><div class="t">Take payment</div>' +
           '<button class="msl-sh-x" data-act="close-sheet" aria-label="Close"' + (busy ? ' disabled' : '') + '>×</button></div>' +
@@ -451,6 +519,27 @@
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
           (S.preflight && !S.preflight.blocking && S.preflight.message
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
+
+          /* ── FULFILMENT ─ asked before payment, because it can change the total
+               and because a receipt that guesses is worse than one that asks. */
+          '<div class="msl-lbl">Is the customer taking it now?</div>' +
+          '<div class="msl-pays">' +
+            '<button class="msl-pay' + (!delivering ? ' on' : '') + '" data-act="ful" data-f="pickup"' +
+              (busy ? ' disabled' : '') + '><span class="ic">🛍</span>Taking it now</button>' +
+            '<button class="msl-pay' + (delivering ? ' on' : '') + '" data-act="ful" data-f="delivery"' +
+              (busy ? ' disabled' : '') + '><span class="ic">🛵</span>Deliver it</button>' +
+          '</div>' +
+          (delivering
+            ? '<input class="msl-inp" id="msl-dest" inputmode="text" ' +
+                'placeholder="Where is it going? Street, estate or landmark" ' +
+                'value="' + esc(S.destText) + '" aria-label="Delivery destination">' +
+              (S.destErr ? '<div class="msl-note" style="color:#ffb020">' + esc(S.destErr) + '</div>' : '') +
+              (S.ful.dest
+                ? '<div class="msl-note">Going to <b>' + esc(destLabel()) + '</b>. ' +
+                  'A rider is assigned from Orders after the sale — this screen does not ' +
+                  'dispatch anyone.</div>'
+                : '<div class="msl-note">A delivery needs somewhere to go before it can be charged.</div>')
+            : '') +
 
           '<div class="msl-lbl">How is the customer paying?</div>' +
           '<div class="msl-pays">' + METHODS.map(function (m) {
@@ -468,10 +557,14 @@
               '</div>' +
               '<input class="msl-inp" id="msl-cash" inputmode="numeric" pattern="[0-9]*" ' +
                 'placeholder="Or type the amount" value="' + (given == null ? '' : given) + '" aria-label="Cash received">' +
-              (change != null
-                ? '<div class="msl-tot grand"><span>Change due</span><b>' + esc(md.formatKES(change)) + '</b></div>'
-                : (given != null && given < t.subtotal
-                    ? '<div class="msl-note" style="color:#ffb020">That is less than the amount due.</div>' : ''))
+              (!st
+                ? '<div class="msl-warn">The change could not be worked out on this device, so this ' +
+                  'sale cannot be completed here. Reopen SOKONI Merchant.</div>'
+                : change != null
+                  ? '<div class="msl-tot grand"><span>Change due</span><b>' + esc(change) + '</b></div>'
+                  : shortBy != null && given != null
+                    ? '<div class="msl-note" style="color:#ffb020">Short by ' + esc(shortBy) + '.</div>'
+                    : '')
             : '<div class="msl-note">Confirm the ' + esc(S.method === 'mpesa' ? 'M-Pesa' : 'card') +
               ' payment has actually been received before completing. This screen <b>records</b> the ' +
               'tender against the sale — it does not request the money.</div>') +
@@ -491,7 +584,7 @@
         '</div>' +
         '<div class="msl-sh-f">' +
           '<button class="msl-btn solid wide" data-act="complete"' +
-            (busy || (cash && given != null && given < t.subtotal) ? ' disabled' : '') + '>' +
+            (busy || !canPay || !fulReady ? ' disabled' : '') + '>' +
             (busy ? (S.sale === 'checking' ? 'Checking…' : 'Completing…')
                   : (S.sale === 'failed' ? 'Try again' : 'Complete sale')) +
           '</button>' +
@@ -500,6 +593,36 @@
     }
 
     /* ── Actions ──────────────────────────────────────────────────────────── */
+
+    /* The destination is NORMALISED by SokoniBuyerLocations, so the till and the
+       buyer's own saved places produce the same shape. This screen does not invent a
+       field name and does not geocode: a typed line is a typed line, and geometry is
+       absent rather than approximated. */
+    function setDestination(text) {
+      S.destText = text || '';
+      var L = LOC();
+      var raw = String(text || '').trim();
+      if (!raw) { S.ful.dest = null; S.destErr = null; return; }
+      if (!L) { S.ful.dest = null; S.destErr = 'Delivery addresses are unavailable on this device.'; return; }
+      try {
+        /* A till types ONE line. It maps to `street`, which is a real field in the
+           locations contract — NOT to an invented `line1`. Inventing a field name
+           here is the same defect as inventing a twelfth destination spelling, and
+           the suite caught exactly that on the first run. */
+        var place = L.normalise({ label: 'Other', street: raw });
+        if (!L.isDeliverable(place)) { S.ful.dest = null; S.destErr = 'That is not enough to deliver to yet.'; return; }
+        /* capturedAt is left null on purpose: only the SERVER may stamp it, and a
+           device clock on a delivery record is the same defect as one on a receipt. */
+        S.ful.dest = L.snapshot(place, null);
+        S.destErr = null;
+      } catch (e) { S.ful.dest = null; S.destErr = (e && e.message) || 'That address could not be read.'; }
+    }
+
+    function destLabel() {
+      var L = LOC();
+      if (!S.ful.dest) return '';
+      return (L && L.formatted) ? L.formatted(S.ful.dest) : (S.ful.dest.line1 || '');
+    }
 
     function addProduct(p) {
       try {
@@ -572,6 +695,9 @@
 
     function newSale() {
       S.cart = []; clearToken(); S.sheet = null; S.sale = 'idle';
+      S.ful = { type: 'pickup', dest: null, note: '' };
+      S.destText = ''; S.destErr = null;
+      S.settled = null; S.fulfilled = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
@@ -658,6 +784,10 @@
           var sale = res.sale || {};
           S.receipt = sale.receipt || null;
           S.cached = sale.cached === true;
+          /* Frozen at completion. The receipt must describe the sale that HAPPENED,
+             so it cannot keep reading live state that a stray tap could still move. */
+          S.settled = settlement();
+          S.fulfilled = fulfilment();
           S.sale = 'done';
           paint();
           toast('Sale complete', 'success');
@@ -674,21 +804,62 @@
       if (!S.receipt) return;
       if (typeof ctx.onPrint !== 'function') { toast('No printer is set up on this device.', 'error'); return; }
       try {
-        Promise.resolve(ctx.onPrint(S.receipt)).catch(function () {
+        /* Second argument is additive: an existing printer that only reads the
+           server receipt keeps working unchanged. */
+        Promise.resolve(ctx.onPrint(S.receipt, composedReceipt())).catch(function () {
           toast('The receipt could not be printed.', 'error');
         });
       } catch (_) { toast('The receipt could not be printed.', 'error'); }
     }
 
-    function receiptText() {
+    /* The order as the RECEIPT contract wants it. Every figure is the server's:
+       the timestamp, the receipt number and the total all come from the completed
+       sale, never from this screen's cart. */
+    function receiptOrder() {
       var r = S.receipt || {};
-      var lines = [(ctx.shopName || 'SOKONI') + ' — Receipt ' + (r.receiptNo || '')];
-      (r.items || []).forEach(function (it) {
-        lines.push((it.name || it.productId) + ' x' + (it.qty || 1) + '  ' + md.formatKES((it.unitPrice || 0) * (it.qty || 1)));
-      });
-      lines.push('Total  ' + md.formatKES(r.total));
-      if (r.timestamp) lines.push(r.timestamp);
-      return lines.join('\n');
+      var C = CASH();
+      var toM = function (v) { return (C && typeof v === 'number') ? C.toMinor(v) : null; };
+      return {
+        receiptId: r.receiptNo || null,
+        /* SERVER time. When the sale carries none, SokoniReceipt prints
+           "Time not recorded" rather than reaching for the device clock. */
+        createdAt: r.timestamp || null,
+        items: (r.items || []).map(function (it) {
+          var qty = Number(it.qty || 1);
+          var unit = toM(it.unitPrice);
+          return { name: it.name || it.productId, qty: qty,
+                   unitMinor: unit, lineMinor: unit == null ? null : unit * qty };
+        }),
+        totalMinor: toM(r.total),
+        totals: { subtotalMinor: toM(r.total) },
+        settlement: S.settled || null,
+        fulfilment: S.fulfilled || null,
+        shop: ctx.shop || (ctx.shopName ? { name: ctx.shopName } : {}),
+        tax: ctx.tax || null,
+        /* Absent unless REAL. A phone till has no terminal, and inventing one puts a
+           fiction on a tax-adjacent document. */
+        terminalId: ctx.terminalId || null,
+        cashierName: ctx.cashierName || null,
+        customer: ctx.customer || null,
+      };
+    }
+
+    function composedReceipt() {
+      var R = RCPT();
+      if (!R) return null;
+      try { return R.render(receiptOrder(), { locale: ctx.locale || 'en-KE' }); }
+      catch (_) { return null; }
+    }
+
+    function receiptText() {
+      var R = RCPT();
+      var composed = composedReceipt();
+      if (R && composed) return R.toText(composed);
+      /* No branded renderer on this device. Say what the receipt IS rather than
+         emit a half-branded imitation of it. */
+      var r = S.receipt || {};
+      return (ctx.shopName || 'SOKONI') + ' Receipt ' + (r.receiptNo || '') +
+             ' Total ' + md.formatKES(r.total);
     }
 
     function shareReceipt() {
@@ -745,6 +916,12 @@
       if (act === 'inc')          { var l1 = S.cart[i]; if (l1) { S.cart = md.setLineQty(S.cart, l1.productId, l1.qty + 1); paint(); } return; }
       if (act === 'dec')          { var l2 = S.cart[i]; if (l2) { S.cart = md.setLineQty(S.cart, l2.productId, l2.qty - 1);
                                     if (!S.cart.length) S.sheet = null; paint(); } return; }
+      if (act === 'ful')          { var ft = el.getAttribute('data-f');
+                                    S.ful.type = (ft === 'delivery') ? 'delivery' : 'pickup';
+                                    /* Switching back to pickup DROPS the destination. Keeping it
+                                       would let a pickup sale carry an address into the receipt. */
+                                    if (S.ful.type === 'pickup') { S.ful.dest = null; S.destText = ''; S.destErr = null; }
+                                    paint(); return; }
       if (act === 'method')       { S.method = el.getAttribute('data-m') || 'cash'; S.cashGiven = null; paint(); return; }
       if (act === 'tender')       { var v = el.getAttribute('data-v');
                                     S.cashGiven = (v === 'exact') ? totals().subtotal : Number(v); paint(); return; }
@@ -769,6 +946,14 @@
         if (bar) bar.outerHTML = barHTML();
         var find = host.querySelector('.msl-find');
         if (find) find.classList.toggle('has', !!S.term);
+        return;
+      }
+      if (el.id === 'msl-dest') {
+        setDestination(el.value);
+        var sh = host.querySelector('.msl-sheet');
+        if (sh) { var at = el.selectionStart; sh.innerHTML = paySheet();
+                  var back = host.querySelector('#msl-dest');
+                  if (back) { back.focus(); try { back.setSelectionRange(at, at); } catch (_) {} } }
         return;
       }
       if (el.id === 'msl-cash') {
