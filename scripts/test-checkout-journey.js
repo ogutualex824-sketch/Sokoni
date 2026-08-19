@@ -77,6 +77,11 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
     try {
       localStorage.setItem('loggedIn', 'true');
       localStorage.setItem('sokoniUser', JSON.stringify({ uid: 'zzz_journey_merchant' }));
+      /* The privacy consent modal is a top-level dialog that intercepts pointer
+         events until answered, so a click on the page beneath it never lands.
+         Answering it up front is what a returning merchant's browser already
+         carries; it is not a product behaviour this suite is testing. */
+      localStorage.setItem('sokoniPrivacyAccepted', '1');
     } catch (e) {}
     window.__calls.subGetPlans = 0;
     window.sokoniCallable = function (name) {
@@ -115,7 +120,26 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
           if (window.__scenario.walletFails) throw new Error('Insufficient wallet balance.');
           return { data: { ok: true } };
         }
-        if (name === 'initiateSTKPush') { window.__calls.initiateSTKPush++; return { data: { ok: true } }; }
+        /* ── THE STUB ENFORCES THE SERVER'S CONTRACT ────────────────────────
+           This used to accept ANY arguments and return ok. The page was calling
+           it with { paymentIntentId, phone } while the real function requires
+           { phone, amount, ref } — so every production attempt was rejected
+           HTTP 400 in ~120ms and no STK prompt was ever requested, while this
+           suite counted the call and passed.
+
+           A stub may replace a dependency's BEHAVIOUR. It must never accept a
+           call the real dependency would refuse. */
+        if (name === 'initiateSTKPush') {
+          window.__calls.initiateSTKPush++;
+          window.__stkArgs = args;
+          if (!args || !args.phone || !args.amount || !args.ref) {
+            throw new Error('invalid-argument: phone, amount, ref required.');
+          }
+          if (!/^254[17]\\d{8}$/.test(String(args.phone))) {
+            throw new Error('invalid-argument: Invalid phone.');
+          }
+          return { data: { ok: true } };
+        }
         if (name === 'reconcileSubscriptionPayment') {
           window.__calls.reconcile++;
           if (window.__scenario.neverReconciles) throw new Error('failed-precondition');
@@ -262,6 +286,25 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
   await page.fill('#phone', '0712345678');
   ck('a valid number enables it',
      (await page.getAttribute('[data-act="pay"]', 'disabled')) === null);
+
+  head('5b - the STK call matches the SERVER contract');
+  /* THE GAP THAT REACHED PRODUCTION. This suite stopped at "the button is
+     enabled" and never pressed it, and the stub accepted any arguments — so a
+     call shaped { paymentIntentId, phone } passed here and was rejected
+     HTTP 400 by the real initiateSTKPush, which requires { phone, amount, ref }.
+     The intent was minted and the STK prompt was never requested. */
+  await page.click('[data-act="pay"]');
+  await page.waitForFunction('window.__calls.initiateSTKPush > 0', null, { timeout: 8000 })
+    .catch(() => {});
+  const stk = await page.evaluate('window.__stkArgs || null');
+  ck('initiateSTKPush was called', !!stk, stk ? 'called' : 'never called');
+  ck('...with ref (the payment intent id)', !!(stk && stk.ref), stk && stk.ref);
+  ck('...with the server amount', !!(stk && Number(stk.amount) === 999),
+     stk ? String(stk.amount) : 'absent');
+  ck('...with a normalised 254 number', !!(stk && /^254[17]\d{8}$/.test(String(stk.phone))),
+     stk && stk.phone);
+  ck('REGRESSION: it does not rely on paymentIntentId alone',
+     !!(stk && stk.ref), 'the server destructures { phone, amount, ref }');
 
   head('6 - an unaffordable wallet is not selectable');
   const poor = await open({ methods: [

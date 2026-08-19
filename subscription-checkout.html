@@ -107,6 +107,7 @@
     cycle: null,           /* what the merchant picked — preselected, not assumed */
     cycleConfirmed: false, /* false until they confirm; nothing is minted before */
     trialDays: 0,          /* from the intent, so the disclosure is the real term */
+    amount: 0,             /* the SERVER figure for this intent; STK is verified against it */
     methods: [],
     selected: null,
     phone: '',
@@ -343,6 +344,10 @@
         .then(function (r) { return (r && r.data && r.data.methods) || []; });
       S.methods = mm;
       S.trialDays = Number(intent.trialDays) || 0;
+      /* The SERVER's figure for this intent, carried so the STK call can name
+         the ref and amount the server will verify it against. Never a figure
+         this page computed. */
+      S.amount = Number(intent.amount);
       S.plan = C.planSummary({
         label: intent.planName, priceKES: intent.amount,
         listingLimit: intent.listingLimit, billingCycle: intent.billingCycle || CYCLE,
@@ -373,8 +378,25 @@
         S.payStatus = 'paid'; paint();
       } else if (S.selected === 'MPESA') {
         S.payStatus = 'stk_sent'; paint();
+        /* ── THE CONTRACT initiateSTKPush ACTUALLY DECLARES ──────────────────
+           It destructures { phone, amount, ref } and refuses anything missing:
+
+               if (!phone || !amount || !ref)
+                 throw new HttpsError('invalid-argument', 'phone, amount, ref required.')
+
+           This sent { paymentIntentId, phone }. `amount` and `ref` arrived
+           undefined, so every real attempt was rejected with HTTP 400 in ~120ms
+           and NO STK prompt was ever requested — the intent was minted and then
+           the push never happened.
+
+           `ref` IS the payment intent id: the server looks the intent up by it
+           and refuses a mismatch on amount or owner (index.js:6300-6316). So
+           naming the amount here is not the client setting a price — the server
+           re-derives it and rejects any disagreement. */
         await callable('initiateSTKPush')({
-          paymentIntentId: S.intentId, phone: C.normalisePhone(S.phone),
+          ref: S.intentId,
+          amount: S.amount,
+          phone: C.normalisePhone(S.phone),
         });
         S.payStatus = 'pending'; paint();
       }
