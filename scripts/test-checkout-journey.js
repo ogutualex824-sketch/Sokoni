@@ -70,6 +70,14 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
     window.__calls = { createPaymentIntent: 0, subscriptionPaymentMethods: 0,
                        payIntentWithWallet: 0, initiateSTKPush: 0, reconcile: 0 };
     window.__scenario = window.__scenario || {};
+    /* A checkout is an AUTHENTICATED surface: auth-guard.js now ships on this
+       page and redirects a signed-out visitor away. The journey therefore signs
+       in, exactly as a merchant would, rather than the harness disabling the
+       guard — auth-guard reads these two keys (auth-guard.js:31-33). */
+    try {
+      localStorage.setItem('loggedIn', 'true');
+      localStorage.setItem('sokoniUser', JSON.stringify({ uid: 'zzz_journey_merchant' }));
+    } catch (e) {}
     window.sokoniCallable = function (name) {
       return async function (args) {
         if (name === 'createPaymentIntent') {
@@ -109,6 +117,15 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 
   async function open(scenario, url) {
     const page = await ctx.newPage();
+    /* ── ISOLATE THE REAL BOOTSTRAP ─────────────────────────────────────────
+       firebase.js assigns window.sokoniCallable, so once the page began loading
+       the genuine bootstrap it OVERWROTE this stub and every call went to real
+       Firebase and hung. The harness therefore serves those two scripts empty.
+       That is safe ONLY because section 1b asserts, from the shipped markup,
+       that the real page loads them — the stub replaces behaviour, never
+       existence. */
+    await page.route('**/sokoni-init.js', function (r) { return r.fulfill({ contentType: 'text/javascript', body: '' }); });
+    await page.route('**/firebase.js', function (r) { return r.fulfill({ contentType: 'text/javascript', body: '' }); });
     await page.addInitScript(STUB);
     if (scenario) await page.addInitScript('window.__scenario = ' + JSON.stringify(scenario) + ';');
     await page.goto(url || (BASE + '/subscription-checkout.html?planId=seller_basic&cycle=monthly'));
@@ -122,6 +139,24 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
      plansSrc.indexOf('checkout.html?type=subscription') === -1);
   ck('...and routes to a subscription surface',
      /location\.href = `subscription/.test(plansSrc), 'subscriptions.html or subscription-checkout.html');
+
+  head('1b - THE PAGE CAN OBTAIN A CALLABLE WITHOUT THE STUB');
+  /* THE BLIND SPOT THAT SHIPPED A BROKEN CHECKOUT. Every other assertion in this
+     file runs against addInitScript-injected sokoniCallable — so the suite was
+     PROVIDING the exact dependency the live page was missing, and passed 37/0
+     while production could not create a single payment intent.
+     A stub may replace a dependency's BEHAVIOUR; it must never supply its
+     EXISTENCE. These assertions read the shipped markup instead. */
+  const pageSrc = fs.readFileSync(path.join(ROOT, 'subscription-checkout.html'), 'utf8');
+  ck('the page loads the Firebase bootstrap that defines sokoniCallable',
+     pageSrc.indexOf('sokoni-init.js') > -1 || pageSrc.indexOf('firebase.js') > -1);
+  ck('...as a module, matching every other page that uses it',
+     /type="module"[^>]*sokoni-init.js|sokoni-init.js[^>]*type="module"/.test(pageSrc));
+  ck('it guards a signed-out visitor', pageSrc.indexOf('auth-guard.js') > -1);
+  ck('it WAITS for the async bootstrap rather than failing instantly',
+     pageSrc.indexOf('whenReady') > -1);
+  ck('NC the detector would notice if the bootstrap were removed',
+     '<script src="only-my-logic.js"></script>'.indexOf('sokoni-init.js') === -1);
 
   head('2 - the plan and price come from the SERVER');
   let page = await open();

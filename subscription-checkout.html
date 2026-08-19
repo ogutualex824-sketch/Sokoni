@@ -51,6 +51,15 @@
 <div class="wrap" id="root" aria-live="polite"></div>
 <div class="bar" id="bar"></div>
 
+<!-- ── THE BOOTSTRAP THIS PAGE SHIPPED WITHOUT ──────────────────────────────
+     window.sokoniCallable is defined by firebase.js, which sokoni-init.js loads
+     for pages that do not load it directly. Without these, EVERY callable on
+     this page rejected with "SOKONI is still starting up" — so createPaymentIntent
+     was never reached and no payment intent was ever created.
+     auth-guard.js is here too: a checkout must not render to a signed-out visitor. -->
+<script src="security.js"></script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="auth-guard.js"></script>
 <script src="sokoni-subscription-checkout.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -113,9 +122,23 @@
   }
   function clearIntent() { try { sessionStorage.removeItem(STORE_KEY); } catch (_) {} }
 
+  /* sokoni-init.js is a MODULE, so it resolves after this script runs. Rejecting
+     immediately turned a timing gap into a permanent failure. Wait for the
+     bootstrap, bounded — and say so plainly if it never arrives. */
+  function whenReady(ms) {
+    var deadline = Date.now() + (ms || 12000);
+    return new Promise(function (resolve, reject) {
+      (function poll() {
+        if (typeof window.sokoniCallable === 'function') return resolve();
+        if (Date.now() > deadline) return reject(new Error('SOKONI could not start up on this device.'));
+        setTimeout(poll, 120);
+      })();
+    });
+  }
   function callable(name) {
-    if (typeof window.sokoniCallable === 'function') return window.sokoniCallable(name);
-    return function () { return Promise.reject(new Error('SOKONI is still starting up.')); };
+    return function (args) {
+      return whenReady().then(function () { return window.sokoniCallable(name)(args); });
+    };
   }
 
   /* ── render ─────────────────────────────────────────────────────────────── */
