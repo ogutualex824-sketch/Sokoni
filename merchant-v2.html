@@ -1751,6 +1751,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                    '<span class="p">' + esc(money((it.price || 0) * (it.qty || it.quantity || 1), o.currency)) + '</span></div>';
           }).join('') + '</div>'
         : '<div class="note" style="margin:0 0 16px">This order record carries no line items.</div>') +
+      /* Print and Share sit together at the top of the action bar — the two things a
+         merchant reaches for most on an order. Neither is buried under "More". */
+      '<div class="sheet-actions">' +
+        '<button class="act" data-print-order="' + esc(o.id) + '">🖨 Print</button>' +
+        waButton(o) +
+      '</div>' +
       '<div class="sheet-actions">' +
         '<button class="act ghost" data-route="receipts">🧾 Receipts</button>' +
         '<button class="act ghost" data-route="deliveries">🛵 Delivery Hub</button>' +
@@ -1759,11 +1765,97 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
   function row (k, v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'; }
 
+  /* ══ WHATSAPP THE BUYER ═══════════════════════════════════════════════════
+     One tap beside Print, because chasing a customer about an order is one of the
+     most frequent things a merchant does and it should not live under "More".
+
+     THE DATA RULE, and it is the whole risk here: the number comes from the ORDER's
+     own buyer contact and nowhere else. Not the merchant's profile, not
+     localStorage, not the last customer served, not a guess from a name. Messaging
+     the WRONG person about someone's order is a privacy breach, so when the order
+     carries no usable number the honest answer is to say so.
+
+     KENYAN NORMALISATION. wa.me needs digits only, in international form.
+       0712 345 678   -> 254712345678
+       +254 712 345678-> 254712345678
+       712345678      -> 254712345678
+     A number that does not resolve to a plausible Kenyan mobile returns null and
+     the button explains itself rather than opening a chat with nobody. */
+  function waPhone (raw) {
+    var d = String(raw == null ? '' : raw).replace(/[^0-9+]/g, '');
+    if (!d) return null;
+    d = d.replace(/^\+/, '');
+    if (/^0[17]\d{8}$/.test(d))   d = '254' + d.slice(1);   /* 07xx / 01xx local  */
+    else if (/^[17]\d{8}$/.test(d)) d = '254' + d;          /* bare 7xx / 1xx     */
+    else if (/^2540[17]\d{8}$/.test(d)) d = '254' + d.slice(4); /* 2540… mistake  */
+    /* Only a well-formed Kenyan mobile is accepted. Anything else is not silently
+       "fixed" into a number that might belong to someone else. */
+    return /^254[17]\d{8}$/.test(d) ? d : null;
+  }
+
+  /* The delivery destination is READ, never authored. There is no canonical
+     order-destination field yet (docs/DELIVERY_DESTINATION_BLOCKER.md — eight
+     spellings, no authority), so this reads what the order already carries and
+     includes NOTHING when it carries nothing. A pickup order never gets an
+     invented address. */
+  function orderDestination (o) {
+    if (/pickup/i.test(String(o.fulfilment || ''))) return null;
+    var d = o.deliveryAddress || o.dropoffAddress || o.address || '';
+    d = String(d).trim();
+    return d || null;
+  }
+
+  function waMessage (o, shopName) {
+    var who = String(o.customer || '').trim();
+    var lines = [
+      'Hello' + (who && who !== 'Walk-in' ? ' ' + who : '') + ', this is ' + (shopName || 'our shop') +
+      ' on SOKONI regarding your order #' + o.ref + '.',
+    ];
+    var dest = orderDestination(o);
+    if (dest) lines.push('', 'Delivery location:', dest);
+    lines.push('', 'Order total: ' + money(o.total, o.currency) + '.');
+    lines.push('', 'We\'d like to confirm your order.');
+    return lines.join('\n');
+  }
+
+  /* Rendered as a real ANCHOR, deliberately. The shell forbids window.open and
+     target="_blank" — that containment rule is what stops a module throwing the
+     merchant out of the app, and it is not something a Share button gets to evade.
+     An <a href> the merchant taps is their own navigation, and on a phone wa.me
+     hands off to the WhatsApp app while the browser keeps the shell where it was. */
+  function waButton (o) {
+    var num = waPhone(o.phone);
+    if (!num) {
+      /* No number is a real answer. Say it on the button itself rather than
+         offering an action that cannot work, and never invent a recipient. */
+      return '<button class="act ghost" data-wa-none="1" title="No buyer phone on this order">↗ Share</button>';
+    }
+    var url = 'https://wa.me/' + num + '?text=' + encodeURIComponent(waMessage(o, merchantDisplayName()));
+    return '<a class="act" rel="noopener" href="' + esc(url) + '">↗ Share</a>';
+  }
+
   document.addEventListener('click', function (e) {
     var o = e.target.closest('[data-order]');
     if (o) { openOrder(o.dataset.order); return; }
     var pay = e.target.closest('[data-payment]');
     if (pay) { openPayment(pay.dataset.payment); return; }
+    /* Share with no usable number: explain, never open a chat with nobody. */
+    if (e.target.closest('[data-wa-none]')) {
+      toast('WhatsApp unavailable — no buyer phone number is attached to this order.');
+      return;
+    }
+    /* Print routes through the shell's OWN device layer, the same connection POS
+       uses. No second printer authority. */
+    var pr = e.target.closest('[data-print-order]');
+    if (pr) {
+      var po = (ORD.rows || []).filter(function (x) { return x.id === pr.dataset.printOrder; })[0];
+      if (!po) return;
+      printerEngine().then(function (eng) {
+        if (eng && eng.printReceipt) return eng.printReceipt({ order: po, ref: po.ref, total: po.total, currency: po.currency, items: po.items });
+        toast('No printer service is loaded.');
+      });
+      return;
+    }
     var r = e.target.closest('[data-retry]');
     if (r) {
       if (r.dataset.retry === 'payments') { PAY.rows = null; CACHE.payments = null; renderPayments(nativePanel('payments')); }
