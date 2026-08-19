@@ -103,7 +103,9 @@ const GEO = ['deliveryCoords', 'dropoffCoords', 'dropoff',
     const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     const db = m.getFirestore(getApp());
     const res = { orders: 0, err: null, counts: {}, delivery: 0, pickup: 0, unknownFulfil: 0,
-                  deliveryWithNoGeo: 0, deliveryWithNoText: 0, soleSource: {}, fulfilKeys: {} };
+                  deliveryWithNoGeo: 0, deliveryWithNoText: 0,
+                  unstatedWithNoGeo: 0, unstatedWithNoText: 0, pickupWithDestination: 0,
+                  soleSource: {}, fulfilKeys: {} };
     [...TEXT, ...GEO].forEach((k) => { res.counts[k] = 0; res.soleSource[k] = 0; });
     try {
       const snap = await m.getDocs(m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(200)));
@@ -126,11 +128,25 @@ const GEO = ['deliveryCoords', 'dropoffCoords', 'dropoff',
         });
         if (present.length === 1) res.soleSource[present[0]]++;
 
-        if (!/pickup/.test(ft)) {
-          const anyText = TEXT.some((k) => o[k]);
-          const anyGeo = GEO.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== '');
+        /* ACCOUNTING BUG, fixed: this used `!pickup`, which counts orders with a
+           STATED delivery type AND orders with no fulfilment type at all, while the
+           top line counts them as two separate buckets. The gap total therefore
+           exceeded the delivery count (5 delivery + 3 unstated reported as 8) and
+           looked like more delivery orders than the sample contained.
+           The two are now reported separately, because they mean different things:
+           a stated delivery with no geometry is a DATA GAP, an order with no
+           fulfilment type at all is a CLASSIFICATION gap and may not be a delivery. */
+        const anyText = TEXT.some((k) => o[k]);
+        const anyGeo = GEO.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== '');
+        if (/pickup/.test(ft)) {
+          /* A pickup order carrying a destination is worth knowing about too. */
+          if (anyText || anyGeo) res.pickupWithDestination++;
+        } else if (ft) {
           if (!anyGeo) res.deliveryWithNoGeo++;
           if (!anyText) res.deliveryWithNoText++;
+        } else {
+          if (!anyGeo) res.unstatedWithNoGeo++;
+          if (!anyText) res.unstatedWithNoText++;
         }
       });
     } catch (e) { res.err = 'ERR ' + (e.code || e.message); }
@@ -161,8 +177,22 @@ const GEO = ['deliveryCoords', 'dropoffCoords', 'dropoff',
   else console.log('    (none — no order states its fulfilment type)');
 
   console.log('\n  GAPS ON DELIVERY ORDERS');
-  console.log('    delivery orders with NO geometry at all : ' + out.deliveryWithNoGeo);
-  console.log('    delivery orders with NO address text    : ' + out.deliveryWithNoText);
+  console.log('    STATED delivery, no geometry   : ' + out.deliveryWithNoGeo + ' of ' + out.delivery);
+  console.log('    STATED delivery, no address    : ' + out.deliveryWithNoText + ' of ' + out.delivery);
+  console.log('    UNSTATED fulfilment, no geometry: ' + out.unstatedWithNoGeo + ' of ' + out.unknownFulfil);
+  console.log('    UNSTATED fulfilment, no address : ' + out.unstatedWithNoText + ' of ' + out.unknownFulfil);
+  console.log('    PICKUP orders carrying a destination: ' + out.pickupWithDestination + ' of ' + out.pickup);
+
+  /* SELF-CHECK. The previous version reported a gap total larger than the bucket it
+     claimed to describe, and nothing caught it — a reader had to notice 8 > 5. The
+     buckets must account for every sampled order, and the arithmetic says so now. */
+  const bucketSum = out.delivery + out.pickup + out.unknownFulfil;
+  console.log('\n  ARITHMETIC CHECK');
+  console.log('    delivery ' + out.delivery + ' + pickup ' + out.pickup + ' + unstated ' +
+              out.unknownFulfil + ' = ' + bucketSum + '  vs sampled ' + out.orders +
+              (bucketSum === out.orders ? '   OK' : '   MISMATCH — do not trust the rows above'));
+  const gapOk = out.deliveryWithNoGeo <= out.delivery && out.unstatedWithNoGeo <= out.unknownFulfil;
+  console.log('    each gap count is within its own bucket: ' + (gapOk ? 'OK' : 'MISMATCH'));
 
   console.log('\n  "sole source" = orders where that field was the ONLY destination present.');
   console.log('  A field with a non-zero sole-source count CANNOT be dropped without data loss.');

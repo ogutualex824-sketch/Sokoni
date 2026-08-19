@@ -132,3 +132,86 @@ only ones that can start before it is decided.
 - **No consumer gains another `a || b` hedge.** Each one makes convergence harder and hides the
   divergence from anyone reading a single call site.
 - **Pickup orders never carry a destination**, and no surface invents one for them.
+
+---
+
+# PRODUCTION EVIDENCE — census run 2026-08-19
+
+Real approved seller, headed browser, App Check **attested** (the backend answered a world-readable
+read before anything was counted).
+
+```
+orders sampled 9    delivery 5 · pickup 1 · fulfilment unstated 3
+
+ADDRESS      deliveryAddress 100%   address 100%
+             dropoffAddress 0%  deliveryLocation 0%  destination 0%
+GEOMETRY     ALL NINE SPELLINGS 0%
+SOLE SOURCE  0 for every field
+FULFILMENT   fulfillmentType 6   ·   deliveryMethod 3
+```
+
+## What this settles
+
+**Nine of the eleven measured spellings are simply not present in production.** Only
+`deliveryAddress` and `address` carry data, both at 100%, and **no field is ever a sole source** —
+so on this evidence nothing would be lost by consolidating.
+
+**Geometry is entirely absent.** Every coordinate spelling is 0%. The `dropoffLat`/`dropoffLng` pair
+that `dispatch.js` reads on the **proof-of-delivery path** is never populated on these orders. That
+reframes the earlier proposal: the compatibility projection was going to preserve a field that
+production does not actually contain. **Coordinates are not a field to preserve — they are a
+capability to add**, which is exactly why the canonical model treats `lat`/`lng` as first-class
+rather than something to reconstruct from an address later.
+
+**Two fulfilment vocabularies are live at once** — `fulfillmentType` (6) and `deliveryMethod` (3) —
+and 3 orders state neither. The canonical `type` field must be written by one authority, and the
+migration must read both.
+
+## What it does NOT settle — and why nothing is retired yet
+
+**Nine orders, one seller.** Enough to design against, nowhere near enough to prove every historical
+order shares this shape. `deliveryAddress` and `address` therefore stay as **compatibility
+projections** until a broader census covers more sellers. Retiring a field on a 9-order sample would
+be exactly the reasoning this whole exercise exists to avoid.
+
+## A census bug, found by the reader and fixed
+
+The first run reported *"delivery orders with NO geometry at all: 8"* against a sample containing
+only **5** delivery orders. That was wrong, and it was mine.
+
+The top line bucketed orders three ways — pickup / stated-delivery / unstated — while the gap
+counter used `!pickup`, which sweeps **stated delivery *and* unstated together**: 5 + 3 = 8. The
+number was arithmetically explicable but described a different population than its label claimed.
+
+Fixed by reporting the buckets separately, because they mean different things: a **stated** delivery
+with no geometry is a *data gap*; an order with **no fulfilment type at all** is a *classification
+gap* and may not be a delivery. Pickup orders carrying a destination are now counted too.
+
+An **arithmetic self-check** was added: the buckets must sum to the sample, and each gap count must
+sit within its own bucket. Nothing caught the original discrepancy — a reader had to notice 8 > 5.
+
+**This does not change the design conclusion** (geometry is 0% under any bucketing) but it does
+change the **migration gate**, which needs to know precisely how many records of each kind exist.
+
+## Canonical model — frozen for design, not yet implemented
+
+```
+destination {
+  type          pickup | delivery      ← one vocabulary; migration reads both existing keys
+  label         Home | Work | Shop | Other
+  recipientName
+  phone
+  building
+  unit                                 house / apartment number
+  street
+  area                                 estate / area
+  town
+  instructions
+  formatted                            the single human-readable line
+  lat, lng                             FIRST-CLASS, not reconstructed
+  placeId                              when available
+}
+```
+
+`deliveryAddress` and `address` continue to be written as projections. **No new spelling is
+introduced.** Pickup carries no destination.
