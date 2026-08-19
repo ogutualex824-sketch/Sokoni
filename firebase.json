@@ -24,6 +24,7 @@
       "**/node_modules/**",
       "skills-lock.json",
       "**/*.md",
+      "**/*.log",
       "bs-config.js",
       "package.json",
       "package-lock.json",
@@ -578,9 +579,15 @@
     "rules": "storage.rules"
   },
   "emulators": {
-    "firestore": { "port": 8080 },
-    "auth": { "port": 9099 },
-    "ui": { "enabled": false },
+    "firestore": {
+      "port": 8080
+    },
+    "auth": {
+      "port": 9099
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }
