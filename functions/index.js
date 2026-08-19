@@ -11266,6 +11266,7 @@ exports.reconcileSubscriptionPayment = subPayMethods.reconcileSubscriptionPaymen
 const merchantIdentity = require('./merchant-identity');
 exports.merchantIdentity       = merchantIdentity.merchantIdentity;
 exports.employeeSaleAuthorize  = merchantIdentity.employeeSaleAuthorize;
+exports.adminLinkMerchantAccounts = merchantIdentity.adminLinkMerchantAccounts;
 
 /* ── SmartPOS Multi-Till + Cash Manager → smartPosDispatch ──────────── */
 /* mt* and cm* ops are routed via smartPosDispatch({op:'...',...})       */
