@@ -213,7 +213,18 @@ process.on('unhandledRejection', () => {});
 
   /* Chromium in production mode: it is the engine that implements Web Bluetooth, so the
      device rows describe the browser a merchant would actually use. WebKit otherwise. */
-  const browser = await (MODE === 'production' ? chromium : webkit).launch();
+  /* HEADED in REMOTE mode, and that is a requirement rather than a preference.
+     MEASURED: headless Chromium on the production origin cannot complete reCAPTCHA
+     attestation, so App Check refuses EVERY Firestore read before rules are consulted —
+     including world-readable collections. A headless remote run therefore reports
+     permission-denied on shops, products, orders and sellerPayments alike and proves
+     nothing about any of them.
+
+     Headed, the same origin exchanges a token (exchangeRecaptchaV3Token -> 200) and the
+     same public reads return fromCache:false. SOKONI_CERT_HEADLESS=1 forces headless for
+     anyone who has a reason; it will fail the attestation pre-flight below. */
+  const HEADLESS = REMOTE ? process.env.SOKONI_CERT_HEADLESS === '1' : true;
+  const browser = await (MODE === 'production' ? chromium : webkit).launch({ headless: HEADLESS });
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: MODE !== 'production', hasTouch: true });
 
   if (MODE === 'ci') {
@@ -256,6 +267,50 @@ process.on('unhandledRejection', () => {});
      top-level navigation and muddy the containment rows, so REMOTE uses the clean root. */
   await page.goto(BASE + (REMOTE ? '/' : '/index.html'), { waitUntil: 'commit', timeout: 30000 }).catch(() => null);
   await page.waitForFunction(() => typeof window.__sokoniAppCheckState === 'string', null, { timeout: 25000 }).catch(() => null);
+
+  /* ── App Check attestation — proved BEFORE anything that depends on it ──────
+     Every data row downstream reads Firestore, and App Check gates Firestore before
+     rules are evaluated. Without this row, an attestation failure surfaces later as
+     permission-denied on shops/orders/sellerPayments and reads like a rules or
+     ownership defect — which is exactly the false trail a headless run produced.
+
+     The probe is a world-readable collection: 'shops' is `allow read: if true`, so a
+     refusal there cannot be a rule and can only be attestation. fromCache:false is the
+     assertion — a cached answer would mean the backend was never reached. */
+  if (REMOTE) {
+    /* NO fixed pre-wait. The marketplace home AUTO-NAVIGATES to /offer roughly 14s after
+       load, and a fixed 6s delay here pushed sign-in into that navigation window — the
+       Firebase app is momentarily absent while the new document boots, and sign-in then
+       reported 'no Firebase app on the page' for a reason that had nothing to do with
+       credentials. Retry only on FAILURE, and break the instant it succeeds, so the happy
+       path costs almost nothing and sign-in still happens well before the redirect. */
+    let attest = null;
+    for (let i = 0; i < 3; i++) {
+      if (i > 0) await page.waitForTimeout(1500);
+      attest = await page.evaluate(async () => {
+      try {
+        const { getApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+        if (!getApps().length) return 'no Firebase app on the sign-in page';
+        const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const s2 = await m.getDocs(m.query(m.collection(m.getFirestore(getApp()), 'shops'), m.limit(1)));
+        return { size: s2.size, fromCache: s2.metadata.fromCache };
+      } catch (e) { return 'ERR ' + ((e && e.code) || (e && e.message) || 'unknown'); }
+      }).catch((e) => 'ERR ' + e.message);
+      if (attest && typeof attest === 'object' && attest.fromCache === false) break;
+    }
+
+    const attested = attest && typeof attest === 'object' && attest.fromCache === false;
+    ck('App Check obtained a valid PRODUCTION attestation', attested, JSON.stringify(attest));
+    if (!attested) {
+      console.error('\n  STOPPING — App Check did not attest, so every Firestore row below would');
+      console.error('  fail with permission-denied for a reason unrelated to the product.');
+      console.error('  A world-readable collection was refused, which no rule can do.');
+      console.error(HEADLESS
+        ? '  This run is HEADLESS. Remove SOKONI_CERT_HEADLESS=1 — headless cannot solve reCAPTCHA.'
+        : '  This run is HEADED, so the failure is real: report it rather than adding a debug token.');
+      closeServer(); process.exit(1);
+    }
+  }
 
   /* Bounded retry — sign-in through the shipped SDK intermittently misses its window,
      and an intermittent sign-in makes everything downstream measure a signed-OUT
