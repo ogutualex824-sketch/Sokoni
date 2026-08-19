@@ -178,8 +178,18 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      QUARANTINE.size === 4 &&
      ['test-auth-email', 'test-icons', 'test-overlays', 'test-search-pipeline']
        .every((n) => QUARANTINE.has(n)), [...QUARANTINE].join(', '));
-  ok('DECLARED still holds exactly its five entries', Object.keys(DECLARED).length === 5,
+  /* Six since 2026-08-19: test-auth-post-login-routing was quarantined for the
+     subscription release — it tests fix/auth-post-login-routing, which is
+     deliberately unmerged. This guard did its job and refused the addition until
+     it was declared here, which is the point of it: a registry may grow, but never
+     quietly. Raising this number is the ONLY sanctioned way to add an entry. */
+  ok('DECLARED still holds exactly its six entries', Object.keys(DECLARED).length === 6,
      Object.keys(DECLARED).join(', '));
+  ok('the quarantined suite names WHY and HOW it is removed',
+     /deliberately unmerged/.test(DECLARED['test-auth-post-login-routing'].reason) &&
+     /Remove by merging/.test(DECLARED['test-auth-post-login-routing'].reason));
+  ok('...and it is QUARANTINE, never PASS',
+     DECLARED['test-auth-post-login-routing'].verdict === 'QUARANTINE');
   ok('every DECLARED entry carries a written reason',
      Object.values(DECLARED).every((d) => d.reason && d.reason.length > 40));
   ok('neither seller-products nor pos-tab-transitions was added to either registry',

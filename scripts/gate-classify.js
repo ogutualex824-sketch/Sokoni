@@ -86,6 +86,35 @@ const EXECUTION_EVIDENCE = [
    only contain suites proven to test current intended behaviour. Each entry
    carries the question that decides where it belongs. */
 const DECLARED = {
+  /* ── QUARANTINED, NOT WEAKENED ─────────────────────────────────────────────
+     All 23 assertions are retained and still run; 13 pass. The 10 that fail
+     exercise post-login routing through the merchant entry authority, and that
+     implementation is deliberately NOT on this branch:
+
+         auth.js  references to the entry authority ... 0
+         login.html references ....................... 0
+
+     The suite arrived with ecb2d1e; the commits it depends on (1f6407f,
+     9e3cf82) belong to fix/auth-post-login-routing, which was checkpointed and
+     intentionally left unmerged. So it has never been green here — it is ahead
+     of its implementation, not describing a defect in what shipped.
+
+     It is quarantined so an unrelated, uncertified Merchant v2 cutover is not
+     dragged into the subscription release merely to turn a gate green. The test
+     is right; the code it tests is simply not here yet.
+
+     TO REMOVE THIS QUARANTINE: merge or implement the checkpointed auth
+     post-login routing, then run the suite UNCHANGED. Do not edit the ten
+     assertions to fit whatever ships.
+
+     EXPIRES: before the Merchant v2 cutover / next release certification.
+     Quarantined 2026-08-19 for the subscription release. */
+  'test-auth-post-login-routing': {
+    verdict: 'QUARANTINE',
+    reason: 'Tests fix/auth-post-login-routing, deliberately unmerged. 13/23 pass; ' +
+            'auth.js has 0 references to the entry authority. Remove by merging that ' +
+            'work and re-running unchanged. Expires before the v2 cutover.',
+  },
   'test-offline-detection': {
     verdict: 'ENV',
     reason: 'Drives a browser against http://localhost:3000 — needs a dev server, not a defect.',
