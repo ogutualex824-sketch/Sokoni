@@ -102,7 +102,44 @@ console.log('='.repeat(74));
   line('reason', REASON);
   line('evidence', JSON.stringify(EVIDENCE));
 
+  /* ── BLOCKED: "how many products" is not yet a settled question ────────────
+     A recount is only correct once ACTIVE is defined, and in production it is
+     not. The KASS shop carries archive state under THREE disagreeing spellings —
+     `status: 'archived'` (7 docs), `archivedAt` present (8), `active === false`
+     (5) — with only 5 agreeing across all three and at least one product
+     (AD111) archived by one signal alone.
+
+     Counting all 103 would charge the merchant for archived products and block a
+     shop that is actually at 95 or 96 active. Counting by any single signal
+     picks a winner among three that disagree. Neither is a recount; both are a
+     guess written into an enforcement record.
+
+     This refuses until the product lifecycle contract is canonical. */
   head('OPERATION 2 — recount both counters from reality');
+  {
+    const snap = await db.collection('products').where('sellerUid', '==', SHOP).get();
+    const byStatus = [], byArchivedAt = [], byActiveFalse = [];
+    snap.forEach((d) => {
+      const x = d.data();
+      if (String(x.status || '').toLowerCase() === 'archived') byStatus.push(d.id);
+      if (x.archivedAt) byArchivedAt.push(d.id);
+      if (x.active === false) byActiveFalse.push(d.id);
+    });
+    const union = new Set([].concat(byStatus, byArchivedAt, byActiveFalse));
+    const agreed = byStatus.filter((i) => byArchivedAt.indexOf(i) > -1 && byActiveFalse.indexOf(i) > -1);
+    line('products total', String(snap.size));
+    line('archived: status', String(byStatus.length));
+    line('archived: archivedAt', String(byArchivedAt.length));
+    line('archived: active===false', String(byActiveFalse.length));
+    line('archived: union / agreed', union.size + ' / ' + agreed.length);
+    line('ACTIVE (union basis)', String(snap.size - union.size));
+    if (union.size !== agreed.length) {
+      stop('archive state disagrees across ' + union.size + ' products (only ' + agreed.length +
+           ' agree on all three signals). Define the canonical product lifecycle before ' +
+           'writing a counter — a recount over an undefined ACTIVE is a guess, not a count.');
+    }
+  }
+
   const plan = [];
   for (const uid of [SHOP, PAID]) {
     const real = await db.collection('products').where('sellerUid', '==', uid).count().get()

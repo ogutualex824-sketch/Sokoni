@@ -141,3 +141,43 @@ product. If any precondition fails it stops before writing anything — a half-a
 identity repair is worse than none.
 
 **`--apply` has NOT been run.**
+
+---
+
+## Re-verified 2026-08-19 — the repair is now BLOCKED, and correctly so
+
+**No products were deleted.** All 103 are present. Nothing in this session ever wrote to
+production: every operation was a read, and `--apply` has never run.
+
+But re-verification found something that invalidates the prepared counter write.
+
+### Archive state already exists — under three disagreeing spellings
+
+| signal | products |
+|---|---|
+| `status === archived` | 7 |
+| `archivedAt` present | 8 |
+| `active === false` | 5 |
+| **union** (archived by ANY) | **8** |
+| **agreed by all three** | **5** |
+
+Only 84 of 103 products carry a `status` field at all. One product (`AD111`) has
+`archivedAt` and nothing else. Two more carry `status`+`archivedAt` but not `active:false`.
+
+### Why this blocks the repair
+
+The prepared write was `count = 103`. Under a lifecycle where archived products do not
+consume the allowance, KASS is at **95 active** (union basis) or **96** (status basis) —
+**already under the 100 limit**. Writing 103 would charge the merchant for archived
+products and block a shop that should not be blocked.
+
+Counting by any single signal picks a winner among three that disagree. Neither option is
+a recount; both are a guess written into an enforcement record.
+
+`apply-kass-repair.js` now REFUSES with this measurement rather than proceeding.
+
+### What must come first
+
+The canonical product lifecycle — Active / Archived / Permanently deleted — with ONE
+definition of archived, a migration that reconciles the three existing spellings, and the
+counter counting ACTIVE only. Then the recount is a count rather than a guess.
