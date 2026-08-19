@@ -73,6 +73,54 @@ is a **contact/spam vector and self-granted channel**, not an order-data breach.
 `scripts/*message*`, `*chat*` or `*conversation*` suite exists. Nothing would catch a regression
 here today.
 
+---
+
+## MEASURED — the party table (step 2 of the clear-gate sequence)
+
+`scripts/census-conversation-parties.js`. Read from `firestore.rules`, because the rules already
+gate reads on exactly the fields that identify a party — so they are the authoritative naming, not
+a guess.
+
+| transaction | collection | rules | buyer | seller | rider |
+|---|---|---|---|---|---|
+| `order` | `orders` | yes | `buyerId`, `buyerUid`, `uid`, `userId` | `sellerUid` | `assignedDriverUid` |
+| `service_booking` | `bookings` | yes | `buyerId`, `uid`, `userId` | `ownerId` | — |
+| `food_order` | `foodOrders` | yes | `buyerUid` | — | — |
+| `property_inquiry` | `propertyInquiries` | yes | `uid` | — | — |
+| `job_application` | `jobApplications` | yes | `uid` | — | — |
+| `legal_consultation` | `legalConsultations` | yes | `clientUid` | — | — |
+| **`logistics_request`** | **`packageRequests`** | yes | `buyerUid`, `uid` | `sellerUid` | **`assignedDriverId`** |
+| `support_ticket` | `supportTickets` | yes | `uid` | — | — |
+| 9 other types | `pharmacyOrders`, `vehicleInquiries`, `freelancerEngagements`, `eventBookings`, `hotelReservations`, `financialRequests`, `healthcareAppointments`, `insuranceRequests`, `rfqs` | **NO RULES BLOCK** | — | — | — |
+
+### Three findings that shape the fix
+
+1. **The rider is named DIFFERENTLY in the two collections that matter most.**
+   `orders` → **`assignedDriverUid`**. `packageRequests` → **`assignedDriverId`**. Same role, two
+   names — the destination problem again, in the field that decides whether a rider can join a
+   conversation at all.
+2. **`orders` has FOUR buyer-ish fields** (`buyerId`, `buyerUid`, `uid`, `userId`) and `bookings`
+   three. A fix that reads only one of them **drops a legitimate party** and locks a real buyer out
+   of their own conversation.
+3. **9 of 17 accepted transaction types have no rules block at all.** `createConversation` accepts
+   them as valid anchors today. Parties cannot be derived server-side for them, so the fix must
+   refuse them explicitly rather than silently producing an empty participant list — an empty list
+   would make the conversation unreadable to everyone, which is a different bug, not a fix.
+
+## MEASURED — id guessability (step 1)
+
+- **`orders`**: `functions/index.js:2861` — `"SKN" + crypto.randomBytes(6).toString("hex")`.
+  **48 bits of cryptographic entropy. Not enumerable.**
+- **`packageRequests`**: `functions/index.js:8198` — `"DEL" + apiRef`, derived from the order
+  reference, so it inherits that entropy.
+
+**This materially lowers the severity recorded above.** Mass enumeration of transactions is not
+feasible. The realistic abuse is narrower and still real: **anyone who legitimately knows a
+transaction id — a buyer knows their own — can create that conversation naming an arbitrary third
+party**, who then receives an inbox entry and a channel. Bounded contact-spam, not a breach.
+
+---
+
 ## The minimal fix — proposed, NOT implemented
 
 Derive participants server-side instead of accepting them:
