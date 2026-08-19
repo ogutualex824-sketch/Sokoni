@@ -15,6 +15,12 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const C = require(path.join(ROOT, 'sokoni-subscription-checkout.js'));
+/* Limits come from the CANONICAL catalogue, never a number typed here. A
+   fixture with its own plan table is an eleventh catalogue, and it would also
+   keep passing if the real allowance changed. */
+const CAT = require(path.join(ROOT, 'functions/subscription-catalog.js'));
+const STARTER_LIMIT = CAT.PLANS.STARTER.listingLimit;
+const UNLIMITED = CAT.PLANS.GROWTH.listingLimit;
 
 let pass = 0, fail = 0, unproven = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
@@ -32,12 +38,12 @@ const SERVER = [
 ];
 
 head('1 - the plan summary reads from the resolved entitlement');
-const sum = C.planSummary({ label: 'Seller Basic', priceKES: 999, listingLimit: 100, billingCycle: 'monthly' });
+const sum = C.planSummary({ label: 'Seller Basic', priceKES: 999, listingLimit: STARTER_LIMIT, billingCycle: 'monthly' });
 ck('name and price', sum.name === 'Seller Basic' && sum.price === 'KES 999', sum.price);
 ck('cycle label', sum.cycleLabel === 'per month');
-ck('100 products', sum.products === '100 products', sum.products);
+ck('100 products', sum.products === STARTER_LIMIT + ' products', sum.products);
 ck('unlimited renders as words, not -1',
-   C.planSummary({ listingLimit: -1 }).products === 'Unlimited products');
+   C.planSummary({ listingLimit: UNLIMITED }).products === 'Unlimited products');
 ck('an unknown limit is OMITTED, not shown as 0',
    C.planSummary({}).products === null);
 ck('capabilities are listed', sum.includes.length === 5 && sum.includes.every((i) => i.on));

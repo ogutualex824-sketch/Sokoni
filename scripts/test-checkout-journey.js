@@ -23,6 +23,9 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const ROOT = path.resolve(__dirname, '..');
+/* Catalogue-derived, so this fixture can never become a rival plan table. */
+const CAT = require(path.join(ROOT, 'functions/subscription-catalog.js'));
+const STARTER_LIMIT = CAT.PLANS.STARTER.listingLimit;
 
 let pass = 0, fail = 0, unproven = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
@@ -73,7 +76,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
           window.__calls.createPaymentIntent++;
           return { data: { paymentIntentId: 'pi_' + window.__calls.createPaymentIntent,
                            planId: args.planId, planName: 'Seller Basic', amount: 999,
-                           listingLimit: 100, billingCycle: args.billingCycle, currency: 'KES' } };
+                           listingLimit: STARTER_LIMIT, billingCycle: args.billingCycle, currency: 'KES' } };
         }
         if (name === 'subscriptionPaymentMethods') {
           window.__calls.subscriptionPaymentMethods++;
@@ -120,7 +123,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
   const planText = await page.textContent('.plan');
   ck('the server plan name is rendered', /Seller Basic/.test(planText), planText.trim().split('\n')[0]);
   ck('the server price is rendered', /KES 999/.test(planText));
-  ck('the server product limit is rendered', /100 products/.test(planText));
+  ck('the server product limit is rendered', new RegExp(STARTER_LIMIT + ' products').test(planText));
   const html = fs.readFileSync(path.join(ROOT, 'subscription-checkout.html'), 'utf8');
   ck('no price constant is hardcoded in the page',
      !/KES\s*\d{3}/.test(html.replace(/<style[\s\S]*?<\/style>/g, '')));

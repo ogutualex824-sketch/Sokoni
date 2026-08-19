@@ -21,6 +21,10 @@
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const catalog = require(path.join(ROOT, 'functions/subscription-catalog.js'));
+/* The stale ceiling a counter may carry, and the entitled one — both read from
+   the catalogue so this file defines no plan limits of its own. */
+const FREE_LIMIT = catalog.PLANS.FREE.listingLimit;
+const STARTER_LIMIT = catalog.PLANS.STARTER.listingLimit;
 
 let pass = 0, fail = 0, unproven = 0;
 const ck = (l, ok, d) => {
@@ -146,7 +150,7 @@ un('which price is commercially correct for Starter',
      eff.listingLimit !== 10);
 
   head('7 - one entitlement call, and the counter is read honestly');
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 23, maxProducts: 10 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 23, maxProducts: FREE_LIMIT });
   const ent = await EA.getMerchantEntitlement(KASS);
   ck('plan STARTER, status ACTIVE', ent.plan === 'STARTER' && ent.status === 'ACTIVE');
   ck('products 23 / 100', ent.limits.productsUsed === 23 && ent.limits.products === 100);
@@ -156,11 +160,11 @@ un('which price is commercially correct for Starter',
   ck('can create a product', (await EA.canCreateProduct(KASS)).allowed === true);
 
   head('8 - the limit is enforced, and deletion frees capacity');
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 100, maxProducts: 100 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 100, maxProducts: STARTER_LIMIT });
   const atLimit = await EA.canCreateProduct(KASS);
   ck('at 100/100 creation is BLOCKED', atLimit.allowed === false && atLimit.reason === 'product-limit-reached');
   ck('...and the way out is stated, not left to support', !!atLimit.remedy, atLimit.remedy);
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 99, maxProducts: 100 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 99, maxProducts: STARTER_LIMIT });
   ck('after deleting one, creation is allowed again', (await EA.canCreateProduct(KASS)).allowed === true);
   ck('inventory-add uses the SAME authority',
      JSON.stringify(await EA.canAddInventory(KASS)) === JSON.stringify(await EA.canCreateProduct(KASS)));
@@ -227,7 +231,7 @@ un('which price is commercially correct for Starter',
   head('13 - the merchant-facing panel says the right sentence');
   const P = require(path.join(ROOT, 'sokoni-plan-panel.js'));
   /* Back to the state a real merchant would be in. */
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 23, maxProducts: 10 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 23, maxProducts: FREE_LIMIT });
   const vKass = P.render(await EA.getMerchantEntitlement(KASS));
   ck('KASS reads as STARTER / Active', vKass.heading === 'Starter' && vKass.subheading === 'Active');
   ck('...products 23 / 100', vKass.products.text === '23 / 100', vKass.products.text);
@@ -256,14 +260,14 @@ un('which price is commercially correct for Starter',
   ck('a 1-day trial is singular, not "1 days"',
      P.render({ plan: 'STARTER', label: 'Starter', status: 'ACTIVE', trial: { active: true, daysRemaining: 1 },
        limits: {}, features: {} }).subheading === '1 day remaining');
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 100, maxProducts: 100 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 100, maxProducts: STARTER_LIMIT });
   const vFull = P.render(await EA.getMerchantEntitlement(KASS));
   ck('AT LIMIT says so in the merchant’s words',
      vFull.notice && /reached your Starter limit/.test(vFull.notice.text), vFull.notice && vFull.notice.text);
   ck('...offers Manage products AND Upgrade, not "contact support"',
      vFull.notice.actions.map((a) => a.id).join(',') === 'manage-products,upgrade');
   ck('...and add-product is withheld', vFull.canAddProduct === false);
-  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 99, maxProducts: 100 });
+  await db.doc('productCounters/' + KASS).set({ uid: KASS, count: 99, maxProducts: STARTER_LIMIT });
   const vAfter = P.render(await EA.getMerchantEntitlement(KASS));
   ck('after deleting one, 99 / 100 and add-product returns',
      vAfter.products.text === '99 / 100' && vAfter.canAddProduct === true, vAfter.products.text);
