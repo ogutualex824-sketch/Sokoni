@@ -2575,5 +2575,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   go(boot);
 })();
 </script>
+<!-- Self-update. A page that loads neither shared-header.js nor sw-register.js serves
+     STALE content after every deploy — the merchant keeps the build they first opened
+     and never sees a fix. merchant.html has carried /sw-register.js for exactly this
+     reason; this shell shipped without it, which a production smoke test caught before
+     the cutover rather than after. shared-header.js is deliberately NOT used here: it
+     injects a marketplace header this shell replaces with its own chrome. -->
+<script src="/sw-register.js" defer></script>
 </body>
 </html>
