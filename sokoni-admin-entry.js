@@ -41,10 +41,41 @@
      Not a fixed delay: a slow verification and a missing one look identical from a
      timer, and answering from a timer is how a page decides it is signed out while
      the token is still in flight. Resolve on the authority actually being ready. */
+  /* Wait for Firebase to actually decide, then make sure the authority has SEEN
+     that decision. Not a fixed delay: a slow token and an absent session look
+     identical to a timer. */
+  function _awaitUser() {
+    return new Promise(function (resolve) {
+      var n = 0, wired = false;
+      (function tick() {
+        var a = window.firebaseAuth;
+        if (a && a.currentUser) return resolve(a.currentUser);
+        if (a && typeof a.onAuthStateChanged === 'function' && !wired) {
+          wired = true;
+          try { a.onAuthStateChanged(function (u) { if (u) resolve(u); }); } catch (_) {}
+        }
+        if (++n > 250) return resolve(null);        /* ~7.5s */
+        setTimeout(tick, 30);
+      }());
+    });
+  }
+
   function _ready() {
     var perms = P();
     if (!perms || typeof perms.init !== 'function') return Promise.resolve(false);
-    return perms.init().then(function () { return true; }, function () { return false; });
+    return perms.init().then(function () {
+      /* init() runs at DOMContentLoaded, BEFORE Firebase resolves currentUser, and
+         caches that unverified outcome for the page load. Consulting isVerified()
+         at this point locked every administrator out of every administrative
+         surface with "Could not verify your access". Wait for a real user, then ask
+         the authority to re-read the token before deciding. */
+      if (perms.isVerified && perms.isVerified()) return true;
+      return _awaitUser().then(function (user) {
+        if (!user) return false;                    /* genuinely signed out */
+        if (typeof perms.reverify !== 'function') return false;
+        return perms.reverify();
+      });
+    }, function () { return false; });
   }
 
   function _hesc(s) {
@@ -74,7 +105,14 @@
     } catch (_) {}
 
     var title, body, canEnter = !!res.canEnter;
-    if (res.reason === 'no-claim') {
+    if (res.reason === 'signed-out') {
+      /* Distinct from not-verified on purpose. Telling someone whose session simply
+         expired to "check your connection" sends them to refresh a page that cannot
+         work until they sign in. */
+      title = 'Sign in to continue';
+      body = 'Your session has ended. Sign in with your administrator account.';
+      canEnter = false;
+    } else if (res.reason === 'no-claim') {
       title = 'Access denied';
       body = 'This account does not carry the ' + label + ' role.';
     } else if (res.reason === 'not-verified') {
@@ -111,6 +149,12 @@
           + 'background:#71ff00;color:#050505;border:0;border-radius:12px;font-size:14px;'
           + 'font-weight:800;cursor:pointer;font-family:inherit;">Enter ' + _hesc(label) + '</button>'
         : '')
+      /* A signed-out visitor needs the way IN, not the way home. */
+      + (res.reason === 'signed-out'
+        ? '<a href="login.html" style="display:block;padding:13px;margin-bottom:10px;'
+          + 'background:#71ff00;color:#050505;border-radius:12px;font-size:14px;'
+          + 'font-weight:800;text-decoration:none;">Sign in</a>'
+        : '')
       + '<a href="/" style="display:block;padding:13px;background:rgba(255,255,255,.06);'
       + 'color:#e8e8e8;border-radius:12px;font-size:14px;font-weight:600;text-decoration:none;">'
       + 'Go to SOKONI Home</a>'
@@ -140,10 +184,13 @@
     var ok = await _ready();
     var perms = P();
     if (!ok || !perms || typeof perms.requireAdminContext !== 'function') {
-      /* Fail CLOSED. An unavailable authority is an unknown answer, and an unknown
-         answer on an administrative surface is a denial, never an admission. */
-      _denyScreen({ reason: 'not-verified' }, need);
-      return { ok: false, reason: 'authority-unavailable' };
+      /* Fail CLOSED — an unknown answer on an administrative surface is a denial.
+         But SAY WHICH unknown: "could not verify your access" shown to someone who
+         is simply signed out sends them to refresh a page that will never work.
+         Signed out is actionable; unverifiable claims are not the same problem. */
+      var signedOut = !(window.firebaseAuth && window.firebaseAuth.currentUser);
+      _denyScreen({ reason: signedOut ? 'signed-out' : 'not-verified' }, need);
+      return { ok: false, reason: signedOut ? 'signed-out' : 'authority-unavailable' };
     }
     var res = perms.requireAdminContext(need);
     if (!res.ok) { _denyScreen(res, need); return res; }

@@ -328,6 +328,38 @@
     return _initPromise;
   }
 
+  /* ── RE-VERIFICATION AFTER AUTH RESOLVES ────────────────────────────────────
+     init() caches _initPromise on first call, and _run() below fires it at
+     DOMContentLoaded. Firebase resolves currentUser asynchronously AFTER that, so
+     _rolesFromFirebase() bails on `!auth.currentUser` and returns null — leaving
+     _claimsVerified and _verifiedThisLoad false for the rest of the page load, with
+     the failed outcome cached.
+
+     Nothing depended on that until F4 gave requireAdminContext() a real
+     isVerified() check. Then it became a hard lockout: every administrator, on
+     every administrative surface, got "Could not verify your access" regardless of
+     their claims. The guard was correct to fail closed; the state it consulted was
+     simply never allowed to become true.
+
+     This re-runs ONLY the verification step, and only upgrades — it can set
+     verified true, never false, so it cannot be used to widen anything. A caller
+     that has waited for a real currentUser calls this before asking about roles. */
+  async function reverify() {
+    if (_verifiedThisLoad) return true;
+    const firebaseRoles = await _rolesFromFirebase();
+    if (!firebaseRoles) return false;
+    _currentRoles     = firebaseRoles;
+    _claimsVerified   = true;
+    _verifiedThisLoad = true;
+    try { _writeCache({ roles: _currentRoles, level: _roleLevel(_currentRoles), claimsVerified: true }); }
+    catch (_) {}
+    try { _filterNav(); } catch (_) {}
+    try {
+      document.dispatchEvent(new CustomEvent('sokoniRolesReady', { detail: { roles: _currentRoles } }));
+    } catch (_) {}
+    return true;
+  }
+
   function hasRole(role) {
     const norm = _normaliseRole(role) || role;
     if (!_currentRoles.includes(norm)) return false;
@@ -689,6 +721,7 @@
     hasRole, hasAnyRole, hasAllRoles, can,
     adminHomeFor,
     enterAdminContext, getAdminContext, clearAdminContext, requireAdminContext,
+    reverify,
     getRoles, getLevel, isLoggedIn, isVerified,
     showAccessDenied,
     clearCache: _clearCache,
