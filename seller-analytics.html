@@ -346,7 +346,7 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     }
     function _grant(){ onGranted(); }
     function _checkRole(user){
-      if(!window.firebaseDB){ _lsFallback(); return; }
+      if(!window.firebaseDB){ _claimsFallback(); return; }
       /* v9 modular Firestore via dynamic import */
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
         return fs.getDoc(fs.doc(window.firebaseDB, 'users', user.uid));
@@ -359,13 +359,26 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
           }).catch(_deny);
         }
       }).catch(function(){
-        /* Network error — fall back to localStorage role */
-        _lsFallback();
+        /* Network error — fall back to the signed TOKEN, not to localStorage. */
+        _claimsFallback();
       });
-      function _lsFallback(){
-        var lsu = {}; try { lsu = JSON.parse(localStorage.getItem('sokoniUser')||'{}') || {}; } catch(e){}
-        var r = (localStorage.getItem('userRole')||'').toLowerCase();
-        if(_isSellerDoc(lsu) || r === 'seller' || r === 'admin' || r === 'vendor'){ _grant(); } else { _deny(); }
+      /* ── FALLBACK WHEN THE USER DOCUMENT CANNOT BE READ ──────────────────────
+         This read localStorage.getItem('userRole') and a cached sokoniUser doc and
+         granted on either. The visitor owns both, so the grant was forgeable.
+         Measured in docs/ANALYTICS-LSFALLBACK-PROOF.md: it exposes nothing here
+         either, because the orders query is scoped to where('sellerUid','==',uid).
+         Low severity, but it was a SECOND role authority beside the real one.
+
+         The ID TOKEN is the right fallback: already in memory, no Firestore
+         round-trip — which is what just failed — and signed by Firebase rather than
+         written by the page. No role in the token means deny. A transient read
+         failure must not be answered from client state. */
+      function _claimsFallback(){
+        user.getIdTokenResult().then(function(r){
+          var c = (r && r.claims) || {};
+          if(c.seller === true || c.admin === true || c.superAdmin === true){ _grant(); }
+          else { _deny(); }
+        }).catch(_deny);
       }
     }
     function _poll(n){

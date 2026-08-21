@@ -350,7 +350,7 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     }
     function _deny(){ window.location.replace('login.html'); }
     function _checkRole(user){
-      if(!window.firebaseDB){ _lsFallback(); return; }
+      if(!window.firebaseDB){ _claimsFallback(); return; }
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
         return fs.getDoc(fs.doc(window.firebaseDB, 'users', user.uid));
       }).then(function(snap){
@@ -362,12 +362,25 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
           }).catch(_deny);
         }
       }).catch(function(){
-        _lsFallback();
+        _claimsFallback();
       });
-      function _lsFallback(){
-        var lsu = {}; try { lsu = JSON.parse(localStorage.getItem('sokoniUser')||'{}') || {}; } catch(e){}
-        var r = (localStorage.getItem('userRole')||'').toLowerCase();
-        if(_isSellerDoc(lsu) || r === 'seller' || r === 'admin' || r === 'vendor'){ onGranted(user); } else { _deny(); }
+      /* ── FALLBACK WHEN THE USER DOCUMENT CANNOT BE READ ──────────────────────
+         This read `localStorage.getItem('userRole')` and a cached sokoniUser doc,
+         and granted on either. The visitor owns both, so the grant was forgeable —
+         measured in docs/ANALYTICS-LSFALLBACK-PROOF.md, which also showed it
+         exposes nothing (this page performs no privileged read). Low severity, but
+         it was a SECOND role authority sitting beside the real one.
+
+         The ID TOKEN is the right fallback: it is already in memory, needs no
+         Firestore round-trip — which is exactly what just failed — and is signed by
+         Firebase rather than written by the page. If it does not carry the role,
+         deny. A transient read failure must not be answered from client state. */
+      function _claimsFallback(){
+        user.getIdTokenResult().then(function(r){
+          var c = (r && r.claims) || {};
+          if(c.seller === true || c.admin === true || c.superAdmin === true){ onGranted(user); }
+          else { _deny(); }
+        }).catch(_deny);
       }
     }
     function _poll(n){
