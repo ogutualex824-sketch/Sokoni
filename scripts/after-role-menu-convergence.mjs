@@ -323,6 +323,38 @@ export default async function run(page) {
     wide.map((w) => w.vp + ':' + (w.ok ? 'ok'
       : 'left=' + (w.r && w.r.left) + ' right=' + (w.r && w.r.right) + ' vw=' + (w.r && w.r.vw))).join('  '));
 
+  /* ── C14: the repaint must not be gated on the LEGACY mirror field ──────────
+     The sokoniActiveRoleChanged handler used to return early when u.role already
+     equalled the new role, and the account-popup repaint sat BEHIND that check.
+     u.role is the legacy field that setActiveRole never writes, so the guard
+     compared the new role against something unrelated to what is on screen — and a
+     stale label survived the switch.
+
+     Fire the event with u.role ALREADY matching, which is exactly the case that
+     used to skip the repaint. */
+  await paint('roles=buyer,driver&ra=driver&mirror=driver');
+  await page.addScriptTag({ content: `
+    (function () {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+      u.role = 'driver'; u.activeRole = 'driver';
+      localStorage.setItem('sokoniUser', JSON.stringify(u));
+      window.SokoniRoleAuthority._r = 'driver';
+      var threw = null;
+      try {
+        document.dispatchEvent(new CustomEvent('sokoniActiveRoleChanged', { detail: { role: 'driver' } }));
+      } catch (e) { threw = String(e && e.message || e); }
+      document.documentElement.setAttribute('data-c14', JSON.stringify({
+        threw: threw,
+        acting: window.SokoniRoleAuthority.getActiveRole(),
+        mirrorRole: (JSON.parse(localStorage.getItem('sokoniUser') || '{}').role) || null
+      }));
+    }());` });
+  const c14 = JSON.parse((await page.getAttribute('html', 'data-c14')) || '{}');
+  ck('C14  an event whose value already matches the mirror is still handled',
+    c14.threw === null && c14.acting === 'driver' && c14.mirrorRole === 'driver',
+    'acting=' + c14.acting + ' mirror=' + c14.mirrorRole
+      + (c14.threw ? ' THREW: ' + c14.threw : ''));
+
   const passed = rows.filter((r) => r.ok).length;
   return { passed, failed: rows.length - passed, rows };
 }

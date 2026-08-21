@@ -2029,14 +2029,28 @@
      until the next full page load. _skBridging stops the two events echoing. */
   var _skBridging = false;
   document.addEventListener('sokoniActiveRoleChanged', function (e) {
-    if (_skBridging) return;
     var role = e && e.detail && e.detail.role;
-    if (!role) return;
-    var current = '';
-    try { current = String((JSON.parse(localStorage.getItem('sokoniUser') || '{}').role) || '').toLowerCase(); } catch (_) {}
-    if (current === String(role).toLowerCase()) return;
-    _skBridging = true;
-    try { _skMirrorRoleLocally(role); } finally { _skBridging = false; }
+
+    /* The WRITE stays conditional — re-mirroring a value the mirror already holds
+       is pointless work and risks an event echo. */
+    if (!_skBridging && role) {
+      var current = '';
+      try { current = String((JSON.parse(localStorage.getItem('sokoniUser') || '{}').role) || '').toLowerCase(); } catch (_) {}
+      if (current !== String(role).toLowerCase()) {
+        _skBridging = true;
+        try { _skMirrorRoleLocally(role); } finally { _skBridging = false; }
+      }
+    }
+
+    /* The REPAINT is not. It used to sit behind that same equality check, so
+       whenever u.role already matched the new role the handler returned early and
+       the account popup kept whatever it last rendered — a stale "Driver" surviving
+       a switch.
+
+       u.role is the LEGACY field and setActiveRole never writes it; the acting role
+       lives in u.activeRole. So the guard was comparing the new role against a field
+       that has nothing to do with what is on screen. The mirror already holding a
+       value does not mean the DOM shows it. Repaint unconditionally. */
     try {
       var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
       if (u && document.getElementById('sk-acct-popup')) _buildAcctPopup(u);
