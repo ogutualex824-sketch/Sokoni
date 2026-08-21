@@ -185,8 +185,15 @@ console.log('                                                       denies or ne
 const arraySources = rows.filter((r) => r.source === 'roles[] array').length;
 const claimSources = rows.filter((r) => r.source === 'claims.role').length;
 console.log('\n  ── the larger question this exposes (NOT answered here)');
+/* The 7 roles[] readers are NOT one group — verified line by line:
+     5 need the ARRAY and nothing else (notify.js x2, sms-service.js, and the two
+       analytics pages, which also lowercase it first)
+     2 fall back to the singular field:
+       Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : [])
+       — promotions.js, kass-knowledge.js — so users.role alone satisfies them.
+   Reporting all seven as unsatisfied would turn a shape into a defect. */
 console.log('  sites reading users/{uid}.roles ARRAY   ' + arraySources
-  + '   setUserRole never writes that array');
+  + '   of which 5 STRICT, 2 fall back to users.role');
 console.log('  sites reading claims.role              ' + claimSources
   + '   setUserRole writes no role claim at all');
 console.log('  => on those paths the CANONICAL token cannot match either, so the check');
@@ -194,9 +201,9 @@ console.log('     is dead rather than redundant. Which accounts are affected dep
 console.log('     the promotion path and needs a runtime census, not a static one.');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
-console.log('  NOT a rename proposal. These strings are dormant, not dangerous: they fail');
-console.log('  closed. Renaming them globally would convert ' + unreachable.length + ' dormant comparisons');
-console.log('  into live authorization changes in one commit, which is the opposite of');
-console.log('  what this census is for. Each needs its own decision about whether the');
-console.log('  check was meant to fire at all.\n');
+console.log('  NOT a rename proposal. 15 are dormant and fail closed; 2 are live via');
+console.log('  lowercase normalisation. Renaming globally would convert the dormant ones');
+console.log('  into live authorization changes in one commit, and would BREAK the two that');
+console.log('  already work. Each site needs its own decision about whether the check was');
+console.log('  ever meant to fire at all.\n');
 process.exit(fail ? 1 : 0);

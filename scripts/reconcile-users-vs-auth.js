@@ -212,12 +212,36 @@ function attribute(fields) {
     return 'unknown-shape';
   }
 
-  /* Which of the nine consumer sites this account can actually satisfy.
-     7 read users/{uid}.roles, 2 read claims.role — see 77e7928. */
+  /* Which consumer sites this account can actually satisfy.
+
+     CORRECTION to the first version, which lumped all seven roles[] readers
+     together. Verified line by line, they are not one group:
+
+       STRICT roles[] — 5 sites, need the ARRAY and nothing else
+         functions/notify.js x2, functions/sms-service.js
+         business-analytics.html, seller-analytics.html
+           `const roles = u.data().roles || []`   no fallback
+
+       roles[] WITH A SINGULAR FALLBACK — 2 sites, satisfied by users.role alone
+         functions/promotions.js, functions/kass-knowledge.js
+           `Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : [])`
+
+       claims.role — 2 sites
+         functions/delivery-authority.js, functions/pos-integrations-api.js
+
+     So a setUserRole-shaped account is NOT invisible to all nine: the two fallback
+     sites see it through the singular field. Reporting otherwise would have turned
+     a shape into a defect, which is exactly what this census must not do.
+
+     The two analytics pages also lowercase the array before comparing, so their
+     lowercase 'superadmin' test does match a stored 'superAdmin'. */
   function satisfies(doc, claims) {
+    const hasArray = Array.isArray(doc.roles) && doc.roles.length > 0;
+    const hasSingular = typeof doc.role === 'string' && doc.role.length > 0;
     return {
-      rolesArrayReaders: Array.isArray(doc.roles) && doc.roles.length > 0,
-      claimRoleReaders: typeof claims.role === 'string' && claims.role.length > 0,
+      strictRolesArray: hasArray,                    /* 5 sites */
+      rolesWithSingularFallback: hasArray || hasSingular,  /* 2 sites */
+      claimRoleReaders: typeof claims.role === 'string' && claims.role.length > 0,  /* 2 */
     };
   }
 
@@ -299,16 +323,21 @@ function attribute(fields) {
     console.log('      users.role    ' + (e.role || '(absent)'));
     console.log('      users.roles   ' + (e.roles ? '[' + e.roles.join(', ') + ']' : '(absent)'));
     console.log('      shape         ' + e.shape);
-    console.log('      satisfies     roles[] readers: ' + (e.satisfies.rolesArrayReaders ? 'YES' : 'no')
-      + '   (7 sites)      claims.role readers: '
-      + (e.satisfies.claimRoleReaders ? 'YES' : 'no') + '   (2 sites)');
+    console.log('      satisfies     strict roles[]      '
+      + (e.satisfies.strictRolesArray ? 'YES' : 'no ') + '  (5 sites)');
+    console.log('                    roles[] w/ fallback '
+      + (e.satisfies.rolesWithSingularFallback ? 'YES' : 'no ') + '  (2 sites)');
+    console.log('                    claims.role         '
+      + (e.satisfies.claimRoleReaders ? 'YES' : 'no ') + '  (2 sites)');
   }
-  const blind = elevated.filter((e) => !e.satisfies.rolesArrayReaders && !e.satisfies.claimRoleReaders);
-  console.log('\n  elevated accounts satisfying NEITHER consumer group: ' + blind.length
+  const blind = elevated.filter((e) => !e.satisfies.strictRolesArray
+    && !e.satisfies.rolesWithSingularFallback && !e.satisfies.claimRoleReaders);
+  console.log('\n  elevated accounts satisfying NO consumer group at all: ' + blind.length
     + ' of ' + elevated.length);
-  console.log('  Those accounts hold the claim but are invisible to all nine role checks.');
-  console.log('  A shape is not a defect on its own — this reports what exists, and the');
-  console.log('  decision about which representation is authoritative comes after.');
+  console.log('  A shape is NOT a defect on its own. Some of these consumers may be stale or');
+  console.log('  non-authoritative, and a gap here can mean the CHECK is wrong rather than');
+  console.log('  the account. This reports what exists; which representation is authoritative');
+  console.log('  is decided after the evidence, not from this output.');
 
   const unknown = rows.filter((r) => r.classification === 'UNCLASSIFIED');
   if (unknown.length) {
