@@ -50,6 +50,20 @@ function credentialsPresent() {
   if (process.env.FIREBASE_CONFIG || process.env.GCLOUD_PROJECT) {
     return { ok: true, how: 'ambient (FIREBASE_CONFIG / GCLOUD_PROJECT)' };
   }
+  /* Application Default Credentials at the well-known gcloud path. firebase-admin
+     picks these up without any env var, so refusing here would have reported "no
+     credentials" on a machine that has them — a false blocker of the same kind as
+     the firebase-admin resolution bug. Reported by NAME so the operator can see
+     which identity the enumeration ran as: an `authorized_user` ADC is a person's
+     own login, not a service account, and that distinction belongs in the record. */
+  const home = process.env.APPDATA || process.env.HOME || '';
+  const adc = path.join(home, process.env.APPDATA ? 'gcloud' : '.config/gcloud',
+    'application_default_credentials.json');
+  if (home && fs.existsSync(adc)) {
+    let kind = 'unknown';
+    try { kind = (JSON.parse(fs.readFileSync(adc, 'utf8')).type) || 'unknown'; } catch (_) {}
+    return { ok: true, how: 'Application Default Credentials (' + kind + ')' };
+  }
   return { ok: false };
 }
 

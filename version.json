@@ -1,10 +1,10 @@
 {
-  "commit": "b9c5c556aed3ad9b82d136f0d76f81ee39a3fe1e",
-  "commitShort": "b9c5c55",
+  "commit": "48c89aedc3d9abe7a132d2246ea342f9c09624ac",
+  "commitShort": "48c89ae",
   "branch": "release/admin-slice",
-  "buildTime": "2026-08-21T21:01:46.236Z",
+  "buildTime": "2026-08-21T21:45:03.006Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260821210145-v546",
+  "cacheVersion": "sokoni-20260821214502-v547",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
