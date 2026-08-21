@@ -1891,28 +1891,6 @@ const SA={
 // Auth Gate — superAdmin custom claim check
 // ═══════════════════════════════════════════════════════════
 (function(){
-  /* Master passcode gate (3026). Shown only AFTER the superAdmin claim is verified,
-     so a legitimate super admin who knows the code always passes. Convenience code,
-     not a secret — the claim above is the real gate. */
-  function _promptSuperPass(onOk){
-    var gate=document.getElementById('authGate');
-    gate.innerHTML=
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;max-width:280px;text-align:center;">'+
-        '<div style="font-size:15px;font-weight:800;color:#fff;">Super Admin Passcode</div>'+
-        '<input id="saPass" type="password" inputmode="numeric" maxlength="8" placeholder="Enter passcode" autocomplete="off" '+
-          'style="width:200px;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;text-align:center;letter-spacing:.3em;outline:none;">'+
-        '<button id="saPassBtn" type="button" style="width:200px;padding:12px;background:var(--accent,#71ff00);color:#000;border:0;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;">Unlock &rarr;</button>'+
-        '<div id="saPassErr" style="color:#ff6b6b;font-size:12px;min-height:16px;"></div>'+
-      '</div>';
-    function submit(){
-      var v=(document.getElementById('saPass')||{}).value||'';
-      if(v==='3026'){ onOk(); }
-      else { document.getElementById('saPassErr').textContent='Incorrect passcode.'; var i=document.getElementById('saPass'); if(i){ i.value=''; i.focus(); } }
-    }
-    document.getElementById('saPassBtn').onclick=submit;
-    var inp=document.getElementById('saPass');
-    if(inp){ inp.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); }); inp.focus(); }
-  }
   function runGate(){
     firebase.auth().onAuthStateChanged(async user=>{
       if(!user){
@@ -1926,11 +1904,20 @@ const SA={
           location.href='admin-os.html?error=insufficient_privileges';
           return;
         }
-        // Claim verified — require the master passcode 3026 before revealing the console.
-        _promptSuperPass(function(){
-          document.getElementById('authGate').style.display='none';
-          SA.init(user);
-        });
+        /* Claim verified — that IS the gate, so the console opens.
+
+           A master-passcode prompt stood here. Measured (a6a385f): the literal appeared in
+           0 Cloud Functions and 0 rules, so nothing server-side could ever observe it — it
+           authorised nothing, and it was compiled into shipped client source, so it was not
+           a secret either. It sat on top of a decision the claim check above had already
+           made, and it contradicted the role model: an account authorised for a role opens
+           that role's surface without a second challenge.
+
+           Account login is the one entry authentication. A PIN does not determine
+           Admin/Super Admin access. (The Wallet PIN is unrelated: it is server-verified and
+           authorises money movement, not a surface.) */
+        document.getElementById('authGate').style.display='none';
+        SA.init(user);
       }catch(err){
         console.error('[SuperAdmin] Auth check failed:',err);
         location.href='login.html?error=auth_check_failed';
