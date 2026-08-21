@@ -528,12 +528,47 @@
       guardPage();
     });
   }
+  /* A {once:true} listener only fires for an event that has not happened yet.
+     firebase.js is a DEFERRED module and this is a CLASSIC script, so the ordering
+     is not fixed: when sokoniAuthReady was published before this file registered,
+     _boot never ran, refresh() never happened, and the authority stayed
+     _verified=false with _approved=[buyer] for the whole page load.
+
+     That is the state behind the original symptom. With isVerified() false the
+     header falls back to sokoniUser.role while the switcher falls back to
+     detail.role, and those two mirrors disagree — Driver on the left, Buyer in the
+     dropdown, from one unverified authority rather than from two bad readers.
+
+     firebase.js already records that the event fired. Read the flag as well as
+     listening, so a late loader catches up instead of waiting forever. */
+  var _booted = false;
+  function _bootOnce() { if (_booted) return; _booted = true; _boot(); }
   try {
     if (window.SokoniAuthState && window.SokoniAuthState.whenResolved) {
-      window.SokoniAuthState.whenResolved(_boot);
+      window.SokoniAuthState.whenResolved(_bootOnce);
+    } else if (window.__sokoniAuthReady === true) {
+      _bootOnce();                                   /* already published — catch up */
     } else {
-      document.addEventListener('sokoniAuthReady', _boot, { once: true });
+      document.addEventListener('sokoniAuthReady', _bootOnce, { once: true });
+      /* Belt and braces: the flag may be set by a path that does not dispatch, and
+         a poll bounded to ~7.5s cannot mask a genuine signed-out state — it stops. */
+      var _n = 0;
+      (function _watch() {
+        if (_booted) return;
+        if (window.__sokoniAuthReady === true) return _bootOnce();
+        if (++_n > 250) return;
+        setTimeout(_watch, 30);
+      }());
     }
+  } catch (_) {}
+
+  /* Re-verify when the SESSION changes, not only once per load. A token refresh
+     that adds or removes a claim must reach the UI without a reload — otherwise a
+     revoked role keeps its workspace open until the user happens to navigate. */
+  try {
+    document.addEventListener('sokoniAuthReady', function () {
+      if (_booted) refresh(true);
+    });
   } catch (_) {}
 
   /* Re-apply declarative gates whenever authority changes, so a role revoked

@@ -2515,8 +2515,22 @@
     buyer:'🛍️', seller:'🏪', provider:'🛠️', driver:'🚗', admin:'🛡️', moderator:'⚖️',
   };
 
+  /* Does this account hold an administrative claim? Asked through hasRole(), which
+     refuses an elevated role asserted only by cache. */
+  function _skHasAdminClaim() {
+    try {
+      var P = window.SokoniPermissions;
+      return !!(P && P.hasRole && (P.hasRole('admin') || P.hasRole('superAdmin')));
+    } catch (_) { return false; }
+  }
+
   function _injectRoleSwitcher(roles, currentRole) {
-    if (!roles || roles.length < 2) return; /* Only show when user has multiple roles */
+    /* "Fewer than two workspace roles" no longer means "nothing to switch to".
+       An administrator whose only workspace role is buyer still has Admin and
+       Super Admin to reach, and bailing here hid the menu entirely for exactly
+       the accounts that most needed it. */
+    if ((!roles || roles.length < 2) && !_skHasAdminClaim()) return;
+    roles = roles || [];
     if (document.getElementById('sk-role-switcher')) return; /* Already injected */
 
     var actionsEl = document.getElementById('sk-nav-actions');
@@ -2539,11 +2553,21 @@
     var menu = document.createElement('div');
     menu.id = 'sk-role-menu';
     menu.setAttribute('role', 'menu');
+    /* The MENU owns its scrolling, not the page.
+
+       `overflow:hidden` with no height cap meant the list simply grew: add the two
+       administrative entries to six workspace roles and the lower items fall off a
+       small screen with no way to reach them. Capping the height and scrolling
+       inside the menu keeps every entry reachable at any list length, and
+       overscroll-behavior stops the gesture escaping to the document once the menu
+       hits its end — otherwise the page scrolls away underneath an open menu. */
     menu.style.cssText = [
       'display:none;position:absolute;top:calc(100% + 6px);right:0;',
       'background:#0d0d0d;border:1px solid #1a1a1a;border-radius:10px;',
-      'min-width:160px;z-index:9999;overflow:hidden;',
-      'box-shadow:0 8px 24px rgba(0,0,0,.6);',
+      'z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.6);',
+      'width:min(92vw,320px);max-width:calc(100vw - 16px);min-width:160px;',
+      'max-height:min(70vh,420px);overflow-y:auto;overflow-x:hidden;',
+      '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;',
     ].join('');
 
     var header = document.createElement('div');
@@ -2588,13 +2612,109 @@
       menu.appendChild(item);
     });
 
+    /* ── ADMINISTRATIVE ENTRIES ───────────────────────────────────────────────
+       One user-facing switcher, two authorities behind it. `admin` and
+       `superAdmin` are deliberately NOT workspace roles — SokoniRoleAuthority
+       excludes them from CANONICAL_ROLES so administrative access keeps a single
+       owner — so setActiveRole('admin') returns {ok:false, reason:'unknown-role'}
+       by design and is NOT what these call.
+
+       They enter the administrative CONTEXT instead, which is claims-checked by
+       SokoniPermissions.hasRole(): an elevated role asserted only by cache is
+       refused, so a forged sokoniUser.role achieves nothing here. An entry is
+       rendered only when the claim is actually held, and the authority is asked
+       again at click time rather than trusting what was true at render time. */
+    (function _adminEntries() {
+      var P = window.SokoniPermissions;
+      if (!P || typeof P.hasRole !== 'function') return;
+      var admin = [];
+      try {
+        if (P.hasRole('superAdmin')) admin.push({ role: 'superAdmin', label: 'Super Admin', icon: '👑', href: 'super-admin.html' });
+        if (P.hasRole('admin'))      admin.push({ role: 'admin',      label: 'Admin',       icon: '🛡️', href: 'admin.html' });
+      } catch (_) { return; }
+      if (!admin.length) return;
+
+      var sep = document.createElement('div');
+      sep.style.cssText = 'padding:8px 12px 6px;font-size:10px;font-weight:600;color:#888;'
+        + 'text-transform:uppercase;letter-spacing:.8px;border-top:1px solid #1a1a1a;'
+        + 'border-bottom:1px solid #1a1a1a;margin-top:4px;';
+      sep.textContent = 'Administration';
+      menu.appendChild(sep);
+
+      var ctx = null;
+      try { ctx = P.getAdminContext && P.getAdminContext(); } catch (_) {}
+
+      admin.forEach(function (a) {
+        var el = document.createElement('a');
+        el.href = a.href;
+        el.setAttribute('role', 'menuitem');
+        el.style.cssText = [
+          'display:flex;align-items:center;gap:10px;padding:10px 14px;',
+          'color:#e8e8e8;text-decoration:none;font-size:13px;transition:background .15s;',
+          ctx === a.role ? 'background:rgba(192,132,252,.10);color:#c084fc;font-weight:600;' : '',
+        ].join('');
+        el.innerHTML = '<span>' + a.icon + '</span><span>' + _hesc(a.label) + '</span>'
+          + (ctx === a.role ? '<span style="margin-left:auto;font-size:10px;opacity:.6;">current</span>' : '');
+        el.addEventListener('click', function (ev) {
+          if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
+          ev.preventDefault();
+          var res = null;
+          try { res = P.enterAdminContext(a.role); } catch (_) { res = null; }
+          if (!res || res.ok !== true) {
+            /* Refused: say why and change NOTHING visible. The menu must not act as
+               though a role were granted that the authority just declined. */
+            var why = (res && res.reason) || 'unavailable';
+            var msg = why === 'no-claim'     ? 'That role is not available on this account.'
+                    : why === 'not-verified' ? 'Could not verify your roles. Check your connection and try again.'
+                    : why === 'signed-out'   ? 'Sign in to continue.'
+                    : 'Could not open that surface right now.';
+            try {
+              if (window.showNotif) window.showNotif(msg, 'error');
+              else console.warn('[role-switch] ' + why + ': ' + msg);
+            } catch (_) {}
+            return;
+          }
+          location.href = a.href;
+        });
+        el.addEventListener('mouseenter', function () { this.style.background = 'rgba(255,255,255,.06)'; });
+        el.addEventListener('mouseleave', function () {
+          this.style.background = ctx === a.role ? 'rgba(192,132,252,.10)' : '';
+        });
+        menu.appendChild(el);
+      });
+    }());
+
+    /* Keep the open menu inside the viewport.
+
+       It is anchored right:0 to the switcher button, which on a 390px screen sits
+       ~284px from the left — so a 320px menu hung 36px off the left edge and its
+       first characters were unreachable. Width clamping cannot fix that: the
+       overflow comes from the ANCHOR OFFSET, not the width, and max-width was
+       already generous enough to never bind.
+
+       Measured after paint rather than guessed, because the button's position
+       depends on which action icons that page happens to render. */
+    function _skClampMenu() {
+      try {
+        menu.style.right = '0px';
+        var r = menu.getBoundingClientRect();
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        if (r.left < 8) menu.style.right = Math.round(r.left - 8) + 'px';
+        else if (r.right > vw - 8) menu.style.right = Math.round((vw - 8) - r.right) * -1 + 'px';
+      } catch (_) {}
+    }
+
     var isOpen = false;
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       isOpen = !isOpen;
       menu.style.display = isOpen ? 'block' : 'none';
       btn.setAttribute('aria-expanded', String(isOpen));
+      if (isOpen) _skClampMenu();
     });
+    /* A rotation changes the anchor as much as an open does. */
+    window.addEventListener('resize', function () { if (isOpen) _skClampMenu(); });
+    window.addEventListener('orientationchange', function () { if (isOpen) _skClampMenu(); });
     document.addEventListener('click', function() {
       if (isOpen) { isOpen = false; menu.style.display = 'none'; btn.setAttribute('aria-expanded','false'); }
     });
@@ -2679,6 +2799,16 @@
   }
   document.addEventListener('sokoniActiveRoleChanged', function () { _skRenderRoleSwitcher(null); });
   document.addEventListener('sokoniRoleChanged',      function () { _skRenderRoleSwitcher(null); });
+  /* The administrative context is the other half of the current-role answer, and
+     the menu marks it. Entering or leaving it must repaint for the same reason a
+     workspace switch does. */
+  document.addEventListener('sokoniAdminContextChanged', function () { _skRenderRoleSwitcher(null); });
+  /* The authority finishing verification CHANGES THE ANSWER: before it, the
+     approved list is unknown and the menu is drawn from a mirror. Repaint once it
+     is real, or the first paint's guess stands for the whole session — which is
+     how an administrator ends up looking at a Buyer-only menu. */
+  document.addEventListener('sokoniRoleAuthorityReady', function () { _skRenderRoleSwitcher(null); });
+  document.addEventListener('sokoniRolesReady',         function () { _skRenderRoleSwitcher(null); });
 
   /* Wait for auth to be ready before starting Firestore listeners */
   function _waitForAuth() {
