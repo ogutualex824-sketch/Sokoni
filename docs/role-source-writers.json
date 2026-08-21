@@ -1,0 +1,418 @@
+{
+  "generated": "census-role-source-writers",
+  "rows": [
+    {
+      "target": "firestore",
+      "file": "auth.js",
+      "line": 580,
+      "fn": "fail [helper]",
+      "kind": "PARTIAL",
+      "writesRole": false,
+      "writesRoles": false,
+      "keys": [
+        "consent",
+        "createdAt"
+      ],
+      "note": "spreads another object — remaining keys unknown"
+    },
+    {
+      "target": "firestore",
+      "file": "firebase.js",
+      "line": 635,
+      "fn": "_registerSession [helper]",
+      "kind": "PARTIAL",
+      "writesRole": false,
+      "writesRoles": false,
+      "keys": [
+        "createdAt",
+        "lastLogin"
+      ],
+      "note": "spreads another object — remaining keys unknown"
+    },
+    {
+      "target": "firestore",
+      "file": "firebase.js",
+      "line": 828,
+      "fn": "sokoniUpdateProfile [helper]",
+      "kind": "PARTIAL",
+      "writesRole": false,
+      "writesRoles": false,
+      "keys": [
+        "updatedAt"
+      ],
+      "note": "spreads another object — remaining keys unknown"
+    },
+    {
+      "target": "claims",
+      "file": "functions/account-status.js",
+      "line": 19,
+      "fn": "_setDeactivatedClaim [helper]",
+      "kind": "OPAQUE",
+      "keys": [],
+      "note": "variable `claims` not defined in this file",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/admin-os.js",
+      "line": 151,
+      "fn": "adminUpdateUserRole",
+      "kind": "PARTIAL",
+      "keys": [],
+      "note": "resolved from `claims`, spreads another object",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "firestore",
+      "file": "functions/admin-os.js",
+      "line": 152,
+      "fn": "adminUpdateUserRole",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": false,
+      "keys": [
+        "role",
+        "customClaims",
+        "roleUpdatedAt",
+        "roleUpdatedBy"
+      ],
+      "note": ""
+    },
+    {
+      "target": "claims",
+      "file": "functions/application-lifecycle.js",
+      "line": 629,
+      "fn": "grantAccountRole [helper]",
+      "kind": "PARTIAL",
+      "keys": [],
+      "note": "resolved from `claims`, spreads another object",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/beta-access.js",
+      "line": 99,
+      "fn": "betaReview",
+      "kind": "OPAQUE",
+      "keys": [],
+      "note": "variable `claims` not defined in this file",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 133,
+      "fn": "bootstrapAdminClaim",
+      "kind": "PARTIAL",
+      "keys": [
+        "admin",
+        "superAdmin",
+        "role"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": true,
+      "otherClaims": [
+        "admin",
+        "superAdmin"
+      ]
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 179,
+      "fn": "grantAdminClaim",
+      "kind": "PARTIAL",
+      "keys": [
+        "admin"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "admin"
+      ]
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 218,
+      "fn": "revokeAdminClaim",
+      "kind": "OPAQUE",
+      "keys": [],
+      "note": "variable `existClaims` not defined in this file",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 4638,
+      "fn": "grantPlatformRole",
+      "kind": "PARTIAL",
+      "keys": [],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 4689,
+      "fn": "revokePlatformRole",
+      "kind": "PARTIAL",
+      "keys": [],
+      "note": "resolved from `updated`, spreads another object",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "claims",
+      "file": "functions/index.js",
+      "line": 5081,
+      "fn": "removePlatformEmployee",
+      "kind": "OPAQUE",
+      "keys": [],
+      "note": "variable `prev` not defined in this file",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "firestore",
+      "file": "functions/index.js",
+      "line": 139,
+      "fn": "bootstrapAdminClaim",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": false,
+      "keys": [
+        "role",
+        "adminGrantedAt"
+      ],
+      "note": ""
+    },
+    {
+      "target": "firestore",
+      "file": "functions/index.js",
+      "line": 182,
+      "fn": "grantAdminClaim",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": true,
+      "keys": [
+        "role",
+        "roles",
+        "adminGrantedAt"
+      ],
+      "note": ""
+    },
+    {
+      "target": "firestore",
+      "file": "functions/index.js",
+      "line": 220,
+      "fn": "revokeAdminClaim",
+      "kind": "LITERAL",
+      "writesRole": false,
+      "writesRoles": true,
+      "keys": [
+        "roles"
+      ],
+      "note": ""
+    },
+    {
+      "target": "firestore",
+      "file": "functions/index.js",
+      "line": 4693,
+      "fn": "revokePlatformRole",
+      "kind": "LITERAL",
+      "writesRole": false,
+      "writesRoles": true,
+      "keys": [
+        "roles"
+      ],
+      "note": ""
+    },
+    {
+      "target": "claims",
+      "file": "functions/invitations-core.js",
+      "line": 311,
+      "fn": "acceptInvitation [helper]",
+      "kind": "PARTIAL",
+      "keys": [
+        "platformEmployee",
+        "platformRole"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "platformEmployee",
+        "platformRole"
+      ]
+    },
+    {
+      "target": "firestore",
+      "file": "functions/notify.js",
+      "line": 239,
+      "fn": "sendPush [helper]",
+      "kind": "PARTIAL",
+      "writesRole": false,
+      "writesRoles": false,
+      "keys": [
+        "fcmTokens"
+      ],
+      "note": "spreads another object — remaining keys unknown"
+    },
+    {
+      "target": "claims",
+      "file": "functions/provider-onboarding.js",
+      "line": 374,
+      "fn": "_h",
+      "kind": "PARTIAL",
+      "keys": [
+        "provider",
+        "providerId"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "provider",
+        "providerId"
+      ]
+    },
+    {
+      "target": "claims",
+      "file": "functions/security-incident-response.js",
+      "line": 110,
+      "fn": "suspendUser",
+      "kind": "PARTIAL",
+      "keys": [
+        "suspended",
+        "suspendedAt",
+        "suspendedBy",
+        "suspendReason"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "suspended",
+        "suspendedAt",
+        "suspendedBy",
+        "suspendReason"
+      ]
+    },
+    {
+      "target": "claims",
+      "file": "functions/security-incident-response.js",
+      "line": 189,
+      "fn": "unsuspendUser",
+      "kind": "PARTIAL",
+      "keys": [
+        "suspended",
+        "unsuspendedAt",
+        "unsuspendedBy"
+      ],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "suspended",
+        "unsuspendedAt",
+        "unsuspendedBy"
+      ]
+    },
+    {
+      "target": "claims",
+      "file": "functions/super-admin.js",
+      "line": 106,
+      "fn": "setUserRole",
+      "kind": "LITERAL",
+      "keys": [
+        "admin",
+        "superAdmin",
+        "seller",
+        "driver",
+        "moderator",
+        "buyer"
+      ],
+      "note": "resolved from `claims`",
+      "writesRoleClaim": false,
+      "otherClaims": [
+        "admin",
+        "superAdmin",
+        "seller",
+        "driver",
+        "moderator",
+        "buyer"
+      ]
+    },
+    {
+      "target": "firestore",
+      "file": "functions/super-admin.js",
+      "line": 110,
+      "fn": "setUserRole",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": false,
+      "keys": [
+        "role",
+        "roleUpdatedAt"
+      ],
+      "note": ""
+    },
+    {
+      "target": "firestore",
+      "file": "functions/super-admin.js",
+      "line": 197,
+      "fn": "suspendUser",
+      "kind": "OPAQUE",
+      "writesRole": false,
+      "writesRoles": false,
+      "keys": [],
+      "note": "variable `updatePayload` not defined in this file"
+    },
+    {
+      "target": "claims",
+      "file": "functions/universal-onboarding.js",
+      "line": 196,
+      "fn": "_assertAuth [helper]",
+      "kind": "PARTIAL",
+      "keys": [],
+      "note": "spreads another object — remaining keys unknown",
+      "writesRoleClaim": false,
+      "otherClaims": []
+    },
+    {
+      "target": "firestore",
+      "file": "functions/wap.js",
+      "line": 1011,
+      "fn": "wapSaveDefinition",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": false,
+      "keys": [
+        "role",
+        "verifiedAt",
+        "businessName",
+        "serverTs"
+      ],
+      "note": ""
+    },
+    {
+      "target": "firestore",
+      "file": "sokoni-wap-definitions.js",
+      "line": 394,
+      "fn": "(module scope)",
+      "kind": "LITERAL",
+      "writesRole": true,
+      "writesRoles": false,
+      "keys": [
+        "role",
+        "verifiedAt",
+        "businessName",
+        "serverTs"
+      ],
+      "note": ""
+    }
+  ]
+}
