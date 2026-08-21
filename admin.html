@@ -7075,7 +7075,7 @@ function _renderAdmOrders(orders) {
       <td style="font-size:10px;color:rgba(255,255,255,0.3);">${_dt(o.createdAt)}</td>
       <td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;">
         <button class="abtn abtn-blue" onclick="openOverride('${_h(o.id||o._fsId)}','${o.status||''}')">✏️</button>
-        ${o.deliveryRef ? `<a href="delivery-tracking.html?ref=${encodeURIComponent(o.deliveryRef)}" target="_blank" class="abtn abtn-green">🗺️</a>` : ''}
+        ${o.deliveryRef ? `<a href="delivery-tracking.html?ref=${encodeURIComponent(o.deliveryRef)}" class="abtn abtn-green">🗺️</a>` : ''}
         ${o.disputed ? `<button class="abtn abtn-red" onclick="openDisputeModal('${_h(o.disputeId||'')}')">⚖️</button>` : ''}
         ${!o.disputed && !['completed','cancelled','refunded'].includes(o.status) ? `<button class="abtn abtn-yellow" onclick="admFileDispute('${_h(o.id||o._fsId)}')">🚨</button>` : ''}
       </td>
@@ -7145,7 +7145,7 @@ function _renderAdmDeliveries(deliveries) {
       <td style="color:#71ff00;">KES ${_fmt(d.deliveryFee||d.fee||0)}</td>
       <td>${_statusBadge(d.status)}</td>
       <td style="white-space:nowrap;">
-        <a href="delivery-tracking.html?ref=${encodeURIComponent(dRef)}" target="_blank" class="abtn abtn-green">🗺️</a>
+        <a href="delivery-tracking.html?ref=${encodeURIComponent(dRef)}" class="abtn abtn-green">🗺️</a>
         ${!['delivered','buyer_confirmed','cancelled'].includes(d.status)
           ? `<button class="abtn abtn-red" onclick="admCancelDelivery('${_h(dRef)}')">✕</button>`
           : ''}
