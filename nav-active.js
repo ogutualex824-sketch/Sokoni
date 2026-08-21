@@ -144,7 +144,6 @@
 
     /* ── Admin / Super Admin / Platform Tools ──────────── */
     'admin.html':              'profile.html',
-    'superadmin.html':         'profile.html',
     'admin-subscriptions.html':'profile.html',
     'subscription-os.html':    'profile.html',
     'gip.html':                'profile.html',

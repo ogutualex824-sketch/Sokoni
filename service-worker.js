@@ -129,7 +129,7 @@ const PRECACHE_PAGES = [
   "/beta", "/beta-dashboard",
   "/seller-success", "/driver-success", "/join", "/support", "/launch-metrics", "/launch-readiness", "/merchant-pipeline",
   "/ride-book",
-  "/jobs", "/education", "/superadmin", "/scan",
+  "/jobs", "/education", "/scan",
   "/inventory",
   "/inv-dashboard",
   "/inv-products",

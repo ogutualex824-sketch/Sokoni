@@ -1,3 +1,73 @@
+## [2026-08-21] - superadmin.html RETIRED. One canonical Super Admin surface. 14/0.
+
+Isolated change. Not deployed. Nothing else in this commit.
+
+    scripts/after-superadmin-retirement.js    14 passed / 0 failed
+    scripts/before-admin-surface-gate.mjs     19 passed / 0 failed
+    scripts/after-admin-context.mjs           15 passed / 0 failed
+    scripts/before-role-state-divergence.mjs  16 passed / 0 failed
+    after-admin-lock-removal 24/0 | test:panels 32/0 | acting-role 36/0
+    role:switch 50/0 | merchant-routes 68/0 | verify:markup | verify:auth
+
+`superadmin.html` was a fourth administrative surface outside the F4 model: it gated on the claim
+alone, so an administrator acting as a workspace role still opened it, and it admitted `admin`
+where its hyphenated sibling requires `superAdmin === true`. The before-proof
+(`f74068b`, `docs/ADMIN_SURFACE_RECONCILIATION.md`) established `super-admin.html` as canonical,
+found no capability unique to the retired page, and confirmed its apparent `setUserRole`
+escalation is refused server-side by `_requireSuperAdmin`.
+
+**Retired in the approved order:** repoint the one user-facing caller → prove zero references →
+remove bookkeeping → delete → regress.
+
+The before-proof enumerated **five** callers by grepping `superadmin.html`. That was two short,
+and both were found only because the removal step widened the pattern:
+
+* `service-worker.js:132` precached the **cleanUrls** form `/superadmin`. After deletion the
+  worker would have precached a route that 404s.
+* `firebase.json:370,387` matched the bare path segment inside an `@(...)` alternation.
+
+A page reference is not one string. The after-proof now searches all three spellings —
+`superadmin.html`, `/superadmin`, and a bare segment inside a route alternation — while excluding
+the *role* string `superadmin`, which appears in ~20 unrelated authorization checks and is a
+separate concern.
+
+**`firebase.json` was REPOINTED, not stripped.** Those two rules apply
+`no-store, no-cache, must-revalidate, private` plus `X-Robots-Tag: noindex` to
+`@(login|signup|admin|superadmin)`. `super-admin` was never in that alternation — so deleting the
+entry would have quietly removed those headers from the *surviving* Super Admin surface. Both
+alternations now name `super-admin`.
+
+Changed: `admin.html:728` (href only — the `link-superadmin` id and its RBAC styling hook are
+preserved), `navigation-registry.json` (`.pages` key + `.workspaces.Unassigned` entry, removed
+structurally so the file stays valid), `nav-active.js`, `vision-2030.html` (repointed),
+`shared-header.js` (both EXCLUDED spellings), `sokoni-nav-engine.js`, `service-worker.js`,
+`firebase.json`. Deleted: `superadmin.html`.
+
+`CACHE_VERSION` untouched — the predeploy bump owns it.
+
+The invariant now holds with one surface, not two:
+
+    admin / superAdmin destination
+            ↓
+    SokoniPermissions.adminHomeFor()
+            ↓
+    super-admin.html
+
+Files: as listed. Database changes: none. API changes: none. Rules changes: none.
+Breaking change: `/superadmin` stops resolving once deployed.
+
+Security: no permission widened, no vocabulary added, no guard copied. The retired page's admission
+rule is gone rather than propagated — which is what adding the F4 guard to it would have done,
+settling the duplication in favour of keeping both.
+
+RECORDED, out of scope: ~20 server and client checks test a lowercase `'superadmin'` ROLE string
+(`roles.includes('superadmin')`) while the claim is `superAdmin`. That is a separate vocabulary
+inconsistency and was deliberately not touched here.
+
+UNPROVEN: production behaviour. The retired route is still live until a deploy, and this branch is
+undeployed.
+
+
 ## [2026-08-21] - users/{uid} writer census. 39 creating writers, 25 stub-capable. Auth side UNPROVEN.
 
 Read-only investigation. No document was written or deleted, and the Admin dashboard number is

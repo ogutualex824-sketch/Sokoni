@@ -134,18 +134,17 @@ export default async function run(page) {
     /login/.test(aos), 'landed=' + aos);
 
   /* ── S: the controls the surface is supposed to offer ── */
-  /* superadmin.html (no hyphen) is a FOURTH administrative surface, 47 KB, with its
-     own onAuthStateChanged guard. The F4 work enumerated admin.html,
-     super-admin.html and admin-os.html and never saw it — it is in shared-header's
-     EXCLUDED list and is reached from admin.html, nav-active.js,
-     navigation-registry.json and vision-2030.html.
+  /* superadmin.html was a FOURTH administrative surface, outside the F4 model: it
+     gated on the claim alone and admitted `admin` where its hyphenated sibling
+     required `superAdmin`. It was measured here while the duplicate-surface question
+     was open, and RETIRED once that was settled — see
+     docs/ADMIN_SURFACE_RECONCILIATION.md and the after-proof
+     scripts/after-superadmin-retirement.js, which asserts zero remaining references.
 
-     It is included here so the gap is MEASURED rather than described. S5 is expected
-     to FAIL for it until the duplicate-surface question is settled: it gates on the
-     claim alone, so an administrator acting as a workspace role still opens it, and
-     it admits `admin` where its hyphenated sibling requires `superAdmin`. That is a
-     reconciliation decision, not a silent edit to one of the two files. */
-  for (const f of ['admin.html', 'super-admin.html', 'superadmin.html']) {
+     It is dropped from this loop rather than left in: a deleted page 404s, and four
+     rows failing because a fetch returned "Not Found" would look like four defects.
+     There are now three administrative surfaces, all under one model. */
+  for (const f of ['admin.html', 'super-admin.html']) {
     const src = await page.evaluate(async (u) => {
       const r = await fetch(u, { cache: 'no-store' });
       return r.text();

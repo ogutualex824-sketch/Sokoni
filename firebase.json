@@ -367,7 +367,7 @@
         ]
       },
       {
-        "source": "@(login|signup|admin|superadmin).html",
+        "source": "@(login|signup|admin|super-admin).html",
         "headers": [
           {
             "key": "Cache-Control",
@@ -384,7 +384,7 @@
         ]
       },
       {
-        "source": "@(login|signup|admin|superadmin)",
+        "source": "@(login|signup|admin|super-admin)",
         "headers": [
           {
             "key": "Cache-Control",

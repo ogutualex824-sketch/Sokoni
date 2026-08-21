@@ -553,10 +553,10 @@
     'profile.html', 'profile',
     /* Enterprise full-screen dashboards — have their own specialized nav */
     'ecc.html', 'wap.html', 'gip.html', 'platform.html',
-    'sasos-admin.html', 'pos-kiosk.html', 'superadmin.html',
+    'sasos-admin.html', 'pos-kiosk.html',
     'monitor.html', 'moderation.html', 'verification-admin.html',
     'ecc', 'wap', 'gip', 'platform', 'sasos-admin', 'pos-kiosk',
-    'superadmin', 'monitor', 'moderation', 'verification-admin',
+    'monitor', 'moderation', 'verification-admin',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
   /* The merchant shell announces itself with ?shell=merchant. Kept as one function so

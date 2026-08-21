@@ -25,7 +25,7 @@
     'login', 'signup',
     'register', 'success', 'offline', 'admin',
     'profile', 'ecc', 'wap', 'gip', 'platform',
-    'sasos-admin', 'pos-kiosk', 'pos-display', 'superadmin',
+    'sasos-admin', 'pos-kiosk', 'pos-display',
     'monitor', 'moderation', 'verification-admin'
   ];
 
