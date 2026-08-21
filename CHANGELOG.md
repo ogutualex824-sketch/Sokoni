@@ -1,3 +1,53 @@
+## [2026-08-21] - RELEASE 2 PUBLISHED. Served rules proven at 49/0.
+
+Rules only. No Hosting, no Functions. `firestore.rules.served-current` records exactly what is
+now served.
+
+    BEFORE release -> ruleset 53e1185c-7930-4409-bd18-3ef88aa5fed8
+    created ruleset           4d86bb52-835e-421b-ad41-8ddf1a2e1ff1
+    PATCH release             HTTP 200
+    AFTER release  -> ruleset 4d86bb52-835e-421b-ad41-8ddf1a2e1ff1   CHANGED: YES
+
+Published through the Rules API (`POST /rulesets` then `PATCH /releases/cloud.firestore`), NOT
+`firebase deploy --only firestore:rules`. The CLI promotes the repo's `firestore.rules`, which
+still carries 39 lines of another team's unreleased chat and userLocations rules; the API
+promotes exactly the bytes that were proven.
+
+### Acceptance — measured against what is SERVED, not what was sent
+
+    served ruleset re-fetched   252,074 bytes
+    candidate                   252,074 bytes
+    byte-identical              YES
+    harness vs SERVED rules     49 passed, 0 failed
+
+That last line is the acceptance criterion. "The CLI said success" would not have been evidence:
+the register records a 409 failure mode where the release silently stays on the old ruleset, so
+the release id was checked to have MOVED and the served source was re-fetched and re-proven.
+
+### What this closed, in production
+
+Against the previously served ruleset the same harness scored **38 passed, 11 FAILED**. An admin
+could set their own `activeRole` to `driver` or `superAdmin` without the claim, and could set
+another user's `activeRole`, `role`, `permissions`, `kycStatus`, `roles` array and
+`registeredAs.admin`. All eight are now denied, and the admin console's real write
+(`registeredAs.legal` + `approved`) still succeeds.
+
+The authority chain is now enforced end to end:
+
+    login -> claims -> authorized roles -> activeRole -> destination -> page authority
+                                                                    -> Firestore authorization
+
+Switching roles selects an already-authorised role. It does not create authority.
+
+### Still outstanding
+
+`verify-rules-release-parity` will continue to report local != live, and that is CORRECT: the
+repo's `firestore.rules` is a different lineage carrying unreleased work from another team. It
+should not be deployed, and reconciling it is separate from this release.
+
+The authenticated production checks remain owed — admin and superAdmin health scores, and the
+role-switch rows from a signed-in session. Wallet PIN untouched. Release 3 (responsive) separate.
+
 ## [2026-08-21] - RELEASE 2 candidate: rules re-derived on the SERVED ruleset. NOT PUBLISHED.
 
 `firestore.rules.release-candidate` · `firestore.rules.served-20260817` ·
