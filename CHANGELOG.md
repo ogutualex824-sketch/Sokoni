@@ -1,3 +1,81 @@
+## [2026-08-21] - Admin lock REMOVED. One credential system. 24/0 + 19/0.
+
+Not deployed. Wallet PIN untouched — it is server-verified and authorises money movement, not a
+surface.
+
+    scripts/after-admin-lock-removal.js       24 passed / 0 failed
+    scripts/before-admin-surface-gate.mjs     19 passed / 0 failed   (was 18/1, then 12/5)
+    scripts/after-admin-context.mjs           15 passed / 0 failed
+    scripts/before-role-state-divergence.mjs  16 passed / 0 failed
+    test:panels 32/0   test:profile:acting-role 36/0   test:role:switch 50/0
+
+`admin.html` carried a PIN / password / pattern lock storing an unsalted SHA-256 in
+`localStorage`. The before-proof (`0efdd55`, 20/0) established it authorised nothing:
+
+    stores   unsalted SHA-256 in localStorage         4-digit PIN = 10^4 candidates
+    CFs      0 observed it       CONTROL: the same walker found adminOsDispatch in 4 files
+    rules    0 referenced it     in the SERVED ruleset and the repo file
+    grants   nothing — order was credential -> claim -> context -> reveal, and a missing
+             claim denied even with a correct credential
+    master   a hardcoded passcode compiled into the page was accepted as PIN or password
+             and bypassed the stored hash outright
+
+That last line is what settled it: whatever the device credential protected, it protected only
+against people who had not read the shipped source. Removing `3026` from `super-admin.html` earlier
+was correct for that file and was reported as such; the same literal survived here.
+
+Entry is now, and only:
+
+    Firebase login  ->  claims  ->  adminContext  ->  Admin surface
+
+**Removed:** the credential overlay, `CRED_KEYS`, `_sha256`/`_getHash`/`_tryUnlock`, all PIN,
+password and pattern modes, first-run setup, the forgot/reset flow, the Security Credentials
+settings section, `LOCK_ID`, `MASTER_OK` and `3026`. ~18 KB.
+
+**Kept:** Firebase authentication, the admin/superAdmin claim checks, the F4 `adminContext` gate,
+role switching through the canonical authority, and the 15-minute session timeout.
+
+**Timeout repointed.** `lockAdmin()` no longer returns to a password box — there isn't one. It
+clears the administrative context and reloads, so the account stays signed in and
+`SokoniAdminEntry` presents "Enter Admin" again. Re-entry stays deliberate, which is what the
+timeout existed to enforce.
+
+**Entry now runs on every load.** The old resume block revealed the dashboard whenever
+`sessionStorage` carried the unlock key, without re-checking anything — the claim was verified once
+and then trusted for the rest of the session. The claim and the context are now resolved on every
+load, and the session key is a timeout record rather than an admission.
+
+Two harness faults were found and fixed while proving this, both mine:
+
+* The orphan scanner counted `document.getElementById(...)` and `navigator.clipboard.writeText(...)`
+  as bare calls to undefined functions, and could not see globals defined in the page's other
+  scripts (`_skConfirm` lives in `shared-header.js`). It now excludes `.method(` and collects
+  definitions across every local script the page loads. It carries a negative control that must
+  flag a deliberately broken binding.
+* A Wallet-PIN row read `walletHits.every(() => true)` — always true, and therefore not evidence.
+  It now asks git which paths actually changed.
+
+The orphan check earned its place: three Save buttons (`changePin`, `changePassword`,
+`saveNewPattern`) survived the first pass of this removal, bound to functions that no longer
+existed. `node --check` cannot see that — the markup parses perfectly and the control throws only
+when pressed.
+
+`scripts/before-admin-lock.js` now reports SUPERSEDED and exits 0 rather than failing forever; its
+passing run is `0efdd55`.
+
+Files: `admin.html`, `scripts/after-admin-lock-removal.js` (new), `scripts/before-admin-lock.js`.
+Database changes: none. API changes: none. Rules changes: none.
+Breaking change: administrators no longer enter a device PIN/password; account login plus a
+deliberate Admin entry is the whole path.
+
+Security: this removes a client-side pre-filter that authorised nothing and was bypassed by a
+constant in shipped source. Firestore rules and the admin callables remain the boundary that
+protects data, unchanged. No permission was widened and no vocabulary added.
+
+UNPROVEN: runtime behaviour for a real signed-in administrator. The decision table comes from a
+fixture stubbing `getIdTokenResult`; the anonymous rows are real.
+
+
 ## [2026-08-21] - F4: administrative surfaces gate on CONTEXT, not the claim alone. 15/0 + 18/1.
 
 Authorization-path change. Not deployed.

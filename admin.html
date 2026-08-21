@@ -573,80 +573,19 @@ body.adm-light .adm-sec-h{color:#111;}
 <script src="splash.js"></script>
 
 <!-- ADMIN LOCK SCREEN (Pattern / PIN / Password) -->
+<!-- Administrative entry. The PIN/password/pattern overlay that stood here was removed:
+     scripts/before-admin-lock.js measured it at 20/0 - the credential reached 0 Cloud
+     Functions and 0 rules (served ruleset included), and a hardcoded master passcode
+     compiled into this file bypassed the stored hash outright, so it restricted nobody
+     who read the source. Entry is now Firebase login -> claim -> adminContext, one
+     credential system. #adminLock is kept as the pre-entry splash so the reveal path
+     and lockAdmin() keep a single element to toggle. -->
 <div id="adminLock" class="adm-lock-overlay">
-  <div class="adm-lock-box">
-    <img src="assets/sokoni-logo-dark.png" class="adm-lock-logo" onerror="this.style.display='none'" alt="SOKONI">
-    <div class="adm-lock-title">🔐 Admin Access</div>
-    <div class="adm-lock-sub">SOKONI Control Panel</div>
-    <!-- Mode Tabs -->
-    <div class="adm-lock-tabs">
-      <button class="adm-lock-tab" id="lockTab_pattern" onclick="switchLockMode('pattern')">⬡ Pattern</button>
-      <button class="adm-lock-tab" id="lockTab_pin" onclick="switchLockMode('pin')">● PIN</button>
-      <button class="adm-lock-tab" id="lockTab_password" onclick="switchLockMode('password')">🔑 Password</button>
-    </div>
-    <!-- Pattern Mode -->
-    <div id="lockMode_pattern" class="adm-lock-mode">
-      <div class="pat-hint">Draw your unlock pattern (≥4 dots)</div>
-      <div class="pat-wrap">
-        <canvas id="patternCanvas" width="240" height="240"></canvas>
-      </div>
-    </div>
-    <!-- PIN Mode -->
-    <div id="lockMode_pin" class="adm-lock-mode" style="display:none">
-      <div class="adm-pin-dots">
-        <div class="adm-pin-dot" id="pd0"></div><div class="adm-pin-dot" id="pd1"></div>
-        <div class="adm-pin-dot" id="pd2"></div><div class="adm-pin-dot" id="pd3"></div>
-      </div>
-      <div class="adm-pin-pad">
-        <button class="adm-pin-key" onclick="pinKey('1')">1</button>
-        <button class="adm-pin-key" onclick="pinKey('2')">2</button>
-        <button class="adm-pin-key" onclick="pinKey('3')">3</button>
-        <button class="adm-pin-key" onclick="pinKey('4')">4</button>
-        <button class="adm-pin-key" onclick="pinKey('5')">5</button>
-        <button class="adm-pin-key" onclick="pinKey('6')">6</button>
-        <button class="adm-pin-key" onclick="pinKey('7')">7</button>
-        <button class="adm-pin-key" onclick="pinKey('8')">8</button>
-        <button class="adm-pin-key" onclick="pinKey('9')">9</button>
-        <button class="adm-pin-key" onclick="pinKey('clr')">⌫</button>
-        <button class="adm-pin-key" onclick="pinKey('0')">0</button>
-        <button class="adm-pin-key" onclick="pinKey('del')">✕</button>
-      </div>
-    </div>
-    <!-- Password Mode -->
-    <div id="lockMode_password" class="adm-lock-mode" style="display:none">
-      <div class="adm-pw-wrap">
-        <input type="password" id="lockPwInput" class="adm-pw-input"
-               placeholder="Admin password"
-               onkeydown="if(event.key==='Enter')checkLockPassword()"
-               autocomplete="current-password">
-        <button class="adm-pw-toggle" type="button" onclick="toggleLockPwVis()" title="Show/hide">👁</button>
-      </div>
-      <button class="adm-unlock-btn" type="button" onclick="checkLockPassword()">Unlock →</button>
-    </div>
-    <div class="adm-lock-error" id="lockError"></div>
-    <!-- Forgot / reset the device lock — gated on the live Firebase admin claim so
-         only a verified admin can clear it (the claim, not this PIN, is the real gate). -->
-    <button type="button" onclick="adminForgotReset()"
-      style="background:none;border:none;color:rgba(113,255,0,0.7);font-size:11.5px;text-decoration:underline;cursor:pointer;font-family:inherit;margin-top:4px;">Forgot PIN? Reset (admin only)</button>
-    <!-- First-run credential setup (shown when no PIN/password stored) -->
-    <div id="firstRunSetup" style="display:none;margin-top:16px;border-top:1px solid rgba(113,255,0,0.1);padding-top:16px;text-align:left;">
-      <div style="font-size:11px;font-weight:800;color:#71ff00;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">⚙️ First-Time Setup</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:12px;line-height:1.5;">No credentials found. Set a PIN to secure this panel.</div>
-      <input type="password" id="firstRunPin" maxlength="4" inputmode="numeric" pattern="\d{4}"
-        placeholder="Choose a 4-digit PIN"
-        style="width:100%;padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:8px;letter-spacing:.15em;">
-      <input type="password" id="firstRunPin2" maxlength="4" inputmode="numeric" pattern="\d{4}"
-        placeholder="Confirm PIN"
-        style="width:100%;padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:10px;letter-spacing:.15em;">
-      <button type="button" onclick="firstRunSavePin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;">Save PIN &amp; Continue →</button>
-      <div id="firstRunMsg" style="font-size:11px;min-height:16px;margin-top:8px;text-align:center;"></div>
-    </div>
-    <div id="bootstrapSection" style="display:none;margin-top:18px;text-align:center;border-top:1px solid rgba(113,255,0,0.1);padding-top:18px;">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">First time? Activate your admin account below.</div>
-      <button type="button" id="bootstrapBtn" onclick="runBootstrap()" style="padding:10px 22px;background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(57,230,0,0.08));border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;font-family:inherit;width:100%;">⚡ Activate Admin Account</button>
-      <div id="bootstrapMsg" style="font-size:11px;margin-top:8px;min-height:16px;"></div>
-    </div>
-    <a href="seller.html" class="adm-lock-back">← Back to Seller Dashboard</a>
+  <div class="adm-lock-box" style="text-align:center;">
+    <div style="font-size:40px;margin-bottom:12px;">🛡️</div>
+    <h1 style="font-size:19px;font-weight:800;margin:0 0 8px;">SOKONI Admin</h1>
+    <p id="lockError" style="font-size:13px;line-height:1.6;color:rgba(255,255,255,.55);margin:0 0 18px;">Verifying your administrator access…</p>
+    <a href="/" class="adm-lock-back">← Back to SOKONI</a>
   </div>
 </div>
 
@@ -1618,39 +1557,12 @@ body.adm-light .adm-sec-h{color:#111;}
           </div>
         </div>
 
-        <div style="margin-top:24px;">
-          <div class="adm-sec-h">🔐 Security Credentials</div>
-          <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:16px;">
-            Use the forms below to update your PIN, pattern lock, and password. Changes take effect immediately.
-          </p>
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">● Change PIN</div>
-            <div class="inp-row" style="max-width:380px;">
-              <input type="password" class="adm-input" id="newPin" placeholder="New 4-digit PIN" maxlength="4" style="max-width:180px;" autocomplete="new-password">
-              <button class="solid-btn solid-green" onclick="changePin()">Save PIN</button>
-            </div>
-          </div>
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">🔑 Change Password</div>
-            <div class="inp-row" style="max-width:380px;">
-              <input type="password" class="adm-input" id="newAdminPw" placeholder="New password (min 6 chars)" style="max-width:240px;" autocomplete="new-password">
-              <button class="solid-btn solid-green" onclick="changePassword()">Save</button>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">⬡ Change Pattern</div>
-            <p style="font-size:11px;color:rgba(255,255,255,0.25);margin-bottom:8px;">Draw your new pattern below (min 4 dots), then save.</p>
-            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-              <div style="position:relative;width:180px;height:180px;touch-action:none;cursor:crosshair;">
-                <canvas id="patternCanvasNew" width="240" height="240" style="width:180px;height:180px;"></canvas>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                <button class="solid-btn solid-green" onclick="saveNewPattern()">Save Pattern</button>
-                <button class="solid-btn" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);" onclick="_patNewReset()">Clear</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- The Security Credentials section (PIN / password / pattern) was removed with
+             the lock itself. Its three Save buttons bound to changePin, changePassword and
+             saveNewPattern, whose definitions are gone - leaving them would have shipped
+             three controls that throw ReferenceError on click. Administrative entry is
+             Firebase login -> claim -> adminContext; there is no device credential to
+             change. The Wallet PIN is unrelated and unaffected. -->
 
         <div style="margin-top:24px;">
           <div class="adm-sec-h">Data Management</div>
@@ -2280,321 +2192,119 @@ body.adm-light .adm-sec-h{color:#111;}
 var SESS_KEY   = 'sokoniAdminUnlocked';
 var SESS_TS    = 'sokoniAdminTs';
 var SESSION_MS = 15 * 60 * 1000;
-var LOCK_ID    = 'admin_lock';
-var CRED_KEYS  = { pin:'sokoniAdminPinHash', pattern:'sokoniAdminPatternHash', password:'sokoniAdminPwHash' };
-/* Default credentials removed from source — set via admin settings panel after first login */
-var DEFAULTS   = {};
+/* ── ADMINISTRATIVE ENTRY ───────────────────────────────────────────────────
+   A PIN / password / pattern lock stood here. It was removed on measurement,
+   not on analogy — scripts/before-admin-lock.js, 20/0:
 
-/* Auto-pick mode: touch devices default to pattern, laptops to password */
-var _lockMode = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) ? 'pattern' : 'password';
-var _lockPin  = '';
+     stores   unsalted SHA-256 in localStorage (pin / pattern / password)
+     CFs      0 observed it        control: the same walker found adminOsDispatch
+     rules    0 referenced it      in the SERVED ruleset and the repo file
+     grants   nothing — the order was credential -> claim -> context -> reveal,
+              and a missing claim denied even with a correct credential
+     master   a hardcoded passcode, compiled into this file, was accepted as PIN
+              or password and bypassed the stored hash outright
 
-async function _sha256(text) {
-  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
-}
+   So it authorised nothing and restricted nobody who read the source. Keeping it
+   would have meant a second credential system contradicting the role model: an
+   account authorised for a role opens that role's surface without a second
+   challenge. Account login is the one entry authentication.
 
-async function _getHash(mode) {
-  var h = localStorage.getItem(CRED_KEYS[mode]);
-  if (!h) {
-    /* No credential stored — force admin to set up credentials */
-    return null;
-  }
-  return h;
-}
+   (The Wallet PIN is unrelated and untouched: it is server-verified and authorises
+   money movement, not a surface.)
 
-async function _tryUnlock(secret, mode) {
-  var sec = window.SokoniSecurity;
-  var lockInfo = sec ? sec.isLoginLocked(LOCK_ID) : false;
-  if (lockInfo && lockInfo.locked) {
-    _lockSetError('Too many attempts. Wait ' + lockInfo.minsLeft + ' min.'); return;
-  }
-  var entered = await _sha256(String(secret));
-  var stored  = await _getHash(mode);
-  /* Master passcode 3026 — always accepted as PIN or password so an admin is never
-     locked out by a missing/forgotten device credential. NOTE: this is a
-     CONVENIENCE code, not a secret (it is visible in client source); the Firebase
-     admin/superAdmin claim verified below is the real gate — 3026 alone grants
-     nothing without the claim. */
-  var MASTER_OK = (mode === 'pin' || mode === 'password') && String(secret) === '3026';
-  if (!stored && !MASTER_OK) {
-    _lockSetError('No credentials set. Use the setup form below to create your PIN.');
-    var frs = document.getElementById('firstRunSetup');
-    if (frs) frs.style.display = 'block';
-    return;
-  }
-  if (entered === stored || MASTER_OK) {
-    if (sec) sec.clearLoginLockout(LOCK_ID);
+   Entry is now exactly:
 
-    /* Verify Firebase admin custom claim — REQUIRED, no bypass on error */
-    try {
-      var fbUser = window.firebaseAuth && window.firebaseAuth.currentUser;
-      if (!fbUser) {
-        _lockSetError('Not signed in. Please sign in with your admin account first.');
-        return;
-      }
-      var tokenResult = await fbUser.getIdTokenResult(true /* forceRefresh */);
-      if (!tokenResult.claims || (tokenResult.claims.admin !== true && tokenResult.claims.superAdmin !== true)) {
-        _lockSetError('Firebase admin claim not found. Contact the platform owner.');
-        return;
-      }
-      /* Store role for RBAC — superAdmin > admin */
-      window._admClaimedRole = tokenResult.claims.superAdmin === true ? 'superAdmin' : 'admin';
-      /* F4. The claim above answers "may this account", never "is it doing so now".
-         An administrator who switched to Buyer kept full admin access because the
-         claim was all this gate read. 'admin' is requested even for a Super Admin:
-         requireAdminContext accepts superAdmin for an admin requirement, matching
-         adminHomeFor(), while admin never satisfies superAdmin. The denial surface
-         is rendered by SokoniAdminEntry, so nothing is shown here. */
-      if (window.SokoniAdminEntry) {
-        var gate = await window.SokoniAdminEntry.guard('admin');
-        if (!gate.ok) return;
-      }
-    } catch (claimErr) {
-      /* Network error — deny access to prevent offline bypass attacks */
-      _lockSetError('Cannot verify admin claim — check your connection and try again.');
-      return;
-    }
+       Firebase login  ->  claims  ->  adminContext  ->  Admin surface
 
-    sessionStorage.setItem(SESS_KEY, '1');
-    sessionStorage.setItem(SESS_TS, Date.now().toString());
-    document.getElementById('adminLock').style.display = 'none';
-    document.getElementById('adminDash').style.display = 'block';
-    loadAll();
-    /* Apply role-based UI immediately after unlock */
-    if (typeof applyRBAC === 'function') applyRBAC(window._admClaimedRole || 'admin');
-    document.dispatchEvent(new CustomEvent('sokoniAdminReady'));
-  } else {
-    var entry = sec ? sec.recordFailedLogin(LOCK_ID) : null;
-    if (entry && entry.until) {
-      Object.values(CRED_KEYS).forEach(function(k){ localStorage.removeItem(k); });
-      _lockSetError('🔒 Too many attempts. Credentials wiped. Locked 15 min.');
-    } else {
-      var left = entry ? Math.max(0, 5 - entry.count) : '?';
-      _lockSetError('❌ Wrong ' + mode + '. ' + left + ' attempt' + (left===1?'':'s') + ' left.');
-    }
-    var box = document.querySelector('.adm-lock-box');
-    if (box) { [[-8,0],[8,80],[-4,160],[0,240]].forEach(function(p){
-      setTimeout(function(){ box.style.transform='translateX('+p[0]+'px)'; }, p[1]);
-    }); }
-  }
-}
+   Both halves already existed and were always the real gate. */
 
 function _lockSetError(msg) {
-  var el = document.getElementById('lockError'); if (el) el.textContent = msg;
+  var el = document.getElementById('lockError');
+  if (el) el.textContent = msg || '';
 }
 
-/* ── Mode switching ── */
-function switchLockMode(mode) {
-  _lockMode = mode;
-  ['pattern','pin','password'].forEach(function(m){
-    var el  = document.getElementById('lockMode_'+m);
-    var tab = document.getElementById('lockTab_'+m);
-    if (el)  el.style.display  = (m===mode ? 'flex' : 'none');
-    if (tab) tab.classList.toggle('active', m===mode);
+/* Resolves once Firebase has actually decided, rather than after a fixed delay —
+   a slow token and an absent session look identical to a timer, and answering from
+   a timer is how a page concludes "not signed in" while the token is still in
+   flight. Bounded so a genuinely dead auth surfaces instead of spinning forever. */
+function _awaitAuthUser() {
+  return new Promise(function (resolve) {
+    var tries = 0;
+    (function tick() {
+      var a = window.firebaseAuth;
+      if (a && a.currentUser) return resolve(a.currentUser);
+      if (a && typeof a.onAuthStateChanged === 'function' && !tick._wired) {
+        tick._wired = true;
+        try { a.onAuthStateChanged(function (u) { if (u) resolve(u); }); } catch (_) {}
+      }
+      if (++tries > 250) return resolve(null);      /* ~7.5s */
+      setTimeout(tick, 30);
+    }());
   });
-  _lockSetError('');
-  if (mode==='pin'){ _lockPin=''; _updatePinDots(); }
-  if (mode==='pattern'){ _patReset(); }
-  if (mode==='password'){
-    var inp=document.getElementById('lockPwInput');
-    if(inp){ inp.value=''; setTimeout(function(){ inp.focus(); },80); }
+}
+
+async function _adminEnter() {
+  var user = await _awaitAuthUser();
+  if (!user) {
+    _lockSetError('Sign in with your administrator account to continue.');
+    try {
+      sessionStorage.setItem('sokoniLoginRedirect',
+        location.pathname.split('/').pop() + (location.search || ''));
+    } catch (_) {}
+    location.replace('login.html');
+    return;
   }
-}
 
-/* ── PIN mode ── */
-function pinKey(k) {
-  _lockSetError('');
-  if (k==='del') _lockPin='';
-  else if (k==='clr') _lockPin=_lockPin.slice(0,-1);
-  else if (_lockPin.length<4) _lockPin+=k;
-  _updatePinDots();
-  if (_lockPin.length===4) { var p=_lockPin; _lockPin=''; _updatePinDots(); _tryUnlock(p,'pin'); }
-}
-function _updatePinDots() {
-  for(var i=0;i<4;i++){
-    var d=document.getElementById('pd'+i);
-    if(d) d.className='adm-pin-dot'+(_lockPin.length>i?' filled':'');
-  }
-}
-
-/* ── Password mode ── */
-function checkLockPassword() {
-  var v=(document.getElementById('lockPwInput')||{}).value||'';
-  if(!v.trim()) return;
-  _tryUnlock(v,'password');
-}
-function toggleLockPwVis() {
-  var inp=document.getElementById('lockPwInput');
-  if(inp) inp.type=(inp.type==='password'?'text':'password');
-}
-
-/* ── Pattern mode ── */
-var _patSequence=[], _patDrawing=false, _patCanvas=null, _patCtx=null, _patCur={x:0,y:0};
-var _DOT_POS=[
-  {x:40,y:40},{x:120,y:40},{x:200,y:40},
-  {x:40,y:120},{x:120,y:120},{x:200,y:120},
-  {x:40,y:200},{x:120,y:200},{x:200,y:200}
-];
-
-function _patInit() {
-  _patCanvas=document.getElementById('patternCanvas'); if(!_patCanvas) return;
-  _patCtx=_patCanvas.getContext('2d');
-  _patReset();
-  _patCanvas.addEventListener('mousedown',_patStart);
-  _patCanvas.addEventListener('mousemove',_patMove);
-  _patCanvas.addEventListener('mouseup',_patEnd);
-  _patCanvas.addEventListener('mouseleave',_patEnd);
-  _patCanvas.addEventListener('touchstart',function(e){e.preventDefault();_patStart(e.touches[0]);},{passive:false});
-  _patCanvas.addEventListener('touchmove',function(e){e.preventDefault();_patMove(e.touches[0]);},{passive:false});
-  _patCanvas.addEventListener('touchend',function(e){e.preventDefault();_patEnd();},{passive:false});
-}
-function _patRelPos(e) {
-  var r=_patCanvas.getBoundingClientRect();
-  return {x:(e.clientX-r.left)*(_patCanvas.width/r.width),y:(e.clientY-r.top)*(_patCanvas.height/r.height)};
-}
-function _patHit(x,y) {
-  for(var i=0;i<9;i++){var d=_DOT_POS[i],dx=x-d.x,dy=y-d.y;if(Math.sqrt(dx*dx+dy*dy)<28)return i;} return -1;
-}
-function _patStart(e) {
-  var p=_patRelPos(e), h=_patHit(p.x,p.y); if(h===-1)return;
-  _patDrawing=true; _patSequence=[h]; _patCur=p; _patDraw();
-}
-function _patMove(e) {
-  if(!_patDrawing)return;
-  var p=_patRelPos(e); _patCur=p;
-  var h=_patHit(p.x,p.y);
-  if(h!==-1&&_patSequence.indexOf(h)===-1) _patSequence.push(h);
-  _patDraw();
-}
-function _patEnd() {
-  if(!_patDrawing)return; _patDrawing=false;
-  if(_patSequence.length<4){ _lockSetError('Connect at least 4 dots'); setTimeout(_patReset,1200); return; }
-  var seq=_patSequence.join('');
-  _tryUnlock(seq,'pattern').then(_patReset);
-}
-function _patReset() { _patSequence=[]; _patDrawing=false; _patDraw(); }
-function _patDraw() {
-  if(!_patCtx)return;
-  var W=_patCanvas.width,H=_patCanvas.height;
-  _patCtx.clearRect(0,0,W,H);
-  /* lines */
-  if(_patSequence.length>0){
-    _patCtx.beginPath();
-    _patCtx.strokeStyle='rgba(113,255,0,0.55)';_patCtx.lineWidth=3;
-    _patCtx.lineCap='round';_patCtx.lineJoin='round';
-    var p0=_DOT_POS[_patSequence[0]]; _patCtx.moveTo(p0.x,p0.y);
-    for(var j=1;j<_patSequence.length;j++){var pj=_DOT_POS[_patSequence[j]];_patCtx.lineTo(pj.x,pj.y);}
-    if(_patDrawing) _patCtx.lineTo(_patCur.x,_patCur.y);
-    _patCtx.stroke();
-  }
-  /* dots */
-  for(var i=0;i<9;i++){
-    var d=_DOT_POS[i], active=_patSequence.indexOf(i)!==-1;
-    _patCtx.beginPath();_patCtx.arc(d.x,d.y,16,0,Math.PI*2);
-    _patCtx.strokeStyle=active?'rgba(113,255,0,0.35)':'rgba(255,255,255,0.1)';
-    _patCtx.lineWidth=1.5; _patCtx.stroke();
-    _patCtx.beginPath();_patCtx.arc(d.x,d.y,9,0,Math.PI*2);
-    _patCtx.fillStyle=active?'#71ff00':'rgba(255,255,255,0.38)';
-    if(active){_patCtx.shadowBlur=10;_patCtx.shadowColor='#71ff00';}
-    _patCtx.fill(); _patCtx.shadowBlur=0;
-  }
-}
-
-/* ── First-run lock-screen PIN setup ── */
-window.firstRunSavePin = async function() {
-  var p1 = (document.getElementById('firstRunPin')  || {}).value || '';
-  var p2 = (document.getElementById('firstRunPin2') || {}).value || '';
-  var msg = document.getElementById('firstRunMsg');
-  if (!/^\d{4}$/.test(p1)) { msg.textContent = 'PIN must be exactly 4 digits.'; msg.style.color = '#f97316'; return; }
-  if (p1 !== p2)            { msg.textContent = 'PINs do not match.';            msg.style.color = '#f97316'; return; }
-  var h = await _sha256(p1);
-  localStorage.setItem(CRED_KEYS.pin, h);
-  msg.textContent = '✅ PIN saved! Switching to PIN mode…'; msg.style.color = '#71ff00';
-  document.getElementById('firstRunSetup').style.display = 'none';
-  document.getElementById('lockError').textContent = '';
-  setTimeout(function(){ switchLockMode('pin'); }, 800);
-};
-
-/* ── Forgot PIN / reset the device lock ──
-   The lock is a per-device second factor whose hash cannot be recovered. A
-   verified admin (Firebase admin/superAdmin claim) can always clear it and set a
-   new PIN, so a forgotten/wiped lock never causes a permanent lockout. Non-admins
-   are told to use "Activate Admin Account" — they can't reset what they can't pass. */
-window.adminForgotReset = async function () {
+  /* Verify the Firebase admin claim — REQUIRED, no bypass on error. */
   try {
-    var u = window.firebaseAuth && window.firebaseAuth.currentUser;
-    if (!u) { _lockSetError('Sign in with your admin account first, then tap Reset.'); return; }
-    var tr = await u.getIdTokenResult(true /* force refresh */);
-    if (!tr.claims || (tr.claims.admin !== true && tr.claims.superAdmin !== true)) {
-      _lockSetError('Only a verified admin can reset the lock. If you have no admin claim yet, use "Activate Admin Account" below.');
-      var bs = document.getElementById('bootstrapSection'); if (bs) bs.style.display = 'block';
+    var tokenResult = await user.getIdTokenResult(true /* forceRefresh */);
+    if (!tokenResult.claims ||
+        (tokenResult.claims.admin !== true && tokenResult.claims.superAdmin !== true)) {
+      _lockSetError('This account does not carry an administrator role.');
       return;
     }
-    Object.values(CRED_KEYS).forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
-    var frs = document.getElementById('firstRunSetup'); if (frs) frs.style.display = 'block';
-    switchLockMode('pin');
-    _lockSetError('✅ Lock reset — choose a new 4-digit PIN below.');
-  } catch (e) {
-    _lockSetError('Could not verify admin — check your connection and try again.');
+    /* Store role for RBAC — superAdmin > admin */
+    window._admClaimedRole = tokenResult.claims.superAdmin === true ? 'superAdmin' : 'admin';
+  } catch (claimErr) {
+    /* Deny on a verification failure. An unknown answer on an administrative
+       surface is a denial, never an admission — this is the offline-bypass guard. */
+    _lockSetError('Cannot verify your administrator access — check your connection and try again.');
+    return;
   }
-};
 
-/* ── Change credentials (called from settings pane) ── */
-async function changePin() {
-  var v=(document.getElementById('newPin')||{}).value||'';
-  if(!/^\d{4}$/.test(v.trim())){ toast('❌ PIN must be 4 digits'); return; }
-  var h=await _sha256(v.trim());
-  localStorage.setItem(CRED_KEYS.pin,h);
-  document.getElementById('newPin').value=''; toast('✅ PIN updated');
-}
-async function changePassword() {
-  var v=(document.getElementById('newAdminPw')||{}).value||'';
-  if(v.length<6){ toast('❌ Password must be at least 6 characters'); return; }
-  var h=await _sha256(v);
-  localStorage.setItem(CRED_KEYS.password,h);
-  document.getElementById('newAdminPw').value=''; toast('✅ Password updated');
-}
-/* Pattern change: uses a mini canvas #patternCanvasNew in settings */
-var _patNew=[], _patNewDrawing=false, _patNewCanvas=null, _patNewCtx=null, _patNewCur={x:0,y:0};
-function _patNewInit() {
-  _patNewCanvas=document.getElementById('patternCanvasNew'); if(!_patNewCanvas)return;
-  _patNewCtx=_patNewCanvas.getContext('2d'); _patNewReset();
-  _patNewCanvas.addEventListener('mousedown',_patNewStart);
-  _patNewCanvas.addEventListener('mousemove',_patNewMove);
-  _patNewCanvas.addEventListener('mouseup',_patNewEnd);
-  _patNewCanvas.addEventListener('mouseleave',_patNewEnd);
-  _patNewCanvas.addEventListener('touchstart',function(e){e.preventDefault();_patNewStart(e.touches[0]);},{passive:false});
-  _patNewCanvas.addEventListener('touchmove',function(e){e.preventDefault();_patNewMove(e.touches[0]);},{passive:false});
-  _patNewCanvas.addEventListener('touchend',function(e){e.preventDefault();_patNewEnd();},{passive:false});
-}
-function _patNewRelPos(e){var r=_patNewCanvas.getBoundingClientRect();return{x:(e.clientX-r.left)*(_patNewCanvas.width/r.width),y:(e.clientY-r.top)*(_patNewCanvas.height/r.height)};}
-function _patNewHit(x,y){for(var i=0;i<9;i++){var d=_DOT_POS[i],dx=x-d.x,dy=y-d.y;if(Math.sqrt(dx*dx+dy*dy)<28)return i;}return -1;}
-function _patNewStart(e){var p=_patNewRelPos(e),h=_patNewHit(p.x,p.y);if(h===-1)return;_patNewDrawing=true;_patNew=[h];_patNewCur=p;_patNewDraw();}
-function _patNewMove(e){if(!_patNewDrawing)return;var p=_patNewRelPos(e);_patNewCur=p;var h=_patNewHit(p.x,p.y);if(h!==-1&&_patNew.indexOf(h)===-1)_patNew.push(h);_patNewDraw();}
-function _patNewEnd(){if(!_patNewDrawing)return;_patNewDrawing=false;_patNewDraw();}
-function _patNewReset(){_patNew=[];_patNewDrawing=false;_patNewDraw();}
-function _patNewDraw(){
-  if(!_patNewCtx)return;
-  var W=_patNewCanvas.width,H=_patNewCanvas.height;_patNewCtx.clearRect(0,0,W,H);
-  if(_patNew.length>0){_patNewCtx.beginPath();_patNewCtx.strokeStyle='rgba(113,255,0,0.55)';_patNewCtx.lineWidth=3;_patNewCtx.lineCap='round';_patNewCtx.lineJoin='round';var p0=_DOT_POS[_patNew[0]];_patNewCtx.moveTo(p0.x,p0.y);for(var j=1;j<_patNew.length;j++){var pj=_DOT_POS[_patNew[j]];_patNewCtx.lineTo(pj.x,pj.y);}if(_patNewDrawing)_patNewCtx.lineTo(_patNewCur.x,_patNewCur.y);_patNewCtx.stroke();}
-  for(var i=0;i<9;i++){var d=_DOT_POS[i],a=_patNew.indexOf(i)!==-1;_patNewCtx.beginPath();_patNewCtx.arc(d.x,d.y,16,0,Math.PI*2);_patNewCtx.strokeStyle=a?'rgba(113,255,0,0.35)':'rgba(255,255,255,0.1)';_patNewCtx.lineWidth=1.5;_patNewCtx.stroke();_patNewCtx.beginPath();_patNewCtx.arc(d.x,d.y,9,0,Math.PI*2);_patNewCtx.fillStyle=a?'#71ff00':'rgba(255,255,255,0.38)';if(a){_patNewCtx.shadowBlur=10;_patNewCtx.shadowColor='#71ff00';}_patNewCtx.fill();_patNewCtx.shadowBlur=0;}
-}
-async function saveNewPattern() {
-  if(_patNew.length<4){ toast('❌ Draw a pattern with at least 4 dots'); return; }
-  var h=await _sha256(_patNew.join(''));
-  localStorage.setItem(CRED_KEYS.pattern,h);
-  _patNewReset(); toast('✅ Pattern updated');
+  /* The claim says MAY; the administrative context says IS. SokoniAdminEntry renders
+     its own denial (including the Enter Admin action) when it refuses. */
+  if (window.SokoniAdminEntry) {
+    var gate = await window.SokoniAdminEntry.guard('admin');
+    if (!gate.ok) return;
+  }
+
+  sessionStorage.setItem(SESS_KEY, '1');
+  sessionStorage.setItem(SESS_TS, Date.now().toString());
+  document.getElementById('adminLock').style.display = 'none';
+  document.getElementById('adminDash').style.display = 'block';
+  loadAll();
+  if (typeof applyRBAC === 'function') applyRBAC(window._admClaimedRole || 'admin');
+  document.dispatchEvent(new CustomEvent('sokoniAdminReady'));
 }
 
 /* ── Lock / session ── */
+
+/* Leaving the administrative surface. There is no second credential to return to,
+   so this clears the administrative CONTEXT and reloads: the account stays signed
+   in, and SokoniAdminEntry presents "Enter Admin" again. Re-entry is therefore
+   still deliberate, which is what the timeout existed to enforce. */
 function lockAdmin() {
   sessionStorage.removeItem(SESS_KEY); sessionStorage.removeItem(SESS_TS);
+  try {
+    if (window.SokoniPermissions && window.SokoniPermissions.clearAdminContext) {
+      window.SokoniPermissions.clearAdminContext();
+    }
+  } catch (_) {}
   document.getElementById('adminDash').style.display='none';
   document.getElementById('adminLock').style.display='flex';
-  _lockPin=''; _updatePinDots(); _patReset();
-  var inp=document.getElementById('lockPwInput'); if(inp) inp.value='';
-  _lockSetError('');
+  _lockSetError('Session ended. Re-enter the Admin surface to continue.');
+  location.reload();
 }
 function _refreshSession() {
   if(sessionStorage.getItem(SESS_KEY)) sessionStorage.setItem(SESS_TS,Date.now().toString());
@@ -2608,40 +2318,17 @@ document.addEventListener('click',_refreshSession);
 document.addEventListener('keydown',_refreshSession);
 setInterval(_checkSessionTimeout,60000);
 
-/* Restore active session on page load */
-if(sessionStorage.getItem(SESS_KEY)){
-  _checkSessionTimeout();
-  if(sessionStorage.getItem(SESS_KEY)){
-    document.getElementById('adminLock').style.display='none';
-    document.getElementById('adminDash').style.display='block';
-  }
-}
+/* Entry runs on EVERY load, not only when a session key is absent.
 
-/* Init lock screen to correct mode + pattern canvas */
-(function(){
-  switchLockMode(_lockMode);
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',function(){ _patInit(); _checkFirstRunSetup(); });
-  } else { _patInit(); _checkFirstRunSetup(); }
-})();
+   This used to reveal the dashboard whenever sessionStorage carried the unlock key,
+   without re-checking anything — so the claim was verified once and then trusted for
+   the rest of the session. Now the claim and the administrative context are resolved
+   on every load, and the session key is a timeout record rather than an admission. */
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', function(){ _adminEnter(); }, { once:true });
+} else { _adminEnter(); }
 
-function _checkFirstRunSetup() {
-  /* If no credential hash exists for any mode, show setup panel immediately */
-  var hasAny = CRED_KEYS.pin in localStorage &&
-               localStorage.getItem(CRED_KEYS.pin) ||
-               CRED_KEYS.pattern in localStorage &&
-               localStorage.getItem(CRED_KEYS.pattern) ||
-               CRED_KEYS.password in localStorage &&
-               localStorage.getItem(CRED_KEYS.password);
-  if (!hasAny) {
-    var frs = document.getElementById('firstRunSetup');
-    if (frs) frs.style.display = 'block';
-  }
-}
 
-/* ════════════════════════════════
-   TOAST
-════════════════════════════════ */
 function toast(msg,ms){
   var t=document.getElementById('adm-toast');
   t.textContent=msg; t.classList.add('show');

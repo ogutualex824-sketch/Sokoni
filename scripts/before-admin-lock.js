@@ -55,6 +55,18 @@ function grepDir(dir, re) {
 
 const admin = read('admin.html');
 
+/* This file measures a construct that has since been REMOVED (see the after-proof,
+   scripts/after-admin-lock-removal.js). Its rows describe the old state, so against
+   current sources it fails by design — which is itself the negative control: the
+   detector that found the lock no longer finds one. Report that plainly rather than
+   leaving a permanently red script in the repo. The passing run is at 0efdd55. */
+if (!/CRED_KEYS/.test(admin) && !/String\(secret\)\s*===/.test(admin)) {
+  console.log('\n  admin.html lock — before-proof: SUPERSEDED');
+  console.log('  The lock this file measured is gone from admin.html.');
+  console.log('  Passing run: 0efdd55 (20/0). Current state: scripts/after-admin-lock-removal.js\n');
+  process.exit(0);
+}
+
 console.log('\n  admin.html lock — before-proof\n');
 console.log('  ── 1. what it stores and validates');
 
