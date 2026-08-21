@@ -1,3 +1,67 @@
+## [2026-08-21] - RELEASE 1 CANDIDATE — verification complete. STILL NOT DEPLOYED.
+
+Branch `release/admin-slice` on production `47db4ab`. **8 commits · 24 files · +969 / -98.**
+Production remains HOLD.
+
+    2b2d5d0  admin navigation stays in the current context        (40fe779)
+    390cf97  load the authority modules on four surfaces          (4791d9b)
+    91d95ba  Home resolves to the acting role's surface           (2a3e1a9)
+    a5696c9  health guard: typed denial, accepts superAdmin       (1f854f6)
+    d1e7832  remove the redundant Super Admin passcode            (b224ec2)
+    b3522e9  account-centre switching delegates to the authority  (aad9118)
+    498767b  receipt naming remediation                           (cd5b806)
+
+`c827cd6` (responsive) and `80297d4` (rules) are deliberately EXCLUDED — Releases 3 and 2.
+
+### The required gate set
+
+    static/predeploy (production's own 11)   11/11 PASS
+    receipt naming                           98  (baseline 109)  PASS  — was 121
+    admin navigation                          3/0                PASS
+    authority runtime                        16/0/4              PASS
+    role coordination                        17/0/1              PASS
+    Super Admin PIN removal                   7/7                PASS
+    health guard                             fixed; see below
+    receipt contract / sell / pos-ecosystem  114/0 · 40/0 · 19    PASS
+
+**The predeploy blocker is cleared.** Adding `cd5b806` took the ratchet from **121 to 98**
+against a 109 baseline. `--update-baseline` was NOT run: the candidate passes the gate as it
+stands rather than by moving the line. The two money-path contracts remain untouched and OPEN.
+
+### The two remaining failures, classified — not suppressed
+
+**`test-home-logo-routing` 24/1 — LINEAGE DIFFERENCE.** Production maps
+`seller: 'merchant.html'`; the work branch maps `'merchant-v2.html'`. The test encodes the work
+branch's value. Production's hub map was deliberately NOT changed: that is the merchant-v2
+migration, not an admin-release defect.
+
+**`before-superadmin-pin-and-health` 9/4 — STALE BEFORE-PROOF.** Split by section, PART 1 (the
+PIN) is **7/7 PASS**. All four failures are PART 2 assertions describing the PRE-fix guard —
+"throws a plain Error", "checks token.admin", "does NOT accept superAdmin" — which `a5696c9`
+correctly inverts. They failing IS the evidence the guard changed.
+
+**The orphan-binding gate does not exist on this lineage** and was deliberately not brought
+along; production's predeploy contains zero orphan entries. Its absence is a lineage
+characteristic, not a regression, and importing it would expand scope.
+
+### One conflict re-derived rather than merged
+
+`merchant-v2.html`: `cd5b806` added a single script tag, but production's file lacks a
+role-authority block the work branch has. Production's version was kept and the tag re-inserted
+at the correct anchor — production loads `sokoni-merchant-sell.js` STATICALLY where the work
+branch loads it on demand. Ordering verified on all five consumer pages.
+
+### Post-deployment acceptance, still owed
+
+    anonymous            -> unauthenticated     (today: INTERNAL / HTTP 500, measured)
+    unauthorized account -> permission-denied
+    admin                -> health renders
+    superAdmin           -> health renders
+
+The first row needs no credentials and confirms the deploy landed. If an authenticated admin
+still gets INTERNAL, the guard is no longer the explanation and a dimension helper is — a
+distinction that is only cleanly testable once this is deployed.
+
 ## [2026-08-21] - RELEASE 1 CANDIDATE constructed from 47db4ab — NOT DEPLOYED.
 
 Branch `release/admin-slice`, built on production `47db4ab`. **Nothing deployed. Production
