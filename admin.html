@@ -2360,11 +2360,27 @@ function applyRBAC(role) {
     navBadge.style.display = 'inline-flex';
   }
 
-  /* Super Admin link — always visible but highlighted for superAdmin */
+  /* Super Admin link — HIDDEN unless the account actually holds the claim.
+
+     This was "always visible but highlighted for superAdmin": dimmed for an ordinary
+     Admin, but still clickable. That was correct while it pointed at superadmin.html,
+     which admitted `superAdmin || admin` and adapted internally via
+     SAApp._isSuperAdmin — an Admin clicking it got a usable page.
+
+     Retiring superadmin.html (e1cc06a) repointed this link to super-admin.html, which
+     requires claims.superAdmin === true. The link kept its dimmed-but-clickable
+     behaviour, so an Admin pressing it now lands on a denial reading "This account
+     does not carry the Super Admin role" — a working control turned into a dead end by
+     a change made two files away.
+
+     A control that cannot succeed should not be offered. Hidden when the claim is
+     absent, matching the role dropdown, which renders its Super Admin entry only when
+     hasRole('superAdmin'). */
   var superLink = document.getElementById('link-superadmin');
   if (superLink) {
-    superLink.style.color = isSuperAdmin ? '#c084fc' : 'rgba(255,255,255,0.25)';
-    superLink.style.opacity = isSuperAdmin ? '1' : '0.5';
+    superLink.style.display = isSuperAdmin ? 'flex' : 'none';
+    superLink.style.color = '#c084fc';
+    superLink.style.opacity = '1';
   }
 
   /* Mobile 7-nav: hide/show transport tab for non-transport admins */

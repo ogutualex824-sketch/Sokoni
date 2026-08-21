@@ -55,7 +55,19 @@ function sources() {
 /* A reference to the PAGE, in any spelling this repo actually uses. The role string
    'superadmin' inside a quoted list of roles is excluded — it is a separate
    inconsistency (lowercase role vs the superAdmin claim) and not this slice. */
-function pageRefs(src) {
+/* Comments are not references. A later fix explained the retirement in an admin.html
+   comment — naming the retired page in order to say why a link was repointed — and
+   this proof counted that as a surviving caller. Documenting a removal is not
+   performing one. Strip line-for-line so the reported line numbers stay true. */
+function stripComments(src) {
+  return src
+    .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/^[ \t]*\/\/.*$/gm, (m) => ' '.repeat(m.length));
+}
+
+function pageRefs(rawSrc) {
+  const src = stripComments(rawSrc);
   const hits = [];
   const lines = src.split(/\r?\n/);
   lines.forEach((l, i) => {
