@@ -341,6 +341,29 @@
     return rolesArray.some(r => hasRole(r));
   }
 
+  /* ── THE ADMINISTRATIVE DESTINATION ───────────────────────────────────────
+     Where an administrator's Home goes. It lives HERE, beside the authority that already
+     decides administrative access, and deliberately NOT in SokoniRoleAuthority: that file
+     records why in its own vocabulary comment — `admin` and `staff` are canonical roles
+     server-side but are NOT workspace roles, and duplicating administrative access there
+     would create a second path to the same privilege. This repository has already paid for
+     that shape: eight independent role->destination maps once gave three different answers
+     for one role.
+
+     So `admin` and `superAdmin` are NOT added to CANONICAL_ROLES or WORKSPACE_HUBS, are not
+     offered by the role switcher, and cannot be selected as an `activeRole`. This function
+     adds a DESTINATION next to an existing decision; it grants nothing.
+
+     It routes through hasRole(), which refuses an elevated role asserted only by cache —
+     so a forged localStorage role resolves to null here, not to admin.html. Super Admin wins
+     over Admin when both claims are present, because the higher surface can reach the lower
+     one and not the reverse. */
+  function adminHomeFor() {
+    if (hasRole('superAdmin')) return 'super-admin.html';
+    if (hasRole('admin'))      return 'admin.html';
+    return null;
+  }
+
   function hasAllRoles(rolesArray) {
     return rolesArray.every(r => hasRole(r));
   }
@@ -558,6 +581,7 @@
   const SokoniPermissions = {
     init, guardCurrentPage,
     hasRole, hasAnyRole, hasAllRoles, can,
+    adminHomeFor,
     getRoles, getLevel, isLoggedIn, isVerified,
     showAccessDenied,
     clearCache: _clearCache,

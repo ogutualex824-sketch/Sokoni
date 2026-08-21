@@ -1469,6 +1469,61 @@
      it only fires sokoniRoleChanged. Without this the menu would keep pointing at
      the previous role's delivery surface, which is exactly the mix-up this entry
      exists to prevent. Re-resolve in place on every role change. */
+  /* ── HOME resolves to the acting role's surface ───────────────────────────
+     The logo shipped as a single static `/` for every role, so an administrator mid-task
+     was returned to the marketplace. It now asks the authority that owns each role class
+     and NEITHER file learns about the other's roles:
+
+         administrative   SokoniPermissions.adminHomeFor()   superAdmin > admin
+         workspace        SokoniRoleAuthority.hubFor(role)   buyer/seller/rider/…
+
+     Order matters: administrative first, because an operator holding both an admin claim
+     and a workspace role is acting as an administrator when they reach for Home.
+
+     This resolves a DESTINATION, never authority. adminHomeFor() routes through hasRole(),
+     which refuses an elevated role asserted only by cache, and hubFor() returns null unless
+     the authority approves the role — so a forged local role yields null and we keep '/'.
+     The destination page runs its own guard regardless. The markup default stays '/', which
+     is correct with no JavaScript and for a signed-out visitor.
+
+     The href is set on the anchor; window.location is NOT wrapped. Overriding
+     Location.prototype.href broke Auth signup once and must not be reintroduced. */
+  function _skResolveHomeHref() {
+    try {
+      var P = window.SokoniPermissions;
+      if (P && typeof P.adminHomeFor === 'function') {
+        var admin = P.adminHomeFor();
+        if (admin) return admin;
+      }
+    } catch (_) { /* an authority that cannot answer must not break the header */ }
+    try {
+      var RA = window.SokoniRoleAuthority;
+      if (RA && typeof RA.hubFor === 'function' && typeof RA.getActiveRole === 'function') {
+        var hub = RA.hubFor(RA.getActiveRole());
+        /* buyer is the baseline every account holds, and its hub IS the home page — so
+           hubFor('buyer') answers 'index.html' for every signed-out visitor. Rewriting the
+           logo to 'index.html' would change the highest-traffic link on the site from the
+           canonical '/' for no gain, and this site serves cleanUrls. Baseline keeps '/'. */
+        if (hub === 'index.html') return '/';
+        if (hub) return hub;
+      }
+    } catch (_) { /* same */ }
+    return '/';
+  }
+
+  function _skApplyHomeHref() {
+    var a = document.getElementById('sk-nav-logo');
+    if (!a) return;
+    var href = _skResolveHomeHref();
+    if (a.getAttribute('href') !== href) a.setAttribute('href', href);
+  }
+  window._skApplyHomeHref = _skApplyHomeHref;
+
+  /* Re-resolve whenever either authority reports a change. */
+  document.addEventListener('sokoniRoleAuthorityReady', _skApplyHomeHref);
+  document.addEventListener('sokoniActiveRoleChanged', _skApplyHomeHref);
+  document.addEventListener('sokoniRoleChanged', _skApplyHomeHref);
+
   document.addEventListener('sokoniRoleChanged', function () {
     var a = document.querySelector('#sk-menu-grid [data-sk-key="delivery"]');
     if (!a) return;
@@ -2581,6 +2636,11 @@
       const nav = _buildNav();
       document.body.insertBefore(nav, document.body.firstChild);
     }
+    /* Resolve Home for the acting role now that the anchor exists. The authorities may not
+       have verified yet — they re-fire sokoniRoleAuthorityReady / sokoniActiveRoleChanged and
+       this runs again. Until then the markup default '/' stands, which is the safe answer. */
+    try { if (window._skApplyHomeHref) window._skApplyHomeHref(); } catch (_) {}
+
     /* sk-has-search already applied before first paint — only need idempotent add here */
     if (showSearch) document.body.classList.add('sk-has-search');
     if (_navExists) _refresh(); /* sync avatar/cart from localStorage */
