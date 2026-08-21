@@ -283,9 +283,25 @@
 </div>
 
 <script type="module">
-import { initializeApp, getApps }    from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+/* SDK version MUST match firebase.js (10.12.2).
+
+   This file imported 11.0.2 while firebase.js initialises 10.12.2. Two SDK
+   versions are two separate ES module instances with two separate app
+   registries, so getApps() here was always empty, the bootstrap branch imported
+   firebase.js (which initialised the app in the OTHER registry), and getAuth()
+   then ran against nothing:
+
+     Firebase: No Firebase App '[DEFAULT]' has been created (app/no-app)
+
+   It surfaced as an unhandled REJECTION, not a console error, so the page simply
+   sat on "Computing scores..." forever - for every visitor, signed in or not.
+   The health callable was never reached, which is why this looked like an
+   authorization problem rather than a bootstrap one.
+
+   Do not bump this file's SDK independently of firebase.js. */
+import { initializeApp, getApps }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
 const cfg = window.__SOKONI_CONFIG__;
 if (!cfg || !getApps().length) { import("./firebase.js").then(() => boot()); }
