@@ -107,3 +107,31 @@ does not exist in this platform, and the health score needs its four inputs defi
 can mean anything.
 
 Showing nothing is correct until those sources exist. Showing `0` would be equally wrong.
+
+---
+
+## After-proof — `scripts/after-analytics-metrics.js`, **19 passed / 0 failed**
+
+All seven literals removed. The three already-correct honest states preserved. Three new
+honest states added. `planSubscriptions/{uid}` untouched. **No new data source added** —
+read count before `0`, after `0`. **No zeros substituted.**
+
+### The negative control earned its place
+
+The run initially **refused to score**. One of the eight patterns did not fire against the
+pre-fix source from `cd5adc6`: the literal is `'34<span …>%</span>'`, so the digits follow a
+**quote**, not a `>`. The regex looked for `>34<` and was dead.
+
+Every assertion in this proof is an **absence**, and a dead regex reports absence exactly like
+a fixed page does. The run voided itself before scoring a single row. Fixed, then 8 of 8 fired.
+
+### The browser pass is VOID
+
+Loading the page with a forged `localStorage` seller role returned `null` for every metric id:
+`mainContent` stays hidden until `_verifySellerAccess` grants, and that needs a real Firebase
+session. The real auth stack overrides the fixture — the same reason the `profile.html`
+universal-surfaces harness voided.
+
+So this proof establishes that the fabricated literals are **gone from source** and the honest
+states are **present in source**. It does **not** establish how the page renders to a signed-in
+seller. That row stays open and needs a session.
