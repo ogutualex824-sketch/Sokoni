@@ -474,7 +474,7 @@
           '<div class="msl-sh-b">' +
             '<div class="msl-ok"><div class="ic">✅</div>' +
               '<div class="hd">' + esc(md.formatKES(r.total != null ? r.total : t.subtotal)) + '</div>' +
-              '<div class="rc">Receipt ' + esc(r.receiptNo || '—') +
+              '<div class="rc">Receipt ' + esc(receiptIdOf(r) || '—') +
                 (S.cached ? ' · already completed earlier' : '') + '</div>' +
             '</div>' +
             (S.cached ? '<div class="msl-warn">This sale had already been completed on the server, so ' +
@@ -798,7 +798,7 @@
           var SH = SHIFT();
           if (SH && S.settled) {
             var moves = SH.eventsForSale(S.settled, {
-              saleId: sale.saleId || (S.receipt && S.receipt.receiptNo) || null,
+              saleId: sale.saleId || (S.receipt && receiptIdOf(S.receipt)) || null,
               shiftId: ctx.shiftId || null, registerId: ctx.registerId || null,
             });
             /* The SERVER owns the stored record — this only hands the movements to
@@ -840,7 +840,7 @@
       var C = CASH();
       var toM = function (v) { return (C && typeof v === 'number') ? C.toMinor(v) : null; };
       return {
-        receiptId: r.receiptNo || null,
+        receiptId: receiptIdOf(r) || null,
         /* SERVER time. When the sale carries none, SokoniReceiptDoc prints
            "Time not recorded" rather than reaching for the device clock. */
         createdAt: r.timestamp || null,
@@ -882,7 +882,7 @@
       /* No branded renderer on this device. Say what the receipt IS rather than
          emit a half-branded imitation of it. */
       var r = S.receipt || {};
-      return (ctx.shopName || 'SOKONI') + ' Receipt ' + (r.receiptNo || '') +
+      return (ctx.shopName || 'SOKONI') + ' Receipt ' + (receiptIdOf(r) || '') +
              ' Total ' + md.formatKES(r.total);
     }
 

@@ -596,6 +596,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      -ui counterparts), so this list mirrors v1's load order exactly. -->
 <script src="sokoni-merchant-data.js"></script>
 <script src="sokoni-merchant-stock.js"></script>
+<!-- ADR-009 canonical receipt-identifier accessor. Must precede sokoni-merchant-sell.js,
+     which reads receipt ids through receiptIdOf(). Production loads that module STATICALLY
+     here, unlike the work branch where it is loaded on demand — hence a different anchor. -->
+<script src="sokoni-receipt-id.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <script src="sokoni-merchant-staff.js"></script>

@@ -17,6 +17,12 @@
 (function (root) {
   'use strict';
 
+  /* ADR-009 canonical receipt identifier. In the merchant shell this comes from the
+     sokoni-receipt-id.js tag on the page; under Node it is require()d, because four
+     scripts/test-pos-*.js load this module directly and have no window. */
+  var _receiptIdOf = (root && root.receiptIdOf) ||
+    (typeof require === 'function' ? require('./sokoni-receipt-id.js').receiptIdOf : null);
+
   var POS_DB = 'sokoni_smartpos', POS_VER = 4;
 
   /* ── POS source (IndexedDB, read directly — the POS app need not be open) ── */
@@ -74,10 +80,10 @@
     var ts = _toMs(t.completedAt) || _toMs(t.timestamp) || _toMs(t.createdAt) || Date.now();
     var status = t.voided ? 'cancelled' : (t.refunded ? 'refunded' : 'completed');
     return {
-      id:          'POS-' + (t.receiptNo || String(t.saleId || t.id || '').slice(-6)),
+      id:          'POS-' + (_receiptIdOf(t) || String(t.saleId || t.id || '').slice(-6)),
       /* Prefer saleId so a local IndexedDB txn dedups against its authoritative
          posRetailSales twin (same sale, two stores → one row). */
-      canonicalId: String(t.saleId || t.id || t.receiptNo || ts),
+      canonicalId: String(t.saleId || t.id || _receiptIdOf(t) || ts),
       source:      'pos',
       branchId:    t.branchId || null,          /* branch isolation key (null = legacy, pre-migration) */
       channel:     'in_store',

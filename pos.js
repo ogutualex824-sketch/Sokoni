@@ -2199,7 +2199,7 @@ const SPos = (function () {
           <thead><tr><th>Date</th><th>Receipt</th><th>Items</th><th class="td-right">Total</th><th>Payment</th><th>Actions</th></tr></thead>
           <tbody>${txns.map(t => `<tr>
             <td style="font-size:11px">${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}</td>
-            <td style="font-family:monospace;font-size:11px">${t.receiptNo || '-'}</td>
+            <td style="font-family:monospace;font-size:11px">${receiptIdOf(t) || '-'}</td>
             <td>${(t.items||[]).length}</td>
             <td class="td-right">KES ${_fmt(t.total)}</td>
             <td><span class="stock-badge ${t.paymentMethod==='mpesa'?'stock-ok':'stock-low'}">${(t.paymentMethod||'cash').toUpperCase()}</span></td>
@@ -2538,7 +2538,7 @@ const SPos = (function () {
 
     _setVal('suc-total',      'KES ' + _fmt(receiptData.total));
     _setVal('suc-method',     (receiptData.paymentMethod || 'CASH').toUpperCase());
-    _setVal('suc-receipt-no', receiptData.receiptNo || '');
+    _setVal('suc-receipt-no', receiptIdOf(receiptData) || '');
     _setVal('suc-customer',   receiptData.customerName || 'Walk-in');
     _setVal('suc-cashier',    receiptData.cashierName  || '');
 
@@ -2575,7 +2575,7 @@ const SPos = (function () {
         const e164 = cleaned.startsWith('254') ? cleaned : cleaned.startsWith('0') ? '254' + cleaned.slice(1) : cleaned;
         const lines = [
           `*${receiptData.businessName || 'SOKONI SmartPOS'}*`,
-          `Receipt: ${receiptData.receiptNo}`,
+          `Receipt: ${receiptIdOf(receiptData)}`,
           `Date: ${new Date().toLocaleString('en-KE')}`,
           '',
           ...(receiptData.items || []).map(i => `${i.name} x${i.qty} — KES ${_fmt(i.qty * i.price)}`),
@@ -2886,7 +2886,7 @@ const SPos = (function () {
         : '<span class="ord-badge ord-ok">Completed</span>';
       const method = (t.paymentMethod || 'cash').toUpperCase();
       const n = (t.items || []).length;
-      const idLabel = t.receiptNo || ('POS-' + String(t.id || '').slice(-6));
+      const idLabel = receiptIdOf(t) || ('POS-' + String(t.id || '').slice(-6));
       return `<div class="ord-card">
         <div class="ord-card-top">
           <div>
@@ -2922,7 +2922,7 @@ const SPos = (function () {
       ov.className = 'ord-det-overlay';
       ov.onclick = e => { if (e.target === ov) ov.remove(); };
       ov.innerHTML = `<div class="ord-det-card">
-        <div class="ord-det-head"><strong>Sale #${_esc(t.receiptNo || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
+        <div class="ord-det-head"><strong>Sale #${_esc(receiptIdOf(t) || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
         <div class="ord-det-body">
           <div class="ord-det-row"><span>Customer</span><span>${_esc(t.customerName || 'Walk-in')}</span></div>
           <div class="ord-det-row"><span>Cashier</span><span>${_esc(t.cashierName || '-')}</span></div>
@@ -2963,7 +2963,7 @@ const SPos = (function () {
         <thead><tr><th>Date &amp; Time</th><th>Receipt</th><th>Cashier</th><th>Customer</th><th>Items</th><th class="td-right">Total</th><th>Method</th><th>Actions</th></tr></thead>
         <tbody>${txns.map(t => `<tr>
           <td style="font-size:11px;white-space:nowrap">${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}</td>
-          <td style="font-family:monospace;font-size:11px">${t.receiptNo||'-'}</td>
+          <td style="font-family:monospace;font-size:11px">${receiptIdOf(t)||'-'}</td>
           <td style="font-size:11px">${_esc(t.cashierName||'-')}</td>
           <td style="font-size:11px">${_esc(t.customerName||'Walk-in')}</td>
           <td style="font-size:11px">${(t.items||[]).length}</td>
@@ -3019,7 +3019,7 @@ const SPos = (function () {
 
       const body = `
         <div style="font-size:12px;color:var(--txt2);margin-bottom:10px">
-          Receipt <strong>${t.receiptNo}</strong> · KES ${_fmt(t.total)} · ${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}
+          Receipt <strong>${receiptIdOf(t)}</strong> · KES ${_fmt(t.total)} · ${new Date(t.completedAt||t.timestamp).toLocaleString('en-KE')}
         </div>
         <div style="font-size:11px;font-weight:800;letter-spacing:.05em;color:var(--txt3);margin-bottom:6px">SELECT ITEMS TO REFUND</div>
         ${itemsHtml}
@@ -3086,7 +3086,7 @@ const SPos = (function () {
       const refundTxn = {
         type:            'refund',
         originalTxnId:   originalTxn.id,
-        originalReceiptNo: originalTxn.receiptNo,
+        originalReceiptNo: receiptIdOf(originalTxn),
         items:           refundItems,
         total:           refundTotal,
         paymentMethod:   method,
@@ -3152,7 +3152,7 @@ const SPos = (function () {
           This action cannot be undone.
         </div>
         <div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px">
-          Receipt <strong>${_esc(t.receiptNo || t.id)}</strong><br>
+          Receipt <strong>${_esc(receiptIdOf(t) || t.id)}</strong><br>
           Total: <strong>KES ${_fmt(t.total)}</strong> · ${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}
         </div>
         <div>
@@ -3201,7 +3201,7 @@ const SPos = (function () {
 
       await products.reload();
       await sales.showHistory();
-      toast(`Transaction ${txn.receiptNo || txn.id} voided`, 'info');
+      toast(`Transaction ${receiptIdOf(txn) || txn.id} voided`, 'info');
     },
   };
 

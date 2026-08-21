@@ -143,7 +143,7 @@ class RawReceiptBuilder {
   }
 
   receiptMeta (r = {}) {
-    this._col2('Receipt No:', r.receiptNo  || '—');
+    this._col2('Receipt No:', receiptIdOf(r)  || '—');
     if (r.etimsNo)    this._col2('eTIMS Inv:', r.etimsNo);
     const d = r.timestamp ? new Date(r.timestamp) : new Date();
     this._col2('Date:', d.toLocaleDateString('en-KE', { day:'2-digit', month:'short', year:'numeric' }));
@@ -1247,11 +1247,11 @@ class PosPrintService {
 
     /* QR Code — verify URL */
     const verifyUrl = receipt.receiptUrl
-      || `https://mysokoni.co.ke/r/${receipt.receiptNo || ''}`;
+      || `https://mysokoni.co.ke/r/${receiptIdOf(receipt) || ''}`;
     b.qrBlock(verifyUrl);
 
     /* Barcode of receipt number */
-    if (receipt.receiptNo) b.barcodeBlock(String(receipt.receiptNo).replace(/[^A-Za-z0-9]/g, ''));
+    if (receiptIdOf(receipt)) b.barcodeBlock(String(receiptIdOf(receipt)).replace(/[^A-Za-z0-9]/g, ''));
 
     b.footer(
       store.thankYouMsg || 'Thank you for shopping with SOKONI!',
@@ -1278,7 +1278,7 @@ class PosPrintService {
     const copies = Number(context.copies || s.copies || 1);
     const meta = {
       docType:     'pos_sale',
-      receiptId:   receipt.receiptNo || receipt.receiptNumber || 'UNKNOWN',
+      receiptId:   receiptIdOf(receipt) || 'UNKNOWN',
       cashierName: receipt.cashierName  || context.cashierName || '—',
       registerId:  context.registerId   || 'default',
       branchId:    context.branchId     || receipt.branchId || '—',
@@ -1326,9 +1326,9 @@ class PosPrintService {
        instead of printing from this hosted module. */
     if (typeof window !== 'undefined' && window.parent !== window && !context.__fromShell) {
       try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
-      return { jobId: 'shell:' + (order.receiptNo || order.receiptNumber || Date.now()), status: 'routed_to_shell' };
+      return { jobId: 'shell:' + (receiptIdOf(order) || Date.now()), status: 'routed_to_shell' };
     }
-    const jobId = 'rcpt_' + String(order.receiptNo || order.receiptNumber || order.id || order.transactionId || Date.now());
+    const jobId = 'rcpt_' + String(receiptIdOf(order) || order.id || order.transactionId || Date.now());
     const _now  = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const t0    = _now();
     const dur   = () => Math.round(_now() - t0);
@@ -1338,7 +1338,7 @@ class PosPrintService {
       try { _printerState.onPrintLifecycle(state); } catch (_) {}   /* feed the one canonical state */
     };
 
-    emit('queued', { receiptId: order.receiptNo || order.receiptNumber || null });
+    emit('queued', { receiptId: receiptIdOf(order) || null });
 
     /* If neither the enterprise transport service nor the iOS HTML path is present,
        there is no drain path for the offline queue — go straight to the legacy chain. */
@@ -1497,7 +1497,7 @@ class PosPrintService {
     const store = _getStoreProfile();
     b.header({ businessName: store.businessName || 'SOKONI SmartPOS', ...store });
     b._push(CMD.ALIGN_CENTER, CMD.BOLD_ON); b._ln('TAX INVOICE'); b._push(CMD.BOLD_OFF, CMD.ALIGN_LEFT);
-    b._col2('Invoice No:', data.invoiceNo || '—'); b._col2('Date:', new Date().toLocaleDateString('en-KE'));
+    b._col2('Invoice No:', invoiceIdOf(data) || '—'); b._col2('Date:', new Date().toLocaleDateString('en-KE'));
     if (data.etimsNo) b._col2('eTIMS Ref:', data.etimsNo);
     b._col2('Customer:', data.customer?.name || '—');
     if (data.customer?.kraPin) b._col2('Customer PIN:', data.customer.kraPin);
@@ -1507,7 +1507,7 @@ class PosPrintService {
     b._eq(); b._center('OFFICIAL TAX INVOICE'); b._eq();
     b.qrBlock(data.verifyUrl || data.etimsQrUrl || '');
     b.footer('Thank you for your business.', store.website); b.cut();
-    return this._print(b.build(), { docType:'pos_invoice', receiptId: data.invoiceNo });
+    return this._print(b.build(), { docType:'pos_invoice', receiptId: invoiceIdOf(data) });
   }
 
   /* ── Credit Note ───────────────────────────────────────────── */
