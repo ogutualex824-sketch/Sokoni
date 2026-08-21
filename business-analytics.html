@@ -452,104 +452,120 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
     requestAnimationFrame(step);
   }
 
+  /* ── BUSINESS HEALTH ──────────────────────────────────────────────────────
+     This read `metrics = [{val:92},{val:88},{val:74},{val:61}]` — four literals
+     typed into the file — averaged them into a score, animated a gauge up to it
+     and filled four progress bars. Nothing was read from anywhere.
+
+     A seller saw a health score of 79 with four component bars and no way to tell
+     it apart from a measurement. Under the standing no-fabricated-metrics rule a
+     figure must come from a canonical source or be shown as unavailable; the four
+     inputs of this score are not defined anywhere in the platform, so there is
+     nothing to compute it from.
+
+     Same honest-state pattern this file already uses for Top Products, Staff and
+     the B2B split. NOT zero: zero would claim a measured absence of health. */
   function renderHealthMetrics(){
-    var metrics = [
-      { id:0, val:92 },
-      { id:1, val:88 },
-      { id:2, val:74 },
-      { id:3, val:61 },
-    ];
-    var sum = metrics.reduce(function(a,m){return a+m.val;},0);
-    var score = Math.round(sum / metrics.length);
-
-    metrics.forEach(function(m){
-      var bar = document.getElementById('hmBar'+m.id);
-      var lbl = document.getElementById('hmVal'+m.id);
-      setTimeout(function(){
-        bar.style.width = m.val+'%';
-        lbl.textContent = m.val+'%';
-      }, 300);
-    });
-
-    setTimeout(function(){ animateGauge(score); }, 100);
+    var gauge = document.getElementById('healthGauge');
+    if (gauge) gauge.style.display = 'none';
+    var num = document.getElementById('healthNum');
+    if (num) {
+      num.textContent = '—';
+      num.style.fontSize = '28px';
+      num.style.opacity = '.55';
+    }
+    /* Clear the four component bars rather than leaving them at their last width. */
+    for (var i = 0; i < 4; i++) {
+      var bar = document.getElementById('hmBar' + i);
+      var lbl = document.getElementById('hmVal' + i);
+      if (bar) bar.style.width = '0%';
+      if (lbl) { lbl.textContent = '—'; lbl.style.opacity = '.55'; }
+    }
+    var host = num && num.parentNode;
+    if (host && !host.querySelector('[data-unavailable="health"]')) {
+      var note = document.createElement('div');
+      note.setAttribute('data-unavailable', 'health');
+      note.style.cssText = 'padding:14px 12px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));'
+        + 'font-size:12px;line-height:1.6;';
+      note.innerHTML = '<strong style="color:#fff;display:block;margin-bottom:4px;">'
+        + 'Business health not available yet</strong>'
+        + 'Needs its four component inputs defined against canonical sources before a '
+        + 'score can mean anything.';
+      host.appendChild(note);
+    }
   }
 
   /* ── GROUPED BAR CHART (Revenue vs Target) ── */
+  /* ── REVENUE vs TARGET ────────────────────────────────────────────────────
+     This drew a six-month grouped bar chart from two literal arrays:
+
+       actuals = [148000, 162000, 135000, 178000, 191000, 205000]
+       targets = [150000, 160000, 165000, 175000, 190000, 200000]
+
+     Nothing was read. The series was even shaped to look plausible — a dip in
+     March, recovery through June, targets tracking just above and below actuals —
+     and it animated on load, so it was indistinguishable from measured revenue. A
+     seller could make a stocking or marketing decision on it.
+
+     Real revenue needs per-month aggregation over DELIVERED orders, which does not
+     exist as a canonical source here. Until it does, say so. NOT zero: a zero
+     series would claim the seller earned nothing. */
   function drawRevenueChart(){
     var canvas = document.getElementById('revenueChart');
-    var dpr = window.devicePixelRatio || 1;
-    var W = canvas.parentElement.clientWidth - 40;
-    var H = 220;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W+'px';
-    canvas.style.height = H+'px';
-    var ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    var months = ['Jan','Feb','Mar','Apr','May','Jun'];
-    var actuals = [148000, 162000, 135000, 178000, 191000, 205000];
-    var targets  = [150000, 160000, 165000, 175000, 190000, 200000];
-    var max = Math.max.apply(null, actuals.concat(targets)) * 1.15;
-
-    var padL = 56, padR = 16, padT = 20, padB = 36;
-    var cW = W - padL - padR;
-    var cH = H - padT - padB;
-    var groupW = cW / months.length;
-    var barW = Math.min(groupW * 0.35, 30);
-    var gap = 4;
-
-    /* grid */
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
-    for(var g = 0; g <= 4; g++){
-      var y = padT + (cH/4)*g;
-      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-      var val = Math.round(max - (max/4)*g);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '10px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(val >= 1000 ? (val/1000).toFixed(0)+'K' : val, padL-6, y+4);
+    if(!canvas) return;
+    canvas.style.display = 'none';
+    var host = canvas.parentNode;
+    if(host && !host.querySelector('[data-unavailable="revenue"]')){
+      var note = document.createElement('div');
+      note.setAttribute('data-unavailable','revenue');
+      note.style.cssText = 'padding:26px 18px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));font-size:12px;line-height:1.6;';
+      note.innerHTML = '<div style="font-size:26px;margin-bottom:8px;opacity:.5;">&#128200;</div>' +
+        '<div style="font-weight:800;color:#fff;margin-bottom:6px;">Revenue trend not available yet</div>' +
+        '<div style="max-width:420px;margin:0 auto;">Needs monthly revenue aggregated from ' +
+        'delivered orders, and a target series to compare it against. Neither exists as a ' +
+        'canonical source yet.</div>';
+      host.appendChild(note);
     }
-
-    months.forEach(function(m, i){
-      var cx = padL + groupW * i + groupW/2;
-      var aH = (actuals[i]/max) * cH;
-      var tH = (targets[i]/max) * cH;
-
-      /* target bar */
-      ctx.fillStyle = 'rgba(113,255,0,0.15)';
-      ctx.strokeStyle = 'rgba(113,255,0,0.5)';
-      ctx.lineWidth = 1;
-      var tx = cx - barW - gap/2;
-      var ty = padT + cH - tH;
-      ctx.fillRect(tx, ty, barW, tH);
-      ctx.strokeRect(tx, ty, barW, tH);
-
-      /* actual bar */
-      ctx.fillStyle = actuals[i] >= targets[i] ? '#71ff00' : '#ff4646';
-      var ax = cx + gap/2;
-      var ay = padT + cH - aH;
-      ctx.fillRect(ax, ay, barW, aH);
-
-      /* month label */
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '11px Segoe UI,system-ui,sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(m, cx, H-8);
-    });
   }
 
   /* ── CAC KPIS ── */
+  /* ── CUSTOMER ACQUISITION ─────────────────────────────────────────────────
+     Every figure here was a literal: newCust = 47, spend = 18800, CAC derived from
+     those two, a repeat rate of '34%' and a trend of 'down 12%' written straight
+     into the innerHTML. A seller read "CAC KES 400" as a measurement.
+
+     CAC needs a marketing-spend source. SOKONI has no such source — there is no
+     collection, callable or integration recording what a seller spent on
+     acquisition — so CAC cannot be computed at all, not merely "not yet". New
+     customers and repeat rate need first-order-vs-repeat classification over
+     delivered orders, which is the same aggregation Top Products is waiting on.
+
+     Em dash, not zero: 0 would claim the seller acquired nobody and spent nothing. */
   function renderCACKPIs(){
-    var newCust = 47;
-    var spend = 18800;
-    var cac = Math.round(spend / newCust);
-    document.getElementById('cacVal').textContent = cac.toLocaleString('en-KE');
-    document.getElementById('newCustVal').textContent = newCust;
-    document.getElementById('mktSpend').textContent = spend.toLocaleString('en-KE');
-    document.getElementById('repeatRate').innerHTML = '34<span style="font-size:14px;color:var(--sub);">%</span>';
-    document.getElementById('cacTrend').innerHTML = '<span class="trend-down">↓ 12%</span>';
+    var DASH = '—';
+    [['cacVal', DASH], ['newCustVal', DASH], ['mktSpend', DASH]].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) { el.textContent = pair[1]; el.style.opacity = '.55'; }
+    });
+    var rr = document.getElementById('repeatRate');
+    if (rr) { rr.textContent = DASH; rr.style.opacity = '.55'; }
+    var tr = document.getElementById('cacTrend');
+    if (tr) tr.textContent = '';
+
+    /* Say WHY, once, beside the row — the pattern Top Products and Staff use. */
+    var host = (document.getElementById('cacVal') || {}).closest
+      ? document.getElementById('cacVal').closest('.kpi-row') : null;
+    if (host && host.parentNode && !host.parentNode.querySelector('[data-unavailable="cac"]')) {
+      var note = document.createElement('div');
+      note.setAttribute('data-unavailable', 'cac');
+      note.style.cssText = 'padding:14px 12px;text-align:center;color:var(--sub,rgba(255,255,255,0.5));'
+        + 'font-size:12px;line-height:1.6;';
+      note.innerHTML = '<strong style="color:#fff;display:block;margin-bottom:4px;">'
+        + 'Acquisition metrics not available yet</strong>'
+        + 'CAC needs a marketing-spend source, which SOKONI does not record. New customers '
+        + 'and repeat rate need first-order-vs-repeat classification over delivered orders.';
+      host.parentNode.insertBefore(note, host.nextSibling);
+    }
   }
 
   /* ── TOP PRODUCTS ────────────────────────────────────────────────────────
