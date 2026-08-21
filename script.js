@@ -6,6 +6,38 @@ let getDocs = null;
    Defined here so buildProductCard() and all callers share one implementation. */
 const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 
+/* ── THE seller predicate for this file ────────────────────────────────────────
+   There were THREE, and they disagreed:
+
+     3354  user.registeredAs?.seller || user.isSeller                    2 conditions
+     3489  _u.isSeller || _u.role==='seller' || _u.registeredAs==='seller'
+             || _u.sellerActive || _u.storeName                          5 conditions
+     3641  the same 5
+
+   `registeredAs` is read as an OBJECT at one site and compared to a STRING at the
+   other two, so those branches can never both be true for one account — the same
+   user could be a seller for the story button and not for the upload guard.
+
+   Authority first: SokoniRoleAuthority.isApproved('seller') is claims-derived and
+   is the real answer. The mirror union is kept ONLY for the window before the
+   authority verifies, and it is a UNION of what the three used to check, so this
+   cannot deny anyone the old code allowed. Both `registeredAs` shapes are handled.
+
+   This is a PRESENTATION and client-side-guard predicate. It is not authorization:
+   Firestore rules decide whether a story may actually be written. */
+function _skIsSeller(u) {
+  try {
+    var RA = window.SokoniRoleAuthority;
+    if (RA && RA.isVerified && RA.isVerified() && typeof RA.isApproved === 'function') {
+      return !!RA.isApproved('seller');
+    }
+  } catch (_) {}
+  if (!u) { try { u = JSON.parse(localStorage.getItem('sokoniUser') || '{}') || {}; } catch (_) { u = {}; } }
+  var ra = u.registeredAs;
+  return !!(u.isSeller || u.role === 'seller' || u.sellerActive || u.storeName
+            || ra === 'seller' || (ra && ra.seller === true));
+}
+
 /* Self-bootstrap the shared image render helper (sokoni-image.js) when the host page
    didn't load it. This decouples the trending grid's renderProductImage() upgrade from
    index.html carrying the <script> tag — which, in this multi-agent repo, is subject to
@@ -3351,7 +3383,7 @@ function loadStoriesSection(){
     /* Logged-in user check */
     let user = null;
     try { user = JSON.parse(localStorage.getItem("sokoniUser")); } catch(e){}
-    const isSeller = user && (user.registeredAs?.seller || user.isSeller);
+    const isSeller = user && _skIsSeller(user);
 
     /* Group by seller for ring display */
     const bySellerMap = {};
@@ -3486,7 +3518,7 @@ function openQuickStoryUpload(){
         (window._skToast||alert)('Please log in to post a story.');
         return;
     }
-    var _isSeller = _u.isSeller || _u.role === 'seller' || _u.registeredAs === 'seller' || _u.sellerActive || _u.storeName;
+    var _isSeller = _skIsSeller(_u);
     if(!_isSeller){
         (window._skToast||alert)('Only registered sellers can post stories.\n\nGo to Seller Dashboard to activate your store.');
         return;
@@ -3638,7 +3670,7 @@ function postQuickStory(){
     let user = null;
     try { user = JSON.parse(localStorage.getItem("sokoniUser")); } catch(e){}
     if(!user || !user.uid){ (window._skToast||alert)('Please log in to post a story.'); return; }
-    var _isSeller = user.isSeller || user.role === 'seller' || user.registeredAs === 'seller' || user.sellerActive || user.storeName;
+    var _isSeller = _skIsSeller(user);
     if(!_isSeller){ (window._skToast||alert)('Only registered sellers can post stories.'); return; }
 
     const status = document.getElementById("quickStoryStatus");

@@ -512,14 +512,27 @@ auth.onAuthStateChanged(async user => {
     if (!snap.exists) { window.location.href = "/"; return; }
     const data = snap.data();
     const claims = (await user.getIdTokenResult()).claims;
-    const role = claims.role || data.role || '';
-    if (!['seller','admin','superadmin','manager'].includes(role)) {
+    /* `claims.role` is not written by the canonical role setter — setUserRole writes
+       the BOOLEAN claims (admin/superAdmin/seller/…) and no `role` key at all, so
+       this fell through to the document mirror for every account promoted that way.
+
+       And the list below spells it `superadmin` while the stored value is
+       `superAdmin`, so a genuine Super Admin matched nothing here: denied outright,
+       and isManager false. Lowercasing the comparison fixes that without renaming
+       anything — the vocabulary census showed a global rename would break the two
+       sites that already normalise and wake 15 dormant ones.
+
+       The boolean claims are ADDED as an authority; every previously-allowed path is
+       kept, so this can only admit accounts it used to refuse, never the reverse. */
+    const roleStr = String(claims.role || data.role || '').toLowerCase();
+    const hasAdminClaim = claims.admin === true || claims.superAdmin === true;
+    if (!hasAdminClaim && !['seller','admin','superadmin','manager'].includes(roleStr)) {
       toast('Access restricted to sellers and admins.','error');
       setTimeout(()=>window.location.href='/', 2000);
       return;
     }
     businessId = data.sellerId || data.businessId || user.uid;
-    isManager  = ['admin','superadmin','manager'].includes(role);
+    isManager  = hasAdminClaim || ['admin','superadmin','manager'].includes(roleStr);
     if (!isManager) document.getElementById('tabApproval').style.display = 'none';
     init();
   } catch(e){ toast('Auth error: '+e.message,'error'); }
