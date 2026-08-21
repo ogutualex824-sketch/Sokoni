@@ -1,3 +1,67 @@
+## [2026-08-21] - RELEASE 2 candidate: rules re-derived on the SERVED ruleset. NOT PUBLISHED.
+
+`firestore.rules.release-candidate` · `firestore.rules.served-20260817` ·
+`scripts/test-role-switch-rules.js`. **Nothing published. The live ruleset is unchanged.**
+Both files are hosting-ignored (`firestore.rules*`), so the Release 1 deploy does not serve them.
+
+### Why the repo's firestore.rules could not be used
+
+`verify-rules-release-parity.js` against the live release:
+
+    live ruleset : 53e1185c-7930-4409-bd18-3ef88aa5fed8   251,494 bytes (fetched source)
+    local file   : firestore.rules                        259,061 bytes
+    a deploy would promote: 39 lines added, 4 removed
+
+Those 39 lines are **another team's unreleased chat and userLocations rules**, not this change.
+Deploying `--only firestore:rules` from the repo would have shipped them. The candidate is
+therefore built on the fetched live source, exactly as the plan required.
+
+All six predicates `80297d4` depends on — `activeRoleApproved`, `noPrivilegeEscalation`,
+`noSelfGrant`, `rolesUnchanged`, `noAdminFields`, `isAdmin` — exist in the live ruleset, and the
+`allow update` block is byte-identical to the one that commit modified, so the change applied by
+a single anchored substitution (verified to match exactly once, or abort).
+
+### Size, measured not assumed
+
+    live       251,494 bytes
+    candidate  252,074 bytes
+    delta      +580
+    headroom   10,070 bytes of 262,144 (96.2% used)
+
+The register's recorded "1,693 bytes free" was against a different measure; the live source has
+**10,070** bytes of headroom, so +580 is comfortable. The candidate's comment is deliberately
+terse — the reasoning lives in `docs/ROLE_SWITCH_BEFORE.md`, not in the file being measured.
+
+### Before/after on the PRODUCTION lineage
+
+Same 49-assertion harness, emulator, only the ruleset swapped:
+
+    LIVE ruleset (unmodified)   38 passed, 11 FAILED
+    CANDIDATE                   49 passed,  0 failed
+
+**The eleven failures are a live privilege surface in production right now.** Against the ruleset
+actually being served, an admin can:
+
+    admin -> driver                          ALLOWED  (holds no driver claim)
+    admin -> superAdmin                      ALLOWED
+    set ANOTHER user's activeRole            ALLOWED
+    set another user's role                  ALLOWED
+    set another user's permissions           ALLOWED
+    set another user's kycStatus             ALLOWED
+    rewrite another user's roles array       ALLOWED
+    set another user's registeredAs.admin    ALLOWED
+
+The candidate denies all eight while preserving the admin console's real write
+(`registeredAs.legal` + `approved`) — the control that stopped an over-broad fix earlier.
+
+### Not published, deliberately
+
+A bad ruleset can lock every user out of the platform, and the register records a known failure
+mode where the CLI reports 409 while the release silently stays on the old ruleset. Publishing is
+a separate authorisation from the Release 1 hosting/functions deploy, and after publishing the
+served ruleset must be re-fetched and this harness re-run against it — a local pass is not proof
+of what is served.
+
 ## [2026-08-21] - RELEASE 1 CANDIDATE — verification complete. STILL NOT DEPLOYED.
 
 Branch `release/admin-slice` on production `47db4ab`. **8 commits · 24 files · +969 / -98.**
