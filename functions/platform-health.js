@@ -19,7 +19,7 @@
  * indexes required.
  */
 
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 
 /* ── helpers ───────────────────────────────────────────────────── */
@@ -31,8 +31,32 @@ function grade(score) {
   if (score >= 40) return "D";
   return "F";
 }
+/* ── WHY THIS IS NOT `throw new Error` ───────────────────────────────────────
+   Measured against the DEPLOYED function, unauthenticated:
+
+       POST getPlatformHealthScores  ->  {"error":{"message":"INTERNAL"}}  HTTP 500
+
+   firebase-functions converts any non-HttpsError throw into INTERNAL, so this guard
+   reported a permission decision as a server fault. Two costs, both real:
+
+     * the operator saw "Could not load health scores: INTERNAL" and it looked like a crash,
+       inviting a UI patch over a working authorization check;
+     * every other failure in this callable ALSO surfaces as INTERNAL, so a denial and a
+       throwing health dimension were indistinguishable from the client. Typing the denial
+       correctly is what makes the remaining diagnosis possible.
+
+   ── AND WHY superAdmin IS ACCEPTED ──
+   This module never mentioned superAdmin. An account holding only that claim was refused
+   here moments after super-admin.html admitted it on exactly that claim. Every other admin
+   surface treats superAdmin as >= admin: sokoni-admin-gate.js resolves superAdmin then
+   admin, firestore.rules isAdmin() accepts either, and admin.html's own gate checks both.
+   This is that same rule, not a new one. */
 function requireAdmin(req) {
-  if (!req.auth?.token?.admin) throw new Error("PERMISSION_DENIED");
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in to view platform health.");
+  const t = req.auth.token || {};
+  if (t.admin !== true && t.superAdmin !== true) {
+    throw new HttpsError("permission-denied", "Administrator access required.");
+  }
 }
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
