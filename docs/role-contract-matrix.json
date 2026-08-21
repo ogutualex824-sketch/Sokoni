@@ -1,0 +1,4502 @@
+{
+  "generated": "census-role-contract",
+  "total": 330,
+  "tally": {
+    "PUBLIC": 157,
+    "MIRROR-AUTHORITY": 7,
+    "PASS": 120,
+    "DUPLICATE-AUTH": 3,
+    "UNGUARDED": 43
+  },
+  "rows": [
+    {
+      "route": "404.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "about.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "account-centre.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "buyer",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "admin-feedback.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "admin-messages.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "admin-os.html",
+      "auth": true,
+      "guards": [
+        "SokoniAdminEntry.guard",
+        "inline claim check"
+      ],
+      "authority": true,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-admin-entry.js",
+        "sokoni-aos.js"
+      ],
+      "verdict": "DUPLICATE-AUTH"
+    },
+    {
+      "route": "admin-subscriptions.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ai-subscriptions.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "admin.html",
+      "auth": true,
+      "guards": [
+        "SokoniAdminEntry.guard",
+        "inline claim check"
+      ],
+      "authority": true,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "rider",
+        "provider",
+        "mechanic",
+        "legal",
+        "landlord"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-admin-entry.js",
+        "etims.js",
+        "admin-api.js",
+        "sokoni-offers.js"
+      ],
+      "verdict": "DUPLICATE-AUTH"
+    },
+    {
+      "route": "ai-subscriptions.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ai-subscriptions.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "analytics.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "android-doctor.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "api-gateway.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "async-jobs.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "auction-manager.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "auction.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "automation-center.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "automation-engine.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "availability-manager.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "b2b-chat.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "b2b-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "b2b-orders.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "b2b-rfq.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "b2b-seller-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "b2b-supplier.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "b2b.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "banking.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-banking-pro.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "beta-control.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-async.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "beta-dashboard.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "beta.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "provider"
+      ],
+      "legacyDriverVocab": true,
+      "followedScripts": [
+        "sokoni-beta.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "bnb-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-bnb.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "bnb-manage.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "bnb.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "business-analytics.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [
+        "users.role",
+        "localStorage.role",
+        "isSeller/isProvider flag"
+      ],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "business-health.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "business-kpi.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "business-os.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "business.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "businesses.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "car-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "mechanic"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-geo.js",
+        "sokoni-async.js",
+        "sokoni-carhub-pro.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "car-rental.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "careers.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "cart.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "cart.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "catalogue-doctor.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "category.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sellability.js",
+        "sokoni-offers.js",
+        "category.js",
+        "sokoni-featured.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "chat.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "checkout-2-preview.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "components/checkout/celebration-engine.js",
+        "components/checkout/success-experience.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "checkout.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "components/payment/payment-trust-badge.js",
+        "components/checkout/checkout-trust.js",
+        "sokoni-delivery-pricing.js",
+        "sokoni-delivery.js",
+        "checkout.js",
+        "sokoni-redis.js",
+        "sokoni-vouchers.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "cleaning.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "commerce-os.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "commission-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "commission-engine.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "commissioning.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-resilience.js",
+        "pos-sync.js",
+        "pos-health.js",
+        "pos-printer.js",
+        "pos-terminals.js",
+        "pos-device-manager.js",
+        "pos-modules.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "community-guidelines.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "community.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "contact-guard.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "construction.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "contact.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "cookie-policy.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "coupon-manager.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "creative-studio.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "crm.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "customer-analytics.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "customer-display.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "data-deletion.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "delivery-tracking.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "rider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-delivery-pricing.js",
+        "sokoni-gps-manager.js",
+        "sokoni-map-manager.js",
+        "sokoni-route-manager.js",
+        "sokoni-tracking.js",
+        "sokoni-tracking-manager.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "delivery.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "developer-portal.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "diagnostics.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "digital-esoko-seller.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "digital-esoko.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "digital-store.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "digital.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "dispatch.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "dispute-portal.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "dispute.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "driver-success.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [
+        "sokoni-launch.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "driver.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "rider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-geo.js",
+        "sokoni-gps-manager.js",
+        "sokoni-tracking.js",
+        "sokoni-tracking-manager.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "earnings.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-delivery-pricing.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "ecc.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "education.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-education.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "electrical.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "email-center.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "email-preview.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "ent-organizer.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "enterprise-certification.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "enterprise-ops.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "entertainment.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "etims-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ui.js",
+        "sokoni-etims.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "etims-seller.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ui.js",
+        "sokoni-etims.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "event-hub.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-hub-nav.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "event-manager.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-hub-nav.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "executive-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "expense-management.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "faq.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "feedback.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "feeds.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "finance-budget.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "finance-expenses.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "finance-invoices.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "finance-reconcile.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "financial-os.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "rider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "finos-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "finos.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-finos.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "fitness-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "flashsale.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "fleet-manager.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "fleet-monitor.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth",
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "food-cart.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "food-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "food-menu.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "food-order.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "food-rider.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "food.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "fos-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "franchise.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "general-ledger.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "gip.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "growth-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "healthcare.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "mechanic",
+        "health",
+        "landlord"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "inventory-manager.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "help.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "home-services.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "hr-payroll.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "hub-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ui.js",
+        "sokoni-hub-etims.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "index.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [
+        "users.role",
+        "isSeller/isProvider flag"
+      ],
+      "workspaceHints": [
+        "seller",
+        "rider",
+        "health",
+        "legal",
+        "landlord",
+        "tenant"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sellability.js",
+        "script.js",
+        "sokoni-ai-policy.js",
+        "sokoni-spotlight.js",
+        "sokoni-featured.js",
+        "sokoni-lazy.js"
+      ],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "inspiq.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "inspiq.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "inv-ai.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "inv-dashboard.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "inv-product.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "inv-products.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "inventory.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "invoice.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "job-post.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-jobs.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "jobs.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-jobs.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "join.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "kass-developer.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "kass-executive.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "kass-finance.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "kass-manager.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "kass-seller.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "kass-support.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "kitchen-display.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "landlord.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "landlord"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "launch-metrics.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "launch-readiness.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "launch.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "legal-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "rider",
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "legal-centre.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "rider",
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-company.js",
+        "sokoni-legal-certificate.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "legal-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-legal-pdf.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "legal.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "life-events.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "login.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-alerts.js",
+        "session-manager.js",
+        "sokoni-verify-screen.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "logistics-reports.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "loyalty-merchant.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "loyalty.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "manager-auth.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-manager-auth.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "marketing-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-marketing.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "marketing.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "mechanics.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "mechanic"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "merchant-pipeline.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "merchant-success.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "merchant-v2.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-merchant-routes.js",
+        "sokoni-merchant-data.js",
+        "sokoni-merchant-stock.js",
+        "sokoni-merchant-sell.js",
+        "sokoni-merchant-inventory-ui.js",
+        "sokoni-merchant-staff.js",
+        "sokoni-merchant-team.js",
+        "sokoni-merchant-campaigns.js",
+        "sokoni-merchant-marketing.js",
+        "sokoni-merchant-disputes.js",
+        "sokoni-merchant-disputes-ui.js",
+        "sokoni-merchant-messages.js",
+        "sokoni-merchant-messages-ui.js",
+        "sokoni-merchant-customers.js",
+        "sokoni-merchant-customers-ui.js",
+        "sokoni-merchant-store.js",
+        "sokoni-merchant-store-ui.js",
+        "sokoni-merchant-tax.js",
+        "sokoni-merchant-tax-ui.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "merchant.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-product-visibility.js",
+        "sokoni-order-service.js",
+        "sokoni-analytics-engine.js",
+        "sokoni-sync.js",
+        "sokoni-analytics.js",
+        "sokoni-reconcile.js",
+        "sokoni-branch.js",
+        "sokoni-merchant-routes.js",
+        "sokoni-merchant-capability.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "messages-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "messages.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-chat-engine.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "minishop-admin.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-minishop.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "minishop-status.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "minishop.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-minishop.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "ministore.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "moderation.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "monitor.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "monitor.js",
+        "sokoni-queue.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "my-orders.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "my-subscriptions.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "notifications.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "observability.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "offer.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "offline.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "onboarding-driver.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "rider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "onboarding-professional.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "provider",
+        "health",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "onboarding-seller.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "onboarding.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "rider",
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-onboarding.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "opportunity.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "rider",
+        "mechanic"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "ops-center.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "ops-dashboard.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "org-directory.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "org-structure.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "org-workflows.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "partner-portal.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pay.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "components/payment/payment-trust-badge.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "payment-receipt.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "payment-security.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "payments.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "phone-repair.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "plans.html",
+      "auth": true,
+      "guards": [
+        "requireAuth()"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "platform-health.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "platform-hub.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "platform.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-platform.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "plumbing.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-accounting.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-ai.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-bi.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-cash-manager.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-certification.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-checkout.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-crash-breadcrumbs.js",
+        "pos-sync.js",
+        "pos-scanner.js",
+        "pos-sales.js",
+        "pos-loyalty-engine.js",
+        "sokoni-printer-manager.js",
+        "sokoni-pos-ios-print.js",
+        "sokoni-pos-print-service.js",
+        "pos-cash-manager.js",
+        "sokoni-pos-performance.js",
+        "pos-multi-till.js",
+        "sokoni-cash-drawer.js",
+        "pos-manager-auth.js",
+        "pos-resilience.js",
+        "pos-lifecycle.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-completeness.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-crm-pro.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-customers.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-daily.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-display.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-hardware-setup.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-capability-detector.js",
+        "sokoni-permission-manager.js",
+        "sokoni-hardware-persistence.js",
+        "sokoni-device-profiles.js",
+        "sokoni-driver-base.js",
+        "sokoni-device-registry.js",
+        "sokoni-connection-manager.js",
+        "sokoni-driver-manager.js",
+        "sokoni-discovery-engine.js",
+        "sokoni-printer-driver.js",
+        "sokoni-peripheral-drivers.js",
+        "sokoni-hardware-diagnostics.js",
+        "sokoni-hardware-recovery.js",
+        "sokoni-universal-hardware.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-hardware-wizard.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-hardware-wizard.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-hq.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-inventory-intelligence.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-inventory.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-ios-print-test.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-kds.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-kiosk.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-launch-report.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-live-floor.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-marketplace.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-receipt.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-observability.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-onboard.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-printer-hardware-test.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-printer-setup.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-printer-manager.js",
+        "sokoni-pos-print-service.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-reports.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-sales.js",
+        "pos-reports.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-setup.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-activation-preflight.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-staff-ops.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-suppliers.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "pos-till-manager.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-v2.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth",
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-receipt.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos-workspace.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "pos.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-crash-breadcrumbs.js",
+        "sokoni-branch.js",
+        "pos-inventory-sync.js",
+        "pos-resilience.js",
+        "pos-idempotency.js",
+        "pos-health.js",
+        "pos-sync.js",
+        "pos-omni.js",
+        "pos-printer.js",
+        "sokoni-print-engine.js",
+        "sokoni-printer-drivers.js",
+        "sokoni-printer-discovery.js",
+        "sokoni-receipt-engine.js",
+        "sokoni-label-engine.js",
+        "sokoni-pos-print.js",
+        "sokoni-printer-manager.js",
+        "sokoni-pos-print-service.js",
+        "pos-manager-auth.js",
+        "pos-terminals.js",
+        "pos-device-manager.js",
+        "pos-barcode.js",
+        "pos-ai.js",
+        "pos-analytics.js",
+        "pos-boss.js",
+        "pos-plugins.js",
+        "pos-voice.js",
+        "pos-ai-engine.js",
+        "pos-finance.js",
+        "pos-audit.js",
+        "pos-modules.js",
+        "pos-scanner.js",
+        "pos-mobile.js",
+        "pos-lifecycle.js",
+        "pos.js",
+        "sokoni-form-engine.js",
+        "sokoni-queue.js",
+        "sokoni-qr.js",
+        "sokoni-barcode.js",
+        "sokoni-receipt.js",
+        "pos-sales.js",
+        "pos-reports.js",
+        "pos-session-manager.js",
+        "pos-terminal-driver.js",
+        "pos-receipt-engine.js",
+        "pos-analytics-live.js",
+        "sokoni-redis.js",
+        "sokoni-device-hub.js",
+        "sokoni-payment-terminal.js",
+        "sokoni-customer-display.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "press.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "print-station.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "pos-printer.js",
+        "sokoni-print-engine.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "privacy.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "procurement.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "product.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "health"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sellability.js",
+        "product.js",
+        "sokoni-product-analytics.js",
+        "sokoni-offers.js",
+        "sokoni-qr.js",
+        "sokoni-reviews.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "professional-profile.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "profile.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth",
+        "inline claim check"
+      ],
+      "authority": true,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "rider",
+        "provider",
+        "mechanic",
+        "health",
+        "legal",
+        "landlord",
+        "tenant"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-book-service.js",
+        "sokoni-orders.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "property-agent-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "property-agent.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "property-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "property-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "property-listing.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "property.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "provider-dashboard.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "provider-onboarding.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-provider.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "provider-profile.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-book-service.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "provider-terms.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "provider.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "mechanic",
+        "legal",
+        "landlord"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "inventory-manager.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "providers.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "provider",
+        "health",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "qr-center.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-qr.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "redis-monitor.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "referral.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "refund-policy.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "register.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "release-readiness.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "reliability-center.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "rental.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "requests.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "returns-policy.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "returns.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "revenue-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "revenue.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "reviews.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "provider"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "ride-book.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "rider-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "rider-nav.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-navigation.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "route-debug.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "route-planner.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "sasos-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sasos.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "scan.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "search-quality.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "search.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "seller",
+        "provider",
+        "mechanic"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-recommendations.js",
+        "sokoni-search.js",
+        "sokoni-search-pro.js",
+        "sokoni-search-engine.js",
+        "sokoni-typesense-engine.js",
+        "sokoni-search-recommendations.js"
+      ],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "security-center.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "security-compliance.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "security-zero-trust-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "sell.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "seller-analytics.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [
+        "users.role",
+        "localStorage.role",
+        "isSeller/isProvider flag"
+      ],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "MIRROR-AUTHORITY"
+    },
+    {
+      "route": "seller-delivery.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "seller-earnings.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "seller-fulfilment.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-fulfilment-lifecycle.js",
+        "sokoni-receipt-engine.js",
+        "sokoni-pos-print.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "seller-public.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "seller-revenue.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "seller-success.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-launch.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "seller-terms.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "seller-wallet.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "seller.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "health",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-owner-cache.js",
+        "sokoni-branch.js",
+        "sokoni-subscriptions.js",
+        "sokoni-authority.js",
+        "sokoni-product-validator.js",
+        "sokoni-product-visibility.js",
+        "seller.js",
+        "sokoni-seller-products.js",
+        "sokoni-queue.js",
+        "sokoni-drawer.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "services.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller",
+        "provider",
+        "mechanic",
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-book-service.js",
+        "sokoni-featured.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "settlement-dashboard.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "sfos-monitor.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sfos-core.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "sfos-wallet.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sfos-core.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "signup.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-alerts.js",
+        "sokoni-verify-screen.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "sokoni-cert.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "sports-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sports.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "sports-tournament.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sports.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "sports-venue.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-sports.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "staff-management.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "status.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "store.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "subscription-billing.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "subscription-checkout.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-subscription-checkout.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "subscription-os.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-ai-subscriptions.js",
+        "sokoni-subscription-brain.js",
+        "sokoni-entitlement.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "subscriptions.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-subscriptions.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "success.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "components/checkout/celebration-engine.js",
+        "components/checkout/success-experience.js"
+      ],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "super-admin.html",
+      "auth": true,
+      "guards": [
+        "SokoniAdminEntry.guard",
+        "inline claim check"
+      ],
+      "authority": true,
+      "mirrors": [
+        "users.role"
+      ],
+      "workspaceHints": [
+        "buyer",
+        "seller",
+        "provider"
+      ],
+      "legacyDriverVocab": true,
+      "followedScripts": [
+        "sokoni-admin-entry.js"
+      ],
+      "verdict": "DUPLICATE-AUTH"
+    },
+    {
+      "route": "support.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-launch.js"
+      ],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "task-queue.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "tech-hub.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "tenant-portal.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "terms.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "test-accounts.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "buyer",
+        "seller"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "demo-seed.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "track.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "trust-and-safety.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "trust-safety.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "trust.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [
+        "legal"
+      ],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "UNGUARDED"
+    },
+    {
+      "route": "uat-center.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "unboxing.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "validation.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-validate.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "venue-booking.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "venue-manager.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "verification-admin.html",
+      "auth": true,
+      "guards": [
+        "inline claim check"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "verification.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": true,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "vision-2030.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "wallet.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [
+        "sokoni-wallet-v2.js"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "route": "wap.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "warehouse-scanner.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "warehouse.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "webhooks.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "wholesale-portal.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    },
+    {
+      "route": "wishlist.html",
+      "auth": true,
+      "guards": [
+        "data-require-auth"
+      ],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PASS"
+    },
+    {
+      "route": "workspace-invite.html",
+      "auth": false,
+      "guards": [],
+      "authority": false,
+      "mirrors": [],
+      "workspaceHints": [],
+      "legacyDriverVocab": false,
+      "followedScripts": [],
+      "verdict": "PUBLIC"
+    }
+  ]
+}
