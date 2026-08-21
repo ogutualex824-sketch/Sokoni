@@ -1,0 +1,214 @@
+/* RECONCILE — Firestore users/{uid} against Firebase Authentication accounts.
+   ==========================================================================
+   Run (needs Admin SDK credentials):
+     GOOGLE_APPLICATION_CREDENTIALS=/path/sa.json \
+       node scripts/reconcile-users-vs-auth.js
+     ... --json > docs/users-reconciliation.json
+
+   READ-ONLY. It lists, compares and classifies. It never writes, never deletes, and
+   has no flag that would let it.
+
+   WHY
+   The Admin dashboard's "Total Users" is db.collection('users').count() — a count of
+   FIRESTORE DOCUMENTS. Reported 83 against fewer than 20 Auth accounts. Those two
+   numbers measure different things, so the gap is a question, not yet a defect:
+
+       a Firestore users document  !=  a Firebase Auth account
+
+   scripts/census-users-doc-writers.js established WHICH code can mint a document:
+   39 production write sites can create one, 25 of them narrow set(..., {merge:true})
+   calls that leave behind only the handful of fields they touched. set+merge creates
+   on absence; update() does not. This script decides which live documents actually
+   came from those paths.
+
+   CLASSIFICATION
+     AUTH MATCH        uid resolves to a Firebase Auth account
+     ORPHAN            uid does not resolve, and the document looks like a stub
+     EXPECTED SYSTEM   a known non-account document (allowlist below; deliberately tiny)
+     UNCLASSIFIED      everything else — NOT a synonym for orphan
+
+   UNCLASSIFIED exists so the report cannot quietly round uncertainty down into a
+   category that invites deletion. A document nobody can explain is a document nobody
+   should delete.
+
+   WHAT THIS SCRIPT WILL NOT DO
+   If credentials are absent it EXITS NON-ZERO and prints what is missing. It does not
+   sample, estimate, or fall back to the client SDK, and it never emits a count it did
+   not read. An unproven number reported as a result is worse than no number.
+   ==========================================================================*/
+'use strict';
+const fs = require('fs');
+const path = require('path');
+
+const JSON_OUT = process.argv.includes('--json');
+const ROOT = path.join(__dirname, '..');
+
+/* ── credentials gate ─────────────────────────────────────────────────────── */
+function credentialsPresent() {
+  const gac = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (gac && fs.existsSync(gac)) return { ok: true, how: 'GOOGLE_APPLICATION_CREDENTIALS' };
+  if (process.env.FIREBASE_CONFIG || process.env.GCLOUD_PROJECT) {
+    return { ok: true, how: 'ambient (FIREBASE_CONFIG / GCLOUD_PROJECT)' };
+  }
+  return { ok: false };
+}
+
+const cred = credentialsPresent();
+if (!cred.ok) {
+  console.error('\n  RECONCILIATION NOT RUN — Admin SDK credentials are absent.\n');
+  console.error('  This script enumerates Firebase Authentication, which requires the Admin');
+  console.error('  SDK. It will not substitute the client SDK, sample, or estimate.\n');
+  console.error('  Provide one of:');
+  console.error('    GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json');
+  console.error('    an ambient Google Cloud credential (FIREBASE_CONFIG / GCLOUD_PROJECT)\n');
+  console.error('  Until then the Auth-side count is UNPROVEN, and the dashboard\'s "83"');
+  console.error('  remains a Firestore DOCUMENT count with no account count to compare it to.\n');
+  process.exit(2);
+}
+
+/* ── the deliberately tiny allowlist ──────────────────────────────────────────
+   A document belongs here only when something in the repo demonstrably creates it
+   for a non-account purpose. Nothing qualifies today, and an empty allowlist is the
+   honest state: widening it to make a report look tidy would relabel unknowns as
+   expected. Entries need a `why` naming the writer. */
+const EXPECTED_SYSTEM = [
+  /* { id: 'some-fixed-id', why: 'functions/x.js:NN creates this for <reason>' } */
+];
+
+/* Field signatures of the narrow writers, from census-users-doc-writers.js. A stub
+   whose entire field set is covered by one signature is attributable to that writer. */
+const SIGNATURES = [
+  { writer: 'functions/booking-payment-sweep.js:53', fields: ['walletBalance'] },
+  { writer: 'functions/index.js:4720',               fields: ['lastSeen'] },
+  { writer: 'functions/invitations-core.js:319',     fields: ['updatedAt'] },
+  { writer: 'functions/index.js:220 / 4693',         fields: ['roles'] },
+  { writer: 'functions/index.js:139',                fields: ['role', 'adminGrantedAt'] },
+  { writer: 'functions/super-admin.js:110',          fields: ['role', 'roleUpdatedAt'] },
+  { writer: 'functions/wallet-engine.js:704',        fields: ['phoneNumber', 'phoneVerifiedAt'] },
+  { writer: 'functions/age-verification.js:79',      fields: ['ageVerified', 'ageVerifiedAt', 'ageVerifiedMethod'] },
+  { writer: 'auth.js:379',                           fields: ['googleLinked', 'googleLinkedAt'] },
+  { writer: 'auth.js:1608',                          fields: ['linkedProviders', 'linkedAt'] },
+  { writer: 'firebase.js:877',                       fields: ['fcmToken', 'fcmPlatform', 'fcmUpdatedAt'] },
+  { writer: 'functions/sub-billing.js:331',          fields: ['tier', 'features', 'expiresAt', 'updatedAt'] },
+];
+
+/* A document created by real signup carries identity. If any of these is present the
+   document is not a bare stub, whatever else is missing. */
+const IDENTITY_FIELDS = ['email', 'phoneNumber', 'name', 'displayName', 'provider', 'createdAt'];
+
+function attribute(fields) {
+  const set = new Set(fields);
+  const hits = [];
+  for (const s of SIGNATURES) {
+    /* every field the doc has is accounted for by this writer */
+    if (fields.length && fields.every((f) => s.fields.includes(f))) hits.push(s.writer);
+  }
+  return hits;
+}
+
+(async () => {
+  let admin;
+  try { admin = require('firebase-admin'); }
+  catch (e) {
+    console.error('\n  firebase-admin is not installed in this worktree.');
+    console.error('  Install it where the Admin SDK is available, then re-run.\n');
+    process.exit(2);
+  }
+  if (!admin.apps.length) admin.initializeApp();
+  const db = admin.firestore();
+  const auth = admin.auth();
+
+  /* ── enumerate Auth ── */
+  const authUids = new Set();
+  let pageToken;
+  do {
+    const page = await auth.listUsers(1000, pageToken);
+    page.users.forEach((u) => authUids.add(u.uid));
+    pageToken = page.pageToken;
+  } while (pageToken);
+
+  /* ── enumerate Firestore ── */
+  const docs = [];
+  const snap = await db.collection('users').get();
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    docs.push({
+      uid: d.id,
+      fields: Object.keys(data).sort(),
+      createdAt: data.createdAt ? String(data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null,
+      updatedAt: data.updatedAt ? String(data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : null,
+      lastLogin: data.lastLogin ? String(data.lastLogin.toDate ? data.lastLogin.toDate().toISOString() : data.lastLogin) : null,
+    });
+  });
+
+  /* ── classify ── */
+  const rows = docs.map((d) => {
+    const inAuth = authUids.has(d.uid);
+    const expected = EXPECTED_SYSTEM.find((e) => e.id === d.uid);
+    const hasIdentity = d.fields.some((f) => IDENTITY_FIELDS.includes(f));
+    const writers = attribute(d.fields);
+    let cls;
+    if (inAuth) cls = 'AUTH MATCH';
+    else if (expected) cls = 'EXPECTED SYSTEM';
+    else if (writers.length || (!hasIdentity && d.fields.length <= 6)) cls = 'ORPHAN';
+    else cls = 'UNCLASSIFIED';
+    return Object.assign({}, d, {
+      classification: cls,
+      inAuth,
+      hasIdentity,
+      likelyWriters: writers,
+      expectedWhy: expected ? expected.why : null,
+    });
+  });
+
+  const tally = rows.reduce((a, r) => { a[r.classification] = (a[r.classification] || 0) + 1; return a; }, {});
+
+  if (JSON_OUT) {
+    console.log(JSON.stringify({
+      generated: 'reconcile-users-vs-auth',
+      credentials: cred.how,
+      authAccounts: authUids.size,
+      firestoreDocuments: docs.length,
+      tally, rows,
+    }, null, 2));
+    return;
+  }
+
+  console.log('\n  users/{uid}  vs  Firebase Authentication\n');
+  console.log('  credentials              ' + cred.how);
+  console.log('  Firebase Auth accounts   ' + authUids.size + '   (enumerated, not estimated)');
+  console.log('  Firestore users docs     ' + docs.length + '   (this is what the dashboard counts)');
+  console.log('  difference               ' + (docs.length - authUids.size));
+  console.log('\n  ── classification');
+  for (const k of ['AUTH MATCH', 'ORPHAN', 'EXPECTED SYSTEM', 'UNCLASSIFIED']) {
+    console.log('  ' + k.padEnd(18) + (tally[k] || 0));
+  }
+
+  const orphans = rows.filter((r) => r.classification === 'ORPHAN');
+  if (orphans.length) {
+    console.log('\n  ── orphan candidates, with attribution');
+    for (const o of orphans) {
+      console.log('  ' + o.uid);
+      console.log('      fields    {' + o.fields.join(', ') + '}');
+      console.log('      created   ' + (o.createdAt || '(absent)')
+        + '   updated ' + (o.updatedAt || '(absent)'));
+      console.log('      writer    ' + (o.likelyWriters.length
+        ? o.likelyWriters.join(' | ') + '   (set+merge, creates on absence)'
+        : 'NOT ATTRIBUTED — no writer signature covers this field set'));
+    }
+  }
+
+  const unknown = rows.filter((r) => r.classification === 'UNCLASSIFIED');
+  if (unknown.length) {
+    console.log('\n  ── UNCLASSIFIED — explain before acting on any of these');
+    for (const u of unknown) console.log('  ' + u.uid + '   {' + u.fields.join(', ') + '}');
+  }
+
+  console.log('\n  Nothing was written or deleted. A document nobody can explain is a document');
+  console.log('  nobody should delete — settle UNCLASSIFIED before any cleanup is considered.\n');
+})().catch((e) => {
+  console.error('\n  RECONCILIATION FAILED: ' + (e && e.message || e));
+  console.error('  No partial result is reported — a partial enumeration would understate');
+  console.error('  both sides and could not be told apart from a clean one.\n');
+  process.exit(1);
+});

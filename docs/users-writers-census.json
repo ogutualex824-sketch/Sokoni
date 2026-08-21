@@ -1,0 +1,1239 @@
+{
+  "generated": "census-users-doc-writers",
+  "totals": {
+    "rows": 78,
+    "creators": 39,
+    "merges": 35,
+    "stubs": 25
+  },
+  "controls": [
+    {
+      "label": "the scanner finds a writer known to exist (firebase.js signup path)",
+      "ok": true,
+      "detail": "4 row(s) in firebase.js"
+    },
+    {
+      "label": "update() is NOT classified as able to create",
+      "ok": true,
+      "detail": "13 update row(s)"
+    },
+    {
+      "label": "a file with no users writes yields no rows",
+      "ok": true,
+      "detail": "package.json"
+    },
+    {
+      "label": "CONTROL the scanner WOULD match its own shapes if not excluded",
+      "ok": true,
+      "detail": "self-match 2 row(s), excluded by path"
+    },
+    {
+      "label": "every row names a real file and line",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "rows": [
+    {
+      "file": "admin.html",
+      "line": 5240,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "admin.html",
+      "line": 5253,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "admin.html",
+      "line": 5315,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "auth.js",
+      "line": 379,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "googleLinked",
+        "googleLinkedAt"
+      ]
+    },
+    {
+      "file": "auth.js",
+      "line": 580,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "consent",
+        "policyVersion",
+        "source",
+        "privacy",
+        "terms",
+        "consentedAt",
+        "createdAt"
+      ]
+    },
+    {
+      "file": "auth.js",
+      "line": 757,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "registeredAs"
+      ]
+    },
+    {
+      "file": "auth.js",
+      "line": 1608,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "linkedProviders",
+        "linkedAt"
+      ]
+    },
+    {
+      "file": "driver.html",
+      "line": 961,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "isDriver",
+        "isRider",
+        "driverProfile",
+        "shiftStatus",
+        "lastShiftAt",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "driver.html",
+      "line": 2831,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "isDriver",
+        "isRider",
+        "driverProfile",
+        "shiftStatus",
+        "lastShiftAt",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "firebase.js",
+      "line": 559,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": true,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "firebase.js",
+      "line": 635,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "createdAt",
+        "lastLogin"
+      ]
+    },
+    {
+      "file": "firebase.js",
+      "line": 828,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "firebase.js",
+      "line": 877,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "fcmToken",
+        "fcmPlatform",
+        "fcmUpdatedAt"
+      ]
+    },
+    {
+      "file": "functions/account-manager.js",
+      "line": 65,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "deletionScheduledAt",
+        "deletionReason",
+        "deletionRequestedAt",
+        "status"
+      ]
+    },
+    {
+      "file": "functions/account-manager.js",
+      "line": 98,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "deletionScheduledAt",
+        "deletionReason",
+        "deletionRequestedAt",
+        "status",
+        "deletionCancelledAt"
+      ]
+    },
+    {
+      "file": "functions/account-manager.js",
+      "line": 185,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "status",
+        "deletedAt",
+        "email",
+        "name",
+        "phone",
+        "photoURL"
+      ]
+    },
+    {
+      "file": "functions/account-status.js",
+      "line": 88,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "deactivated",
+        "accountStatus",
+        "deactivatedAt",
+        "deactivationReason"
+      ]
+    },
+    {
+      "file": "functions/account-status.js",
+      "line": 116,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "deactivated",
+        "accountStatus",
+        "reactivatedAt",
+        "deactivationReason"
+      ]
+    },
+    {
+      "file": "functions/account-status.js",
+      "line": 141,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "deactivated",
+        "accountStatus",
+        "lastAdminActionBy"
+      ]
+    },
+    {
+      "file": "functions/admin-os.js",
+      "line": 152,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "customClaims",
+        "roleUpdatedAt",
+        "roleUpdatedBy"
+      ]
+    },
+    {
+      "file": "functions/age-verification.js",
+      "line": 79,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "ageVerified",
+        "ageVerifiedAt",
+        "ageVerifiedMethod"
+      ]
+    },
+    {
+      "file": "functions/automation-engine.js",
+      "line": 262,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "sellerEnabled",
+        "sellerApplicationId",
+        "sellerApprovedAt"
+      ]
+    },
+    {
+      "file": "functions/beta-access.js",
+      "line": 102,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "betaStatus",
+        "betaReviewedAt",
+        "betaReviewedBy",
+        "betaReviewNote"
+      ]
+    },
+    {
+      "file": "functions/booking-payment-sweep.js",
+      "line": 53,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "walletBalance"
+      ]
+    },
+    {
+      "file": "functions/facebook-data-deletion.js",
+      "line": 243,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "status",
+        "deletionScheduledAt",
+        "deletionRequestedAt",
+        "deletionReason",
+        "disabled"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 139,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "adminGrantedAt"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 182,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "roles",
+        "adminGrantedAt"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 220,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "roles"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 480,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "banned",
+        "banReason",
+        "bannedAt",
+        "bannedBy"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 4693,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "roles"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 4720,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "lastSeen"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 5165,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": true,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "functions/index.js",
+      "line": 7808,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "suspended",
+        "suspendedAt",
+        "suspendReason"
+      ]
+    },
+    {
+      "file": "functions/invitations-core.js",
+      "line": 319,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "functions/notify.js",
+      "line": 239,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "fcmTokens"
+      ]
+    },
+    {
+      "file": "functions/qa-booking-pricing-e2e.js",
+      "line": 17,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "name"
+      ]
+    },
+    {
+      "file": "functions/qa-booking-refund-e2e.js",
+      "line": 16,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "walletBalance"
+      ]
+    },
+    {
+      "file": "functions/sub-billing.js",
+      "line": 394,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "planId",
+        "tier",
+        "status",
+        "features",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "functions/sub-billing.js",
+      "line": 615,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "planId",
+        "tier",
+        "status",
+        "features",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "functions/sub-billing.js",
+      "line": 331,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "tier",
+        "features",
+        "expiresAt",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "functions/sub-engine.js",
+      "line": 824,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "functions/sub-engine.js",
+      "line": 332,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "functions/sub-engine.js",
+      "line": 517,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": []
+    },
+    {
+      "file": "functions/subscription-authority.js",
+      "line": 100,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "planId",
+        "tier",
+        "status",
+        "features",
+        "listings_limit",
+        "expiresAt",
+        "updatedAt",
+        "source"
+      ]
+    },
+    {
+      "file": "functions/super-admin.js",
+      "line": 110,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "roleUpdatedAt"
+      ]
+    },
+    {
+      "file": "functions/super-admin.js",
+      "line": 197,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": true,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "functions/trust-safety.js",
+      "line": 122,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "status",
+        "bannedAt",
+        "bannedBy",
+        "banReason"
+      ]
+    },
+    {
+      "file": "functions/wallet-engine.js",
+      "line": 704,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "phoneNumber",
+        "phoneVerifiedAt"
+      ]
+    },
+    {
+      "file": "functions/wap.js",
+      "line": 1011,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "verifiedAt",
+        "serverTs"
+      ]
+    },
+    {
+      "file": "scripts/migrate-user-baselines.js",
+      "line": 90,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": false,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "scripts/migrate-user-baselines.js",
+      "line": 93,
+      "shape": "tx/batch .set(db.collection(\"users\").doc(x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": false,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "scripts/qa/consolidate-kass-seller.js",
+      "line": 22,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "roles",
+        "isSeller",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "scripts/qa/merge-kass-data.js",
+      "line": 30,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "phoneNumber",
+        "shopName",
+        "linkedAccounts",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "scripts/test-auth-signup-gate.js",
+      "line": 102,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": []
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 47,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "email",
+        "roles",
+        "activeRole",
+        "accountStatus"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 124,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 131,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "roles",
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 138,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "roles"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 142,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 167,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "roles",
+        "accountStatus"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 170,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "roles",
+        "accountStatus"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 173,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "accountStatus"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 177,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "roles"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 180,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "roles"
+      ]
+    },
+    {
+      "file": "scripts/test-role-rules.js",
+      "line": 183,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "name",
+        "roles",
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 38,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "name",
+        "roles",
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 40,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "name",
+        "roles",
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 61,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 116,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 123,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 133,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": true,
+      "production": false,
+      "fields": [
+        "<variable payload>"
+      ]
+    },
+    {
+      "file": "scripts/test-role-switch-rules.js",
+      "line": 152,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "activeRole"
+      ]
+    },
+    {
+      "file": "scripts/test-seller-rules.js",
+      "line": 45,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "roles"
+      ]
+    },
+    {
+      "file": "scripts/test-seller-rules.js",
+      "line": 46,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": [
+        "uid",
+        "roles"
+      ]
+    },
+    {
+      "file": "scripts/test-signup-canonical-profile.js",
+      "line": 50,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": false,
+      "fields": []
+    },
+    {
+      "file": "sokoni-chat-engine.js",
+      "line": 430,
+      "shape": "compat .collection(\"users\").doc(x).set",
+      "verb": "set",
+      "merge": false,
+      "canCreate": true,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "isTyping",
+        "updatedAt"
+      ]
+    },
+    {
+      "file": "sokoni-wap-definitions.js",
+      "line": 394,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "set",
+      "merge": true,
+      "canCreate": true,
+      "stubRisk": true,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "role",
+        "verifiedAt",
+        "serverTs"
+      ]
+    },
+    {
+      "file": "superadmin.html",
+      "line": 758,
+      "shape": "modular setDoc(doc(db,\"users\",x))",
+      "verb": "update",
+      "merge": false,
+      "canCreate": false,
+      "stubRisk": false,
+      "opaque": false,
+      "production": true,
+      "fields": [
+        "suspended",
+        "suspendedAt",
+        "suspendedBy"
+      ]
+    }
+  ]
+}

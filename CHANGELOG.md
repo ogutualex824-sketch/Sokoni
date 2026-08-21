@@ -1,3 +1,71 @@
+## [2026-08-21] - users/{uid} writer census. 39 creating writers, 25 stub-capable. Auth side UNPROVEN.
+
+Read-only investigation. No document was written or deleted, and the Admin dashboard number is
+deliberately unchanged.
+
+    scripts/census-users-doc-writers.js      5/5 controls   artifact: docs/users-writers-census.json
+    scripts/reconcile-users-vs-auth.js       BUILT, refuses to run without Admin SDK credentials
+    docs/USERS_DOCUMENT_INTEGRITY.md         the write-up
+
+**The question.** The dashboard reports 83 Total Users against a believed <20 Firebase Auth
+accounts. Those measure different things, so the gap is a question rather than a defect:
+
+    a Firestore users document  !=  a Firebase Auth account
+
+`functions/admin-os.js:443` is `db.collection('users').count()`. Nothing in that path consults
+Firebase Authentication.
+
+**The mechanism.** `set(ref, data, {merge:true})` CREATES the document when it does not exist;
+`update()` fails. So every set+merge against `users/{uid}` can mint a stub holding only the fields
+that writer touched, for a uid that may never have signed up.
+
+**Census:**
+
+    write sites found            78
+    can CREATE (set)             39      update() cannot
+    of those, set+merge          35
+    narrow, <=4 keys             25      most likely to mint a stub
+    opaque payload               3       payload is a variable; width unknown
+    excluded, scripts/ only      26      emulator harnesses and one-off migrations
+
+Production writers concentrate in `functions/index.js` (8), then `auth.js`, `firebase.js`,
+`functions/account-status.js`, `functions/sub-billing.js` (3 each). The narrow writers and the
+exact field set each would leave behind are tabulated in the doc — that table is what lets the
+reconciler attribute a stub to a writer instead of guessing.
+
+**Reconciler built, not run.** It classifies AUTH MATCH / ORPHAN / EXPECTED SYSTEM / UNCLASSIFIED.
+UNCLASSIFIED exists so uncertainty cannot be rounded down into a category that invites deletion —
+a document nobody can explain is a document nobody should delete. The EXPECTED SYSTEM allowlist is
+EMPTY on purpose: nothing in the repo demonstrably creates a users document for a non-account
+purpose, and widening it to tidy a report would relabel unknowns as expected. The script is
+read-only and has no delete path.
+
+Without Admin SDK credentials it exits non-zero and says what is missing. It does not sample,
+estimate, or fall back to the client SDK. **The Auth-side count stays UNPROVEN.**
+
+Three instrument faults were found and fixed while building the census, all mine:
+
+* The scanner CONTAINS the call shapes it searches for, as regex literals, so it matched its own
+  source and the clean-file control failed. Excluded by path — not by weakening the pattern, which
+  would have blinded the census to the real writers. A converse control now proves the exclusion is
+  load-bearing.
+* `set(ref, profile, {merge:true})` with a variable payload made the field extractor read the
+  OPTIONS object, reporting the field list as `{merge}`. Such calls are now marked opaque and are
+  NOT counted as narrow — calling an unknown width a stub would be inventing a finding.
+* `scripts/` harnesses and migrations were inflating the production census more than threefold.
+  They write to an emulator or under an operator's hand and cannot mint a production stub. Now
+  separated, not silently dropped.
+
+RECORDED, out of scope, both instances of the no-fabricated-metrics rule:
+`functions/admin-os.js:443` catches a failed count into `0`, and `admin.html:5367` renders
+`(d.totalUsers || 0)`. An unknown displayed as 0 is a defect; a canonical 0 is fine.
+
+Files: `scripts/census-users-doc-writers.js` (new), `scripts/reconcile-users-vs-auth.js` (new),
+`docs/USERS_DOCUMENT_INTEGRITY.md` (new), `docs/users-writers-census.json` (new).
+Database changes: none. API changes: none. Rules changes: none. Breaking changes: none.
+Security: read-only census; no permission, rule or vocabulary touched.
+
+
 ## [2026-08-21] - Admin lock REMOVED. One credential system. 24/0 + 19/0.
 
 Not deployed. Wallet PIN untouched — it is server-verified and authorises money movement, not a
