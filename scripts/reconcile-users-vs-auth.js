@@ -53,6 +53,31 @@ function credentialsPresent() {
   return { ok: false };
 }
 
+/* ── emulator-redirection gate ─────────────────────────────────────────────────
+   The Admin SDK silently retargets when these are set. A Firestore emulator runs on
+   this machine for an unrelated project, so the failure is live, not theoretical:
+   with either variable set this script would enumerate the EMULATOR's accounts and
+   documents and print a tally that looks exactly like a production result. A
+   confidently wrong number is worse than a refusal — and worse than no number,
+   because it would be acted on.
+
+   FIREBASE_AUTH_EMULATOR_HOST matters as much as the Firestore one: auth.listUsers()
+   is what decides AUTH MATCH, so redirecting it alone would misclassify every row
+   while the document side stayed real. */
+const REDIRECTS = ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST'];
+const redirected = REDIRECTS.filter((v) => process.env[v]);
+if (redirected.length) {
+  console.error('\n  RECONCILIATION NOT RUN — the Admin SDK is pointed at an emulator.\n');
+  for (const v of redirected) console.error('    ' + v + '=' + process.env[v]);
+  console.error('\n  With these set this script would enumerate emulator data and report it');
+  console.error('  as production. Clear them in this shell and re-run:\n');
+  console.error('    PowerShell   Remove-Item Env:' + redirected[0] + '  -ErrorAction SilentlyContinue');
+  console.error('    bash         unset ' + redirected.join(' '));
+  console.error('\n  Do NOT stop any emulator that is running — it may belong to another');
+  console.error('  session. Clearing the variables is enough; the processes are unrelated.\n');
+  process.exit(2);
+}
+
 const cred = credentialsPresent();
 if (!cred.ok) {
   console.error('\n  RECONCILIATION NOT RUN — Admin SDK credentials are absent.\n');
