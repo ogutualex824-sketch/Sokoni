@@ -153,12 +153,21 @@ function attribute(fields) {
   const db = admin.firestore();
   const auth = admin.auth();
 
-  /* ── enumerate Auth ── */
+  /* ── enumerate Auth ──────────────────────────────────────────────────────────
+     Claims are captured alongside the uid, not just membership. The writer census
+     (eb2f05f) showed the platform has THREE role representations populated by
+     different promotion paths, so the same sitting that answers "is this uid real"
+     can answer "what shape is this account" — and running the Admin SDK twice for
+     two halves of one question wastes the scarcer resource, which is the session. */
   const authUids = new Set();
+  const authClaims = new Map();
   let pageToken;
   do {
     const page = await auth.listUsers(1000, pageToken);
-    page.users.forEach((u) => authUids.add(u.uid));
+    page.users.forEach((u) => {
+      authUids.add(u.uid);
+      authClaims.set(u.uid, u.customClaims || {});
+    });
     pageToken = page.pageToken;
   } while (pageToken);
 
@@ -169,12 +178,48 @@ function attribute(fields) {
     const data = d.data() || {};
     docs.push({
       uid: d.id,
+      /* The three representations, kept apart. `role` is a string, `roles` is an
+         array, and neither is the claim — conflating them is what hid this. */
+      role: typeof data.role === 'string' ? data.role : null,
+      roles: Array.isArray(data.roles) ? data.roles.slice() : null,
       fields: Object.keys(data).sort(),
       createdAt: data.createdAt ? String(data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null,
       updatedAt: data.updatedAt ? String(data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : null,
       lastLogin: data.lastLogin ? String(data.lastLogin.toDate ? data.lastLogin.toDate().toISOString() : data.lastLogin) : null,
     });
   });
+
+  /* ── role SHAPE ───────────────────────────────────────────────────────────────
+     Describes which promotion path an account looks like it came through. It does
+     NOT judge: a shape is not a defect, and the point is to discover what exists in
+     production rather than to confirm an expectation. `unknown` is a real answer and
+     is never collapsed into one of the named shapes.
+
+     From the writer census (docs/ROLE_SOURCE_POPULATION.md):
+       setUserRole        users.role + boolean claims,  no roles[], no claims.role
+       grantAdminClaim    users.role + roles[]
+       bootstrap          claims.role present */
+  const BOOL_CLAIMS = ['admin', 'superAdmin', 'seller', 'driver', 'moderator', 'buyer'];
+  function shapeOf(doc, claims) {
+    const hasRole = !!doc.role;
+    const hasRoles = Array.isArray(doc.roles) && doc.roles.length > 0;
+    const hasClaimRole = typeof claims.role === 'string' && claims.role.length > 0;
+    const hasBools = BOOL_CLAIMS.some((k) => claims[k] === true);
+    if (hasClaimRole) return 'bootstrap-shaped';
+    if (hasRole && hasRoles) return 'grantAdminClaim-shaped';
+    if (hasRole && !hasRoles && hasBools) return 'setUserRole-shaped';
+    if (!hasRole && !hasRoles && !hasBools) return 'no-role-state';
+    return 'unknown-shape';
+  }
+
+  /* Which of the nine consumer sites this account can actually satisfy.
+     7 read users/{uid}.roles, 2 read claims.role — see 77e7928. */
+  function satisfies(doc, claims) {
+    return {
+      rolesArrayReaders: Array.isArray(doc.roles) && doc.roles.length > 0,
+      claimRoleReaders: typeof claims.role === 'string' && claims.role.length > 0,
+    };
+  }
 
   /* ── classify ── */
   const rows = docs.map((d) => {
@@ -187,12 +232,17 @@ function attribute(fields) {
     else if (expected) cls = 'EXPECTED SYSTEM';
     else if (writers.length || (!hasIdentity && d.fields.length <= 6)) cls = 'ORPHAN';
     else cls = 'UNCLASSIFIED';
+    const claims = authClaims.get(d.uid) || {};
     return Object.assign({}, d, {
       classification: cls,
       inAuth,
       hasIdentity,
       likelyWriters: writers,
       expectedWhy: expected ? expected.why : null,
+      claims: inAuth ? claims : null,
+      elevated: BOOL_CLAIMS.filter((k) => claims[k] === true),
+      shape: inAuth ? shapeOf(d, claims) : 'no-auth-account',
+      satisfies: inAuth ? satisfies(d, claims) : null,
     });
   });
 
@@ -232,6 +282,33 @@ function attribute(fields) {
         : 'NOT ATTRIBUTED — no writer signature covers this field set'));
     }
   }
+
+  /* ── role shape, for the accounts that actually matter ──────────────────────── */
+  const real = rows.filter((r) => r.inAuth);
+  const shapes = real.reduce((a, r) => { a[r.shape] = (a[r.shape] || 0) + 1; return a; }, {});
+  console.log('\n  ── role SHAPE across ' + real.length + ' account(s) with an Auth record');
+  for (const k of Object.keys(shapes).sort()) console.log('  ' + k.padEnd(24) + shapes[k]);
+
+  const elevated = real.filter((r) => r.elevated.some((c) => c === 'admin' || c === 'superAdmin'));
+  console.log('\n  ── the ' + elevated.length + ' account(s) holding admin or superAdmin');
+  if (!elevated.length) console.log('  (none)');
+  for (const e of elevated) {
+    console.log('  ' + e.uid);
+    console.log('      claims        ' + (e.elevated.join(', ') || '(none)')
+      + (e.claims && e.claims.role ? '   claims.role=' + e.claims.role : '   claims.role=(absent)'));
+    console.log('      users.role    ' + (e.role || '(absent)'));
+    console.log('      users.roles   ' + (e.roles ? '[' + e.roles.join(', ') + ']' : '(absent)'));
+    console.log('      shape         ' + e.shape);
+    console.log('      satisfies     roles[] readers: ' + (e.satisfies.rolesArrayReaders ? 'YES' : 'no')
+      + '   (7 sites)      claims.role readers: '
+      + (e.satisfies.claimRoleReaders ? 'YES' : 'no') + '   (2 sites)');
+  }
+  const blind = elevated.filter((e) => !e.satisfies.rolesArrayReaders && !e.satisfies.claimRoleReaders);
+  console.log('\n  elevated accounts satisfying NEITHER consumer group: ' + blind.length
+    + ' of ' + elevated.length);
+  console.log('  Those accounts hold the claim but are invisible to all nine role checks.');
+  console.log('  A shape is not a defect on its own — this reports what exists, and the');
+  console.log('  decision about which representation is authoritative comes after.');
 
   const unknown = rows.filter((r) => r.classification === 'UNCLASSIFIED');
   if (unknown.length) {
