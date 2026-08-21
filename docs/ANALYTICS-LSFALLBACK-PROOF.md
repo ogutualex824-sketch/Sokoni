@@ -114,7 +114,13 @@ in the snapshot, which is reassuring but not authoritative.
 This does not affect the verdict above, which rests on query construction and read counts in the
 page source rather than on the ruleset.
 
-**Open item:** re-fetch the live ruleset and reconcile the artifact.
+**RESOLVED 2026-08-22.** Live re-fetch: release `4d86bb52` is unchanged, the live ruleset is
+257,162 UTF-8 bytes, and `firestore.rules.served-current` is **byte-identical** to it. The 252,074
+figure was JS string CHARACTERS, not bytes — `publish-rules.js` reported `SOURCE.length` and
+labelled it bytes. The artifact was always correct.
+
+The real consequence: true headroom is **4,982 bytes (98.1% used)**, not the 10,070 recorded —
+half what was reported. Future rules work must use `Buffer.byteLength(src, 'utf8')`.
 
 ---
 

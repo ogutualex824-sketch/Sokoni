@@ -1,3 +1,41 @@
+## [2026-08-22] - CORRECTION: rules headroom was reported in CHARACTERS, not bytes.
+
+Live re-fetch, read-only. No rules published, no product code changed.
+
+    live release      4d86bb52-835e-421b-ad41-8ddf1a2e1ff1   unchanged since Release 2
+                      updateTime 2026-08-21T16:18:38Z
+    live ruleset      257,162 UTF-8 BYTES
+                      252,074 JS string CHARACTERS
+    served-current    BYTE-IDENTICAL to live
+
+**The artifact was correct; the CHANGELOG figure was in the wrong unit.** `scripts/publish-rules.js`
+reported `SOURCE.length` — JavaScript string length, i.e. UTF-16 code units — and labelled it
+"bytes". The 5,088 difference is multi-byte UTF-8 in the rule comments (em dashes, arrows).
+
+The `firestore.rules.served-current` discrepancy raised in `b37d59c` is therefore **CLOSED, and
+it was not a discrepancy at all** — it was two measurements of the same content in two units.
+
+### The consequence, which is real
+
+| | |
+|---|---|
+| Firestore source limit | 262,144 **bytes** |
+| actual ruleset | 257,162 bytes — **98.1% used** |
+| **REAL headroom** | **4,982 bytes** |
+| what Release 2 reported | 10,070 bytes free (96.2% used) |
+| overstated by | 5,088 bytes — **2× the true headroom** |
+
+The limit is enforced on bytes, so the previously recorded headroom was **double** what actually
+exists. Anyone planning a rules change against the 10,070 figure would have had roughly half the
+room they expected — and this ruleset has already hit a publish ceiling once.
+
+**Any future rules work must measure `Buffer.byteLength(src, 'utf8')`, never `src.length`.**
+
+Release 2's authorization result is unaffected: the release id has not moved, the served content
+is byte-identical to what the harness scored 49/0, and the `activeRole` scoping is present in the
+served source.
+
+
 ## [2026-08-21] - superadmin.html RETIRED. One canonical Super Admin surface. 14/0.
 
 Isolated change. Not deployed. Nothing else in this commit.
