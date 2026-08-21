@@ -83,6 +83,17 @@ function fixture() {
       isApproved: function (r) { return window.__FX.roles.indexOf(r) >= 0; },
       hubFor: function () { return null; },          /* no navigation during the probe */
       ready: function () { return Promise.resolve(); },
+      /* Models the real setActiveRole contract: approves only what the claims
+         approve, and on refusal changes NOTHING. P2 depends on the refusal being
+         a genuine no-op rather than a suppressed UI update. */
+      setActiveRole: function (r) {
+        if (window.__FX.roles.indexOf(r) < 0) {
+          return Promise.resolve({ ok: false, reason: 'not-approved' });
+        }
+        this._r = r;
+        document.dispatchEvent(new CustomEvent('sokoniActiveRoleChanged', { detail: { role: r } }));
+        return Promise.resolve({ ok: true, role: r });
+      },
     };
   };
   window.__installRA(ra);
@@ -149,20 +160,33 @@ export default async function run(page) {
   await page.waitForSelector('#sk-nav-actions', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(600);
   await page.addScriptTag({ content: `
-    var r = { threw: null, avatarDirectChild: null };
+    var r = { threw: null, anchorOk: null, anchorId: null, found: false };
     var a = document.getElementById('sk-nav-actions');
     var av = document.getElementById('sk-nav-avatar');
-    r.avatarDirectChild = !!(a && av && av.parentElement === a);
-    r.avatarParent = av && av.parentElement ? (av.parentElement.id || '?') : null;
-    var h = (window.__caught || [])[0];
-    if (h) { try { h({ detail: { uid: 'fixture-uid', roles: ['buyer','driver'], role: 'driver' } }); }
-             catch (e) { r.threw = String(e && e.message || e); } }
+    /* The fix does NOT flatten the header; it climbs to whichever ancestor is a
+       direct child. Assert that climb resolves — re-nesting the avatar so that no
+       ancestor qualifies would silently bring the NotFoundError back. */
+    var anchor = av;
+    while (anchor && anchor.parentElement !== a) anchor = anchor.parentElement;
+    r.anchorOk = !!anchor;
+    r.anchorId = anchor ? (anchor.id || anchor.className || '?') : null;
+    /* Select shared-header's handler by SIGNATURE, not by position. Several modules
+       register on sokoniAuthReady and their order varies with script load timing, so
+       indexing [0] silently tested somebody else's handler on some runs. */
+    (window.__caught || []).forEach(function (h) {
+      if (String(h).indexOf('_wireRealtime') < 0) return;
+      r.found = true;
+      try { h({ detail: { uid: 'fixture-uid', roles: ['buyer','driver'], role: 'driver' } }); }
+      catch (e) { r.threw = String(e && e.message || e); }
+    });
     r.switcher = !!document.getElementById('sk-role-switcher');
     document.documentElement.setAttribute('data-c0', JSON.stringify(r));
   ` });
   const c0 = JSON.parse(await page.getAttribute('html', 'data-c0'));
-  ck('RIG  #sk-nav-avatar is a DIRECT child of #sk-nav-actions (insertBefore requires it)',
-    c0.avatarDirectChild === true, 'parent=' + c0.avatarParent);
+  ck('RIG  shared-header\'s own sokoniAuthReady handler was located by signature',
+    c0.found === true, 'without it the C0 rows below are void');
+  ck('RIG  the insert anchor resolves to a DIRECT child of #sk-nav-actions',
+    c0.anchorOk === true, 'anchor=' + c0.anchorId);
   ck('C0   the sokoniAuthReady handler completes without throwing',
     c0.threw === null, c0.threw || '');
   ck('C0   the role switcher renders at all', c0.switcher === true, '');
@@ -198,6 +222,43 @@ export default async function run(page) {
   const post = await readProbe();
   ck('F2   sokoniActiveRoleChanged -> dropdown re-renders and marks DRIVER',
     post.current === 'driver', 'marked=' + post.current);
+
+  /* ── P: a RENDERED dropdown must actually switch ────────────────────────────
+     C0–C3 prove the dropdown reflects the authority. They do not prove the control
+     does anything when clicked — which it did not: the items were plain anchors
+     that navigated and never called setActiveRole. P1 clicks the real element. */
+  const p = await paint('roles=buyer,driver&ra=buyer&mirror=buyer&detail=buyer');
+  ck('RIG  dropdown starts marked buyer before any click', p.current === 'buyer',
+    'marked=' + p.current);
+
+  await page.addScriptTag({ content: `
+    var items = document.querySelectorAll('#sk-role-menu a[role="menuitem"]');
+    var target = null;
+    for (var i = 0; i < items.length; i++) {
+      if (/driver/i.test(items[i].textContent || '')) target = items[i];
+    }
+    document.documentElement.setAttribute('data-p', JSON.stringify({ found: !!target }));
+    if (target) target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+  ` });
+  const pClick = JSON.parse(await page.getAttribute('html', 'data-p'));
+  ck('RIG  a Driver item exists in the rendered menu to click', pClick.found === true);
+  await page.waitForTimeout(700);
+  const afterClick = await readProbe();
+  ck('P1   clicking Driver switches the acting role -> dropdown marks DRIVER',
+    afterClick.current === 'driver' && afterClick.authority === 'driver',
+    'marked=' + afterClick.current + ' authority=' + afterClick.authority);
+
+  /* P2: the authority refuses. The visible role must not move — a UI that switches
+     anyway would be claiming a role the server just declined. */
+  const p2 = await paint('roles=buyer,driver&ra=buyer&mirror=buyer&detail=buyer');
+  ck('RIG  reset to buyer before the refused switch', p2.current === 'buyer',
+    'marked=' + p2.current);
+  await page.addScriptTag({ content: 'window._skSwitchRole("admin");' });
+  await page.waitForTimeout(700);
+  const refused = await readProbe();
+  ck('P2   a REFUSED switch leaves the visible role unchanged (still buyer)',
+    refused.current === 'buyer' && refused.authority === 'buyer',
+    'marked=' + refused.current + ' authority=' + refused.authority);
 
   const passed = rows.filter((r) => r.ok).length;
   return { passed, failed: rows.length - passed, rows };

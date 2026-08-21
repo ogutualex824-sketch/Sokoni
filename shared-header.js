@@ -2563,6 +2563,24 @@
       item.innerHTML = '<span>' + (ROLE_ICONS[role] || '👤') + '</span>' +
         '<span>' + role.charAt(0).toUpperCase() + role.slice(1) + '</span>' +
         (role === currentRole ? '<span style="margin-left:auto;font-size:10px;opacity:.6;">current</span>' : '');
+      /* Selecting a role must SWITCH, not merely navigate.
+
+         These were plain anchors: clicking one went to ROLE_ROUTES[role] and never
+         called setActiveRole, so the destination changed while the acting role did
+         not — the page landed on a workspace the authority still considered
+         inactive, and the dropdown went on marking the old role.
+
+         _skSwitchRole is the single writer: it asks the authority, refuses with a
+         reason when the authority declines, mirrors locally only after that
+         succeeds, and then routes via hubFor(). The href stays so this remains a
+         real link for middle-click, keyboard and screen readers; the plain-click
+         path is handed to the writer instead. */
+      item.addEventListener('click', function (ev) {
+        if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
+        ev.preventDefault();
+        if (typeof window._skSwitchRole === 'function') window._skSwitchRole(role);
+        else location.href = item.href;   /* never leave the control inert */
+      });
       item.addEventListener('mouseenter', function() { this.style.background = 'rgba(255,255,255,.06)'; });
       item.addEventListener('mouseleave', function() {
         this.style.background = role === currentRole ? 'rgba(113,255,0,.08)' : '';
@@ -2587,32 +2605,98 @@
     wrapper.appendChild(btn);
     wrapper.appendChild(menu);
 
-    /* Insert before avatar button */
-    var avatar = document.getElementById('sk-nav-avatar');
-    if (avatar) actionsEl.insertBefore(wrapper, avatar);
+    /* Insert before the avatar's row entry.
+
+       This read `insertBefore(wrapper, avatar)`, but #sk-nav-avatar is nested inside
+       #sk-acct-wrap and is therefore a GRANDCHILD of the actions row. insertBefore
+       requires a DIRECT child and throws NotFoundError otherwise — which aborted the
+       whole sokoniAuthReady handler, and because that listener is {once:true} there
+       was no second chance: the role switcher never rendered at all, on any page, for
+       any account. Measured in scripts/before-role-state-divergence.mjs (C0).
+
+       Climb to whichever ancestor IS a direct child rather than naming #sk-acct-wrap,
+       so re-nesting the avatar later cannot silently reintroduce this. If the avatar
+       is absent entirely the loop ends at null and we fall back — no path throws. */
+    var anchor = document.getElementById('sk-nav-avatar');
+    while (anchor && anchor.parentElement !== actionsEl) anchor = anchor.parentElement;
+    if (anchor) actionsEl.insertBefore(wrapper, anchor);
     else actionsEl.insertBefore(wrapper, actionsEl.firstChild);
   }
+
+  /* ── The switcher's state comes from the AUTHORITY ──────────────────────────
+     F1. The switcher used to be handed detail.role, falling back to sokoniUser.role
+     and then roles[0]. All three are mirrors. users/{uid}.role is never updated when
+     the acting role changes — only users/{uid}.activeRole is — so the mirror is stale
+     by construction and roles[0] is 'buyer' for practically every account. That is
+     how the header could say Driver (it asks the authority, via _skActingRole) while
+     the dropdown marked Buyer.
+
+     localStorage stays a cache. It does not get to be the authority.
+
+     The approved list is taken from the authority too, not just the current value:
+     marking a role the list does not contain would leave nothing marked at all. */
+  function _skSwitcherState(detail) {
+    var roles = (detail && detail.roles) || [];
+    var current = (detail && detail.role) || '';
+    if (!roles.length) {
+      try {
+        var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+        if (u) {
+          roles = u.roles || (u.role ? [u.role] : []);
+          current = current || u.role || (roles[0] || '');
+        }
+      } catch (_) {}
+    }
+    var RA = window.SokoniRoleAuthority;
+    if (RA && RA.isVerified && RA.isVerified()) {
+      try {
+        var approved = RA.getApprovedRoles && RA.getApprovedRoles();
+        if (approved && approved.length) roles = approved.slice();
+      } catch (_) {}
+    }
+    /* Authority first; the mirror only while the authority is genuinely
+       uninitialised — "unverified" means UNKNOWN, not "assume the mirror". */
+    current = _skActingRole(current) || current;
+    if (current && roles.indexOf(current) < 0) roles = roles.concat([current]);
+    return { roles: roles, current: current };
+  }
+
+  /* ── Re-render on every role change ─────────────────────────────────────────
+     F2. _injectRoleSwitcher had exactly ONE call site, inside the {once:true}
+     sokoniAuthReady listener, so the dropdown was painted at first auth and never
+     again — a switch updated the header and the routing while the dropdown kept
+     showing the role the account started the page on.
+
+     _injectRoleSwitcher returns early when #sk-role-switcher already exists, so
+     simply calling it again is a silent no-op. The old node has to go first. */
+  var _skLastAuthDetail = null;
+  function _skRenderRoleSwitcher(detail) {
+    if (detail) _skLastAuthDetail = detail;
+    var st = _skSwitcherState(_skLastAuthDetail);
+    var old = document.getElementById('sk-role-switcher');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    _injectRoleSwitcher(st.roles, st.current);
+  }
+  document.addEventListener('sokoniActiveRoleChanged', function () { _skRenderRoleSwitcher(null); });
+  document.addEventListener('sokoniRoleChanged',      function () { _skRenderRoleSwitcher(null); });
 
   /* Wait for auth to be ready before starting Firestore listeners */
   function _waitForAuth() {
     /* Prefer the sokoniAuthReady event fired by firebase.js */
     document.addEventListener('sokoniAuthReady', function(e) {
       const uid = e.detail && e.detail.uid;
-      if (uid) _wireRealtime(uid);
-
-      /* Role switcher: read roles from event detail or from cached user */
-      var roles = (e.detail && e.detail.roles) || [];
-      var currentRole = (e.detail && e.detail.role) || '';
-      if (!roles.length) {
-        try {
-          var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
-          if (u) {
-            roles = u.roles || (u.role ? [u.role] : []);
-            currentRole = currentRole || u.role || (roles[0] || '');
-          }
-        } catch (_) {}
+      /* Isolated deliberately. _wireRealtime opens Firestore listeners, and this
+         handler is {once:true} — so anything it throws used to take the role
+         switcher down with it and there was no second dispatch to recover on.
+         A realtime-wiring failure should cost the badge counts, not the switcher. */
+      if (uid) {
+        try { _wireRealtime(uid); }
+        catch (err) { console.warn('[SOKONI header] realtime wiring failed:',
+          (err && err.message) || err); }
       }
-      _injectRoleSwitcher(roles, currentRole);
+      /* Role list and current selection both resolved by _skSwitcherState, which
+         asks SokoniRoleAuthority first and treats localStorage as a cache. */
+      _skRenderRoleSwitcher(e.detail || null);
     }, { once: true });
 
     /* Fallback: poll localStorage for cached user (covers pages without firebase.js) */

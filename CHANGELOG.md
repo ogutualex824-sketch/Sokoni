@@ -1,3 +1,73 @@
+## [2026-08-21] - ROLE STATE: header switcher never rendered. F0-F3 fixed, 16/0.
+
+One acting role, read from one authority. Not deployed.
+
+    scripts/before-role-state-divergence.mjs
+
+    pre-fix   4 passed / 12 failed      (same harness, sources from de14777)
+    post-fix  16 passed /  0 failed
+
+The reported symptom was "header indicator says Driver, role dropdown says Buyer". Measuring it
+turned up a defect underneath the one being reported.
+
+**F0 - the header role switcher never rendered at all.** `_injectRoleSwitcher` ended with
+`actionsEl.insertBefore(wrapper, avatar)`, but `#sk-nav-avatar` is nested inside `#sk-acct-wrap`
+and is a GRANDCHILD of `#sk-nav-actions`. `insertBefore` requires a direct child and throws
+NotFoundError otherwise, which aborted the whole `sokoniAuthReady` handler - and that listener is
+`{once:true}`, so there was no second chance. On every page, for every account. The fix climbs to
+whichever ancestor IS a direct child rather than naming `#sk-acct-wrap`, so re-nesting the avatar
+cannot silently reintroduce it. `_wireRealtime` is now isolated in the same handler for the same
+reason: a Firestore hiccup should cost the badge counts, not the switcher.
+
+**F1 - the switcher read mirrors, never the authority.** It was handed `detail.role`, falling back
+to `sokoniUser.role` and then `roles[0]`. All three are mirrors, and `users/{uid}.role` is never
+rewritten when the acting role changes - only `users/{uid}.activeRole` is - so the mirror is stale
+by construction and `roles[0]` is `buyer` for practically every account. That is precisely how the
+header could say Driver (it asks the authority via `_skActingRole`) while the dropdown marked
+Buyer. New `_skSwitcherState()` asks `SokoniRoleAuthority` for both the approved list and the
+current value. localStorage stays a cache; it does not get to be the authority.
+
+**F1b - selecting a role navigated but did not switch.** The menu items were plain anchors with
+`href = ROLE_ROUTES[role]` and no click handler, so choosing Driver went to the driver hub while
+`activeRole` stayed put. They now hand the plain-click path to `_skSwitchRole`, the single writer,
+which asks the authority, refuses with a reason when it declines, mirrors locally only after that
+succeeds, and then routes via `hubFor()`. The href stays for middle-click, keyboard and screen
+readers.
+
+**F2 - the dropdown was painted once and never repainted.** `_injectRoleSwitcher` had exactly one
+call site, inside the `{once:true}` listener, and nothing re-rendered on `sokoniActiveRoleChanged`
+or `sokoniRoleChanged` - which the file already listened for three times, for the Home href. It
+also returns early when `#sk-role-switcher` exists, so calling it again was a silent no-op; the
+old node is now removed first.
+
+**F3 - Account Centre had two rival readers of the same element.** `#acRoleSwitcher` was written by
+one renderer using `_u.roles[0]` (ignoring `activeRole` outright, so it read `buyer` for nearly
+every account) and another using `u.activeRole || u.role || roles[0]`. Whichever ran last won.
+Both now call `_acActiveRole()`, which asks the same authority the header does, and the page
+re-renders on `sokoniActiveRoleChanged`.
+
+`users/{uid}.role` is deliberately NOT written when the acting role changes. `role`/claims record
+what the account is ALLOWED to be; `activeRole` records what it is currently acting as. Writing
+both would recreate the divergence this removes rather than eliminate it.
+
+Files: `shared-header.js`, `account-centre.html`, `scripts/before-role-state-divergence.mjs`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+Security: none of this is authorization, and none of it was treated as such. A correct dropdown is
+a correctness fix, not an access-control result. The chain remains claims -> authority ->
+activeRole -> page gate -> Firestore rules, with the Release 2 ruleset as the backstop:
+`setActiveRole` writes `users/{uid}.activeRole` and the served rule `activeRoleApproved()` still
+refuses any role the claims do not carry. P2 in the harness pins the client half - a refused switch
+leaves the visible role unchanged, so the UI cannot claim a role the server just declined.
+
+Gates: `test:profile:acting-role` 36/0, `test:role:switch` 50/0, `verify:markup`, `verify:auth`.
+
+UNPROVEN: every row above comes from a fixture that stubs `SokoniRoleAuthority` and dispatches
+`sokoniAuthReady` by hand. That is a fixture for a rendering function, not an authenticated
+session. Behaviour with real claims, and page-entry authorization for a switched principal, remain
+unproven pending a real persona.
+
+
 ## [2026-08-21] - RELEASE 2 PUBLISHED. Served rules proven at 49/0.
 
 Rules only. No Hosting, no Functions. `firestore.rules.served-current` records exactly what is
