@@ -134,7 +134,18 @@ export default async function run(page) {
     /login/.test(aos), 'landed=' + aos);
 
   /* ── S: the controls the surface is supposed to offer ── */
-  for (const f of ['admin.html', 'super-admin.html']) {
+  /* superadmin.html (no hyphen) is a FOURTH administrative surface, 47 KB, with its
+     own onAuthStateChanged guard. The F4 work enumerated admin.html,
+     super-admin.html and admin-os.html and never saw it — it is in shared-header's
+     EXCLUDED list and is reached from admin.html, nav-active.js,
+     navigation-registry.json and vision-2030.html.
+
+     It is included here so the gap is MEASURED rather than described. S5 is expected
+     to FAIL for it until the duplicate-surface question is settled: it gates on the
+     claim alone, so an administrator acting as a workspace role still opens it, and
+     it admits `admin` where its hyphenated sibling requires `superAdmin`. That is a
+     reconciliation decision, not a silent edit to one of the two files. */
+  for (const f of ['admin.html', 'super-admin.html', 'superadmin.html']) {
     const src = await page.evaluate(async (u) => {
       const r = await fetch(u, { cache: 'no-store' });
       return r.text();
