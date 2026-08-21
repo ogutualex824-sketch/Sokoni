@@ -161,6 +161,12 @@
   <script src="sokoni-commission-rates.js"></script>
 
 <script src="sokoni-intasend.js" defer></script>
+<!-- Home routes through SokoniPermissions.adminHomeFor() for administrative roles and
+     SokoniRoleAuthority.hubFor() for workspace roles. Without these the resolver is
+     unreachable and an administrator's Home silently stays "/". Placed BEFORE
+     shared-header in document order so a later `defer` change cannot break it. -->
+<script src="sokoni-permissions.js"></script>
+<script src="sokoni-role-authority.js"></script>
 <script src="shared-header.js" defer></script>
 <!-- ONE merchant-entry resolver: approved+shop -> merchant.html, approved+no shop -> shop
      setup, not approved -> intake. Replaces seven unconditional Start Selling links. -->

@@ -10,6 +10,12 @@
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<!-- Home routes through SokoniPermissions.adminHomeFor() for administrative roles and
+     SokoniRoleAuthority.hubFor() for workspace roles. Without these the resolver is
+     unreachable and an administrator's Home silently stays "/". Placed BEFORE
+     shared-header in document order so a later `defer` change cannot break it. -->
+<script src="sokoni-permissions.js"></script>
+<script src="sokoni-role-authority.js"></script>
 <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
