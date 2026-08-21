@@ -563,6 +563,10 @@ body.adm-light .adm-sec-h{color:#111;}
      shared-header in document order so a later `defer` change cannot break it. -->
 <script src="sokoni-permissions.js"></script>
 <script src="sokoni-role-authority.js"></script>
+<!-- Administrative surface entry (F4). Gates on the CLAIM and on the administrative
+     context, so an administrator acting as a workspace role no longer keeps admin access.
+     Loads AFTER sokoni-permissions.js, which owns that context. -->
+<script src="sokoni-admin-entry.js"></script>
 <script src="shared-header.js" defer></script>
 </head>
 <body>
@@ -2336,6 +2340,16 @@ async function _tryUnlock(secret, mode) {
       }
       /* Store role for RBAC — superAdmin > admin */
       window._admClaimedRole = tokenResult.claims.superAdmin === true ? 'superAdmin' : 'admin';
+      /* F4. The claim above answers "may this account", never "is it doing so now".
+         An administrator who switched to Buyer kept full admin access because the
+         claim was all this gate read. 'admin' is requested even for a Super Admin:
+         requireAdminContext accepts superAdmin for an admin requirement, matching
+         adminHomeFor(), while admin never satisfies superAdmin. The denial surface
+         is rendered by SokoniAdminEntry, so nothing is shown here. */
+      if (window.SokoniAdminEntry) {
+        var gate = await window.SokoniAdminEntry.guard('admin');
+        if (!gate.ok) return;
+      }
     } catch (claimErr) {
       /* Network error — deny access to prevent offline bypass attacks */
       _lockSetError('Cannot verify admin claim — check your connection and try again.');

@@ -1,3 +1,78 @@
+## [2026-08-21] - F4: administrative surfaces gate on CONTEXT, not the claim alone. 15/0 + 18/1.
+
+Authorization-path change. Not deployed.
+
+    scripts/after-admin-context.mjs          15 passed / 0 failed   decision table
+    scripts/before-admin-surface-gate.mjs    18 passed / 1 failed   gate + controls
+    scripts/before-role-state-divergence.mjs 16 passed / 0 failed   F0-F3 regression
+
+**The defect.** `admin.html`, `super-admin.html` and `admin-os.html` each gated on the Firebase
+claim ALONE. The claim answers "may this account", never "is it doing so now" — so an administrator
+who switched to Buyer kept full admin access, and the workspace they were acting in disagreed with
+the surface they could open.
+
+**Why not activeRole.** `SokoniRoleAuthority` deliberately excludes `admin` and `superAdmin` from
+CANONICAL_ROLES: administrative access already has an owner (`sokoni-permissions.js`), and a second
+path to it is how this repository once had three answers for one role. `setActiveRole('admin')`
+returns `{ok:false, reason:'unknown-role'}` by design. So the administrative context is its own
+state, owned by the same file that owns `adminHomeFor()`:
+
+    activeRole    which WORKSPACE the account is acting in    SokoniRoleAuthority
+    adminContext  which ADMIN surface it has entered          sokoni-permissions.js
+
+They are mutually exclusive by construction — selecting any workspace role clears the context, via
+a `sokoniActiveRoleChanged` listener.
+
+**The context is a selector, not a token.** Every read re-checks `hasRole()`, which refuses an
+elevated role asserted only by cache, so the sessionStorage mirror cannot grant anything the token
+does not already carry. R6/R7 pin that: a forged mirror on a non-admin yields `ctx=null` and
+`no-claim`, and a forged `superAdmin` mirror on an admin account is refused.
+
+Decision table proven (fixture stubs `getIdTokenResult`; see UNPROVEN below):
+
+    claim       context              require('admin')  require('superAdmin')
+    admin       none                 DENY              DENY
+    admin       entered              ALLOW             DENY
+    admin       entered, switched    DENY              DENY     <- the invariant
+    superAdmin  entered via 'admin'  ALLOW             ALLOW
+    buyer       forged mirror        DENY              DENY
+
+New `sokoni-admin-entry.js` owns the entry decision and renders the denial. It fails CLOSED: an
+unavailable authority is an unknown answer, and an unknown answer on an administrative surface is a
+denial. The denial offers an Enter button only where the claim is already held — pressing it
+changes context and cannot grant a claim; `no-claim` is offered only the way out.
+
+**Controls.** `admin.html` is NOT in shared-header's EXCLUDED list and sets no `data-no-header`, so
+it already receives the injected nav — including the role switcher fixed in `dde54cc` — and the
+header's Sign out. `super-admin.html` and `admin-os.html` set `data-no-header="true"`, which returns
+from shared-header's top-level IIFE before `_skSwitchRole` is ever defined; they get
+`SokoniAdminEntry.mountControls()` instead: workspace switcher, Home, Sign out. That switcher
+implements nothing — it calls `_skSwitchRole` when present and `SokoniRoleAuthority.setActiveRole`
+otherwise. Two callers of one authority, not two authorities.
+
+The S rows in the surface proof were file-scoped greps and reported `admin.html` as having no role
+switcher, which was wrong — the injected header gives it one. They now ask whether the surface
+OFFERS the control (own markup, injected header, or admin-entry), not where the bytes live.
+
+Files: `sokoni-permissions.js`, `sokoni-admin-entry.js` (new), `admin.html`, `super-admin.html`,
+`sokoni-aos.js`, `scripts/after-admin-context.mjs` (new), `scripts/before-admin-surface-gate.mjs`.
+Database changes: none. API changes: none. Rules changes: none. Breaking change: administrators now
+enter an administrative surface deliberately once per session.
+
+Security: this is a CLIENT gate and decides only what to RENDER. Firestore rules and the admin
+callables remain the boundary that protects data and are unchanged. Nothing here widens permissions,
+adds permission vocabulary, or introduces a second credential.
+
+STILL OPEN: `admin.html` retains its own password/pattern lock (`lockPwInput`) — a second credential
+the F4 model excludes, and the one failing row. `super-admin.html`'s equivalent was removed earlier
+after a proof showed it appeared in 0 Cloud Functions and 0 rules. `admin.html`'s has NOT been
+measured yet, and is not being removed on the assumption that it is the same construct.
+
+UNPROVEN: the decision table comes from a fixture that stubs `getIdTokenResult`, the same boundary
+the F0-F3 fixture used. Behaviour with a real signed-in administrator, and the signed-in-non-admin
+path through `admin.html`'s sessionStorage resume, remain unproven pending a persona.
+
+
 ## [2026-08-21] - ROLE STATE: header switcher never rendered. F0-F3 fixed, 16/0.
 
 One acting role, read from one authority. Not deployed.

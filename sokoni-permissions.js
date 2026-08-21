@@ -575,6 +575,112 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+     9b. THE ADMINISTRATIVE CONTEXT
+  ══════════════════════════════════════════════════════════════
+
+     Holding the admin claim says what the account MAY do. It does not say what the
+     account is DOING. Before this, all three administrative surfaces gated on the
+     claim alone, so an administrator who switched to Buyer kept full admin access —
+     the workspace they were acting in and the surface they could open disagreed.
+
+     activeRole cannot express this. SokoniRoleAuthority deliberately excludes `admin`
+     and `superAdmin` from CANONICAL_ROLES (see its vocabulary comment, and
+     adminHomeFor above), because administrative access already has an owner and a
+     second path to it is how this repository previously ended up with three answers
+     for one role. So the administrative context lives HERE, beside that owner, as its
+     own state:
+
+         activeRole    which WORKSPACE the account is acting in   (SokoniRoleAuthority)
+         adminContext  which ADMIN surface the account has entered (this file)
+
+     They are mutually exclusive by construction: selecting any workspace role clears
+     the administrative context (listener at the end of this block).
+
+     WHAT THIS IS AND IS NOT. The claim is the authority; this is a context selector.
+     Every read re-checks hasRole(), which refuses an elevated role asserted only by
+     cache, so the sessionStorage mirror below cannot grant anything the token does not
+     already carry — forging it gets an administrator the surface their own claim
+     already allows, and gets everyone else nothing. It is the same relationship
+     activeRole has with claims, and it is NOT a substitute for the server: Firestore
+     rules and the admin callables remain the boundary that actually protects data. */
+
+  var _adminContext = null;
+  var ADMIN_CTX_KEY = 'sokoniAdminContext';
+
+  function _adminCtxMirror(v) {
+    try {
+      if (v) sessionStorage.setItem(ADMIN_CTX_KEY, v);
+      else sessionStorage.removeItem(ADMIN_CTX_KEY);
+    } catch (_) {}
+  }
+
+  /* Entering requires a VERIFIED claim, not a cached one — hasRole() enforces that
+     for elevated roles. Returns a reason so a caller can say why rather than
+     presenting a dead button. */
+  function enterAdminContext(role) {
+    var r = role === 'superAdmin' ? 'superAdmin' : 'admin';
+    if (!isLoggedIn())    return { ok: false, reason: 'signed-out' };
+    if (!isVerified())    return { ok: false, reason: 'not-verified' };
+    /* A Super Admin entering the Admin surface holds `superAdmin`, and need not also
+       hold `admin` — the same direction requireAdminContext() accepts. Resolving it
+       here keeps the two functions from disagreeing, which is how an Enter button
+       ends up refusing an account the gate would have admitted. */
+    if (!hasRole(r) && r === 'admin' && hasRole('superAdmin')) r = 'superAdmin';
+    if (!hasRole(r))      return { ok: false, reason: 'no-claim' };
+    _adminContext = r;
+    _adminCtxMirror(r);
+    try {
+      document.dispatchEvent(new CustomEvent('sokoniAdminContextChanged',
+        { detail: { context: r } }));
+    } catch (_) {}
+    return { ok: true, context: r };
+  }
+
+  /* The mirror is only ever a HINT for surviving a reload. It is re-validated against
+     hasRole() on every read, and dropped if the claim is gone. */
+  function getAdminContext() {
+    if (!_adminContext) {
+      try { _adminContext = sessionStorage.getItem(ADMIN_CTX_KEY) || null; } catch (_) {}
+    }
+    if (!_adminContext) return null;
+    if (!hasRole(_adminContext)) { _adminContext = null; _adminCtxMirror(null); return null; }
+    return _adminContext;
+  }
+
+  function clearAdminContext() {
+    if (!_adminContext) { try { _adminContext = sessionStorage.getItem(ADMIN_CTX_KEY) || null; } catch (_) {} }
+    if (!_adminContext) return;
+    _adminContext = null;
+    _adminCtxMirror(null);
+    try {
+      document.dispatchEvent(new CustomEvent('sokoniAdminContextChanged',
+        { detail: { context: null } }));
+    } catch (_) {}
+  }
+
+  /* THE administrative page decision. `superAdmin` satisfies an `admin` requirement —
+     the higher surface reaches the lower one and not the reverse, matching
+     adminHomeFor() — while `admin` never satisfies `superAdmin`. */
+  function requireAdminContext(required) {
+    var need = required === 'superAdmin' ? 'superAdmin' : 'admin';
+    if (!isLoggedIn())  return { ok: false, reason: 'signed-out' };
+    if (!isVerified())  return { ok: false, reason: 'not-verified' };
+    var ctx = getAdminContext();
+    var claimed = hasRole(need) || (need === 'admin' && hasRole('superAdmin'));
+    if (!claimed) return { ok: false, reason: 'no-claim', need: need };
+    if (!ctx)     return { ok: false, reason: 'context-not-entered', need: need, canEnter: true };
+    if (ctx !== need && !(need === 'admin' && ctx === 'superAdmin')) {
+      return { ok: false, reason: 'wrong-context', need: need, context: ctx, canEnter: true };
+    }
+    return { ok: true, context: ctx, need: need };
+  }
+
+  /* Mutual exclusion. Choosing a workspace role IS leaving the administrative surface;
+     without this the two states drift and an administrator acting as Buyer would still
+     open admin.html, which is the defect this block exists to close. */
+  document.addEventListener('sokoniActiveRoleChanged', function () { clearAdminContext(); });
+
+  /* ══════════════════════════════════════════════════════════════
      10. EXPORTS
   ══════════════════════════════════════════════════════════════ */
 
@@ -582,6 +688,7 @@
     init, guardCurrentPage,
     hasRole, hasAnyRole, hasAllRoles, can,
     adminHomeFor,
+    enterAdminContext, getAdminContext, clearAdminContext, requireAdminContext,
     getRoles, getLevel, isLoggedIn, isVerified,
     showAccessDenied,
     clearCache: _clearCache,

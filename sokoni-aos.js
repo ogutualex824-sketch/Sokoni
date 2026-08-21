@@ -26,9 +26,21 @@ window.SokoniAOS = (() => {
         window.location.href = "/";
         return;
       }
+      /* F4. The claim above answers "may this account", never "is it doing so now".
+         An administrator who switched to a workspace role kept full admin access
+         because the claim is all this gate used to read. The administrative context
+         is the second half; SokoniAdminEntry renders its own denial when it refuses. */
+      if (window.SokoniAdminEntry) {
+        const gate = await window.SokoniAdminEntry.guard('admin');
+        if (!gate.ok) return;
+      }
       _currentUser = { uid: user.uid, email: user.email, name: user.displayName,
                        isSuper: !!tok.claims.superAdmin };
       _bootUI();
+      /* data-no-header="true" returns from shared-header's top-level IIFE before
+         _skSwitchRole is defined, so this surface gets its own switcher / Home /
+         Sign out rather than the injected nav's. */
+      if (window.SokoniAdminEntry) window.SokoniAdminEntry.mountControls({ role: 'admin' });
     });
   }
 

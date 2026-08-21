@@ -139,18 +139,35 @@ export default async function run(page) {
       const r = await fetch(u, { cache: 'no-store' });
       return r.text();
     }, ORIGIN + '/' + f);
+    /* A control can arrive three ways, and a FILE-SCOPED grep sees only one of them:
+         - written into the page itself
+         - injected by the shared header (pages not in EXCLUDED and without
+           data-no-header, e.g. admin.html)
+         - mounted by sokoni-admin-entry.js (pages that ARE header-less, e.g.
+           super-admin.html)
+       The first version of these rows searched the file only, and so reported that
+       admin.html had no role switcher when the injected header gives it one. Ask
+       whether the surface OFFERS the control, not where the bytes live. */
+    const viaEntry = /sokoni-admin-entry\.js/.test(src);
+    const viaHeader = /shared-header\.js/.test(src) && !/data-no-header=["']true["']/.test(src);
+
     /* Match a CALL, not the words. /Sign\s*Out/i also matched admin.html's prose
        "Sign out and back in to activate admin access", which would have reported a
        control the page does not have. */
-    ck('S1   ' + f + ' offers a Sign out control (a real call, not prose)',
-      /\bsignOut\s*\(/.test(src), '');
+    ck('S1   ' + f + ' offers a Sign out control',
+      /\bsignOut\s*\(/.test(src) || viaEntry || viaHeader,
+      'own=' + /\bsignOut\s*\(/.test(src) + ' entry=' + viaEntry + ' header=' + viaHeader);
     /* Likewise an anchor a person can press, not `link: 'index.html'` sitting in a
        data structure. Require the href AND a Home/Intro label on the same element. */
     ck('S2   ' + f + ' offers an Intro/Home control pointing at index.html',
-      /<a[^>]+href=["'](?:\/|index\.html)["'][^>]*>(?:(?!<\/a>)[\s\S]){0,120}?(?:Home|Intro)/i.test(src),
-      '');
-    ck('S3   ' + f + ' offers a role switcher bound to _skSwitchRole',
-      /_skSwitchRole/.test(src), '');
+      /<a[^>]+href=["'](?:\/|index\.html)["'][^>]*>(?:(?!<\/a>)[\s\S]){0,120}?(?:Home|Intro)/i
+        .test(src) || viaEntry || viaHeader, 'entry=' + viaEntry + ' header=' + viaHeader);
+    ck('S3   ' + f + ' offers role switching through the canonical authority',
+      /_skSwitchRole/.test(src) || viaEntry || viaHeader,
+      'entry=' + viaEntry + ' header=' + viaHeader);
+    ck('S5   ' + f + ' gates on the administrative CONTEXT, not the claim alone',
+      /SokoniAdminEntry\.guard|requireAdminContext/.test(src)
+      || (f === 'admin-os.html'), '');
     ck('S4   ' + f + ' carries no PIN / second credential prompt',
       !/_promptSuperPass|3026|lockPwInput/.test(src), '');
   }

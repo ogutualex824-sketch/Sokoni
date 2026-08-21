@@ -16,6 +16,10 @@
      shared-header in document order so a later `defer` change cannot break it. -->
 <script src="sokoni-permissions.js"></script>
 <script src="sokoni-role-authority.js"></script>
+<!-- Administrative surface entry (F4). Gates on the CLAIM and on the administrative
+     context, so an administrator acting as a workspace role no longer keeps admin access.
+     Loads AFTER sokoni-permissions.js, which owns that context. -->
+<script src="sokoni-admin-entry.js"></script>
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

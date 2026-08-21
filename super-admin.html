@@ -16,6 +16,10 @@
      shared-header in document order so a later `defer` change cannot break it. -->
 <script src="sokoni-permissions.js"></script>
 <script src="sokoni-role-authority.js"></script>
+<!-- Administrative surface entry (F4). Gates on the CLAIM and on the administrative
+     context, so an administrator acting as a workspace role no longer keeps admin access.
+     Loads AFTER sokoni-permissions.js, which owns that context. -->
+<script src="sokoni-admin-entry.js"></script>
 <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1916,8 +1920,20 @@ const SA={
            Account login is the one entry authentication. A PIN does not determine
            Admin/Super Admin access. (The Wallet PIN is unrelated: it is server-verified and
            authorises money movement, not a surface.) */
+        /* F4. The claim above answers "may this account", never "is it doing so
+           now". A Super Admin who switched to a workspace role kept full access
+           because the claim was all this gate read. SokoniAdminEntry renders its
+           own denial when it refuses, so there is nothing to show here. */
+        if (window.SokoniAdminEntry) {
+          const gate = await window.SokoniAdminEntry.guard('superAdmin');
+          if (!gate.ok) return;
+        }
         document.getElementById('authGate').style.display='none';
         SA.init(user);
+        /* data-no-header="true" returns from shared-header's top-level IIFE before
+           _skSwitchRole exists, so this surface carries its own switcher and Home.
+           Sign Out is already present in the page and is left alone. */
+        if (window.SokoniAdminEntry) window.SokoniAdminEntry.mountControls({ role: 'superAdmin' });
       }catch(err){
         console.error('[SuperAdmin] Auth check failed:',err);
         location.href='login.html?error=auth_check_failed';
