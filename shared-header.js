@@ -43,6 +43,45 @@
     } catch (e) { /* SW wiring must never break header rendering */ }
   }());
 
+  /* ── SELF-BOOTSTRAP THE ROLE AUTHORITY ───────────────────────────────────────
+     This header injects a role switcher on every page that is not EXCLUDED and does
+     not set data-no-header — 180 pages. Only FIVE of them load
+     sokoni-role-authority.js and sokoni-permissions.js.
+
+     On the other 175 the switcher renders and NOTHING canonical can answer it, so
+     every reader falls back to the localStorage mirror. Measured live on /cart:
+
+       SokoniRoleAuthority  undefined
+       SokoniPermissions    undefined
+       dropdownMarked       "Buyer"    (from ls_activeRole — the mirror)
+
+     The switcher was not wrong there; it degraded exactly as designed. But that
+     makes the mirror the authority again on 175 pages, which is the whole class of
+     defect this release set out to remove — and it is invisible to a harness that
+     injects the modules itself, which is what mine did.
+
+     Same shape as the service-worker bootstrap above, and for the same reason: a
+     capability this file DEPENDS ON should not require 175 pages to remember a
+     script tag. Idempotent, skipped where the page already loads them, and ordered
+     permissions-then-authority to match the five pages that do it by hand.
+
+     Loading late is safe: nothing here reads the authority synchronously, and the
+     switcher already repaints on sokoniRoleAuthorityReady and sokoniRolesReady, so
+     arrival triggers the correction rather than being missed. */
+  (function _ensureRoleAuthority() {
+    try {
+      if (window.__sokoniAuthorityInjected) return;
+      window.__sokoniAuthorityInjected = true;
+      ['sokoni-permissions.js', 'sokoni-role-authority.js'].forEach(function (f) {
+        if (document.querySelector('script[src*="' + f + '"]')) return;
+        var s = document.createElement('script');
+        s.src = '/' + f;
+        s.defer = true;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    } catch (e) { /* the header must render even if the authority cannot load */ }
+  }());
+
   /* ── SPLASH SCREEN — unique per page, runs on every page load ────────
      Injects a full-screen branded splash overlay immediately, before any
      content paints, then fades out once the page is ready (min 1.8 s).

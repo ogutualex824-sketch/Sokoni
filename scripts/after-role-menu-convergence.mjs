@@ -56,6 +56,13 @@ export default async function run(page) {
     }));
 
     window.__FX = { roles, ra, claims };
+    /* shared-header now SELF-BOOTSTRAPS sokoni-permissions.js and
+       sokoni-role-authority.js, so the real modules load after this init script and
+       overwrite these stubs — which took this harness from 18/0 to 9/9 the moment
+       the bootstrap landed. The product is correct; the fixture has to survive it.
+       Installed as a function so paint() can re-apply after the real ones arrive,
+       the same guard the F0-F3 harness already uses. */
+    window.__installStubs = function () {
     window.SokoniRoleAuthority = {
       _r: ra,
       isVerified() { return true; },
@@ -91,6 +98,8 @@ export default async function run(page) {
       },
       init() { return Promise.resolve(); },
     };
+    };                       /* end __installStubs */
+    window.__installStubs();
     /* stop the header navigating away mid-probe */
     window.__nav = [];
   });
@@ -98,6 +107,9 @@ export default async function run(page) {
   async function paint(qs) {
     await page.goto(BASE + '?' + qs, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#sk-nav-actions', { timeout: 15000 }).catch(() => {});
+    /* Re-apply the fixture: the header self-bootstraps the REAL authority modules,
+       which replace the stubs installed at document-start. */
+    await page.addScriptTag({ content: 'window.__installStubs && window.__installStubs();' });
     await page.addScriptTag({ content:
       'document.dispatchEvent(new CustomEvent("sokoniAuthReady",{detail:{'
       + 'uid:"fx",roles:window.__FX.roles,role:window.__FX.ra}}));' });

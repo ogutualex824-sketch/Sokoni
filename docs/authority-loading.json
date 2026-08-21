@@ -1,0 +1,2547 @@
+{
+  "generated": "census-authority-loading",
+  "total": 317,
+  "tally": {
+    "MIRROR-ONLY": 175,
+    "NO-HEADER": 137,
+    "FULL": 5
+  },
+  "rows": [
+    {
+      "page": "404.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "about.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "account-centre.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "FULL"
+    },
+    {
+      "page": "admin-feedback.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "admin-messages.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "admin-os.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "admin-subscriptions.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "admin.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "FULL"
+    },
+    {
+      "page": "ai-subscriptions.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "analytics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "api-gateway.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "async-jobs.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "auction-manager.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "auction.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "automation-center.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "automation-engine.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "availability-manager.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "b2b-chat.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b-orders.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b-rfq.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b-seller-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b-supplier.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "b2b.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "banking.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "beta-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "beta.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "bnb-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "bnb-manage.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "bnb.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "business-analytics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "business-health.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "business-kpi.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "business-os.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "business.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "businesses.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "car-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "car-rental.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "careers.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "cart.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "category.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "chat.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "checkout-2-preview.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "checkout.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "cleaning.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "commerce-os.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "commission-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "commission-engine.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "commissioning.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "community-guidelines.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "community.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "construction.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "contact.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "cookie-policy.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "coupon-manager.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "creative-studio.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "crm.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "customer-analytics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "customer-display.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "data-deletion.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "delivery-tracking.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "delivery.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "developer-portal.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "digital-esoko-seller.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "digital-esoko.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "digital-store.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "digital.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "dispatch.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "dispute-portal.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "dispute.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "driver-success.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "driver.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "FULL"
+    },
+    {
+      "page": "earnings.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "ecc.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "education.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "electrical.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "email-center.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "ent-organizer.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "enterprise-certification.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "enterprise-ops.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "entertainment.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "etims-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "etims-seller.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "event-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "event-manager.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "executive-dashboard.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "expense-management.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "faq.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "feedback.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "feeds.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "finance-budget.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "finance-expenses.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "finance-invoices.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "finance-reconcile.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "financial-os.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "finos-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "finos.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "fitness-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "flashsale.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "fleet-manager.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "fleet-monitor.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "food-cart.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "food-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "food-menu.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "food-order.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "food-rider.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "food.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "fos-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "franchise.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "general-ledger.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "gip.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "growth-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "healthcare.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "help.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "home-services.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "hr-payroll.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "hub-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "index.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "FULL"
+    },
+    {
+      "page": "inspiq.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "inv-ai.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "inv-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "inv-product.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "inv-products.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "inventory.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "invoice.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "job-post.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "jobs.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "join.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "kass-developer.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kass-executive.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kass-finance.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kass-manager.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kass-seller.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kass-support.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "kitchen-display.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "landlord.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "FULL"
+    },
+    {
+      "page": "launch-metrics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "launch-readiness.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "launch.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "legal-admin.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "legal-centre.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "legal-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "legal.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "life-events.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "login.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "logistics-reports.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "loyalty-merchant.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "loyalty.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "manager-auth.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "marketing-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "marketing.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "mechanics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "merchant-pipeline.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "merchant-success.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "merchant-v2.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "merchant.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "messages-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "messages.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "minishop-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "minishop-status.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "minishop.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "ministore.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "moderation.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "monitor.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "my-orders.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "my-subscriptions.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "notifications.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "observability.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "offer.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "offline.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "onboarding-driver.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "onboarding-professional.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "onboarding-seller.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "onboarding.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "opportunity.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "ops-center.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "ops-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "org-directory.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "org-structure.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "org-workflows.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "partner-portal.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pay.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "payment-receipt.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "payment-security.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "payments.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "phone-repair.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "plans.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "platform-health.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "platform-hub.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "platform.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "plumbing.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-accounting.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-ai.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-bi.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-cash-manager.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-certification.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-checkout.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-completeness.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-crm-pro.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-customers.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-daily.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-display.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-hardware-wizard.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-hq.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-inventory-intelligence.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-inventory.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-kds.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-kiosk.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-launch-report.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-live-floor.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-marketplace.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-observability.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-onboard.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-printer-setup.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-reports.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-setup.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-staff-ops.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-suppliers.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos-till-manager.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "pos-workspace.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "pos.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "press.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "print-station.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "privacy.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "procurement.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "product.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "professional-profile.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "profile.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "property-agent-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "property-agent.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "property-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "property-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "property-listing.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "property.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "provider-dashboard.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "provider-onboarding.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "provider-profile.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "provider-terms.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "provider.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "providers.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "qr-center.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "redis-monitor.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "referral.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "refund-policy.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "register.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "release-readiness.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "reliability-center.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "rental.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "requests.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "returns-policy.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "returns.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "revenue-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "revenue.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "reviews.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "ride-book.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "rider-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "rider-nav.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "route-planner.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "sasos-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "scan.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "search-quality.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "search.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "security-center.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "security-compliance.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "security-zero-trust-dashboard.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "sell.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-analytics.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-delivery.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-earnings.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-fulfilment.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-public.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-revenue.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-success.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "seller-terms.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "seller-wallet.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "seller.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "services.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "settlement-dashboard.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "sfos-wallet.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "signup.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "sokoni-cert.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "sports-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "sports-tournament.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "sports-venue.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "staff-management.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "status.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "store.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "subscription-billing.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "subscription-os.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": true,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "subscriptions.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "success.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "super-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": true,
+      "permissions": true,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "support.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "task-queue.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "tech-hub.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "tenant-portal.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "terms.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "test-accounts.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "track.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "trust-and-safety.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "trust-safety.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "trust.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "uat-center.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "unboxing.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "venue-booking.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "venue-manager.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "verification-admin.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "verification.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "vision-2030.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "wallet.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "wap.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "warehouse-scanner.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "warehouse.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "webhooks.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "wholesale-portal.html",
+      "header": true,
+      "noHeader": true,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "NO-HEADER"
+    },
+    {
+      "page": "wishlist.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    },
+    {
+      "page": "workspace-invite.html",
+      "header": true,
+      "noHeader": false,
+      "roleAuthority": false,
+      "permissions": false,
+      "verdict": "MIRROR-ONLY"
+    }
+  ]
+}
