@@ -543,23 +543,43 @@
      listening, so a late loader catches up instead of waiting forever. */
   var _booted = false;
   function _bootOnce() { if (_booted) return; _booted = true; _boot(); }
+
+  /* Every trigger, none of them exclusive.
+
+     The first version of this put the flag check and the catch-up poll in ELSE
+     branches, so when SokoniAuthState existed — it does, on profile.html and
+     elsewhere — that branch ran alone with no fallback behind it. And
+     whenResolved() legitimately fires EARLY with an optimistic, signed-out session
+     (its own timeout path), which makes refresh() settle on _approved=[buyer],
+     _verified=false. In that branch nothing ever retried.
+
+     An unverified authority is precisely the state that lets the header and the
+     switcher fall back to two different mirrors and disagree. So: try every
+     trigger, let _bootOnce()'s idempotence sort out which one wins, and keep
+     watching until the authority has actually seen a user. */
   try {
     if (window.SokoniAuthState && window.SokoniAuthState.whenResolved) {
       window.SokoniAuthState.whenResolved(_bootOnce);
-    } else if (window.__sokoniAuthReady === true) {
-      _bootOnce();                                   /* already published — catch up */
-    } else {
-      document.addEventListener('sokoniAuthReady', _bootOnce, { once: true });
-      /* Belt and braces: the flag may be set by a path that does not dispatch, and
-         a poll bounded to ~7.5s cannot mask a genuine signed-out state — it stops. */
-      var _n = 0;
-      (function _watch() {
-        if (_booted) return;
-        if (window.__sokoniAuthReady === true) return _bootOnce();
-        if (++_n > 250) return;
-        setTimeout(_watch, 30);
-      }());
     }
+    if (window.__sokoniAuthReady === true) _bootOnce();
+    document.addEventListener('sokoniAuthReady', _bootOnce, { once: true });
+
+    /* THE CONVERGENCE WATCH.
+       Runs regardless of which trigger fired, and asks the only question that
+       matters: is there a real user that the authority has not yet verified
+       against? Bounded to ~10s so a genuinely signed-out session stops rather than
+       polling forever, and it can only ever cause a re-verification — it never
+       demotes, so it cannot widen or narrow entitlement on its own. */
+    var _n = 0;
+    (function _converge() {
+      try {
+        if (window.__sokoniAuthReady === true && !_booted) _bootOnce();
+        if (_authUser() && !_verified) refresh(true);
+        else if (_verified) return;                  /* settled — stop watching */
+      } catch (_) {}
+      if (++_n > 330) return;                        /* ~10s */
+      setTimeout(_converge, 30);
+    }());
   } catch (_) {}
 
   /* Re-verify when the SESSION changes, not only once per load. A token refresh

@@ -134,6 +134,43 @@ export default async function run(page) {
   ck('C1   authority=driver, mirror=buyer -> dropdown marks DRIVER',
     m.current === 'driver', 'marked=' + m.current);
 
+  /* The window BEFORE the authority verifies. Both consumers must still give ONE
+     answer: this is the state that produced Driver in the header and Buyer in the
+     menu, and it is reached on any load where verification has not finished. */
+  await page.goto(BASE + '?roles=buyer,driver&ra=driver&mirror=buyer',
+    { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content:
+    'window.SokoniRoleAuthority.isVerified = function(){ return false; };' });
+  await page.waitForSelector('#sk-nav-actions', { timeout: 15000 }).catch(() => {});
+  await page.addScriptTag({ content:
+    'document.dispatchEvent(new CustomEvent("sokoniAuthReady",{detail:{'
+    + 'uid:"fx",roles:window.__FX.roles,role:"buyer"}}));' });
+  await page.waitForTimeout(700);
+  await page.addScriptTag({ content: `
+    (function () {
+      var menu = document.getElementById('sk-role-menu');
+      var marked = null;
+      if (menu) {
+        Array.prototype.forEach.call(menu.querySelectorAll('a[role="menuitem"]'), function (a) {
+          if (/current/i.test(a.textContent || '')) {
+            var sp = a.querySelectorAll('span');
+            marked = sp[1] ? (sp[1].textContent || '').trim().toLowerCase() : null;
+          }
+        });
+      }
+      var mirror = null;
+      try {
+        var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+        mirror = u.activeRole || u.role || null;
+      } catch (e) {}
+      document.documentElement.setAttribute('data-d',
+        JSON.stringify({ marked: marked, mirror: mirror }));
+    }());` });
+  const dv = JSON.parse((await page.getAttribute('html', 'data-d')) || '{}');
+  ck('C1b  authority UNVERIFIED -> header and menu share ONE mirror',
+    dv.marked === dv.mirror && !!dv.marked,
+    'menu=' + dv.marked + ' mirror=' + dv.mirror);
+
   /* ── 2. Admin entries appear only with the claim ── */
   await paint('roles=buyer,driver&ra=buyer&claims=admin');
   m = await readMenu();

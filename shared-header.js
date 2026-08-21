@@ -1857,6 +1857,24 @@
   /* THE acting-role resolver for the header. Authority first; the caller's mirror value
      only while the authority is genuinely uninitialised or unverified — "unverified" means
      UNKNOWN, and answering from the mirror is a first-paint stopgap, never a decision. */
+  /* ONE mirror answer, for the window before the authority has verified.
+
+     The header and the switcher both prefer the authority — but while it is still
+     unverified they each fell back to a DIFFERENT value: the header to whatever its
+     caller passed, the switcher to detail.role. Two fallbacks, one screen, and the
+     header said Driver while the menu marked Buyer.
+
+     A mirror is not an authority, but it must at least be a SINGLE mirror. Reading
+     activeRole first matters: that is the field a switch actually writes, while
+     `role` is never rewritten when the acting role changes and is stale by
+     construction. */
+  function _skMirrorRole() {
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+      return u.activeRole || u.role || (Array.isArray(u.roles) ? u.roles[0] : '') || '';
+    } catch (_) { return ''; }
+  }
+
   function _skActingRole(fallback) {
     try {
       var RA = window.SokoniRoleAuthority;
@@ -1865,7 +1883,9 @@
         if (r) return r;
       }
     } catch (_) {}
-    return fallback || '';
+    /* The shared mirror wins over the caller's own guess, so every consumer that
+       reaches this line gets the same answer. */
+    return _skMirrorRole() || fallback || '';
   }
 
   function _skActiveRoleLine(active) {
