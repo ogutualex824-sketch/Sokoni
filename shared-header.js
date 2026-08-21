@@ -1033,14 +1033,31 @@
 
     /* ── Account dropdown ── */
     .sk-acct-wrap { position: relative; flex-shrink: 0; }
+    /* The MENU owns its scrolling, not the page.
+
+       This was overflow:hidden with no height cap. It now carries the workspace
+       roles, the Administration entries and every account link, so on a phone the
+       lower items fell off with no way to reach them. Capping the height and
+       scrolling inside keeps every entry reachable at any list length, and
+       overscroll-behavior stops the gesture escaping to the document once the menu
+       hits its end — otherwise the page scrolls away underneath an open menu. */
     #sk-acct-popup {
       position: absolute; top: calc(100% + 10px); right: 0;
       min-width: 220px; background: #141414;
       border: 1px solid rgba(113,255,0,0.15); border-radius: 14px;
       box-shadow: 0 16px 40px rgba(0,0,0,.6);
-      z-index: 99999; overflow: hidden;
+      z-index: 99999;
+      width: max-content; max-width: min(92vw, 340px);
+      max-height: min(78vh, 520px);
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain; touch-action: pan-y;
       animation: skAcctIn .18s cubic-bezier(.19,1.32,.34,1);
     }
+    /* The administrative entries read as a different KIND of choice, because they
+       are: they enter a context rather than change the acting workspace. */
+    .sk-acct-admin-pill { border-color: rgba(192,132,252,.35) !important; }
+    .sk-acct-admin-pill.active { background: rgba(192,132,252,.12) !important; color: #c084fc !important; }
     @keyframes skAcctIn {
       from { opacity: 0; transform: translateY(-8px) scale(.97); }
       to   { opacity: 1; transform: none; }
@@ -1836,18 +1853,65 @@
       '</div>' +
       '<div class="sk-acct-separator"></div>';
 
-    /* ── Role pills (personal roles, only if > 1 AND in personal mode) ── */
-    const rolePills = (isPersonalActive && roles.length > 1)
+    /* ── Role menu — ONE entry point, inside the profile dropdown ────────────────
+       This listed `roles` straight from user.roles, the localStorage mirror, and had
+       no administrative entries at all. Two problems: the mirror is not the
+       authority, and a separate standalone switcher button duplicated the same idea
+       elsewhere in the header.
+
+       Now the workspace list comes from _skSwitcherState(), which asks
+       SokoniRoleAuthority and only falls back to the mirror while the authority is
+       still unverified. Administration comes from SokoniPermissions.hasRole(), which
+       refuses an elevated role asserted only by cache — so a forged
+       roles:['buyer','admin','superAdmin'] in localStorage cannot conjure an entry.
+
+       The two halves call DIFFERENT authorities on purpose:
+         workspace  -> _skSwitchRole()      -> setActiveRole()
+         admin      -> enterAdminContext()  -> the administrative surface
+       `admin` and `superAdmin` are outside CANONICAL_ROLES, so setActiveRole would
+       refuse them by design. One menu, two authorities. */
+    const _st = _skSwitcherState(_skLastAuthDetail);
+    const _wsRoles = _st.roles || [];
+    const _acting = _st.current || active;
+
+    const workspaceStrip = (isPersonalActive && _wsRoles.length > 1)
       ? '<div class="sk-acct-role-strip">' +
           '<div class="sk-acct-role-label">Switch Role</div>' +
           '<div class="sk-acct-role-pills">' +
-            roles.map(r =>
-              '<button class="sk-acct-role-pill ' + (r === active ? 'active' : '') + '" ' +
-                'onclick="window._skSwitchRole(\'' + r + '\')">' + rName(r) + '</button>'
+            _wsRoles.map(r =>
+              '<button class="sk-acct-role-pill ' + (r === _acting ? 'active' : '') + '" ' +
+                'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' + _hesc(rName(r)) + '</button>'
             ).join('') +
           '</div>' +
-        '</div>' +
-        '<div class="sk-acct-separator"></div>'
+        '</div>'
+      : '';
+
+    /* Administration — rendered only for a claim the authority confirms. */
+    var _adminEntries = [];
+    try {
+      var _P = window.SokoniPermissions;
+      if (_P && typeof _P.hasRole === 'function') {
+        if (_P.hasRole('superAdmin')) _adminEntries.push({ r: 'superAdmin', l: 'Super Admin', i: '👑' });
+        if (_P.hasRole('admin'))      _adminEntries.push({ r: 'admin',      l: 'Admin',       i: '🛡️' });
+      }
+    } catch (_) {}
+    var _ctx = null;
+    try { _ctx = window.SokoniPermissions && window.SokoniPermissions.getAdminContext(); } catch (_) {}
+
+    const adminStrip = _adminEntries.length
+      ? '<div class="sk-acct-role-strip">' +
+          '<div class="sk-acct-role-label">Administration</div>' +
+          '<div class="sk-acct-role-pills">' +
+            _adminEntries.map(a =>
+              '<button class="sk-acct-role-pill sk-acct-admin-pill ' + (_ctx === a.r ? 'active' : '') + '" ' +
+                'onclick="window._skEnterAdmin(\'' + _hesc(a.r) + '\')">' + a.i + ' ' + _hesc(a.l) + '</button>'
+            ).join('') +
+          '</div>' +
+        '</div>'
+      : '';
+
+    const rolePills = (workspaceStrip || adminStrip)
+      ? workspaceStrip + adminStrip + '<div class="sk-acct-separator"></div>'
       : '';
 
     const popup = document.createElement('div');
@@ -1875,6 +1939,21 @@
 
     const wrap = document.getElementById('sk-acct-wrap');
     if (wrap) wrap.appendChild(popup);
+
+    /* Keep the open menu inside the viewport. It is anchored right:0 to the avatar,
+       and on a narrow screen a 340px menu hangs off the left edge — the overflow
+       comes from the ANCHOR OFFSET, not the width, so max-width alone cannot fix it.
+       Measured after paint, because the avatar's position depends on which action
+       icons the page happens to render. */
+    (function _clampAcct() {
+      try {
+        popup.style.right = '0px';
+        var r = popup.getBoundingClientRect();
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        if (r.left < 8) popup.style.right = Math.round(r.left - 8) + 'px';
+        else if (r.right > vw - 8) popup.style.right = Math.round((vw - 8) - r.right) * -1 + 'px';
+      } catch (_) {}
+    }());
 
     const avatar = document.getElementById('sk-nav-avatar');
     if (avatar) avatar.setAttribute('aria-expanded', 'true');
@@ -2043,6 +2122,35 @@
         if (here.toLowerCase() !== hub.toLowerCase()) location.href = hub;
       }
     } catch (_) {}
+  };
+
+  /* ── Entering an administrative surface from the profile menu ────────────────
+     Deliberately NOT _skSwitchRole: `admin` and `superAdmin` are outside
+     CANONICAL_ROLES, so setActiveRole refuses them by design. This asks
+     SokoniPermissions, which checks the claim through hasRole() — an elevated role
+     asserted only by cache is refused, so a forged localStorage entry gets nothing.
+
+     On refusal it says why and changes NOTHING visible. A menu must not behave as
+     though a surface opened when the authority just declined it. */
+  window._skEnterAdmin = function (role) {
+    var P = window.SokoniPermissions;
+    var dest = role === 'superAdmin' ? 'super-admin.html' : 'admin.html';
+    var res = null;
+    try { res = (P && P.enterAdminContext) ? P.enterAdminContext(role) : null; } catch (_) { res = null; }
+    if (!res || res.ok !== true) {
+      var why = (res && res.reason) || 'unavailable';
+      var msg = why === 'no-claim'     ? 'That role is not available on this account.'
+              : why === 'not-verified' ? 'Could not verify your roles. Check your connection and try again.'
+              : why === 'signed-out'   ? 'Sign in to continue.'
+              : 'Could not open that surface right now.';
+      try {
+        if (window.showNotif) window.showNotif(msg, 'error');
+        else console.warn('[role-menu] ' + why + ': ' + msg);
+      } catch (_) {}
+      return;
+    }
+    try { window._skCloseAcct(); } catch (_) {}
+    location.href = dest;
   };
 
   /* The local mirror of an already-authorised decision. Kept separate so the
@@ -2598,10 +2706,22 @@
   }
 
   function _injectRoleSwitcher(roles, currentRole) {
-    /* "Fewer than two workspace roles" no longer means "nothing to switch to".
-       An administrator whose only workspace role is buyer still has Admin and
-       Super Admin to reach, and bailing here hid the menu entirely for exactly
-       the accounts that most needed it. */
+    /* ── RETIRED as a standalone control ──────────────────────────────────────
+       The header carried TWO ways to change role: this button, and the role strip
+       inside the profile dropdown. Two controls for one decision is how they drift
+       — and they did, because this one read the authority while the profile strip
+       read user.roles from localStorage.
+
+       The profile/avatar is now the single entry point, and it carries both the
+       workspace roles and the Administration entries. This function is kept as a
+       no-op rather than deleted so that any page or script still calling it fails
+       quietly instead of throwing, and so the removal reads as deliberate.
+
+       The account popup is rebuilt on the same events this used to repaint on, so
+       nothing is lost by not rendering here. */
+    return;
+
+    /* eslint-disable no-unreachable */
     if ((!roles || roles.length < 2) && !_skHasAdminClaim()) return;
     roles = roles || [];
     if (document.getElementById('sk-role-switcher')) return; /* Already injected */

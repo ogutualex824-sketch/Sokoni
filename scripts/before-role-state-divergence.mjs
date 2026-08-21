@@ -122,7 +122,35 @@ function probe() {
   document.documentElement.setAttribute('data-probe', JSON.stringify(out));
 }
 
+/* SUPERSEDED WHEN THE STANDALONE SWITCHER IS ABSENT.
+
+   Every row here is about #sk-role-switcher / #sk-role-menu — the separate header
+   button retired once the role menu moved inside the profile dropdown. The F0-F3
+   findings it recorded (insertBefore on a non-child, the mirror-vs-authority split,
+   the missing re-render) are history worth keeping, but the control is gone.
+
+   Equivalent coverage: scripts/after-unified-role-menu.mjs, on a real page.
+
+   Reporting SUPERSEDED beats failing forever against a control that no longer
+   exists — a permanently red harness teaches people to ignore red. */
+async function _supersededGuard(page, url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#sk-nav-actions', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const present = await page.evaluate(() => !!document.getElementById('sk-role-switcher'));
+  if (present) return null;
+  return {
+    SUPERSEDED: true,
+    reason: 'the standalone role switcher was retired; the role menu now lives in the profile dropdown',
+    replacement: 'scripts/after-unified-role-menu.mjs',
+    passed: 0, failed: 0, rows: [],
+  };
+}
+
 export default async function run(page) {
+  const _sup = await _supersededGuard(page, BASE);
+  if (_sup) return _sup;
+
   await page.addInitScript(fixture);
 
   const rows = [];

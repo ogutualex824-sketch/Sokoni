@@ -33,7 +33,37 @@
 
 const BASE = 'http://127.0.0.1:8901/404.html';
 
+/* SUPERSEDED WHEN THE STANDALONE SWITCHER IS ABSENT.
+
+   This harness exercises #sk-role-switcher / #sk-role-menu — a separate header
+   button that was retired once the role menu moved inside the profile dropdown.
+   Two controls for one decision is how they drift, and they did: this one read the
+   authority while the profile strip read user.roles from localStorage.
+
+   The rows below stay as the record of what was proven at the time. Equivalent
+   coverage now lives in scripts/after-unified-role-menu.mjs, which runs on a REAL
+   page (/cart) and injects no modules of its own.
+
+   Reporting SUPERSEDED beats failing forever against a control that no longer
+   exists — a permanently red harness teaches people to ignore red. */
+async function _supersededGuard(page, url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#sk-nav-actions', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const present = await page.evaluate(() => !!document.getElementById('sk-role-switcher'));
+  if (present) return null;
+  return {
+    SUPERSEDED: true,
+    reason: 'the standalone role switcher was retired; the role menu now lives in the profile dropdown',
+    replacement: 'scripts/after-unified-role-menu.mjs',
+    passed: 0, failed: 0, rows: [],
+  };
+}
+
 export default async function run(page) {
+  const _sup = await _supersededGuard(page, BASE);
+  if (_sup) return _sup;
+
   const rows = [];
   const ck = (label, ok, detail) => rows.push({ label, ok, detail: detail || '' });
 
