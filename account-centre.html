@@ -22,6 +22,11 @@
   <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
        through SokoniCart; without this tag the pip cannot render a count. -->
   <script src="sokoni-cart.js"></script>
+  <!-- The role authority MUST load before shared-header: _skSwitchRole falls back to a
+       local mirror when SokoniRoleAuthority is absent, so delegating to it from a page that
+       loads no authority would assert a role without ever asking. defer preserves order. -->
+  <script src="sokoni-role-authority.js" defer></script>
+  <script src="sokoni-permissions.js" defer></script>
   <script src="shared-header.js" defer></script>
   <style>
     /* ── Tokens ─────────────────────────────────────────── */
@@ -2165,25 +2170,56 @@ window.acRevokeDevice = async function(sessionId) {
 };
 
 /* ── Role switcher ──────────────────────────────────────────── */
+/* ── ROLE SWITCHING DELEGATES TO THE ONE AUTHORITY PATH ─────────────────────
+   This used to be a third, rival implementation. Measured
+   (scripts/before-role-entry-coordination.js, 11/3/1): it called no authority and had no
+   refusal branch — it reordered `roles` from localStorage, wrote `sokoniUser.role`/`.roles`
+   and announced the switch. A role selection that asks nothing is a client-side assertion,
+   and `seller-analytics.html:_isSellerDoc()` reads exactly those keys.
+
+   `_skSwitchRole` (shared-header.js) is the path `profile.switchRole` already shares: it
+   calls `SokoniRoleAuthority.setActiveRole`, refuses with a stated reason when the account
+   does not hold the role, persists `activeRole` server-side, and only then navigates.
+   Delegating leaves TWO call sites onto ONE authority instead of three implementations.
+
+   No local reordering remains. If the shared switcher is somehow absent, this REFUSES
+   rather than falling back to asserting the role locally — the fallback was the defect. */
 window.acSwitchRole = function(role) {
-  if (!_u) return;
-  // Reorder roles array so selected role is first
-  const roles = Array.isArray(_u.roles) ? [..._u.roles] : [role];
-  const idx   = roles.indexOf(role);
-  if (idx > 0) { roles.splice(idx, 1); roles.unshift(role); }
-  _u.roles = roles;
-  _u.role  = role;
-  try { localStorage.setItem('sokoniUser', JSON.stringify(_u)); } catch (_) {}
-  if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
-  // Re-render role switcher
-  const switcher = document.getElementById('acRoleSwitcher');
-  if (switcher) {
-    switcher.innerHTML = roles.map(r =>
-      `<button class="ac-role-pill ${r === role ? 'active-role' : ''}" onclick="window.acSwitchRole('${_esc(r)}')">${_roleName(r)}</button>`
-    ).join('');
-  }
-  document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role } }));
+  if (typeof window._skSwitchRole === 'function') return window._skSwitchRole(role);
+
+  var msg = 'Cannot switch roles right now — please refresh.';
+  try {
+    if (window.SokoniPermissions && typeof window.SokoniPermissions.showAccessDenied === 'function') {
+      window.SokoniPermissions.showAccessDenied(role);
+    } else if (window.SokoniToast && window.SokoniToast.show) {
+      window.SokoniToast.show(msg, 'error');
+    } else if (window.showNotif) {
+      window.showNotif(msg, 'error');
+    } else {
+      console.warn('[account-centre] role switch unavailable: ' + msg);
+    }
+  } catch (_) { /* a missing notifier must not become a silent local switch */ }
 };
+
+/* The authority announces the change; the pills follow it rather than predicting it. */
+document.addEventListener('sokoniRoleChanged', function () {
+  try {
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    if (u) _renderRoleSwitcher(u);
+  } catch (_) {}
+});
+
+function _renderRoleSwitcher(u) {
+  var switcher = document.getElementById('acRoleSwitcher');
+  if (!switcher) return;
+  var roles = Array.isArray(u.roles) ? u.roles : [];
+  if (!roles.length) { switcher.innerHTML = '<span class="ac-badge ac-badge-grey">Buyer</span>'; return; }
+  var active = u.activeRole || u.role || roles[0];
+  switcher.innerHTML = roles.map(function (r) {
+    return '<button class="ac-role-pill ' + (r === active ? 'active-role' : '') +
+           '" onclick="window.acSwitchRole(\'' + _esc(r) + '\')">' + _roleName(r) + '</button>';
+  }).join('');
+}
 
 /* ── Edit field ─────────────────────────────────────────────── */
 window.acEditField = function(field) {
