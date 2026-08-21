@@ -167,8 +167,28 @@ exports.posRevokeApiKey = onCall(_CF, async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'API key not found');
   const keyData = snap.data();
 
-  /* Ensure caller can manage this key (same seller or admin) */
-  const isAdmin = ['admin','superadmin'].includes(auth.token?.role || '');
+  /* Ensure caller can manage this key (same seller or admin)
+
+     This tested ONLY `auth.token.role`, which the canonical role setter never
+     writes — setUserRole sets the BOOLEAN claims (admin/superAdmin/…) and no
+     `role` key at all. Measured against production, in
+     docs/USERS-RECONCILIATION-RESULT.md: all three accounts holding an admin or
+     superAdmin claim have `claims.role` absent, and one carries it as the NUMBER 5
+     — a role LEVEL from the zero-trust vocabulary that happens to share this key
+     name.
+
+     So `isAdmin` was false for every administrator, and each fell through to the
+     ownership branch and was refused. It failed CLOSED, so nothing was exposed —
+     but an administrator could not revoke a seller's key, which is exactly what the
+     line above says they may do.
+
+     The boolean claims are server-set and unforgeable, so they become the authority.
+     The string comparison is kept and lowercased for any account that does carry
+     one; String() also stops a numeric 5 being coerced into a match. Widens only —
+     nobody previously admitted is now refused. */
+  const _tok = auth.token || {};
+  const isAdmin = _tok.admin === true || _tok.superAdmin === true
+    || ['admin', 'superadmin'].includes(String(_tok.role || '').toLowerCase());
   if (!isAdmin) {
     const userSnap = await db().collection('users').doc(auth.uid).get();
     const userData = userSnap.data() || {};

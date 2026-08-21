@@ -96,8 +96,34 @@ manifest — there are none.
 visible to the seven `roles[]` consumers.
 
 **None satisfies the two `claims.role` consumers** — `delivery-authority.js` and
-`pos-integrations-api.js`. So those two checks are dead for every administrator in production,
-exactly as the writer census predicted.
+`pos-integrations-api.js`.
+
+### CORRECTION — "those two checks are dead" was only half right
+
+That column measures whether `claims.role` is present. It does **not** measure whether the
+whole predicate fails, and reading the two files apart shows they behave differently:
+
+```js
+// delivery-authority.js:48 — NOT a defect
+token.admin === true || token.isAdmin === true
+  || token.role === 'admin' || token.role === 'superadmin'
+```
+
+The **boolean is the first disjunct**. All three elevated accounts hold `claims.admin`, so
+`isAdminToken` recognises every one of them. The `token.role` arms are dead but harmless inside
+an OR.
+
+```js
+// pos-integrations-api.js:171 — a real capability loss
+const isAdmin = ['admin','superadmin'].includes(auth.token?.role || '');
+```
+
+**Only** `token.role`, no boolean. `isAdmin` is false for every administrator, each falls to the
+ownership branch, and each is refused — so an administrator could not revoke another seller's
+POS API key, which the line above says they may. It **fails closed**, so nothing was exposed.
+
+One file, not two. Stating "dead for every administrator" of both was an over-claim from a
+column that only asked about `claims.role`.
 
 ### `claims.role = 5`
 
