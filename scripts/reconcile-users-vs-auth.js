@@ -107,11 +107,21 @@ function attribute(fields) {
 }
 
 (async () => {
-  let admin;
-  try { admin = require('firebase-admin'); }
-  catch (e) {
-    console.error('\n  firebase-admin is not installed in this worktree.');
-    console.error('  Install it where the Admin SDK is available, then re-run.\n');
+  /* firebase-admin is a dependency of functions/, not of the repo root — measured:
+     it does NOT resolve from the root but DOES resolve from ./functions. Requiring
+     it by bare name alone made this script report "not installed" and exit even
+     with valid credentials, which would have looked like a missing dependency
+     rather than a resolution path. Try both before concluding it is absent. */
+  let admin = null;
+  for (const attempt of [
+    () => require('firebase-admin'),
+    () => require(require.resolve('firebase-admin', { paths: [path.join(ROOT, 'functions')] })),
+  ]) {
+    try { admin = attempt(); break; } catch (_) { /* try the next path */ }
+  }
+  if (!admin) {
+    console.error('\n  firebase-admin could not be resolved from the repo root or ./functions.');
+    console.error('  Install it, or run this script from an environment that has it.\n');
     process.exit(2);
   }
   if (!admin.apps.length) admin.initializeApp();
