@@ -1,3 +1,72 @@
+## [2026-08-21] - RELEASE 1 CANDIDATE constructed from 47db4ab — NOT DEPLOYED.
+
+Branch `release/admin-slice`, built on production `47db4ab`. **Nothing deployed. Production
+remains HOLD.**
+
+    13 files changed, 816 insertions(+), 72 deletions(-)
+
+    2b2d5d0  admin navigation stays in the current browser/PWA context   (from 40fe779)
+    390cf97  load the authority modules on four surfaces                 (from 4791d9b)
+    91d95ba  Home resolves to the acting role's surface                  (from 2a3e1a9)
+    a5696c9  health guard: typed denial, accepts superAdmin              (from 1f854f6)
+    d1e7832  remove the redundant Super Admin passcode                   (from b224ec2)
+    b3522e9  account-centre switching delegates to the authority         (from aad9118)
+
+`firestore.rules` is absent by design — Release 2, to be re-derived against the served
+ruleset. `CHANGELOG.md` was excluded from every pick and regenerated here rather than merged
+six times. `c827cd6` (pinch-zoom) was deliberately NOT included.
+
+### Two commits required re-derivation, not cherry-picking
+
+`40fe779` and `4791d9b` did not apply: production's `admin-os.html` had drifted 22+/2- from
+their parents. Both changes are mechanical, so the RULE was re-applied to production's files
+and the result verified — more robust than merging hunks.
+
+That re-derivation found a real difference. Production loads **neither** authority module on
+any of the four surfaces — the work branch's `index.html` already carried `role-authority`,
+production's does not — so both tags are added here. And production's `admin-os.html` carried
+**27** internal `target="_blank"` (the work branch had 24 at the equivalent point). All are
+gone; every surviving `target="_blank"` is external (wa.me, Google Cloud console, Firebase
+console), verified by tag-level scan.
+
+`b224ec2` and `aad9118` conflicted only on their own test harnesses, never on product files;
+the harnesses were taken as authored.
+
+### Verification, with failures attributed rather than explained away
+
+    static/predeploy (production's 11-entry list)   10 PASS, 1 FAIL
+    test-admin-nav-context                          3/0
+    before-authority-runtime                       16/0/4
+    before-role-entry-coordination                 17/0/1
+    test-home-logo-routing                         24/1/2
+    before-superadmin-pin-and-health                9/4/2
+
+**The predeploy failure is PRE-EXISTING and is a release blocker.**
+`verify-receipt-naming` reports **121 against a 109 baseline** — measured identically at
+`47db4ab` with none of these commits applied. Production's own lineage already fails its own
+gate, so any deploy from it hits a failing predeploy. `cd5b806` (123 -> 100 on the work branch)
+would address it but is **not** in the approved set. This needs a decision before deployment.
+
+**The orphan-binding gate does not exist on this lineage at all.** It was added by `3ec20a3`,
+which is not in the release set, and production's predeploy contains zero orphan entries. The
+release therefore ships WITHOUT that protection.
+
+**`test-home-logo-routing` 1 failure is a lineage difference, not a defect.** Production maps
+`seller: 'merchant.html'`; the work branch maps `seller: 'merchant-v2.html'`. The test encodes
+the work branch's value. Production's hub map was deliberately NOT changed — that is the
+merchant-v2 migration and has no place in this release. Recorded rather than made to pass.
+
+**`before-superadmin-pin-and-health` 4 failures are stale before-proof assertions.** They assert
+the PRE-fix guard ("throws a plain Error", "checks token.admin", "does NOT accept superAdmin"),
+which `a5696c9` correctly inverts. The same staleness exists on the work branch, where the file
+was not re-run after `1f854f6` — noted there too rather than only here.
+
+### Still required before any deployment
+
+The receipt-ratchet decision, the rules release (separate), and the post-deploy acceptance set —
+whose first row needs no credentials: `anonymous -> unauthenticated`, against today's measured
+`INTERNAL / HTTP 500`.
+
 ## [2026-08-19] — CF consolidation programme STOPPED at the measured safe ceiling
 
 **Nothing deployed.** Decision record: docs/CF_CONSOLIDATION_PROGRAMME.md
