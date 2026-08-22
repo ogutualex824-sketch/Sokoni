@@ -1,10 +1,10 @@
 {
-  "commit": "f42e9576eb2217e6bcf2bbd47f9d9e801deba5c8",
-  "commitShort": "f42e957",
-  "branch": "release/dompurify-only",
-  "buildTime": "2026-08-22T14:01:30.590Z",
+  "commit": "70b4509819621e37e179f6aed162dfcf89234528",
+  "commitShort": "70b4509",
+  "branch": "release/nav-identity-only",
+  "buildTime": "2026-08-22T19:56:04.031Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260822140129-v552",
+  "cacheVersion": "sokoni-20260822195603-v553",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
