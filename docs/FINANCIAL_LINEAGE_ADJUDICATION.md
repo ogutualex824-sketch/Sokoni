@@ -1019,3 +1019,136 @@ revenue aggregation invented. No change to `savedAt`, to the category treatment,
 **And the dormant `settleOrder` path is NOT to be deleted** on the strength of zero
 executions. It is deployed, guarded, and now correct; removing it needs its own
 caller/dependency census and migration proof.
+
+---
+
+## CONCEPT 4b — the primary payment record, and TWO corrections to this document
+
+I had never examined `payments`. It is the primary record, it carries both figures,
+and it settles two questions I answered wrongly from derived collections.
+
+```
+payments/{id}     amount            100      requested / charged to the customer
+                  confirmedAmount    97      returned by the gateway
+                  status             COMPLETE | FAILED | PENDING
+```
+
+Measured across all ten payments that have a commission row:
+
+| payments.amount | ledger.serviceTotal | ratio |
+|---:|---:|---:|
+| 100 | 97 | **0.9700** |
+| 200 | 194 | **0.9700** |
+| 499 | 484.02 | **0.9700** |
+| 999 | 969.03 | **0.9700** |
+
+**Exactly 3% on every transaction, no exceptions.**
+
+### CORRECTION 1 — the gateway-fee hypothesis is CONFIRMED, not refuted
+
+In CONCEPT 3 I wrote that the net-of-gateway-fee explanation was *"REFUTED — six orders
+are 97/97/97; only client-created orders diverge."*
+
+That reasoning was wrong. Those six orders were **created from** the net figure by the
+absent-order branch, so their internal consistency proved nothing at all — it was a
+tautology, not evidence. The `payments` collection carries both numbers side by side
+and settles it: `paidAmount` **is** net of a flat 3% gateway fee.
+
+### CORRECTION 2 — the client-written `orderTotal` was CORRECT
+
+I recorded `SKN0178R32`'s client-written `orderTotal: 100` as an unverified browser
+figure that settlement would wrongly pay on.
+
+**100 is the correct customer-facing gross.** It matches `payments.amount` exactly. The
+browser was right.
+
+It is the **webhook-created** orders that record the **net (97) as the order total** —
+arguably the wrong figure for a customer-facing order gross, since the customer paid
+100. So the divergence runs opposite to how I reported it:
+
+```
+checkout-created order    orderTotal 100 = what the customer paid        ✓ gross
+webhook-created order     orderTotal  97 = what the gateway remitted     ← net, labelled gross
+```
+
+Which of the two settlement *should* use is a **policy question** — pay the seller on
+the customer-facing gross, or on what SOKONI actually received — and it is not mine to
+decide. It is recorded as OPEN, not as a defect.
+
+> Twice now I have drawn a conclusion about these amounts from derived collections and
+> been wrong. What caught it both times was reading the **primary** record instead of
+> the ones computed from it. That is the lesson worth keeping from this concept.
+
+### The gateway fee is real SOKONI cost, and it IS tracked
+
+`admin-os.js` computes `netMargin = totalCommission − gatewayFees`. So the 3% is
+represented in the finance model — it is simply not visible in the "Platform Revenue"
+card, which shows `totalCommission` alone.
+
+### Coverage — 2 completed payments produce NO revenue record
+
+```
+payments                    24
+  COMPLETE                  12
+  FAILED                     8
+  PENDING                     4
+commissionLedger            10
+```
+
+Every COMPLETE payment has a commission row **except two**:
+
+| id | amount | status | category | commission row |
+|---|---:|---|---|---|
+| `SKN13E5ABB69` | 100 | COMPLETE | `default` | **none** |
+| `SKN4E038752E` | 100 | COMPLETE | `default` | **none** |
+
+**KES 200 of completed payments contributes nothing to Platform Revenue.** Both carry
+the `default` category. Whether they were also never *charged* commission, or merely
+never *recorded*, is NOT ESTABLISHED — and the two possibilities differ in whether
+money was lost or only reporting was.
+
+### Category is DESCRIPTIVE, not authoritative
+
+The concept's key question, answered. `commissionLedger.category` is copied from
+`payData.meta.category` on the payment record. The **primary** record is
+`payments/{id}`; the ledger row is a **projection** of it.
+
+Evidence: `SKNAE9E798BC` carries **no category at all** on the payment (`-`) and lands
+in the ledger as category `default` with a 48 cut. A row whose category is assigned by
+absence is a description, not an authority.
+
+Consequences: `subscriptionPayments` is **empty (0 docs)** — subscription revenue has
+no primary collection of its own, it lives in `payments` with a category string. Same
+for POS: `posRetailSales` is **empty**, so no POS revenue exists to represent.
+
+### Category landscape, measured
+
+```
+payments by category   product 11 · subscription 5 · default 3 · dj 2 · hair-beauty 1
+                       · electrical 1 · (absent) 1     [measured, not eyeballed —
+                       my first draft read 10/4 and 7/5 off the table by eye and both
+                       were wrong; every tally here comes from a counting query]
+primary collections    subscriptionPayments 0 · posRetailSales 0 · transactions 0
+                       · refunds 0 · sellerPayments 0
+populated adjacents    walletTransactions 46 · payoutRequests 6 · bookingFees 6
+                       · providerPayouts 2 · deliveryFees 2
+```
+
+### CONCEPT 4b register
+
+```
+primary payment record     payments/{id}  — amount (gross) + confirmedAmount (net)
+gateway fee                FLAT 3%, exact on all 10, tracked as gatewayFees
+commissionLedger           a PROJECTION of payments, keyed by the same id
+category                   DESCRIPTIVE — copied from payment meta, defaulted when absent
+subscription revenue       NO primary collection; lives in payments
+POS revenue                NONE EXISTS — posRetailSales empty
+refund / reversal          NONE EXISTS — refunds empty; treatment still unobservable
+coverage gap               2 COMPLETE payments (KES 200) with no commission row
+order gross basis          OPEN POLICY — customer-facing 100 vs remitted 97
+```
+
+### Deliberately not done
+
+No category reclassified. No missing commission row created. No amount copied between
+`payments`, `orders` and `commissionLedger`. No revenue card changed.
