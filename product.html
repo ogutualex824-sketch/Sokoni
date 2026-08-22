@@ -292,6 +292,16 @@ window.closeProduct = closeProduct;
 <script src="sokoni-sellability.js"></script>
 <script src="adult-gate.js"></script>
 <script src="product.js"></script>
+<!-- #mobileMenu diagnostic, OPT-IN. Fetches nothing unless the query string asks
+     for it, so the page pays a few bytes of inline gate and no network cost.
+     Open /product?diag=menu on the device to see who opens the drawer. -->
+<script>
+  if (/[?&]diag=menu\b/.test(location.search)) {
+    var d = document.createElement('script');
+    d.src = 'sokoni-menu-diag.js'; d.defer = true;
+    document.head.appendChild(d);
+  }
+</script>
 
 <script src="sokoni-audit.js" defer></script>
 <script src="scroll-top.js" defer></script>
