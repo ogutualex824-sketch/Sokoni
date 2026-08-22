@@ -47,13 +47,36 @@
     document.head.appendChild(co);
   }
   /* P1-9 (Phase 4 audit): load DOMPurify so SokoniSecurity.safeHTML() sanitizes with a
-     real, spec-aware library instead of the bypassable regex fallback. Deferred + from
-     cdnjs (allowed by CSP script-src). safeHTML falls back to regex until this loads. */
+     real, spec-aware library instead of the bypassable regex fallback.
+
+     ── WHY THIS IS NO LONGER FETCHED FROM A CDN ──────────────────────────────
+     It was: cdnjs, deferred, crossOrigin anonymous. Measured during a production
+     runtime audit, cdnjs returned HTTP 503 for this exact file. When that fetch
+     fails, window.DOMPurify never appears and safeHTML() does not fail — it
+     silently falls through to the regex branch below, which this file itself
+     describes as "bypassable, best-effort only". The old comment called that
+     "the brief window before DOMPurify finishes loading"; when the CDN is down
+     that window is the entire session, on every page, for every user.
+
+     So a third-party outage silently downgraded platform-wide HTML sanitisation
+     to a known-bypassable implementation, with nothing anywhere reporting it.
+     That is an availability dependency sitting inside a security control, and
+     the two should not be coupled.
+
+     Now served from our own origin: same TLS connection the page already has,
+     covered by the service worker's caching, versioned in the repository, and
+     reviewable in a diff. The version is PINNED in the filename so an upgrade is
+     a deliberate commit rather than whatever a CDN happens to serve. */
   if (!window.DOMPurify && !document.querySelector('script[src*="dompurify"],script[src*="purify.min"]')) {
     var dp = document.createElement('script');
-    dp.src = 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js';
+    dp.src = base + 'vendor/dompurify-3.0.9.min.js';
     dp.defer = true;
-    dp.crossOrigin = 'anonymous';
+    /* If even the local copy cannot load, say so. The regex fallback staying
+       silent is exactly how this went unnoticed for as long as it did. */
+    dp.onerror = function () {
+      console.error('[SokoniSecurity] DOMPurify failed to load — safeHTML() is running on the '
+        + 'BYPASSABLE regex fallback. HTML sanitisation is degraded.');
+    };
     document.head.appendChild(dp);
   }
 }());
@@ -142,7 +165,18 @@ const SokoniSecurity = (() => {
         ALLOW_DATA_ATTR: false,
       });
     }
-    /* Fallback (pre-DOMPurify): regex strip — bypassable, best-effort only. */
+    /* Fallback (pre-DOMPurify): regex strip — bypassable, best-effort only.
+
+       Warned ONCE per page rather than per call: silence is what let a CDN
+       outage downgrade sanitisation platform-wide without anyone noticing, but a
+       warning on every sanitised string would be its own kind of noise. */
+    if (!safeHTML._warnedDegraded) {
+      safeHTML._warnedDegraded = true;
+      try {
+        console.warn('[SokoniSecurity] safeHTML() sanitised with the REGEX fallback — '
+          + 'DOMPurify was not available. This path is bypassable.');
+      } catch (_) {}
+    }
     return String(str)
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "")
