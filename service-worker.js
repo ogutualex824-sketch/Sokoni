@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260822001243-v549";
+const CACHE_VERSION = "sokoni-20260822013206-v550";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -65,6 +65,31 @@ const APP_SHELL = [
   "/manifest.json",
   "/favicon.ico",
   "/assets/icons/icon-192.png",
+];
+
+/* ── SHELL_OPTIONAL — cached at install, but never a reason to abort one ───────
+   WHY THIS TIER EXISTS. A merchant on a phone taps POS, and POS reports "No
+   internet" while the rest of SOKONI works. Measured cause: PRECACHE_PAGES and
+   PRECACHE_STATIC are declared and NEVER read — roughly 543 dead entries — so
+   "/pos" appearing there cached nothing. POS entered the cache only after a
+   first SUCCESSFUL visit; before that, a navigation that could not reach the
+   network fell through to caches.match("/offline"), and the app told the
+   merchant they had no internet. It was SOKONI saying it, not iOS.
+
+   WHY NOT APP_SHELL. That list is deliberately all-or-nothing: one failed asset
+   rejects the install, the new worker is discarded, and the old one keeps
+   serving. That is right for "/" and "/style.css" — if those are broken the app
+   is broken anyway. It would be wrong for POS: a single POS 404 would block
+   every SOKONI update for every user, including buyers who never open a till.
+   A surface-specific outage must not become a platform-wide release freeze.
+
+   So POS is fetched in the SAME install pass, and a failure here is REPORTED
+   and moved past rather than fatal. Cost: one extra document fetch per install.
+   This deliberately does NOT revive the two dead lists — whether those should be
+   wired, trimmed or deleted is an offline-policy decision, and wiring all 543
+   would restore exactly the install storm this architecture removed. */
+const SHELL_OPTIONAL = [
+  "/pos",           /* the till — a merchant's cold first tap must not 404 into /offline */
 ];
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
@@ -439,6 +464,22 @@ self.addEventListener("install", event => {
         if (!res.ok) throw new Error(u + " -> HTTP " + res.status);
         await (isPage(u) ? pc : sc).put(u, res.clone());
         return u;
+      })
+    );
+
+    /* Best-effort tier. Same install pass, same caches, but its failures never
+       reach the abort check below — so a POS outage cannot freeze SOKONI updates
+       for everyone. A failure is logged loudly rather than swallowed: silently
+       not caching POS is how this defect stayed invisible in the first place. */
+    await Promise.allSettled(
+      SHELL_OPTIONAL.map(async (u) => {
+        try {
+          const res = await fetch(new Request(u, { cache: "reload" }));
+          if (!res.ok) throw new Error(u + " -> HTTP " + res.status);
+          await (isPage(u) ? pc : sc).put(u, res.clone());
+        } catch (e) {
+          console.warn("[SW] optional shell asset not cached (update continues):", u, e.message);
+        }
       })
     );
 
