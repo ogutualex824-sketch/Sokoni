@@ -380,11 +380,26 @@
       }
       if (S.phase === 'no_shop') {
         var why = (ctx.scope && ctx.scope.reason) || 'no_active_shop';
+        /* THREE DIFFERENT FACTS, THREE DIFFERENT ANSWERS. Telling a signed-in
+           cashier to "sign in" is the defect this separates: not authenticated,
+           authenticated without a merchant role, and a merchant whose shop is not
+           active yet are not the same situation and must not read the same. */
+        if (why === 'no_merchant_role' || why === 'no_sell_capability') {
+          return '<div class="msl-body"><div class="msl-state"><div class="ic">🔒</div>' +
+            '<div class="hd">You do not have permission to use the till</div>' +
+            (why === 'no_sell_capability'
+              ? 'Your account is part of this shop, but selling is not one of the things ' +
+                'it can do. The shop owner can change that.'
+              : 'This account is signed in, but it is not a merchant account and is not ' +
+                'employed by a shop. Ask the shop owner to add you.') +
+            '</div></div>';
+        }
         return '<div class="msl-body"><div class="msl-state"><div class="ic">🏪</div>' +
-          '<div class="hd">No shop is active yet</div>' +
           (why === 'not_signed_in'
-            ? 'Sign in to open the till.'
-            : 'Selling needs a shop. Once your merchant account has an approved shop, its ' +
+            ? '<div class="hd">Sign in to open the till</div>' +
+              'The till needs to know who is selling before it can open.'
+            : '<div class="hd">No shop is active yet</div>' +
+              'Selling needs a shop. Once your merchant account has an approved shop, its ' +
               'products appear here and you can start selling.') +
           '</div></div>';
       }

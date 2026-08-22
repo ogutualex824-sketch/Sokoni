@@ -948,7 +948,25 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     shopError: null,         /* why activeShopId is null, when it is */
     uid: null, email: null, sellerUid: null,
     activeShopId: null, shop: null, roles: [],
+    /* SERVER-RESOLVED merchant capabilities. Empty until merchantIdentity answers
+       — for owners and employees alike. Never derived from a document the client
+       can write, and never inferred from "is signed in". An owner gets the owner
+       set; an employee gets exactly what their employment role grants. */
+    capabilities: [], servedBy: null,
   };
+  /* NO CLIENT-SIDE CAPABILITY LIST, DELIBERATELY. An earlier draft mirrored
+     ROLE_CAPABILITIES.owner here so the owner path could stay a single read.
+     That is one permission change away from drifting out of step with
+     functions/merchant-identity.js, on an authorisation boundary controlling a
+     merchant's till. Owners and employees now both get their capabilities from
+     the server; the extra round trip is the cheaper mistake.
+
+     Does this session hold a named merchant capability? The till asks for 'sell'.
+     Absent capabilities means NOT PERMITTED, which is a different answer from
+     NOT SIGNED IN — conflating them is what told a signed-in cashier to sign in. */
+  function can (capability) {
+    return Array.isArray(S.capabilities) && S.capabilities.indexOf(capability) !== -1;
+  }
   /* ONE display-name authority for the whole shell. The header chip and the dashboard
      greeting both read it, so they cannot drift into showing different names for the
      same merchant — which is how a "polish" change quietly becomes an identity bug.
@@ -1068,16 +1086,67 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       }
       try {
         var m = await sdk();
+        /* ── STEP 1: DISCOVERY — which shop is this account associated with? ──
+           These reads answer WHICH shop to ask about. Neither grants anything.
+
+           shops/{uid} is keyed BY the owner's uid, so it answers "do you own a
+           shop" — and nothing else. An EMPLOYEE authenticates perfectly, misses
+           here, and used to be indistinguishable from a signed-out visitor. That
+           is why a signed-in cashier could be told to sign in. */
+        var shopId = null, ownShop = null;
         var snap = await m.fs.getDoc(m.fs.doc(m.db, 'shops', S.uid));
-        if (snap.exists()) {
-          S.shop = snap.data() || {};
-          S.activeShopId = snap.id;
+        if (snap.exists()) { ownShop = snap.data() || {}; shopId = snap.id; }
+        else {
+          /* Reading your OWN employment record is permitted by rules and is used
+             ONLY to learn which shop to ask about. Its `role` field is writable by
+             the client and is therefore never read here — see step 2. */
+          try {
+            var eSnap = await m.fs.getDoc(m.fs.doc(m.db, 'shopEmployees', S.uid));
+            if (eSnap.exists()) {
+              var emp = eSnap.data() || {};
+              if (emp.shopOwnerId) shopId = String(emp.shopOwnerId);
+            }
+          } catch (_) { /* absent or unreadable — falls through to no-shop */ }
+        }
+
+        if (!shopId) { S.shopError = 'no-shop-document'; return; }
+
+        /* ── STEP 2: AUTHORITY — what may this account DO there? ──────────────
+           ONE source of truth, for owners and employees alike. The client may
+           propose a shopId; it cannot assert its relationship to that shop.
+           resolveActor re-derives ownership from the document id (uid === shopId)
+           and employment from shopEmployees/{uid}.shopOwnerId, refusing anything
+           that does not match — and rules pin that field to the caller, so a
+           self-declared record matches only the writer's own shop.
+
+           The owner's capabilities are NOT mirrored client-side. A duplicated
+           list is one permission change away from drifting out of step with the
+           server, and this is an authorisation boundary on a merchant's till.
+           One extra round trip is the cheaper mistake. */
+        try {
+          var ident = await _callable('merchantIdentity')({ shopId: shopId });
+          var d = (ident && ident.data) ? ident.data : ident;
+          if (!d || !Array.isArray(d.capabilities)) {
+            S.shopError = 'identity-malformed';
+            return;
+          }
+          /* Prefer the FULL shop document when we have it — shopIdentity() returns
+             a projection (name, logo, phone, email, address, city), and consumers
+             read fields beyond it. The projection is the right answer only when
+             the direct read was not ours to make. */
+          S.shop = ownShop || d.shop || null;
+          S.activeShopId = shopId;
+          S.capabilities = d.capabilities;
+          S.servedBy = d.servedBy || null;
           S.shopError = null;
           return;
+        } catch (e) {
+          /* A refusal here is an ANSWER, not a failure to retry: the server
+             declined the relationship. Recorded with its reason so an inactive
+             employment or an unknown role stays diagnosable. */
+          S.shopError = 'identity-' + ((e && e.code) || 'unresolved');
+          return;
         }
-        /* Genuinely absent is a real answer — record it and stop retrying. */
-        S.shopError = 'no-shop-document';
-        return;
       } catch (e) {
         S.shopError = (e && e.code) || 'read-failed';
         await new Promise(function (r) { setTimeout(r, 1200 * (attempt + 1)); });
@@ -1460,6 +1529,20 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   function _scope () {
     if (!window.SokoniMerchantData) return { ok: false, reason: 'data-module-missing' };
+    /* THREE ANSWERS, NOT TWO. resolveScope knows "no uid" and "no shop"; it cannot
+       know "signed in, but this account holds no merchant capability" — that is
+       what the identity resolution above establishes.
+
+       Collapsing that into no_active_shop is what put a buyer and a cashier in the
+       same state, and told both of them to wait for a shop. Named separately so the
+       till can say which is true. 'resolving' is deliberately not answered here:
+       a session that is not yet known must not be reported as not permitted. */
+    if (S.state === 'in' && S.activeShopId && !can('sell')) {
+      return { ok: false, reason: 'no_sell_capability', sellerUid: S.uid, shopId: null };
+    }
+    if (S.state === 'in' && !S.activeShopId && S.shopError && /^identity-/.test(S.shopError)) {
+      return { ok: false, reason: 'no_merchant_role', sellerUid: S.uid, shopId: null };
+    }
     return window.SokoniMerchantData.resolveScope({ uid: S.uid, activeShopId: S.activeShopId });
   }
   function _scopeKey (s) { return (s && s.ok) ? s.shopId : ('!' + ((s && s.reason) || 'unknown')); }
