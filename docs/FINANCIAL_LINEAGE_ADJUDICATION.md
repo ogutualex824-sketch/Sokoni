@@ -642,3 +642,87 @@ work rather than riding on the case fix.
 boundary. Untouched, deliberately: `orderTotal`/`total`/`paidAmount` authority, Shape-A
 vs Shape-B commission, CONCEPT 4, analytics, the Daraja ambiguity, and what
 `index.js` writes.
+
+---
+
+## RELEASE B.1 — DEPLOYED 2026-08-22, and what the deploy actually did
+
+### The CLI exited 0 while reporting four errors
+
+```
+Error: There was an error deploying functions:
+- Error Failed to set invoker function emailSubscriptionReminders in region us-central1
+- Error Failed to update function accountDeactivate in region us-central1
+- Error Failed to update function getTypesenseSearchKey in region us-central1
+- Error Failed to set invoker function searchQueueCoordinator in region us-central1
+[exited with code 0]
+```
+
+**Exit code 0 is not evidence of success here.** Neither is the log: it was piped
+through `tail -60`, which discarded every per-function progress line, so the four
+errors and a list of URLs are all that survived. Establishing what deployed required
+asking Google, not reading the CLI.
+
+### Per-function state — Cloud Functions v2 API
+
+Deploy window 07:23–08:20 UTC. Every target updated inside it.
+
+| function | state | updateTime (UTC) |
+|---|---|---|
+| `onOrderStatusChange` | ACTIVE | 07:32:15 |
+| `getPlatformHealthScores` | ACTIVE | 08:09:57 |
+| `getTopBusinessPriorities` | ACTIVE | 08:17:54 |
+| `onPackageRequestChanged` | ACTIVE | 07:32:00 — **created**, 1691 → 1692 |
+
+### The four reported errors left NO broken state
+
+| function | trigger | outcome |
+|---|---|---|
+| `accountDeactivate` | callable | updated 07:45 — the "failed update" landed |
+| `getTypesenseSearchKey` | callable | updated 08:13 — same |
+| `emailSubscriptionReminders` | schedule | updated 07:35, **has** `run.invoker` for the compute SA |
+| `searchQueueCoordinator` | schedule | updated 08:15, **has** `run.invoker` for the compute SA |
+
+Transient retry noise on a 1692-function deploy, not damage. A control makes that
+readable: `autoconfirmdeliveredorders`, which was **not** reported as failing, has
+**no** `run.invoker` binding at all — so a missing binding is not itself evidence of
+breakage, and the two that were reported have theirs.
+
+> Recorded for later, not as a finding: `autoconfirmdeliveredorders` is the sweep that
+> moves delivered orders to `completed`, which is what triggers settlement. Whether the
+> absent binding affects it is unestablished — Firebase may invoke v2 scheduled
+> functions by another path. It is unrelated to this release and predates it.
+
+### Platform Health — verified at the query level, read-only
+
+Both shapes run against production directly, without invoking the callable:
+
+```
+OLD  ops_reports.orderBy('__name__','desc').limit(7)   THREW 9 FAILED_PRECONDITION
+NEW  getAll(7 date keys)                               SUCCEEDED — 7/7 docs present
+
+OLD  funnelStats.orderBy('__name__','desc').limit(30)  THREW 9
+NEW  getAll(30 date keys)                              SUCCEEDED — 0/30 present
+```
+
+The old query **still throws today**, so the index genuinely does not exist and the
+fix is what removes the failure — not an index that quietly appeared.
+
+**A new observation from that run:** 7 of 7 `ops_reports` documents exist but **none
+carries `paymentSuccessRate`**. `_operationalHealth` will therefore compute
+`avgPayRate = null` and mark that dimension missing. The code handles it correctly;
+the dimension simply has no data behind it. Recorded, not fixed.
+
+### What is NOT established by this deploy
+
+- **The settlement guard is not directly observable.** `order-settlement.js` is a
+  module inside `index.js`, not its own deployed function, so there is no deployed
+  artefact to read. The evidence is: `onOrderStatusChange` updated inside the deploy
+  window, the tree contained both guards, and the local proof is 9/0 including the
+  P7/P9 controls. Behavioural confirmation would require settling a real order, and
+  we agreed not to manufacture one.
+- **POS claim shapes** need an authenticated call.
+- **D1 is untouched.** `_costEfficiency()` still returns `indexCount = 192`,
+  `scheduledCount = 8`, `heavyCFs = 4` and stamps `dataComplete: true`. Platform
+  Health returning scores now makes it a *more convincing* untrustworthy metric, not
+  a fixed one.
