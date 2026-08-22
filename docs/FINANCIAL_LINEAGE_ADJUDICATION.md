@@ -1752,3 +1752,145 @@ blocked on               delivery authority · gross-vs-net policy · forfeit po
 ### Deliberately not done
 
 No aggregation written, no normaliser built, no policy chosen, no dashboard touched.
+
+---
+
+## CONCEPT 4h — delivery, the PIN, and where buyer funds actually sit
+
+Read-only. Measured before designing, because most of the proposed architecture turns
+out to exist already — and one part of it is bypassed.
+
+### 1 · The delivery PIN system is BUILT, and its privacy posture is already correct
+
+```
+functions/delivery-pin.js       deliveryPinOnAccept · getMyDeliveryPin · deliveryVerifyShadow
+functions/delivery-complete.js  completeDeliveryWithPin · buyerConfirmDelivery
+```
+
+`completeDeliveryWithPin` validates the format, **rate-limits attempts**
+(`resource-exhausted` after repeated failures), compares a **keyed HMAC hash**, and
+audits every denial (`complete_denied_wrong_pin`, `complete_denied_pin_missing`).
+
+Storage, per the module's own header:
+
+```
+packageRequest   keyed HMAC HASH        safe to expose — a 6-digit PIN is only
+                                        non-brute-forceable because the key is secret
+deliveryPins/{orderId}   PLAINTEXT      NO Firestore rule → deny-by-default;
+                                        no client reads it
+orders/{id}      deliveryPinIssued: true — the FACT only, never the value
+                 deliveryPin: FieldValue.delete()  ← plaintext actively removed
+                                        as the order passes through
+buyer access     getMyDeliveryPin — proves buyer identity and REFUSES the rider
+historical rows  scripts/sweep-order-delivery-pins.js
+```
+
+**The "rider can read deliveryPin" P0 in my notes is already closed**, and the module
+comment records the retraction of the earlier design. The ODPC concerns — purpose
+limitation, minimisation, safeguards — are addressed: the value exists in exactly one
+deny-by-default place, the order carries only a boolean, and the rider is refused by
+identity rather than by obscurity.
+
+### 2 · The PIN gates `delivered`. It moves no money.
+
+`_completeDelivery` runs one transaction and writes:
+
+```js
+t.set(orderRef, { status: "delivered", … })
+```
+
+No wallet, no balance, no commission. The PIN is a **delivery-proof** mechanism, not a
+settlement authorisation — which matches the recommendation that the PIN authorise but
+not itself release funds.
+
+### 3 · THE FINDING — the seller is paid at PAYMENT, not at delivery
+
+```
+order SKN084IE2Z
+  paidAt                    2026-08-05T11:04:25Z
+  payment.walletCreditedAt  2026-08-05T11:04:24Z    ← credit happens HERE
+  deliveredAt               2026-08-06T15:29:21Z    ← 28 hours LATER
+  seller wallet txn         2026-08-05T11:09:07Z    (5-minute sweep)
+```
+
+**There is no hold.** Buyer funds reach the seller's withdrawable balance roughly five
+minutes after payment confirmation and more than a day before the goods arrive.
+
+So the proposed model — *money HELD → delivered → buyer confirms → PIN verified →
+atomic settlement* — is **not a refinement of the current behaviour. It is the opposite
+of it.**
+
+### 4 · …and the held model ALREADY EXISTS, deployed, never executed
+
+`functions/order-settlement.js` implements precisely the proposed lifecycle:
+
+```
+UNSETTLED → HELD → ELIGIBLE_FOR_SETTLEMENT → SETTLING → SETTLED
+                                              (REFUNDED if refunded first)
+```
+
+with `settleOrder` doing the atomic release: seller wallet + `settlements/{orderId}` +
+`walletTransactions` + balanced `ledger`, all deterministic-id, all in one transaction,
+now double-guarded by B.1.
+
+**It has never run** (`settlements` = 0 docs), because the payment webhook credits the
+seller immediately and stamps `settlementStatus: "settled"` on the order — which tells
+`settleOrder` there is nothing to do.
+
+```
+DESIGNED   payment → HELD → fulfilment → completed → settleOrder → release
+LIVE       payment → CREDIT NOW → stamp "settled" → settleOrder always skips
+```
+
+That single fact explains CONCEPT 3's "the settlement path has never run", the empty
+`settlements` collection, the lowercase marker B.1 had to tolerate, and why buyer funds
+are unprotected — all four are the same bypass.
+
+### 5 · What B.2 actually is
+
+Not a new settlement policy. **A decision about which of two existing implementations is
+authoritative**, and if it is the held one, removing the bypass rather than building
+anything.
+
+Consequences that must be faced with that decision, not after it:
+
+```
+sellers are paid today at payment          changing this changes merchant cash flow
+7 orders already credited under the old model — no retro-application
+the FinOS credit is idempotent via payments/{apiRef}.walletCreditedAt
+                                            — a hold must not break that guarantee
+provider bookings settle on their OWN rail (provider-ops.js) and must NOT be
+                                            forced into the delivery-PIN model
+wallet top-ups are stored value            never part of this flow
+refunds/disputes                            reversal path, not ordinary settlement
+```
+
+### 6 · The allocation invariant is preserved either way
+
+Already proven and unaffected by which release boundary is chosen:
+
+```
+customer-funded amount = seller payout + rider payout + SOKONI share
+                       + explicitly defined gateway/other costs
+```
+
+### CONCEPT 4h register
+
+```
+delivery PIN system        BUILT — hashed, rate-limited, audited
+PIN privacy posture        CORRECT — deny-by-default store, boolean on the order,
+                           rider refused by identity; historical sweep exists
+PIN → money                NO — it gates `delivered` only
+buyer funds today          RELEASED AT PAYMENT, ~28h before delivery on the
+                           measured order. NO HOLD.
+held model                 EXISTS, DEPLOYED, NEVER EXECUTED — bypassed by the webhook
+buyer-confirmation fn      buyerConfirmDelivery EXISTS — not wired to settlement
+B.2 restated               choose the authoritative implementation and remove the
+                           bypass; do not build a third
+```
+
+### Deliberately not done
+
+No lifecycle changed, no bypass removed, no credit deferred. Whether SOKONI holds buyer
+funds until delivery is a **business decision with real merchant cash-flow
+consequences**, and it is not one this audit should make.
