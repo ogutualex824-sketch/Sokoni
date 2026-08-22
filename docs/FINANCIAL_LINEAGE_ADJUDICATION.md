@@ -726,3 +726,59 @@ the dimension simply has no data behind it. Recorded, not fixed.
   `scheduledCount = 8`, `heavyCFs = 4` and stamps `dataComplete: true`. Platform
   Health returning scores now makes it a *more convincing* untrustworthy metric, not
   a fixed one.
+
+---
+
+## Auto-confirm sweep — read-only inspection (concern CLOSED)
+
+### First, a correction to my own observation
+
+I flagged `autoconfirmdeliveredorders` as having no `run.invoker` binding. **It is not a
+deployed function at all.** `autoConfirmDeliveredOrders` is a helper folded into
+`exports.expireOldEscrows` — the source says so explicitly: *"Folded into THIS existing
+scheduler (no new Cloud Run service)."* My IAM query hit a Cloud Run name that is not
+the sweep, and `getIamPolicy` returned an empty policy rather than a 404, which read
+like a finding. The concern was about the wrong object.
+
+### The real sweep, measured
+
+```
+expireOldEscrows                      ACTIVE, updated 2026-08-22T07:35:20Z (this deploy)
+firebase-schedule-expireOldEscrows-us-central1
+  schedule        every 24 hours (UTC)
+  state           ENABLED
+  lastAttemptTime 2026-08-21T13:01:08Z
+  status          {}          ← empty = the last attempt succeeded
+logs              executed 08-19, 08-20, 08-21 at 13:01 UTC
+```
+
+**Healthy. No evidence of failure.** Concern closed as the sweep being operational.
+
+### An unexplained residue, recorded not resolved
+
+`SKN084IE2Z` — `status: delivered`, `deliveredAt` a real Timestamp **15.7 days** old,
+no dispute flags, against a 3-day window (`_systemConfig/settlement` is absent, so the
+default applies). Under the **pre-B.1** code it satisfied every condition in
+`autoConfirmDeliveredOrders`, and the sweep ran daily for twelve of those days. It was
+never auto-confirmed.
+
+Why is **NOT ESTABLISHED**. The `functions:log` view renders the sweep's own
+`console.log` bodies as empty lines, so neither
+`[Maintenance] auto-confirmed N delivered order(s)` nor `auto-confirm sweep failed`
+can be seen. Candidate explanations — a throw earlier in `expireOldEscrows`, or the
+order reaching `delivered` more recently than `deliveredAt` suggests — are untested.
+
+### Why this no longer matters for safety
+
+After B.1 the same order is **correctly skipped**: `_isState('settled', STATES.SETTLED)`
+now matches, so the sweep `continue`s and never advances it to `completed`. The
+double-credit path is closed for it regardless of the historical reason.
+
+And the residue is corroborating evidence rather than a worry: an order that met every
+condition for twelve days under vulnerable code and was never confirmed is consistent
+with the production audit finding **0 settlement records and 0 wallet transactions**.
+Two independent observations agreeing that the double credit never happened.
+
+> Standing note: this order will now remain `delivered` permanently. That is a
+> reporting/lifecycle question, not a money question — the wallet was already credited
+> by the path its lowercase marker records. It belongs to CONCEPT 3's close, not here.
