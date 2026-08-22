@@ -1,3 +1,95 @@
+## [2026-08-22] - Administrative surfaces: one top-right profile menu, no marketplace header.
+
+Hosting only. No rules, no Functions, no schema. Client-side chrome and client-side
+state transitions — Firestore rules and the admin callables remain the boundary and are
+untouched.
+
+### The model this completes
+
+    Marketplace pages   shared header + profile dropdown carrying role switching   (7278782)
+    Admin surfaces      NO shared marketplace header; the top-right profile button
+                        is the single dropdown entry point, and it REPLACES the
+                        standalone Sign Out                                        (this)
+    Admin switching     SokoniPermissions + adminContext, never setActiveRole
+    Workspace switching SokoniRoleAuthority + activeRole
+    Authority           never localStorage
+
+### What was actually wrong — measured, not assumed
+
+`scripts/before-admin-profile-model.mjs` against the pre-change tree, **11 / 0, every
+defect present**:
+
+| | before |
+|---|---|
+| admin.html | the full marketplace nav stacked on top of its own `.adm-nav` — two headers, two role controls |
+| admin.html | no Sign Out of its own at all; the only one belonged to the marketplace header it should not have had |
+| super-admin.html | **three** visible Sign Out controls: sidebar footer, topbar, and the legacy bar's |
+| super-admin.html | a bare `<select>` for role switching, not a menu |
+| admin-os.html | the legacy bar plus its own sidebar Sign Out |
+
+### Files
+
+| file | change |
+|---|---|
+| `sokoni-admin-entry.js` | the control bar (`<select>` + Home + Sign out) replaced by a profile button and dropdown; adopts the page's own Sign Out; scroll-capped and viewport-clamped; `mountControls` keeps its name, `mountProfileMenu` added as the honest alias |
+| `admin.html` | `data-no-header="true"`; mounts the menu into `.adm-nav-right` |
+| `super-admin.html` | menu mounted **before** `SA.init()` |
+| `sokoni-aos.js` | menu mounted **before** `_bootUI()` |
+
+### A real defect found while proving it
+
+The menu was originally mounted **after** each surface's data layer booted. When
+`SA.init()` or `_bootUI()` threw — which they do whenever Firestore is unreachable —
+the surface was left with **no Sign Out and no role switcher at all**. The way *out* of
+a surface must not be downstream of the thing that can fail. Both now mount first.
+
+### Proof
+
+`scripts/after-admin-profile-model.mjs` — **31 / 0, stable across three runs**, and
+**10 / 21 against the pre-change tree**, so it detects the change rather than the tree.
+
+Covers, on real pages with nothing injected: no marketplace header; profile button
+present; standalone Sign Out replaced (counting *whose* each remaining control is);
+dropdown opens on click; Admin controls present; **Super Admin absent unless the claim
+authorises it**; context marked current; scroll contract; viewport safety at
+360/390/820/1440 and landscape; and the critical transition **SuperAdmin → Buyer**,
+asserted on state — `getAdminContext()` null and its sessionStorage mirror gone — not
+on a caption.
+
+Negative control: `localStorage` roles forged to `['buyer','seller','admin','superAdmin']`
+with an empty token yields **zero** administrative entries and no menu.
+
+### Three harness defects corrected along the way, recorded because they nearly shipped as findings
+
+1. **The first fixture stubbed the wrong boundary.** All three gates read
+   `firebase.auth()`, not `window.firebaseAuth`, so every page redirected and the
+   harness measured the marketplace home and the login screen while reporting
+   confident results about admin pages. Fixed, and every scenario now carries a
+   **landed-URL control**.
+2. **`if (!window.firebase)`** — the fixture's getter returned a truthy Proxy, so the
+   real compat shim was never installed, two pages threw during boot, and the harness
+   called that "profile button missing".
+3. **A page-scoped grep answered a two-file question.** `admin-os.html` was recorded as
+   mounting nothing; the call lives in `sokoni-aos.js`. The row was rewritten to what
+   is actually true.
+
+Regression green: unified-role-menu 12/0 · admin-context 15/0 · admin-lockout 7/0 ·
+admin-surface-gate 19/0 · admin-lock-removal 24/0 · superadmin-retirement 14/0 ·
+analytics-metrics 19/0 · role-presentation 19/0 · claims-role-consumers 17/0 ·
+superadmin-link-gating 13/0 · role:switch 50/0 · profile:acting-role 36/0 · panels 32/0 ·
+verify:auth · verify:markup.
+
+**NOT DEPLOYED.** Hosting candidate is now `1eef889` + `7278782` + this commit.
+`aa1c938` (Functions) stays held. Nothing here has been observed in a real signed-in
+session — see *What is still unproven* below.
+
+### What is still unproven
+
+The harness supplies the identity; no one signs in. It proves rendering, wiring and
+client-side transitions on real pages, and cannot prove authorization. Still requiring a
+real session in a real browser: Admin → Platform Health, SuperAdmin → expense-management,
+Seller → business-analytics, and the live Buyer→Seller→Rider walk on `/cart`.
+
 ## [2026-08-22] - CORRECTION: rules headroom was reported in CHARACTERS, not bytes.
 
 Live re-fetch, read-only. No rules published, no product code changed.

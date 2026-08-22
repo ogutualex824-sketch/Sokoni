@@ -1929,11 +1929,19 @@ const SA={
           if (!gate.ok) return;
         }
         document.getElementById('authGate').style.display='none';
-        SA.init(user);
+        /* BEFORE SA.init, deliberately. The profile menu is the only way to sign out
+           or leave this surface, and SA.init() builds the console's data layer — so
+           mounting the menu after it made the exit depend on Firestore booting. When
+           it threw, the surface had no Sign Out and no role switcher at all. The way
+           OUT must not be downstream of the thing that can fail. */
         /* data-no-header="true" returns from shared-header's top-level IIFE before
-           _skSwitchRole exists, so this surface carries its own switcher and Home.
-           Sign Out is already present in the page and is left alone. */
+           _skSwitchRole exists, so this surface carries its own profile menu: one
+           top-right button holding the workspace switcher, the Admin tools and Sign
+           Out. It ADOPTS the two standalone Sign Out buttons already in this page
+           (sidebar footer and topbar) by hiding them, so the surface has exactly one
+           way out instead of three. */
         if (window.SokoniAdminEntry) window.SokoniAdminEntry.mountControls({ role: 'superAdmin' });
+        SA.init(user);
       }catch(err){
         console.error('[SuperAdmin] Auth check failed:',err);
         location.href='login.html?error=auth_check_failed';

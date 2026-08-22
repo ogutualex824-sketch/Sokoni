@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" data-no-header="true">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -2283,6 +2283,12 @@ async function _adminEnter() {
   sessionStorage.setItem(SESS_TS, Date.now().toString());
   document.getElementById('adminLock').style.display = 'none';
   document.getElementById('adminDash').style.display = 'block';
+  /* This page set no data-no-header until now, so it received the full shared
+     MARKETPLACE nav stacked on top of .adm-nav — two headers, two role controls,
+     and the only Sign Out on the surface belonged to the marketplace one. The
+     header is now suppressed and the top-right profile button below is this
+     surface's single entry point for role switching, Admin tools and Sign Out. */
+  if (window.SokoniAdminEntry) window.SokoniAdminEntry.mountControls({ role: 'admin' });
   loadAll();
   if (typeof applyRBAC === 'function') applyRBAC(window._admClaimedRole || 'admin');
   document.dispatchEvent(new CustomEvent('sokoniAdminReady'));

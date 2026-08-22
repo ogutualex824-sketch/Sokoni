@@ -36,11 +36,17 @@ window.SokoniAOS = (() => {
       }
       _currentUser = { uid: user.uid, email: user.email, name: user.displayName,
                        isSuper: !!tok.claims.superAdmin };
-      _bootUI();
       /* data-no-header="true" returns from shared-header's top-level IIFE before
-         _skSwitchRole is defined, so this surface gets its own switcher / Home /
-         Sign out rather than the injected nav's. */
+         _skSwitchRole is defined, so this surface gets its own top-right profile
+         menu rather than the injected nav's. It ADOPTS the sidebar-footer Sign Out
+         already in admin-os.html by hiding it, leaving one way out instead of two.
+
+         BEFORE _bootUI, deliberately: _bootUI starts the live KPI listeners, and
+         mounting the menu after it made the only Sign Out on this surface depend on
+         those succeeding. The way OUT must not be downstream of the thing that can
+         fail. */
       if (window.SokoniAdminEntry) window.SokoniAdminEntry.mountControls({ role: 'admin' });
+      _bootUI();
     });
   }
 
