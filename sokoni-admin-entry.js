@@ -69,10 +69,20 @@
          at this point locked every administrator out of every administrative
          surface with "Could not verify your access". Wait for a real user, then ask
          the authority to re-read the token before deciding. */
-      if (perms.isVerified && perms.isVerified()) return true;
+      /* ALWAYS reverify. This used to short-circuit on isVerified(), which returns
+         _claimsVerified — a flag the five-minute sessionStorage cache sets true on
+         its own. A returning administrator therefore passed this gate without any
+         token being read this load, and requireAdminContext (which now insists on a
+         real token, as hasRole() always did) would have refused them.
+
+         reverify() returns immediately when the token has already been read this
+         load, so the unconditional call costs nothing on the warm path and is the
+         only thing that makes the cold one correct. */
       return _awaitUser().then(function (user) {
         if (!user) return false;                    /* genuinely signed out */
-        if (typeof perms.reverify !== 'function') return false;
+        if (typeof perms.reverify !== 'function') {
+          return !!(perms.isVerified && perms.isVerified());
+        }
         return perms.reverify();
       });
     }, function () { return false; });

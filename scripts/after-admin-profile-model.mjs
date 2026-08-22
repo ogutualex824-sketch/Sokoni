@@ -30,7 +30,7 @@
 ==========================================================================*/
 
 import {
-  installFixture, stubFirebaseModule, setScenario, primeOrigin, open, read,
+  installFixture, stubFirebaseModule, setScenario, primeOrigin, open, read, clickSel,
 } from './lib/admin-fixture.mjs';
 
 const CLAIMS_BOTH = ['admin', 'superAdmin', 'seller', 'rider'];
@@ -46,9 +46,8 @@ export default async function run(page) {
   /* Open the menu and read it. Clicking is the only honest way to assert "the
      dropdown opens" — asserting the element exists proves markup, not behaviour. */
   async function openMenu() {
-    await page.addScriptTag({ content:
-      'var b=document.getElementById("sk-admin-profile"); if(b) b.click();' });
-    await page.waitForTimeout(400);
+    await clickSel(page, '#sk-admin-profile');
+    await page.waitForTimeout(450);
     return read(page);
   }
 
@@ -80,7 +79,8 @@ export default async function run(page) {
   ck('A5   Admin controls are present in the dropdown',
     m.admin.indexOf('admin') > -1, JSON.stringify(m.admin));
   ck('A6   the entered administrative context is marked current',
-    m.adminCurrent === 'admin', 'current=' + m.adminCurrent + ' ctx=' + m.ctx);
+    m.adminCurrent === 'admin' && m.ssCtx === 'admin',
+    'is-current=' + m.adminCurrent + ' sessionStorage=' + m.ssCtx);
   ck('A7   exactly ONE Sign Out on the surface, and it is OURS',
     m.signOuts.length === 1 && m.signOutsOurs === 1,
     m.signOuts.length + ' visible: ' + JSON.stringify(m.signOuts));
@@ -139,8 +139,8 @@ export default async function run(page) {
   ck('S5   Super Admin controls are present in the dropdown',
     m.admin.indexOf('superAdmin') > -1, JSON.stringify(m.admin));
   ck('S6   the administrative context is superAdmin and is marked current',
-    m.ctx === 'superAdmin' && m.adminCurrent === 'superAdmin',
-    'ctx=' + m.ctx + ' current=' + m.adminCurrent);
+    m.ssCtx === 'superAdmin' && m.adminCurrent === 'superAdmin',
+    'sessionStorage=' + m.ssCtx + ' is-current=' + m.adminCurrent);
   ck('S7   exactly ONE Sign Out on the surface, and it is OURS',
     m.signOuts.length === 1 && m.signOutsOurs === 1,
     m.signOuts.length + ' visible: ' + JSON.stringify(m.signOuts));
@@ -185,19 +185,22 @@ export default async function run(page) {
   landed = await open(page, 'super-admin.html', { wait: 5000 });
   const pre = await openMenu();
   ck('RIG  CONTROL in the superAdmin context before switching',
-    landed.ok && pre.ctx === 'superAdmin' && pre.ssCtx === 'superAdmin'
+    landed.ok && pre.ssCtx === 'superAdmin' && pre.adminCurrent === 'superAdmin'
       && pre.workspace.indexOf('buyer') > -1,
-    'ctx=' + pre.ctx + ' ss=' + pre.ssCtx + ' workspace=' + JSON.stringify(pre.workspace));
+    'sessionStorage=' + pre.ssCtx + ' is-current=' + pre.adminCurrent
+    + ' workspace=' + JSON.stringify(pre.workspace));
 
-  await page.addScriptTag({ content:
-    'var b=document.querySelector("#sk-admin-profile-menu [data-sk-workspace=\'buyer\']");'
-    + ' if (b) b.click();' });
+  const clicked = await clickSel(page,
+    "#sk-admin-profile-menu [data-sk-workspace='buyer']");
   await page.waitForTimeout(4000);
   const post = await read(page);
 
+  ck('RIG  CONTROL the Buyer entry was actually clicked',
+    clicked === true, 'clicked=' + clicked);
   ck('T1   SuperAdmin -> Buyer LEAVES the administrative context',
-    post.ctx == null && post.ssCtx == null,
-    'getAdminContext=' + JSON.stringify(post.ctx) + ' sessionStorage=' + JSON.stringify(post.ssCtx));
+    post.ssCtx == null && post.adminCurrent == null,
+    'sessionStorage=' + JSON.stringify(post.ssCtx)
+    + ' is-current=' + JSON.stringify(post.adminCurrent));
   ck('T2   SuperAdmin -> Buyer leaves the administrative SURFACE',
     post.landed !== 'super-admin.html', 'landed=' + post.landed);
   ck('T3   the acting workspace role is now buyer',

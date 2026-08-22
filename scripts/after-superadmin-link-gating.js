@@ -72,8 +72,18 @@ const perms = read('sokoni-permissions.js');
 ck('adminHomeFor() returns it only for hasRole(superAdmin)',
   /if \(hasRole\('superAdmin'\)\) return 'super-admin\.html';/.test(perms), '');
 const header = read('shared-header.js');
+/* This matched the RETIRED standalone switcher's spelling. That control and its
+   builder are gone, so the pattern went missing and the row failed — while the
+   property it exists to protect held perfectly well in the live account popup, one
+   function away. A detector pinned to dead code reports its own deletion as a
+   regression. Re-pointed at the live renderer, and widened: EVERY Super Admin entry
+   pushed anywhere in this file must be guarded by hasRole('superAdmin'). */
+const superPushes = header.match(/_adminEntries\.push\(\{ r: 'superAdmin'/g) || [];
+const guardedSuperPushes =
+  header.match(/hasRole\('superAdmin'\)\)\s*_adminEntries\.push\(\{ r: 'superAdmin'/g) || [];
 ck('the role dropdown renders it only for hasRole(superAdmin)',
-  /P\.hasRole\('superAdmin'\)\) admin\.push\(\{ role: 'superAdmin'/.test(header), '');
+  superPushes.length > 0 && superPushes.length === guardedSuperPushes.length,
+  guardedSuperPushes.length + ' of ' + superPushes.length + ' Super Admin entries claim-guarded');
 const nav = read('sokoni-nav-engine.js');
 ck('the nav engine keys it under the superAdmin role',
   /superAdmin: 'super-admin\.html'/.test(nav), '');

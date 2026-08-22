@@ -31,27 +31,9 @@
 }
 #sk-nav-back-btn:active { transform: scale(0.92); }
 
-/* ── Role chip (workspace label in top nav) ────────────────── */
-#sk-nav-role-chip {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: rgba(113,255,0,0.08);
-  border: 1px solid rgba(113,255,0,0.2);
-  color: rgba(113,255,0,0.85);
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: 0.06em;
-  margin-right: 4px;
-  text-transform: uppercase;
-}
-body.sk-workspace-admin      #sk-nav-role-chip { background: rgba(0,170,255,0.08);   border-color: rgba(0,170,255,0.22);   color: rgba(0,170,255,0.85); }
-body.sk-workspace-superAdmin #sk-nav-role-chip { background: rgba(255,215,0,0.08);   border-color: rgba(255,215,0,0.22);   color: rgba(255,215,0,0.85); }
-body.sk-workspace-driver     #sk-nav-role-chip { background: rgba(255,124,0,0.08);   border-color: rgba(255,124,0,0.22);   color: rgba(255,124,0,0.85); }
-body.sk-workspace-rider      #sk-nav-role-chip { background: rgba(255,77,109,0.08);  border-color: rgba(255,77,109,0.22);  color: rgba(255,77,109,0.85); }
-body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.08); border-color: rgba(182,109,255,0.22); color: rgba(182,109,255,0.85); }
-@media (max-width: 440px) { #sk-nav-role-chip { display: none; } }
+/* Role chip REMOVED — see sokoni-nav-engine.js. It named a role from an
+   unauthenticated localStorage pick, beside the logo, contradicting the profile
+   menu. The profile dropdown is the single control that names the acting role. */
 
 /* ── "Hub" dashboard shortcut (seller sub-pages only) ────────── */
 #sk-nav-dash-btn {
@@ -422,21 +404,7 @@ body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav .bnav-emoj
   color: #71ff00 !important;
 }
 
-/* ── Role badge in hamburger overlay ── */
-#sk-menu-role-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  margin: 16px 0 4px 16px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.55);
-}
+/* Hamburger role badge REMOVED with the nav chip — same unauthenticated source. */
 
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE
@@ -460,7 +428,6 @@ body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav .bnav-emoj
 @media (max-width: 380px) {
   .sk-snav-item { padding: 5px 9px; min-width: 46px; }
   .sk-snav-icon { font-size: 14px; }
-  #sk-nav-role-chip { display: none; }
 }
 
 /* ── Sub 360px (very small phones) ── */

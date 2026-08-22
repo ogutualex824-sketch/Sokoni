@@ -1879,7 +1879,11 @@
           '<div class="sk-acct-role-label">Switch Role</div>' +
           '<div class="sk-acct-role-pills">' +
             _wsRoles.map(r =>
+              /* data-sk-workspace mirrors the administrative menu's convention, so both
+                 menus are addressable the same way and a proof does not have to match
+                 on an onclick STRING to find a control. */
               '<button class="sk-acct-role-pill ' + (r === _acting ? 'active' : '') + '" ' +
+                'data-sk-workspace="' + _hesc(r) + '" ' +
                 'onclick="window._skSwitchRole(\'' + _hesc(r) + '\')">' + _hesc(rName(r)) + '</button>'
             ).join('') +
           '</div>' +
@@ -1904,6 +1908,7 @@
           '<div class="sk-acct-role-pills">' +
             _adminEntries.map(a =>
               '<button class="sk-acct-role-pill sk-acct-admin-pill ' + (_ctx === a.r ? 'active' : '') + '" ' +
+                'data-sk-admin="' + _hesc(a.r) + '" ' +
                 'onclick="window._skEnterAdmin(\'' + _hesc(a.r) + '\')">' + a.i + ' ' + _hesc(a.l) + '</button>'
             ).join('') +
           '</div>' +
@@ -2678,263 +2683,25 @@
     }).catch(function() { /* Firebase unavailable — skip live counts */ });
   }
 
-  /* ── Multi-role switcher ── */
-  /*
-   * Renders a compact "Switch role" dropdown in the header nav actions area
-   * when the signed-in user has more than one role. Clicking a role redirects
-   * the user to that role's primary workspace.
-   */
-  var ROLE_ROUTES = {
-    buyer:    'profile.html',
-    seller:   'seller.html',
-    provider: 'provider.html',
-    driver:   'rider-nav.html',
-    admin:    'admin-os.html',
-    moderator:'admin-os.html',
-  };
-  var ROLE_ICONS = {
-    buyer:'🛍️', seller:'🏪', provider:'🛠️', driver:'🚗', admin:'🛡️', moderator:'⚖️',
-  };
+  /* ── The standalone role switcher and its private route map: BOTH REMOVED ──
+     The profile dropdown is the single role/account control (7278782), so this
+     builder had already been reduced to a no-op. Its ROLE_ROUTES map stayed, and
+     that map was a SECOND role -> workspace registry which disagreed with the real
+     one, SokoniRoleAuthority.WORKSPACE_HUBS, on every entry they shared:
 
-  /* Does this account hold an administrative claim? Asked through hasRole(), which
-     refuses an elevated role asserted only by cache. */
-  function _skHasAdminClaim() {
-    try {
-      var P = window.SokoniPermissions;
-      return !!(P && P.hasRole && (P.hasRole('admin') || P.hasRole('superAdmin')));
-    } catch (_) { return false; }
-  }
+         role      ROLE_ROUTES (here)   WORKSPACE_HUBS (the authority)
+         buyer     profile.html         index.html
+         seller    seller.html          merchant.html
+         driver    rider-nav.html       driver.html   (canonical role: rider)
+         admin     admin-os.html        absent by design
 
-  function _injectRoleSwitcher(roles, currentRole) {
-    /* ── RETIRED as a standalone control ──────────────────────────────────────
-       The header carried TWO ways to change role: this button, and the role strip
-       inside the profile dropdown. Two controls for one decision is how they drift
-       — and they did, because this one read the authority while the profile strip
-       read user.roles from localStorage.
+     It also listed admin and moderator as though they were workspaces, which is
+     exactly the conflation SokoniRoleAuthority exists to prevent: administrative
+     access is SokoniPermissions + adminContext, never an acting role.
 
-       The profile/avatar is now the single entry point, and it carries both the
-       workspace roles and the Administration entries. This function is kept as a
-       no-op rather than deleted so that any page or script still calling it fails
-       quietly instead of throwing, and so the removal reads as deliberate.
-
-       The account popup is rebuilt on the same events this used to repaint on, so
-       nothing is lost by not rendering here. */
-    return;
-
-    /* eslint-disable no-unreachable */
-    if ((!roles || roles.length < 2) && !_skHasAdminClaim()) return;
-    roles = roles || [];
-    if (document.getElementById('sk-role-switcher')) return; /* Already injected */
-
-    var actionsEl = document.getElementById('sk-nav-actions');
-    if (!actionsEl) return;
-
-    var wrapper = document.createElement('div');
-    wrapper.id = 'sk-role-switcher';
-    wrapper.style.cssText = 'position:relative;display:flex;align-items:center;';
-
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'sk-nav-icon-btn';
-    btn.title = 'Switch workspace';
-    btn.setAttribute('aria-label', 'Switch workspace');
-    btn.setAttribute('aria-haspopup', 'true');
-    btn.setAttribute('aria-expanded', 'false');
-    btn.innerHTML = '<span style="font-size:11px;font-weight:700;letter-spacing:.3px;">' +
-      (ROLE_ICONS[currentRole] || '👤') + '</span>';
-
-    var menu = document.createElement('div');
-    menu.id = 'sk-role-menu';
-    menu.setAttribute('role', 'menu');
-    /* The MENU owns its scrolling, not the page.
-
-       `overflow:hidden` with no height cap meant the list simply grew: add the two
-       administrative entries to six workspace roles and the lower items fall off a
-       small screen with no way to reach them. Capping the height and scrolling
-       inside the menu keeps every entry reachable at any list length, and
-       overscroll-behavior stops the gesture escaping to the document once the menu
-       hits its end — otherwise the page scrolls away underneath an open menu. */
-    menu.style.cssText = [
-      'display:none;position:absolute;top:calc(100% + 6px);right:0;',
-      'background:#0d0d0d;border:1px solid #1a1a1a;border-radius:10px;',
-      'z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.6);',
-      'width:min(92vw,320px);max-width:calc(100vw - 16px);min-width:160px;',
-      'max-height:min(70vh,420px);overflow-y:auto;overflow-x:hidden;',
-      '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;',
-    ].join('');
-
-    var header = document.createElement('div');
-    header.style.cssText = 'padding:8px 12px 6px;font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid #1a1a1a;';
-    header.textContent = 'Your Workspaces';
-    menu.appendChild(header);
-
-    roles.forEach(function(role) {
-      var item = document.createElement('a');
-      item.href = ROLE_ROUTES[role] || 'profile.html';
-      item.setAttribute('role', 'menuitem');
-      item.style.cssText = [
-        'display:flex;align-items:center;gap:10px;padding:10px 14px;',
-        'color:#e8e8e8;text-decoration:none;font-size:13px;transition:background .15s;',
-        role === currentRole ? 'background:rgba(113,255,0,.08);color:#71ff00;font-weight:600;' : '',
-      ].join('');
-      item.innerHTML = '<span>' + (ROLE_ICONS[role] || '👤') + '</span>' +
-        '<span>' + role.charAt(0).toUpperCase() + role.slice(1) + '</span>' +
-        (role === currentRole ? '<span style="margin-left:auto;font-size:10px;opacity:.6;">current</span>' : '');
-      /* Selecting a role must SWITCH, not merely navigate.
-
-         These were plain anchors: clicking one went to ROLE_ROUTES[role] and never
-         called setActiveRole, so the destination changed while the acting role did
-         not — the page landed on a workspace the authority still considered
-         inactive, and the dropdown went on marking the old role.
-
-         _skSwitchRole is the single writer: it asks the authority, refuses with a
-         reason when the authority declines, mirrors locally only after that
-         succeeds, and then routes via hubFor(). The href stays so this remains a
-         real link for middle-click, keyboard and screen readers; the plain-click
-         path is handed to the writer instead. */
-      item.addEventListener('click', function (ev) {
-        if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
-        ev.preventDefault();
-        if (typeof window._skSwitchRole === 'function') window._skSwitchRole(role);
-        else location.href = item.href;   /* never leave the control inert */
-      });
-      item.addEventListener('mouseenter', function() { this.style.background = 'rgba(255,255,255,.06)'; });
-      item.addEventListener('mouseleave', function() {
-        this.style.background = role === currentRole ? 'rgba(113,255,0,.08)' : '';
-      });
-      menu.appendChild(item);
-    });
-
-    /* ── ADMINISTRATIVE ENTRIES ───────────────────────────────────────────────
-       One user-facing switcher, two authorities behind it. `admin` and
-       `superAdmin` are deliberately NOT workspace roles — SokoniRoleAuthority
-       excludes them from CANONICAL_ROLES so administrative access keeps a single
-       owner — so setActiveRole('admin') returns {ok:false, reason:'unknown-role'}
-       by design and is NOT what these call.
-
-       They enter the administrative CONTEXT instead, which is claims-checked by
-       SokoniPermissions.hasRole(): an elevated role asserted only by cache is
-       refused, so a forged sokoniUser.role achieves nothing here. An entry is
-       rendered only when the claim is actually held, and the authority is asked
-       again at click time rather than trusting what was true at render time. */
-    (function _adminEntries() {
-      var P = window.SokoniPermissions;
-      if (!P || typeof P.hasRole !== 'function') return;
-      var admin = [];
-      try {
-        if (P.hasRole('superAdmin')) admin.push({ role: 'superAdmin', label: 'Super Admin', icon: '👑', href: 'super-admin.html' });
-        if (P.hasRole('admin'))      admin.push({ role: 'admin',      label: 'Admin',       icon: '🛡️', href: 'admin.html' });
-      } catch (_) { return; }
-      if (!admin.length) return;
-
-      var sep = document.createElement('div');
-      sep.style.cssText = 'padding:8px 12px 6px;font-size:10px;font-weight:600;color:#888;'
-        + 'text-transform:uppercase;letter-spacing:.8px;border-top:1px solid #1a1a1a;'
-        + 'border-bottom:1px solid #1a1a1a;margin-top:4px;';
-      sep.textContent = 'Administration';
-      menu.appendChild(sep);
-
-      var ctx = null;
-      try { ctx = P.getAdminContext && P.getAdminContext(); } catch (_) {}
-
-      admin.forEach(function (a) {
-        var el = document.createElement('a');
-        el.href = a.href;
-        el.setAttribute('role', 'menuitem');
-        el.style.cssText = [
-          'display:flex;align-items:center;gap:10px;padding:10px 14px;',
-          'color:#e8e8e8;text-decoration:none;font-size:13px;transition:background .15s;',
-          ctx === a.role ? 'background:rgba(192,132,252,.10);color:#c084fc;font-weight:600;' : '',
-        ].join('');
-        el.innerHTML = '<span>' + a.icon + '</span><span>' + _hesc(a.label) + '</span>'
-          + (ctx === a.role ? '<span style="margin-left:auto;font-size:10px;opacity:.6;">current</span>' : '');
-        el.addEventListener('click', function (ev) {
-          if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) return;
-          ev.preventDefault();
-          var res = null;
-          try { res = P.enterAdminContext(a.role); } catch (_) { res = null; }
-          if (!res || res.ok !== true) {
-            /* Refused: say why and change NOTHING visible. The menu must not act as
-               though a role were granted that the authority just declined. */
-            var why = (res && res.reason) || 'unavailable';
-            var msg = why === 'no-claim'     ? 'That role is not available on this account.'
-                    : why === 'not-verified' ? 'Could not verify your roles. Check your connection and try again.'
-                    : why === 'signed-out'   ? 'Sign in to continue.'
-                    : 'Could not open that surface right now.';
-            try {
-              if (window.showNotif) window.showNotif(msg, 'error');
-              else console.warn('[role-switch] ' + why + ': ' + msg);
-            } catch (_) {}
-            return;
-          }
-          location.href = a.href;
-        });
-        el.addEventListener('mouseenter', function () { this.style.background = 'rgba(255,255,255,.06)'; });
-        el.addEventListener('mouseleave', function () {
-          this.style.background = ctx === a.role ? 'rgba(192,132,252,.10)' : '';
-        });
-        menu.appendChild(el);
-      });
-    }());
-
-    /* Keep the open menu inside the viewport.
-
-       It is anchored right:0 to the switcher button, which on a 390px screen sits
-       ~284px from the left — so a 320px menu hung 36px off the left edge and its
-       first characters were unreachable. Width clamping cannot fix that: the
-       overflow comes from the ANCHOR OFFSET, not the width, and max-width was
-       already generous enough to never bind.
-
-       Measured after paint rather than guessed, because the button's position
-       depends on which action icons that page happens to render. */
-    function _skClampMenu() {
-      try {
-        menu.style.right = '0px';
-        var r = menu.getBoundingClientRect();
-        var vw = window.innerWidth || document.documentElement.clientWidth;
-        if (r.left < 8) menu.style.right = Math.round(r.left - 8) + 'px';
-        else if (r.right > vw - 8) menu.style.right = Math.round((vw - 8) - r.right) * -1 + 'px';
-      } catch (_) {}
-    }
-
-    var isOpen = false;
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      isOpen = !isOpen;
-      menu.style.display = isOpen ? 'block' : 'none';
-      btn.setAttribute('aria-expanded', String(isOpen));
-      if (isOpen) _skClampMenu();
-    });
-    /* A rotation changes the anchor as much as an open does. */
-    window.addEventListener('resize', function () { if (isOpen) _skClampMenu(); });
-    window.addEventListener('orientationchange', function () { if (isOpen) _skClampMenu(); });
-    document.addEventListener('click', function() {
-      if (isOpen) { isOpen = false; menu.style.display = 'none'; btn.setAttribute('aria-expanded','false'); }
-    });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && isOpen) { isOpen = false; menu.style.display = 'none'; btn.setAttribute('aria-expanded','false'); }
-    });
-
-    wrapper.appendChild(btn);
-    wrapper.appendChild(menu);
-
-    /* Insert before the avatar's row entry.
-
-       This read `insertBefore(wrapper, avatar)`, but #sk-nav-avatar is nested inside
-       #sk-acct-wrap and is therefore a GRANDCHILD of the actions row. insertBefore
-       requires a DIRECT child and throws NotFoundError otherwise — which aborted the
-       whole sokoniAuthReady handler, and because that listener is {once:true} there
-       was no second chance: the role switcher never rendered at all, on any page, for
-       any account. Measured in scripts/before-role-state-divergence.mjs (C0).
-
-       Climb to whichever ancestor IS a direct child rather than naming #sk-acct-wrap,
-       so re-nesting the avatar later cannot silently reintroduce this. If the avatar
-       is absent entirely the loop ends at null and we fall back — no path throws. */
-    var anchor = document.getElementById('sk-nav-avatar');
-    while (anchor && anchor.parentElement !== actionsEl) anchor = anchor.parentElement;
-    if (anchor) actionsEl.insertBefore(wrapper, anchor);
-    else actionsEl.insertBefore(wrapper, actionsEl.firstChild);
-  }
+     Dead code that contradicts the live registry is not harmless — it is the next
+     person s reasonable-looking reference. There is now ONE map, in the authority
+     that owns routing, and _skSwitchRole routes through hubFor(). */
 
   /* ── The switcher's state comes from the AUTHORITY ──────────────────────────
      F1. The switcher used to be handed detail.role, falling back to sokoniUser.role
@@ -2975,20 +2742,30 @@
   }
 
   /* ── Re-render on every role change ─────────────────────────────────────────
-     F2. _injectRoleSwitcher had exactly ONE call site, inside the {once:true}
-     sokoniAuthReady listener, so the dropdown was painted at first auth and never
-     again — a switch updated the header and the routing while the dropdown kept
-     showing the role the account started the page on.
+     These listeners now repaint the ACCOUNT POPUP, which is the single control that
+     names the acting role. They previously rebuilt the standalone switcher; that
+     control and its builder are gone (see above), so calling it would be a
+     reference to nothing.
 
-     _injectRoleSwitcher returns early when #sk-role-switcher already exists, so
-     simply calling it again is a silent no-op. The old node has to go first. */
+     The events stay exactly as they were — a workspace switch, a legacy role change
+     and an administrative context change all have to repaint, for the same reason:
+     the menu marks the current role, and a control that shows a stale one is worse
+     than a control that shows none. Repaint is UNCONDITIONAL; guarding it behind a
+     mirror-equality check is how authority-only changes once repainted nothing.
+
+     Rebuilding only when the popup exists keeps this cheap: the popup is created on
+     first open, and there is nothing to repaint before that. */
   var _skLastAuthDetail = null;
   function _skRenderRoleSwitcher(detail) {
     if (detail) _skLastAuthDetail = detail;
-    var st = _skSwitcherState(_skLastAuthDetail);
+    /* Retire any switcher node left in a page that was open across the change. */
     var old = document.getElementById('sk-role-switcher');
     if (old && old.parentNode) old.parentNode.removeChild(old);
-    _injectRoleSwitcher(st.roles, st.current);
+    if (!document.getElementById('sk-acct-popup')) return;
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u) _buildAcctPopup(u);
+    } catch (_) {}
   }
   document.addEventListener('sokoniActiveRoleChanged', function () { _skRenderRoleSwitcher(null); });
   document.addEventListener('sokoniRoleChanged',      function () { _skRenderRoleSwitcher(null); });

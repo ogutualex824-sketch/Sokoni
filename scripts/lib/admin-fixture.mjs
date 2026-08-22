@@ -48,7 +48,8 @@ export const ORIGIN = process.env.SK_ORIGIN || 'http://127.0.0.1:8901';
    thing under test. */
 export function installFixture(page) {
   return page.addInitScript(() => {
-    let cfg = { claims: [], ctx: '', lsroles: ['buyer'], nonce: '0' };
+    let cfg = { claims: [], ctx: '', lsroles: ['buyer'], permCache: null,
+                tokenDelayMs: 0, nonce: '0' };
     try { cfg = Object.assign(cfg, JSON.parse(localStorage.getItem('__fxCfg') || '{}')); }
     catch (_) {}
 
@@ -69,10 +70,39 @@ export function installFixture(page) {
       }
     } catch (_) {}
 
+    /* ── Seeding the permissions cache, to make the verification race reachable ──
+       sokoni-permissions.js init() reads sessionStorage.sokoniPermCache and assigns
+       _claimsVerified = cached.claimsVerified, while _verifiedThisLoad deliberately
+       stays false until a signed token is read. That gap is the race: isVerified()
+       answers true, hasRole(elevated) answers false, and anything consulting
+       getAdminContext() in between used to erase the context.
+
+       It is not an exotic state — it is what a returning user has on every
+       page-to-page navigation within five minutes. Seeding it makes the window
+       reachable on demand instead of by luck; polling for it hit the window on some
+       loads and not others, which is what made the earlier harness swing. */
+    try {
+      if (cfg.permCache && cfg.permCache.length) {
+        sessionStorage.setItem('sokoniPermCache', JSON.stringify({
+          roles: cfg.permCache, claimsVerified: true, ts: Date.now(),
+        }));
+      } else if (cfg.permCache === null) {
+        sessionStorage.removeItem('sokoniPermCache');
+      }
+    } catch (_) {}
+
     const user = {
       uid: 'fx', email: 'fx@example.test', displayName: 'Fixture Admin',
       /* the gates pass forceRefresh=true; the fixture is the token either way */
-      getIdTokenResult: () => Promise.resolve({ claims: claimObj }),
+      /* A real token ROUND-TRIPS. Resolving instantly is the unrealistic part, and it
+         made the verification window between _claimsVerified (cache, immediate) and
+         _verifiedThisLoad (token, later) too small to land in reliably — the race
+         control flipped run to run. A delay restores the window to a realistic width;
+         it does not create it. */
+      getIdTokenResult: () => new Promise((res) => {
+        if (!cfg.tokenDelayMs) return res({ claims: claimObj });
+        setTimeout(() => res({ claims: claimObj }), cfg.tokenDelayMs);
+      }),
       getIdToken: () => Promise.resolve('fixture-token'),
     };
     const stub = {
@@ -125,13 +155,67 @@ export function installFixture(page) {
       },
       set: (v) => { realShim = v; proxy = null; },
     });
+
+    /* ── Publishing authority state to the DOM ────────────────────────────
+       Production serves a strict nonce-based CSP, so page.addScriptTag is blocked
+       there — the reader came back null and the run died on the first assertion.
+       page.evaluate is not blocked, but it runs in an ISOLATED WORLD and cannot see
+       window.SokoniPermissions at all.
+
+       So the main world publishes what it knows to an attribute, and the isolated
+       world reads the attribute. addInitScript is injected over CDP before page
+       scripts and is not subject to CSP, which is why this hook survives where an
+       injected <script> does not.
+
+       It only ever READS the authorities. It cannot grant anything.
+
+       getAdminContext() IS NOT CALLED HERE, AND MUST NOT BE. It is named like a read
+       and is not one: it re-checks hasRole(ctx) and, when that is false, clears the
+       context AND ERASES ITS sessionStorage MIRROR.
+
+       There is a window on every load where that check is false through no fault of
+       the context. isVerified() returns _claimsVerified, which _readCache() sets true
+       from the sessionStorage cache; hasRole() on an elevated role additionally
+       demands _verifiedThisLoad, which is in-memory only and stays false until the
+       token round-trips. Between those two moments getAdminContext() destroys the
+       context it was asked about.
+
+       Polling it here therefore erased the seeded context mid-load, and did so
+       intermittently — the harness swung 32/0, 31/1, 22/10, 23/9 across runs, with
+       later scenarios failing more often because the cache was warmer. Gating the call
+       on isVerified() narrowed the window without closing it, because isVerified() is
+       precisely the flag that goes true too early.
+
+       So: publish PURE reads only. The context is taken from the raw sessionStorage
+       mirror in the isolated world, and from the `is-current` mark the product itself
+       renders — which is the stronger signal anyway, being the one a user can see.
+
+       (No product code sits in that window today: all three getAdminContext callers
+       render a dropdown on a human click, long after the round-trip. Latent, not live
+       — but it is a real sharp edge in an API named like an accessor.) */
+    setInterval(() => {
+      try {
+        const P = window.SokoniPermissions, RA = window.SokoniRoleAuthority;
+        document.documentElement.setAttribute('data-sk-authstate', JSON.stringify({
+          entryLoaded: !!window.SokoniAdminEntry,
+          verified: !!(P && P.isVerified && P.isVerified()),
+          hasAdmin: !!(P && P.hasRole && P.hasRole('admin')),
+          hasSuper: !!(P && P.hasRole && P.hasRole('superAdmin')),
+          approved: (RA && RA.getApprovedRoles) ? RA.getApprovedRoles() : undefined,
+          active: (RA && RA.getActiveRole) ? RA.getActiveRole() : undefined,
+          canonical: (RA && RA.CANONICAL_ROLES) ? RA.CANONICAL_ROLES : undefined,
+          hubs: (RA && RA.WORKSPACE_HUBS) ? RA.WORKSPACE_HUBS : undefined,
+        }));
+      } catch (_) {}
+    }, 250);
   });
 }
 
 /* Change scenario. Requires being on the origin already — call primeOrigin() once. */
 let _nonce = 0;
-export async function setScenario(page, { claims = [], ctx = '', lsroles = ['buyer'] } = {}) {
-  const cfg = { claims, ctx, lsroles, nonce: 'n' + (++_nonce) };
+export async function setScenario(page,
+  { claims = [], ctx = '', lsroles = ['buyer'], permCache = null, tokenDelayMs = 0 } = {}) {
+  const cfg = { claims, ctx, lsroles, permCache, tokenDelayMs, nonce: 'n' + (++_nonce) };
   await page.evaluate((c) => {
     localStorage.setItem('__fxCfg', JSON.stringify(c));
     try { sessionStorage.removeItem('__fxCtxNonce'); } catch (_) {}
@@ -208,8 +292,14 @@ export async function stubFirebaseModule(page) {
      removed firestore()/functions(), so their own boot threw before it ever reached the
      profile menu — which the harness then reported as a missing button. Scope the
      double to the one page whose third resolver actually needs it. */
+  /* Matches /admin AND /admin.html, and NOT /admin-os. Production sets cleanUrls, so
+     /admin.html 301s to /admin — an .includes('/admin.html') check therefore never
+     matched there, admin.html got the REAL signed-out auth, and the run measured the
+     marketplace home while reporting on the admin console. The same class of mistake
+     the landed-URL control exists to catch, one layer lower down. */
+  const IS_ADMIN_PAGE = /\/admin(\.html)?(\?|#|$)/;
   await page.route('**/firebase.js', (route) => {
-    if (!route.request().frame().url().includes('/admin.html')) return route.continue();
+    if (!IS_ADMIN_PAGE.test(route.request().frame().url())) return route.continue();
     return route.fulfill({
     status: 200,
     contentType: 'application/javascript; charset=utf-8',
@@ -260,7 +350,12 @@ export async function open(page, file, { wait = 3500 } = {}) {
 }
 
 /* One reader, so before and after measure the same things the same way. */
-export const READ = String.raw`(function () {
+/* ONE reader, so before and after measure the same things the same way.
+   Runs via page.evaluate, NOT addScriptTag: production's nonce CSP blocks an injected
+   <script>, and the first production run died on a null read because of it. evaluate()
+   lives in an isolated world, so anything needing main-world globals comes from the
+   data-sk-authstate attribute the fixture publishes. */
+export function readFn() {
   function txt(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
   function vis(el) {
     if (!el) return false;
@@ -286,18 +381,16 @@ export const READ = String.raw`(function () {
   out.authGateShown = vis(document.getElementById('authGate'))
                    || vis(document.getElementById('adminLock'));
 
-  /* Every VISIBLE control whose label is a sign-out — OURS INCLUDED, so a duplicate
-     is counted rather than assumed away.
-
-     The first version anchored on /^sign\s*out$/i and so did not match our own
-     "↩ Sign out": the count came back 0 and the row read as "no sign-out on the
-     surface" when the truth was "one, and the probe could not see it". Strip
-     leading/trailing non-letters before matching, and record WHOSE each one is —
-     "exactly one" is only the right answer if that one is ours. */
+  /* Every VISIBLE control whose label is a sign-out — OURS INCLUDED, so a duplicate is
+     counted rather than assumed away. Anchored on the label with leading/trailing
+     non-letters stripped: an unanchored whole-label match alone did not catch our own
+     "↩ Sign out", so the count came back 0 and read as "no sign-out on the surface"
+     when the truth was "one, and the probe could not see it". Record WHOSE each one
+     is — "exactly one" is only the right answer if that one is ours. */
   out.signOuts = Array.prototype.filter.call(
     document.querySelectorAll('button, a'),
     function (el) {
-      var t = txt(el).replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}]+$/u, '');
+      var t = txt(el).replace(/^[^A-Za-z]+/, '').replace(/[^A-Za-z]+$/, '');
       return /^sign\s*out$/i.test(t) && vis(el);
     }
   ).map(function (el) {
@@ -326,20 +419,34 @@ export const READ = String.raw`(function () {
     });
   }
 
-  var P = window.SokoniPermissions, RA = window.SokoniRoleAuthority;
-  out.entryLoaded = !!window.SokoniAdminEntry;
-  out.verified    = !!(P && P.isVerified && P.isVerified());
-  out.hasAdmin    = !!(P && P.hasRole && P.hasRole('admin'));
-  out.hasSuper    = !!(P && P.hasRole && P.hasRole('superAdmin'));
-  out.ctx         = (P && P.getAdminContext) ? P.getAdminContext() : undefined;
-  out.approved    = (RA && RA.getApprovedRoles) ? RA.getApprovedRoles() : undefined;
-  out.active      = (RA && RA.getActiveRole) ? RA.getActiveRole() : undefined;
+  /* Main-world state, smuggled through the DOM by the fixture. */
+  var st = {};
+  try { st = JSON.parse(document.documentElement.getAttribute('data-sk-authstate') || '{}'); }
+  catch (_) {}
+  out.entryLoaded = !!st.entryLoaded;
+  out.verified    = !!st.verified;
+  out.hasAdmin    = !!st.hasAdmin;
+  out.hasSuper    = !!st.hasSuper;
+  /* deliberately NOT st.ctx: see the publisher. The context is observed through the
+     raw mirror below and through the product-rendered is-current mark. */
+  out.approved    = st.approved;
+  out.active      = st.active;
+  out.authStateSeen = document.documentElement.hasAttribute('data-sk-authstate');
   out.ssCtx       = (function () { try { return sessionStorage.getItem('sokoniAdminContext'); }
                                    catch (_) { return 'ERR'; } }());
-  document.documentElement.setAttribute('data-p', JSON.stringify(out));
-}());`;
+  return out;
+}
 
 export async function read(page) {
-  await page.addScriptTag({ content: READ });
-  return JSON.parse(await page.getAttribute('html', 'data-p'));
+  return page.evaluate(readFn);
+}
+
+/* Clicking through evaluate for the same CSP reason. */
+export async function clickSel(page, sel) {
+  return page.evaluate((s) => {
+    const el = document.querySelector(s);
+    if (!el) return false;
+    el.click();
+    return true;
+  }, sel);
 }

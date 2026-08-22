@@ -1,3 +1,138 @@
+## [2026-08-22] - Role Navigation & Header Cleanup: one control, one registry, one accessor.
+
+Hosting only. No rules, no Functions, no schema.
+
+### The outcome
+
+Wherever you are in SOKONI, the account has ONE authoritative current role, ONE
+profile control, and switching a role takes you to that role's workspace.
+
+### A  The role indicator beside the logo is gone
+
+`#sk-nav-role-chip` sat next to the SOKONI wordmark and named a role in uppercase.
+It came from `sokoni-nav-engine.js`'s own `_role()`, which:
+
+* reads **localStorage only** and consults no authority;
+* returns a **priority pick** (superAdmin > admin > driver > rider > provider >
+  seller > buyer), not the acting role;
+* treats `admin`/`superAdmin` as workspaces.
+
+So it disagreed with the profile menu by construction. Measured on production:
+
+| scenario | header chip | profile menu |
+|---|---|---|
+| acting Buyer, holds rider+seller claims | **RIDER** | Buyer |
+| forged localStorage, **no claims at all** | **SUPER ADMIN** | (nothing) |
+
+`shared-header.js` injects nav-engine on **every page it runs on**, so this was
+platform-wide — not the six pages carrying a static `<script>` tag. An earlier note
+in this log put nav-engine at "8 pages"; that was a static-tag count and was wrong
+about the runtime.
+
+The hamburger drawer's `#sk-menu-role-badge` is retired with it — same source, same
+contradiction, one tap away. Nothing replaces either: a second renderer is what
+created the disagreement.
+
+### C  One role -> workspace registry
+
+`shared-header.js` carried a private `ROLE_ROUTES` map that disagreed with the real
+registry, `SokoniRoleAuthority.WORKSPACE_HUBS`, on **every entry they shared**:
+
+| role | ROLE_ROUTES | WORKSPACE_HUBS |
+|---|---|---|
+| buyer | `profile.html` | `index.html` |
+| seller | `seller.html` | `merchant.html` |
+| driver | `rider-nav.html` | `driver.html` (canonical role: `rider`) |
+| admin | `admin-os.html` | absent by design |
+
+It was already unreachable — the standalone switcher was retired to a no-op in
+`7278782` — but dead code that contradicts the live registry is the next person's
+reasonable-looking reference. Removed along with the retired builder (230 lines).
+
+Routing itself needed **no change**: `_skSwitchRole` already routed through
+`hubFor()`. That is now proven rather than assumed.
+
+### I  getAdminContext() no longer destroys what it reports
+
+The accessor re-checked `hasRole(ctx)` unconditionally and, on false, cleared the
+context **and erased its sessionStorage mirror**. There is a window on every load
+where that check is false through no fault of the context:
+
+    isVerified()        -> _claimsVerified     set true straight from the 5-minute cache
+    hasRole(elevated)   -> _verifiedThisLoad   in-memory only, false until the token round-trips
+
+A returning user reaches the accessor inside that window on every page-to-page
+navigation. Measured on production: with `admin` entered and the admin claim
+genuinely held, an early call left the mirror **null**.
+
+It now answers three states instead of two:
+
+    not verified yet         -> null, and CHANGE NOTHING      (pending / unknown)
+    verified + authorized    -> the context
+    verified + unauthorized  -> null, and clear it            (the real revocation)
+
+`enterAdminContext` and `requireAdminContext` were moved onto the same in-memory
+flag, so all three ask one question in one wording. Previously `enterAdminContext`
+reported `no-claim` — "this account does not carry the Admin role" — when the truth
+was that nothing had been checked yet.
+
+`SokoniAdminEntry._ready()` now **always** calls `reverify()`. It short-circuited on
+`isVerified()`, which a warm cache sets true on its own; with the stricter check
+below it, that would have locked out every returning administrator. `reverify()`
+returns immediately once the token has been read, so the warm path is unchanged.
+
+### Files
+
+| file | change |
+|---|---|
+| `sokoni-nav-engine.js` | role chip and drawer badge retired; Hub shortcut re-anchored on the back button |
+| `sokoni-nav-engine.css` | chip and badge rules removed |
+| `shared-header.js` | dead `ROLE_ROUTES`/`ROLE_ICONS`/`_injectRoleSwitcher` deleted; repaint listeners now rebuild the account popup; workspace and admin entries tagged `data-sk-workspace` / `data-sk-admin` |
+| `sokoni-permissions.js` | three-state `getAdminContext`; `_verifiedForElevated` shared by the three admin functions |
+| `sokoni-admin-entry.js` | `_ready()` always reverifies |
+
+### Proof
+
+`scripts/after-role-nav-header.mjs` — **12 / 0, stable across runs**, and **9 / 3
+against live `f4dcb5b`**, failing exactly the three defects. Every row carries a
+control.
+
+Covers: no role indicator on cart / index / driver / seller-delivery / provider; no
+role announced to assistive tech; a forged localStorage mirror names no role; the
+accessor race, reproduced deterministically and then fixed; the safety it must NOT
+lose (an unheld context is still cleared once verification really happened); role
+switch **routes** — seller -> merchant, rider -> driver, provider -> providers; all
+nine canonical roles have a hub; the registry holds no administrative role.
+
+Reproducing the race needed two fixture corrections worth recording: seeding
+`sokoniPermCache` (which is what puts `isVerified()` true and `_verifiedThisLoad`
+false at the same instant), and giving the fixture token a realistic delay — an
+instantly-resolving token made the window too small to land in, and the control
+flipped run to run.
+
+Three harness defects were also fixed rather than worked around: a `page.evaluate`
+read of `window.SokoniPermissions` from the **isolated world** returned undefined and
+passed a row while measuring nothing; a detector in `after-superadmin-link-gating`
+was pinned to the deleted dead code and reported its own removal as a regression;
+and a landed-URL normaliser ignored the fragment, calling `merchant.html#dashboard`
+the wrong destination.
+
+Regression green: admin-profile-model 32/0 · unified-role-menu 12/0 ·
+superadmin-retirement 14/0 · admin-lock-removal 24/0 · analytics-metrics 19/0 ·
+role-presentation 19/0 · claims-role-consumers 17/0 · superadmin-link-gating 13/0 ·
+role:switch 50/0 · profile:acting-role 36/0 · panels 32/0 · verify:auth ·
+verify:markup.
+
+### Still open, recorded not silently changed
+
+`sokoni-nav-engine.js` `_role()` remains an unauthenticated role source. It no longer
+renders a label, but it still drives the back-button destination and the
+`body.sk-workspace-*` classes. Those are navigation and styling rather than an
+identity claim; converging them onto the authority is its own slice with its own
+before-proof.
+
+**NOT DEPLOYED.**
+
 ## [2026-08-22] - Administrative surfaces: one top-right profile menu, no marketplace header.
 
 Hosting only. No rules, no Functions, no schema. Client-side chrome and client-side

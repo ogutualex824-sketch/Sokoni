@@ -478,13 +478,25 @@
       topNav.insertBefore(btn, topNav.firstChild);
     }
 
-    if (!document.getElementById('sk-nav-role-chip')) {
-      var chip         = document.createElement('span');
-      chip.id          = 'sk-nav-role-chip';
-      chip.textContent = (_LABEL[ws] || ws).replace(/^[^\s]+\s/, '');
-      chip.setAttribute('aria-label', 'Current workspace: ' + ws);
-      topNav.insertBefore(chip, document.getElementById('sk-nav-back-btn').nextSibling);
-    }
+    /* ── #sk-nav-role-chip REMOVED ────────────────────────────────────────────
+       The chip sat beside the SOKONI logo and named a role in uppercase. It came
+       from _role() below, which reads localStorage ONLY, consults no authority, and
+       returns a PRIORITY pick (superAdmin > admin > driver > rider > provider >
+       seller > buyer) rather than the acting role. So it disagreed with the profile
+       menu by construction: acting as Buyer with a rider claim, the header said
+       RIDER. Measured with a forged mirror and NO claims at all, it said SUPER ADMIN.
+
+       shared-header.js injects this module on every page it runs on, so that was
+       platform-wide — not the six pages carrying a static <script> tag.
+
+       The profile dropdown is now the single control that names the acting role, and
+       it sources that from SokoniRoleAuthority. One answer, from the authority that
+       owns it. Nothing replaces the chip: a second renderer is what created the
+       contradiction.
+
+       _role() still drives the back-button destination and the body.sk-workspace-*
+       classes. Those are navigation and styling rather than an identity claim, and
+       changing them needs its own before-proof — recorded, not silently altered. */
 
     /* "🏪 Hub" shortcut — seller non-dashboard pages only */
     if (ws === 'seller' && _page !== 'seller.html' && !document.getElementById('sk-nav-dash-btn')) {
@@ -493,35 +505,26 @@
       dash.href   = 'seller.html';
       dash.setAttribute('aria-label', 'Seller Dashboard');
       dash.innerHTML = '<span aria-hidden="true">🏪</span> Hub';
-      var chipEl  = document.getElementById('sk-nav-role-chip');
-      topNav.insertBefore(dash, chipEl ? chipEl.nextSibling : null);
+      /* Anchored on the back button now that the role chip is gone. It used to sit
+         after the chip and fall back to appending when the chip was absent — which,
+         with the chip removed, would silently move the Hub shortcut to the far end
+         of the nav on every seller sub-page. */
+      var backEl = document.getElementById('sk-nav-back-btn');
+      topNav.insertBefore(dash, backEl ? backEl.nextSibling : topNav.firstChild);
     }
   }
 
   /* ═══════════════════════════════════════════════════════════
      ROLE BADGE in hamburger overlay
   ═══════════════════════════════════════════════════════════ */
-  function _buildMenuBadge(ws) {
-    /* The menu drawer (#sk-menu-drawer) is built lazily on first hamburger click.
-       Defer injection until that first click so the element actually exists. */
-    var btn = document.getElementById('sk-menu-btn');
-    if (!btn) return;
-    var _done = false;
-    btn.addEventListener('click', function () {
-      if (_done) return;
-      _done = true;
-      /* Give the drawer 150 ms to render before we inject the badge */
-      setTimeout(function () {
-        var drawer = document.getElementById('sk-menu-drawer');
-        if (!drawer || document.getElementById('sk-menu-role-badge')) return;
-        var badge = document.createElement('div');
-        badge.id  = 'sk-menu-role-badge';
-        badge.setAttribute('aria-label', 'Workspace: ' + ws);
-        badge.textContent = _LABEL[ws] || ws;
-        drawer.insertBefore(badge, drawer.firstChild);
-      }, 150);
-    });
-  }
+  /* RETIRED with the nav chip, and for the same reason: it rendered a role label
+     from the same unauthenticated _role() pick, so the drawer could announce one
+     role while the profile menu showed another. Removing only the chip would have
+     left the identical contradiction one tap away.
+
+     Kept as a no-op rather than deleted so the call site below stays honest about
+     the removal instead of vanishing. */
+  function _buildMenuBadge() { }
 
   /* ═══════════════════════════════════════════════════════════
      "MORE" DRAWER — store identity + categorised tool grid + role switcher

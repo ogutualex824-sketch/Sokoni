@@ -651,8 +651,12 @@
      presenting a dead button. */
   function enterAdminContext(role) {
     var r = role === 'superAdmin' ? 'superAdmin' : 'admin';
-    if (!isLoggedIn())    return { ok: false, reason: 'signed-out' };
-    if (!isVerified())    return { ok: false, reason: 'not-verified' };
+    if (!isLoggedIn())            return { ok: false, reason: 'signed-out' };
+    /* _verifiedForElevated, not isVerified: a cached claimsVerified is not a token.
+       hasRole() below already refuses on the same flag, so without this the refusal
+       came back as 'no-claim' — telling an administrator their account does not carry
+       the role, when the truth was that nothing had been checked yet. */
+    if (!_verifiedForElevated()) return { ok: false, reason: 'not-verified' };
     /* A Super Admin entering the Admin surface holds `superAdmin`, and need not also
        hold `admin` — the same direction requireAdminContext() accepts. Resolving it
        here keeps the two functions from disagreeing, which is how an Enter button
@@ -668,13 +672,45 @@
     return { ok: true, context: r };
   }
 
+  /* An elevated decision may only be made once THIS load has read a signed token.
+     isVerified() is not that test: it returns _claimsVerified, which _readCache()
+     sets true straight from the sessionStorage cache. _verifiedThisLoad is the
+     in-memory flag that only a real token can set, and it is what hasRole() already
+     consults for elevated roles. Naming it here so the three administrative
+     functions below ask the same question in the same words. */
+  function _verifiedForElevated() { return _verifiedThisLoad; }
+
   /* The mirror is only ever a HINT for surviving a reload. It is re-validated against
-     hasRole() on every read, and dropped if the claim is gone. */
+     hasRole() on every read, and dropped if the claim is genuinely gone.
+
+     "NOT VERIFIED YET" IS UNKNOWN — IT IS NOT "UNAUTHORIZED".
+     ────────────────────────────────────────────────────────────────────────────
+     This used to run the hasRole() check unconditionally. hasRole() refuses an
+     elevated role while _verifiedThisLoad is false — which is every load until the
+     token round-trips, and a returning user reaches this line with _claimsVerified
+     ALREADY true from the five-minute cache. In that window the accessor concluded
+     "not authorized" and did what it does with an unauthorized context: cleared it
+     and erased its sessionStorage mirror.
+
+     So an accessor destroyed the state it was asked to report, purely because it was
+     asked early. Measured on production: with a context of 'admin' in place and the
+     admin claim genuinely held, an early call left the mirror null.
+
+     It now answers in three states rather than two:
+
+         not verified yet          -> null, and CHANGE NOTHING     (pending/unknown)
+         verified + authorized     -> the context
+         verified + unauthorized   -> null, and clear it           (the real revocation)
+
+     Returning null while pending is the same contract callers already handle — the
+     menus mark nothing as current, which is correct for "we do not know yet" — while
+     the destructive branch now runs only on a fact rather than on a race. */
   function getAdminContext() {
     if (!_adminContext) {
       try { _adminContext = sessionStorage.getItem(ADMIN_CTX_KEY) || null; } catch (_) {}
     }
     if (!_adminContext) return null;
+    if (!_verifiedForElevated()) return null;      /* pending: report nothing, destroy nothing */
     if (!hasRole(_adminContext)) { _adminContext = null; _adminCtxMirror(null); return null; }
     return _adminContext;
   }
@@ -695,8 +731,12 @@
      adminHomeFor() — while `admin` never satisfies `superAdmin`. */
   function requireAdminContext(required) {
     var need = required === 'superAdmin' ? 'superAdmin' : 'admin';
-    if (!isLoggedIn())  return { ok: false, reason: 'signed-out' };
-    if (!isVerified())  return { ok: false, reason: 'not-verified' };
+    if (!isLoggedIn())            return { ok: false, reason: 'signed-out' };
+    /* Same flag as getAdminContext() and enterAdminContext(). Were this left on
+       isVerified(), a warm cache would carry the decision past this line, find a
+       null (pending) context below, and deny with 'context-not-entered' — offering
+       an Enter button for a context the account had in fact already entered. */
+    if (!_verifiedForElevated()) return { ok: false, reason: 'not-verified' };
     var ctx = getAdminContext();
     var claimed = hasRole(need) || (need === 'admin' && hasRole('superAdmin'));
     if (!claimed) return { ok: false, reason: 'no-claim', need: need };
