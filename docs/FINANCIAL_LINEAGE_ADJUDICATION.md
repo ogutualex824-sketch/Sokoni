@@ -556,3 +556,89 @@ like on the page — the next slice would have been sent to fix code that never 
 ---
 
 ---
+
+---
+
+## RELEASE B.1 — settlement exactly-once (FIX, functions-only, undeployed)
+
+### The invariant
+
+> For one order, the seller's withdrawable balance is credited exactly once,
+> regardless of webhook delivery, trigger retry, or settlement replay.
+
+### What was actually exposed — narrower than first reported
+
+The before-proof corrected my own account. **A generic replay was already safe**:
+`settleOrder` writes `settlementStatus: STATES.SETTLED` inside the same transaction,
+so a retry sees the canonical uppercase value and no-ops (row P3 passes on the
+unfixed code). The exposure was specifically the **unrecognised state string**:
+
+```
+_finalizeMarketplacePayment (index.js)  writes  "settled"   ← lowercase, 7 prod orders
+order-settlement STATES.SETTLED                 "SETTLED"
+guards compared with  ===
+```
+
+An order carrying the lowercase marker — already credited by the FinOS path the
+marker exists to record — would settle again on reaching `completed`, crediting the
+wallet a second time. One extra credit, not unbounded.
+
+The same `===` affected **six guard sites across five functions**, and not uniformly:
+
+| function | consequence of the lowercase value |
+|---|---|
+| `settleOrder` | settles an already-credited order → **double credit** |
+| `markRefundedIfUnsettled` | marks a settled order REFUNDED while the seller keeps the credit |
+| `reverseSettledOrder` | refuses to reverse it (`not-settled`) |
+| `handleOrderRefund` | does not route a refund to the reversal path |
+| `autoConfirmDeliveredOrders` | re-processes it |
+
+### The fix — two defences, one of which is not a string
+
+**1 · The exactly-once boundary is now a RECORD.** `settleOrder`'s transaction reads
+`settlements/{orderId}` and returns `already-settled` if it exists.
+
+Deterministic ids already made `settlements`, `walletTransactions` and `ledger`
+replay-safe — a repeated `.set()` on the same id overwrites. `FieldValue.increment`
+does **not** overwrite, so the balance was the single write a second pass could
+double, and nothing but a string comparison stood in front of it. The record is
+written in the same transaction, so a concurrent second attempt conflicts, retries,
+and sees it.
+
+**2 · `_isState()` compares canonically.** Applied at all seven comparison sites. This
+does **not** rename anything and does **not** change what any writer stores —
+`settlement-dashboard.html` reads the lowercase value, so re-casing the writer is a
+separate and wider slice. It makes the *reader* tolerant of both spellings, which is
+the half that governs money.
+
+### Proof — `scripts/proof-settlement-exactly-once.js`
+
+**BEFORE 7/2 → AFTER 9/0**, failing exactly the two defences added.
+
+| | before | after |
+|---|---|---|
+| P1 fresh settlement credits once | PASS | PASS |
+| P2 one settlement / wallet txn / ledger entry | PASS | PASS |
+| P3 replay does not credit twice | PASS | PASS |
+| P4 replay leaves one of each record | PASS | PASS |
+| **P5 lowercase "settled" recognised** | **FAIL** | **PASS** |
+| P6 CONTROL canonical "SETTLED" still blocks | PASS | PASS |
+| P7 CONTROL another order's record does not block this one | PASS | PASS |
+| P8 CONTROL an eligible order still settles | PASS | PASS |
+| **P9 the RECORD blocks even when state says HELD** | **FAIL** | **PASS** |
+
+No emulator and no production data: `settleOrder(db, adminSdk, orderId)` takes both
+handles as parameters, so recording fakes observe every write, and
+`settlement-engine` is stubbed through `require.cache`. The asserted quantity is the
+**wallet balance**, not an outcome string.
+
+P7 and P9 are the rows that stop this passing for the wrong reason. P7 proves the new
+guard is not simply blocking everything; P9 proves the record guard does independent
+work rather than riding on the case fix.
+
+### Scope
+
+`functions/order-settlement.js` only. **Not deployed** — a Functions deploy is its own
+boundary. Untouched, deliberately: `orderTotal`/`total`/`paidAmount` authority, Shape-A
+vs Shape-B commission, CONCEPT 4, analytics, the Daraja ambiguity, and what
+`index.js` writes.
