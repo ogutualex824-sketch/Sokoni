@@ -891,3 +891,131 @@ The platform-revenue question now has a concrete first target: **`sokoniCut` rec
 `commissionLedger/{apiRef}` by the webhook is the live commission fact**, not anything
 `settleOrder` writes — because `settleOrder` writes nothing. Any revenue figure derived
 from `settlements` or from `ledger/{orderId}_*` is derived from an **empty collection**.
+
+---
+
+## CONCEPT 4 — Platform Revenue (read-only first pass)
+
+### The candidate authority, measured
+
+```
+commissionLedger      10 documents, ALL Shape B, no Shape A exists
+document id           the ORDER / payment id (SKN…), not an opaque apiRef
+                      → the rail IS order-correlated
+coverage              every PAID order has exactly one row;
+                      the two pending_payment orders have none
+```
+
+| id | serviceTotal | sokoniCut | pct | category |
+|---|---:|---:|---:|---|
+| SKN0178R32 … SKN19R7E1S (7) | 97 | 10 | 5 | product |
+| SKN1R37P4 | 194 | 10 | 5 | hair-beauty |
+| SKN51E7BD480 | 484.02 | 24 | 5 | **subscription** |
+| SKNAE9E798BC | 969.03 | 48 | 5 | default |
+
+### Finding 1 — `sokoniCut` is the commission ASSESSED, not platform revenue
+
+`admin-os.js` sums **every** row's `sokoniCut` with **no category filter**:
+
+```js
+const cut = Number(x.sokoniCut != null ? x.sokoniCut : x.commission) || 0;
+b.productCommission += cut;
+b.totalCommission = b.productCommission + b.serviceCommission;
+```
+
+and `admin.html` renders `totalCommission` as the card **"Platform Revenue · 30d"**.
+
+For the **subscription** row that is wrong in a quantifiable way. A subscription is the
+merchant *paying SOKONI* — the webhook's own comment says so ("merchant PAYING US").
+SOKONI's revenue on that payment is the **full 484.02**, not the 24 recorded as
+commission. Platform Revenue understates it by **460.02** on that single row.
+
+**Answer to the concept's first question: `sokoniCut` is the commission assessed. It is
+being displayed as revenue, and for non-marketplace categories those are not the same
+fact.**
+
+### Finding 2 — the revenue aggregator is Shape-B-only
+
+`x.sokoniCut != null ? x.sokoniCut : x.commission` reads neither of Shape A's fields
+(`commissionKES`, `totalOwed`). Shape A rows would contribute **0** to Platform Revenue.
+No Shape A rows exist yet, so this is latent — and it becomes live the first time a
+Daraja payment lands.
+
+### Finding 3 — `commissionPct` does not describe its own `sokoniCut`
+
+`97 × 5% = 4.85`, but the recorded cut is **10** — the engine's minimum applies. The
+record therefore states a rate that does not produce the amount beside it. The
+effective rate on a 97 order is 10.3%, not the 5% shown.
+
+Shape A carries `baseRate / planId / planName / adjustment / reason / engineVersion`
+precisely so a settlement stays reproducible years later. **Shape B carries none of
+it** — and Shape B is the only shape that exists.
+
+### Finding 4 — `uid` on Shape B is the BUYER
+
+`SKN084IE2Z` has `sellerUid = D5Ql2EYr…` on the order and `uid = AiJp5yzTnR…` on its
+commission row. The writer passes `payData.uid`, the payer. Any consumer filtering
+Shape B by `uid` expecting a seller gets the **buyer's** rows.
+
+### Finding 5 — the admin legacy commission sync reads ZERO rows, silently, always
+
+`admin.html:6285`
+
+```js
+getDocs(query(collection(db,'commissionLedger'), orderBy('savedAt','desc'), limit(200)))
+```
+
+Measured against production:
+
+```
+commissionLedger docs               10
+docs carrying a savedAt field        0
+orderBy('savedAt','desc') returns    0 docs
+orderBy('createdAt','desc') returns 10 docs
+```
+
+Firestore silently excludes documents missing the `orderBy` field. This query has
+therefore **never** returned a commission record, and it writes that emptiness into
+`localStorage.sokoniCommissionLedger` — the MIRROR recorded as D2. Not an error, not a
+displayed zero: nothing, permanently.
+
+### Finding 6 — the "empty → 0" question, answered per surface
+
+| surface | on no data | verdict |
+|---|---|---|
+| `seller-revenue.html` | *"No commission records this period"*, total blank | **honest empty state** |
+| `admin.html` canonical cards | `R(n) = 'KES ' + fmt(Math.round(n||0))` | **absent renders KES 0** |
+| `admin.html` legacy sync | silently empty | worse than a zero — invisible |
+
+`seller-revenue.html` deserves credit for not fabricating a zero. It is still
+misleading in a subtler way: its filter is `where("sellerUid","==",uid)` and Shape B
+has no `sellerUid` at all, so the query is **structurally incapable** of matching. The
+message says "none this period" when the truth is "this page cannot see your records" —
+a true sentence about a false premise.
+
+### CONCEPT 4 register
+
+```
+candidate authority        commissionLedger/{orderId}.sokoniCut
+                           CONFIRMED as the live commission fact
+is it platform revenue     NO — commission assessed only; subscription rows
+                           understate SOKONI's revenue by the non-commission remainder
+calculation authority      REAL — finos-utils.calculateCommission on every live path
+coverage of paid orders    COMPLETE — 1:1, no duplicates, no gaps
+refund / reversal          NOT ESTABLISHED — no refund rows exist to observe
+subscription treatment     MIXED INTO the same collection, counted as commission
+POS revenue                NOT ESTABLISHED
+wallet-funded revenue      NOT ESTABLISHED
+delivery fees              NOT ESTABLISHED
+dead candidates            settlements (0 docs) · ledger/{orderId}_* (0 docs)
+```
+
+### Deliberately not done
+
+No value copied between collections. No empty dashboard populated with zero. No
+revenue aggregation invented. No change to `savedAt`, to the category treatment, or to
+`_costEfficiency()` — which remains `192 / 8 / 4` and `dataComplete: true`.
+
+**And the dormant `settleOrder` path is NOT to be deleted** on the strength of zero
+executions. It is deployed, guarded, and now correct; removing it needs its own
+caller/dependency census and migration proof.
