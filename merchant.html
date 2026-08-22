@@ -660,10 +660,38 @@
      A slot whose preferred route is withheld with NO usable fallback keeps its declared id
      so the failure is loud (the route gate asserts four working slots) rather than a
      silently missing button. */
+  /* ── A FALLBACK MAY CHANGE THE DESTINATION. IT MAY NOT CHANGE THE IDENTITY ──
+     This used to substitute the id alone:
+
+         Object.assign({}, b, { id: b.fallback, preferred: b.id })
+
+     Two lines below, the button is drawn from b.icon and b.label — which were
+     still the PREFERRED route's. So when `sell` is withheld here (v1 has no Sell
+     renderer) the till slot rendered a button reading "💳 Sell" that navigated to
+     `pos`. The merchant pressed Sell and got POS, with nothing on screen able to
+     tell them why.
+
+     The contract already records the till-slot decision deliberately, "so it is
+     visible and auditable rather than a substitution buried in a shell". The
+     substitution was not buried — the LABEL was, and the label is what a person
+     actually reads.
+
+     Sell and POS are two different products. A slot that offers POS must say POS.
+     When a shell can render Sell, the same slot says Sell and opens Sell; nothing
+     here has to change for that to happen. */
   var BOTTOM_NAV = CONTRACT.BOTTOM_NAV.map(function (b) {
     if (b.id === '__more' || !withheldId(b.id)) return b;
     if (b.fallback && !withheldId(b.fallback)) {
-      return Object.assign({}, b, { id: b.fallback, preferred: b.id });
+      var target = byId[b.fallback] || {};
+      return Object.assign({}, b, {
+        id: b.fallback,
+        /* Present the DESTINATION's own identity, falling back to the slot's only
+           if the registry somehow lacks one — a nameless button is worse than a
+           slightly generic one. */
+        label: target.label || target.name || b.label,
+        icon:  target.icon || b.icon,
+        preferred: b.id,
+      });
     }
     return b;
   });
