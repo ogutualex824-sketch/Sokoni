@@ -1,8 +1,8 @@
 # Financial Lineage Adjudication — Release B, concept pass
 
 **Status:** READ-ONLY. Nothing changed. No calculation touched, no value copied.
-**Scope of this pass:** CONCEPT 1 (Gross Order Amount) and CONCEPT 2 (Commission).
-Concepts 3–7 are not started.
+**Scope of this pass:** CONCEPT 1 (Gross Order Amount), CONCEPT 2 (Commission) and
+CONCEPT 3 (gross authority for seller net). Concepts 4–7 are not started.
 
 Companion to [[DATA_LINEAGE_REGISTER]]. See also [[reference_canonical_collections]],
 [[project_commission_engine]], [[project_product_settlement]].
@@ -131,6 +131,11 @@ That is the correct behaviour for an unknown rate: refuse, record, escalate.
 
 ### AUTHORITATIVE FACT — one collection, TWO RECORD SHAPES
 
+> **AMENDED BY CONCEPT 3.** The two shapes are RAIL-SEGREGATED, not redundant: an
+> IntaSend payment never produces Shape A, and a Daraja payment never produces Shape B.
+> The `DUPLICATE-AUTHORITY (shape)` labels below overstate the cause. The reader
+> defect is unchanged. See CONCEPT 3.
+
 `commissionLedger` is written by **three live server paths** in two incompatible
 shapes.
 
@@ -222,6 +227,95 @@ deployable; only production logs can say which the gateway calls). No change pro
 
 ---
 
+## CONCEPT 3 — Seller Net · gross authority first
+
+### The question was the right one, and the answer re-frames CONCEPT 2
+
+`sellerPayments.amount` and `orders.total` are **not two authorities for one fact**.
+They are the gross fact on **two different payment rails**, and the rails are mutually
+exclusive by construction.
+
+```
+INTASEND RAIL   webhookIntasend / intasendWebhook
+                gateway apiAmount
+                   ├─→ orders.{orderTotal,total,escrow.held}   (CONCEPT 1 writer)
+                   ├─→ commissionLedger/{apiRef}               SHAPE B
+                   ├─→ walletTransactions
+                   └─→ _finalizeMarketplacePayment(..., writeSellerPayment: FALSE)
+                                                               ← no sellerPayments
+DARAJA RAIL     darajaSTKCallback
+                gateway paidAmount
+                   ├─→ sellerPayments/{checkoutId}             amount: paidAmount
+                   │      └─trigger→ commissionLedger/{paymentId}  SHAPE A
+                   └─→ order finalisation (see the split below)
+```
+
+`writeSellerPayment: false` is passed **explicitly** on the IntaSend rail, and the
+finaliser's own comment states why: *"the IntaSend path already records the sale via
+commissionLedger + walletTransactions; only the Daraja path needs this."*
+
+**Correction to CONCEPT 2.** That section classified Shape B as
+`DUPLICATE-AUTHORITY (shape)`, which implies redundancy. The evidence is
+*segregation*: one collection holding two rail-specific schemas that never describe the
+same payment. The **reader consequence stands unchanged and remains a defect** —
+`seller-revenue.html` still cannot see Shape B — but the cause is a shared collection
+with no shared contract, not a duplicated implementation. The remaining true duplicate
+in CONCEPT 2 is the pair of exported endpoints `intasendWebhook` **and**
+`webhookIntasend` writing identical Shape-B records.
+
+### AUTHORITATIVE GROSS — depends on the rail AND on whether the order pre-existed
+
+`_finalizeMarketplacePayment` branches, and the two branches do not agree about gross:
+
+```js
+/* order EXISTS  */ txn.update(orderRef, paidFields)   // status, paymentVerified,
+                                                       // paidAmount: amount
+                                                       // total / orderTotal NOT written
+/* order ABSENT  */ txn.set(orderRef, { …, amount, total: amount, orderTotal: amount })
+```
+
+So there is a **fourth amount field**, `orders.paidAmount`, and on the Daraja rail it is
+the gateway-verified figure — while `orders.total` on a **pre-existing** order is left
+exactly as it was written, by whoever created it.
+
+```
+CONCEPT 1 said:  orders.total is gateway-authoritative      (IntaSend rail — TRUE)
+CONCEPT 3 finds: on the Daraja rail, for a pre-existing order,
+                 orders.total is NOT written by the payment at all;
+                 orders.paidAmount is the gateway figure.
+```
+
+Nothing reconciles `total` against `paidAmount`. If they differ, no code notices.
+
+### STATUS
+
+```
+sellerPayments.amount vs orders.total   RESOLVED — rail-segregated, not competing
+gross on IntaSend rail                  REAL — gateway apiAmount
+gross on Daraja rail, new order         REAL — gateway paidAmount, writes all fields
+gross on Daraja rail, existing order    NOT ESTABLISHED — total is inherited, and its
+                                        writer is unidentified; paidAmount is the only
+                                        gateway-verified figure on that document
+total vs paidAmount reconciliation      NONE FOUND
+SELLER NET                              NOT YET ADJUDICATED
+```
+
+### Why CONCEPT 3 does not close here
+
+Seller net cannot be adjudicated until it is known which gross the settlement writer
+consumes, and on a Daraja-rail order that gross is currently ambiguous. The next step is
+the settlement writer's actual read — not a calculation review — followed by
+`sellerBilling`, wallet credit and payout.
+
+### Deliberately not done
+
+No repair of Shape B. No reconciliation of `total` against `paidAmount`. No deletion.
+Establishing who writes a pre-existing order's `total` is the next measurement, and it
+connects directly to the still-open CONCEPT 1 question of whether a client can write it.
+
+
+---
+
 ## Method note
 
 Every claim above was checked for **callers**, not inferred from the code's own
@@ -236,5 +330,7 @@ like on the page — the next slice would have been sent to fix code that never 
   7 analytics; then subscriptions, wallet, refunds, delivery fee, POS as separate domains
 - The served-ruleset read that would settle order-amount immutability
 - Any change to `_costEfficiency()`, `f4422b4`, or any financial calculation
+
+---
 
 ---
