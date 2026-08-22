@@ -1277,3 +1277,102 @@ refunds                     still unobservable — 0 docs
 No unit conversion applied. No aggregator changed. No commission row created. The units
 defect is a one-line-looking fix in a money path and needs its own slice, before-proof
 and deploy decision — the same discipline B.1 got.
+
+---
+
+## CONCEPT 4d — the allocation invariant HOLDS on both live rails
+
+### The P0 premise is not supported by the data
+
+The proposed P0 was: *"the first order completed and gave the seller everything without
+taking SOKONI commission."* **That is not what the records show, and it is not something
+this document ever established.**
+
+Measured allocation, marketplace rail:
+
+```
+customer pays          100      payments.amount
+gateway fee (3%)        −3      amount − confirmedAmount
+gateway remits          97      payments.confirmedAmount = commissionLedger.serviceTotal
+SOKONI commission      −10      commissionLedger.sokoniCut
+seller receives         87      walletTransactions, ×7
+                       ────
+                   3 + 10 + 87 = 100     ✓ reconciles exactly
+```
+
+Provider-booking rail:
+
+```
+gross                  100      providerPayouts.gross 10000 cents
+SOKONI commission      −20      providerPayouts.commission 2000 cents (20%)
+provider receives       80      walletTransactions type booking_earning, ×2
+                       ────
+                       20 + 80 = 100      ✓ reconciles exactly
+```
+
+`walletTransactions` by type:
+
+```
+pending                    24   sum   530
+earning_settlement          9   sum  1714
+payout                      4   sum   400
+receive / send            3/3   sum   150 / 150
+booking_earning             2   sum   160
+order_settlement_reversal   1   sum  −970
+```
+
+**No path credited a seller with the full customer amount.** The seller's 87 is the
+gateway-confirmed 97 minus the recorded commission of 10, and SOKONI's share is
+recorded on both rails. The invariant the release was to establish is already holding
+where money actually moved.
+
+That does not make the financial model correct — the *reporting* defects in 4a–4c are
+real and unaffected. But the allocation itself is not broken, and a P0 remediation
+aimed at it would be fixing something that is working.
+
+### Two new findings from the same measurement
+
+**1 · Synthetic QA records live in production financial collections.**
+
+The single `order_settlement_reversal` is not a real reversal:
+
+```
+uid       "_qa_rs_1786041628341"
+orderId   "_qa_refund_1786041628341"
+amount    −970
+reason    "qa"
+```
+
+It is `qa-dispatch-settlement-e2e.js` output, written into production
+`walletTransactions`. Any wallet or revenue aggregate that does not exclude it is
+counting test data as money. It is also the reason refund/reversal behaviour still
+cannot be observed from real records — **the only reversal in production is synthetic.**
+
+**2 · `type` and `status` disagree on 24 wallet transactions.**
+
+```
+type "pending"   status "failed"   n=24   sum 530
+```
+
+These are wallet top-ups. A record typed `pending` while its status says `failed` is a
+third state vocabulary sitting in the money tables — the same class of defect as the
+`settled`/`SETTLED` split that B.1 closed, and a hazard for any aggregate that filters
+on one field and not the other.
+
+### Revised priority
+
+```
+NOT A DEFECT   completed-order allocation — verified, reconciles exactly on both rails
+P1             cents ↔ shillings in adminGetFinance      CONFIRMED, ~21× overstatement
+P1             revenue MODEL — sokoniCut is not universal revenue
+P2             exclude synthetic QA records from financial aggregates
+P2             wallet type/status vocabulary
+P2             refund lineage — still unobservable; no real reversal exists
+P3             analytics rebuild · D1 _costEfficiency
+```
+
+The exactly-once boundary the release calls for **already exists on the live rail**:
+`payments/{apiRef}.walletCreditedAt`, checked and set inside the same transaction as
+the wallet credit. B.1 added the equivalent to the dormant `settleOrder` rail. What is
+missing is not atomicity — it is a single agreed definition of revenue, and correct
+units when summing across rails.
