@@ -3150,21 +3150,41 @@ import SokoniDB from "./sokoni-db.js";
     });
   </script>
   <script>
-    /* ══ SECRET ADMIN ACCESS — 7 taps on logo within 2.5 seconds ══ */
+    /* ══ SECRET ADMIN ACCESS ══════════════════════════════════════════════════
+       7 taps on the logo  ->  Admin        (claims.admin OR claims.superAdmin)
+       9 taps on the logo  ->  Super Admin  (claims.superAdmin ONLY)
+
+       THE COUNT IS DECIDED WHEN TAPPING STOPS, not on the way past 7. The previous
+       version fired the moment the counter reached 7 and reset — so a ninth tap was
+       unreachable by construction, and 9 could never have meant anything different
+       from 7. A short settle window is the only way one gesture can carry two
+       destinations.
+
+       The claim decides, and nothing else: no PIN, pattern, password, localStorage
+       secret or client-side credential of any kind. An account holding only `admin`
+       gets NOTHING from nine taps — the higher surface is not reachable by tapping
+       harder. */
     (function () {
+      const SETTLE_MS = 900;      /* long enough for a deliberate ninth tap */
       let _taps = 0, _t = null;
       window._secretTap = function () {
         _taps++;
         clearTimeout(_t);
-        if (_taps >= 7) { _taps = 0; _showAdminLock(); return; }
-        _t = setTimeout(() => { _taps = 0; }, 2500);
+        _t = setTimeout(function () {
+          const n = _taps;
+          _taps = 0;
+          if (n >= 9)      window._skAdminShortcut('superAdmin');
+          else if (n >= 7) window._skAdminShortcut('admin');
+        }, SETTLE_MS);
       };
-      /* Also: type "sokoni" anywhere while holding Ctrl+Shift → admin */
+      /* Also: type "sokoni" anywhere while holding Ctrl+Shift → Admin.
+         Deliberately the ADMIN path only; there is one gesture for the higher
+         surface and it is the nine-tap. */
       let _seq = '';
       document.addEventListener('keydown', function (e) {
         if (e.ctrlKey && e.shiftKey) {
           _seq = (e.key || '').toLowerCase() === 's' || _seq ? _seq + (e.key || '').toLowerCase() : '';
-          if (_seq === 'sokoni') { _seq = ''; _showAdminLock(); }
+          if (_seq === 'sokoni') { _seq = ''; window._skAdminShortcut('admin'); }
           if (_seq.length > 6) _seq = '';
         } else { _seq = ''; }
       });
@@ -3597,7 +3617,21 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     } catch (_) {}
   }
 
-  window._showAdminLock = async function () {
+  /* need: 'admin' (7 taps) or 'superAdmin' (9 taps).
+
+     ELIGIBILITY IS PER CLAIM, NOT HIGHEST-ROLE-WINS:
+
+         7 taps   admin OR superAdmin   ->  admin.html
+         9 taps   superAdmin ONLY       ->  super-admin.html
+
+     So an administrator tapping nine times reaches nothing, and a Super Admin tapping
+     seven times reaches the Admin surface — which is what they asked for. The
+     destination is derived from the requirement, never from "the highest role this
+     account holds". */
+  var DEST = { admin: 'admin.html', superAdmin: 'super-admin.html' };
+
+  window._skAdminShortcut = async function (need) {
+    need = need === 'superAdmin' ? 'superAdmin' : 'admin';
     var P = window.SokoniPermissions;
     if (!P || typeof P.hasRole !== 'function') return;
 
@@ -3607,24 +3641,27 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     try { if (P.init) await P.init(); } catch (_) {}
     try { if (P.reverify) await P.reverify(); } catch (_) {}
 
-    if (!P.hasRole('admin') && !P.hasRole('superAdmin')) return;   /* stay hidden */
+    var eligible = need === 'superAdmin'
+      ? P.hasRole('superAdmin')                            /* strictly superAdmin */
+      : (P.hasRole('admin') || P.hasRole('superAdmin'));   /* either reaches Admin */
+    if (!eligible) return;                                 /* silent — stay hidden */
 
-    /* ALWAYS the Admin surface, for both claim types. enterAdminContext resolves a
-       superAdmin-only holder to their own context, and admin.html accepts that for an
-       admin requirement — the higher surface reaches the lower one, never the reverse. */
     var r = null;
-    try { r = P.enterAdminContext ? P.enterAdminContext('admin') : null; } catch (_) { r = null; }
+    try { r = P.enterAdminContext ? P.enterAdminContext(need) : null; } catch (_) { r = null; }
     if (!r || r.ok !== true) {
       var why = (r && r.reason) || 'unavailable';
       _say(why === 'not-verified' ? 'Could not verify your access. Check your connection and try again.'
          : why === 'signed-out'   ? 'Sign in with your administrator account.'
-         : 'Could not open the Admin surface right now.');
+         : 'Could not open that surface right now.');
       return;
     }
-    window.location.href = 'admin.html';
+    window.location.href = DEST[need];
   };
 
-  /* Kept so any straggling caller fails quietly rather than throwing. */
+  /* Kept so any straggling caller fails quietly rather than throwing. The old name
+     meant "open the admin lock"; there is no lock any more, and it now means the
+     Admin path — which is what every one of its callers intended. */
+  window._showAdminLock  = function () { return window._skAdminShortcut('admin'); };
   window._closeAdminLock = function () {};
 }());
 </script>

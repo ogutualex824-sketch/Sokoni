@@ -43,9 +43,19 @@ export default async function run(page) {
      world acts and reports. Calling it directly from evaluate would silently find
      `undefined` and pass a row while doing nothing. */
   await page.addInitScript(() => {
+    /* TOP FRAME ONLY, AND ONCE. addInitScript runs in every frame of the page, so the
+       tap loop executed more than once and sent 14 taps where 7 were intended — which
+       resolves to the nine-tap branch and looked exactly like a product routing bug.
+       The count instrumentation did not catch it because it recorded the INTENDED n,
+       not how many times the loop ran. */
+    if (window.top !== window) return;
+    if (window.__fxTapHook) return;
+    window.__fxTapHook = true;
     const iv = setInterval(() => {
       if (!document.documentElement.hasAttribute('data-fx-tap')) return;
-      if (typeof window._showAdminLock !== 'function') return;
+      if (typeof window._secretTap !== 'function') return;
+      if (window.__fxTapped) return;
+      window.__fxTapped = true;
       clearInterval(iv);
       /* sessionStorage, not a DOM attribute: on the paths that WORK the handler
          navigates, the document is replaced, and an attribute would be gone before it
@@ -53,7 +63,16 @@ export default async function run(page) {
          on the inert one — an inverted control is worse than none. */
       try { sessionStorage.setItem('__fxTapped', '1'); } catch (_) {}
       document.documentElement.setAttribute('data-fx-tapped', '1');
-      try { window._showAdminLock(); } catch (e) {
+      /* Drive the REAL gesture counter, not the handler it happens to call. Calling
+         _skAdminShortcut directly would prove the destination logic while leaving the
+         thing under test — that 7 and 9 taps are distinguishable at all — unmeasured.
+         The previous counter fired at exactly 7 and reset, so a ninth tap was
+         unreachable by construction; only tapping can show that is fixed. */
+      var n = parseInt(document.documentElement.getAttribute('data-fx-tap') || '0', 10) || 0;
+      /* Publish what was ACTUALLY sent, so a wrong destination can be attributed to
+         the product rather than to the harness miscounting. */
+      try { sessionStorage.setItem('__fxTapN', String(n)); } catch (_) {}
+      try { for (var i = 0; i < n; i++) window._secretTap(); } catch (e) {
         document.documentElement.setAttribute('data-fx-taperr', String(e && e.message || e));
       }
     }, 60);
@@ -61,7 +80,7 @@ export default async function run(page) {
 
   await primeOrigin(page);
 
-  async function tapAndSee(scenario) {
+  async function tapAndSee(scenario, taps) {
     await setScenario(page, scenario);
     await page.goto(ORIGIN + '/index.html', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3500);
@@ -71,43 +90,59 @@ export default async function run(page) {
     const pre = await page.evaluate(() => ({
       overlay: !!document.getElementById('idxAdminLock'),
     }));
-    await page.evaluate(() => {
+    await page.evaluate((n) => {
       try { sessionStorage.removeItem('__fxTapped'); } catch (_) {}
-      document.documentElement.setAttribute('data-fx-tap', '1');
-    });
-    await page.waitForTimeout(4000);
-    const tapped = await page.evaluate(() => {
-      try { return sessionStorage.getItem('__fxTapped') === '1'; } catch (_) { return false; }
-    }).catch(() => false);
+      document.documentElement.setAttribute('data-fx-tap', String(n));
+    }, taps);
+    await page.waitForTimeout(8000);   /* settle window + claim resolve + navigation */
+    const st = await page.evaluate(() => {
+      let tapped = false, n = null, err = null;
+      try { tapped = sessionStorage.getItem('__fxTapped') === '1'; } catch (_) {}
+      try { n = sessionStorage.getItem('__fxTapN'); } catch (_) {}
+      try { err = document.documentElement.getAttribute('data-fx-taperr'); } catch (_) {}
+      return { tapped, n, err };
+    }).catch(() => ({ tapped: false, n: null, err: 'evaluate-failed' }));
+    const tapped = st.tapped;
     const landed = page.url().split('?')[0].split('#')[0].split('/').pop().replace(/\.html$/, '');
-    return { ...pre, landed, tapped };
+    return { ...pre, landed, tapped, sent: st.n, err: st.err };
   }
 
   /* ══ 1. The dead credential overlay is gone ══════════════════════════════ */
-  const asAdmin = await tapAndSee({ claims: ['admin'], ctx: '', lsroles: ['buyer'] });
+  const asAdmin = await tapAndSee({ claims: ['admin'], ctx: '', lsroles: ['buyer'] }, 7);
   ck('RIG  CONTROL the shortcut handler actually ran',
     asAdmin.tapped === true, 'invoked=' + asAdmin.tapped);
   ck('K1   no credential overlay is rendered on the home page',
     asAdmin.overlay === false, '#idxAdminLock present=' + asAdmin.overlay);
 
   /* ══ 2. THE P0: an Admin lands on Admin, never on Super Admin ════════════ */
-  ck('K2   admin claim -> admin.html',
-    asAdmin.landed === 'admin', 'landed=' + asAdmin.landed);
+  ck('K2   admin claim + 7 taps -> admin.html',
+    asAdmin.landed === 'admin', 'landed=' + asAdmin.landed + ' taps sent=' + asAdmin.sent);
 
-  const asSuper = await tapAndSee({ claims: ['superAdmin'], ctx: '', lsroles: ['buyer'] });
-  ck('K3   superAdmin claim -> ALSO admin.html, not super-admin',
-    asSuper.landed === 'admin', 'landed=' + asSuper.landed);
+  /* ── THE MATRIX ──────────────────────────────────────────────────────────
+        Admin      7 -> Admin        Admin      9 -> NOTHING
+        SuperAdmin 7 -> Admin        SuperAdmin 9 -> Super Admin           */
+  const admin9 = await tapAndSee({ claims: ['admin'], ctx: '', lsroles: ['buyer'] }, 9);
+  ck('K3   admin claim + 9 taps -> NOTHING (the higher surface is not reachable)',
+    admin9.landed === 'index', 'landed=' + admin9.landed + ' taps sent=' + admin9.sent);
+
+  const super7 = await tapAndSee({ claims: ['superAdmin'], ctx: '', lsroles: ['buyer'] }, 7);
+  ck('K3b  superAdmin claim + 7 taps -> admin.html',
+    super7.landed === 'admin', 'landed=' + super7.landed + ' taps sent=' + super7.sent);
+
+  const super9 = await tapAndSee({ claims: ['superAdmin'], ctx: '', lsroles: ['buyer'] }, 9);
+  ck('K3c  superAdmin claim + 9 taps -> super-admin.html',
+    super9.landed === 'super-admin', 'landed=' + super9.landed + ' taps sent=' + super9.sent);
 
   /* ══ 3. CONTROLS ════════════════════════════════════════════════════════
      No claim: the shortcut must go nowhere AND reveal nothing. A forged
      localStorage mirror is the same test with the mirror shouting. */
-  const asNobody = await tapAndSee({ claims: [], ctx: '', lsroles: ['buyer'] });
+  const asNobody = await tapAndSee({ claims: [], ctx: '', lsroles: ['buyer'] }, 9);
   ck('K4   CONTROL no claim -> the shortcut navigates nowhere',
     asNobody.landed === 'index' && asNobody.tapped === true,
     'landed=' + asNobody.landed + ' invoked=' + asNobody.tapped);
 
   const asForged = await tapAndSee({ claims: [],
-    ctx: '', lsroles: ['buyer', 'admin', 'superAdmin'] });
+    ctx: '', lsroles: ['buyer', 'admin', 'superAdmin'] }, 9);
   ck('K5   CONTROL forged localStorage roles -> still nowhere',
     asForged.landed === 'index',
     'ls roles included admin+superAdmin, claims empty -> landed=' + asForged.landed);

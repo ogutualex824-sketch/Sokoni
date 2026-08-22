@@ -142,6 +142,11 @@ export default async function run(page) {
        (cache) with hasRole(elevated) still false (no token yet). Wait for exactly
        that, and give up after 6s so a window that never opens is reported, not
        waited on forever. */
+    /* TOP FRAME ONLY, AND ONCE — addInitScript runs in every frame, so several
+       pollers raced each other for the same one-shot window and the control flapped. */
+    if (window.top !== window) return;
+    if (window.__fxRaceHook) return;
+    window.__fxRaceHook = true;
     const t0 = Date.now();
     const t = setInterval(() => {
       const P = window.SokoniPermissions;
@@ -167,6 +172,7 @@ export default async function run(page) {
        every call returned undefined, and the row passed while measuring nothing at
        all. So the main world answers on request instead — the isolated world only
        raises a flag and reads the reply. */
+    if (window.top !== window) return;
     const ask = setInterval(() => {
       if (!document.documentElement.hasAttribute('data-fx-ask-ctx')) return;
       const P = window.SokoniPermissions;
