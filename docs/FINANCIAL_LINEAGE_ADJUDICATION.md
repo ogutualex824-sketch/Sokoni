@@ -1517,3 +1517,102 @@ QA data                   present in production; needs an explicit exclusion rul
 ### Deliberately not done
 
 No unit converted, no `type` rewritten, no QA record deleted, no aggregate changed.
+
+---
+
+## CONCEPT 4f — Provider authority: RESOLVED
+
+The two records are not rivals for one fact. One is a server settlement event; the
+other is a client receipt.
+
+### The decisive control — follow the wallet credit, not the record
+
+`functions/provider-ops.js` settlement path:
+
+```js
+const payoutRef   = providerPayouts.doc(ref.id);                    // deterministic: booking id
+const walletRef   = wallets.doc(uid);
+const walletTxId  = `${uid}_${ref.id}_bookingsettle`;               // deterministic → no duplicate txn
+const walletTxRef = walletTransactions.doc(walletTxId);
+await runTransaction(async (t) => { … })                            // ONE transaction
+  → walletTransactions  type 'booking_earning'
+  → providerProfiles, providerAnalytics updated in the same commit
+```
+
+**The provider's wallet credit and the `providerPayouts` record are written in the same
+transaction, under deterministic ids.** Production matches exactly: 2 `booking_earning`
+transactions at 80 KES, 2 `providerPayouts` with `net` 8000 cents, ids correlated by
+booking.
+
+`functions/settlement-monitor.js` independently treats
+`walletTransactions.type == 'booking_earning'` as the booking settlement signal —
+corroboration from a surface built for a different purpose.
+
+### `bookingFees` has NO server writer
+
+Zero matches in `functions/`. It is written by the browser:
+
+```js
+/* sokoni-pay.js — saveBookingFee() */
+const r = getRecords("sokoniBookingFees"); r.unshift(record);
+saveRecords("sokoniBookingFees", r);              // localStorage mirror FIRST
+…
+db.collection('bookingFees').doc(id).set(fsRecord).catch(function(){});   // silent failure
+```
+
+* client-written, and `SokoniPay` **is** invoked from many pages — this path is live,
+  unlike DUP-1/DUP-2;
+* `.catch(function(){})` — a failed write is swallowed with no signal;
+* localStorage is written **before** Firestore, so the mirror can hold records the
+  database never received;
+* production rows carry `sokoniCut: 0`, `commissionPct: 0`, `providerNet = amount`.
+
+The same file's neighbouring function states the rule the author already knew:
+*"localStorage ledger only — Firestore commissionLedger is written exclusively by …"*.
+`bookingFees` is the collection where that discipline was not applied.
+
+### The answer
+
+| | `bookingFees` | `providerPayouts` |
+|---|---|---|
+| writer | **browser** (`sokoni-pay.js`) | **server** (`provider-ops.js`) |
+| trigger | a booking action in the UI | booking settlement / forfeit |
+| transactional | no — fire-and-forget | **yes**, one `runTransaction` |
+| provider actually paid from it | **no** | **yes** — same transaction as the wallet credit |
+| commission recorded | `0` on every row | 20%, `commission` in cents |
+| deterministic id | `record.ref` or `'BF'+Date.now()` | booking id |
+| unit | KES | **cents** |
+| failure handling | silently swallowed | transaction aborts |
+
+```
+providerPayouts   REAL / AUTHORITATIVE provider settlement record
+bookingFees       CLIENT-WRITTEN RECEIPT — a projection, not a financial authority
+                  MUST NOT contribute to platform revenue
+```
+
+`bookingFees` is not to be deleted or reconciled into `providerPayouts`. It is a UI
+booking record that happens to carry commission-shaped fields, all zero. The revenue
+model simply must not read it.
+
+### A connection back to F5
+
+`saveBookingFee` writes **`savedAt`** — and `admin.html:6285` orders `commissionLedger`
+by `savedAt`, a field no `commissionLedger` row has ever carried. The dead query in F5
+is a `bookingFees`-shaped query pointed at the wrong collection. That explains the
+defect rather than merely restating it.
+
+### CONCEPT 4f register
+
+```
+provider authority        RESOLVED — providerPayouts
+bookingFees               CLIENT RECEIPT / MIRROR — excluded from revenue by rule
+provider commission       20%, cents, status-gated, atomically paired with the credit
+F5 root cause             a bookingFees-shaped orderBy('savedAt') applied to
+                          commissionLedger
+unblocks                  4g revenue unit contract
+```
+
+### Deliberately not done
+
+No record reconciled, no field copied, nothing deleted. `bookingFees` keeps its rows;
+the reporting contract will simply not name it as a revenue source.
