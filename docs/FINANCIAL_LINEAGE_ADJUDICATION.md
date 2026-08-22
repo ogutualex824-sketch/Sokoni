@@ -414,6 +414,126 @@ authoritative was the whole task, and it now has an answer: **`orderTotal`**.
 
 ---
 
+## CONCEPT 3c — Production read-only comparison
+
+Run: `node scripts/audit-order-gross-consistency.js` (Admin SDK, **zero write calls**).
+
+```
+orders examined:            9
+payment methods present:    {"mpesa_intasend": 9}
+
+A_CONSISTENT                  6
+B_UNVERIFIED_GROSS            1
+C_INTERNAL_GROSS_DIVERGENCE   0
+D_SETTLEMENT_INPUT_MISSING    0
+E_UNADJUDICATED               2
+
+SETTLED while orderTotal != paidAmount:  1
+```
+
+### First: there are no Daraja orders at all
+
+All nine are `mpesa_intasend`. **The Daraja pre-existing-order branch has never
+executed in production.** The CONCEPT 3b ambiguity is therefore *latent*, not live —
+it cannot have mispaid anyone yet because the rail has produced no orders.
+
+Nine orders total is also worth stating plainly: this is pre-launch volume, and no
+conclusion about production financial health should be drawn from it.
+
+### Second: the escalation row does NOT survive inspection — and my classifier overstated it
+
+`SKN0178R32` — `orderTotal=100, total=100, paidAmount=97, settlementStatus="settled"`.
+
+Direct inspection of that order:
+
+```
+settlements/SKN0178R32           ABSENT
+walletTransactions for order     0
+settledAt                        absent
+order status                     confirmed   (never reached "completed")
+```
+
+**`settleOrder` has never run for it.** Nobody was paid on 100 against a gateway 97.
+
+Two corrections to my own audit:
+
+1. **The escalation counter was case-broken.** It compared `settlementStatus === 'SETTLED'`
+   while the stored value is `'settled'`, so it printed `0` for a record listed two
+   lines below it as settled. Fixed — but it is exactly the inverted control this
+   programme keeps finding, and it failed in the direction of false reassurance.
+2. **`B_UNVERIFIED_GROSS` may be a category error on this rail.** `paidAmount` of 97
+   against a `100` order with `deliveryFee: 0` is consistent with IntaSend reporting
+   **net of gateway charges**. If so, comparing `orderTotal` to `paidAmount` compares
+   gross to net, and the row is not a discrepancy at all. Recorded as a **question**,
+   not a verdict; the script now carries that caveat in its own output.
+
+**No incident is declared.** The condition you set — a settled order paid on an
+unverified figure — is not met: no settlement record exists for the flagged order.
+
+### Third, and this is the real finding: `settlementStatus` has TWO VOCABULARIES
+
+```
+functions/order-settlement.js   STATES.SETTLED = 'SETTLED'      ← uppercase
+functions/index.js  _finalizeMarketplacePayment
+                                paidFields.settlementStatus = opts.settlementStatus
+                                and webhookIntasend passes "settled"   ← lowercase
+```
+
+`settleOrder`'s replay guard is **case-sensitive**:
+
+```js
+if (st === STATES.SETTLED)  return { outcome: 'already-settled' };   /* replay no-op */
+```
+
+A lowercase `'settled'` does not match it. Production state right now:
+
+```
+settlementStatus tally     { settled: 7, undefined: 2 }     ← 7 lowercase
+order status tally         { confirmed: 5, delivered: 1, in_transit: 1,
+                             pending_payment: 2 }           ← 0 completed
+```
+
+Seven of nine orders carry the lowercase marker. `settleOrder` is invoked by
+`onOrderStatusChange` when an order reaches **`completed`**. If one of those seven
+reaches `completed`, the guard does not match, `settleOrder` proceeds, and:
+
+```js
+t.set(wRef, { balance: FV.increment(withdrawable), … }, { merge: true });
+```
+
+`FieldValue.increment` is **not idempotent**. The deterministic ids on
+`walletTransactions`, `settlements` and `ledger` make those documents replay-safe —
+but the wallet balance increment is not protected by them.
+
+```
+LATENT DOUBLE-CREDIT EXPOSURE
+  reachable when      an order carrying lowercase "settled" reaches status "completed"
+  currently blocked   only by the fact that no order has reached "completed" yet
+  nearest state       one order is "delivered" — the step before completion
+```
+
+This has **not** fired: zero settlement records, zero wallet transactions, zero
+completed orders. It is an exposure, not damage.
+
+### STATUS
+
+```
+Daraja gross ambiguity           LATENT — rail has produced no production orders
+settled-on-unverified-figure     NOT FOUND — flagged row has no settlement record
+paidAmount gross-vs-net          OPEN QUESTION — likely net of gateway charges
+settlementStatus vocabulary      TWO, and settleOrder's replay guard is case-sensitive
+double-credit exposure           LATENT, unfired, gated on the first "completed" order
+```
+
+### Deliberately not done
+
+No field normalised, no case corrected, no guard changed, no value copied. Fixing the
+vocabulary split is a code change to a money path and needs its own slice, its own
+before-proof and its own deploy decision — not a patch appended to an audit.
+
+
+---
+
 ## Method note
 
 Every claim above was checked for **callers**, not inferred from the code's own
@@ -428,6 +548,8 @@ like on the page — the next slice would have been sent to fix code that never 
   7 analytics; then subscriptions, wallet, refunds, delivery fee, POS as separate domains
 - The served-ruleset read that would settle order-amount immutability
 - Any change to `_costEfficiency()`, `f4422b4`, or any financial calculation
+
+---
 
 ---
 
