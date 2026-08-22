@@ -104,6 +104,9 @@
     '.msl-bar .n{font-size:17px;font-weight:900;color:var(--acc);line-height:1.2}',
     '.msl-bar .l{font-size:11px;color:var(--txt2);font-weight:600}',
     '.msl-bar .msl-btn{flex:0 0 auto}',
+    /* An empty cart earns no bottom furniture. The node stays so the partial
+       update paths can still address it; only its box is removed. */
+    '.msl-bar.empty{display:none}',
 
     /* ── Sheet ── */
     '.msl-scrim{position:absolute;inset:0;background:rgba(0,0,0,.62);z-index:60;',
@@ -347,7 +350,21 @@
           '<span aria-hidden="true">🔎</span>' +
           '<input id="msl-q" type="search" inputmode="search" autocomplete="off" ' +
             'placeholder="Search or scan a product" value="' + esc(S.term) + '" aria-label="Search products">' +
-          (S.term ? '<button class="msl-x" data-act="clear" aria-label="Clear search">×</button>' : '') +
+          /* ALWAYS rendered; the CSS owns whether it is SEEN.
+             `.msl-x` is display:none, and `.msl-find.has .msl-x` is display:block —
+             so visibility already follows the `has` class that onInput toggles.
+             Rendering the button conditionally as well meant the element did not
+             exist at the moment the class arrived: typing a term filtered the grid,
+             `.msl-find` gained `has`, and the class had nothing to reveal. The
+             clear control was therefore unreachable during the one interaction it
+             exists for, and only appeared after some OTHER action forced a full
+             paint. Measured: 0 clear buttons after typing, 1 after a repaint.
+
+             The input handler repaints only the grid and the bar on purpose — a
+             full paint would destroy focus and caret position mid-search — so the
+             top bar cannot be re-rendered here. The element has to be there
+             already. */
+          '<button class="msl-x" data-act="clear" aria-label="Clear search">×</button>' +
         '</label>' +
         '<button class="msl-scan" data-act="scan" aria-label="Scan barcode">▣</button>' +
       '</div>';
@@ -406,7 +423,21 @@
     function barHTML() {
       var t = totals();
       if (!S.cart.length) {
-        return '<div class="msl-bar" style="border-top-color:var(--line)">' +
+        /* HIDDEN, not removed.
+
+           Measured at 390x844: this bar is 39px and the shell's bottom nav is
+           61px, so an empty till spent 100px of a phone screen on two stacked
+           full-width bars — and this one carried a hint, no information and no
+           action. With an item it earns its space (count, total, Charge); empty
+           it did not.
+
+           The ELEMENT stays in the DOM because the partial-update paths address
+           it directly — onInput does `host.querySelector('.msl-bar').outerHTML =
+           barHTML()` to repaint without destroying search focus and caret.
+           Returning '' here would delete the node, that lookup would return null,
+           and the bar could not come back without a full paint. A class the CSS
+           hides keeps the element addressable and the update paths intact. */
+        return '<div class="msl-bar empty" style="border-top-color:var(--line)">' +
           '<div class="sum"><div class="l" style="font-size:12px">Tap a product to start a sale</div></div>' +
         '</div>';
       }
