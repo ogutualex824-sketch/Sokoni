@@ -316,6 +316,104 @@ connects directly to the still-open CONCEPT 1 question of whether a client can w
 
 ---
 
+## CONCEPT 3b — Settlement gross: which field is actually consumed
+
+### The measurement
+
+```js
+/* functions/order-settlement.js */
+function _grossCents(order) {
+  const total    = Number(order.orderTotal != null ? order.orderTotal : order.total) || 0;
+  const delivery = Number(order.deliveryFee || 0);
+  return Math.max(0, Math.round((total - delivery) * 100));
+}
+```
+
+**Settlement consumes `orders.orderTotal`, falling back to `orders.total`.**
+It does **not** read `paidAmount`, `escrow.held`, or `sellerPayments.amount`.
+
+Of the three CONCEPT 1 duplicate fields, `orderTotal` is therefore the *de facto*
+settlement authority — established by a preference order inside one helper, not by any
+declared contract.
+
+### The settlement path
+
+| | |
+|---|---|
+| RAIL | **both — the path is rail-agnostic** |
+| WRITER | `exports.onOrderStatusChange`, `onDocumentUpdated("orders/{orderId}")`, on `status → completed`, → `order-settlement.settleOrder` |
+| ORDER READ | `orders/{orderId}` |
+| GROSS FIELD READ | `orderTotal ?? total` |
+| DELIVERY FIELD | `order.deliveryFee` — carried onto the order from the checkout session on the IntaSend rail |
+| COMMISSION | `settlement-engine.computeSettlement` → `finos-utils.calculateCommission` — **the same single rate authority as CONCEPT 2** |
+| SELLER NET | `breakdown.sellerNetCents`, over `gross = (orderTotal ?? total) − deliveryFee`, with the **platform-funded** discount slice added back |
+| RECORDED RESULT | `settlements/{orderId}` (deterministic → exactly-once), seller wallet credit, wallet transaction, balanced ledger |
+
+There is **one** settlement path, and it settles any order that reaches `completed`
+regardless of which rail paid it.
+
+### AUTHORITY
+
+```
+IntaSend rail                    REAL
+                                 the same webhook writes orderTotal, total and
+                                 escrow.held from the gateway amount, and settlement
+                                 reads orderTotal. Gross is gateway-verified end to end.
+
+Daraja rail, order created
+by the payment                   REAL
+                                 the absent-order branch sets total and orderTotal
+                                 from the gateway paidAmount.
+
+Daraja rail, PRE-EXISTING order  AMBIGUOUS  ← settlement-integrity concern
+                                 the payment writes paidAmount and does NOT write
+                                 orderTotal/total. Settlement then pays the seller on
+                                 orderTotal — a field the payment never verified —
+                                 while the gateway-verified figure on the very same
+                                 document is ignored.
+```
+
+This resolves the question CONCEPT 3 left open, and it resolves it the unfavourable way:
+the unreconciled `total` ↔ `paidAmount` relationship **is** a settlement-integrity
+concern, not merely a data-model tidiness issue. If the two ever differ on a
+Daraja-paid pre-existing order, the seller is paid on the unverified one and nothing
+detects it.
+
+### What is NOT wrong here
+
+Worth stating, because the surrounding code is careful and a reader skimming the
+finding could conclude otherwise:
+
+- the commission rate is the canonical engine on every path, including settlement;
+- settlement is exactly-once by deterministic document id, transactionally guarded on
+  `settlementStatus`, and a replay is a no-op;
+- delivery fee is excluded from seller gross deliberately and is split separately;
+- the platform-funded discount slice is added back, so the merchant does not absorb
+  loyalty points SOKONI itself issued;
+- orders predating the discount block yield 0 and settle exactly as before.
+
+### STILL NOT ESTABLISHED
+
+```
+who writes orderTotal on a pre-existing order          UNIDENTIFIED
+whether a client may write it (served ruleset)         NOT ESTABLISHED
+whether total and paidAmount ever actually diverge     NOT MEASURED — needs production
+                                                       data, not source reading
+```
+
+The last one is the decisive question and **source reading cannot answer it**. A
+read-only production query comparing `total`, `orderTotal` and `paidAmount` on
+Daraja-paid orders would settle whether this is a live discrepancy or a latent one.
+
+### Deliberately not done
+
+No change to `_grossCents`. No copy of `paidAmount` into `total`. No settlement
+recalculation. Recording which fact the settlement system already treats as
+authoritative was the whole task, and it now has an answer: **`orderTotal`**.
+
+
+---
+
 ## Method note
 
 Every claim above was checked for **callers**, not inferred from the code's own
@@ -330,6 +428,8 @@ like on the page — the next slice would have been sent to fix code that never 
   7 analytics; then subscriptions, wallet, refunds, delivery fee, POS as separate domains
 - The served-ruleset read that would settle order-amount immutability
 - Any change to `_costEfficiency()`, `f4422b4`, or any financial calculation
+
+---
 
 ---
 
