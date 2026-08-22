@@ -1,10 +1,10 @@
 {
-  "commit": "70b4509819621e37e179f6aed162dfcf89234528",
-  "commitShort": "70b4509",
-  "branch": "release/nav-identity-only",
-  "buildTime": "2026-08-22T19:56:04.031Z",
+  "commit": "7c3413d46593095ea7c4255f3ae177227943071f",
+  "commitShort": "7c3413d",
+  "branch": "release/sell-crossshell",
+  "buildTime": "2026-08-22T20:46:04.433Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260822195603-v553",
+  "cacheVersion": "sokoni-20260822204602-v554",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
