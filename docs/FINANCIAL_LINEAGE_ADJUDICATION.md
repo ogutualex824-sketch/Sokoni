@@ -1894,3 +1894,140 @@ B.2 restated               choose the authoritative implementation and remove th
 No lifecycle changed, no bypass removed, no credit deferred. Whether SOKONI holds buyer
 funds until delivery is a **business decision with real merchant cash-flow
 consequences**, and it is not one this audit should make.
+
+---
+
+## CONCEPT 4i — B.2 before-proof: a FOURTH settlement path, and an authorization finding
+
+This began as the write-contract diff B.2 requires. It found a settlement implementation
+I had not mapped, and an authorization question on it that outranks the B.2 sequencing.
+
+**Nothing was called, invoked or tested. Source and IAM policy only.**
+
+### 1 · There are FOUR settlement implementations, not three
+
+```
+1  order-settlement.js  settleOrder          HELD model · deployed · NEVER RUN
+2  webhookIntasend      inline credit        service "booking_earning" · immediate
+3  provider-ops.js      booking settlement   transactional · the provider rail
+4  finos-router.js      finosRecordTransaction   ← THE MARKETPLACE SELLER RAIL
+```
+
+#4 is the one that actually pays marketplace sellers. It credits **three parties
+separately** in one transaction — which is precisely the separation B.2 asks for:
+
+```js
+U.creditWalletTxn(txn, db, sellerId,          'seller',   comm.sellerNetCents, …)
+U.creditWalletTxn(txn, db, riderId,           'rider',    riderEarnings + tipCts, …)
+U.creditWalletTxn(txn, db, 'platform_master', 'platform', …)
+```
+
+It writes the **cents** rails (`availableBalance` / `withdrawableBalance`), which
+`sweepEarningsToWallet` later moves into `balance` as `earning_settlement` — matching
+the 7 × 87 transactions observed on the marketplace seller. That closes the last gap in
+CONCEPT 3: this is where the seller's money came from.
+
+### 2 · THE AUTHORIZATION FINDING
+
+`finosRecordTransaction` is an `onCall` that credits seller, rider and platform wallets.
+
+**Declared** in source:
+
+```js
+exports.finosRecordTransaction = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private' }, …
+```
+
+**Deployed**, measured against the Cloud Run IAM policy:
+
+```
+finosrecordtransaction    roles/run.invoker → allUsers
+finosreleaseescrow        roles/run.invoker → allUsers
+```
+
+**The `invoker: 'private'` declaration is not in effect.** (`allUsers` is normal and
+required for an ordinary browser-callable onCall — the controls
+`getplatformhealthscores` and `completedeliverywithpin` also show it. What is not normal
+is a function that *asked* to be private being public.)
+
+What the function then does with client input:
+
+```js
+const { hubType, transactionId, amountCents, sellerId, buyerId,
+        deliveryFeeCents, riderId, tipCents, paymentRef, … } = request.data;
+_assertAuth(request);                       // any authenticated user
+…
+if (paymentRef) {                           // ← CONDITIONAL
+  const verified = await _verifyPayment(db, paymentRef);
+  if (!verified) throw new HttpsError('failed-precondition', …);
+}
+```
+
+| control | state |
+|---|---|
+| authentication | **any** signed-in account (`_assertAuth` checks only that a uid exists) |
+| App Check | **NOT enforced** — `finos-router.js` has no `enforceAppCheck`; `index.js` uses it on 5+ functions |
+| ownership | **none** — `caller` is used only for the fraud check and `createdBy`; no check that caller relates to `sellerId`, `buyerId` or the transaction |
+| payment verification | **skipped entirely when `paymentRef` is omitted** |
+| `amountCents` | client-supplied, capped at 50,000,000 (KES 500,000) per call |
+| `sellerId` | client-supplied |
+| idempotency | per `(transactionId, hub)` — blocks replay of one id, not new ones |
+| fraud check | **advisory only** — see below |
+
+`checkFinancialFraud` is passed `eventType: 'purchase'`. Its `LARGE_SINGLE_PAYOUT` and
+velocity signals fire only for `'payout'`, and `LARGE_REFUND` only for `'refund'`. For a
+purchase **no signal fires**, and the function records alerts rather than throwing — it
+does not block.
+
+**A third defect compounds it.** `_verifyPayment` Path 1 tests:
+
+```js
+paySnap.data().status === 'completed'
+```
+
+Production `payments` carry `status: "COMPLETE"`. Path 1 therefore **never matches** —
+the same case/vocabulary class as the `settled`/`SETTLED` split B.1 closed, this time
+inside a payment-verification check. Path 2 (orders by `trackingId` with `status:'paid'`)
+may still succeed, so verification is not wholly inert when `paymentRef` IS supplied.
+
+### What is and is not established
+
+```
+ESTABLISHED   allUsers holds run.invoker on the deployed service        (IAM measured)
+ESTABLISHED   the source declares invoker:'private'                     (source)
+ESTABLISHED   no App Check on finos-router                              (source)
+ESTABLISHED   no ownership check between caller and sellerId            (source)
+ESTABLISHED   payment verification is conditional on paymentRef         (source)
+ESTABLISHED   fraud check is advisory and silent for 'purchase'         (source)
+ESTABLISHED   _verifyPayment Path 1 cannot match production status      (source + data)
+
+NOT ESTABLISHED   that any such call has ever been made — production shows no
+                  anomalous credit; the 7 × 87 and 2 × 80 all reconcile to real payments
+NOT TESTED        deliberately. Establishing this by invocation would create
+                  unauthorized financial records in production.
+```
+
+### Why this reorders B.2
+
+B.2 governs **when** money is released. This governs **whether an unauthorized party can
+cause a release at all**. Moving to the held model does not address it: `settleOrder`
+would become the release mechanism, and `finosRecordTransaction` would still be
+callable.
+
+Recommended order:
+
+```
+B.2.0   authorization on the FinOS financial callables   ← FIRST
+        · make invoker:'private' actually take effect, or
+        · add an ownership/authorization check, and
+        · make payment verification unconditional, and
+        · fix _verifyPayment's status comparison
+B.2     held settlement model (as approved)
+B.3+    unchanged
+```
+
+### Deliberately not done
+
+No IAM changed, no function called, no guard added. Altering invoker policy or auth on a
+live money path is a production security change and is the owner's decision — and if
+`allUsers` is removed carelessly, every legitimate browser caller breaks.
