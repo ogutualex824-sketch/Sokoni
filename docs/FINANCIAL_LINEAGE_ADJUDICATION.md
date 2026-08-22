@@ -1,8 +1,8 @@
 # Financial Lineage Adjudication — Release B, concept pass
 
 **Status:** READ-ONLY. Nothing changed. No calculation touched, no value copied.
-**Scope of this pass:** CONCEPT 1 (Gross Order Amount) and the entry to CONCEPT 2
-(Commission). Concepts 3–7 are not started.
+**Scope of this pass:** CONCEPT 1 (Gross Order Amount) and CONCEPT 2 (Commission).
+Concepts 3–7 are not started.
 
 Companion to [[DATA_LINEAGE_REGISTER]]. See also [[reference_canonical_collections]],
 [[project_commission_engine]], [[project_product_settlement]].
@@ -106,19 +106,119 @@ Classification: **DUPLICATE-AUTHORITY (latent)**.
 
 ---
 
-## CONCEPT 2 — Commission (entry only, NOT adjudicated)
 
-What is established so far:
+## CONCEPT 2 — Commission
 
-| | |
+### AUTHORITATIVE CALCULATION — one engine, and it holds
+
+```
+functions/finos-utils.js   calculateCommission(db, {
+                             orderAmountCents, category, sellerId, hubId })
+                           -> { effectiveRate, commissionCents, fixedKES, audit }
+```
+
+**Every server path computes the rate through this one function.** No second rate
+engine was found on any live path. The failure branch deliberately refuses a
+hardcoded fallback:
+
+```js
+/* Do not apply a hardcoded fallback rate — this would over-charge marketplace
+   sellers (3%) by 7 percentage points. Instead, flag the entry for manual review */
+commissionPct = null; sokoniCut = 0;   // + commissionReviewQueue entry
+```
+
+That is the correct behaviour for an unknown rate: refuse, record, escalate.
+
+### AUTHORITATIVE FACT — one collection, TWO RECORD SHAPES
+
+`commissionLedger` is written by **three live server paths** in two incompatible
+shapes.
+
+**SHAPE A** — `exports.onSellerPaymentCreated`, trigger `sellerPayments/{paymentId}`
+
+```
+doc id     commissionLedger/{paymentId}          deterministic
+fields     sellerUid, paymentId, orderId, mpesaCode, hub,
+           grossAmount, commissionPct, fixedFee, commissionKES, totalOwed,
+           baseRate, planId, planName, adjustment, reason, engineVersion
+```
+
+Exactly-once with respect to money: the existence check, the ledger write and the
+`sellerBilling` increments are one transaction, and a redelivery returns before
+incrementing. Carries the full rate audit — the rule, plan and adjustment that
+produced the charge remain reproducible.
+
+**SHAPE B** — `exports.intasendWebhook` **and** `exports.webhookIntasend`
+
+```
+doc id     commissionLedger/{apiRef}             deterministic, set+merge
+fields     ref, checkoutId, uid, providerName, category,
+           commissionPct, sokoniCut, providerNet, serviceTotal,
+           status:"auto_collected", source
+```
+
+No audit breakdown. **Two exported HTTP endpoints write this identical record**,
+distinguishable only by `source: "intasend_webhook"` vs `"webhookIntasend"`.
+
+### The same concepts under different names
+
+| concept | Shape A | Shape B |
+|---|---|---|
+| party | `sellerUid` | `uid` |
+| gross | `grossAmount` | `serviceTotal` |
+| commission | `commissionKES` (+`totalOwed`) | `sokoniCut` |
+| counterparty net | — | `providerNet` |
+| rate audit | 7 fields | none |
+| precision | 2 dp | **whole KES** (`Math.round(cents/100)`) |
+
+### DOWNSTREAM READERS — and a live consequence
+
+```
+seller-revenue.html   commissionLedger.where("sellerUid","==",uid)
+                      reads .totalOwed, .grossAmount
+```
+
+Shape B records carry **no `sellerUid`** and **no `totalOwed`/`grossAmount`**. The
+equality filter therefore excludes every Shape-B record from the seller revenue page —
+not as a wrong number, but as an entire class of records that is silently absent.
+
+**This is a lineage defect, not a display bug, and it is recorded — not fixed.** The
+correct repair is decided at the authority level (one shape, or an explicit projection),
+never by copying `uid` into `sellerUid` across the collection.
+
+### A lineage break worth noting
+
+Shape A's gross is `sellerPayments.amount` — **not** `orders.total`, the CONCEPT 1
+authoritative fact. Whether `sellerPayments.amount` derives from the order gross is a
+separate, unanswered question and is the first item of the next pass.
+
+### CLASSIFICATION
+
+| path | classification |
 |---|---|
-| canonical store | `commissionLedger` ([[reference_canonical_collections]]) |
-| references in `functions/` | `collection("commissionLedger")` × 11 |
-| independent client calculators | DUP-1 (12% default), DUP-2 (`tax.commission / amt`) — both latent |
-| authoritative calculation | **NOT YET IDENTIFIED** |
+| `finos-utils.calculateCommission` | **REAL** — single rate authority |
+| `onSellerPaymentCreated` → Shape A | **REAL** — exactly-once, audited |
+| `intasendWebhook` → Shape B | **DUPLICATE-AUTHORITY** (shape) |
+| `webhookIntasend` → Shape B | **DUPLICATE-AUTHORITY** (shape + duplicate endpoint) |
+| `seller-revenue.html` | **DERIVED**, over an incomplete subset |
+| `admin.html` (`sokoniCommissionLedger`, `sokoniCommissions` in localStorage) | **MIRROR** candidate, unadjudicated |
+| `sokoni-orders.js` 12% default | **UNUSED** — no callers |
+| `sokoni-payment-engine.js` share split | **UNUSED** — no callers |
 
-The next step is to find the single writer of `commissionLedger` and its inputs
-(seller, shop, category/rate, gross, fees) — not to compare numbers between pages.
+### STATUS
+
+```
+rate calculation      REAL              one engine, no live duplicate
+recorded fact         DUPLICATE-AUTHORITY   one collection, two shapes, three writers
+reader completeness   DEFECT (recorded)     Shape B invisible to seller revenue
+gross provenance      NOT ESTABLISHED       sellerPayments.amount vs orders.total
+```
+
+### Not done
+
+Whether the two Shape-B endpoints are both *receiving* traffic (both are exported and
+deployable; only production logs can say which the gateway calls). No change proposed.
+
 
 ---
 
@@ -132,7 +232,9 @@ like on the page — the next slice would have been sent to fix code that never 
 
 ## Not done, and deliberately
 
-- CONCEPT 3 seller net · 4 platform revenue · 5 ledger · 6 analytics · 7 subscriptions,
-  wallet, refunds, payouts, POS
+- CONCEPT 3 seller net · 4 platform revenue · 5 ledger · 6 settlement/payout ·
+  7 analytics; then subscriptions, wallet, refunds, delivery fee, POS as separate domains
 - The served-ruleset read that would settle order-amount immutability
 - Any change to `_costEfficiency()`, `f4422b4`, or any financial calculation
+
+---
