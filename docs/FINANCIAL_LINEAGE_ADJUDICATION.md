@@ -782,3 +782,112 @@ Two independent observations agreeing that the double credit never happened.
 > Standing note: this order will now remain `delivered` permanently. That is a
 > reporting/lifecycle question, not a money question — the wallet was already credited
 > by the path its lowercase marker records. It belongs to CONCEPT 3's close, not here.
+
+---
+
+## CONCEPT 3 — CLOSING CORRECTION: the settlement path I adjudicated has never run
+
+Three findings, each of which changes an earlier conclusion in this document.
+
+### 1 · `orders.orderTotal` is written by the BROWSER
+
+`checkout.html` creates the order before payment:
+
+```js
+subtotal, deliveryFee, total, orderTotal: total,
+status: "pending_payment",
+statusHistory: [{ status: "pending_payment", at: Date.now(), by: _uid }],
+```
+
+`total` is a **client-computed cart total**. So the field `_grossCents()` consumes —
+`orderTotal ?? total` — originates in the browser on every checkout-created order.
+
+CONCEPT 1 recorded *"the value never comes from the client."* That is true of the
+**webhook-created** path and false of the **checkout-created** path. Both are live.
+
+### 2 · The pre-existing-order branch is NOT Daraja-only, and it HAS executed
+
+Production shows two order shapes, distinguishable by `deliveryFee`:
+
+| shape | count | orderTotal | paidAmount | deliveryFee | creator |
+|---|---:|---:|---:|---|---|
+| webhook-created | 6 | 97 | 97 | absent | payment (absent-order branch) |
+| checkout-created | 3 | 100 | 97 / absent | `0` | browser |
+
+`SKN0178R32` is the live instance: created by the client at **100**
+(`statusHistory[0].by = <uid>`, `status: pending_payment`, `escrow: null`), paid 25
+seconds later, gateway confirmed **97**, and the payment wrote only `paidAmount`.
+`orderTotal` still reads 100.
+
+CONCEPT 3c recorded the pre-existing-order ambiguity as *"latent — the Daraja rail has
+produced no production orders."* The **rail** claim was right; the framing was wrong.
+`_finalizeMarketplacePayment` is called by the IntaSend rail too, so the branch is
+rail-agnostic and has executed.
+
+### 3 · `settleOrder` has NEVER RUN — the money moves on another rail entirely
+
+```
+settlements collection            0 documents
+walletTransactions *_ordersettle  0
+```
+
+Every actual seller credit came from a different path:
+
+```
+webhookIntasend
+  amount (gateway)
+  sokoniCut = calculateCommission(amount)          ← the canonical rate engine
+  netShillings = amount − sokoniCut
+  → wallets/{sellerUid}.balance += netShillings    DIRECT, shillings
+  → walletTransactions  type "booking_earning"
+  → idempotent via payments/{apiRef}.walletCreditedAt inside the transaction
+  → commissionLedger/{apiRef}                      SHAPE B
+  → order settlementStatus = "settled"             ← the lowercase marker
+```
+
+plus `sweepEarningsToWallet` (`every 5 minutes`) moving the cents rails
+(`withdrawableBalance`/`availableBalance`) into `balance` as
+`type: 'earning_settlement'` — 8 such transactions on the one seller, summing exactly
+to the observed balance of 1530.
+
+**So CONCEPT 3b adjudicated a settlement writer that has never executed.** Its analysis
+of `_grossCents` remains accurate about that code; it is simply not the path the money
+took.
+
+### The safety conclusion — and it is reassuring
+
+```
+LIVE rail (FinOS webhook)   gross = GATEWAY amount        ✓ never the client figure
+DORMANT rail (settleOrder)  gross = orderTotal ?? total   ✗ client-written on checkout orders
+```
+
+The client-written 100 on `SKN0178R32` was **not** used for its credit — the credit used
+the gateway's 97. The client figure is consumed only by `settleOrder`, and every
+IntaSend-paid order receives the lowercase `settled` marker from
+`_finalizeMarketplacePayment`, so after B.1 `settleOrder` always skips them.
+
+**Before B.1 that marker did not match the guard.** Had `settleOrder` ever run on
+`SKN0178R32`, it would have paid the seller on the browser's 100 rather than the
+gateway's 97 — a double credit computed from an unverified figure. B.1 closed both
+halves of that at once, which was not visible when B.1 was written.
+
+### CONCEPT 3 — CLOSE (qualified)
+
+```
+seller net, LIVE rail            REAL — gateway gross, canonical commission, idempotent
+seller net, settleOrder rail     BUILT, DEPLOYED, NEVER EXECUTED
+duplicate authority              TWO complete settlement implementations
+orderTotal provenance            CLIENT-WRITTEN on checkout-created orders
+total ↔ paidAmount               NOT a gateway-fee artefact — six orders are 97/97/97;
+                                 only client-created orders diverge
+served-rule immutability         STILL OPEN (clients demonstrably CREATE orders;
+                                 whether they may UPDATE amounts is unestablished)
+SKN084IE2Z lifecycle             OPEN — permanently `delivered`, operational not money
+```
+
+### For CONCEPT 4
+
+The platform-revenue question now has a concrete first target: **`sokoniCut` recorded on
+`commissionLedger/{apiRef}` by the webhook is the live commission fact**, not anything
+`settleOrder` writes — because `settleOrder` writes nothing. Any revenue figure derived
+from `settlements` or from `ledger/{orderId}_*` is derived from an **empty collection**.
