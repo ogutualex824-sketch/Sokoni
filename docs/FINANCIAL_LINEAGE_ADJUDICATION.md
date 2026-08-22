@@ -2031,3 +2031,149 @@ B.3+    unchanged
 No IAM changed, no function called, no guard added. Altering invoker policy or auth on a
 live money path is a production security change and is the owner's decision — and if
 `allUsers` is removed carelessly, every legitimate browser caller breaks.
+
+---
+
+## B.2.0 BEFORE-PROOF — financial-call authorization (read-only)
+
+No function invoked. Source, caller census, and IAM policy only.
+
+### 1 · Legitimate caller census — the decisive result
+
+```
+finosRecordTransaction    CLIENT callers: 0        SERVER callers: 0
+finosReleaseEscrow        CLIENT callers: 2        financial-os.html:707 · sokoni-aos.js:757
+finosDisputeEscrow        CLIENT callers: 1        financial-os.html:713
+finosResolveDispute       CLIENT callers: 1        financial-os.html:765
+```
+
+**`finosRecordTransaction` has no caller anywhere** — not a page, not a module, not
+another function. Only the re-export at `index.js:11192`.
+
+The webhook's own comment explains why, and confirms it deliberately:
+
+> *FinOS's crediting engine is reachable only through `finosRecordTransaction` (an
+> onCall), and **nothing on the payment path invoked it**. Commission was calculated,
+> the merchant's net was written to `commissionLedger.providerNet` — and then no money
+> moved into their balance. FinOS is the canonical authority, so this calls its existing
+> **primitive** rather than touching a balance directly.*
+
+The live marketplace credit therefore runs **webhook → FinOS credit primitive**, bypassing
+the callable entirely. Production confirms it:
+
+```
+wallets/D5Ql2EYr…/transactions      8 documents
+  type 'sale'  amountCents 8700  dir credit  orderId SKN0178R32
+  …one per paid order, 7 × 8700 (= 97 − 10 commission)
+  plus  92103  (= 969.03 − 48)
+```
+
+Every credit carries an `orderId` and reconciles to a real payment. **No anomalous
+credit exists.**
+
+> That also resolves where the marketplace money came from — `_walletTxRef` writes to the
+> **subcollection** `wallets/{id}/transactions`, not the top-level `walletTransactions`
+> I had been measuring. The 7 × 87 in the top-level collection are the later
+> `sweepEarningsToWallet` moves of these same credits.
+
+### 2 · What that means for the fix
+
+```
+finosRecordTransaction   ZERO legitimate callers → making it genuinely private,
+                         or removing the export, breaks NOTHING.
+                         It is pure attack surface today.
+finosReleaseEscrow       2 admin-surface callers → IAM must NOT be tightened blindly;
+                         it needs application-level authorization instead.
+```
+
+This is the cleanest possible answer to "can `allUsers` be removed?" — **for the
+highest-risk function, yes, with no legitimate traffic to break.**
+
+### 3 · `finosReleaseEscrow` is materially lower risk
+
+```js
+_assertAuth(request);
+const { escrowId, reason } = request.data;        // escrowId ONLY — no amount
+…
+if (!snap.exists) throw new HttpsError('not-found', 'Escrow not found');
+if (e.status !== ES.HELD)
+  throw new HttpsError('failed-precondition', `Escrow is ${e.status}, only held escrows can be released`);
+const caller  = _uid(request);
+const isAdmin = request.auth?.token?.admin || request.auth?.token?.superAdmin;
+```
+
+The client supplies **only an escrow id**. The amount and recipients come from the
+server-created escrow record, the state is gated on `HELD`, and the function resolves an
+admin claim. It does not share `finosRecordTransaction`'s shape, where the caller
+supplies `sellerId` and `amountCents` directly.
+
+### 4 · Payment status vocabulary — enumerated before changing anything
+
+```
+payments.status         { COMPLETE: 12, FAILED: 8, PENDING: 4 }
+payments.intasendState  { COMPLETE: 12, FAILED: 8, undefined: 4 }
+```
+
+The literal `'completed'` **does not occur in production**. `_verifyPayment` Path 1:
+
+```js
+if (paySnap.exists && paySnap.data().status === 'completed') return true;
+```
+
+is therefore dead on every record. Path 2 (orders by `trackingId` with `status: 'paid'`)
+is the only branch that can succeed.
+
+**But its practical impact is nil today**, because the only function calling
+`_verifyPayment` has no callers. It is a latent verification defect, not a live one —
+and it must be fixed before any caller is added, not after.
+
+### 5 · The authorization boundary, restated against the evidence
+
+The desired shape:
+
+```
+Browser → authenticated user → server verifies identity
+                             → server verifies payment
+                             → server verifies authority/ownership
+                             → server validates amount + recipients
+                             → financial transaction
+```
+
+`finosRecordTransaction` currently implements only the first step. But since **no
+browser needs it at all**, the boundary is achieved by removing its public reachability
+rather than by building the missing checks into a function nobody calls.
+
+### 6 · Recommended B.2.0, in risk order
+
+```
+1  finosRecordTransaction   make invoker:'private' effective, or drop the export
+                            ZERO callers — no legitimate traffic breaks
+                            Requires a Functions deploy; IAM binding must be removed
+                            explicitly, since redeploy alone did not apply the
+                            declaration last time
+2  _verifyPayment           accept the real vocabulary (COMPLETE), and make
+                            verification UNCONDITIONAL rather than gated on the caller
+                            supplying paymentRef
+3  ownership check          caller must be provably related to the transaction —
+                            required before the callable is ever re-exposed
+4  App Check                add to finos-router; NOT a substitute for 1–3
+5  finosReleaseEscrow       leave IAM alone; audit its admin/ownership branch separately
+```
+
+### What is NOT established
+
+```
+why the deployed IAM disagrees with invoker:'private'   — possibly a manual allUsers
+                                                          binding added to fix a 403,
+                                                          which redeploy does not remove
+whether any unauthorized call was ever made             — production shows none;
+                                                          every credit reconciles
+finosReleaseEscrow's full ownership branch              — isAdmin is computed; what it
+                                                          gates was not traced
+```
+
+### Deliberately not done
+
+No IAM changed, no export removed, no guard added, and **no invocation attempted**.
+Proving this by calling the function would create an unauthorized financial record in
+production — the wrong test for exactly the property under examination.
