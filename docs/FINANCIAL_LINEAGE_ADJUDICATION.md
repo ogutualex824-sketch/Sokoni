@@ -1616,3 +1616,139 @@ unblocks                  4g revenue unit contract
 
 No record reconciled, no field copied, nothing deleted. `bookingFees` keeps its rows;
 the reporting contract will simply not name it as a revenue source.
+
+---
+
+## CONCEPT 4g — the revenue contract (read-only; no aggregation written)
+
+### 1 · `providerPayouts.kind` — the discriminator is an ABSENCE
+
+```
+production rows by kind    { "(absent)": 2 }      commission 4000 cents total
+kinds emitted by the code  'deposit_forfeit'  — and nothing else
+```
+
+The **normal settlement path writes no `kind` at all**; only the forfeit path stamps
+one. So the discriminator exists only as a negative:
+
+```
+qualifying settlement   kind !== 'deposit_forfeit'      ✓ works today
+                        kind === 'settlement'           ✗ matches NOTHING
+```
+
+**Any inclusion rule must be written as an exclusion**, or the settlement path must
+begin stamping a positive kind. A future reviewer reading `kind: 'deposit_forfeit'` in
+the source would reasonably assume a matching `'settlement'` exists. It does not.
+
+Zero forfeits exist in production, so this is latent — and it is exactly the shape of
+defect that becomes live the first time the other branch runs.
+
+### 2 · Forfeit economics — a policy question, stated not decided
+
+The forfeit transaction moves money three ways in one commit:
+
+```
+customer wallet   += refundShillings          partial refund
+provider wallet   += forfeitShillings         provider keeps the forfeited deposit
+providerPayouts     gross: forfeitC
+                    commission: forfeitCommissionC     ← SOKONI's cut ON A FORFEIT
+                    net: providerNetC
+                    kind: 'deposit_forfeit'
+walletTransactions  type 'booking_forfeit'
+```
+
+The `commission` field means the same thing in both kinds — SOKONI's cut. What differs
+is the **economic event**: a forfeit is a cancellation fee, not payment for a delivered
+service. Whether that is platform revenue, a recovery, or neither is a **business
+decision**, and this document does not make it.
+
+What matters for the contract: **an aggregate that sums `commission` across all
+`providerPayouts` silently folds forfeits into service revenue.**
+
+### 3 · Subscription authority — IDENTIFIED
+
+```
+subscriptions/xrH21J5GFbW8PluCZ2ny5n
+  plan "starter" · planName "Starter" · status "active"
+  paymentRef  "SKN51E7BD480"     ← links to payments/{id}
+  amountPaid  484.02             ← the NET (confirmed) amount
+  currentPeriodStart 2026-08-04 · currentPeriodEnd 2026-09-03
+```
+
+```
+subscriptions           4 documents
+  paid                  1   (starter, amountPaid 484.02, paymentRef set)
+  trials / free         3   (seller_free / trialing — NO payment, NO revenue)
+COMPLETE subscription payments in `payments`   1
+```
+
+So the subscription revenue authority is **`subscriptions.amountPaid` + `paymentRef`**,
+corroborated by `payments/{paymentRef}.confirmedAmount = 484.02`. Two records agree
+because one references the other — a derivation, not a coincidence.
+
+**Confirming CONCEPT 4's F1 with the primary record:** the platform's revenue on that
+transaction is **484.02**, not the `sokoniCut` of **24** that the Platform Revenue card
+counts.
+
+**One open accounting choice:** `amountPaid` is the **net** figure. Gross was 499, of
+which 14.98 was the gateway fee. Recognising subscription revenue at 499 with 14.98 as
+a cost, or at 484.02 net, is a policy decision — not a defect either way, but the
+contract must state which.
+
+Three of four subscriptions are unpaid trials and must contribute **zero** — a
+subscription record is not, by itself, revenue.
+
+### 4 · THE CONTRACT
+
+> **Revenue is an economic classification, not a field name.** A field called
+> `commission`, `sokoniCut`, `fee` or `net` does not make its record revenue.
+
+| class | source | inclusion | exclusion | unit |
+|---|---|---|---|---|
+| Marketplace | `commissionLedger.sokoniCut` | category ∈ {product, service-hub, default} | subscription rows | KES |
+| Provider | `providerPayouts.commission` | `status == 'settled'` **AND** `kind != 'deposit_forfeit'` | forfeits, pending | **cents → KES** |
+| Subscription | `subscriptions.amountPaid` (via `paymentRef`) | `status` paid/active **AND** `paymentRef` present | trials, free plans, unpaid | KES |
+| Delivery | `deliveryFees.platformFeeKES` | — | — | **UNRESOLVED** — zero in production, magnitudes inconsistent |
+| POS | — | — | — | **NO RECORDS EXIST** |
+| Wallet top-ups | — | **never** | all | stored value, not revenue |
+| QA / synthetic | — | **never** | `reason == 'qa'`, `_qa_` id prefixes | — |
+
+```
+TOTAL PLATFORM REVENUE = Σ (explicitly named classes above)
+
+NEVER  Σ all sokoniCut
+NEVER  Σ all commission
+NEVER  implicit category inference
+NEVER  missing record → 0
+```
+
+### 5 · What still blocks a normaliser
+
+```
+delivery authority        UNRESOLVED — platformFeeKES is 0 on both rows and
+                          grossOrderKES holds 1000 and 97 with no matching order
+gross vs net recognition  POLICY — subscription (and marketplace) revenue recognised
+                          before or after the 3% gateway fee
+forfeit classification    POLICY — revenue, recovery, or neither
+positive `kind`           the settlement path stamps none; exclusion-only filtering
+```
+
+The first three are decisions, not measurements. **4g cannot close them, and a
+normaliser written before they are made would encode an unstated policy as if it were a
+fact** — which is the failure mode this whole audit exists to prevent.
+
+### CONCEPT 4g register
+
+```
+providerPayouts.kind      DISCRIMINATOR IS AN ABSENCE — exclusion-only
+forfeit economics         POLICY OPEN; must not be summed with service revenue
+subscription authority    subscriptions.amountPaid + paymentRef  — IDENTIFIED
+subscription trials       3 of 4 records are unpaid — contribute zero
+F1 confirmed              484.02 is the revenue, 24 is the commission counted
+revenue contract          DRAFTED with explicit inclusion AND exclusion per class
+blocked on               delivery authority · gross-vs-net policy · forfeit policy
+```
+
+### Deliberately not done
+
+No aggregation written, no normaliser built, no policy chosen, no dashboard touched.
