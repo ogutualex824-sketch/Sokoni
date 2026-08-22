@@ -1152,3 +1152,128 @@ order gross basis          OPEN POLICY — customer-facing 100 vs remitted 97
 
 No category reclassified. No missing commission row created. No amount copied between
 `payments`, `orders` and `commissionLedger`. No revenue card changed.
+
+---
+
+## CONCEPT 4c — the two missing rows are CORRECT, and the revenue card has a units defect
+
+### The KES 200 gap: possibility A, decisively
+
+`SKN13E5ABB69` and `SKN4E038752E` both have `paymentIntents` with:
+
+```
+resourceType   providerBooking
+status         paid
+resourceId     AiJp5yzTnR…_2026-08-02_…   /   …_2026-08-05_…
+```
+
+`holdServiceBookingPayment()` falls back to `apiRef` when `intentRef` is absent, finds
+the booking intent, and the webhook returns early — exactly as its own comment
+describes:
+
+> *a service-booking payment is HELD (paid_held), never credited here — the provider is
+> credited only by Phase C settlement at completion. Handled in isolation via the
+> server-minted intent; skips all commission/credit/creation.*
+
+**The missing commission rows are correct by design.** Commission on those payments is
+not skipped; it is **deferred to the booking settlement rail**, and it landed there:
+
+```
+providerPayouts   2 documents — one per booking payment
+                  gross 10000 · commission 2000 · net 8000
+                  netShillingsCredited 80 · commissionPct 20 · status "settled"
+```
+
+No revenue was lost, and no commission row should be created to make the counts agree.
+This is **possibility A**: commission legitimately not charged *on that rail, at that
+moment*.
+
+### A sixth revenue rail, and a third commission vocabulary
+
+```
+commissionLedger   sokoniCut         5% (min 10)    SHILLINGS
+providerPayouts    commission        20%            CENTS
+bookingFees        sokoniCut = 0     0%             6 rows, zero platform revenue
+deliveryFees       2 docs — not yet examined
+```
+
+### THE DEFECT — cents added to shillings in the Platform Revenue total
+
+`adminGetFinance` **does** read `providerPayouts` (I was wrong to suspect it omitted
+the booking rail — it does not). It accumulates:
+
+```js
+if (x.status !== 'settled') continue;
+const gross = Number(x.gross) || 0;         // CENTS
+const comm  = Number(x.commission) || 0;    // CENTS
+b.serviceRevenue += gross; b.serviceCommission += comm;
+…
+b.totalCommission = b.productCommission + b.serviceCommission;
+```
+
+while `productCommission` accumulates `commissionLedger.sokoniCut`, which is in
+**SHILLINGS**.
+
+Units established from the data itself, not assumed:
+
+```
+providerPayouts     net = 8000  with  netShillingsCredited = 80    → net is CENTS
+commissionLedger    sokoniCut = 10  on  serviceTotal = 97          → cut is SHILLINGS
+```
+
+Both payouts carry `status: "settled"` and were created 2026-08-02 / 08-05 — inside a
+30-day window ending today. So for that window the aggregator computes:
+
+```
+productCommission  Σ sokoniCut                =   152      shillings
+serviceCommission  Σ providerPayouts.commission = 4000      CENTS mistaken for shillings
+totalCommission                                = 4152
+
+true value                                     =   152 + 40 = 192
+```
+
+`admin.html` renders `R(b.totalCommission)` as the card **"Platform Revenue · 30d"**.
+
+**The figure is overstated by roughly 21×, from a units mismatch — not from the
+category semantics.**
+
+`serviceRevenue` (Σ `gross` = 20000 cents presented as shillings) carries the same
+defect wherever it is displayed.
+
+> Derived from the source and the production data, not observed on the rendered card —
+> reading the card needs an authenticated admin session. The arithmetic is
+> deterministic given both, and every input above was measured.
+
+### This coexists with F1, in the opposite direction
+
+CONCEPT 4 recorded that the card **understates** revenue because a subscription's true
+revenue is the whole payment (484.02) while only its commission (24) is counted. That
+remains true. Both are simultaneously true of the same figure:
+
+```
+subscription rows   understate   — commission counted where full payment is the revenue
+provider payouts    overstate    — cents summed into a shillings total
+```
+
+A single number is wrong in two directions at once for two different reasons. That is
+why the card must not be "corrected" by adjusting the number — the model underneath it
+has to be defined first.
+
+### CONCEPT 4c register
+
+```
+KES 200 coverage gap        RESOLVED — correct by design, deferred to the booking rail
+providerPayouts rail        REAL — 20% commission, cents, status-gated
+bookingFees rail            6 rows at 0% — records no platform revenue at all
+UNITS DEFECT                CONFIRMED — serviceCommission (cents) + productCommission
+                            (shillings); ~21× overstatement for the sampled window
+serviceRevenue              same defect
+delivery revenue            NOT YET EXAMINED — 2 docs
+refunds                     still unobservable — 0 docs
+```
+
+### Deliberately not done
+
+No unit conversion applied. No aggregator changed. No commission row created. The units
+defect is a one-line-looking fix in a money path and needs its own slice, before-proof
+and deploy decision — the same discipline B.1 got.
