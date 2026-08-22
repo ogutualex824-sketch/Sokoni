@@ -461,8 +461,20 @@
       });
     }
 
+    /* ── SOKONI Marketplace ───────────────────────────────────────────────────
+       An explicit way back to the marketplace from an administrative surface.
+
+       It is a NAVIGATION, not a role change. It does not call setActiveRole and it
+       does not clear the administrative context: the operator remains an Admin (or
+       Super Admin) who is looking at the marketplace, and returning to the admin
+       surface needs no re-entry. That is the F4 separation working as intended —
+       `activeRole` is the workspace being acted in, `adminContext` is the
+       administrative surface entered, and browsing the shop changes neither.
+
+       Choosing a WORKSPACE role from the strip above is the thing that leaves the
+       administrative context, because that is a change of who you are acting as. */
     html += '<div class="sk-ap-sep"></div>'
-      + '<a class="sk-ap-item" href="/">🏠 SOKONI Home</a>'
+      + '<a class="sk-ap-item" href="/" data-sk-marketplace="1">🛍️ SOKONI Marketplace</a>'
       + '<button type="button" class="sk-ap-item sk-ap-danger" data-sk-signout="1">'
       + '↩ Sign out</button>';
 

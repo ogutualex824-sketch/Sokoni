@@ -1,3 +1,112 @@
+## [2026-08-22] - Admin shortcut, Marketplace return, and the Health INTERNAL traced.
+
+Hosting slice + a SEPARATE Functions commit. No rules, no schema.
+
+### 1  The admin shortcut opened a lock that nobody could ever open
+
+Seven taps on the SOKONI logo opened a PIN / pattern / password overlay whose hashes
+lived in `localStorage` under `sokoniAdminPinHash` / `sokoniAdminPatternHash` /
+`sokoniAdminPwHash`.
+
+**Measured: nothing in the entire repository ever wrote those keys.** The only other
+references were a preservation comment in `firebase.js` and the harness that proves
+this removal. So `_iGetHash()` returned `null` for every account on every device, and
+every attempt ended on *"Admin credentials not configured. Set them via the SOKONI
+admin setup"* — pointing at a setup screen that does not exist. **The shortcut was
+unusable by everyone, including a real Super Admin.**
+
+It was also the last surviving instance of the pattern removed from `admin.html` in
+`7976119`: a client-side secret compiled into shipped source, reaching 0 Cloud
+Functions and 0 rules, therefore authorising nothing.
+
+Entry is now the same single credential system as every other administrative
+surface — Firebase login → claim → `adminContext` — and the destination is
+**`admin.html` for both claim types**. Super Admin stays reachable separately from
+the profile menu's Administration strip, which is claim-gated on its own. No
+highest-role-wins, no `users.role`, no localStorage role.
+
+An account without the claim gets **nothing**: no navigation and no message. This is
+a hidden shortcut, and announcing "you are not an administrator" to whoever taps a
+logo seven times tells them the surface exists. A holder whose entry fails *is* told,
+because a control that refuses silently is indistinguishable from a broken one.
+
+### 2  SOKONI Marketplace on the administrative surfaces
+
+Both admin profile dropdowns now carry **🛍️ SOKONI Marketplace → `/`**.
+
+It is a NAVIGATION, not a role change. It does not call `setActiveRole` and it does
+not clear the administrative context: the operator remains an Admin who is looking at
+the marketplace, and returning needs no re-entry. Choosing a *workspace* role from the
+strip above is the thing that leaves the administrative context, because that is a
+change of who you are acting as. Proven: context `superAdmin` before and after.
+
+### 3  Health INTERNAL — traced to the exact query
+
+Captured from the deployed Cloud Function log, **not inferred**:
+
+    9 FAILED_PRECONDITION: The query requires an index.
+    .../collectionGroups/ops_reports/indexes/_ ... __name__
+
+    _operationalHealth:
+      db.collection("ops_reports").orderBy("__name__", "desc").limit(7)
+
+A **descending** order on `__name__` is not covered by the automatic single-field
+indexes. The file header asserted the opposite — that assumption is what let it
+through. It threw on every call; `Promise.all` rejected; firebase-functions converted
+the non-`HttpsError` into a bare `INTERNAL`, so four working dimensions were erased by
+one broken one.
+
+**Fixed without adding an index.** `ops_reports` is keyed `YYYY-MM-DD`
+(`scheduled-reports.js` writes `.doc(today)`), so the last seven keys are computable
+rather than discoverable — the pattern `_marketplaceHealth` already used for
+today/yesterday. `getAll` is one round trip over at most seven documents and consumes
+none of the index budget, which the cost dimension itself reports at 192/200.
+
+`getTopBusinessPriorities` had the **identical defect** on `funnelStats`, unreported
+only because the scores callable is hit first. Same fix. Swept the rest of
+`functions/`: every other `orderBy('__name__')` is **ascending**, which the automatic
+index does cover, so none of them shares this defect.
+
+One failing dimension no longer erases the other four: `Promise.allSettled` attributes
+it, and a failed dimension returns `score: null` with the code and message attached —
+**not a zero**. A zero is a measurement meaning "this is bad"; the truth was "this is
+unknown". The weighted overall is **withheld** rather than approximated, because
+`null` coerces to 0 and would publish a confidently wrong number. Threshold alerts are
+guarded on a known score — `null < 60` is `true` in JavaScript, so a missing index
+would otherwise have raised "Marketplace health is below 60" and sent someone to fix a
+marketplace that was never measured.
+
+### Proof
+
+`scripts/after-admin-shortcut-marketplace.mjs` — **10 / 0, stable**, and **3 / 7
+against live `68497f7`** (`#idxAdminLock present=true`, `landed=""`).
+
+Covers: no credential overlay; admin claim → `admin.html`; superAdmin claim → **also
+`admin.html`, never `super-admin`**; no claim → navigates nowhere and reveals nothing;
+forged localStorage roles → still nowhere; the Marketplace entry and its `/` target;
+and that Marketplace preserves the administrative context.
+
+`after-role-nav-header` 12/0 · `after-admin-profile-model` 32/0 ·
+`after-unified-role-menu` 12/0 · superadmin-retirement 14/0 · admin-lock-removal 24/0 ·
+analytics-metrics 19/0 · role-presentation 19/0 · claims-role-consumers 17/0 ·
+superadmin-link-gating 13/0 · role:switch 50/0 · profile:acting-role 36/0 · panels 32/0.
+
+Two harness defects fixed rather than worked around: a "handler ran" flag held in a DOM
+attribute vanished with the document on exactly the paths that navigated — so the
+control failed on every passing case and passed on the inert one; and the race probe
+sampled at the verification window instead of waiting for it, making it flaky and its
+property row vacuous.
+
+### Release boundary
+
+    LIVE      hosting 68497f7 / v550 · rules 4d86bb52
+    THIS      hosting slice (index.html, sokoni-admin-entry.js)
+    SEPARATE  f4422b4 functions/platform-health.js — NOT deployed
+    HELD      aa1c938 functions/pos-integrations-api.js — NOT deployed
+
+The health fix is server-side and cannot take effect until a Functions deploy, which
+is a different boundary from this one and is not bundled with it.
+
 ## [2026-08-22] - Role Navigation & Header Cleanup: one control, one registry, one accessor.
 
 Hosting only. No rules, no Functions, no schema.

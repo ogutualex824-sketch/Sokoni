@@ -135,9 +135,20 @@ export default async function run(page) {
      Measured directly: call it as early as the module exists, then look at the
      mirror. This is the defect, not a proxy for it. */
   await page.addInitScript(() => {
+    /* WAIT FOR THE WINDOW, do not sample at it. Firing at the first sight of the
+       module meant sometimes arriving after the token had already resolved, and the
+       control then honestly reported "not in the window" — flaky, and it made the
+       property row pass vacuously. The window is defined precisely: isVerified() true
+       (cache) with hasRole(elevated) still false (no token yet). Wait for exactly
+       that, and give up after 6s so a window that never opens is reported, not
+       waited on forever. */
+    const t0 = Date.now();
     const t = setInterval(() => {
       const P = window.SokoniPermissions;
       if (!P || typeof P.getAdminContext !== 'function') return;
+      const inWindow = !!(P.isVerified && P.isVerified())
+                    && !(P.hasRole && P.hasRole('admin'));
+      if (!inWindow && Date.now() - t0 < 6000) return;
       clearInterval(t);
       let before = null, ret = null, after = null, verified = null;
       try { before = sessionStorage.getItem('sokoniAdminContext'); } catch (_) {}
