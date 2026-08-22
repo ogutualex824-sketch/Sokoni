@@ -985,6 +985,37 @@
        would boot the customer app inside /merchant, the double-shell defect e0dbdca fixed. */
     if (m.kind === 'exit') { location.assign(m.href); return; }
 
+    /* ── A ROUTE THIS SHELL CANNOT RENDER, BUT ANOTHER CAN ────────────────────
+       Sell is the phone-first till. This shell has no native renderer for it and
+       no integration layer to build one on — so it hands the merchant to the
+       shell that already hosts the certified module, rather than substituting
+       POS into the slot. Sell reaches Sell.
+
+       Deliberately placed with the exit branch and returning BEFORE any state
+       below runs, for the same reason exits do: setting `current`, swapping the
+       title and pushing the hash would leave "#sell" in the history of a page we
+       are navigating away from, and Back would resolve it and bounce again.
+
+       Only for a route this shell WITHHOLDS. A route it can render is rendered
+       here; this is not a redirect for anything that works locally. */
+    if (m.crossShell && withheldId(id)) {
+      /* ── THE BACK LOOP, AND WHY THIS GUARD EXISTS ────────────────────────
+         Tapping Sell from another route is safe: this returns before the hash
+         is pushed, so the URL still reads (say) #dashboard, and Back from v2
+         lands there and mounts normally.
+
+         ARRIVING at /merchant#sell is not safe. A bookmark, a shared link, or
+         Back from v2 itself would boot the router on that hash, assign again,
+         and Back could never re-enter this shell — the exact bounce loop the
+         exit branch above documents.
+
+         So: navigate across only when we are moving TO this route from
+         somewhere else. When the hash already names it, render the honest
+         withheld panel instead, which says where the surface lives rather than
+         trapping the merchant in a redirect. */
+      if (location.hash.replace('#', '') !== id) { location.assign(m.crossShell); return; }
+    }
+
     if (current && current !== 'devices' && current !== id) _lastModule = current;  /* for Devices "Done" */
     current = id;
     setActive(id);

@@ -62,6 +62,25 @@
 
     { id:'sell', name:'Sell', icon:'💳', tier:'primary',
       kind:'native',
+      /* ── CROSS-SHELL DESTINATION ─────────────────────────────────────────
+         Where a shell that CANNOT render this route natively should send the
+         merchant instead. Not a fallback to a different product — the same
+         product, in the shell that already hosts it.
+
+         v2 renders Sell natively (SokoniMerchantSell) and never consults this.
+         v1 has no native Sell renderer and no integration layer for one — no
+         mount contract, no callable binding, no merchant-data adapter — so
+         building one there would mean new, uncertified code in front of
+         posCompleteCheckout, inside the shell v2 exists to replace.
+
+         This replaces `fallback:'pos'` on the bottom-nav till slot, which
+         contradicted the capability layer's own rule: "Falling `sell` back to
+         POS would quietly merge exactly what the platform has decided must stay
+         apart." Sell now reaches Sell.
+
+         A clean route, not '.html': cleanUrls:true means 'merchant-v2.html'
+         301-redirects, and a till must open in ONE navigation. */
+      crossShell:'/merchant-v2#sell',
       role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'sell',
       note:'The phone-first till (sokoni-merchant-sell.js). Native, NOT the POS iframe: POS is a ' +
@@ -545,7 +564,10 @@
 
        ⚠ REVIEW: the till slot's identity is a navigation decision. Recorded here, in the
        contract, so it is visible and auditable rather than a substitution buried in a shell. */
-    { id:'sell',      icon:'💳', label:'Sell', fallback:'pos' },
+    /* No `fallback` — see the `sell` route's crossShell above. A shell that
+       cannot render Sell sends the merchant to the shell that can, rather than
+       substituting a different product into the till slot. */
+    { id:'sell',      icon:'💳', label:'Sell' },
     { id:'__more',    icon:'☰',  label:'More'   }
   ];
 

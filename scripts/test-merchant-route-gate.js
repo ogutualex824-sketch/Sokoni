@@ -198,9 +198,25 @@ server.listen(0, async () => {
       (slotWithheld(b.id) && b.fallback && !slotWithheld(b.fallback)) ? b.fallback : b.id);
     check('bottom nav renders every declared slot', bnav.length === C.BOTTOM_NAV.length,
           bnav.map((b) => b.id).join(',') || 'none');
-    check('every bottom-nav slot resolves to a route this shell can mount',
-          bnav.every((b) => !slotWithheld(b.id)),
-          bnav.filter((b) => slotWithheld(b.id)).map((b) => b.id).join(',') || 'all mountable');
+    /* A slot must LEAD SOMEWHERE REAL. Mountable here is one way; declaring a
+       crossShell destination — the shell that does host the surface — is the
+       other. What is still forbidden is a slot pointing at a route this shell
+       withholds with nowhere else to send the merchant: that is the blank
+       defect, in the most prominent control in the app.
+
+       The crossShell target is checked too, or this becomes a loophole where
+       any withheld slot passes by naming a string. It must be an absolute path
+       within the app, and it must NOT be a legacy dashboard — sending Sell to
+       seller.html would re-merge exactly what the registry keeps apart. */
+    const crossShellOf = (id) => { const r = id === '__more' ? null : C.get(id); return (r && r.crossShell) || null; };
+    const badSlot = (b) => slotWithheld(b.id) && !crossShellOf(b.id);
+    check('every bottom-nav slot leads somewhere real (mountable here, or cross-shell)',
+          bnav.every((b) => !badSlot(b)),
+          bnav.filter(badSlot).map((b) => b.id).join(',') || 'all resolve');
+    const crossTargets = bnav.map((b) => crossShellOf(b.id)).filter(Boolean);
+    check('every cross-shell target is an in-app path and not a legacy dashboard',
+          crossTargets.every((t) => /^\/[a-z0-9-]/i.test(t) && !/seller\.html|\.html/i.test(t)),
+          crossTargets.join(',') || 'none declared');
     check('...and the resolved slots match the contract after fallback',
           bnav.map((b) => b.id).join(',') === expectedSlots.join(','),
           bnav.map((b) => b.id).join(',') + ' (contract: ' + expectedSlots.join(',') + ')');
