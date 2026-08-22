@@ -1376,3 +1376,144 @@ The exactly-once boundary the release calls for **already exists on the live rai
 the wallet credit. B.1 added the equivalent to the dormant `settleOrder` rail. What is
 missing is not atomicity — it is a single agreed definition of revenue, and correct
 units when summing across rails.
+
+---
+
+## CONCEPT 4e — unit boundary + wallet vocabulary (read-only)
+
+### 1 · The wallet `type` problem is a WRITER DEFECT, not a vocabulary to normalise
+
+The full matrix, measured:
+
+| type | status | n | sum |
+|---|---|---:|---:|
+| `pending` | `failed` | 12 | 140 |
+| `pending` | **`completed`** | **10** | **370** |
+| `earning_settlement` | completed | 9 | 1714 |
+| `payout` | completed | 4 | 400 |
+| `receive` | completed | 3 | 150 |
+| `booking_earning` | completed | 2 | 160 |
+| `send` | completed | 2 | 100 |
+| `order_settlement_reversal` | *undefined* | 1 | −970 |
+| `send` | `pending_claim` | 1 | 50 |
+| `pending` | `expired` | 1 | 10 |
+| `pending` | `pending` | 1 | 10 |
+
+Every `type: "pending"` row carries a `wtop_…` id — a wallet top-up. `functions/wallet.js`
+writes it literally:
+
+```js
+uid, type: 'pending', amount: amt, description: 'Wallet top-up via M-Pesa',
+status: 'pending', mpesaRef: null, invoiceId: null, createdAt: Timestamp.now(),
+```
+
+**`type` is assigned a STATUS WORD at creation, and never updated.** `_finalizeWalletTopUp`
+later moves `status` to `completed`/`failed` and leaves `type` as `"pending"` forever.
+
+So the two fields are not an ambiguous pair needing a decision:
+
+```
+status   coherent lifecycle across every type — completed / failed / expired /
+         pending / pending_claim
+type     coherent category for every other kind — earning_settlement, payout,
+         receive, send, booking_earning, order_settlement_reversal
+         …and WRONG for top-ups, where a status value occupies the category field
+```
+
+Consequences already true in production:
+
+* an aggregate filtering `type == 'topup'` finds **zero** top-ups;
+* an aggregate filtering `type == 'pending'` picks up **10 completed** ones (KES 370);
+* a wallet statement grouped by type shows "pending" as a spending category.
+
+The correct fix is to give top-ups a real category — **not** to reinterpret `status`.
+Existing rows would need a backfill decision of their own, and that is a separate slice.
+
+### 2 · Monetary unit census — the reporting-boundary contract
+
+Units marked **ESTABLISHED** are proven by a paired field or a cross-collection match;
+**INFERRED** means read from code or magnitude and not independently confirmed.
+
+| collection | field | sample | unit | basis |
+|---|---|---:|---|---|
+| `payments` | `amount` | 100 | **KES** | ESTABLISHED — equals customer charge |
+| `payments` | `confirmedAmount` | 97 | **KES** | ESTABLISHED — 0.97 × amount, matches `serviceTotal` |
+| `commissionLedger` | `serviceTotal` | 97 | **KES** | ESTABLISHED — equals `confirmedAmount` |
+| `commissionLedger` | `sokoniCut` | 10 | **KES** | ESTABLISHED — 10 on a 97 gross |
+| `providerPayouts` | `gross` | 10000 | **CENTS** | ESTABLISHED |
+| `providerPayouts` | `commission` | 2000 | **CENTS** | ESTABLISHED |
+| `providerPayouts` | `net` | 8000 | **CENTS** | ESTABLISHED — pairs with `netShillingsCredited` 80 |
+| `providerPayouts` | `netShillingsCredited` | 80 | **KES** | ESTABLISHED — by name and by pairing |
+| `walletTransactions` | `amount` | 87 / 80 | **KES** | ESTABLISHED — 97−10 and 8000c→80 |
+| `wallets` | `balance` | 1530 | **KES** | INFERRED — sweep adds `moveShillings` |
+| `wallets` | `withdrawableBalance` / `availableBalance` | 3 | **CENTS** | INFERRED — sweep does `floor(moveCents/100)` |
+| `payoutRequests` | `amount` / `netAmount` | 100 | KES | INFERRED |
+| `bookingFees` | `amount` / `providerNet` / `totalPaid` | 100 | KES | INFERRED |
+| `deliveryFees` | `grossOrderKES` | 1000 / 97 | KES by name | **INCONSISTENT — see below** |
+
+**Three collections, three scales, in one financial domain.** That is exactly why the
+conversion must happen once at the reporting boundary rather than in each dashboard.
+
+### 3 · Two further findings from the census
+
+**`bookingFees` records ZERO commission on the same domain `providerPayouts` charges 20% on.**
+
+```
+bookingFees      6 rows   amount 100 · sokoniCut 0 · commissionPct 0 · providerNet 100
+providerPayouts  2 rows   gross 10000c · commission 2000c (20%) · net 8000c
+```
+
+Two collections describing provider/booking money with contradictory commission. Which
+is authoritative is **NOT ESTABLISHED**; `bookingFees` may be a superseded rail. Either
+way a revenue model must not sum both.
+
+**`deliveryFees` records no platform revenue, and its magnitudes disagree.**
+
+```
+platformFeeKES 0 · riderFeeKES 0 · totalFeeKES 0 · grossOrderKES 1000 and 97
+```
+
+Delivery currently contributes **zero** platform revenue, and `grossOrderKES` holds
+1000 in one row and 97 in the other — a 10× spread on a two-row sample with no order at
+1000 in `orders`. Unit or provenance is **NOT ESTABLISHED**.
+
+### 4 · Revenue model — categories and their candidate authorities
+
+Stated as candidates, each with what is and is not established:
+
+| class | candidate authority | unit | status |
+|---|---|---|---|
+| marketplace commission | `commissionLedger.sokoniCut` where category ∈ product/service-hub | KES | **REAL** |
+| provider / service | `providerPayouts.commission` where `status='settled'` | CENTS | **REAL**, needs conversion |
+| subscription | the **payment itself** — `payments.confirmedAmount` where category=`subscription` | KES | **NOT WIRED** — the card counts only its `sokoniCut` |
+| delivery | `deliveryFees.platformFeeKES` | KES | **ZERO in production** |
+| POS | — | — | **NO RECORDS EXIST** |
+| wallet | top-ups are **stored value, NOT revenue** | KES | fees not separately recorded |
+| other / `default` | `commissionLedger` category `default` | KES | category assigned by absence |
+
+`TOTAL = Σ explicitly defined classes`, never `Σ all commission-shaped fields`.
+
+### 5 · Inclusion rule — every aggregate needs one
+
+Production `walletTransactions` contains a synthetic record (`_qa_rs_…`, `reason: "qa"`,
+−970). The invariant should be **"every monetary aggregate states its inclusion rule"**,
+not "everything in this collection is real money". No QA record should be deleted to
+make a dashboard tidy.
+
+### CONCEPT 4e register
+
+```
+wallet type field         WRITER DEFECT — a status word in the category field, 24 rows
+wallet status field       COHERENT — leave alone
+unit boundary             3 scales across the financial domain; conversion belongs at
+                          the reporting boundary, once, explicitly
+bookingFees vs providerPayouts   CONTRADICTORY commission on one domain — authority OPEN
+deliveryFees              zero platform revenue; magnitudes inconsistent — OPEN
+subscription revenue      authority identified, NOT WIRED to reporting
+POS revenue               no records exist
+QA data                   present in production; needs an explicit exclusion rule
+```
+
+### Deliberately not done
+
+No unit converted, no `type` rewritten, no QA record deleted, no aggregate changed.
