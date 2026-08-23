@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Till</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  SOKONI TILL  —  /till
+  ══════════════════════════════════════════════════════════════════════════════
+  A lightweight POS shell. It exists because /pos loads 69 scripts and ~1.9 MB
+  before it knows who the merchant is, and that boot has repeatedly failed on a
+  real iPhone while every individual layer underneath it measured healthy.
+
+  IT REBUILDS NOTHING. Every part that already works is reused as-is:
+
+    · SokoniMerchantSell   the certified till — search, cart, cash tendering,
+                           automatic change, M-Pesa, fulfilment, receipt,
+                           auto-print, idempotent sale (24/24 in-shell)
+    · SokoniPosContext     server-resolved business / branch / device (13/0)
+    · SokoniCash           the cash authority — this screen owns no arithmetic
+    · SokoniReceiptDoc     the one receipt renderer
+    · posCompleteCheckout  the existing sale callable, untouched
+
+  What is NEW here is only the BOOT: seven scripts instead of sixty-nine,
+  identity established BEFORE anything heavy loads, and nothing that can redirect
+  a merchant into business registration.
+
+  ORDER OF OPERATIONS
+      paint a usable frame  ->  auth  ->  server-resolved scope  ->  mount the till
+
+  Nothing blocks the first paint. If identity cannot be resolved the screen SAYS
+  so instead of going white — the failure mode that started all of this.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:#07090c; --panel:#0d1218; --line:rgba(255,255,255,.10);
+    --txt:#e8f2ff; --txt2:#8aa0b8; --acc:#71ff00;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--txt);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-text-size-adjust:100%;
+    display:flex; flex-direction:column; overflow:hidden;      /* the shell never scrolls */
+  }
+  header {
+    flex:0 0 auto; display:flex; align-items:center; gap:10px;
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;
+    border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  header .t { flex:1; min-width:0; }
+  header .n { font-weight:800; font-size:15px; letter-spacing:.01em; }
+  header .s { font-size:11.5px; color:var(--txt2); }
+  header a { color:var(--txt2); text-decoration:none; font-size:12px; padding:8px; }
+  /* THE SCROLL OWNER. One element scrolls; the shell does not. This is what keeps
+     the till's own charge bar pinned instead of pushed below the fold. */
+  #till { flex:1 1 auto; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  #boot {
+    flex:1 1 auto; min-height:0; overflow:auto;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:28px 20px; color:var(--txt2);
+  }
+  #boot .box { max-width:340px; }
+  #boot .hd { color:var(--txt); font-weight:700; font-size:16px; margin-bottom:8px; }
+  #boot .sp {
+    width:22px; height:22px; margin:0 auto 14px; border-radius:50%;
+    border:2px solid rgba(255,255,255,.15); border-top-color:var(--acc);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { .sp { animation:none; } }
+  #boot a.btn {
+    display:inline-block; margin-top:14px; padding:12px 18px; border-radius:11px;
+    background:rgba(113,255,0,.12); border:1px solid rgba(113,255,0,.35);
+    color:var(--acc); font-weight:700; text-decoration:none; font-size:14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="t">
+    <div class="n" id="h-name">SOKONI Till</div>
+    <div class="s" id="h-sub">starting…</div>
+  </div>
+  <a href="/merchant-v2" id="h-back">Merchant</a>
+</header>
+
+<div id="till">
+  <div id="boot">
+    <div class="box">
+      <div class="sp"></div>
+      <div class="hd">Opening your till</div>
+      <div id="boot-msg">Checking who you are…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Seven scripts. Firebase is a MODULE, as it is in the real document. -->
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-cash.js" defer></script>
+<script src="sokoni-receipt-id.js" defer></script>
+<script src="sokoni-receipt.js" defer></script>
+<script src="sokoni-merchant-data.js" defer></script>
+<script src="sokoni-merchant-sell.js" defer></script>
+<script src="sokoni-pos-context.js" defer></script>
+
+<script>
+(function () {
+  'use strict';
+
+  var boot = document.getElementById('boot');
+  var msg  = document.getElementById('boot-msg');
+  var host = document.getElementById('till');
+
+  function stage(n) { try { if (window.sokoniStage) window.sokoniStage('till:' + n); } catch (_) {} }
+
+  /* Never a white screen: every terminal state SAYS something. */
+  function show(title, body, linkLabel, linkHref) {
+    boot.innerHTML = '';
+    var b = document.createElement('div'); b.className = 'box';
+    var h = document.createElement('div'); h.className = 'hd'; h.textContent = title;
+    var p = document.createElement('div'); p.textContent = body || '';
+    b.appendChild(h); b.appendChild(p);
+    if (linkLabel && linkHref) {
+      var a = document.createElement('a'); a.className = 'btn';
+      a.href = linkHref; a.textContent = linkLabel; b.appendChild(a);
+    }
+    boot.appendChild(b);
+    boot.style.display = 'flex';
+  }
+
+  function sub(t) { var e = document.getElementById('h-sub'); if (e) e.textContent = t; }
+
+  /* Bounded wait for auth — a page that never resolves it must still answer. */
+  function whenAuth() {
+    return new Promise(function (res) {
+      var done = false, finish = function (u) { if (!done) { done = true; res(u || null); } };
+      try {
+        if (window.__sokoniAuthReady) return finish(window.__sokoniCurrentUid || null);
+        document.addEventListener('sokoniAuthReady', function () {
+          finish(window.__sokoniCurrentUid || null);
+        }, { once: true });
+      } catch (_) {}
+      setTimeout(function () { finish(window.__sokoniCurrentUid || null); }, 12000);
+    });
+  }
+
+  /* SokoniPosContext is certified against a compat-shaped db; the app uses the
+     modular SDK. The adapter bends, not the proven module. */
+  function compatDb(fs, db) {
+    var rows = function (s) {
+      return { docs: s.docs.map(function (d) { return { id: d.id, data: function () { return d.data(); } }; }) };
+    };
+    return { collection: function (n) { return {
+      where: function (f, op, v) { return { get: function () {
+        return fs.getDocs(fs.query(fs.collection(db, n), fs.where(f, op, v))).then(rows); } }; },
+      doc: function (id) { return { get: function () {
+        return fs.getDoc(fs.doc(db, n, id)).then(function (d) {
+          return { exists: d.exists(), data: function () { return d.data(); } }; }); } }; }
+    }; } };
+  }
+
+  function waitFor(name, ms) {
+    return new Promise(function (res) {
+      var t0 = Date.now();
+      (function poll() {
+        if (window[name]) return res(window[name]);
+        if (Date.now() - t0 > (ms || 8000)) return res(null);
+        setTimeout(poll, 60);
+      })();
+    });
+  }
+
+  async function run() {
+    stage('begin');
+    msg.textContent = 'Checking who you are…';
+    var uid = await whenAuth();
+    stage('auth:' + (uid ? 'yes' : 'no'));
+
+    if (!uid) {
+      return show('Please sign in',
+        'Sign in to SOKONI to open your till.', 'Sign in', '/auth?next=/till');
+    }
+
+    msg.textContent = 'Finding your shop…';
+    stage('context:start');
+
+    var CTX = await waitFor('SokoniPosContext', 8000);
+    if (!CTX) return show('Could not start', 'The till could not load one of its parts. Reload to try again.');
+
+    var fs, db, ctxResult;
+    try {
+      fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      db = window.firebaseDB || fs.getFirestore();
+      ctxResult = await CTX.resolve({ db: compatDb(fs, db), uid: uid });
+    } catch (e) {
+      stage('context:failed');
+      return show('Could not reach SOKONI',
+        'Your till could not check your shop. Check the connection and reload.');
+    }
+    stage('context:' + (ctxResult && ctxResult.decision));
+
+    if (!ctxResult || !ctxResult.ok) {
+      return show('Could not open the till', 'SOKONI could not confirm your account.');
+    }
+    if (ctxResult.decision === 'no-owned-business') {
+      return show('No shop on this account',
+        'This account is not the owner of a shop yet. If you are an employee, shop access is being rolled out.');
+    }
+    if (ctxResult.decision === 'device-suspended') {
+      return show('This device is suspended',
+        'Selling is disabled on this device. An owner or manager can re-enable it.');
+    }
+    if (ctxResult.decision === 'paired-elsewhere') {
+      return show('This device belongs to another business',
+        'Ask an owner to release it before using it here.');
+    }
+
+    var biz = (ctxResult.businesses && ctxResult.businesses[0]) || null;
+    document.getElementById('h-name').textContent = (biz && biz.name) || 'SOKONI Till';
+    sub(ctxResult.decision === 'open-pos' ? 'Ready to sell' : 'This device is not paired yet');
+
+    /* Selling does not wait for device pairing — pairing governs DEVICE
+       management, and a merchant who owns the shop can still sell. The header
+       says which state they are in rather than blocking the till. */
+    msg.textContent = 'Loading your products…';
+    stage('sell:waiting');
+    var SELL = await waitFor('SokoniMerchantSell', 8000);
+    var MD   = await waitFor('SokoniMerchantData', 8000);
+    if (!SELL || !MD) {
+      return show('Could not start selling',
+        'The till module did not load. Reload to try again.');
+    }
+
+    stage('sell:mount');
+    boot.style.display = 'none';
+    try {
+      SELL.mount(host, {
+        scope: { ok: true, shopId: ctxResult.selected.merchantId,
+                 sellerUid: uid, capabilities: ['sell'] },
+        db: db,
+        shopName: (biz && biz.name) || 'My shop',
+        origin: location.origin,
+        servedBy: null,
+        callSale: (window.sokoniCallable ? window.sokoniCallable('posCompleteCheckout') : null),
+        onToast: function (t) { sub(String(t || '')); },
+        onPrint: function () { return Promise.resolve(); }
+      });
+      stage('sell:mounted');
+    } catch (e) {
+      boot.style.display = 'flex';
+      show('The till could not open', String((e && e.message) || e));
+      stage('sell:failed');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(run, 50); });
+  } else { setTimeout(run, 50); }
+}());
+</script>
+</body>
+</html>
