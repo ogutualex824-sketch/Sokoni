@@ -257,8 +257,16 @@
   S = load();
   if (!S) S = { lo: 0, hi: 0, total: 0, attempt: null };
   if (S.attempt && !S.attempt.completed) {
-    /* The tab died inside that range. Treat it as failing and narrow. */
-    S.hi = S.attempt.end;
+    /* The tab died inside that range. Narrow to where it ACTUALLY got, not to
+       the range that was attempted — `reached` is recorded before each script
+       executes, so a death at index 8 means the failing prefix is [0, 9), not
+       [0, 34). Using the attempted end throws away the most valuable datum the
+       crash produced and costs several needless taps on a device that has to be
+       crashed once per tap. */
+    var bound = (typeof S.attempt.reached === 'number')
+      ? Math.min(S.attempt.end, S.attempt.reached + 1)
+      : S.attempt.end;
+    S.hi = bound;
     if (S.hi <= S.lo) S.hi = S.lo + 1;
     save();
   }
