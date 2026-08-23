@@ -486,6 +486,82 @@
   }
   window.sokoniTapDiag = renderTapDiagnostic;
 
+  /* ── The crash report, ON SCREEN ────────────────────────────────────────
+     sokoniCrashReport() writes to the console, and on the device where this
+     actually matters — an iPhone whose tab WebKit just killed — reaching a
+     console means a Mac and Web Inspector. That dependency is why a crash that
+     reproduces every time still has no evidence attached to it.
+
+     ?diag=crash renders the SAME previous-run record into the page instead. It
+     reads only what the breadcrumbs already wrote; it records nothing new and
+     changes no boot behaviour. Inert unless the query string asks. */
+  function renderCrashPanel() {
+    var prev = null;
+    try { prev = JSON.parse(localStorage.getItem(PREV) || 'null'); } catch (_) {}
+
+    var box = document.createElement('div');
+    box.id = 'sk-crash-panel';
+    /* white-space:pre-wrap is not cosmetic here. Without it the newlines and the
+       column alignment collapse into one run-on paragraph, and the report is
+       unreadable on the only device it exists for. */
+    box.style.cssText = 'position:fixed;inset:0;z-index:2147483646;overflow:auto;' +
+      'white-space:pre-wrap;word-break:break-word;' +
+      'background:#12060a;color:#ffd9d9;font:12px/1.5 ui-monospace,Menlo,monospace;padding:14px';
+
+    var lines = [];
+    if (!prev) {
+      lines.push('NO INCOMPLETE PREVIOUS RUN RECORDED.');
+      lines.push('');
+      lines.push('That means the last POS session ended cleanly.');
+      lines.push('Reproduce the failure, then reopen this URL to read the boundary.');
+    } else {
+      var last = prev.stages && prev.stages.length ? prev.stages[prev.stages.length - 1] : null;
+      lines.push('PREVIOUS RUN DIED IN PHASE: ' + (prev.phase || 'BOOT'));
+      lines.push('LAST STAGE REACHED:         ' + prev.lastStage);
+      lines.push('');
+      lines.push('that last stage IS the crash boundary');
+      lines.push('');
+      lines.push('session      ' + (prev.sessionId || 'n/a'));
+      lines.push('iOS          ' + (prev.iosVersion || '(not iOS)'));
+      lines.push('standalone   ' + prev.standalone + '   (installed PWA)');
+      lines.push('deviceMemory ' + (prev.deviceMemory != null ? prev.deviceMemory + ' GB' : 'unreported'));
+      lines.push('stages       ' + (prev.stages ? prev.stages.length : 0));
+      lines.push('scripts ok   ' + (prev.scripts
+        ? prev.scripts.filter(function (s) { return s.ok; }).length + ' / ' + prev.scripts.length
+        : 'n/a'));
+      if (last) {
+        lines.push('');
+        lines.push('final stage detail');
+        lines.push('  ' + last.stage + '   started ' + last.started + 'ms' +
+          (last.finished != null ? '  finished ' + last.finished + 'ms' : '  NEVER FINISHED') +
+          (last.heapMB != null ? '   heap ' + last.heapMB + ' MB' : ''));
+      }
+      if (prev.stages && prev.stages.length) {
+        lines.push('');
+        lines.push('last stages before the end (newest last)');
+        prev.stages.slice(-12).forEach(function (s) {
+          lines.push('  ' + String(s.seq).padStart(3) + '  ' + s.stage +
+            (s.heapMB != null ? '   heap ' + s.heapMB + ' MB' : '') +
+            (s.finished == null ? '   <-- did not finish' : ''));
+        });
+      }
+    }
+    lines.push('');
+    lines.push('(tap to close — this panel only READS what was already recorded)');
+
+    box.textContent = lines.join('\n');
+    box.addEventListener('click', function () { box.remove(); });
+    document.documentElement.appendChild(box);
+    try { navigator.clipboard && navigator.clipboard.writeText(lines.join('\n')); } catch (_) {}
+  }
+  window.sokoniCrashPanel = renderCrashPanel;
+
+  if (/[?&]diag=crash/.test(location.search)) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderCrashPanel, { once: true });
+    } else { renderCrashPanel(); }
+  }
+
   if (/[?&]diag=tap/.test(location.search)) {
     /* After load so the grid has rendered — running against an empty DOM would
        report NO ELEMENT and send the investigation somewhere false. */

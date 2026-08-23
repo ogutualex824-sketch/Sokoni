@@ -47,6 +47,12 @@
   // reachable as the explicit sidebar module. Standalone first-run still redirects.
   (function() {
     try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
+    /* A diagnostic URL must never redirect itself away. ?diag=crash exists to read
+       the breadcrumbs left by a session that died; if this guard fires first the
+       page replaces itself with the setup wizard and the evidence is unreachable
+       on exactly the device that has it. Scoped to ?diag= so normal first-run
+       behaviour is unchanged. */
+    if (/[?&]diag=/.test(location.search)) return;
     var setupDone = localStorage.getItem('sokoni_setup_complete');
     if (!setupDone || setupDone !== '1') {
       // Check if this is a fresh device (no merchantId stored)
