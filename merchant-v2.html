@@ -1628,6 +1628,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       scope: _scope(), db: _mdb, shopName: _shopName(),
       callSale: _callable('posCompleteCheckout'),
       callAdjust: _callable('merchantAdjustStock'),
+      /* ── M-PESA, as two halves that must stay separate ───────────────────
+         `callStk` REQUESTS the money — it makes the customer's phone ring.
+         `callVerify` READS BACK what the server knows, and is the only thing
+         that may turn a request into a payment. They are wired as distinct
+         callables so no code path can mistake having sent a push for having
+         been paid: darajaSTKPush cannot report success, and verifyPaymentStatus
+         cannot cause a charge. The record they meet on is written by the Daraja
+         callback, which this client cannot reach at all. */
+      callStk: _callable('darajaSTKPush'),
+      callVerify: _callable('verifyPaymentStatus'),
       onToast: toast,
       onPrint: function (job) {
         /* Routed through the shell's device layer, so a receipt printed from Sell uses

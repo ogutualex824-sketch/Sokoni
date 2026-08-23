@@ -589,7 +589,14 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         name:       _actor.servedBy.name,
         role:       _actor.servedBy.role,
         label:      _actor.servedBy.label,
-        /* Present only when the employment relationship actually carries one. */
+        /* Present only when the employment relationship actually carries one.
+           TODAY IT DOES NOT: shopEmployees has no employee-number field, and the
+           `employeeNumber` that exists in hr-payroll belongs to a separate staff
+           registry keyed {merchantId}_{employeeNumber} that POS identity is not
+           joined to. So this is null and the receipt omits the line — which is the
+           correct output for "the employment relationship does not provide one",
+           not a placeholder pretending to be wired. Joining the two registries is
+           the multi-shop employment slice, not this one. */
         employeeNo: _actor.servedBy.employeeNo || null,
       } : null,
     };
