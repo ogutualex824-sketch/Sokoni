@@ -237,12 +237,40 @@
         'The till module did not load. Reload to try again.');
     }
 
+    /* ── THE SHOP ID FOR PRODUCTS IS NOT THE BUSINESS ID ──────────────────
+       Measured: every product carries `shopId` = the OWNER'S UID
+       (103 of 108 in production), and `shops` is keyed by uid too. The business
+       id (SOK-…) keys `businesses`, `branches` and `posDevices` — a different
+       axis entirely.
+
+       The first version of this shell passed selected.merchantId as the scope,
+       so productQuery asked `where shopId == 'SOK-…'` and matched NOTHING. The
+       till opened and looked broken, when it was asking the right question about
+       the wrong shop.
+
+       The scope is now built by SokoniMerchantData.resolveScope — the same
+       authority Sell and Inventory use — so this screen cannot drift from them.
+       It also rejects placeholder ids like 'main', which is what previously made
+       a correctly-provisioned merchant look like a broken account. */
+    var scope = null;
+    try {
+      scope = MD.resolveScope ? MD.resolveScope({ uid: uid, activeShopId: uid, source: 'till' })
+                              : { ok: true, sellerUid: uid, shopId: uid };
+    } catch (_) { scope = { ok: true, sellerUid: uid, shopId: uid }; }
+
+    if (!scope || !scope.ok) {
+      stage('scope:' + ((scope && scope.reason) || 'unknown'));
+      return show('Could not open your shop',
+        'SOKONI could not resolve which shop this till belongs to (' +
+        ((scope && scope.reason) || 'unknown') + ').');
+    }
+    stage('scope:ok');
+
     stage('sell:mount');
     boot.style.display = 'none';
     try {
       SELL.mount(host, {
-        scope: { ok: true, shopId: ctxResult.selected.merchantId,
-                 sellerUid: uid, capabilities: ['sell'] },
+        scope: scope,
         db: db,
         shopName: (biz && biz.name) || 'My shop',
         origin: location.origin,
@@ -259,9 +287,83 @@
     }
   }
 
+  /* ── ?diag=till — every boundary, on screen ──────────────────────────────
+     Opt-in. Reports AUTH · BUSINESS · BRANCH · DEVICE · SCOPE · PRODUCT QUERY ·
+     PRODUCT COUNT · the exact Firestore error, so a product failure is never
+     again diagnosed by guessing which of seven things went wrong. It runs the
+     SAME query the till runs — listProducts through the same scope — rather
+     than a lookalike. */
+  async function diag() {
+    var L = [], t0 = Date.now();
+    var line = function (k, v) { L.push(k.padEnd(16) + (v == null ? '—' : String(v))); };
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:2147483646;overflow:auto;' +
+      'white-space:pre-wrap;word-break:break-word;background:#04121a;color:#8fe;' +
+      'font:12px/1.5 ui-monospace,Menlo,monospace;padding:14px';
+    box.textContent = 'TILL DIAGNOSTIC — running…';
+    box.addEventListener('click', function () { box.remove(); });
+    document.documentElement.appendChild(box);
+
+    var uid = await whenAuth();
+    line('AUTH', uid ? 'OK  ' + String(uid).slice(0, 12) + '…' : 'NO SESSION');
+    if (!uid) { box.textContent = L.join('\n'); return; }
+
+    var CTX = await waitFor('SokoniPosContext', 8000);
+    var MD  = await waitFor('SokoniMerchantData', 8000);
+    line('MODULES', 'context=' + !!CTX + '  data=' + !!MD);
+    if (!CTX || !MD) { box.textContent = L.join('\n'); return; }
+
+    var fs, db, r;
+    try {
+      fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      db = window.firebaseDB || fs.getFirestore();
+      r = await CTX.resolve({ db: compatDb(fs, db), uid: uid });
+    } catch (e) { line('CONTEXT', 'FAILED  ' + ((e && e.message) || e)); box.textContent = L.join('\n'); return; }
+
+    line('DECISION', r && r.decision);
+    line('BUSINESS', r && r.businesses && r.businesses.length
+      ? r.businesses.map(function (b) { return b.id; }).join(', ') : 'NONE');
+    line('BRANCH', r && r.branches && r.branches.length
+      ? r.branches.map(function (b) { return b.id; }).join(', ') : 'none');
+    line('DEVICE', r && r.device
+      ? (r.device.registered ? 'registered  ' + (r.device.branchId || '') : 'not registered — ' + r.device.reason)
+      : '—');
+
+    var scope = null;
+    try { scope = MD.resolveScope({ uid: uid, activeShopId: uid, source: 'diag' }); } catch (e) {}
+    line('SCOPE', scope && scope.ok ? 'ok  shopId=' + String(scope.shopId).slice(0, 14) + '…'
+                                    : 'FAILED  ' + ((scope && scope.reason) || 'unknown'));
+    if (!scope || !scope.ok) { box.textContent = L.join('\n'); return; }
+
+    /* the real query, through the real authority */
+    var mdb = {
+      queryProducts: function (spec) {
+        var parts = (spec.where || []).map(function (w) { return fs.where(w[0], w[1], w[2]); });
+        return fs.getDocs(fs.query.apply(null, [fs.collection(db, spec.collection)].concat(parts)))
+          .then(function (s) { return s.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); });
+      }
+    };
+    try {
+      var rows = await MD.listProducts({ scope: scope, db: mdb });
+      line('PRODUCT QUERY', 'OK');
+      line('PRODUCT COUNT', rows.length + (rows.length === 0 ? '   <-- query succeeded but matched nothing' : ''));
+      if (rows.length) line('FIRST PRODUCT', (rows[0].name || '(no name)') + '  price=' + rows[0].price);
+    } catch (e) {
+      line('PRODUCT QUERY', 'FAILED');
+      line('FIRESTORE ERROR', (e && (e.code || e.message)) || String(e));
+    }
+    line('ELAPSED', (Date.now() - t0) + ' ms');
+    L.push('');
+    L.push('(tap to close)');
+    box.textContent = L.join('\n');
+    try { navigator.clipboard && navigator.clipboard.writeText(L.join('\n')); } catch (_) {}
+  }
+
+  var WANT = /[?&]diag=till\b/.test(location.search);
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(run, 50); });
-  } else { setTimeout(run, 50); }
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(WANT ? diag : run, 50); });
+  } else { setTimeout(WANT ? diag : run, 50); }
 }());
 </script>
 </body>
