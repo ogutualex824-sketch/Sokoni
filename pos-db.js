@@ -10,6 +10,10 @@ const PosDB = (function () {
      upgrade was interrupted, leaving a store missing — the "object store not found" boot crash).
      onupgradeneeded is idempotent (creates only missing stores), so no data is lost. */
   const DB_VERSION = 5;
+  /* How long to wait for a blocking connection to close before giving up and
+     letting POS boot without the cache. Long enough for a backgrounded tab to
+     release; short enough that a merchant is not staring at a dead screen. */
+  const BLOCKED_TIMEOUT_MS = 5000;
   let _db = null;
   let _degraded = false;   /* true when the local POS cache is unusable — shell must still run */
 
@@ -65,10 +69,53 @@ const PosDB = (function () {
   function _open(version) {
     return new Promise((resolve, reject) => {
       let req;
+      let settled = false;
+      let blockedTimer = null;
+      /* Settle exactly once, and never leave a timer armed behind us. */
+      const done = (fn, v) => {
+        if (settled) return;
+        settled = true;
+        if (blockedTimer) { clearTimeout(blockedTimer); blockedTimer = null; }
+        fn(v);
+      };
       try { req = indexedDB.open(DB_NAME, version); }
       catch (e) { return reject(e); }
-      req.onerror   = () => reject(req.error || new Error('idb open error'));
-      req.onblocked = () => { /* another tab holds an older version — resolve on the next success */ };
+      req.onerror   = () => done(reject, req.error || new Error('idb open error'));
+      /* ── THE BOOT DEADLOCK THIS CLOSES ──────────────────────────────────
+         `onblocked` fires when another connection holds this database at an
+         older version — a second SOKONI tab, the installed PWA, or a page
+         whose connection never closed. Chrome on iOS keeps backgrounded tabs
+         alive, so this is ordinary there, and DB_VERSION was bumped 4→5, which
+         is exactly the condition that blocks.
+
+         This handler used to be EMPTY. onblocked resolves nothing and rejects
+         nothing, and init() awaits _open() with no timeout anywhere in this
+         file — so the promise never settled, init() never reached its own
+         catch, `pos:db:ready` and `pos:db:unavailable` were never dispatched,
+         and POS boot stopped dead. Measured on a real iPhone: the boot reached
+         exactly this script and hung, with no crash and no error.
+
+         The original comment said "resolve on the next success". That is the
+         right instinct and it is now actually implemented: if the blocking
+         connection closes inside the window, onsuccess still wins and resolves
+         normally. What is new is that a block which NEVER clears now ends —
+         rejecting into init()'s existing catch, which marks the cache degraded
+         and dispatches `pos:db:unavailable`.
+
+         That is the file's own stated contract: "On any unrecoverable error,
+         mark degraded and RESOLVE anyway — reads return empty, writes no-op,
+         and Inventory/Cashier fall back to canonical Firestore." IndexedDB is a
+         cache; it may be unavailable, but it must never hold the entire POS
+         boot hostage. */
+      req.onblocked = () => {
+        try { window.__posDbBlocked = true; } catch (_) {}
+        if (blockedTimer) return;                 /* one timer, however many events */
+        blockedTimer = setTimeout(() => {
+          const err = new Error('idb open blocked — another connection holds an older version');
+          try { err.__blocked = true; } catch (_) {}
+          done(reject, err);
+        }, BLOCKED_TIMEOUT_MS);
+      };
       req.onupgradeneeded = e => {
         const db = e.target.result;
         for (const [name, cfg] of Object.entries(SCHEMA)) {
@@ -87,7 +134,7 @@ const PosDB = (function () {
           }
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => done(resolve, req.result);
     });
   }
 
