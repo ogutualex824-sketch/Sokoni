@@ -217,8 +217,15 @@ a{color:inherit;text-decoration:none}
 
    Scoped to hosts that opt in, so panels which legitimately scroll with the page
    are untouched. */
-.panel.show > .panel-scroll,
-.panel.show > #native-sell{
+/* The panel ITSELF is the host: renderModule() mounts a module straight into
+   #panel-<id>, so there is no inner wrapper to size. An earlier version of this
+   rule targeted `.panel.show > #native-sell` — an element the shell never
+   creates — so it matched nothing in production while a test harness that built
+   that wrapper itself passed. The class is added by renderModule, so only module
+   surfaces are constrained and panels that legitimately scroll with the page are
+   untouched. */
+.panel.show.panel-scroll{
+  display:flex; flex-direction:column;
   height:calc(100vh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
   height:calc(100dvh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
   min-height:0;
@@ -1699,6 +1706,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       console.error('[merchant-v2] ' + def.global + ' missing — its script did not load');
       return;
     }
+    /* A module owns its own scrolling, so its panel needs a definite height —
+       otherwise the module's height:100% resolves against an auto-height panel,
+       the column grows to its content, and anything the module pins to its own
+       bottom edge (the Charge bar) ends up below the fold. */
+    p.classList.add('panel-scroll');
+
     var key = _scopeKey(_scope());
     var cur = _mounted[id];
     if (cur && cur.shopKey === key) { try { cur.ui.refresh && cur.ui.refresh(); } catch (_) {} return; }
