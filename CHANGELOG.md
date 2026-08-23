@@ -1,3 +1,116 @@
+## [2026-08-24] - Payment authority: the total is the server's, and money must be confirmed.
+
+Functions (`posCompleteCheckout`) + hosting. No rules, no schema, no new Cloud
+Function export — the CF capacity budget is unchanged.
+
+Deployed `515fa1f`; function updated separately and verified live.
+
+### The outcome
+
+A sale can no longer be recorded for money nobody received. Choosing M-Pesa at
+the till now makes the customer's phone ring and then **waits**; the sale commits
+only once the server reads back a confirmed payment from its own record. Cash
+returns change computed by the server. A discount is authorised against the
+operator's real employment role before it can change what is charged.
+
+### A  Four live defects in `posCompleteCheckout`
+
+Each was proven by running the real handler before anything was changed
+(`scripts/test-sale-authority.js`, 4 failures before, 26/0 after):
+
+| | |
+|---|---|
+| `grandTotal` | destructured from the caller and written straight to revenue. A 3,000 cart could be recorded as a **1 shilling** sale. |
+| `discountTotal` | believed unconditionally — no coupon, no role, no approval. Any caller could take 2,999 off a 3,000 sale. |
+| M-Pesa | a tender was recorded as **taken** with nothing confirming it. Stock moved and a receipt issued. |
+| tenders | never summed against the total, so 3,000 of goods could leave against 5 shillings. |
+
+The till is not the only caller — anything holding a signed-in session reaches
+this function — so the authority belongs in the function, not in the payment
+sheet.
+
+### B  What the server does now
+
+In the order money actually moves: a manual discount is **authorised** against
+`ROLE_CAPABILITIES` via the existing `merchant-identity` authority (composed, not
+reinvented); the total is **computed** from the server's own prices and the
+caller's `grandTotal` is only *compared*, so a device showing a different figure
+is refused loudly rather than charged silently; tenders must **cover** the total,
+with cash permitted to exceed it because that difference is the change; and a
+non-cash tender must be **confirmed** against `posPayments/{ref}`, which only the
+Daraja callback can move to `completed`.
+
+A confirmed payment is claimed atomically via `create()`, so one payment settles
+exactly one sale — the strongest confirmation is worthless if its result is
+replayable. A refused sale **releases** the claim: the money is still the
+customer's, and stranding it would be worse than the refusal.
+
+A failed attempt is now re-claimable. The till holds one sale token across
+retries, so before this a sale refused for a *correctable* reason could never be
+corrected — every retry hit "already in progress". Adding refusals without this
+would have been a downgrade.
+
+### C  The till
+
+`Charge → M-Pesa → confirm the number → STK push → "check your phone" → wait →
+server confirms → commit → receipt → auto-print.`
+
+Selecting M-Pesa completes nothing. A failed status *read* is not a failed
+payment — a dropped poll keeps waiting inside a two-minute window rather than
+telling the shop the customer did not pay. Changing the method **or** the
+discount voids the request, because a confirmation belongs to the figure it was
+requested for.
+
+Cash sends the amount **received**, not the amount due; the server derives the
+change so the drawer and the receipt cannot disagree. The discount is a
+*request* — the control is offered to everyone precisely because the browser
+must never assert a role.
+
+Auto-print fires only after the server returned a completed sale, so a receipt
+can never precede the money. A print failure is reported but does not undo the
+sale.
+
+### D  Receipt
+
+Now prints the server's ladder. `subtotalMinor` had been set to the **total**,
+identical only when there is no discount and silently hiding one whenever there
+was. *Served by* / *Role* come from the server-resolved employment record — a
+cashier sending "Alex / Manager" is printed as their own name and role.
+
+**Employee number is absent, and that is correct**: `shopEmployees` carries no
+such field, and the `employeeNumber` in `hr-payroll` belongs to a separate
+registry POS identity is not joined to. Joining them belongs to the multi-shop
+employment slice.
+
+**Card is unchanged** and still says so — there is no terminal to confirm
+against, so it remains an operator attestation rather than borrowing M-Pesa's
+language.
+
+### Files
+
+`functions/pos-zero-friction.js`, `sokoni-merchant-sell.js`, `merchant-v2.html`,
+`scripts/test-sale-authority.js` (new), `scripts/test-till-payment.js` (new),
+`scripts/browser/verify-payment-gate.mjs` (new).
+
+### Security
+
+Closes a client-authoritative money path: sale total, discount authorisation,
+payment confirmation and replay protection all move server-side. Related:
+[[project_payment_trust]], [[project_merchant_2d2_authority]],
+[[reference_intasend_stk_contract]].
+
+### Verification
+
+26/0 server (real handler, mocked Firestore, every refusal paired with the
+permitted case), 18/0 till structural with controls, 10/10 driven in a real
+browser — the gate observed opening only on the server's `completed`.
+
+**Not proven:** no real STK push against a real handset has been run. The rail
+is composed from `darajaSTKPush` + `verifyPaymentStatus`, both already live, but
+end-to-end M-Pesa with a real customer remains unattested.
+
+---
+
 ## [2026-08-22] - Role Navigation & Header Cleanup: one control, one registry, one accessor.
 
 Hosting only. No rules, no Functions, no schema.
