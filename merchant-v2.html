@@ -2815,6 +2815,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      lands, re-key the device registry to the real uid (devices are stored per account)
      and silently reconnect a saved printer. */
   initSession();
+  /* ── A PANEL RENDERED BEFORE AUTH RESOLVED MUST BE RE-RENDERED ───────────
+     `emit('session')` was fired in four places and NOTHING subscribed to
+     re-render the visible surface. So a native panel opened while the session
+     was still resolving kept the scope it mounted with — which is why Sell said
+     "sign in to open the till" to a merchant who was signed in, and kept saying
+     it after auth arrived.
+
+     renderModule() already does the right thing: it compares _scopeKey(_scope())
+     against the mounted key and remounts when the shop changes. It simply was
+     never called a second time. This calls it.
+
+     Cheap and idempotent: when the key is unchanged renderModule refreshes in
+     place rather than remounting, so a settled session does not churn the
+     surface the merchant is using. */
+  _listeners.session.push(function () {
+    try {
+      if (!current) return;
+      var m = byId[current];
+      if (!m || m.kind !== 'native') return;
+      renderNative(current);
+    } catch (_) {}
+  });
+
   _listeners.session.push(function () {
     loadDevices(); paintStatus(); broadcastSession();
     if (S.state === 'in') autoConnectPrinter();
