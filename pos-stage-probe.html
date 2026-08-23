@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI POS stage probe</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  SOKONI POS STAGE PROBE  —  /pos-stage-probe
+  ══════════════════════════════════════════════════════════════════════════════
+  WHAT THE PREVIOUS PROBE SETTLED, AND WHAT IT DID NOT.
+  /pos-boot-probe fetched and attached all 67 POS scripts — 1863 KB — and the
+  iPhone survived. That removes "too many scripts / too many bytes" from the
+  suspect list.
+
+  But it did NOT exonerate everything, and two gaps matter:
+
+    · firebase.js is <script type="module">. The probe attached every file as a
+      CLASSIC script, so that one could not parse or execute — the element's
+      onload can still fire, so it was marked ✓ while never actually running.
+      Firebase was therefore never exercised.
+    · the probe loaded no CSS. /pos carries 18 stylesheets, none of which were
+      tested.
+
+  So this page tests the stages the last one could not, each behind its own tap,
+  each written to storage BEFORE it runs. If the tab dies, reopening names the
+  stage that killed it.
+
+  Stages are INDEPENDENT on purpose. If each survives alone but /pos still dies,
+  the cause is an interaction between them, and that is itself a finding.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:14px 12px 40px; background:#07090c; color:#e8f2ff;
+         font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         -webkit-text-size-adjust:100%; }
+  h1 { font-size:16px; margin:0 0 3px; }
+  .sub { color:#7f93ab; font-size:12px; margin-bottom:12px; }
+  h2 { font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:#6e7f92;
+       margin:18px 0 4px; }
+  button { display:block; width:100%; margin:7px 0 0; padding:13px 14px; border-radius:11px;
+           background:#12233a; color:#9fd0ff; border:1px solid #1e4470;
+           font:600 13.5px/1.25 inherit; -webkit-appearance:none; cursor:pointer; text-align:left; }
+  button:active { background:#17304f; }
+  button[disabled] { opacity:.5; }
+  .warn { background:#2a1c08; border-color:#6b4a12; color:#ffcf7a; }
+  #out { margin-top:12px; }
+  .row { display:flex; gap:8px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.07);
+         font-size:12.5px; align-items:baseline; }
+  .row .i { flex:0 0 16px; }
+  .row .n { flex:1; min-width:0; word-break:break-word; }
+  .ok .i { color:#56d364; } .bad .i { color:#ff7b72; } .run .i { color:#ffcf7a; }
+  pre { white-space:pre-wrap; word-break:break-word; background:#0b1017; margin:6px 0 0;
+        border:1px solid rgba(255,255,255,.09); border-radius:9px; padding:9px;
+        font-size:11px; color:#a9c3dd; }
+</style>
+</head>
+<body>
+
+<h1>POS stage probe</h1>
+<div class="sub">The scripts already passed. These are the stages that come after.</div>
+
+<h2>Previous run</h2>
+<div id="prev"></div>
+
+<h2>Stages — tap ONE, then stop</h2>
+<button id="s-css">1 · Load the 18 POS stylesheets</button>
+<button id="s-mod">2 · Load firebase.js as a MODULE (the real way)</button>
+<button id="s-idb">3 · Open IndexedDB the way PosDB does</button>
+<button id="s-dom">4 · Build the real /pos DOM (1366 elements)</button>
+<button id="s-all">5 · Scripts + CSS + DOM together (interaction test)</button>
+<button class="warn" id="s-clear">Clear memory &amp; reset</button>
+
+<div id="out"></div>
+
+<script>
+(function () {
+  'use strict';
+  var PREV = 'sokoni_stageprobe_prev';
+  var out = document.getElementById('out');
+  var busy = false;
+
+  function mark(stage, note) {
+    try {
+      localStorage.setItem(PREV, JSON.stringify({
+        at: Date.now(), stage: stage, note: note || '',
+        ua: navigator.userAgent.slice(0, 110)
+      }));
+    } catch (e) {}
+  }
+
+  function row(state, name, detail) {
+    var d = document.createElement('div'); d.className = 'row ' + state;
+    var i = document.createElement('span'); i.className = 'i';
+    i.textContent = state === 'ok' ? '✓' : state === 'bad' ? '✕' : '…';
+    var n = document.createElement('span'); n.className = 'n';
+    n.textContent = name + (detail ? '  —  ' + detail : '');
+    d.appendChild(i); d.appendChild(n); out.appendChild(d);
+    return d;
+  }
+
+  /* previous run */
+  (function () {
+    var host = document.getElementById('prev'), raw = null;
+    try { raw = localStorage.getItem(PREV); } catch (e) {}
+    var pre = document.createElement('pre');
+    if (!raw) pre.textContent = 'No previous run on this device.';
+    else {
+      try {
+        var r = JSON.parse(raw);
+        pre.textContent = 'LAST STAGE   ' + r.stage + '\n' +
+          (r.note ? 'note         ' + r.note + '\n' : '') +
+          '\nIf the tab died, this is the stage that killed it.';
+      } catch (e) { pre.textContent = raw.slice(0, 200); }
+    }
+    host.appendChild(pre);
+  })();
+
+  function stage(btnId, label, fn) {
+    var btn = document.getElementById(btnId);
+    btn.addEventListener('click', function () {
+      if (busy) return;
+      busy = true; btn.disabled = true;
+      var r = row('run', label, 'running…');
+      mark(label, 'started');
+      Promise.resolve().then(fn).then(function (msg) {
+        r.className = 'row ok';
+        r.querySelector('.i').textContent = '✓';
+        r.querySelector('.n').textContent = label + '  —  ' + (msg || 'ok');
+        mark(label, 'SURVIVED: ' + (msg || 'ok'));
+        busy = false;
+      }).catch(function (e) {
+        r.className = 'row bad';
+        r.querySelector('.i').textContent = '✕';
+        r.querySelector('.n').textContent = label + '  —  ' + ((e && e.message) || e);
+        mark(label, 'FAILED: ' + ((e && e.message) || e));
+        busy = false;
+      });
+    });
+  }
+
+  function posHtml() {
+    return fetch('/pos?probe=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('/pos HTTP ' + r.status);
+      return r.text();
+    });
+  }
+
+  /* ── 1 · stylesheets ──────────────────────────────────────────────────── */
+  stage('s-css', 'CSS', function () {
+    return posHtml().then(function (html) {
+      var re = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi, tags = html.match(re) || [];
+      var hrefs = tags.map(function (t) { var m = /href\s*=\s*["']([^"']+)["']/i.exec(t); return m && m[1]; })
+        .filter(function (h) { return h && !/^https?:/i.test(h); });
+      if (!hrefs.length) throw new Error('no same-origin stylesheets found');
+      return new Promise(function (res, rej) {
+        var done = 0, failed = 0;
+        hrefs.forEach(function (h) {
+          var l = document.createElement('link');
+          l.rel = 'stylesheet';
+          l.href = h.charAt(0) === '/' ? h : '/' + h;
+          l.onload = function () { if (++done + failed === hrefs.length) res(hrefs.length + ' stylesheets applied, ' + failed + ' failed'); };
+          l.onerror = function () { failed++; if (done + failed === hrefs.length) res(hrefs.length + ' stylesheets, ' + failed + ' failed'); };
+          document.head.appendChild(l);
+        });
+        setTimeout(function () { rej(new Error('timed out with ' + done + '/' + hrefs.length + ' loaded')); }, 25000);
+      });
+    });
+  });
+
+  /* ── 2 · firebase as a MODULE ─────────────────────────────────────────── */
+  stage('s-mod', 'Firebase module', function () {
+    return new Promise(function (res, rej) {
+      /* type="module" — the way pos.html actually loads it. The previous probe
+         attached it as a classic script, which cannot parse import syntax, so
+         this is the first time it is genuinely executed on the device. */
+      var t0 = Date.now();
+      var errs = [];
+      var onErr = function (e) { errs.push(String(e.message || e.type)); };
+      window.addEventListener('error', onErr);
+      var s = document.createElement('script');
+      s.type = 'module';
+      s.src = '/firebase.js?probe=' + Date.now();
+      s.onload = function () {
+        setTimeout(function () {
+          window.removeEventListener('error', onErr);
+          res('module evaluated in ' + (Date.now() - t0) + ' ms' +
+            (errs.length ? ' · ' + errs.length + ' window errors: ' + errs[0].slice(0, 80) : ' · no errors'));
+        }, 2500);
+      };
+      s.onerror = function () {
+        window.removeEventListener('error', onErr);
+        rej(new Error('module failed to load'));
+      };
+      document.head.appendChild(s);
+      setTimeout(function () { rej(new Error('timed out after 25s — module never finished')); }, 25000);
+    });
+  });
+
+  /* ── 3 · IndexedDB, the way PosDB uses it ─────────────────────────────── */
+  stage('s-idb', 'IndexedDB', function () {
+    return new Promise(function (res, rej) {
+      if (!window.indexedDB) return rej(new Error('indexedDB unavailable'));
+      var t0 = Date.now();
+      var req = indexedDB.open('sokoni_pos', 1);
+      req.onupgradeneeded = function () {
+        try { req.result.createObjectStore('probe'); } catch (e) {}
+      };
+      req.onsuccess = function () {
+        var db = req.result;
+        var names = Array.prototype.slice.call(db.objectStoreNames || []);
+        try { db.close(); } catch (e) {}
+        res('opened the real POS database in ' + (Date.now() - t0) + ' ms · stores: ' +
+          (names.length ? names.join(', ') : 'none'));
+      };
+      req.onerror = function () { rej(new Error('open failed: ' + (req.error && req.error.message))); };
+      req.onblocked = function () { rej(new Error('BLOCKED — another tab holds this database open')); };
+      setTimeout(function () { rej(new Error('timed out after 10s — IndexedDB never answered')); }, 10000);
+    });
+  });
+
+  /* ── 4 · the real DOM ─────────────────────────────────────────────────── */
+  stage('s-dom', 'DOM', function () {
+    return posHtml().then(function (html) {
+      var m = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+      if (!m) throw new Error('could not find a body in /pos');
+      /* Scripts are STRIPPED: this stage measures building the element tree,
+         not running anything. */
+      var body = m[1].replace(/<script[\s\S]*?<\/script>/gi, '');
+      var host = document.createElement('div');
+      host.style.cssText = 'position:absolute;left:-99999px;top:0;width:390px';
+      host.innerHTML = body;
+      document.body.appendChild(host);
+      var n = host.querySelectorAll('*').length;
+      /* force layout, which is where a heavy tree actually costs */
+      var h = host.getBoundingClientRect().height;
+      return n + ' elements built and laid out (' + Math.round(h) + 'px tall)';
+    });
+  });
+
+  /* ── 5 · everything together ──────────────────────────────────────────── */
+  stage('s-all', 'Scripts + CSS + DOM', function () {
+    return posHtml().then(function (html) {
+      var srcs = [];
+      var re = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi, m;
+      while ((m = re.exec(html)) !== null) if (!/^https?:/i.test(m[1])) srcs.push(m[1]);
+      var kb = 0;
+      return srcs.reduce(function (p, src) {
+        return p.then(function () {
+          return new Promise(function (res) {
+            var el = document.createElement('script');
+            el.src = (src.charAt(0) === '/' ? src : '/' + src);
+            if (/firebase\.js/.test(src)) el.type = 'module';   /* the honest type */
+            el.onload = el.onerror = function () { res(); };
+            document.head.appendChild(el);
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        mark('Scripts + CSS + DOM', 'scripts done, starting CSS');
+        var lre = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi, tags = html.match(lre) || [];
+        tags.forEach(function (t) {
+          var h = /href\s*=\s*["']([^"']+)["']/i.exec(t);
+          if (h && !/^https?:/i.test(h[1])) {
+            var l = document.createElement('link'); l.rel = 'stylesheet';
+            l.href = h[1].charAt(0) === '/' ? h[1] : '/' + h[1];
+            document.head.appendChild(l);
+          }
+        });
+        mark('Scripts + CSS + DOM', 'CSS done, building DOM');
+        var bm = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+        var host = document.createElement('div');
+        host.style.cssText = 'position:absolute;left:-99999px;top:0;width:390px';
+        host.innerHTML = bm[1].replace(/<script[\s\S]*?<\/script>/gi, '');
+        document.body.appendChild(host);
+        return srcs.length + ' scripts + ' + tags.length + ' stylesheets + ' +
+          host.querySelectorAll('*').length + ' elements — all three together';
+      });
+    });
+  });
+
+  document.getElementById('s-clear').addEventListener('click', function () {
+    try { localStorage.removeItem(PREV); } catch (e) {}
+    location.reload();
+  });
+}());
+</script>
+</body>
+</html>
