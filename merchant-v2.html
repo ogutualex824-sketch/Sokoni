@@ -1042,7 +1042,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         if (everIn) return commitOut();          /* a real sign-out */
         /* Restore is still plausible — say "checking", not "signed out". */
         S.state = 'resolving'; paintStatus();
-        graceTimer = setTimeout(commitOut, 3000);
+
+        /* ── THE GRACE MUST FIT THE DEVICE, NOT THE DEVELOPER'S LAPTOP ──────
+           3s was too short. Measured on the reported iPhone: the till's own
+           diagnostic took 9,003 ms to resolve identity end to end on that
+           connection — so auth restore had not finished when this committed to
+           'out', and Sell showed "sign in to access" to a merchant who was
+           signed in.
+
+           A cached session marker is evidence that a restore is COMING. When one
+           is present we wait materially longer; with no marker at all, a fast
+           "signed out" is the right answer and the original 3s stands. Same
+           markers auth-guard.js, pos.html and the till use. */
+        var _hasCachedSession = false;
+        try {
+          _hasCachedSession = localStorage.getItem('loggedIn') === 'true'
+            || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+        } catch (_) {}
+        graceTimer = setTimeout(commitOut, _hasCachedSession ? 15000 : 3000);
         return;
       }
       if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
