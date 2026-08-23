@@ -48,6 +48,19 @@
   --txt2:#a8a8a8;
   --txt3:#6d6d6d;
   --acc:#71ff00;
+  /* ── TOKENS THE MOUNTED MODULES DECLARE ──────────────────────────────────
+     sokoni-merchant-sell.js styles its sheet with background:var(--panel) and
+     its product cards with var(--card). This shell defined neither — it names
+     the same surfaces --surface and --surface-2 — so both resolved to NOTHING
+     and rendered TRANSPARENT. That is the reported "payment sheet has no
+     background", and a transparent sheet is also why tapping inside it felt
+     like nothing happened: there was no visible surface to tap.
+
+     Aliased rather than restyled, so the shell keeps ONE palette and the module
+     keeps its own vocabulary. A module is entitled to the tokens it declares —
+     the same contract as supplying SokoniCash or SokoniReceiptDoc. */
+  --panel: var(--surface);
+  --card:  var(--surface-2);
   --acc-dim:rgba(113,255,0,.12);
   --acc-line:rgba(113,255,0,.32);
   --danger:#ff5252;
