@@ -136,17 +136,60 @@
 
   function sub(t) { var e = document.getElementById('h-sub'); if (e) e.textContent = t; }
 
-  /* Bounded wait for auth — a page that never resolves it must still answer. */
+  /* ── READ THE UID FROM EVERY PLACE IT CAN LIVE ───────────────────────────
+     firebase.js sets __sokoniCurrentUid inside the auth-state handler, but
+     publishes `sokoniAuthReady` LATER, from a profile-loading path. So the till
+     could time out while the uid was sitting in a different global — and then
+     tell an already-signed-in merchant to sign in, which sent them round the
+     loop reported from the phone.
+
+     Checked in order of authority: the live SDK user first, then the values
+     firebase.js published, then the cached profile. localStorage is used only
+     to detect that a session EXISTS — never as the uid itself unless it carries
+     one. */
+  function readUid() {
+    try { if (window.firebaseAuth && window.firebaseAuth.currentUser)
+            return window.firebaseAuth.currentUser.uid; } catch (_) {}
+    try { if (window.__sokoniCurrentUid) return window.__sokoniCurrentUid; } catch (_) {}
+    try { if (window.__sokoniAuthReadyDetail && window.__sokoniAuthReadyDetail.uid)
+            return window.__sokoniAuthReadyDetail.uid; } catch (_) {}
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u && u.uid) return u.uid;
+    } catch (_) {}
+    return null;
+  }
+
+  /* Does a session appear to exist, even if the uid has not surfaced yet? */
+  function sessionLooksPresent() {
+    try {
+      if (localStorage.getItem('loggedIn') === 'true') return true;
+      if (JSON.parse(localStorage.getItem('sokoniUser') || 'null')) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  /* Bounded wait — but it keeps LOOKING while it waits, rather than checking
+     once at the start and once at the deadline. */
   function whenAuth() {
     return new Promise(function (res) {
-      var done = false, finish = function (u) { if (!done) { done = true; res(u || null); } };
+      var done = false, timer = null, poll = null;
+      var finish = function (u) {
+        if (done) return; done = true;
+        clearTimeout(timer); clearInterval(poll);
+        res(u || null);
+      };
+      var look = function () { var u = readUid(); if (u) finish(u); };
+      look();
+      if (done) return;
       try {
-        if (window.__sokoniAuthReady) return finish(window.__sokoniCurrentUid || null);
-        document.addEventListener('sokoniAuthReady', function () {
-          finish(window.__sokoniCurrentUid || null);
-        }, { once: true });
+        if (window.__sokoniAuthReadyPromise && window.__sokoniAuthReadyPromise.then) {
+          window.__sokoniAuthReadyPromise.then(look).catch(function () {});
+        }
+        document.addEventListener('sokoniAuthReady', look, { once: true });
       } catch (_) {}
-      setTimeout(function () { finish(window.__sokoniCurrentUid || null); }, 12000);
+      poll  = setInterval(look, 250);
+      timer = setTimeout(function () { finish(readUid()); }, 15000);
     });
   }
 
@@ -183,8 +226,18 @@
     stage('auth:' + (uid ? 'yes' : 'no'));
 
     if (!uid) {
+      /* A session that exists but has not surfaced a uid must NEVER be sent back
+         to the login page — that is the loop reported from the phone: sign in,
+         return, be told to sign in again. Offer a retry instead, and say plainly
+         which of the two situations this is. */
+      if (sessionLooksPresent()) {
+        return show('Finishing sign-in',
+          'You are signed in to SOKONI, but this till could not confirm it yet. ' +
+          'This is usually a slow connection.', 'Try again', location.pathname + location.search);
+      }
       return show('Please sign in',
-        'Sign in to SOKONI to open your till.', 'Sign in', '/login?next=' + encodeURIComponent(location.pathname + location.search));
+        'Sign in to SOKONI to open your till.', 'Sign in',
+        '/login?next=' + encodeURIComponent(location.pathname + location.search));
     }
 
     msg.textContent = 'Finding your shop…';
@@ -305,7 +358,14 @@
     document.documentElement.appendChild(box);
 
     var uid = await whenAuth();
-    line('AUTH', uid ? 'OK  ' + String(uid).slice(0, 12) + '…' : 'NO SESSION');
+    line('AUTH', uid ? 'OK  ' + String(uid).slice(0, 12) + '…' : (sessionLooksPresent() ? 'SESSION PRESENT but uid unresolved' : 'NO SESSION'));
+    try {
+      line('UID SOURCES', 'sdk=' + !!(window.firebaseAuth && window.firebaseAuth.currentUser) +
+        '  currentUid=' + !!window.__sokoniCurrentUid +
+        '  readyDetail=' + !!(window.__sokoniAuthReadyDetail && window.__sokoniAuthReadyDetail.uid) +
+        '  cached=' + !!(JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).uid);
+      line('AUTH READY', String(!!window.__sokoniAuthReady));
+    } catch (_) {}
     if (!uid) { box.textContent = L.join('\n'); return; }
 
     var CTX = await waitFor('SokoniPosContext', 8000);
