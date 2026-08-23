@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Set up this device — SOKONI</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  SOKONI — DEVICE PAIRING  /pos-pair
+  ══════════════════════════════════════════════════════════════════════════════
+  POS Setup, as it should be: this pairs a DEVICE to a business and branch that
+  ALREADY EXIST. It does not create a business, ask for M-PESA credentials, or
+  create an administrator — those belong to registration and approval, and a
+  merchant must never be asked to do them twice.
+
+  It writes exactly one document: posDevices/{sk_device_id}, using the schema the
+  26 devices already in production use — deviceId, merchantId, branchId,
+  cashierId, status. Nothing else.
+
+  AUTHORITY. Business and branches come from SokoniPosContext, resolved from the
+  server. The branch dropdown lists only branches under a business this account
+  actually owns; a branch id typed into the URL is not accepted, because the list
+  the user picks from is itself server-derived and the write is corroborated by
+  firestore.rules (ownsBiz → businesses/{merchantId}.ownerId === auth.uid).
+
+  THE DEVICE ID IS NOT MINTED HERE. It reuses the stable sk_device_id firebase.js
+  maintains and deliberately does not clear on logout. Minting one here would
+  re-pair the same phone on every visit and fill the registry with ghosts.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root { color-scheme: dark; --bg:#07090c; --panel:#0d1218; --line:rgba(255,255,255,.10);
+          --txt:#e8f2ff; --txt2:#8aa0b8; --acc:#71ff00; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); min-height:100vh;
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding:calc(env(safe-area-inset-top) + 20px) 18px 40px; -webkit-text-size-adjust:100%; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--txt2); font-size:13px; margin-bottom:22px; }
+  .f { margin-bottom:18px; }
+  .l { font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--txt2);
+       margin-bottom:6px; font-weight:700; }
+  .v { background:var(--panel); border:1px solid var(--line); border-radius:11px;
+       padding:13px 14px; font-size:15px; }
+  select, input {
+    width:100%; background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:13px 14px; color:var(--txt); font:inherit; -webkit-appearance:none;
+  }
+  button {
+    width:100%; margin-top:8px; padding:15px; border-radius:12px; border:1px solid var(--acc);
+    background:var(--acc); color:#001; font:800 15px/1 inherit; cursor:pointer;
+  }
+  button[disabled] { opacity:.5; }
+  a.alt { display:block; text-align:center; margin-top:14px; color:var(--txt2); font-size:13px; }
+  #msg { margin-top:16px; padding:13px; border-radius:11px; font-size:13.5px; display:none; }
+  #msg.err { background:#2a1010; border:1px solid #6b2020; color:#ffb4b4; display:block; }
+  #msg.ok  { background:#0d2a17; border:1px solid #1c6b3a; color:#8ef0b0; display:block; }
+</style>
+</head>
+<body>
+
+<h1>Set up this device</h1>
+<div class="sub" id="sub">Checking your account…</div>
+
+<div id="form" style="display:none">
+  <div class="f"><div class="l">Business</div><div class="v" id="biz">—</div></div>
+  <div class="f"><div class="l">Branch</div><select id="branch"></select></div>
+  <div class="f"><div class="l">This device</div><input id="name" maxlength="40" placeholder="e.g. Counter iPhone"></div>
+  <button id="go">Connect device</button>
+  <a class="alt" href="/till">Skip for now — open the till</a>
+</div>
+
+<div id="msg"></div>
+
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-pos-context.js" defer></script>
+
+<script>
+(function () {
+  'use strict';
+  var sub = document.getElementById('sub');
+  var form = document.getElementById('form');
+  var msgEl = document.getElementById('msg');
+  var branchSel = document.getElementById('branch');
+  var nameEl = document.getElementById('name');
+  var goBtn = document.getElementById('go');
+  var CTXR = null, FS = null, DB = null, UID = null;
+
+  function msg(kind, text) { msgEl.className = kind; msgEl.textContent = text; }
+
+  function whenAuth() {
+    return new Promise(function (res) {
+      var d = false, fin = function (u) { if (!d) { d = true; res(u || null); } };
+      try {
+        if (window.__sokoniAuthReady) return fin(window.__sokoniCurrentUid || null);
+        document.addEventListener('sokoniAuthReady', function () { fin(window.__sokoniCurrentUid || null); }, { once: true });
+      } catch (_) {}
+      setTimeout(function () { fin(window.__sokoniCurrentUid || null); }, 12000);
+    });
+  }
+  function waitFor(n, ms) {
+    return new Promise(function (res) { var t0 = Date.now();
+      (function p() { if (window[n]) return res(window[n]);
+        if (Date.now() - t0 > (ms || 8000)) return res(null); setTimeout(p, 60); })(); });
+  }
+  function compatDb(fs, db) {
+    var rows = function (s) { return { docs: s.docs.map(function (d) {
+      return { id: d.id, data: function () { return d.data(); } }; }) }; };
+    return { collection: function (n) { return {
+      where: function (f, op, v) { return { get: function () {
+        return fs.getDocs(fs.query(fs.collection(db, n), fs.where(f, op, v))).then(rows); } }; },
+      doc: function (id) { return { get: function () {
+        return fs.getDoc(fs.doc(db, n, id)).then(function (d) {
+          return { exists: d.exists(), data: function () { return d.data(); } }; }); } }; }
+    }; } };
+  }
+  function deviceLabel() {
+    var ua = navigator.userAgent || '';
+    if (/iPhone/i.test(ua)) return 'iPhone';
+    if (/iPad/i.test(ua)) return 'iPad';
+    if (/Android/i.test(ua)) return 'Android device';
+    return 'This device';
+  }
+
+  (async function () {
+    UID = await whenAuth();
+    if (!UID) {
+      sub.textContent = 'You need to sign in first.';
+      return msg('err', 'Sign in to SOKONI, then return here to set up this device.');
+    }
+    var CTX = await waitFor('SokoniPosContext', 8000);
+    if (!CTX) return msg('err', 'Could not load the setup module. Reload to try again.');
+
+    try {
+      FS = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      DB = window.firebaseDB || FS.getFirestore();
+      CTXR = await CTX.resolve({ db: compatDb(FS, DB), uid: UID });
+    } catch (e) {
+      return msg('err', 'Could not reach SOKONI. Check the connection and reload.');
+    }
+
+    if (!CTXR || !CTXR.ok || !CTXR.businesses.length) {
+      sub.textContent = 'No shop on this account.';
+      return msg('err', 'This account does not own a shop yet. Device setup pairs a device to an EXISTING business — it does not create one.');
+    }
+    if (CTXR.device && CTXR.device.reason === 'no-device-id') {
+      return msg('err', 'This browser has no device id yet. Open the till once, then return here.');
+    }
+    if (CTXR.decision === 'device-suspended') {
+      sub.textContent = 'This device is suspended.';
+      return msg('err', 'An owner or manager must re-enable it. Pairing again does not restore access.');
+    }
+    if (CTXR.decision === 'paired-elsewhere') {
+      sub.textContent = 'This device belongs to another business.';
+      return msg('err', 'Ask an owner to release it before pairing it here.');
+    }
+
+    var biz = CTXR.businesses.filter(function (b) { return b.id === CTXR.selected.merchantId; })[0]
+              || CTXR.businesses[0];
+    document.getElementById('biz').textContent = biz.name || biz.id;
+
+    if (!CTXR.branches.length) {
+      sub.textContent = 'No branch to pair to yet.';
+      return msg('err', 'This business has no branch configured. A branch must exist before a device can be paired to it — no branch id is invented here.');
+    }
+    CTXR.branches.forEach(function (b) {
+      var o = document.createElement('option');
+      o.value = b.id; o.textContent = b.name + (b.isDefault ? ' (default)' : '');
+      branchSel.appendChild(o);
+    });
+    nameEl.value = deviceLabel();
+    sub.textContent = CTXR.device && CTXR.device.registered
+      ? 'This device is already paired. You can move it to another branch.'
+      : 'Connect this device to your business.';
+    form.style.display = '';
+  })();
+
+  goBtn.addEventListener('click', async function () {
+    goBtn.disabled = true; msg('', ''); msgEl.className = '';
+    var deviceId = (window.SokoniPosContext && window.SokoniPosContext.deviceId()) || null;
+    if (!deviceId) { goBtn.disabled = false; return msg('err', 'No device id available on this browser.'); }
+    try {
+      /* One document, the existing schema. merchantId is the business the SERVER
+         resolved, never a value from the page or the url. */
+      await FS.setDoc(FS.doc(DB, 'posDevices', deviceId), {
+        deviceId: deviceId,
+        merchantId: CTXR.selected.merchantId,
+        branchId: branchSel.value,
+        cashierId: UID,
+        name: (nameEl.value || deviceLabel()).slice(0, 40),
+        status: 'active',
+        lastSeenAt: new Date().toISOString(),
+        pairedAt: new Date().toISOString()
+      }, { merge: true });
+      msg('ok', 'Device connected. Opening your till…');
+      setTimeout(function () { location.href = '/till'; }, 900);
+    } catch (e) {
+      goBtn.disabled = false;
+      msg('err', 'Could not connect this device: ' + ((e && (e.code || e.message)) || e));
+    }
+  });
+}());
+</script>
+</body>
+</html>

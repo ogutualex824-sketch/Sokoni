@@ -139,11 +139,33 @@
                  note: 'employee relationships are not resolved by this slice' };
       }
 
+      /* ── BRANCHES ACROSS EVERY OWNED BUSINESS, NOT JUST THE FIRST ────────
+         An owner can hold more than one business document — measured in
+         production: one keyed by their uid and one keyed SOK-…, both with the
+         same ownerId. Asking only businesses[0] for branches reported
+         "BRANCH: none" for a merchant whose branch existed under the OTHER
+         document. That was a defect in this resolver, not in their data.
+
+         All owned businesses are queried, and the SELECTED business is the one
+         that actually has branches — preferring a default — because a business
+         with no branch cannot be operated by a till. Falling back to the first
+         id keeps the previous behaviour when nobody has branches yet. */
       return Promise.all([
-        branchesOf(db, ids[0]),
+        Promise.all(ids.map(function (id) { return branchesOf(db, id); })),
         deviceRegistration(db, ids)
       ]).then(function (r) {
-        var branches = r[0], device = r[1];
+        var perBusiness = r[0], device = r[1];
+        var branches = [];
+        perBusiness.forEach(function (list) { branches = branches.concat(list); });
+
+        var withBranches = null;
+        for (var i = 0; i < ids.length; i++) {
+          if (perBusiness[i] && perBusiness[i].length) {
+            if (!withBranches) withBranches = ids[i];
+            if (perBusiness[i].some(function (b) { return b.isDefault; })) { withBranches = ids[i]; break; }
+          }
+        }
+        var chosen = withBranches || ids[0];
         var decision =
           device.registered && device.suspended ? 'device-suspended' :
           device.registered ? 'open-pos' :
@@ -152,7 +174,7 @@
         return {
           ok: true, uid: uid,
           businesses: owned, branches: branches, device: device,
-          selected: { merchantId: ids[0], branchId: device.branchId ||
+          selected: { merchantId: chosen, branchId: device.branchId ||
                       (branches[0] && branches[0].id) || null },
           decision: decision
         };
