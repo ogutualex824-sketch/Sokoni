@@ -9,6 +9,10 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { writeAudit } = require('./pos-audit');
+/* The employment authority. Required at LOAD, deliberately: if this cannot be
+   resolved the deploy fails loudly, instead of every till silently losing
+   discount authorisation and the "Served by" line at the same moment. */
+const { resolveActor } = require('./merchant-identity')._internal;
 
 const db      = getFirestore();
 const REGION  = 'us-central1';
@@ -123,10 +127,28 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     if (err.code === 6 /* ALREADY_EXISTS */) {
       const prev = (await idemRef.get()).data() || {};
       if (prev.status === 'complete') return { saleId: prev.saleId, receipt: prev.receipt, cached: true };
-      _e('Checkout already in progress', 'already-exists');
+      /* A FAILED attempt must be retryable, or a refusal becomes permanent.
+         The till deliberately holds ONE sale token across retries so the key is
+         reproduced identically — that is what makes a retry safe. But it also
+         means an attempt refused for a CORRECTABLE reason (a discount the cashier
+         is not authorised to give, an STK push the buyer had not confirmed yet)
+         could never be corrected and re-sent: every retry would be turned away as
+         "already in progress" and the sale would be stranded.
+         Re-claiming here runs the whole validation again from the top. */
+      if (prev.status !== 'failed') _e('Checkout already in progress', 'already-exists');
+      await idemRef.set({ status: 'processing', startedAt: Date.now(), cashierId, merchantId,
+                          retryOf: prev.failedAt || null });
+      /* Re-claimed: fall through to the validation below rather than rethrowing
+         the ALREADY_EXISTS that brought us here. */
+    } else {
+      throw err;   /* a real infra error — let the caller retry */
     }
-    throw err;   /* a real infra error — let the caller retry */
   }
+
+  /* Confirmed non-cash payments this attempt has claimed. Declared OUT here so a
+     refusal below can RELEASE them: a sale that does not complete must not leave
+     the customer's money spent on nothing. */
+  const _consumed = [];
 
   try {
     /* ── 2. Validate cart totals server-side — batch fetch all products ──
@@ -170,6 +192,181 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         : Math.min(cp.value || 0, serverSubtotal);
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       3a. THE SALE AUTHORITY — the total is computed here, never accepted
+       ══════════════════════════════════════════════════════════════════════
+       Everything below used to be taken on trust from the caller. `grandTotal`
+       was destructured straight out of `data` and written to revenue, so a
+       3,000 cart could be recorded as a 1 shilling sale; `discountTotal` was
+       believed with no coupon, no role and no approval behind it; and an
+       M-PESA tender was recorded as taken without anyone confirming the money
+       arrived. The till is not the only caller — anything holding a signed-in
+       session can reach this function — so the authority has to live here.
+
+       Four rules, in the order money actually moves:
+         · a manual discount is AUTHORISED against the actor's real role
+         · the total is COMPUTED from the server's own prices
+         · the tenders must COVER that total
+         · a non-cash tender must be CONFIRMED, and confirmed money may be
+           spent on exactly one sale */
+
+    const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+    /* ── the actor, resolved from the server's own employment records ──────
+       resolveActor is the existing merchant-identity authority. It keys the
+       owner off the shops/{uid} document id (so ownership cannot be forged by
+       writing a field) and an employee off shopEmployees.shopOwnerId matching
+       the shop being acted on. `merchantId` here IS the shopId — the till
+       sends `merchantId: scope.shopId`.
+
+       resolveActor returns { ok:false, reason } for an ordinary refusal — this
+       person is not employed here — and that is a legitimate answer. It THROWING
+       is a different thing entirely: the authority itself is unavailable. The two
+       must not collapse into one "no actor", because that would silently turn off
+       discount authorisation for everybody at the moment the check broke. */
+    let _actor = null;
+    try {
+      _actor = await resolveActor(cashierId, merchantId);
+    } catch (err) {
+      _e('Staff permissions could not be checked, so this sale was not completed. ' +
+         'Nothing has been charged.', 'unavailable');
+    }
+
+    /* ── manual discount: authorised, bounded, or refused ─────────────────
+       A coupon is already validated above against its own document. A MANUAL
+       discount has no document behind it, so the only thing that can justify
+       it is the actor's role. The sale is refused rather than silently
+       repriced: quietly dropping the discount would charge the customer more
+       than the till just showed them, which is the same class of defect as
+       quietly granting it. */
+    const manualDiscount = _round2(discountTotal);
+    if (manualDiscount < 0) _e('A discount cannot be negative');
+    if (manualDiscount > 0) {
+      if (!_actor || !_actor.ok) {
+        _e('A discount needs an identified member of staff. ' +
+           (_actor && _actor.reason ? 'Employment check: ' + _actor.reason : 'The employment record could not be read.'),
+           'permission-denied');
+      }
+      if ((_actor.capabilities || []).indexOf('discount') === -1) {
+        _e('A ' + (_actor.servedBy && _actor.servedBy.label || 'staff member') +
+           ' cannot give a discount. Ask an owner or manager to approve it.',
+           'permission-denied');
+      }
+      if (manualDiscount > serverSubtotal) _e('A discount cannot exceed the sale');
+    }
+
+    const totalDiscount = _round2(manualDiscount + couponDiscount);
+    if (totalDiscount > serverSubtotal) _e('The discounts together exceed the sale');
+
+    /* ── the authoritative total ───────────────────────────────────────────
+       Computed from the server's OWN prices and the discount it just
+       authorised. The caller's grandTotal is not used; it is only compared, so
+       a till showing a different figure from the one being charged is refused
+       loudly instead of charging silently. */
+    const authoritativeTotal = _round2(serverSubtotal - totalDiscount + (taxTotal || 0));
+    if (authoritativeTotal < 0) _e('The sale total cannot be negative');
+    if (Math.abs(authoritativeTotal - Number(grandTotal)) > 1) {
+      _e('Total mismatch: this device is showing ' + grandTotal +
+         ' but the sale prices to ' + authoritativeTotal +
+         '. Ring the sale up again.');
+    }
+
+    /* ── the tenders must cover the sale ───────────────────────────────────
+       Cash may EXCEED the total — that is change, and it is computed here so
+       the drawer and the receipt cannot disagree about it. Nothing else may
+       exceed it, because there is no mechanism to hand back change on a card
+       or an M-PESA payment. */
+    const _pay = Array.isArray(payments) ? payments : [];
+    for (const p of _pay) {
+      const a = Number(p && p.amount);
+      if (!isFinite(a) || a <= 0) _e('Every payment needs a positive amount');
+    }
+    const tendered = _round2(_pay.reduce((s, p) => s + Number(p.amount || 0), 0));
+    if (tendered + 1 < authoritativeTotal) {
+      _e('The payment of ' + tendered + ' does not cover the sale total of ' + authoritativeTotal);
+    }
+    const cashTendered = _round2(_pay.filter((p) => p.method === 'cash')
+      .reduce((s, p) => s + Number(p.amount || 0), 0));
+    const changeDue = _round2(Math.max(0, tendered - authoritativeTotal));
+    if (changeDue > cashTendered + 1) {
+      _e('Only a cash payment can produce change');
+    }
+
+    /* ── non-cash money must be CONFIRMED, and spent once ──────────────────
+       `posPayments/{checkoutId}` is written by darajaSTKPush and moved to
+       `completed` ONLY by darajaSTKCallback — the webhook Safaricom calls after
+       the buyer enters their PIN. Reading it here is what makes the difference
+       between "M-PESA was selected" and "M-PESA was paid". The client cannot
+       write that document, so it cannot promote its own payment.
+
+       Cash is exempt: the cashier is physically holding it, and the drawer
+       reconciliation is what audits it. Wallet is validated separately below
+       and debited inside the transaction. */
+    const CONFIRMABLE = { mpesa: 1, card: 1, mpesa_daraja: 1 };
+    for (const p of _pay) {
+      const method = String((p && p.method) || '').toLowerCase();
+      if (!CONFIRMABLE[method]) continue;
+
+      const ref = String((p && (p.ref || p.reference || p.checkoutId || p.transactionRef)) || '').trim();
+      if (!ref) {
+        _e('This ' + method.toUpperCase() + ' payment has no transaction reference, so it ' +
+           'cannot be confirmed. Send the payment request and wait for the customer to pay.');
+      }
+
+      const paySnap = await db.collection('posPayments').doc(ref).get();
+      if (!paySnap.exists) {
+        _e('No ' + method.toUpperCase() + ' payment was found for this sale. ' +
+           'Nothing has been charged.', 'not-found');
+      }
+      const pay = paySnap.data() || {};
+
+      if (pay.status !== 'completed') {
+        _e('The customer has not completed this payment yet (' + (pay.status || 'pending') + '). ' +
+           'Wait for their confirmation, or try the payment again.', 'failed-precondition');
+      }
+      /* The money must have reached THIS shop, not merely exist somewhere. */
+      if (pay.sellerUid && pay.sellerUid !== merchantId && pay.sellerUid !== cashierId) {
+        _e('That payment belongs to a different shop.', 'permission-denied');
+      }
+      /* And it must be enough. A 3,000 sale cannot be settled with a confirmed
+         10 shilling payment just because a reference was pasted in. */
+      const confirmedAmount = Number(pay.paidAmount != null ? pay.paidAmount : pay.amount);
+      if (isFinite(confirmedAmount) && confirmedAmount + 1 < Number(p.amount || 0)) {
+        _e('The confirmed payment is ' + confirmedAmount + ' but this sale is claiming ' +
+           p.amount + '.');
+      }
+
+      /* ── spent exactly once ────────────────────────────────────────────
+         Without this, one genuinely confirmed M-PESA payment could settle any
+         number of sales — the strongest confirmation check in the world is
+         worth nothing if its result is replayable. create() is atomic: exactly
+         one sale wins the reference, every other caller gets ALREADY_EXISTS.
+         Keyed by reference, and it records which sale spent it. */
+      const claimRef = db.collection('posPaymentClaims').doc(ref);
+      try {
+        await claimRef.create({
+          reference: ref, method, merchantId, cashierId,
+          idempotencyKey, amount: Number(p.amount || 0), claimedAt: Date.now(),
+        });
+        _consumed.push(ref);
+      } catch (err) {
+        if (err && err.code === 6 /* ALREADY_EXISTS */) {
+          const prior = (await claimRef.get()).data() || {};
+          /* The SAME sale retrying is fine — it already owns this payment. */
+          if (prior.idempotencyKey !== idempotencyKey) {
+            _e('That payment has already been used for another sale.', 'already-exists');
+          }
+        } else { throw err; }
+      }
+
+      /* Carry the confirmation onto the payment line, so the receipt and the
+         stored sale show the real M-PESA code rather than the client's guess. */
+      p.confirmed = true;
+      p.confirmedAmount = isFinite(confirmedAmount) ? confirmedAmount : null;
+      if (pay.mpesaCode) p.mpesaCode = pay.mpesaCode;
+      if (pay.paidPhone) p.paidPhone = pay.paidPhone;
+    }
+
     const saleId   = uid();
     const now      = Date.now();
     const saleDate = new Date(now).toISOString().split('T')[0];
@@ -182,7 +379,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const rawAmt = Number(walletPayment.amount);
       if (!Number.isInteger(rawAmt) || rawAmt <= 0)
         _e('Wallet payment amount must be a positive whole number');
-      if (rawAmt > grandTotal)
+      if (rawAmt > authoritativeTotal)
         _e('Wallet payment exceeds sale total');
       if (walletPayment.customerId && walletPayment.customerId !== customer.id)
         _e('Wallet payment customerId mismatch', 'permission-denied');
@@ -278,7 +475,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         txn.update(custRef, {
           loyaltyPoints:  newPoints,
           lifetimePoints: FieldValue.increment(loyaltyAwarded),
-          totalSpent:     FieldValue.increment(grandTotal),
+          totalSpent:     FieldValue.increment(authoritativeTotal),
           lastPurchaseAt: FieldValue.serverTimestamp(),
           purchaseCount:  FieldValue.increment(1),
         });
@@ -313,9 +510,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       loyaltyRedeemed:    loyaltyRedeemPoints,
       loyaltyAwarded,
       subtotal:           serverSubtotal,
-      discountTotal:      discountTotal + couponDiscount,
+      discountTotal:      totalDiscount,
       taxTotal,
-      grandTotal,
+      grandTotal:         authoritativeTotal,
       status:             'completed',
       createdAt:          FieldValue.serverTimestamp(),
       saleDate,
@@ -335,9 +532,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     await dailyRef.set({
       merchantId, branchId, saleDate,
       totalSales:    FieldValue.increment(1),
-      totalRevenue:  FieldValue.increment(grandTotal),
+      totalRevenue:  FieldValue.increment(authoritativeTotal),
       totalItems:    FieldValue.increment(items.reduce((s, i) => s + (i.qty || 1), 0)),
-      totalDiscount: FieldValue.increment(discountTotal + couponDiscount),
+      totalDiscount: FieldValue.increment(totalDiscount),
       totalTax:      FieldValue.increment(taxTotal),
       updatedAt:     FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -349,7 +546,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         merchantId, branchId, cashierId, saleId,
         itemCount:     items.reduce((s, i) => s + (i.qty || 1), 0),
         durationMs:    elapsed,
-        grandTotal,
+        grandTotal:   authoritativeTotal,
         paymentMethod: payments[0]?.method || 'unknown',
         createdAt:     FieldValue.serverTimestamp(),
         saleDate,
@@ -363,15 +560,38 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       merchantId,
       items:      enrichedItems,
       subtotal:   serverSubtotal,
-      discount:   discountTotal + couponDiscount,
+      discount:   totalDiscount,
       tax:        taxTotal,
-      total:      grandTotal,
+      total:      authoritativeTotal,
       payments,
       loyaltyAwarded,
       loyaltyRedeemed: loyaltyRedeemPoints,
       customer:   customer?.name || 'Guest',
       cashier:    cashierId,
       timestamp:  new Date(now).toISOString(),
+
+      /* ── What the customer actually handed over, and what went back ──────
+         Recorded on the receipt because a cash receipt that shows only the total
+         cannot be checked by the person holding the change. `amountPaid` is what
+         was tendered (3,000), `total` is what the sale was (2,800), `changeDue`
+         is the difference the drawer gave back (200). */
+      amountPaid: tendered,
+      changeDue:  changeDue,
+
+      /* ── SERVED BY, resolved by the SERVER ───────────────────────────────
+         From merchant-identity's employment records — never from anything the
+         client sent. A cashier cannot put "Alex / Manager" on a financial
+         document by typing it. When the employment cannot be resolved this is
+         null and the printed receipt omits the line entirely, rather than
+         naming the wrong person or silently crediting the shop owner. */
+      servedBy: (_actor && _actor.ok && _actor.servedBy) ? {
+        uid:        _actor.servedBy.uid,
+        name:       _actor.servedBy.name,
+        role:       _actor.servedBy.role,
+        label:      _actor.servedBy.label,
+        /* Present only when the employment relationship actually carries one. */
+        employeeNo: _actor.servedBy.employeeNo || null,
+      } : null,
     };
 
     await db.collection('posReceipts').doc(saleId).set({ ...receipt, createdAt: FieldValue.serverTimestamp() });
@@ -382,6 +602,14 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     return { saleId, receipt, loyaltyAwarded };
 
   } catch (err) {
+    /* RELEASE any confirmed payment this attempt claimed. The money is still the
+       customer's — the sale simply did not complete — and leaving the claim in
+       place would make their genuinely paid M-PESA unusable on the retry, which
+       is a worse outcome than the failure itself. Released before the failure is
+       recorded, so a crash between the two leaves the claim rather than losing it. */
+    for (const ref of _consumed) {
+      try { await db.collection('posPaymentClaims').doc(ref).delete(); } catch (_) {}
+    }
     await idemRef.update({ status: 'failed', error: err.message, failedAt: Date.now() });
     if (err instanceof HttpsError) throw err;
     throw new HttpsError('internal', err.message || 'Checkout failed');
