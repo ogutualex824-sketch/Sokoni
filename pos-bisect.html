@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI POS bisect</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  SOKONI POS BISECT  —  /pos-bisect
+  ══════════════════════════════════════════════════════════════════════════════
+  The phone has isolated the failure: CSS alone survives, firebase.js as a real
+  MODULE survives (3.2 s), the real IndexedDB survives, the 1,366-element DOM
+  survives — and Scripts + CSS + DOM TOGETHER kills the tab.
+
+  So the culprit is an EXECUTION interaction inside the assembled runtime, not
+  any single foundation. This bisects it.
+
+  TWO THINGS THE EARLIER PROBE GOT WRONG, FIXED HERE:
+    · firebase.js is <script type="module">. Attaching it as a classic script
+      means it never executes, and the earlier 67/67 pass proved only that the
+      files could be FETCHED. Type is now read from the real document per script.
+    · it ran the whole graph. Here the graph is halved, because the combined run
+      is the thing that kills.
+
+  IT BISECTS ACROSS CRASHES. The range being attempted is written to storage
+  BEFORE the first script in it executes. If the tab dies, reopening detects an
+  attempt that never completed, treats that range as FAILING, and narrows
+  automatically. A crash is a data point, not a lost run.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:14px 12px 40px; background:#07090c; color:#e8f2ff;
+         font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         -webkit-text-size-adjust:100%; }
+  h1 { font-size:16px; margin:0 0 3px; }
+  .sub { color:#7f93ab; font-size:12px; margin-bottom:12px; }
+  h2 { font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:#6e7f92; margin:18px 0 5px; }
+  button { display:block; width:100%; margin:7px 0 0; padding:14px; border-radius:11px;
+           background:#12233a; color:#9fd0ff; border:1px solid #1e4470;
+           font:700 14px/1.25 inherit; -webkit-appearance:none; cursor:pointer; }
+  button:active { background:#17304f; }
+  button[disabled] { opacity:.45; }
+  .go { background:#0d2a17; border-color:#1c6b3a; color:#8ef0b0; }
+  .warn { background:#2a1c08; border-color:#6b4a12; color:#ffcf7a; }
+  pre { white-space:pre-wrap; word-break:break-word; background:#0b1017; margin:6px 0 0;
+        border:1px solid rgba(255,255,255,.1); border-radius:9px; padding:10px;
+        font-size:11.5px; color:#a9c3dd; }
+  #big { font-weight:700; font-size:13px; padding:11px; border-radius:9px; margin-top:10px;
+         background:#0b1017; border:1px solid rgba(255,255,255,.12); white-space:pre-wrap; }
+  ol { margin:8px 0 0; padding:0; list-style:none; font-size:11.5px; }
+  li { padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06); display:flex; gap:7px; }
+  li .i { flex:0 0 14px; } li .n { flex:1; min-width:0; word-break:break-all; }
+  li .k { flex:0 0 auto; color:#7f93ab; }
+  .ok .i{color:#56d364} .bad .i{color:#ff7b72} .cur .i{color:#ffcf7a}
+</style>
+</head>
+<body>
+
+<h1>POS bisect</h1>
+<div class="sub">Real CSS + real DOM + correct script types. Nothing runs until you tap.</div>
+
+<h2>Bisection state</h2>
+<pre id="state">reading…</pre>
+
+<h2>Run</h2>
+<button class="go" id="b-next">Run the next bisection step</button>
+<button id="b-env">Build the environment only (CSS + DOM, no scripts)</button>
+<button class="warn" id="b-reset">Reset bisection</button>
+
+<div id="big">idle</div>
+<ol id="list"></ol>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEY = 'sokoni_bisect_v1';
+  var scripts = [];        /* {src, module} in document order */
+  var S = null;            /* {lo, hi, total, attempt:{start,end,completed,reached}} */
+  var running = false;
+
+  var big = document.getElementById('big');
+  var list = document.getElementById('list');
+  var stateEl = document.getElementById('state');
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function say(t) { big.textContent = t; }
+
+  /* ── environment: the REAL css and the REAL dom ───────────────────────── */
+  function buildEnv(html) {
+    var lre = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi, tags = html.match(lre) || [], css = 0;
+    tags.forEach(function (t) {
+      var h = /href\s*=\s*["']([^"']+)["']/i.exec(t);
+      if (h && !/^https?:/i.test(h[1])) {
+        var l = document.createElement('link'); l.rel = 'stylesheet';
+        l.href = h[1].charAt(0) === '/' ? h[1] : '/' + h[1];
+        document.head.appendChild(l); css++;
+      }
+    });
+    var bm = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+    var host = document.createElement('div');
+    host.id = 'sk-pos-env';
+    host.style.cssText = 'position:absolute;left:-99999px;top:0;width:390px';
+    host.innerHTML = bm ? bm[1].replace(/<script[\s\S]*?<\/script>/gi, '') : '';
+    document.body.appendChild(host);
+    return { css: css, els: host.querySelectorAll('*').length };
+  }
+
+  /* ── the real script list, WITH TYPE ──────────────────────────────────── */
+  function manifest() {
+    return fetch('/pos?bisect=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('/pos HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        var re = /<script([^>]*)\ssrc\s*=\s*["']([^"']+)["']([^>]*)>/gi, m, out = [], seen = {};
+        while ((m = re.exec(html)) !== null) {
+          var attrs = (m[1] || '') + ' ' + (m[3] || '');
+          var src = m[2];
+          if (/^https?:/i.test(src) || seen[src]) continue;
+          seen[src] = 1;
+          out.push({
+            src: src.charAt(0) === '/' ? src : '/' + src,
+            /* THE FIX: type is read from the real document. firebase.js is a
+               module, and attaching it as a classic script means it never
+               executes — which is how the earlier 67/67 pass proved nothing. */
+            module: /type\s*=\s*["']module["']/i.test(attrs)
+          });
+        }
+        return { html: html, scripts: out };
+      });
+  }
+
+  /* ── lifecycle witnesses ──────────────────────────────────────────────── */
+  ['pagehide', 'visibilitychange', 'freeze'].forEach(function (ev) {
+    (ev === 'visibilitychange' ? document : window).addEventListener(ev, function () {
+      if (!S || !S.attempt) return;
+      S.attempt.lifecycle = (S.attempt.lifecycle || []).concat(
+        ev + (ev === 'visibilitychange' ? ':' + document.visibilityState : ''));
+      save();
+    });
+  });
+  window.addEventListener('error', function (e) {
+    if (!S || !S.attempt) return;
+    S.attempt.errors = (S.attempt.errors || []).concat(String((e && e.message) || 'error').slice(0, 100));
+    save();
+  });
+
+  /* ── execute a range, recording BEFORE each script ────────────────────── */
+  function runRange(start, end) {
+    if (running) return; running = true;
+    list.innerHTML = '';
+    say('preparing the real environment…');
+
+    manifest().then(function (M) {
+      scripts = M.scripts;
+      S.total = scripts.length;
+      var env = buildEnv(M.html);
+
+      S.attempt = { start: start, end: end, completed: false, reached: start,
+                    t0: Date.now(), env: env };
+      save();
+
+      say('env: ' + env.css + ' stylesheets, ' + env.els + ' elements\n' +
+          'executing scripts ' + start + '–' + (end - 1) + ' of ' + scripts.length);
+
+      for (var i = start; i < end; i++) {
+        var li = document.createElement('li');
+        li.className = 'cur';
+        li.innerHTML = '<span class="i">·</span><span class="n">' + scripts[i].src +
+          (scripts[i].module ? ' <b>[module]</b>' : '') + '</span><span class="k"></span>';
+        list.appendChild(li);
+      }
+
+      var idx = start;
+      (function step() {
+        if (idx >= end) {
+          S.attempt.completed = true;
+          S.attempt.ms = Date.now() - S.attempt.t0;
+          save();
+          say('RANGE SURVIVED — ' + start + '–' + (end - 1) + ' executed in ' +
+              Math.round(S.attempt.ms / 1000) + ' s.\nTap "Run the next bisection step".');
+          narrow(true);
+          running = false;
+          return;
+        }
+        var s = scripts[idx];
+        var li = list.children[idx - start];
+        S.attempt.reached = idx;
+        S.attempt.reachedSrc = s.src;
+        save();                     /* BEFORE execution — survives the tab dying */
+
+        var t0 = Date.now();
+        var el = document.createElement('script');
+        el.src = s.src;
+        if (s.module) el.type = 'module';
+        el.onload = el.onerror = function () {
+          var ms = Date.now() - t0;
+          if (li) {
+            li.className = 'ok';
+            li.querySelector('.i').textContent = '✓';
+            li.querySelector('.k').textContent = ms + 'ms';
+          }
+          idx++;
+          /* a breath, so a gradual climb is not mistaken for one sudden death */
+          setTimeout(step, 90);
+        };
+        document.head.appendChild(el);
+      })();
+    }).catch(function (e) {
+      running = false;
+      say('could not read /pos: ' + ((e && e.message) || e));
+    });
+  }
+
+  /* ── bisection bookkeeping ────────────────────────────────────────────── */
+  function narrow(survived) {
+    var a = S.attempt;
+    if (!a) return;
+    if (survived) S.lo = a.end;        /* everything up to `end` is fine        */
+    else S.hi = a.end;                 /* something inside [0,end) is the killer */
+    if (S.hi <= S.lo) S.hi = S.lo + 1;
+    save();
+    render();
+  }
+
+  function render() {
+    var lines = [];
+    lines.push('total scripts   ' + (S.total || '?'));
+    lines.push('known good      0–' + (S.lo - 1 < 0 ? '(none)' : S.lo - 1));
+    lines.push('suspect range   ' + S.lo + '–' + (S.hi - 1));
+    var span = S.hi - S.lo;
+    lines.push('span            ' + span + (span <= 1 ? '   <-- ISOLATED' : ''));
+    if (S.attempt) {
+      lines.push('');
+      lines.push('last attempt    ' + S.attempt.start + '–' + (S.attempt.end - 1) +
+        (S.attempt.completed ? '  SURVIVED' : '  DID NOT COMPLETE'));
+      if (!S.attempt.completed) {
+        lines.push('reached index   ' + S.attempt.reached);
+        lines.push('LAST SCRIPT     ' + (S.attempt.reachedSrc || '?'));
+      }
+      if (S.attempt.lifecycle) lines.push('lifecycle       ' + S.attempt.lifecycle.join(', '));
+      if (S.attempt.errors) lines.push('errors          ' + S.attempt.errors.slice(0, 3).join(' | '));
+    }
+    if (span <= 1 && S.total) {
+      lines.push('');
+      lines.push('THE SUSPECT IS SCRIPT INDEX ' + S.lo + '.');
+      lines.push('Run one more step to name it.');
+    }
+    stateEl.textContent = lines.join('\n');
+  }
+
+  /* ── boot: a previous attempt that never completed means it CRASHED ───── */
+  S = load();
+  if (!S) S = { lo: 0, hi: 0, total: 0, attempt: null };
+  if (S.attempt && !S.attempt.completed) {
+    /* The tab died inside that range. Treat it as failing and narrow. */
+    S.hi = S.attempt.end;
+    if (S.hi <= S.lo) S.hi = S.lo + 1;
+    save();
+  }
+  render();
+
+  document.getElementById('b-next').addEventListener('click', function () {
+    if (!S.total) {
+      /* first run: establish the total, then take the first half */
+      manifest().then(function (M) {
+        S.total = M.scripts.length; S.lo = 0; S.hi = M.scripts.length; save(); render();
+        runRange(0, Math.ceil(S.total / 2));
+      }).catch(function (e) { say('could not read /pos: ' + ((e && e.message) || e)); });
+      return;
+    }
+    var mid = S.lo + Math.ceil((S.hi - S.lo) / 2);
+    if (S.hi - S.lo <= 1) mid = S.hi;
+    runRange(0, Math.min(mid, S.total));
+  });
+
+  document.getElementById('b-env').addEventListener('click', function () {
+    manifest().then(function (M) {
+      var env = buildEnv(M.html);
+      say('environment only: ' + env.css + ' stylesheets, ' + env.els +
+          ' elements — no scripts executed.');
+    });
+  });
+
+  document.getElementById('b-reset').addEventListener('click', function () {
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+}());
+</script>
+</body>
+</html>
