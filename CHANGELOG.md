@@ -1,7 +1,7 @@
 ## [2026-08-24] - Mixed tender: part M-Pesa, part cash, one gate for every combination.
 
 Hosting only. **No Functions change** — the server already handled a split.
-Deployed .
+Deployed `71be27d`.
 
 ### The outcome
 
@@ -11,7 +11,7 @@ entering the cash half never rescues an unpaid electronic one.
 
 ### A  The server needed nothing
 
- already sums an array of tenders and confirms each non-cash
+`posCompleteCheckout` already sums an array of tenders and confirms each non-cash
 one independently, because it was built as a list rather than a single method.
 Eight cases were added to *prove* that rather than assume it (S26–S33), including
 the reverse split and both overpayment directions.
@@ -32,7 +32,7 @@ way to hand change back through it.
 
 ### C  A divergence between the button and the server, closed
 
- treats a zero balance as complete even when part of an overpayment
+`SokoniCash` treats a zero balance as complete even when part of an overpayment
 is **unrefundable** — money taken electronically beyond the sale that no drawer
 can return. The server refuses exactly that (S33), so the till would have offered
 a confident tap and received a refusal. Both now agree.
@@ -44,153 +44,27 @@ to the figure it was requested for.
 
 ### D  Receipt
 
- is added **only on a split** — on a single tender it repeats the line
-above it. An existing assertion read  positionally and broke when the
-new line shifted CHANGE to : the receipt was right and the test was
+`TOTAL PAID` is added **only on a split** — on a single tender it repeats the line
+above it. An existing assertion read `lines[2]` positionally and broke when the
+new line shifted CHANGE to `lines[3]`: the receipt was right and the test was
 wrong about where to look, so it now finds lines by label.
 
 ### E  A leak in the new code, found by the rig
 
- removed the listeners but not the STK poll, so a surface torn down
+`destroy()` removed the listeners but not the STK poll, so a surface torn down
 mid-wait kept calling the server every three seconds for two minutes and painted
 a detached host. Now stopped.
 
 ### Files
 
-, ,   SALE AUTHORITY — the total is the server's, and money must be confirmed
-  ======================================================================
-
-  PASS  S0  the real handler loaded and is callable
-        [if this fails, every result below is meaningless]
-  PASS  S1  CONTROL an honest 3,000 cash sale completes
-        [total 3000]
-  PASS  S2  CONTROL the probe detects a refusal when one genuinely happens
-        [an empty cart must be refused: items required]
-  PASS  S3  cash: 3,000 tendered on a 2,800 sale returns 200 change
-        [total=2800 paid=3000 change=200]
-  PASS  S4  cash: the SALE records 2,800, not the 3,000 handed over
-        [subtotal=3000 discount=200 total=2800]
-  PASS  S5  cash: a tender below the amount due cannot complete the sale
-        [refused: The payment of 2000 does not cover the sale total of 3000]
-  PASS  S6  cash: paid exactly due gives zero change
-        [change=0]
-  PASS  S7  discount: an OWNER may give one, and it enters the server total
-        [total=2800]
-  PASS  S8  discount: a CASHIER may not — the role model already says so
-        [refused: A Staff cannot give a discount. Ask an owner or manager to approve it.]
-  PASS  S9  CONTROL a cashier can still SELL — only the discount is gated
-        [sale completed]
-  PASS  S10 discount: someone with no employment here cannot give one
-        [refused: A discount needs an identified member of staff. Employment check: not-employed-here]
-  PASS  S11 discount: cannot exceed the sale, so a total can never go negative
-        [refused: A discount cannot exceed the sale]
-  PASS  S12 total: a 3,000 cart cannot be recorded as a 1 shilling sale
-        [refused: Total mismatch: this device is showing 1 but the sale prices to 3000. Ring the sale up again.]
-  PASS  S13 m-pesa: selecting the method does not complete the sale
-        [refused: This MPESA payment has no transaction reference, so it cannot be confirmed. Send the payment request and wait for the customer to pay.]
-  PASS  S14 m-pesa: a push the buyer has not answered yet does not complete
-        [refused: The customer has not completed this payment yet (pending). Wait for their confirmation, or try the payment again.]
-  PASS  S15 m-pesa: cancelled / rejected / timed out leaves the sale uncommitted
-        [refused: The customer has not completed this payment yet (failed). Wait for their confirmation, or try the payment again.]
-  PASS  S16 m-pesa: an invented reference finds nothing and is refused
-        [refused: No MPESA payment was found for this sale. Nothing has been charged.]
-  PASS  S17 m-pesa: a confirmed 10 shillings cannot settle a 2,800 sale
-        [refused: The confirmed payment is 10 but this sale is claiming 2800.]
-  PASS  S18 m-pesa: a payment the SERVER confirmed does complete the sale
-        [total=2800]
-  PASS  S19 m-pesa: the receipt carries the real M-Pesa code, not the client's guess
-        [SFH4X9QK21]
-  PASS  S20 m-pesa: one confirmed payment cannot settle a SECOND sale
-        [refused: That payment has already been used for another sale.]
-  PASS  S26 mixed: 4,000 confirmed M-Pesa + 2,000 cash completes a 6,000 sale
-        [total=6000 paid=6000 balance=0]
-  PASS  S27 mixed: the receipt keeps BOTH tenders, not a single merged figure
-        [mpesa:4000 + cash:2000]
-  PASS  S28 mixed: cash entered does NOT make an unconfirmed M-Pesa half real
-        [refused: The customer has not completed this payment yet (pending). Wait for their confirmation, or try the payment again.]
-  PASS  S29 mixed: if the M-Pesa half FAILS the sale does not complete
-        [refused: The customer has not completed this payment yet (failed). Wait for their confirmation, or try the payment again.]
-  PASS  S30 mixed: the two halves must still COVER the total
-        [refused: The payment of 4500 does not cover the sale total of 6000]
-  PASS  S31 mixed: 2,000 M-Pesa + 4,000 cash works too, in either order
-        [total=6000]
-  PASS  S32 mixed: overpaying the CASH half returns change
-        [change=500]
-  PASS  S33 an M-Pesa OVERPAYMENT cannot produce change — nothing hands it back
-        [refused: Only a cash payment can produce change]
-  PASS  S21 a sale refused for a correctable reason can be corrected and retried
-        [first=refused retry=completed]
-  PASS  S22 a refused sale RELEASES the payment it claimed, so money is not stranded
-        [claim left behind = no]
-  PASS  S23 receipt: Served by / Role come from the employment record
-        [Alex Ogutu / Owner]
-  PASS  S24 receipt: an employee is named as THEMSELVES, not as the shop owner
-        [Peter Otieno / Manager]
-  PASS  S25 receipt: a cashier cannot type themselves onto it as a Manager
-        [Mary Wanjiku / Staff — the client sent "Alex / Manager"]
-
-  34 passed, 0 failed,
-  TILL PAYMENT — what the sheet sends, and what it refuses to do
-  ======================================================================
-
-  PASS  T0  the real module loaded and exposes mount()
-        [every result below depends on this]
-  PASS  T1  cash sends the amount RECEIVED, and only when there is some
-        [sending the due instead would show change on screen and record none; a zero cash line would claim a drawer movement that never happened]
-  PASS  T2  every ledger tender carries the server's payment reference
-        [without a ref the server has nothing to confirm against and refuses the sale]
-  PASS  T2b the payload is the LEDGER plus cash, so a split reaches the server intact
-        [a single merged figure would lose which money came from where]
-  PASS  T3  the discount is sent to the server to be authorised
-        [a discount applied only on screen would not change what is charged]
-  PASS  T4  the amount due is subtotal MINUS discount, floored at zero
-        [items → subtotal → discount → amount due → payment]
-  PASS  T5  ONE gate covers every combination — the settlement's own answer
-        [cash-only, M-Pesa-only and any split judged by the same arithmetic; a per-method special case is the shape that let "selected" pass for "paid"]
-  PASS  T6  a tender joins the ledger ONLY inside the server-confirmed branch
-        [appended anywhere else and having sent a push would count as having been paid]
-  PASS  T6b an unconfirmed push is simply not in the sum, so the balance stays owed
-        [there is no half-confirmed tender state downstream to mishandle]
-  PASS  T6c the same reference cannot be added to the ledger twice
-        [two polls in flight must not double-count one payment]
-  PASS  T6d an ELECTRONIC overpayment blocks completion, matching the server
-        [SokoniCash calls a zero balance complete even when part is unrefundable; the server refuses it (S33), so the button must too]
-  PASS  T7  sending the push does NOT mark it confirmed
-        [the request and the confirmation are separate states]
-  PASS  T8  a failed status READ is not treated as a failed payment
-        [a dropped poll must not tell the shop the customer did not pay]
-  PASS  T9  the wait is bounded, so a till never spins forever at a counter
-        [an unbounded wait is indistinguishable from a dead app]
-  PASS  T10 changing the payment method voids the M-Pesa request
-        [a confirmation belongs to the tender it was requested for]
-  PASS  T11 changing the discount voids the IN-FLIGHT request
-        [otherwise a push requested for one balance could settle another]
-  PASS  T11b but CONFIRMED tenders survive a method switch — that money is real
-        [discarding them because the cashier tapped Cash would lose a real payment]
-  PASS  T11c the next tender defaults to the BALANCE, not the full total
-        [after 4,000 of a 6,000 sale, the cash keypad must be built around 2,000]
-  PASS  T11d an M-Pesa request cannot exceed the balance
-        [there is no way to hand change back through M-Pesa]
-  PASS  T12 auto-print happens ONLY after the server returned a completed sale
-        [a receipt must never precede the money]
-  PASS  T13 the receipt prints the server's ladder, not this screen's
-        [subtotal set to the total hid the discount whenever there was one]
-  PASS  T14 Served by comes from the server receipt first
-        [never from anything the cashier typed]
-  PASS  T15 CONTROL the detector reports a pattern that is genuinely absent
-        [a bait string that must not match]
-  PASS  T16 CONTROL the gate check FAILS when the gate is removed
-        [if this passed against the mutated source, T5 would be vacuous]
-  PASS  T17 CONTROL the module still declares the card tender honestly
-        [card has no terminal to confirm against and must not borrow M-Pesa's language]
-
-  25 passed, 0 failed, ,
-.
+`sokoni-merchant-sell.js`, `sokoni-cash.js`, `scripts/test-sale-authority.js`,
+`scripts/test-till-payment.js`, `scripts/test-cash-change.js`,
+`scripts/browser/verify-payment-gate.mjs`.
 
 ### Verification
 
-34/0 server, 25/0 till, **19/19 driven in a real browser** (the split watched
-end to end), and the four pre-existing cash/receipt suites still green
+34/0 server, 25/0 till, **19/19 driven in a real browser** (the split watched end
+to end), and the four pre-existing cash/receipt suites still green
 (59 / 114 / 49 / 60).
 
 **Still not proven:** no real STK push against a real handset. Unchanged from the
