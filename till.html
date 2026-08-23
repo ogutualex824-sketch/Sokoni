@@ -135,12 +135,35 @@
   function stagesReset() { try { localStorage.setItem(STAGE_KEY, '[]'); } catch (_) {} }
   function stagesRead() { try { return JSON.parse(localStorage.getItem(STAGE_KEY) || '[]'); } catch (_) { return []; } }
 
+  /* ── NOTHING MAY LOAD FOREVER ────────────────────────────────────────────
+     Every await in run() is individually bounded, but a defect BETWEEN them —
+     or one added later — could still leave the spinner up. This is the
+     backstop: if no terminal state is reached in 25s, the till says so and
+     offers a retry. The loading message now has a deadline; it is not a place a
+     merchant can be stranded. */
+  var SETTLED = false;
+  var watchdog = setTimeout(function () {
+    if (SETTLED) return;
+    stage('watchdog');
+    show('Taking longer than expected',
+      'Your till could not finish opening. Nothing has been lost — your products and sales are safe on SOKONI.',
+      'Try again', location.pathname + location.search);
+  }, 25000);
+  function settle(n) {
+    SETTLED = true;
+    try { clearTimeout(watchdog); } catch (_) {}
+    if (n) stage(n);
+  }
+
   /* Never a white screen: every terminal state SAYS something. */
   function show(title, body, linkLabel, linkHref) {
+    settle('settled');
     boot.innerHTML = '';
     var b = document.createElement('div'); b.className = 'box';
     var h = document.createElement('div'); h.className = 'hd'; h.textContent = title;
-    var p = document.createElement('div'); p.textContent = body || '';
+    var p = document.createElement('div');
+    p.style.whiteSpace = 'pre-line';   /* the pair state prints Business / Branch on their own lines */
+    p.textContent = body || '';
     b.appendChild(h); b.appendChild(p);
     if (linkLabel && linkHref) {
       var a = document.createElement('a'); a.className = 'btn';
@@ -292,9 +315,28 @@
         'Ask an owner to release it before using it here.');
     }
 
-    var biz = (ctxResult.businesses && ctxResult.businesses[0]) || null;
+    var biz = (ctxResult.businesses || []).filter(function (b) {
+      return b.id === (ctxResult.selected && ctxResult.selected.merchantId); })[0]
+      || (ctxResult.businesses && ctxResult.businesses[0]) || null;
     document.getElementById('h-name').textContent = (biz && biz.name) || 'SOKONI Till';
-    sub(ctxResult.decision === 'open-pos' ? 'Ready to sell' : 'This device is not paired yet');
+
+    /* ── PAIR-DEVICE IS A DESTINATION, NOT A WAYPOINT ─────────────────────
+       This used to fall through and mount the till anyway, so an unpaired
+       device sat on "Opening your till…" with nothing behind it. A boot state
+       that has an answer must RENDER that answer. */
+    if (ctxResult.decision === 'pair-device') {
+      stage('render:pair');
+      var br = (ctxResult.branches || []).filter(function (b) {
+        return b.id === (ctxResult.selected && ctxResult.selected.branchId); })[0]
+        || (ctxResult.branches || [])[0] || null;
+      sub('This device is not connected yet');
+      return show('Connect this device',
+        (biz ? 'Business: ' + (biz.name || biz.id) + '\n' : '') +
+        (br ? 'Branch: ' + (br.name || br.id) : 'No branch configured yet'),
+        'Set up this device', '/pos-pair');
+    }
+
+    sub('Ready to sell');
 
     /* Selling does not wait for device pairing — pairing governs DEVICE
        management, and a merchant who owns the shop can still sell. The header
@@ -369,6 +411,7 @@
         onPrint: function () { return Promise.resolve(); }
       });
       stage('sell:mounted');
+      settle();                       /* the till is up; the watchdog stands down */
     } catch (e) {
       boot.style.display = 'flex';
       show('The till could not open', String((e && e.message) || e));
