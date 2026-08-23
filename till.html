@@ -184,7 +184,7 @@
 
     if (!uid) {
       return show('Please sign in',
-        'Sign in to SOKONI to open your till.', 'Sign in', '/auth?next=/till');
+        'Sign in to SOKONI to open your till.', 'Sign in', '/login?next=' + encodeURIComponent(location.pathname + location.search));
     }
 
     msg.textContent = 'Finding your shop…';
