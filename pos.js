@@ -115,20 +115,38 @@ const SPos = (function () {
     } catch (_) {}
   }
 
+  /* Boot stage markers. pos-crash-breadcrumbs.js exposes window.sokoniStage and
+     writes each stage to localStorage SYNCHRONOUSLY, so a stage recorded here
+     survives the tab being killed — and /pos?diag=crash can then name the exact
+     point launchApp reached. pos.js previously reported NOTHING, which is why the
+     crash panel could see the script graph but never the app boot.
+     Never throws, never changes behaviour. */
+  function _stage(n) { try { if (window.sokoniStage) window.sokoniStage('launch:' + n); } catch (_) {} }
+
   async function launchApp() {
+    _stage('begin');
     state.settings = await PosDB.settings.getAll();
+    _stage('settings');
+    /* Null-guarded: launchApp dereferenced this with no check, so removing the
+       wizard markup — which is the direction this is heading — would throw here
+       and blank the app before it ever rendered. */
     const wiz = document.getElementById('pos-wizard');
-    wiz.style.transition = 'opacity 0.18s ease';
-    wiz.style.opacity = '0';
-    wiz.style.pointerEvents = 'none';
-    setTimeout(() => { wiz.style.display = 'none'; }, 190);
+    if (wiz) {
+      wiz.style.transition = 'opacity 0.18s ease';
+      wiz.style.opacity = '0';
+      wiz.style.pointerEvents = 'none';
+      setTimeout(() => { try { wiz.style.display = 'none'; } catch (_) {} }, 190);
+    }
     document.getElementById('pos-app').classList.remove('hidden');
+    _stage('app-visible');
 
     /* Populate header */
     _setVal('hdr-biz-name', state.settings.bizName || 'SOKONI SmartPOS');
 
     /* Load products */
+    _stage('products:start');
     await products.reload();
+    _stage('products:done');
 
     /* Sync the merchant's CANONICAL products into the POS. The POS store was fed only by the
        separate `posProducts` collection, so a shop whose products live in the canonical
@@ -170,7 +188,9 @@ const SPos = (function () {
     } catch (_) {}
 
     /* Load category chips */
+    _stage('categories:start');
     await ui.loadCategories();
+    _stage('categories:done');
 
     /* Init BOS modules */
     if (window.PosBoss) {
