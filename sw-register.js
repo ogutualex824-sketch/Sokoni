@@ -890,6 +890,28 @@
     "/sokoni-sw-telemetry.js",
   ];
 
+  /* On-device build indicator, OPT-IN via ?diag=version.
+     Loaded through the same single entry point rather than 109 page templates,
+     but kept OUT of _mods so it costs nothing on a normal launch: the badge is
+     fetched only when the query string asks for it.
+
+     It answers a question nothing else could. sokoni-sw-telemetry.js beacons to
+     /api/diag, but every candidate collection measured EMPTY on 2026-08-23
+     (clientDiagnostics, swTelemetry, diagnostics, errorLog, diagEvents), so
+     there was no on-device AND no server-side record of which build a phone was
+     running — which is why stale-device reports could only be answered with
+     "try refreshing".
+
+     Note the deliberate inversion: a phone stuck on a PRE-BADGE build will show
+     NOTHING when opened with ?diag=version. Absence is the diagnosis. It is the
+     only check that works without the device already carrying the diagnostic.
+
+     It observes and offers a manual Update trigger. It does not register,
+     modify, or replace any part of the worker lifecycle above. */
+  if (/[?&]diag=version\b/.test(location.search)) {
+    _mods.push("/sokoni-version-badge.js");
+  }
+
   function _inject(src) {
     const bare = src.replace(/^\//, "");
     if (document.querySelector('script[src="' + src + '"], script[src="' + bare + '"]')) return;
