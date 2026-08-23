@@ -101,7 +101,73 @@
     document.body.appendChild(w);
   }
 
+  /* ── the readout, OPT-IN via ?diag=context ───────────────────────────────
+     Silence is ambiguous: a normal POS page means EITHER "open-pos" OR "the
+     resolver failed and correctly failed toward POS". Those must never look the
+     same when we are trying to prove the authenticated read works, so this
+     prints exactly what the resolver returned — including whether the
+     posDevices read SUCCEEDED, which is the end-to-end proof the rules repair
+     still lacks.
+
+     Reads only what resolve() already produced. No extra queries, no secrets —
+     uids and ids are truncated. */
+  function readout(r, err) {
+    var box = document.createElement('div');
+    box.id = 'sk-pos-context-diag';
+    box.style.cssText = 'position:fixed;inset:0;z-index:2147483646;overflow:auto;' +
+      'white-space:pre-wrap;word-break:break-word;background:#04121a;color:#8fe;' +
+      'font:12px/1.5 ui-monospace,Menlo,monospace;padding:14px';
+    var cut = function (v) { return v == null ? '—' : String(v).slice(0, 14) + (String(v).length > 14 ? '…' : ''); };
+    var L = [];
+    L.push('POS CONTEXT — what the resolver actually returned');
+    L.push('');
+    if (err) {
+      L.push('RESOLVER THREW: ' + err);
+      L.push('');
+      L.push('POS still booted — this is the fail-toward-POS path.');
+    } else if (!r) {
+      L.push('resolver did not run (no uid, or the module was absent)');
+      L.push('signed in: ' + (window.__sokoniCurrentUid ? 'YES ' + cut(window.__sokoniCurrentUid) : 'NO'));
+    } else if (!r.ok) {
+      L.push('DECISION   (refused)');
+      L.push('reason     ' + r.reason);
+    } else {
+      L.push('DECISION   ' + r.decision);
+      L.push('uid        ' + cut(r.uid));
+      L.push('');
+      L.push('businesses ' + (r.businesses.length
+        ? r.businesses.map(function (b) { return b.id + ' (' + b.name + ')'; }).join(', ')
+        : 'NONE — this account owns no business'));
+      L.push('branches   ' + (r.branches.length
+        ? r.branches.map(function (b) { return b.id + (b.isDefault ? ' *default' : ''); }).join(', ')
+        : 'none'));
+      L.push('');
+      L.push('DEVICE');
+      L.push('  deviceId   ' + cut(r.device && r.device.deviceId));
+      L.push('  registered ' + (r.device && r.device.registered));
+      L.push('  reason     ' + ((r.device && r.device.reason) || '—'));
+      L.push('  merchantId ' + cut(r.device && r.device.merchantId));
+      L.push('  branchId   ' + cut(r.device && r.device.branchId));
+      L.push('  suspended  ' + !!(r.device && r.device.suspended));
+      L.push('');
+      /* THE B PROOF. "unreadable" means the rules refused the read; anything
+         else means the client genuinely read posDevices. */
+      var readOk = r.device && r.device.reason !== 'unreadable';
+      L.push('posDevices READ BY THE BROWSER: ' + (readOk ? 'YES — rules repair works end to end'
+                                                          : 'NO — the read was refused'));
+    }
+    L.push('');
+    L.push('(tap to close)');
+    box.textContent = L.join('\n');
+    box.addEventListener('click', function () { box.remove(); });
+    document.documentElement.appendChild(box);
+    try { navigator.clipboard && navigator.clipboard.writeText(L.join('\n')); } catch (e) {}
+  }
+
+  var WANT_DIAG = /[?&]diag=context\b/.test(location.search);
+
   function act(r) {
+    if (WANT_DIAG) readout(r, null);
     if (!r || !r.ok) return;                      /* unauthenticated: POS's own guard owns that */
     switch (r.decision) {
       case 'open-pos':
@@ -146,8 +212,16 @@
     if (DONE) return; DONE = true;
     log('start');
     whenAuth().then(function (uid) {
-      if (!uid) { log('no-uid'); return; }
-      if (!window.SokoniPosContext) { log('no-resolver'); return; }
+      /* The readout must ALWAYS have something to say. Returning silently here
+         is right for the product, but it is exactly the ambiguity the
+         diagnostic exists to remove — "nothing happened" and "no user" have to
+         be distinguishable when proving the authenticated path. */
+      if (!uid) { log('no-uid'); if (WANT_DIAG) readout(null, null); return; }
+      if (!window.SokoniPosContext) {
+        log('no-resolver');
+        if (WANT_DIAG) readout(null, 'SokoniPosContext was not loaded');
+        return;
+      }
       return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
         .then(function (fs) {
           var db = window.firebaseDB || fs.getFirestore();
@@ -157,8 +231,10 @@
         .then(act);
     }).catch(function (e) {
       /* Fail toward POS. A boot decision that cannot be made is not a reason to
-         stop the till from opening. */
+         stop the till from opening. The readout still reports it, so a failure
+         is never mistaken for a healthy "open-pos". */
       log('failed:' + ((e && e.message) || e));
+      if (WANT_DIAG) { try { readout(null, (e && e.message) || String(e)); } catch (_) {} }
     });
   }
 
