@@ -55,7 +55,13 @@ function driveInPage() {
       }
       panel.classList.add('show'); panel.classList.add('panel-scroll');
       panel.innerHTML = '';
-      M.mount(panel, ctx);
+      /* The handle is KEPT. The shell calls destroy() before it remounts a
+         surface, and a rig that ignores it leaves the previous instance's
+         listeners on the same host — two instances then handle one click and the
+         stale one wins. That is exactly what happened on the first run of the
+         mixed-tender case below: a discount from an earlier sale reappeared on a
+         fresh 6,000 cart. The bug was in this file, not the till. */
+      let ui = M.mount(panel, ctx);
       await sleep(1200);
 
       const q = (s) => panel.querySelector(s);
@@ -122,10 +128,94 @@ function driveInPage() {
       const openAfterConfirm = !!(completeBtn() && !completeBtn().disabled);
       const showsCode = /SFH4X9QK21/.test(txt());
 
+      /* ══ MIXED TENDER ══ a fresh 6,000 sale paid 4,000 M-Pesa + 2,000 cash.
+         Rung up from scratch so nothing above can leak into it. */
+      const mix = {};
+      try {
+        md.listProducts = () => Promise.resolve([
+          { id: 'P9', productId: 'P9', name: 'Gas cylinder', price: 6000, stock: 20, image: '' },
+        ]);
+        confirmNow = false;
+        let asked = null;
+        ctx.callStk = (p) => { asked = p.amount; return Promise.resolve({ data: { checkoutId: 'CHK9' } }); };
+        ctx.callVerify = () => Promise.resolve({ data: {
+          status: confirmNow ? 'completed' : 'pending',
+          paidAmount: confirmNow ? 4000 : null,
+          mpesaCode: confirmNow ? 'SPLIT4000' : null } });
+
+        try { ui && ui.destroy && ui.destroy(); } catch (_) {}
+        mix.tornDown = true;
+        panel.innerHTML = ''; ui = M.mount(panel, ctx);
+        await sleep(1400);
+        const card2 = panel.querySelector('.msl-card');
+        mix.hasCard = !!card2;
+        if (!card2) throw new Error('no product card after remount');
+        card2.click(); await sleep(300);
+        const charge2 = [].slice.call(panel.querySelectorAll('button'))
+          .find((b) => /charge/i.test(b.textContent || ''));
+        mix.hasCharge = !!charge2;
+        if (!charge2) throw new Error('no Charge control after remount');
+        charge2.click();
+        await sleep(400);
+        mix.due = dueOf();
+        mix.sheetOpen = !!panel.querySelector('.msl-sheet');
+
+        /* Ask M-Pesa for 4,000 of the 6,000. */
+        [].slice.call(panel.querySelectorAll('[data-act="method"]'))
+          .find((b) => b.getAttribute('data-m') === 'mpesa').click();
+        await sleep(300);
+        const amt = panel.querySelector('#msl-mamt');
+        mix.hasAmountField = !!amt;
+        mix.methodButtons = panel.querySelectorAll('[data-act="method"]').length;
+        if (!amt) throw new Error('no #msl-mamt; sheetOpen=' + mix.sheetOpen +
+          ' due=' + mix.due + ' snippet=' + txt().slice(0, 180));
+        amt.value = '4000'; fire(amt, 'input'); await sleep(250);
+        const ph = panel.querySelector('#msl-phone');
+        ph.value = '0712000111'; fire(ph, 'input'); await sleep(250);
+        panel.querySelectorAll('[data-act="stk-send"]')[0].click();
+        await sleep(1400);
+        mix.askedFor = asked;
+        mix.gatedWhilePending = !!(completeBtn() && completeBtn().disabled);
+
+        confirmNow = true;
+        await sleep(4200);
+        const t = txt();
+        mix.ledgerShowsMpesa = /M-Pesa[^0-9]*4,?000/i.test(t);
+        mix.balanceAfter = (t.match(/Balance[^0-9]*([\d,]+)/i) || [])[1];
+        mix.gatedWithBalance = !!(completeBtn() && completeBtn().disabled);
+
+        /* The remaining 2,000 in cash. */
+        const cashBtn = [].slice.call(panel.querySelectorAll('[data-act="method"]'))
+          .find((b) => b.getAttribute('data-m') === 'cash');
+        if (cashBtn) { cashBtn.click(); await sleep(250); }
+        mix.ledgerSurvivedSwitch = /M-Pesa[^0-9]*4,?000/i.test(txt());
+        /* RE-QUERIED every time. The sheet repaints on each keystroke so the
+           ladder stays truthful as you type, which means the previous input node
+           is detached the moment it fires. Holding one reference and writing to
+           it again writes to nothing — the first version of this block did, and
+           its two assertions failed against a screen that was actually correct. */
+        const typeCash = async (v) => {
+          const el = panel.querySelector('#msl-cash');
+          if (!el) throw new Error('no #msl-cash to type into');
+          el.value = String(v); fire(el, 'input'); await sleep(320);
+        };
+
+        await typeCash(2000);
+        mix.openAfterCash = !!(completeBtn() && !completeBtn().disabled);
+
+        /* Overpay the cash half: change must appear, computed across ALL tenders. */
+        await typeCash(2500);
+        mix.changeOnOverpay = (txt().match(/Change due[^0-9]*([\d,]+)/i) || [])[1];
+
+        /* Short cash: must close again. */
+        await typeCash(500);
+        mix.shutWhenShort = !!(completeBtn() && completeBtn().disabled);
+      } catch (e) { mix.error = String((e && e.message) || e); }
+
       out({
         dueBefore, dueAfter, showsDiscount,
         gatedOnSelect, asksForPhone, sendDisabledWithoutPhone, canSendWithPhone,
-        waitingText, gatedWhilePending, openAfterConfirm, showsCode,
+        waitingText, gatedWhilePending, openAfterConfirm, showsCode, mix,
       });
     } catch (e) { out({ error: String((e && e.stack) || e) }); }
   })();
@@ -172,6 +262,33 @@ export default async function run(page) {
     m.openAfterConfirm, 'this is the whole slice');
   ck('P10 the confirmed M-Pesa code is shown back to the cashier',
     m.showsCode, 'so it can be read against the customer\'s SMS');
+
+  /* ── MIXED TENDER: 4,000 M-Pesa + 2,000 cash on a 6,000 sale ─────────────── */
+  const x = m.mix || {};
+  if (x.error) {
+    ck('P11 the mixed-tender sale could be driven', false,
+      x.error + '  | state: ' + JSON.stringify(x));
+  } else {
+    ck('P11 M-Pesa can be asked for PART of the sale',
+      x.due === 6000 && x.hasAmountField && x.askedFor === 4000,
+      'due=' + x.due + ' asked=' + x.askedFor);
+    ck('P12 while that half is pending, Complete sale is shut',
+      x.gatedWhilePending, 'entering cash later must not rescue an unpaid half');
+    ck('P13 the confirmed half joins the ledger as a real tender',
+      x.ledgerShowsMpesa, 'shown as M-Pesa 4,000, not merged into one figure');
+    ck('P14 the balance falls to exactly what is still owed',
+      x.balanceAfter === '2,000', 'balance read back as ' + x.balanceAfter);
+    ck('P15 a confirmed half alone does NOT complete the sale',
+      x.gatedWithBalance, '4,000 of a 6,000 sale is not payment');
+    ck('P16 switching to Cash keeps the confirmed M-Pesa — that money is real',
+      x.ledgerSurvivedSwitch, 'discarding it would lose a payment the customer made');
+    ck('P17 the cash balance completes the split',
+      x.openAfterCash, '4,000 + 2,000 = 6,000');
+    ck('P18 overpaying the CASH half returns change across the whole tender set',
+      x.changeOnOverpay === '500', 'change read back as ' + x.changeOnOverpay);
+    ck('P19 CONTROL dropping the cash below the balance shuts it again',
+      x.shutWhenShort, 'if this failed, P17 would not be a gate at all');
+  }
 
   const passed = rows.filter((r) => r.ok).length;
   return {

@@ -302,6 +302,87 @@ async function call(fn, data, uid) {
   ck('S20 m-pesa: one confirmed payment cannot settle a SECOND sale',
     !replay.ok, replay.ok ? 'ACCEPTED — one payment, two sales' : ('refused: ' + replay.err));
 
+  /* ══ 3b. MIXED TENDER — part M-Pesa, part cash ══════════════════════════════
+     The rule that matters: the M-Pesa portion must be CONFIRMED before anything
+     commits. Entering the cash half does not make the electronic half real, and
+     a shop must never be able to hand over goods because the drawer part was
+     keyed in while the customer's payment failed. */
+  store.posPayments.MIX_4000 = { status: 'completed', sellerUid: 'OWNER1',
+                                 paidAmount: 4000, mpesaCode: 'MIX4000CODE' };
+  store.posPayments.MIX_PENDING = { status: 'pending', sellerUid: 'OWNER1', amount: 4000 };
+  store.posPayments.MIX_FAILED = { status: 'failed', sellerUid: 'OWNER1', amount: 4000 };
+
+  const big = (over) => cart(Object.assign({
+    items: [{ productId: 'P3', qty: 1, unitPrice: 6000 }],
+    subtotal: 6000, grandTotal: 6000,
+  }, over || {}));
+  store.products.P3 = { name: 'Gas cylinder', price: 6000, stock: 20 };
+
+  const mix = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIX_4000' }, { method: 'cash', amount: 2000 }],
+  }), 'OWNER1');
+  const mixR = mix.ok ? mix.res.receipt : null;
+  ck('S26 mixed: 4,000 confirmed M-Pesa + 2,000 cash completes a 6,000 sale',
+    !!mixR && mixR.total === 6000 && mixR.amountPaid === 6000 && mixR.changeDue === 0,
+    mixR ? ('total=' + mixR.total + ' paid=' + mixR.amountPaid + ' balance=' + mixR.changeDue)
+         : ('refused: ' + mix.err));
+
+  ck('S27 mixed: the receipt keeps BOTH tenders, not a single merged figure',
+    !!mixR && mixR.payments.length === 2 &&
+    mixR.payments.some((p) => p.method === 'mpesa' && p.amount === 4000) &&
+    mixR.payments.some((p) => p.method === 'cash' && p.amount === 2000),
+    mixR ? mixR.payments.map((p) => p.method + ':' + p.amount).join(' + ') : 'no receipt');
+
+  const mixPending = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIX_PENDING' }, { method: 'cash', amount: 2000 }],
+  }), 'OWNER1');
+  ck('S28 mixed: cash entered does NOT make an unconfirmed M-Pesa half real',
+    !mixPending.ok,
+    mixPending.ok ? 'ACCEPTED — goods left on a payment still waiting for a PIN'
+                  : ('refused: ' + mixPending.err));
+
+  const mixFailed = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIX_FAILED' }, { method: 'cash', amount: 2000 }],
+  }), 'OWNER1');
+  ck('S29 mixed: if the M-Pesa half FAILS the sale does not complete',
+    !mixFailed.ok, mixFailed.ok ? 'ACCEPTED with a failed electronic half'
+                                : ('refused: ' + mixFailed.err));
+
+  const mixShort = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIX_4000' }, { method: 'cash', amount: 500 }],
+  }), 'OWNER1');
+  ck('S30 mixed: the two halves must still COVER the total',
+    !mixShort.ok, mixShort.ok ? 'ACCEPTED 4,500 against a 6,000 sale'
+                              : ('refused: ' + mixShort.err));
+
+  /* The reverse split, so the pass is not an artefact of one particular ordering. */
+  store.posPayments.MIX_2000 = { status: 'completed', sellerUid: 'OWNER1',
+                                 paidAmount: 2000, mpesaCode: 'MIX2000CODE' };
+  const mixRev = await call(F, big({
+    payments: [{ method: 'cash', amount: 4000 }, { method: 'mpesa', amount: 2000, ref: 'MIX_2000' }],
+  }), 'OWNER1');
+  ck('S31 mixed: 2,000 M-Pesa + 4,000 cash works too, in either order',
+    mixRev.ok && mixRev.res.receipt.total === 6000,
+    mixRev.ok ? ('total=' + mixRev.res.receipt.total) : ('refused: ' + mixRev.err));
+
+  /* Overpaying the CASH half is change. Overpaying the electronic half is not,
+     because nothing can be handed back through it. */
+  store.posPayments.MIX_4000B = { status: 'completed', sellerUid: 'OWNER1', paidAmount: 4000 };
+  const mixOver = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIX_4000B' }, { method: 'cash', amount: 2500 }],
+  }), 'OWNER1');
+  ck('S32 mixed: overpaying the CASH half returns change',
+    mixOver.ok && mixOver.res.receipt.changeDue === 500,
+    mixOver.ok ? ('change=' + mixOver.res.receipt.changeDue) : ('refused: ' + mixOver.err));
+
+  store.posPayments.MIX_BIG = { status: 'completed', sellerUid: 'OWNER1', paidAmount: 7000 };
+  const eOver = await call(F, big({
+    payments: [{ method: 'mpesa', amount: 7000, ref: 'MIX_BIG' }],
+  }), 'OWNER1');
+  ck('S33 an M-Pesa OVERPAYMENT cannot produce change — nothing hands it back',
+    !eOver.ok, eOver.ok ? ('ACCEPTED with change=' + eOver.res.receipt.changeDue +
+                           ' that no drawer could pay') : ('refused: ' + eOver.err));
+
   /* ══ 4. A refusal must be recoverable ═══════════════════════════════════════ */
   const k = 'retrykey1';
   const bad = await call(F, cart({ idempotencyKey: k, grandTotal: 1 }), 'OWNER1');

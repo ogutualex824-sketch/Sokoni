@@ -112,7 +112,24 @@ s = C.settle({ totalMinor: K(43500), tenders: [
 const r = C.receiptPayment(s);
 ck('every tender appears, by method', r.lines[0].label === 'MPESA' && r.lines[1].label === 'CASH');
 ck('amounts match the settlement', r.lines[0].amount === '20,000' && r.lines[1].amount === '25,000');
-ck('change matches the settlement', r.lines[2].label === 'CHANGE' && r.lines[2].amount === C.fromMinor(s.changeMinor));
+/* Found BY LABEL, not by index. This assertion used to read lines[2] and broke the
+   moment a legitimate TOTAL PAID line was added between — the receipt was correct
+   and the test was wrong about where to look. */
+const line = (lbl) => r.lines.filter((l) => l.label === lbl)[0];
+ck('change matches the settlement',
+  !!line('CHANGE') && line('CHANGE').amount === C.fromMinor(s.changeMinor));
+
+/* A split tender states what was paid in total; a single one does not need to,
+   because the one tender line already says it. */
+ck('a SPLIT tender prints TOTAL PAID',
+  !!line('TOTAL PAID') && line('TOTAL PAID').amount === C.fromMinor(s.paidMinor));
+ck('TOTAL PAID sums the tenders, it is not the sale total',
+  line('TOTAL PAID').amount === '45,000' && C.fromMinor(s.totalMinor) === '43,500');
+const single = C.receiptPayment(C.settle({ totalMinor: K(1000), tenders: cash(1500) }));
+ck('a SINGLE tender does not repeat itself as TOTAL PAID',
+  !single.lines.filter((l) => l.label === 'TOTAL PAID').length);
+ck('CONTROL the single-tender receipt still prints its change',
+  !!single.lines.filter((l) => l.label === 'CHANGE').length);
 ck('an unfinished sale prints BALANCE DUE',
    C.receiptPayment(C.settle({ totalMinor: K(1500), tenders: cash(1000) }))
      .lines.some((l) => l.label === 'BALANCE DUE'));

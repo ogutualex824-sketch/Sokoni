@@ -91,13 +91,19 @@ let LAST = null;
   const src = require('fs').readFileSync(path.join(__dirname, '..', 'sokoni-merchant-sell.js'), 'utf8');
 
   /* ── what the payload carries ─────────────────────────────────────────────── */
-  ck('T1  cash sends the amount RECEIVED, not the amount due',
-    /method: 'cash', amount: \(S\.cashGiven == null \? due : Number\(S\.cashGiven\)\)/.test(src),
-    'sending the due instead would show change on screen and record none');
+  ck('T1  cash sends the amount RECEIVED, and only when there is some',
+    /out\.push\(\{ method: 'cash', amount: Number\(S\.cashGiven\) \}\)/.test(src) &&
+    /S\.method === 'cash' && S\.cashGiven != null && Number\(S\.cashGiven\) > 0/.test(src),
+    'sending the due instead would show change on screen and record none; ' +
+    'a zero cash line would claim a drawer movement that never happened');
 
-  ck('T2  a non-cash tender carries the server\'s payment reference',
-    /return \[\{ method: S\.method, amount: due, ref: \(S\.stk && S\.stk\.reference\) \|\| null \}\]/.test(src),
+  ck('T2  every ledger tender carries the server\'s payment reference',
+    /out = S\.tenders\.map\([\s\S]{0,160}ref: t\.ref \|\| null/.test(src),
     'without a ref the server has nothing to confirm against and refuses the sale');
+
+  ck('T2b the payload is the LEDGER plus cash, so a split reaches the server intact',
+    /function payments\(\)[\s\S]{0,120}S\.tenders\.map/.test(src),
+    'a single merged figure would lose which money came from where');
 
   ck('T3  the discount is sent to the server to be authorised',
     /discountTotal: discountOf\(\)/.test(src),
@@ -108,15 +114,32 @@ let LAST = null;
     'items → subtotal → discount → amount due → payment');
 
   /* ── what it will not let a cashier do ────────────────────────────────────── */
-  ck('T5  Complete sale is gated on a CONFIRMED payment for a non-cash tender',
-    /var confirmed = !!\(S\.stk && S\.stk\.phase === 'confirmed' && S\.stk\.reference\)/.test(src) &&
-    /var canPay = \(cash \? \(st \? st\.canComplete : false\) : confirmed\)/.test(src),
-    'selecting M-Pesa must never complete the sale');
+  ck('T5  ONE gate covers every combination — the settlement\'s own answer',
+    /var canPay = !!\(st && st\.canComplete\) && !stranded && !S\.discountErr/.test(src),
+    'cash-only, M-Pesa-only and any split judged by the same arithmetic; ' +
+    'a per-method special case is the shape that let "selected" pass for "paid"');
 
-  ck('T6  `confirmed` is only ever set from a SERVER status read',
-    (src.match(/phase: 'confirmed'/g) || []).length === 1 &&
-    /st === 'completed' \|\| st === 'success'[\s\S]{0,220}phase: 'confirmed'/.test(src),
-    'set anywhere else and having sent a push would count as having been paid');
+  ck('T6  a tender joins the ledger ONLY inside the server-confirmed branch',
+    (src.match(/S\.tenders = S\.tenders\.concat/g) || []).length === 1 &&
+    /st === 'completed' \|\| st === 'success'[\s\S]{0,700}S\.tenders = S\.tenders\.concat/.test(src),
+    'appended anywhere else and having sent a push would count as having been paid');
+
+  /* Negative assertions run against CODE ONLY. The first version of this check
+     failed because the phrase it was forbidding appears in the comment explaining
+     why it is forbidden — the detector matched its own documentation. */
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ck('T6b an unconfirmed push is simply not in the sum, so the balance stays owed',
+    /S\.tenders\b/.test(code) && !/confirmed:\s*false/.test(code),
+    'there is no half-confirmed tender state downstream to mishandle');
+
+  ck('T6c the same reference cannot be added to the ledger twice',
+    /already = S\.tenders\.some\(function \(t\) \{ return t\.ref === ref; \}\)/.test(src),
+    'two polls in flight must not double-count one payment');
+
+  ck('T6d an ELECTRONIC overpayment blocks completion, matching the server',
+    /var stranded = !!\(st && st\.unrefundableMinor > 0\)/.test(src),
+    'SokoniCash calls a zero balance complete even when part is unrefundable; ' +
+    'the server refuses it (S33), so the button must too');
 
   ck('T7  sending the push does NOT mark it confirmed',
     /S\.stk = \{ phase: 'waiting'/.test(src) && !/callStk\([\s\S]{0,400}phase: 'confirmed'/.test(src),
@@ -135,9 +158,23 @@ let LAST = null;
     /if \(act === 'method'\)[\s\S]{0,180}stkStop\(\); S\.stk = null/.test(src),
     'a confirmation belongs to the tender it was requested for');
 
-  ck('T11 changing the discount voids it too — the amount due moved',
-    /Any M-Pesa request was for a DIFFERENT amount due[\s\S]{0,120}stkStop\(\); S\.stk = null/.test(src),
-    'otherwise a push confirmed for 2,800 could pay for a 3,000 sale');
+  ck('T11 changing the discount voids the IN-FLIGHT request',
+    /Any IN-FLIGHT request was for a different balance[\s\S]{0,500}stkStop\(\); S\.stk = null/.test(src),
+    'otherwise a push requested for one balance could settle another');
+
+  ck('T11b but CONFIRMED tenders survive a method switch — that money is real',
+    /Tenders\s*\n?\s*\*?\s*already in the ledger are CONFIRMED money/.test(src) ||
+    /already in the ledger are CONFIRMED money/.test(src),
+    'discarding them because the cashier tapped Cash would lose a real payment');
+
+  ck('T11c the next tender defaults to the BALANCE, not the full total',
+    /function balanceDue\(\) \{ return Math\.max\(0, amountDue\(\) - tenderedSoFar\(\)\)/.test(src) &&
+    /mpesaPanel\(bal\)/.test(src),
+    'after 4,000 of a 6,000 sale, the cash keypad must be built around 2,000');
+
+  ck('T11d an M-Pesa request cannot exceed the balance',
+    /return Math\.min\(a, bal\)/.test(src),
+    'there is no way to hand change back through M-Pesa');
 
   /* ── the receipt ──────────────────────────────────────────────────────────── */
   ck('T12 auto-print happens ONLY after the server returned a completed sale',

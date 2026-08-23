@@ -271,10 +271,18 @@
       discount: 0,
       discountText: '',
       discountErr: null,
-      /* The M-PESA request, and the only thing that may enable Complete sale for
-         a non-cash tender. `reference` is the server's checkoutId; `confirmed` is
-         set ONLY from a server status read, never from having sent the push. */
-      stk: null,               /* null | { phase, phone, reference, error, since } */
+      /* ── THE TENDER LEDGER ───────────────────────────────────────────────
+         Electronic tenders that have been CONFIRMED, in the order they were
+         taken. A tender only enters this list once the server has said the money
+         arrived, so its presence is the proof — there is no `confirmed: false`
+         state to get mishandled downstream. Cash is not held here: it is counted
+         at the end, because cash is the tender that can overpay and produce
+         change. Together they are what `payments()` sends. */
+      tenders: [],             /* [{ method, amount, ref, code }] */
+      /* The M-PESA request in flight, and the only thing that may add to the
+         ledger. `reference` is the server's checkoutId; a tender is appended ONLY
+         from a server status read, never from having sent the push. */
+      stk: null,               /* null | { phase, phone, amount, reference, error, since } */
       /* Pickup until the merchant says otherwise. A default of 'delivery' would
          make an unstated fulfilment look like a stated one. */
       ful: { type: 'pickup', dest: null, note: '' },
@@ -336,17 +344,40 @@
     }
     function amountDue() { return Math.max(0, totals().subtotal - discountOf()); }
 
+    /* Confirmed electronic money, before any cash. */
+    function tenderedSoFar() {
+      return S.tenders.reduce(function (s, t) { return s + (Number(t.amount) || 0); }, 0);
+    }
+    /* What is still owed after the confirmed tenders — the figure the next tender
+       defaults to, and the one the cash keypad is built around. */
+    function balanceDue() { return Math.max(0, amountDue() - tenderedSoFar()); }
+
+    /* EVERY tender, settled together by SokoniCash. Change falls out of the whole
+       set rather than the last one, which is what makes a 4,000 M-Pesa + 2,500
+       cash tender on a 6,000 sale return 500 rather than nothing: the arithmetic
+       is over the total tendered, not over the cash line alone.
+       Cash is appended last because it is the tender that can exceed the balance,
+       and SokoniCash caps change at the cash actually taken — so an electronic
+       overpayment cannot produce change no drawer could pay. */
     function settlement() {
       var C = CASH();
       if (!C) return null;
       var dueMinor = C.toMinor(amountDue());
       if (dueMinor == null) return null;
-      var amountMinor = (S.method === 'cash')
-        ? (S.cashGiven == null ? null : C.toMinor(S.cashGiven))
-        : dueMinor;                     /* a confirmed M-Pesa/card tender is the exact amount */
-      if (amountMinor == null) amountMinor = 0;
+      var ts = [];
+      for (var i = 0; i < S.tenders.length; i++) {
+        var m = C.toMinor(S.tenders[i].amount);
+        if (m == null) return null;
+        ts.push({ method: S.tenders[i].method, amountMinor: m });
+      }
+      if (S.method === 'cash' && S.cashGiven != null && Number(S.cashGiven) > 0) {
+        var cm = C.toMinor(Number(S.cashGiven));
+        if (cm == null) return null;
+        ts.push({ method: 'cash', amountMinor: cm });
+      }
+      if (!ts.length) return null;
       try {
-        return C.settle({ totalMinor: dueMinor, tenders: [{ method: S.method, amountMinor: amountMinor }] });
+        return C.settle({ totalMinor: dueMinor, tenders: ts });
       } catch (_) { return null; }
     }
 
@@ -556,17 +587,23 @@
       return null;
     }
 
-    function mpesaPanel(due) {
+    /* The amount this push is for. Defaults to the whole balance — the common
+       case — but is settable, because a customer may be paying only part of the
+       sale electronically and the rest in cash. Never more than the balance:
+       there is no way to hand change back through M-Pesa. */
+    function stkAmount(bal) {
+      var k = S.stk || {};
+      var a = (k.amount == null || k.amount === '') ? bal : Number(k.amount);
+      if (!isFinite(a) || a <= 0) return 0;
+      return Math.min(a, bal);
+    }
+
+    function mpesaPanel(bal) {
       var k = S.stk || {};
       var phase = k.phase || 'idle';
       var typed = (k.phone == null) ? '' : k.phone;
-
-      if (phase === 'confirmed') {
-        return '<div class="msl-tot grand" style="color:var(--acc)"><span>M-Pesa confirmed</span>' +
-          '<b>' + esc(md.formatKES(due)) + '</b></div>' +
-          '<div class="msl-note">' + (k.code ? 'Code <b>' + esc(k.code) + '</b>. ' : '') +
-          'The server confirmed this payment. Completing the sale now prints the receipt.</div>';
-      }
+      var amt = stkAmount(bal);
+      var overAsked = (k.amount != null && k.amount !== '' && Number(k.amount) > bal);
 
       if (phase === 'sending' || phase === 'waiting') {
         return '<div class="msl-prog"><span class="msl-spin"></span>' +
@@ -589,12 +626,21 @@
             '<div style="font-weight:600;color:var(--txt2);margin-top:7px;font-size:12px">' +
             'Nothing was charged. Check the number and send it again.</div></div>'
           : '') +
+        '<div class="msl-lbl">M-Pesa amount</div>' +
+        '<input class="msl-inp" id="msl-mamt" inputmode="numeric" pattern="[0-9]*" ' +
+          'placeholder="' + esc(String(bal)) + '" value="' + (k.amount == null ? '' : esc(String(k.amount))) + '" ' +
+          'aria-label="Amount to request by M-Pesa">' +
+        (overAsked
+          ? '<div class="msl-note" style="color:#ffb020">Only ' + esc(md.formatKES(bal)) +
+            ' is still owed. M-Pesa cannot give change.</div>'
+          : '<div class="msl-note">Leave it as ' + esc(md.formatKES(bal)) +
+            ' for the whole balance, or enter less and take the rest another way.</div>') +
         '<div class="msl-lbl">Customer\'s M-Pesa number</div>' +
         '<input class="msl-inp" id="msl-phone" inputmode="tel" ' +
           'placeholder="07xx xxx xxx" value="' + esc(typed) + '" aria-label="Customer M-Pesa number">' +
         '<button class="msl-btn solid wide" data-act="stk-send" style="margin-top:10px"' +
-          (normPhone(typed) && due > 0 ? '' : ' disabled') + '>' +
-          'Send payment request for ' + esc(md.formatKES(due)) + '</button>' +
+          (normPhone(typed) && amt > 0 && !overAsked ? '' : ' disabled') + '>' +
+          'Send payment request for ' + esc(md.formatKES(amt)) + '</button>' +
         '<div class="msl-note">The customer gets a prompt on their phone. The sale can only be ' +
           'completed after they pay and the server confirms it.</div>';
     }
@@ -603,30 +649,34 @@
     function stkStop() { if (_stkPoll) { clearTimeout(_stkPoll); _stkPoll = null; } }
 
     function stkSend() {
-      var due = amountDue();
+      var bal = balanceDue();
+      var amt = stkAmount(bal);
+      var keep = (S.stk && S.stk.amount != null) ? S.stk.amount : null;
       var phone = normPhone(S.stk && S.stk.phone);
-      if (!phone || !(due > 0)) return;
+      if (!phone || !(amt > 0)) return;
       if (typeof ctx.callStk !== 'function') {
-        S.stk = { phase: 'idle', phone: (S.stk && S.stk.phone) || '',
+        S.stk = { phase: 'idle', phone: (S.stk && S.stk.phone) || '', amount: keep,
                   error: 'M-Pesa is not available in this workspace yet. Take the payment another way.' };
         paint(); return;
       }
       stkStop();
-      S.stk = { phase: 'sending', phone: (S.stk && S.stk.phone) || '', error: null };
+      S.stk = { phase: 'sending', phone: (S.stk && S.stk.phone) || '', amount: keep,
+                asked: amt, error: null };
       paint();
 
       ctx.callStk({
-        sellerUid: ctx.scope.shopId, phone: phone, amount: due,
+        sellerUid: ctx.scope.shopId, phone: phone, amount: amt,
         hub: 'pos', description: (ctx.shopName || 'SOKONI') + ' sale',
       }).then(function (r) {
         var d = (r && r.data) || r || {};
         var ref = d.checkoutId || d.ref || null;
         if (!ref) throw new Error('The payment request did not return a reference.');
-        S.stk = { phase: 'waiting', phone: S.stk.phone, reference: ref, error: null, since: Date.now() };
+        S.stk = { phase: 'waiting', phone: S.stk.phone, amount: keep, asked: amt,
+                  reference: ref, error: null, since: Date.now() };
         paint();
         stkPoll(ref);
       }).catch(function (e) {
-        S.stk = { phase: 'idle', phone: (S.stk && S.stk.phone) || '',
+        S.stk = { phase: 'idle', phone: (S.stk && S.stk.phone) || '', amount: keep,
                   error: (e && e.message) || 'The payment request could not be sent.' };
         paint();
       });
@@ -652,8 +702,28 @@
           if (!S.stk || S.stk.reference !== ref) return;
           if (st === 'completed' || st === 'success') {
             stkStop();
-            S.stk = { phase: 'confirmed', phone: S.stk.phone, reference: ref,
-                      code: d.mpesaCode || null, error: null };
+            /* CONFIRMED money joins the ledger. The amount recorded is what the
+               SERVER says was paid where it says so, falling back to what was
+               asked for — never to the balance, which may have been something
+               else by the time the customer finished paying.
+               Guarded against a double append: a poll already in flight when
+               another confirms must not enter the same reference twice. */
+            var already = S.tenders.some(function (t) { return t.ref === ref; });
+            if (!already) {
+              var paid = Number(d.paidAmount != null ? d.paidAmount : d.confirmedAmount);
+              S.tenders = S.tenders.concat([{
+                method: 'mpesa',
+                amount: (isFinite(paid) && paid > 0) ? paid : Number(S.stk.asked || 0),
+                ref: ref,
+                code: d.mpesaCode || null,
+              }]);
+            }
+            /* Whatever is still owed is taken the ordinary way, so the sheet
+               returns to the cash keypad rather than stranding the cashier on a
+               spent M-Pesa panel. */
+            S.stk = null;
+            S.method = 'cash';
+            S.cashGiven = null;
             paint(); return;
           }
           if (st === 'failed' || st === 'cancelled') {
@@ -731,12 +801,25 @@
       var shortBy = (st && st.balanceMinor > 0 && C) ? C.fromMinor(st.balanceMinor) : null;
       var disc = discountOf();
       var due  = amountDue();
-      /* Cash is settled on this device against the server's own prices. Anything
-         else is settled by the SERVER: the only thing that may enable Complete
-         sale for a non-cash tender is a confirmation read back from the payment
-         record, never the fact that a request was sent. */
-      var confirmed = !!(S.stk && S.stk.phase === 'confirmed' && S.stk.reference);
-      var canPay = (cash ? (st ? st.canComplete : false) : confirmed) && !S.discountErr;
+      var bal  = balanceDue();
+      /* ONE gate for every combination, and it is the settlement's own answer.
+         `canComplete` is `balance === 0` across ALL tenders, so cash-only,
+         M-Pesa-only and any split are judged by the same arithmetic rather than
+         by a per-method special case — the shape that let "selected" pass for
+         "paid" in the first place.
+
+         The electronic half needs no separate check here: a tender reaches
+         S.tenders ONLY after a server confirmation, so an unconfirmed push simply
+         is not in the sum, the balance stays positive, and the button stays shut.
+         S28 proves the same thing on the server for a caller that skips this. */
+      /* One more condition than `canComplete` carries, and it exists to keep this
+         button honest with the server. SokoniCash treats a balance of zero as
+         complete even when part of the overpayment is UNREFUNDABLE — money taken
+         electronically that exceeds the sale, which no drawer can hand back. The
+         server refuses exactly that case (S33), so enabling the button here would
+         produce a confident tap and a refusal. Both now agree. */
+      var stranded = !!(st && st.unrefundableMinor > 0);
+      var canPay = !!(st && st.canComplete) && !stranded && !S.discountErr;
       var delivering = (S.ful.type === 'delivery');
       /* A delivery with no destination is not ready to charge. buildFulfilment
          refuses it, and so does this button. */
@@ -755,6 +838,28 @@
             : '') +
           '<div class="msl-tot grand" style="margin:0 0 14px">' +
             '<span>Amount due</span><b>' + esc(md.formatKES(due)) + '</b></div>' +
+
+          /* ── THE TENDER LEDGER ─ what has actually been taken so far.
+               Only appears once part of the money is in, because a sale settled in
+               one tender does not need a ledger to explain itself. Each line is a
+               CONFIRMED payment; the balance underneath is what is still owed. */
+          (S.tenders.length
+            ? '<div class="msl-lbl">Taken so far</div>' +
+              S.tenders.map(function (t, i) {
+                return '<div class="msl-tot"><span>' +
+                  esc(t.method === 'mpesa' ? 'M-Pesa' : (t.method === 'card' ? 'Card' : t.method)) +
+                  (t.code ? ' · ' + esc(t.code) : '') + '</span>' +
+                  '<b>' + esc(md.formatKES(t.amount)) + '</b>' +
+                  (busy ? '' : '<button class="msl-x" style="display:block;margin-left:8px" ' +
+                    'data-act="untender" data-i="' + i + '" aria-label="Remove this payment">×</button>') +
+                  '</div>';
+              }).join('') +
+              '<div class="msl-tot"><span>Total tendered</span><b>' +
+                esc(md.formatKES(tenderedSoFar())) + '</b></div>' +
+              '<div class="msl-tot grand" style="margin:0 0 14px"><span>' +
+                (bal > 0 ? 'Balance' : 'Balance') + '</span><b>' +
+                esc(md.formatKES(bal)) + '</b></div>'
+            : '') +
 
           (S.preflight && S.preflight.blocking
             ? '<div class="msl-warn">' + esc(S.preflight.message) + '</div>' : '') +
@@ -798,7 +903,7 @@
             : '<div class="msl-note">Taken off before payment. An owner or manager can ' +
               'approve one; the server checks who is signed in.</div>') +
 
-          '<div class="msl-lbl">How is the customer paying?</div>' +
+          '<div class="msl-lbl">' + (S.tenders.length ? 'How is the rest being paid?' : 'How is the customer paying?') + '</div>' +
           '<div class="msl-pays">' + METHODS.map(function (m) {
             return '<button class="msl-pay' + (S.method === m.id ? ' on' : '') + '" data-act="method" data-m="' + m.id + '"' +
               (busy ? ' disabled' : '') + '><span class="ic">' + m.icon + '</span>' + m.label + '</button>';
@@ -807,8 +912,8 @@
           (cash
             ? '<div class="msl-lbl">Cash received</div>' +
               '<div class="msl-cash">' +
-                '<button data-act="tender" data-v="exact"' + (given === due ? ' class="on"' : '') + '>Exact</button>' +
-                CASH_STEPS.filter(function (v) { return v >= due; }).slice(0, 4).map(function (v) {
+                '<button data-act="tender" data-v="exact"' + (given === bal ? ' class="on"' : '') + '>Exact</button>' +
+                CASH_STEPS.filter(function (v) { return v >= bal; }).slice(0, 4).map(function (v) {
                   return '<button data-act="tender" data-v="' + v + '"' + (given === v ? ' class="on"' : '') + '>' + v + '</button>';
                 }).join('') +
               '</div>' +
@@ -823,13 +928,20 @@
                     ? '<div class="msl-note" style="color:#ffb020">Short by ' + esc(shortBy) + '.</div>'
                     : '')
             : S.method === 'mpesa'
-              ? mpesaPanel(due)
+              ? mpesaPanel(bal)
               /* Card is unchanged by this slice: there is no terminal integration
                  to confirm against, so it stays an operator attestation and says
                  so plainly rather than borrowing M-Pesa's confirmation language. */
               : '<div class="msl-note">Confirm the card payment has actually been received before ' +
                 'completing. This screen <b>records</b> the tender against the sale — it does not ' +
                 'request the money.</div>') +
+
+          (stranded && C
+            ? '<div class="msl-warn" style="margin-top:14px">' +
+              esc(C.fromMinor(st.unrefundableMinor)) + ' more has been taken electronically than ' +
+              'this sale is for, and M-Pesa cannot give change. Remove that payment and take the ' +
+              'right amount, or add items to the sale.</div>'
+            : '') +
 
           (S.sale === 'failed'
             ? '<div class="msl-err" style="margin-top:14px">' + esc(S.saleError || 'The sale was not completed.') +
@@ -962,7 +1074,7 @@
       S.settled = null; S.fulfilled = null;
       S.receipt = null; S.cached = false; S.saleError = null; S.preflight = null; S.cashGiven = null;
       S.discount = 0; S.discountText = ''; S.discountErr = null;
-      stkStop(); S.stk = null;
+      S.tenders = []; stkStop(); S.stk = null;
       /* Re-read the catalogue: the sale just changed canonical stock, and the next
          customer must not be sold against the pre-sale numbers. */
       load();
@@ -976,11 +1088,15 @@
        has nothing to confirm against and refuses the sale, which is the whole
        point: selecting M-Pesa is not paying with it. */
     function payments() {
-      var due = amountDue();
-      if (S.method === 'cash') {
-        return [{ method: 'cash', amount: (S.cashGiven == null ? due : Number(S.cashGiven)) }];
+      var out = S.tenders.map(function (t) {
+        return { method: t.method, amount: Number(t.amount) || 0, ref: t.ref || null };
+      });
+      /* Cash last, and only when there is some. A zero cash line on a sale settled
+         entirely by M-Pesa would claim a drawer movement that never happened. */
+      if (S.method === 'cash' && S.cashGiven != null && Number(S.cashGiven) > 0) {
+        out.push({ method: 'cash', amount: Number(S.cashGiven) });
       }
-      return [{ method: S.method, amount: due, ref: (S.stk && S.stk.reference) || null }];
+      return out;
     }
 
     /* Pre-charge guard. Uses the server's own side-effect-free dry run: it prices
@@ -1244,13 +1360,25 @@
                                        would let a pickup sale carry an address into the receipt. */
                                     if (S.ful.type === 'pickup') { S.ful.dest = null; S.destText = ''; S.destErr = null; }
                                     paint(); return; }
-      /* Switching method abandons the M-Pesa request with it. A confirmation
-         belongs to the tender it was requested for; carrying it across to another
-         method would let a confirmed push pay for a sale it never covered. */
+      /* Switching method abandons the IN-FLIGHT request, and only that. Tenders
+         already in the ledger are CONFIRMED money that the shop has actually
+         received — discarding them because the cashier tapped Cash would lose a
+         payment the customer really made. */
       if (act === 'method')       { S.method = el.getAttribute('data-m') || 'cash'; S.cashGiven = null;
                                     stkStop(); S.stk = null; paint(); return; }
+      /* Removing a tender is how an operator corrects a wrong split before
+         committing. It only leaves this screen's ledger: nothing has been sent to
+         the server yet, and the money itself is unaffected — the customer's M-Pesa
+         payment still exists and can be applied to the corrected sale, because the
+         server keys its claim on the reference rather than on this list. */
+      if (act === 'untender')     { var ti = parseInt(el.getAttribute('data-i'), 10);
+                                    if (ti >= 0 && ti < S.tenders.length) {
+                                      S.tenders = S.tenders.slice(0, ti).concat(S.tenders.slice(ti + 1));
+                                      S.cashGiven = null;
+                                    }
+                                    paint(); return; }
       if (act === 'tender')       { var v = el.getAttribute('data-v');
-                                    S.cashGiven = (v === 'exact') ? amountDue() : Number(v); paint(); return; }
+                                    S.cashGiven = (v === 'exact') ? balanceDue() : Number(v); paint(); return; }
       if (act === 'stk-send')     { stkSend(); return; }
       if (act === 'stk-cancel')   { stkStop(); S.stk = null; paint(); return; }
       if (act === 'complete')     { complete(); return; }
@@ -1288,7 +1416,7 @@
          every keystroke so the ladder stays truthful as you type. Each restores
          focus and caret afterwards — re-rendering out from under a thumb at a till
          is how a field silently stops accepting input. */
-      if (el.id === 'msl-cash' || el.id === 'msl-disc' || el.id === 'msl-phone') {
+      if (el.id === 'msl-cash' || el.id === 'msl-disc' || el.id === 'msl-phone' || el.id === 'msl-mamt') {
         var fid = el.id;
         if (fid === 'msl-cash') {
           var n = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);
@@ -1303,12 +1431,19 @@
             ? 'A discount cannot be more than the ' + md.formatKES(sub) + ' subtotal.' : null;
           /* The cash already keyed in was counted against a different amount due. */
           S.cashGiven = null;
-          /* Any M-Pesa request was for a DIFFERENT amount due, so it is void — a
-             confirmation must belong to the figure it was requested for. */
+          /* Any IN-FLIGHT request was for a different balance, so it is void — a
+             confirmation must belong to the figure it was requested for. Confirmed
+             tenders stay: that money has genuinely been received, and if the
+             discount now puts the sale below it the sheet says so rather than
+             quietly discarding a real payment. */
           stkStop(); S.stk = null;
+        } else if (fid === 'msl-phone') {
+          S.stk = Object.assign({}, S.stk, { phase: 'idle', phone: String(el.value || ''),
+                                             error: (S.stk && S.stk.error) || null });
         } else {
-          S.stk = { phase: 'idle', phone: String(el.value || ''),
-                    error: (S.stk && S.stk.error) || null };
+          var an = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10);
+          S.stk = Object.assign({}, S.stk, { phase: 'idle',
+                                             amount: isFinite(an) && an > 0 ? an : null });
         }
         var f = host.querySelector('.msl-sheet');
         if (f) { var sel = el.selectionStart; f.innerHTML = paySheet();
@@ -1344,6 +1479,11 @@
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
         host.removeEventListener('change', onChange);
+        /* The M-Pesa poll outlives the listeners unless it is stopped here. A
+           surface torn down mid-wait (the shop switches, the session re-resolves
+           and the shell remounts) would otherwise keep calling the server every
+           three seconds for two minutes and paint a host nobody is looking at. */
+        stkStop();
       },
     };
   }

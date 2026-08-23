@@ -120,6 +120,13 @@
     var lines = s.tenders.map(function (t) {
       return { label: t.method.toUpperCase(), amount: fromMinor(t.amountMinor) };
     });
+    /* TOTAL PAID only where it says something the lines above do not. On a single
+       tender it merely repeats that line; on a SPLIT it is the figure a customer
+       checks the sale against, and its absence is what makes a mixed-tender
+       receipt hard to read. */
+    if (s.tenders.length > 1) {
+      lines.push({ label: 'TOTAL PAID', amount: fromMinor(s.paidMinor), strong: true });
+    }
     if (s.changeMinor > 0) lines.push({ label: 'CHANGE', amount: fromMinor(s.changeMinor) });
     if (s.unrefundableMinor > 0) lines.push({ label: 'OVERPAID', amount: fromMinor(s.unrefundableMinor) });
     if (s.balanceMinor > 0) lines.push({ label: 'BALANCE DUE', amount: fromMinor(s.balanceMinor) });
