@@ -200,6 +200,29 @@ a{color:inherit;text-decoration:none}
 .main{ padding:14px 14px 24px; max-width:1180px; }
 .panel{display:none}
 .panel.show{display:block}
+
+/* A NATIVE module that hosts its own scroller needs a definite height for the
+   same reason .frame-wrap below does. Without one, `.panel.show` is display:block
+   with auto height, so a module's `height:100%` resolves against an auto-height
+   ancestor and becomes auto: the module's column grows to its content, its
+   internal `overflow-y:auto` body never engages, the whole document scrolls
+   instead, and anything the module pins to its own bottom edge — the Quick Sell
+   charge bar — ends up below the fold.
+
+   Measured before this rule, at 390x844 AND 412x915: .msl was 2282px tall against
+   an 844px viewport, bodyScrollable=false, docScrolls=true, and the charge bar sat
+   at y=2908 — about 2000px past the fold. That is the "hunt for Charge after
+   scrolling" report, and it is why the module certified green in isolation: a
+   height-constrained test host recreates the fix and hides the defect.
+
+   Scoped to hosts that opt in, so panels which legitimately scroll with the page
+   are untouched. */
+.panel.show > .panel-scroll,
+.panel.show > #native-sell{
+  height:calc(100vh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
+  height:calc(100dvh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
+  min-height:0;
+}
 /* An iframe module fills the viewport minus the chrome. It is the ONLY thing that
    gets a fixed height, because it hosts its own scrolling document. */
 .frame-wrap{
