@@ -600,6 +600,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      which reads receipt ids through receiptIdOf(). Production loads that module STATICALLY
      here, unlike the work branch where it is loaded on demand — hence a different anchor. -->
 <script src="sokoni-receipt-id.js"></script>
+<!-- The cash authority. sokoni-merchant-sell.js resolves it as a GLOBAL
+     (window.SokoniCash) and owns no arithmetic of its own: without this file the
+     module cannot compute change and, correctly, refuses to guess one — the pay
+     screen simply shows no change figure. That is not a Sell defect; it is the
+     shell failing to supply an authority the module depends on. Loaded before the
+     module for the same reason sokoni-receipt-id.js is. -->
+<script src="sokoni-cash.js"></script>
+<!-- The canonical receipt renderer. sokoni-merchant-sell.js composes through
+     global SokoniReceiptDoc — NOT SokoniReceipt, which POS owns — and
+     composedReceipt() returns null when it is absent, so the shell silently fell
+     back to unbranded text with no seller line no matter what servedBy carried.
+     Wiring servedBy without this would have produced a receipt that still showed
+     nobody. ONE renderer, per the receipt contract; this shell was simply not
+     loading it. -->
+<script src="sokoni-receipt.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
@@ -1585,6 +1600,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         toast('Barcode scanning is not available in this workspace yet.');
         return Promise.resolve(null);
       },
+      /* WHO MADE THE SALE — passed straight through, never constructed here.
+         S.servedBy is whatever merchantIdentity resolved on the server; the shell
+         does not build it, default it, or fall back to the shop owner. The receipt
+         renderer already refuses to launder an unnamed employee sale into an
+         owner sale, so a null here yields a receipt with no seller line rather
+         than a false one, which is the correct failure.
+
+         This closes a wire, not a feature: sokoni-merchant-sell.js already sends
+         `servedBy: ctx.servedBy || null` and merchantIdentity already returns
+         { uid, name, role, label }. Only this hand-off was missing, so receipts
+         carried no seller at all. */
+      servedBy: S.servedBy,
     };
   }
 
