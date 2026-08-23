@@ -79,14 +79,38 @@
     } catch (_) { _signedIn = false; }
     if (_signedIn) return;
 
-    var setupDone = localStorage.getItem('sokoni_setup_complete');
-    if (!setupDone || setupDone !== '1') {
-      // Check if this is a fresh device (no merchantId stored)
-      var merchantId = localStorage.getItem('sokoni_merchant_id');
-      if (!merchantId) {
-        window.location.replace('pos-setup.html');
-      }
-    }
+    /* ── /pos NO LONGER ROUTES ANYONE INTO BUSINESS REGISTRATION ──────────
+       What stood here redirected to pos-setup.html whenever two localStorage
+       flags were absent. Those flags answer "has THIS BROWSER run the wizard",
+       which is not the question. The question is "does this account have an
+       approved business", and only the server can answer it.
+
+       The consequence was the reported one: an approved merchant opening POS on
+       a new phone — or after clearing site data — was pushed back through shop
+       creation, M-PESA registration and admin-account setup, for a business that
+       already existed. Business setup belongs to registration and approval, not
+       to opening a till.
+
+       SokoniPosContext now owns this decision, resolved from the server:
+         open-pos          the device is paired      -> nothing happens
+         pair-device       unknown device            -> offers POS Setup, which is
+                                                        DEVICE pairing, not business
+                                                        registration
+         device-suspended  suspended                 -> says so; never offers
+                                                        re-registration as a way round it
+         paired-elsewhere  another merchant's device -> refused
+         retry             the check failed          -> says so, POS still boots
+
+       Nothing redirects. The page renders its answer in place, so a slow or
+       failed resolve leaves POS booting rather than bouncing the merchant to a
+       wizard. A genuinely new merchant reaches business onboarding through
+       registration — the same path everyone else takes — and POS Setup stays
+       reachable as an explicit module for pairing a device on purpose.
+
+       The last device-local flag that could route a merchant anywhere is gone.
+       `sokoni_setup_complete` and `sokoni_merchant_id` are still written by the
+       existing setup flow and still read by pos.js as a CACHE; they simply no
+       longer decide who is a new business. */
   })();
 
   (function(){
