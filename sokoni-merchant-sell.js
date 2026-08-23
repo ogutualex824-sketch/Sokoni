@@ -316,11 +316,50 @@
         S.products = rows || [];
         S.phase = 'ready';
         paint();
+        live();
       }).catch(function (e) {
         S.phase = 'error';
         S.error = (e && e.message) || 'Products could not be loaded.';
         paint();
       });
+    }
+
+    /* ── ONE TILL, MANY DEVICES ───────────────────────────────────────────────
+       A sale rung up on the phone decrements canonical `products.stock` on the
+       server. Without this, the desktop keeps showing the pre-sale figure until
+       somebody reloads — two devices quietly disagreeing about how much stock
+       exists, which is how a shop oversells.
+
+       This does NOT re-fetch after our own sale (load() already does that); it
+       reflects what the SERVER holds, whoever moved it.
+
+       While the payment sheet is open the incoming rows are stored but NOT
+       painted. Re-rendering under a cashier's thumb mid-payment would rebuild
+       the sheet they are typing into, and the cart is already priced — the
+       server re-validates every price and stock level at completion anyway, so
+       nothing is lost by waiting for the sheet to close. */
+    var _liveOff = null;
+    function live() {
+      if (_liveOff) return;                       /* one listener per mount */
+      try {
+        _liveOff = md.subscribeProducts({
+          scope: ctx.scope, db: ctx.db,
+          onProducts: function (rows) {
+            S.products = rows || [];
+            /* Rows are already stored above; only the REPAINT is deferred, and
+               closing the sheet paints anyway. */
+            if (S.sheet) return;
+            paint();
+          },
+          /* A listener that fails silently is worse than none: the screen keeps
+             showing stale stock that looks current. Say so and keep the
+             one-shot figures already on screen. */
+          onError: function () {
+            S.liveError = true;
+            if (!S.sheet) paint();
+          },
+        });
+      } catch (_) { _liveOff = null; }
     }
 
     /* ── Derived ──────────────────────────────────────────────────────────── */
@@ -482,7 +521,13 @@
           '</div></div>';
       }
 
-      return '<div class="msl-body"><div class="msl-grid">' + rows.map(function (p, i) {
+      return '<div class="msl-body">' +
+        /* Said out loud, because a live listener that failed silently leaves stale
+           stock on screen looking current — the worst of both worlds. */
+        (S.liveError
+          ? '<div class="msl-note" style="color:#ffb020;margin-bottom:10px">Live stock updates stopped on this device. These figures are from when the screen loaded; the server still checks stock before completing any sale.</div>'
+          : '') +
+        '<div class="msl-grid">' + rows.map(function (p, i) {
         var q = inCart(p.id);
         var out = (p.stock === 0);
         var stockTxt = (p.stock == null) ? 'Stock —'          /* unknown, never "0 left" */
@@ -1479,6 +1524,10 @@
         host.removeEventListener('click', onClick);
         host.removeEventListener('input', onInput);
         host.removeEventListener('change', onChange);
+        /* Release the live catalogue listener too. An onSnapshot that outlives its
+           surface holds a socket open and bills reads for a panel nobody is
+           looking at — the same leak the STK poll had. */
+        if (_liveOff) { try { _liveOff(); } catch (_) {} _liveOff = null; }
         /* The M-Pesa poll outlives the listeners unless it is stopped here. A
            surface torn down mid-wait (the shop switches, the session re-resolves
            and the shell remounts) would otherwise keep calling the server every

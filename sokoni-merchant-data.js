@@ -122,9 +122,11 @@
     return { collection: PRODUCTS, where: [[SCOPE_FIELD, '==', scope.shopId]] };
   }
 
-  async function listProducts(o) {
-    var scope = o.scope;
-    var rows = await o.db.queryProducts(productQuery(scope));
+  /* ONE normalisation, used by BOTH the one-shot read and the live subscription.
+     Extracted rather than duplicated: two mappings of the same document is two
+     answers to "how much stock is there", and the live one would drift from the
+     fetched one exactly when a merchant is watching both devices. */
+  function mapProducts(rows) {
     return (rows || []).map(function (p) {
       var stock = (typeof p.stock === 'number') ? p.stock : null;
       return {
@@ -141,6 +143,24 @@
         inventoryVersion: (typeof p.inventoryVersion === 'number') ? p.inventoryVersion : null,
       };
     });
+  }
+
+  async function listProducts(o) {
+    return mapProducts(await o.db.queryProducts(productQuery(o.scope)));
+  }
+
+  /* The live equivalent. Returns an UNSUBSCRIBE function — the caller owns the
+     listener's lifetime, and a surface that is torn down must release it.
+     Degrades honestly: a data layer with no subscribeProducts returns null, and
+     the caller keeps its one-shot behaviour rather than silently showing stale
+     stock while believing it is live. */
+  function subscribeProducts(o) {
+    if (!o || !o.db || typeof o.db.subscribeProducts !== 'function') return null;
+    return o.db.subscribeProducts(
+      productQuery(o.scope),
+      function (rows) { o.onProducts(mapProducts(rows)); },
+      o.onError || function () {}
+    );
   }
 
   /* Only products belonging to this shop may enter a cart. A cart line from
@@ -409,6 +429,8 @@
     resolveShopId: resolveShopId,
     isPlaceholderShopId: isPlaceholderShopId,
     productQuery: productQuery,
+    mapProducts: mapProducts,
+    subscribeProducts: subscribeProducts,
     listProducts: listProducts,
     assertInScope: assertInScope,
     idempotencyKey: idempotencyKey,

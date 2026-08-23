@@ -1574,6 +1574,44 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   var _mdb = {
     queryProducts: function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
+    /* ── LIVE ──────────────────────────────────────────────────────────────
+       The same spec shape as queryProducts, delivered continuously instead of
+       once. This is what makes two devices one till: a sale rung up on the
+       phone decrements canonical `products`, and every other signed-in device
+       sees the new stock without anyone reloading.
+
+       Returns an UNSUBSCRIBE function, and the caller must call it. A listener
+       that outlives its surface keeps a socket open and bills reads for a panel
+       nobody is looking at — the same class of leak as the STK poll that
+       survived destroy().
+
+       `onError` is a separate argument on purpose: a listener that fails
+       silently is worse than no listener, because the screen keeps showing
+       stale numbers that look current. */
+    subscribeProducts: function (spec, onRows, onError) {
+      var stopped = false, unsub = null;
+      sdk().then(function (m) {
+        if (stopped) return;
+        if (!window.firebaseDB) throw new Error('The product catalogue is not available yet.');
+        var parts = (spec.where || []).map(function (w) { return m.fs.where(w[0], w[1], w[2]); });
+        if (spec.orderBy) parts.push(m.fs.orderBy(spec.orderBy[0], spec.orderBy[1]));
+        if (spec.limit) parts.push(m.fs.limit(spec.limit));
+        var q = m.fs.query.apply(null, [m.fs.collection(window.firebaseDB, spec.collection)].concat(parts));
+        unsub = m.fs.onSnapshot(q, function (snap) {
+          if (!stopped) { try { onRows(_rows(snap)); } catch (_) {} }
+        }, function (err) {
+          if (!stopped && typeof onError === 'function') onError(err);
+        });
+        /* Unsubscribed before the SDK finished loading — honour it now. */
+        if (stopped && unsub) { try { unsub(); } catch (_) {} }
+      }).catch(function (err) {
+        if (!stopped && typeof onError === 'function') onError(err);
+      });
+      return function () {
+        stopped = true;
+        if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
+      };
+    },
     queryProfiles: function (spec) { return _q(spec, 'Customers are not available yet.'); },
     queryMovements: function (spec) { return _q(spec, 'Adjustment history is not available yet.'); },
     /* The one subcollection read: a conversation's messages. `path` is an array so the
