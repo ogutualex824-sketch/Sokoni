@@ -43,6 +43,147 @@ async function _getMerchant(merchantId) {
   return { id: merchantId, ...snap.data() };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   THE FINANCIAL TRACE FOR ONE TILL SALE
+   ══════════════════════════════════════════════════════════════════════════════
+   Returns { tax, commission, collectionRoute, status } and NEVER throws. A sale
+   that has already moved stock and taken money must not be failed because a
+   bookkeeping write did not land — but the failure must also never be silent, so
+   an unpostable sale is stamped `status: 'failed'` with its reason and can be
+   found and repaired. A swallowed catch here would be the healthy-looking failure
+   that hides missing revenue for months.
+────────────────────────────────────────────────────────────────────────────── */
+async function _postSaleFinancials(o) {
+  const out = { status: 'pending', tax: null, commission: null, collectionRoute: null, error: null };
+  const toCents = (n) => Math.round((Number(n) || 0) * 100);
+
+  try {
+    /* ── which collection model applied, so reconciliation never assumes ──── */
+    try {
+      const pc = require('./payment-config');
+      const r = await pc.resolveCollectionRoute(db);
+      out.collectionRoute = r.route;
+    } catch (_) { out.collectionRoute = 'DIRECT_TO_SELLER'; }
+    /* Cash is never centrally collected whatever the route says — it is in a
+       drawer. Recording the configured route against a cash sale would misstate
+       who holds the money. */
+    const allCash = (o.payments || []).every((p) => String(p.method).toLowerCase() === 'cash');
+    if (allCash) out.collectionRoute = 'CASH_IN_DRAWER';
+
+    /* ── TAX — an ESTIMATE from the records SOKONI holds, never an assessment ──
+       A merchant who has not declared a VAT status gets NO figure. Applying 16%
+       to a business that may not be VAT-registered would invent a liability, and
+       an invented tax number is worse than a stated unknown. */
+    let vatStatus = 'undeclared';
+    try {
+      const m = await db.collection('merchants').doc(String(o.merchantId)).get();
+      const v = m.exists ? String((m.data() || {}).vatStatus || '') : '';
+      if (v === 'registered' || v === 'exempt' || v === 'zero_rated') vatStatus = v;
+    } catch (_) { /* unreadable → stays undeclared, which is the honest answer */ }
+
+    if (vatStatus === 'undeclared') {
+      out.tax = {
+        basis: 'sokoni_estimate', vatStatus: 'undeclared',
+        vatCents: null, taxableCents: null,
+        reason: 'This shop has not recorded a VAT status, so SOKONI cannot estimate VAT ' +
+                'for this sale. Set it once in settings and every later sale carries it.',
+      };
+    } else {
+      const TE = require('./etims-tax-engine');
+      const inv = TE.computeInvoice({
+        items: (o.items || []).map((it) => ({
+          name: it.name, qty: Number(it.qty || 1), unitPrice: Number(it.unitPrice || 0),
+        })),
+        vatStatus,
+      });
+      const t = inv.totals || {};
+      out.tax = {
+        /* NEVER 'official'. SOKONI assists with filing; KRA/ETIMS assesses.
+           The day an ETIMS response exists it is stored beside this, not over it. */
+        basis: 'sokoni_estimate',
+        vatStatus,
+        vatCents: toCents(t.totTaxAmt),
+        taxableCents: toCents(t.totTaxblAmt),
+        totalCents: toCents(t.totAmt),
+        engine: 'etims-tax-engine',
+      };
+    }
+
+    /* ── COMMISSION — the canonical rate, never a local table ──────────────── */
+    let pct = null, commissionCents = 0, sellerNetCents = null;
+    try {
+      const FU = require('./finos-utils');
+      /* Cents in, cents out — calculateCommission speaks orderAmountCents and
+         returns commissionCents. Converting through shillings here would round
+         twice and drift from the marketplace's figure on the same basket. */
+      const c = await FU.calculateCommission(db, {
+        orderAmountCents: toCents(o.total), sellerId: o.merchantId,
+        hubId: 'pos', category: 'pos',
+      });
+      pct = (c && typeof c.effectiveRate === 'number') ? c.effectiveRate : null;
+      commissionCents = (c && Number.isInteger(c.commissionCents)) ? c.commissionCents : 0;
+      sellerNetCents  = (c && Number.isInteger(c.sellerNetCents)) ? c.sellerNetCents : null;
+    } catch (e) {
+      out.status = 'failed';
+      out.error = 'commission rate unavailable: ' + ((e && e.message) || e);
+      return out;
+    }
+
+    out.commission = {
+      pct: (typeof pct === 'number') ? pct : null,
+      amountCents: commissionCents,
+      basisCents: toCents(o.total),
+      /* What the seller keeps, from the same engine — so the merchant wallet and
+         the platform never disagree about the split of one sale. */
+      sellerNetCents: sellerNetCents,
+      /* Not collected at the point of sale — see the note at the call site. */
+      collected: false,
+      settlement: 'receivable',
+    };
+
+    /* ── THE LEDGER ENTRY ──────────────────────────────────────────────────
+       Double entry, and the direction matters. The seller HOLDS the cash and
+       OWES the commission, so the seller account is DEBITED and platform revenue
+       is CREDITED. Nothing is drawn from platform clearing, because no platform
+       cash exists for this sale.
+       Zero commission writes nothing: createLedgerEntry requires a positive
+       amount, and a zero-value entry would be noise in a reconciliation. */
+    if (commissionCents > 0) {
+      const FU = require('./finos-utils');
+      await FU.createLedgerEntry(db, {
+        type: 'pos_commission_receivable',
+        amountCents: commissionCents,
+        debitAccount: FU.ACCOUNTS ? FU.ACCOUNTS.seller(o.merchantId) : ('seller:' + o.merchantId),
+        creditAccount: (FU.ACCOUNTS && FU.ACCOUNTS.PLATFORM_REVENUE) || 'platform:revenue',
+        description: 'SOKONI commission on till sale ' + o.saleId,
+        orderId: o.saleId,
+        sellerId: o.merchantId,
+        category: 'pos',
+        createdBy: 'posCompleteCheckout',
+        /* Derived from the SALE's idempotency key, so a retried posting for the
+           same sale is recognised and cannot double-book commission. */
+        idempotencyKey: 'poscomm_' + o.idempotencyKey,
+        metadata: { collectionRoute: out.collectionRoute, commissionPct: pct },
+      });
+    }
+
+    out.status = 'posted';
+    return out;
+  } catch (e) {
+    /* Recorded, not swallowed. The sale stands; the books are marked repairable. */
+    out.status = 'failed';
+    out.error = (e && e.message) || String(e);
+    try {
+      await db.collection('posFinancialRepair').doc(String(o.saleId)).set({
+        saleId: o.saleId, merchantId: o.merchantId, idempotencyKey: o.idempotencyKey,
+        totalCents: Math.round((Number(o.total) || 0) * 100),
+        error: out.error, at: Date.now(),
+      });
+    } catch (_) { /* even the marker failed — the status on the sale still says so */ }
+    return out;
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════
    posCompleteCheckout
    Idempotent authoritative checkout:
@@ -491,8 +632,50 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       return { loyaltyAwarded };
     });
 
+    /* ══════════════════════════════════════════════════════════════════════
+       4b. THE FINANCIAL TRACE — tax, commission, and a balanced ledger entry
+       ══════════════════════════════════════════════════════════════════════
+       Before this, a till sale wrote posRetailSales, posDaily and posReceipts
+       and STOPPED. No commission, no ledger entry, no tax computation. The
+       commission writer (payment-success.onPaymentSucceeded) watches
+       `payments/{id}` — the IntaSend collection — while POS writes
+       `posPayments`, so a till sale reached NO financial path at all. Every
+       downstream product built on it — billing, settlement, the tax pack —
+       was reading records nobody wrote.
+
+       COMPOSED, NOT REINVENTED: the VAT figures come from etims-tax-engine and
+       the rate from finos-utils.calculateCommission, the same authorities the
+       marketplace uses. A second set of tax or commission maths would be a
+       second set of numbers.
+
+       WHAT THIS DELIBERATELY DOES NOT DO: it does not call
+       settlement-engine.computeSettlement(). That function assumes "100% of
+       every customer payment is collected into the Bravilex account first",
+       which is FALSE for a till — the cash is in the merchant's drawer and a
+       DIRECT_TO_SELLER M-Pesa payment went to the merchant's own shortcode.
+       Posting a till sale as a settlement out of platform clearing would invent
+       platform cash and create seller liabilities with nothing behind them,
+       which is exactly the defect payment-config.js:41-55 warns about.
+       On a till sale SOKONI's commission is a RECEIVABLE: the seller already
+       holds the money and owes us a share. */
+    const financial = await _postSaleFinancials({
+      saleId, merchantId, cashierId, idempotencyKey,
+      items: enrichedItems,
+      subtotal: serverSubtotal,
+      discount: totalDiscount,
+      total: authoritativeTotal,
+      payments: _pay,
+    });
+
     /* ── 5. Write sale record ── */
     const sale = {
+      /* CALLER-SUPPLIED, AND FIRST. `metadata` is client data spread into the sale
+         document. It used to be spread LAST, which meant a caller could send
+         { metadata: { grandTotal: 1 } } and overwrite the figure the server had
+         just computed — silently, after every authority check had passed.
+         Spreading it first makes every authoritative field below win. */
+      ...metadata,
+
       id:              saleId,
       merchantId:      _sanitize(merchantId),
       branchId:        _sanitize(branchId),
@@ -517,7 +700,20 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       createdAt:          FieldValue.serverTimestamp(),
       saleDate,
       idempotencyKey:     _sanitize(idempotencyKey),
-      ...metadata,
+
+      /* ── THE FINANCIAL TRACE, carried on the sale itself ─────────────────
+         Stored here so the sale is self-describing: the tax pack, billing and
+         reconciliation all read one record rather than re-deriving figures from
+         line items months later and getting a different answer.
+         `financialPosting` is the honest status of the bookkeeping — 'posted',
+         or 'failed' with a reason and a row in posFinancialRepair. A sale whose
+         books did not land is findable instead of invisible. */
+      tax:                financial.tax,
+      commission:         financial.commission,
+      collectionRoute:    financial.collectionRoute,
+      financialPosting:   financial.status,
+      financialError:     financial.error || null,
+
     };
 
     await db.collection('posRetailSales').doc(saleId).set(sale);
