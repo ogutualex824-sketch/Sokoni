@@ -229,6 +229,66 @@ const saleWrite = (store) => store.writes.find((w) => w.v && w.v.grandTotal != n
     !!(sw && sw.v.financialPosting),
     sw ? String(sw.v.financialPosting) : 'no posting status — a failed posting would be invisible');
 
+  /* ══ THE MONEY POSITION ═══════════════════════════════════════════════════
+     Cash in a drawer is NOT money at a payment provider. A merchant who cannot
+     tell the two apart cannot reconcile anything, and a single merged
+     `totalRevenue` is exactly that failure. Every assertion below is about
+     keeping them separate. */
+  const daily = (store) => store.writes.find((w) => w.col === 'posDailySummary');
+  /* Null-safe by design: a before-proof must REPORT a missing field, not crash on
+     it. The first version of this block threw on the very absence it existed to
+     demonstrate, which makes a suite useless exactly when it matters. */
+  const inc = (w, k) => (w && w.v && w.v[k] && typeof w.v[k].__increment === 'number')
+    ? w.v[k].__increment : null;
+
+  store.writes.length = 0;
+  await call(F, cart());                                        /* 3,000 all cash */
+  const dCash = daily(store);
+  ck('F14 an all-CASH sale adds to the drawer and NOTHING to electronic',
+    inc(dCash, 'cashCents') === 300000 && (inc(dCash, 'electronicCents') || 0) === 0,
+    dCash ? ('cash=' + inc(dCash, 'cashCents') + ' electronic=' + inc(dCash, 'electronicCents'))
+          : 'no daily summary written');
+
+  store.writes.length = 0;
+  const over = await call(F, cart({ payments: [{ method: 'cash', amount: 3500 }] }));
+  const dOver = daily(store);
+  ck('F15 the drawer records cash NET OF CHANGE, not the amount handed over',
+    inc(dOver, 'cashCents') === 300000,
+    'took 3,500, gave 500 back → drawer +3,000. got ' +
+    (dOver ? String(inc(dOver, 'cashCents')) : 'no summary') +
+    (over.ok ? '' : ' | sale refused: ' + over.err));
+
+  store.posPayments.MIXA = { status: 'completed', sellerUid: 'OWNER1', paidAmount: 4000 };
+  store.products.P6 = { name: 'Gas', price: 6000, stock: 10 };
+  store.writes.length = 0;
+  const split = await call(F, cart({
+    items: [{ productId: 'P6', qty: 1, unitPrice: 6000 }],
+    subtotal: 6000, grandTotal: 6000,
+    payments: [{ method: 'mpesa', amount: 4000, ref: 'MIXA' }, { method: 'cash', amount: 2000 }],
+  }));
+  const dSplit = daily(store);
+  ck('F16 a SPLIT lands 2,000 in the drawer and 4,000 as electronic',
+    inc(dSplit, 'cashCents') === 200000 && inc(dSplit, 'electronicCents') === 400000,
+    dSplit ? ('cash=' + inc(dSplit, 'cashCents') + ' electronic=' + inc(dSplit, 'electronicCents'))
+           : ('no summary; sale ' + (split.ok ? 'ok' : 'refused: ' + split.err)));
+
+  const bm = (dSplit && dSplit.v.byMethod) || {};
+  ck('F17 the split is kept BY METHOD, not collapsed to the first tender',
+    (bm.mpesa || {}).__increment === 400000 && (bm.cash || {}).__increment === 200000,
+    Object.keys(bm).length ? JSON.stringify(bm)
+      : 'payments[0].method reported ONE tender for the whole sale');
+
+  ck('F18 the sale itself carries its own money position',
+    !!(saleWrite(store) && saleWrite(store).v.position &&
+       saleWrite(store).v.position.cashCents === 200000 &&
+       saleWrite(store).v.position.electronicCents === 400000),
+    saleWrite(store) && saleWrite(store).v.position
+      ? JSON.stringify(saleWrite(store).v.position) : 'absent');
+
+  ck('F19 the daily TAX total uses the server estimate, not the client field',
+    !!(dSplit && dSplit.v.totalTaxCents),
+    'totalTax used to increment the caller-supplied taxTotal verbatim');
+
   /* ── CONTROLS ──────────────────────────────────────────────────────────── */
   const bogus = await call(F, cart({ items: [] }));
   ck('F12 CONTROL the probe still detects a refusal',

@@ -53,8 +53,20 @@ async function _getMerchant(merchantId) {
    found and repaired. A swallowed catch here would be the healthy-looking failure
    that hides missing revenue for months.
 ────────────────────────────────────────────────────────────────────────────── */
+/* Per-method daily increments. Kept as a nested map of increments so a split
+   tender contributes to EVERY method it used — the old `paymentMethod:
+   payments[0].method` recorded one tender for the whole sale, so a 4,000 M-Pesa
+   + 2,000 cash sale was filed entirely under whichever came first. */
+function _methodIncrements(position) {
+  const out = {};
+  const by = (position && position.byMethod) || {};
+  for (const k of Object.keys(by)) out[k] = FieldValue.increment(by[k] || 0);
+  return out;
+}
+
 async function _postSaleFinancials(o) {
-  const out = { status: 'pending', tax: null, commission: null, collectionRoute: null, error: null };
+  const out = { status: 'pending', tax: null, commission: null, collectionRoute: null,
+                position: null, error: null };
   const toCents = (n) => Math.round((Number(n) || 0) * 100);
 
   try {
@@ -69,6 +81,41 @@ async function _postSaleFinancials(o) {
        who holds the money. */
     const allCash = (o.payments || []).every((p) => String(p.method).toLowerCase() === 'cash');
     if (allCash) out.collectionRoute = 'CASH_IN_DRAWER';
+
+    /* ══ THE MONEY POSITION ══════════════════════════════════════════════════
+       WHERE the money physically is, which is not the same question as how much
+       the sale was for. Cash sits in a drawer; an M-Pesa or card tender sits with
+       the payment provider. Merging them into one `totalRevenue` — which is all
+       posDailySummary held — makes reconciliation impossible: a merchant cannot
+       count a drawer against a number that also contains money that never
+       entered it.
+
+       CASH IS RECORDED NET OF CHANGE. What went into the drawer is what was
+       tendered minus what was handed back, so 3,500 taken on a 3,000 sale is
+       +3,000, not +3,500. Change comes out of the same drawer.
+
+       Electronic amounts are the CONFIRMED ones. An unconfirmed tender never
+       reaches this function: the sale would have been refused. */
+    const cashTenderedC = toCents((o.payments || [])
+      .filter((p) => String(p.method).toLowerCase() === 'cash')
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0));
+    const changeC = toCents(o.changeDue);
+    const byMethod = {};
+    let electronicC = 0;
+    for (const p of (o.payments || [])) {
+      const m = String(p.method || '').toLowerCase();
+      const c = toCents(p.amount);
+      byMethod[m] = (byMethod[m] || 0) + c;
+      if (m !== 'cash') electronicC += c;
+    }
+    /* The drawer figure replaces the gross cash line: byMethod.cash is what the
+       customer handed over, position.cashCents is what stayed. */
+    out.position = {
+      cashCents: Math.max(0, cashTenderedC - changeC),
+      electronicCents: electronicC,
+      changeGivenCents: changeC,
+      byMethod,
+    };
 
     /* ── TAX — an ESTIMATE from the records SOKONI holds, never an assessment ──
        A merchant who has not declared a VAT status gets NO figure. Applying 16%
@@ -665,6 +712,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       discount: totalDiscount,
       total: authoritativeTotal,
       payments: _pay,
+      /* So the drawer figure can be recorded NET of what was handed back. */
+      changeDue: changeDue,
     });
 
     /* ── 5. Write sale record ── */
@@ -710,6 +759,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
          books did not land is findable instead of invisible. */
       tax:                financial.tax,
       commission:         financial.commission,
+      /* WHERE the money is, per sale: drawer vs provider, split by method. */
+      position:           financial.position,
       collectionRoute:    financial.collectionRoute,
       financialPosting:   financial.status,
       financialError:     financial.error || null,
@@ -732,6 +783,26 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       totalItems:    FieldValue.increment(items.reduce((s, i) => s + (i.qty || 1), 0)),
       totalDiscount: FieldValue.increment(totalDiscount),
       totalTax:      FieldValue.increment(taxTotal),
+
+      /* ── WHERE THE MONEY IS ────────────────────────────────────────────────
+         `totalRevenue` above says how much was SOLD. These say where it went,
+         and they are the only figures a merchant can actually reconcile:
+         count the drawer against cashCents, check the provider against
+         electronicCents. One merged total could never be checked against
+         anything, because it mixes money that entered the drawer with money
+         that never did.
+         cashCents is NET of change; byMethod.cash is the gross tendered. */
+      cashCents:       FieldValue.increment((financial.position && financial.position.cashCents) || 0),
+      electronicCents: FieldValue.increment((financial.position && financial.position.electronicCents) || 0),
+      changeGivenCents: FieldValue.increment((financial.position && financial.position.changeGivenCents) || 0),
+      byMethod:        _methodIncrements(financial.position),
+
+      /* Commission accrued today, and the tax SOKONI estimated — the latter in
+         cents from the tax engine, NOT the caller-supplied `taxTotal` that
+         `totalTax` above still carries for backward compatibility. */
+      commissionCents: FieldValue.increment((financial.commission && financial.commission.amountCents) || 0),
+      totalTaxCents:   FieldValue.increment((financial.tax && financial.tax.vatCents) || 0),
+
       updatedAt:     FieldValue.serverTimestamp(),
     }, { merge: true });
 
@@ -743,7 +814,13 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         itemCount:     items.reduce((s, i) => s + (i.qty || 1), 0),
         durationMs:    elapsed,
         grandTotal:   authoritativeTotal,
-        paymentMethod: payments[0]?.method || 'unknown',
+        /* EVERY method, not the first. `payments[0].method` filed a 4,000 M-Pesa
+           + 2,000 cash sale entirely under whichever tender happened to be first
+           in the array, so split sales were silently misattributed in every
+           report built on this. `paymentMethod` is kept as the single-tender
+           answer for existing readers, and is 'mixed' when it genuinely is. */
+        paymentMethod: (_pay.length === 1 ? String(_pay[0].method) : 'mixed'),
+        paymentMethods: _pay.map((p) => String(p.method)),
         createdAt:     FieldValue.serverTimestamp(),
         saleDate,
       });
