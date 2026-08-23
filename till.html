@@ -117,7 +117,22 @@
   var msg  = document.getElementById('boot-msg');
   var host = document.getElementById('till');
 
-  function stage(n) { try { if (window.sokoniStage) window.sokoniStage('till:' + n); } catch (_) {} }
+  /* Stages are written to localStorage SYNCHRONOUSLY here, not handed to
+     window.sokoniStage — pos-crash-breadcrumbs.js is deliberately NOT one of
+     this shell's seven scripts, so every stage() call was silently a no-op and
+     a stuck till left no trace. A marker that records nothing is worse than
+     none, because it looks like instrumentation. */
+  var STAGE_KEY = 'sokoni_till_stages';
+  function stage(n) {
+    try {
+      var a = JSON.parse(localStorage.getItem(STAGE_KEY) || '[]');
+      a.push({ s: n, t: Date.now() });
+      localStorage.setItem(STAGE_KEY, JSON.stringify(a.slice(-24)));
+    } catch (_) {}
+    try { if (window.sokoniStage) window.sokoniStage('till:' + n); } catch (_) {}
+  }
+  function stagesReset() { try { localStorage.setItem(STAGE_KEY, '[]'); } catch (_) {} }
+  function stagesRead() { try { return JSON.parse(localStorage.getItem(STAGE_KEY) || '[]'); } catch (_) { return []; } }
 
   /* Never a white screen: every terminal state SAYS something. */
   function show(title, body, linkLabel, linkHref) {
@@ -220,6 +235,7 @@
   }
 
   async function run() {
+    stagesReset();
     stage('begin');
     msg.textContent = 'Checking who you are…';
     var uid = await whenAuth();
@@ -412,6 +428,43 @@
       line('PRODUCT QUERY', 'FAILED');
       line('FIRESTORE ERROR', (e && (e.code || e.message)) || String(e));
     }
+    /* WHAT THE LAST NORMAL RUN REACHED — the stuck state leaves its trail here,
+       and this is what a diagnostic that stops at PRODUCT COUNT cannot tell us. */
+    var trail = stagesRead();
+    L.push('');
+    line('LAST RUN REACHED', trail.length ? trail[trail.length - 1].s : '(no trail recorded)');
+    if (trail.length) {
+      var t00 = trail[0].t;
+      L.push('  trail:');
+      trail.forEach(function (x) { L.push('    +' + String(x.t - t00).padStart(6) + 'ms  ' + x.s); });
+    }
+
+    /* AND THE STEP THE PANEL NEVER TESTED: the actual mount. */
+    L.push('');
+    try {
+      var SELL = await waitFor('SokoniMerchantSell', 6000);
+      line('SELL MODULE', SELL ? 'loaded' : 'NOT LOADED');
+      if (SELL) {
+        var probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:-99999px;top:0;width:390px;height:600px';
+        document.body.appendChild(probe);
+        var mt = Date.now();
+        SELL.mount(probe, {
+          scope: scope, db: db, shopName: 'diag', origin: location.origin,
+          servedBy: null, callSale: null,
+          onToast: function () {}, onPrint: function () { return Promise.resolve(); }
+        });
+        await new Promise(function (r) { setTimeout(r, 2500); });
+        var els = probe.querySelectorAll('*').length;
+        var cards = probe.querySelectorAll('.msl-card').length;
+        line('MOUNT', 'OK — ' + els + ' elements, ' + cards + ' product cards, ' + (Date.now() - mt) + ' ms');
+        if (!cards) line('MOUNT NOTE', 'mounted but rendered NO product cards');
+        probe.remove();
+      }
+    } catch (e) {
+      line('MOUNT', 'FAILED — ' + ((e && e.message) || e));
+    }
+
     line('ELAPSED', (Date.now() - t0) + ' ms');
     L.push('');
     L.push('(tap to close)');
