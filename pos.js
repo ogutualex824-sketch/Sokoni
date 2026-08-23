@@ -50,9 +50,33 @@ const SPos = (function () {
        shell — embedded → launch straight to the requested panel; setup stays an explicit module. */
     const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
     try {
-      if (isSetup || embedded) {
+      /* ── A SIGNED-IN MERCHANT NEVER MEETS THE BUSINESS WIZARD ────────────
+         `isSetup` reads state.settings.setupComplete, which comes from
+         PosDB.settings — IndexedDB. That is a DEVICE cache, and it answers
+         "has this browser been set up", not "does this account have an
+         approved business". Only the server can answer the second.
+
+         It became reachable far more often once the PosDB blocked-open
+         deadlock was fixed: a blocked open now RESOLVES DEGRADED instead of
+         hanging, and a degraded cache returns EMPTY settings — so setupComplete
+         is absent and the wizard was shown to merchants whose business already
+         exists. The deadlock fix was correct; this decision was simply reading
+         the wrong authority behind it.
+
+         Same markers auth-guard.js and the pos.html boot guard use, so there is
+         one convention rather than three. A signed-in account launches the app;
+         SokoniPosContext then renders the real answer in place — open the till,
+         or offer POS Setup for DEVICE pairing. Business registration belongs to
+         the application-and-approval flow, never to opening a till. */
+      var _known = false;
+      try {
+        _known = localStorage.getItem('loggedIn') === 'true'
+          || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      } catch (_) { _known = false; }
+
+      if (isSetup || embedded || _known) {
         await launchApp();
-        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }
+        if (!isSetup && (embedded || _known)) { try { window._posNeedsSetup = true; } catch (_) {} }
       } else {
         var _wz = document.getElementById('pos-wizard'); if (_wz) _wz.style.display = 'flex';
       }
