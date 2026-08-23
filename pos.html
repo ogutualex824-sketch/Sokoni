@@ -53,6 +53,32 @@
        on exactly the device that has it. Scoped to ?diag= so normal first-run
        behaviour is unchanged. */
     if (/[?&]diag=/.test(location.search)) return;
+
+    /* A SIGNED-IN merchant is never sent to BUSINESS setup by a missing device
+       flag. `sokoni_setup_complete` and `sokoni_merchant_id` are localStorage,
+       and pos.js keeps its own `setupComplete` in IndexedDB — three device-local
+       answers to a question only the server can settle. Their absence means
+       "new browser", not "new business", so on a new phone an already-configured
+       merchant was being redirected into shop creation, M-PESA setup and admin
+       account creation all over again.
+
+       Until the shop record carries an authoritative POS-initialised signal
+       (`posEnabled` is queried by pos-bi.js and pos-shift-scheduler.js but is
+       ABSENT on every sellers document, so those queries match nothing), the
+       honest interim rule is: if SOKONI already knows this account, let the app
+       boot and decide after identity resolves. Fail toward the POS shell, not
+       toward re-registration.
+
+       Same markers auth-guard.js uses — not a new convention. POS Setup remains
+       reachable as an explicit sidebar module, which is what makes the wizard a
+       DELIBERATE state rather than something that ambushes a returning merchant. */
+    var _signedIn = false;
+    try {
+      _signedIn = localStorage.getItem('loggedIn') === 'true'
+        || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    } catch (_) { _signedIn = false; }
+    if (_signedIn) return;
+
     var setupDone = localStorage.getItem('sokoni_setup_complete');
     if (!setupDone || setupDone !== '1') {
       // Check if this is a fresh device (no merchantId stored)
@@ -623,20 +649,69 @@
           /* Build-version evidence — shows what this DEVICE is running vs. what's DEPLOYED,
              so "is it live?" is answered on screen. Refreshes each time Settings opens. */
           (function () {
+            /* A DETERMINISTIC STATE MACHINE, not a one-shot reading.
+
+               It previously ran exactly once — setTimeout(_posShowBuild, 1500) —
+               and nothing re-ran it when Settings opened, despite the comment
+               above claiming it refreshed each time. So the row showed whatever
+               was true 1.5s after page load, forever: "no update" could be both
+               displayed and wrong.
+
+               It also returned silently when the helper had not loaded yet,
+               leaving "Checking…" on screen permanently — indistinguishable from
+               a check still in flight. A diagnostic that cannot say "I failed" is
+               worse than one that is absent.
+
+               Four states, always one of them:
+                 CHECKING  ·  UP TO DATE  ·  UPDATE AVAILABLE  ·  UNABLE TO CHECK */
+            var _busy = false;
+
+            function _set(el, html) { if (el) el.innerHTML = html; }
+
             async function _posShowBuild() {
               var el = document.getElementById('pos-build-info');
-              if (!el || !window.sokoniBuildInfo) return;
+              if (!el || _busy) return;
+              var btn = document.getElementById('pos-build-update');
+              _busy = true;
+              _set(el, 'Checking…');
               try {
+                if (!window.sokoniBuildInfo) throw new Error('build helper not loaded');
                 var b = await window.sokoniBuildInfo();
-                el.innerHTML = 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
+                _set(el, 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
                   (b.deployedCommit ? ' · ' + b.deployedCommit : '') +
                   (b.stale ? ' — <span style="color:#ff8c00;font-weight:800;">update available</span>'
-                           : ' — <span style="color:#71ff00;">up to date</span>');
-                var btn = document.getElementById('pos-build-update');
+                           : ' — <span style="color:#71ff00;">up to date</span>'));
                 if (btn) btn.style.display = b.stale ? '' : 'none';
-              } catch (_) { el.textContent = 'unavailable'; }
+              } catch (e) {
+                /* Say so. Never leave "Checking…" standing in for a failure, and
+                   never report "up to date" for a check that did not complete. */
+                _set(el, '<span style="color:#ff8c00;">unable to check</span> — ' +
+                  '<a href="#" id="pos-build-retry" style="color:#71ff00">check again</a>');
+                if (btn) btn.style.display = 'none';
+                var r = document.getElementById('pos-build-retry');
+                if (r) r.addEventListener('click', function (ev) {
+                  ev.preventDefault(); _posShowBuild();
+                });
+              } finally { _busy = false; }
             }
             window._posShowBuild = _posShowBuild;
+
+            /* Re-check whenever the row actually becomes visible — which is what
+               "Settings opens" means in practice — without needing to know how
+               the settings panel is implemented. */
+            function _watch() {
+              var el = document.getElementById('pos-build-info');
+              if (!el) return;
+              try {
+                new IntersectionObserver(function (entries) {
+                  entries.forEach(function (en) { if (en.isIntersecting) _posShowBuild(); });
+                }, { threshold: 0.1 }).observe(el);
+              } catch (_) { /* no IO support: the initial check below still runs */ }
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', _watch, { once: true });
+            } else { _watch(); }
             setTimeout(_posShowBuild, 1500);
           })();
         </script>
