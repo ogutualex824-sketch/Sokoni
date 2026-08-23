@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI phone diagnostic</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  SOKONI PHONE DIAGNOSTIC  —  /pos-debug
+  ══════════════════════════════════════════════════════════════════════════════
+  WHY THIS PAGE EXISTS
+  /pos fails on the phone while it opens on the laptop, and the diagnostic URLs
+  on /pos fail too. When the diagnostic dies with the patient, nothing inside POS
+  can be measured — so this page deliberately depends on NOTHING:
+
+      no Firebase        no service-worker registration
+      no POS scripts     no shared-header / splash
+      no authentication  no external stylesheet, font or image
+
+  Everything is inline. If this page cannot open, the problem is below SOKONI
+  entirely — browser, network, DNS, TLS or hosting — and no POS change can fix it.
+
+  THE DANGEROUS STEPS ARE TAP-TRIGGERED, NOT AUTOMATIC
+  Loading the Firebase SDK or the POS document is exactly what might kill the tab.
+  Doing that automatically would reproduce the crash and destroy the evidence, so
+  the safe layers run on load and the risky ones wait for a deliberate tap. When
+  the tab dies, we then know precisely which tap did it.
+
+  IT REMEMBERS ACROSS A CRASH
+  Every step writes to localStorage synchronously before it runs. If the tab is
+  killed, reopening this page shows the LAST STEP REACHED — the same technique
+  pos-crash-breadcrumbs.js uses, for the same reason: when the browser kills a
+  tab, the console goes with it.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 14px 40px;
+    background: #07090c; color: #e8f2ff;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .02em; }
+  .sub { color: #7f93ab; font-size: 12.5px; margin-bottom: 16px; }
+  .row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .ic { flex: 0 0 20px; font-size: 15px; line-height: 1.45; }
+  .nm { flex: 1; min-width: 0; }
+  .nm b { font-weight: 600; font-size: 14.5px; }
+  .dt { display: block; color: #8aa0b8; font-size: 12px; margin-top: 2px; word-break: break-word; }
+  .ok  .ic { color: #56d364; }
+  .bad .ic { color: #ff7b72; }
+  .pend .ic { color: #6e7f92; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+       color: #6e7f92; margin: 22px 0 6px; font-weight: 700; }
+  button {
+    display: block; width: 100%; margin: 8px 0 0;
+    padding: 13px 16px; border-radius: 11px; cursor: pointer;
+    background: #12233a; color: #9fd0ff; border: 1px solid #1e4470;
+    font: 600 14px/1 inherit; -webkit-appearance: none;
+  }
+  button:active { background: #17304f; }
+  button[disabled] { opacity: .45; }
+  .warn { background: #2a1c08; border-color: #6b4a12; color: #ffcf7a; }
+  pre {
+    white-space: pre-wrap; word-break: break-word; margin: 8px 0 0;
+    background: #0b1017; border: 1px solid rgba(255,255,255,.09);
+    border-radius: 9px; padding: 10px; font-size: 11.5px; color: #a9c3dd;
+  }
+  .note { color: #8aa0b8; font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>SOKONI phone diagnostic</h1>
+<div class="sub">This page loads nothing. No Firebase, no service worker, no POS code.</div>
+
+<div id="auto"></div>
+
+<h2>Previous visit</h2>
+<div id="prev"></div>
+
+<h2>Risky steps — tap one at a time</h2>
+<div class="note">
+  These are what may kill the tab. Tap ONE, and if the page dies, reopen
+  <b>/pos-debug</b> — it will name the step that did it.
+</div>
+<button id="b-idb">Test IndexedDB</button>
+<button id="b-sdk">Load Firebase SDK only</button>
+<button id="b-doc">Fetch the /pos document (no navigation)</button>
+<button class="warn" id="b-clear">Clear this diagnostic's memory</button>
+
+<h2>Device</h2>
+<pre id="dev"></pre>
+
+<script>
+/* No dependencies. Everything below is deliberately plain, synchronous where it
+   can be, and wrapped so one failure never stops the rest. */
+(function () {
+  'use strict';
+
+  var KEY = 'sokoni_posdebug_steps';
+  var steps = [];
+
+  /* Written BEFORE each step runs, so a tab killed mid-step still leaves the
+     step name behind. */
+  function mark(name) {
+    steps.push({ t: Date.now(), s: name });
+    try { localStorage.setItem(KEY, JSON.stringify(steps).slice(0, 4000)); } catch (e) {}
+  }
+
+  function row(host, state, name, detail) {
+    var d = document.createElement('div');
+    d.className = 'row ' + state;
+    var ic = state === 'ok' ? '✓' : state === 'bad' ? '✕' : '○';
+    var i = document.createElement('div'); i.className = 'ic'; i.textContent = ic;
+    var n = document.createElement('div'); n.className = 'nm';
+    var b = document.createElement('b'); b.textContent = name; n.appendChild(b);
+    if (detail) { var s = document.createElement('span'); s.className = 'dt'; s.textContent = detail; n.appendChild(s); }
+    d.appendChild(i); d.appendChild(n);
+    host.appendChild(d);
+    return d;
+  }
+
+  var auto = document.getElementById('auto');
+
+  /* ── the safe layers, automatic ───────────────────────────────────────── */
+  mark('document-received');
+  row(auto, 'ok', 'Document received', 'the HTML arrived and the browser parsed it');
+
+  mark('javascript-running');
+  row(auto, 'ok', 'JavaScript running', 'this line executed');
+
+  mark('query-string');
+  try {
+    var q = location.search || '(none)';
+    row(auto, 'ok', 'Query string readable', location.pathname + ' ' + q);
+  } catch (e) { row(auto, 'bad', 'Query string', String(e && e.message)); }
+
+  mark('localstorage');
+  try {
+    localStorage.setItem('_sokoni_probe', '1');
+    var got = localStorage.getItem('_sokoni_probe');
+    localStorage.removeItem('_sokoni_probe');
+    if (got === '1') row(auto, 'ok', 'localStorage works', 'read + write + delete');
+    else row(auto, 'bad', 'localStorage', 'wrote but could not read back');
+  } catch (e) {
+    row(auto, 'bad', 'localStorage BLOCKED', String(e && e.message) +
+      ' — private mode or blocked site data would also break POS setup flags');
+  }
+
+  mark('service-worker-state');
+  try {
+    if (!('serviceWorker' in navigator)) {
+      row(auto, 'pend', 'Service worker', 'unsupported in this browser');
+    } else {
+      var controlled = !!navigator.serviceWorker.controller;
+      row(auto, controlled ? 'ok' : 'pend',
+        'Service worker: ' + (controlled ? 'CONTROLLING this page' : 'not controlling'),
+        controlled
+          ? 'this page is being served through the worker — so if it opened, the worker is not blocking navigation'
+          : 'this page came straight from the network');
+      navigator.serviceWorker.getRegistrations && navigator.serviceWorker.getRegistrations()
+        .then(function (rs) {
+          row(auto, 'ok', 'Registered workers: ' + rs.length,
+            rs.map(function (r) { return r.scope; }).join('  |  ') || 'none');
+        }).catch(function () {});
+    }
+  } catch (e) { row(auto, 'bad', 'Service worker check', String(e && e.message)); }
+
+  mark('storage-estimate');
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(function (est) {
+        var mb = function (n) { return n == null ? '?' : Math.round(n / 1048576) + ' MB'; };
+        row(auto, 'ok', 'Storage quota', mb(est.usage) + ' used of ' + mb(est.quota));
+      }).catch(function () {});
+    }
+  } catch (e) {}
+
+  mark('network-reachable');
+  try {
+    /* A tiny same-origin GET. Confirms the network path works from THIS page
+       without navigating anywhere. */
+    fetch('/version.json?d=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (o) {
+        row(auto, 'ok', 'Network reachable', 'version.json ' + o.s +
+          ' — build ' + (o.j.commitShort || '?') + ' / ' + (o.j.cacheVersion || '?'));
+      })
+      .catch(function (e) {
+        row(auto, 'bad', 'Network request FAILED', String(e && e.message) +
+          ' — the page loaded but cannot fetch, which points at the worker or the connection');
+      });
+  } catch (e) { row(auto, 'bad', 'Network', String(e && e.message)); }
+
+  mark('safe-steps-complete');
+  row(auto, 'ok', 'All safe checks finished', 'nothing below this ran automatically');
+
+  /* ── what the previous visit reached ──────────────────────────────────── */
+  var prev = document.getElementById('prev');
+  try {
+    var raw = localStorage.getItem(KEY + '_prev');
+    if (!raw) {
+      row(prev, 'pend', 'No previous visit recorded', 'this looks like the first run on this device');
+    } else {
+      var p = JSON.parse(raw);
+      var last = p.length ? p[p.length - 1] : null;
+      row(prev, last && /safe-steps-complete|risky:.*:done/.test(last.s) ? 'ok' : 'bad',
+        'Last step reached: ' + (last ? last.s : '(none)'),
+        p.length + ' steps — if this names a RISKY step, that step killed the tab');
+      var pre = document.createElement('pre');
+      pre.textContent = p.map(function (x) { return x.s; }).join('\n');
+      prev.appendChild(pre);
+    }
+  } catch (e) { row(prev, 'bad', 'Could not read previous visit', String(e && e.message)); }
+
+  /* Roll this visit into "previous" only once the safe steps are done, so a
+     crash during a risky step leaves THAT as the last recorded step. */
+  try { localStorage.setItem(KEY + '_prev', JSON.stringify(steps)); } catch (e) {}
+
+  /* ── device ───────────────────────────────────────────────────────────── */
+  try {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
+      navigator.standalone === true;
+    document.getElementById('dev').textContent =
+      'userAgent    ' + navigator.userAgent + '\n' +
+      'viewport     ' + window.innerWidth + ' x ' + window.innerHeight +
+        '  (dpr ' + (window.devicePixelRatio || 1) + ')\n' +
+      'standalone   ' + standalone + '   (installed PWA)\n' +
+      'deviceMemory ' + (navigator.deviceMemory != null ? navigator.deviceMemory + ' GB' : 'unreported') + '\n' +
+      'cores        ' + (navigator.hardwareConcurrency || '?') + '\n' +
+      'online       ' + navigator.onLine + '\n' +
+      'language     ' + navigator.language + '\n' +
+      'url          ' + location.href;
+  } catch (e) {}
+
+  /* ── risky steps, each behind its own tap ─────────────────────────────── */
+  function risky(btnId, label, fn) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = label + ' — running…';
+      mark('risky:' + btnId + ':started');
+      try { localStorage.setItem(KEY + '_prev', JSON.stringify(steps)); } catch (e) {}
+      Promise.resolve()
+        .then(fn)
+        .then(function (msg) {
+          mark('risky:' + btnId + ':done');
+          try { localStorage.setItem(KEY + '_prev', JSON.stringify(steps)); } catch (e) {}
+          btn.textContent = label + ' ✓';
+          row(auto, 'ok', label, String(msg || 'completed'));
+        })
+        .catch(function (e) {
+          mark('risky:' + btnId + ':failed');
+          try { localStorage.setItem(KEY + '_prev', JSON.stringify(steps)); } catch (e) {}
+          btn.textContent = label + ' ✕';
+          row(auto, 'bad', label, String((e && e.message) || e));
+        });
+    });
+  }
+
+  risky('b-idb', 'IndexedDB', function () {
+    return new Promise(function (res, rej) {
+      if (!window.indexedDB) return rej(new Error('indexedDB is not available'));
+      var req = indexedDB.open('_sokoni_probe_db', 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore('s'); };
+      req.onsuccess = function () {
+        try { req.result.close(); } catch (e) {}
+        try { indexedDB.deleteDatabase('_sokoni_probe_db'); } catch (e) {}
+        res('opened, wrote a store, closed and deleted it');
+      };
+      req.onerror = function () { rej(new Error('open failed: ' + (req.error && req.error.message))); };
+      req.onblocked = function () { rej(new Error('blocked — another tab holds it open')); };
+      setTimeout(function () { rej(new Error('timed out after 8s — IndexedDB never answered')); }, 8000);
+    });
+  });
+
+  risky('b-sdk', 'Firebase SDK', function () {
+    return new Promise(function (res, rej) {
+      /* The SDK ONLY. No initializeApp, no auth, no Firestore — this measures
+         whether fetching and parsing that bundle is survivable on this device. */
+      var t0 = Date.now();
+      var s = document.createElement('script');
+      s.src = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js';
+      s.onload = function () { res('loaded and parsed in ' + (Date.now() - t0) + ' ms (not initialised)'); };
+      s.onerror = function () { rej(new Error('the SDK failed to load — network, CSP or blocking')); };
+      document.head.appendChild(s);
+      setTimeout(function () { rej(new Error('timed out after 15s')); }, 15000);
+    });
+  });
+
+  risky('b-doc', 'POS document', function () {
+    /* FETCH, never navigate. If /pos kills the tab on navigation, fetching it
+       still tells us whether the document is delivered. */
+    var t0 = Date.now();
+    return fetch('/pos?probe=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          return 'HTTP ' + r.status + ' · ' + Math.round(txt.length / 1024) + ' KB · ' +
+            (Date.now() - t0) + ' ms · ' +
+            (/<\/html>/i.test(txt) ? 'complete document' : 'TRUNCATED — no closing tag');
+        });
+      });
+  });
+
+  document.getElementById('b-clear').addEventListener('click', function () {
+    try { localStorage.removeItem(KEY); localStorage.removeItem(KEY + '_prev'); } catch (e) {}
+    location.reload();
+  });
+}());
+</script>
+</body>
+</html>
