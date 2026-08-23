@@ -1685,6 +1685,14 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="pos-mobile.js" defer></script>
 <script src="pos-lifecycle.js" defer></script>
 <script src="pos.js" defer></script>
+<!-- POS boot decision. Loaded LAST and deferred: it must never delay the module
+     graph or first paint, and it runs only after `load`. It changes which STATE
+     /pos shows — business/branch/device resolved from the server instead of from
+     localStorage flags — and touches no sale, payment, caching or SW behaviour.
+     It fails toward POS: any error, timeout or unreachable Firestore leaves the
+     page booting exactly as it does today. It never navigates. -->
+<script src="sokoni-pos-context.js" defer></script>
+<script src="sokoni-pos-boot.js" defer></script>
 <script defer src="sokoni-form-engine.js"></script>
 <!-- ══ Scale + observability stack ══ -->
 <script defer src="sokoni-scale.js"></script>
