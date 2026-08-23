@@ -113,6 +113,7 @@
 (function () {
   'use strict';
 
+  var FSMOD = null, DBREF = null;
   var boot = document.getElementById('boot');
   var msg  = document.getElementById('boot-msg');
   var host = document.getElementById('till');
@@ -266,6 +267,7 @@
     try {
       fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
       db = window.firebaseDB || fs.getFirestore();
+      FSMOD = fs; DBREF = db;
       ctxResult = await CTX.resolve({ db: compatDb(fs, db), uid: uid });
     } catch (e) {
       stage('context:failed');
@@ -335,12 +337,30 @@
     }
     stage('scope:ok');
 
+    /* The adapter Sell actually needs — the same shape merchant-v2 passes. */
+    var mdb = {
+      queryProducts: function (spec) {
+        var parts = (spec.where || []).map(function (w) { return FSMOD.where(w[0], w[1], w[2]); });
+        return FSMOD.getDocs(FSMOD.query.apply(null, [FSMOD.collection(DBREF, spec.collection)].concat(parts)))
+          .then(function (snap) {
+            return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+          });
+      }
+    };
+
     stage('sell:mount');
     boot.style.display = 'none';
     try {
+      /* ── THE DB HANDED TO SELL MUST BE AN ADAPTER, NOT A FIRESTORE ───────
+         SokoniMerchantSell calls md.listProducts({ scope, db: ctx.db }), and
+         listProducts calls db.queryProducts(spec). The raw modular Firestore
+         instance has no such method, so it returned nothing and the till
+         mounted with ZERO product cards — while the diagnostic, which built its
+         own adapter, read all 103. Same shape as merchant-v2's `_mdb`; the
+         adapter is the contract, and passing a Firestore object was my error. */
       SELL.mount(host, {
         scope: scope,
-        db: db,
+        db: mdb,
         shopName: (biz && biz.name) || 'My shop',
         origin: location.origin,
         servedBy: null,
