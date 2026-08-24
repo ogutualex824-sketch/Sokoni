@@ -302,6 +302,14 @@
     if (!ctxResult || !ctxResult.ok) {
       return show('Could not open the till', 'SOKONI could not confirm your account.');
     }
+    /* A LOOKUP THAT FAILED IS NOT A MERCHANT WITHOUT A SHOP. Offering a retry
+       is the honest response to a question that was never answered; telling
+       them their POS is not set up is a false statement about their account. */
+    if (ctxResult.decision === 'lookup-failed') {
+      return show('Could not check your shop',
+        'SOKONI could not read your business just now. This is usually a slow ' +
+        'connection.', 'Try again', location.pathname + location.search);
+    }
     if (ctxResult.decision === 'no-owned-business') {
       /* This used to read "This account is not the owner of a shop yet", which
          states something about the MERCHANT when the true cause is that SOKONI
@@ -473,6 +481,33 @@
     line('DEVICE', r && r.device
       ? (r.device.registered ? 'registered  ' + (r.device.branchId || '') : 'not registered — ' + r.device.reason)
       : '—');
+
+    /* WHICH ONE DID IT CHOOSE, and does that choice hold up?
+       BUSINESS lists what was found; it does not say which won. With two owned
+       records — the state this merchant is actually in — "found 2" and "chose
+       the wrong one of 2" produce the identical line above and need completely
+       different fixes. The selected id, its status, its default branch and
+       whether that branch DOCUMENT resolves are the four values that separate
+       them. */
+    var selId = (r && r.selected && r.selected.merchantId) || null;
+    line('SELECTED', selId || 'NONE — the resolver picked nothing');
+    if (selId) {
+      try {
+        var bSnap = await fs.getDoc(fs.doc(db, 'businesses', selId));
+        var bv = bSnap.exists() ? (bSnap.data() || {}) : null;
+        line('SELECTED STATUS', bv ? (bv.status || '(no status)') : 'DOCUMENT MISSING');
+        line('MERCHANT ID', bv ? (bv.merchantId || '(absent)') : '—');
+        line('DEFAULT BRANCH', bv ? (bv.defaultBranchId || '(absent)') : '—');
+        if (bv && bv.defaultBranchId) {
+          var brSnap = await fs.getDoc(fs.doc(db, 'branches', bv.defaultBranchId));
+          line('BRANCH DOC', brSnap.exists()
+            ? 'EXISTS  merchantId=' + ((brSnap.data() || {}).merchantId || '(absent)')
+            : 'MISSING — the till cannot operate a business whose branch is gone');
+        } else line('BRANCH DOC', 'not checked — no defaultBranchId');
+      } catch (e) {
+        line('SELECTED LOOKUP', 'FAILED  ' + ((e && (e.code || e.message)) || e));
+      }
+    }
 
     var scope = null;
     try { scope = MD.resolveScope({ uid: uid, activeShopId: uid, source: 'diag' }); } catch (e) {}

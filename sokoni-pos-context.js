@@ -63,12 +63,34 @@
           };
         });
       })
-      .catch(function () { return []; });
+      /* A FAILED QUERY IS NOT AN EMPTY RESULT.
+
+         This used to `.catch(() => [])`, so a permission error, an auth token
+         that had not attached yet, or a dropped request all became "this user
+         owns no businesses" — and the till told a merchant with 103 products
+         and 7 paired devices that they do not have a shop. The diagnostic
+         path happened to work only because it waits on a second module first,
+         giving the token time to arrive: the same code, a few hundred
+         milliseconds later, answering correctly.
+
+         The error is now carried so resolve() can tell "we could not ask"
+         apart from "we asked and the answer is none". */
+      .catch(function (e) {
+        var err = new Error('businesses lookup failed: ' + ((e && (e.code || e.message)) || e));
+        err.__lookupFailed = true;
+        err.cause = e;
+        throw err;
+      });
   }
 
   /* ── branches under a business ──────────────────────────────────────────
-     Read is permitted only because the caller owns the business; a caller who
-     does not will be refused by rules, and the empty result is honest. */
+     The old comment here said "a caller who does not [own it] will be refused
+     by rules, and the empty result is honest". That reasoning is what produced
+     the defect: it is only honest when the refusal is the ANSWER. A refusal
+     because the token had not attached yet, or a dropped request, produced the
+     same empty list — and a business with no branches loses the selection to
+     one that has them, so a transient failure could hand the till the WRONG
+     business. Same failure class as ownedBusinesses(); same treatment. */
   function branchesOf(db, merchantId) {
     return db.collection('branches').where('merchantId', '==', merchantId).get()
       .then(function (snap) {
@@ -83,7 +105,13 @@
           };
         }).sort(function (a, b) { return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0); });
       })
-      .catch(function () { return []; });
+      .catch(function (e) {
+        var err = new Error('branches lookup failed for ' + merchantId + ': ' +
+                            ((e && (e.code || e.message)) || e));
+        err.__lookupFailed = true;
+        err.cause = e;
+        throw err;
+      });
   }
 
   /* ── is THIS device already paired? ─────────────────────────────────────
@@ -127,7 +155,26 @@
     if (!db) return Promise.resolve({ ok: false, reason: 'no-db' });
     if (!uid) return Promise.resolve({ ok: false, reason: 'unauthenticated', decision: 'sign-in' });
 
-    return ownedBusinesses(db, uid).then(function (owned) {
+    /* ONE RETRY, because the failure this guards against is a race and not a
+       verdict. If the token was simply not attached yet, asking again a beat
+       later succeeds — which is precisely what the diagnostic path was doing
+       by accident. If it fails twice, the caller is told the LOOKUP failed
+       rather than being handed a confident wrong answer. */
+    function ownedWithRetry() {
+      return ownedBusinesses(db, uid).catch(function (e1) {
+        return new Promise(function (res) { setTimeout(res, 700); })
+          .then(function () { return ownedBusinesses(db, uid); })
+          .catch(function (e2) { throw (e2 && e2.__lookupFailed ? e2 : e1); });
+      });
+    }
+
+    return ownedWithRetry().catch(function (e) {
+      /* NOT 'no-owned-business'. The question was never answered. */
+      return { ok: false, uid: uid, businesses: [], branches: [], device: null,
+               decision: 'lookup-failed',
+               reason: (e && e.message) || 'businesses lookup failed' };
+    }).then(function (owned) {
+      if (owned && owned.decision === 'lookup-failed') return owned;
       var ids = owned.map(function (b) { return b.id; });
 
       if (!owned.length) {
@@ -150,10 +197,29 @@
          that actually has branches — preferring a default — because a business
          with no branch cannot be operated by a till. Falling back to the first
          id keeps the previous behaviour when nobody has branches yet. */
+      /* The branch fan-out gets the SAME one retry as the business lookup, for
+         the same reason: these fire microseconds apart, so whatever starved one
+         of a token starved the other. Retrying only the businesses query would
+         have moved the failure one step down instead of removing it. */
+      function branchesForAll() {
+        return Promise.all(ids.map(function (id) { return branchesOf(db, id); }));
+      }
       return Promise.all([
-        Promise.all(ids.map(function (id) { return branchesOf(db, id); })),
+        branchesForAll().catch(function (e1) {
+          return new Promise(function (res) { setTimeout(res, 700); })
+            .then(branchesForAll)
+            .catch(function (e2) { throw (e2 && e2.__lookupFailed ? e2 : e1); });
+        }),
         deviceRegistration(db, ids)
-      ]).then(function (r) {
+      ]).catch(function (e) {
+        /* NOT a business without branches. The question was never answered, and
+           answering it wrongly here picks the wrong shop for a real till. */
+        return { __lookupFailed: true, reason: (e && e.message) || 'branches lookup failed' };
+      }).then(function (r) {
+        if (r && r.__lookupFailed) {
+          return { ok: false, uid: uid, businesses: owned, branches: [], device: null,
+                   decision: 'lookup-failed', reason: r.reason };
+        }
         var perBusiness = r[0], device = r[1];
         var branches = [];
         perBusiness.forEach(function (list) { branches = branches.concat(list); });

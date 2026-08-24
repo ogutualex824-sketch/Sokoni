@@ -1,3 +1,62 @@
+## [2026-08-24] - The till said "no shop" because a query FAILED, not because it answered.
+
+Hosting only. `sokoni-pos-context.js`, `till.html`,
+`scripts/test-pos-context-lookup.js` (new, 23/0). Not deployed to production.
+
+### The defect
+
+    .catch(function () { return []; });
+
+`ownedBusinesses()` and `branchesOf()` both turned EVERY failure into an empty
+result. A permission error, an auth token that had not attached yet, or a
+dropped request became "this user owns no businesses" — and the till told a
+merchant with 103 products, 7 paired devices and an active subscription that
+their POS was not set up.
+
+It reproduced only on the normal path. `?diag=till` additionally awaits a second
+module before resolving, which gives the token a few hundred milliseconds to
+arrive: **the same code, slightly later, answering correctly.** The diagnostic
+was not more careful than the app — it was just slower, and slower was enough.
+
+`branchesOf()` was worse than it looks. With two owned business records — the
+state this merchant is actually in — a transient branch failure does not merely
+lose a branch: the business that appears branchless LOSES THE SELECTION, so the
+till would open the wrong shop.
+
+### The treatment, now consistent across the file
+
+    ownedBusinesses()    failure -> throw -> retry once -> 'lookup-failed'
+    branchesOf()         failure -> throw -> retry once -> 'lookup-failed'
+    deviceRegistration() already distinguished 'unreadable' -> 'retry'
+
+The retry is 700ms and exists because the failure is a RACE, not a verdict — it
+is precisely what the diagnostic path was doing by accident. Both retries were
+needed: these queries fire microseconds apart, so whatever starved one of a
+token starved the other, and fixing only the first would have moved the failure
+one step down instead of removing it.
+
+`till.html` renders `lookup-failed` as **"Could not check your shop — Try
+again"**. A question that was never answered must not be reported as a fact
+about the merchant's account.
+
+### A genuinely empty account is still reported honestly
+
+L8-L10, L22-L23: an empty query is still `no-owned-business` with `ok:true`, it
+does not waste a retry, and a business with genuinely zero branches is not an
+error. The fix does not mask the real case.
+
+### One of my own assertions was vacuous
+
+L22 shipped as `ck('…', (async () => true)())` — a PROMISE OBJECT, always
+truthy. It passed while testing nothing. Replaced with a real case plus L23. A
+vacuous assertion is worse than a missing one: it reports coverage that does not
+exist.
+
+### Data unchanged
+
+No Firestore writes. D5Q canonical, 103 products, 5 sales, 7 devices,
+SOK-E7J2Y8 un-quarantined, no POS routing change.
+
 ## [2026-08-24] - Seven taps never worked: the function was called from nowhere.
 
 Hosting only. `index.html`, `scripts/browser/verify-logo-tap-unlock.mjs` (7/7).
