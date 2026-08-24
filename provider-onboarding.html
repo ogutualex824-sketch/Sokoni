@@ -202,7 +202,7 @@ a{color:var(--acc);text-decoration:none}
       </div>
       <button class="btn btn-p btn-f" style="margin-top:7px" onclick="AU.sendOTP()">Send OTP</button>
       <div id="otpSec" style="display:none;margin-top:12px">
-        <label class="sk-lbl" style="text-align:center;display:block;margin-bottom:6px">Enter the 6-digit code</label>
+        <label class="sk-lbl" id="povOtpLbl" style="text-align:center;display:block;margin-bottom:6px">Enter the 6-digit code</label>
         <!-- Single verification field (sokoni-otp.js). The six boxes it replaces had no
              autocomplete="one-time-code" at all, so SMS AutoFill never worked here. -->
         <div id="otpB"></div>
@@ -366,9 +366,31 @@ const AU=(()=>{
   /* One verification field. Mounted lazily because #otpSec is display:none until the
      SMS is actually sent. Same Firebase confirm() call as before — backend untouched. */
   let _otp=null;
-  function _mountOtp(){if(_otp||!window.SokoniOtp)return;_otp=window.SokoniOtp.mount('#otpB',{length:6,label:'Verification code',placeholder:'6-digit verification code',onComplete:verifyOTP});}
+  /* The component announces each transition; the page moves its own copy, so
+     there is no second state machine here to drift out of step with it. */
+  function _otpLabel(st){var el=document.getElementById('povOtpLbl');if(!el)return;
+    el.textContent = st==='verifying' ? 'Verifying…' : st==='verified' ? '✓ Verified' : 'Enter the 6-digit code';}
+  function _mountOtp(){if(_otp||!window.SokoniOtp)return;_otp=window.SokoniOtp.mount('#otpB',{length:6,orbit:true,label:'Verification code',placeholder:'6-digit verification code',onComplete:verifyOTP,onState:_otpLabel});}
   async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_mountOtp();_otp?.clear().focus()}catch(err){hideLoad();toast(ae(err),'err')}}
-  async function verifyOTP(){const code=(_otp?_otp.value():'').trim();if(!/^\d{6}$/.test(code)){_otp?.error(true);return toast('Enter all 6 digits','err')}showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();_otp?.error(true);_otp?.focus();toast('Invalid code.','err')}}
+  /* The ORBIT is the verification indicator. showLoad() drops a fixed 80%-opaque
+     overlay with its own generic spinner on top of it, so the cinematic
+     verification ran underneath a loading screen where nobody could see it.
+     Authentication is untouched — same _conf.confirm(code), same errors. */
+  async function verifyOTP(){
+    const code=(_otp?_otp.value():'').trim();
+    if(!/^\d{6}$/.test(code)){_otp?.error(true);return toast('Enter all 6 digits','err')}
+    _otp?.error(false);
+    _otp?.state('verifying');
+    try{
+      await _conf.confirm(code);
+      /* Let the ring close and the tick land before anything navigates. */
+      _otp?.state('verified');
+      await new Promise(function(r){setTimeout(r,760)});
+      showLoad('Signing you in…');
+    }catch(err){
+      _otp?.state(null); _otp?.error(true); _otp?.focus(); toast('Invalid code.','err');
+    }
+  }
   return{tab,emailSI,emailSU,google,phoneTog,sendOTP,verifyOTP};
 })();
 

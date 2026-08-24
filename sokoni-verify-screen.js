@@ -186,6 +186,9 @@
       _msg('Enter the 6 digits from the email.', 'error');
       return Promise.resolve();
     }
+    /* The orbit carries the verification state; without this call the cinematic
+       layer never leaves idle on a real page. Verification itself is untouched. */
+    if (S.otp && S.otp.state) { S.otp.error(false); S.otp.state('verifying'); }
     _busy(true, 'Verifying…');
     _msg('', 'info');
     return _call('emailChallengeVerify', { code: code })
@@ -194,7 +197,8 @@
 
         if (!res.ok) {
           _busy(false);
-          if (S.otp) { if (S.otp.error) S.otp.error(true); S.otp.clear(); S.otp.focus(); }
+          if (S.otp) { if (S.otp.state) S.otp.state(null);
+                       if (S.otp.error) S.otp.error(true); S.otp.clear(); S.otp.focus(); }
           var extra = (typeof res.attemptsRemaining === 'number' && res.attemptsRemaining > 0 &&
                        res.reason === 'bad-code')
             ? ' ' + res.attemptsRemaining + ' attempt' + (res.attemptsRemaining === 1 ? '' : 's') + ' left.'
@@ -202,9 +206,14 @@
           _msg(_copy(res.reason) + extra, 'error');
           return;
         }
+        /* Success state on the ORBIT — but _complete() still PROVES the claim
+           against a refreshed token before anything is promised to the user, so
+           this shows verification of the CODE, not of the entitlement. */
+        if (S.otp && S.otp.state) S.otp.state('verified');
         return _complete();
       })
       .catch(function (e) {
+        if (S.otp && S.otp.state) S.otp.state(null);
         _busy(false);
         _msg(_friendly(e), 'error');
       });
@@ -311,7 +320,18 @@
     if (global.SokoniOtp && global.SokoniOtp.mount) {
       S.otp = global.SokoniOtp.mount('#skvOtp', {
         length: 6,
+        orbit: true,
         label: 'Verification code',
+        /* The subtitle carries the state here. Its idle text is captured on the
+           first transition rather than hard-coded, because it is rewritten with
+           the email hint once that resolves — restoring a literal would wipe it. */
+        onState: function (st) {
+          var sub = document.getElementById('skvSub');
+          if (!sub) return;
+          if (S._subIdle == null) S._subIdle = sub.textContent;
+          sub.textContent = st === 'verifying' ? 'Verifying…' :
+                            st === 'verified'  ? '✓ Verified' : S._subIdle;
+        },
         onComplete: function () { _verify(); },
       });
     }

@@ -192,7 +192,7 @@ a{color:var(--acc);text-decoration:none}
       </div>
       <button class="btn btn-p btn-f" style="margin-top:8px" onclick="A.sendOTP()">Send OTP</button>
       <div id="otpSec" style="display:none;margin-top:14px">
-        <label class="sk-lbl" style="text-align:center;display:block;margin-bottom:7px">Enter the 6-digit code</label>
+        <label class="sk-lbl" id="otpLbl" style="text-align:center;display:block;margin-bottom:7px;letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;transition:opacity .25s">Verify your number</label>
         <!-- Single verification field (sokoni-otp.js). The six boxes it replaces had no
              autocomplete="one-time-code" at all, so SMS AutoFill never worked here. -->
         <div id="otpB"></div>
@@ -395,9 +395,41 @@ const A=(()=>{
   /* One verification field. Mounted lazily because #otpSec is display:none until the
      SMS is actually sent. Same Firebase confirm() call as before — backend untouched. */
   let _otp=null;
-  function _mountOtp(){if(_otp||!window.SokoniOtp)return;_otp=window.SokoniOtp.mount('#otpB',{length:6,label:'Verification code',placeholder:'6-digit verification code',onComplete:verifyOTP});}
+  function _mountOtp(){if(_otp||!window.SokoniOtp)return;_otp=window.SokoniOtp.mount('#otpB',{length:6,orbit:true,label:'Verification code',placeholder:'6-digit verification code',onComplete:verifyOTP,
+    /* The component announces each transition; the page moves its own copy.
+       VERIFY YOUR NUMBER -> VERIFYING -> VERIFIED, exactly as specified, without
+       the page keeping a second state machine to drift out of step with. */
+    onState:function(st){var el=document.getElementById('otpLbl');if(!el)return;
+      el.textContent = st==='verifying' ? 'Verifying' : st==='verified' ? 'Verified' : 'Verify your number';}
+  });}
   async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_mountOtp();_otp?.clear().focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
-  async function verifyOTP(){const code=(_otp?_otp.value():'').trim();if(!/^\d{6}$/.test(code)){_otp?.error(true);return toast('Enter all 6 digits','err')}showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();_otp?.error(true);_otp?.focus();toast('Invalid code.','err')}}
+  /* The ORBIT is the verification indicator. showLoad() drops a fixed, 80%-opaque
+     overlay at z-index 9998 with its own generic spinner — so the cinematic
+     verification was running underneath a loading screen and nobody could see it.
+     The orbit now says "verifying" itself, and the overlay is only used for the
+     brief post-verification work, once the success state has been shown.
+
+     Authentication is untouched: same _conf.confirm(code), same errors. */
+  async function verifyOTP(){
+    const code=(_otp?_otp.value():'').trim();
+    if(!/^\d{6}$/.test(code)){_otp?.error(true);return toast('Enter all 6 digits','err')}
+    _otp?.error(false);
+    _otp?.state('verifying');
+    try{
+      await _conf.confirm(code);
+      /* Let the success state actually PLAY. The ring closes and the tick lands
+         in ~700ms; navigating immediately meant the verified state existed only
+         in theory. */
+      _otp?.state('verified');
+      await new Promise(function(r){setTimeout(r,760)});
+      showLoad('Signing you in…');
+    }catch(err){
+      _otp?.state(null);
+      _otp?.error(true);
+      _otp?.focus();
+      toast('Invalid code.','err');
+    }
+  }
   function _ae(e){const m={'auth/wrong-password':'Incorrect password.','auth/user-not-found':'No account found.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 8+ characters.','auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts — try later.'};return m[e.code]||e.message}
   return{tab,emailSI,emailSU,google,phoneToggle,sendOTP,verifyOTP};
 })();

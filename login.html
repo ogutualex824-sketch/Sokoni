@@ -159,8 +159,11 @@
             Code sent to
             <span id="otpPhoneDisplay" style="color:#71ff00;font-weight:700;white-space:nowrap;"></span>
           </p>
-          <!-- Six-box OTP grid, mounted by sokoni-otp.js (boxes:true).
-               iOS AutoFill fills the first box with the full code; distribute() spreads it. -->
+          <!-- ONE verification field rendered as the cinematic orbit (orbit:true).
+               This was boxes:true — six real inputs — until the orbit slice. iOS SMS
+               AutoFill fills exactly ONE field, so the grid took the whole code into
+               box one and maxlength truncated it to a single digit. -->
+          <p id="otpStateLbl" style="font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);text-align:center;margin:0 0 2px;transition:color .3s ease;">Verify your number</p>
           <div id="otpMount"></div>
           <button type="button" class="auth-btn" id="verifyOtpBtn" onclick="verifyPhoneOTP()">
             Verify Code →

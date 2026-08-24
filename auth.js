@@ -1901,9 +1901,19 @@ async function verifyPhoneOTP() {
 
     const btn = document.getElementById('verifyOtpBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+    /* The orbit IS the verification indicator — it accelerates, sweeps, then
+       closes its ring. Driving it here is the whole point of the state machine;
+       without these two calls the cinematic layer never left its idle state on a
+       real page, however well it behaved in the lab. Authentication below is
+       untouched. */
+    _otpField?.error(false);
+    _otpField?.state('verifying');
 
     try {
         const result = await _phoneConfirmResult.confirm(code);   /* OTP errors only */
+        /* Verified: let the ring close and the tick land before anything navigates. */
+        _otpField?.state('verified');
+        await new Promise(function (r) { setTimeout(r, 760); });
         clearInterval(_otpTimerHandle);
         try {
             if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_verified', { success: true });
@@ -1921,6 +1931,7 @@ async function verifyPhoneOTP() {
             setTimeout(function(){ location.href = 'index.html'; }, 800);
         }
     } catch (err) {
+        _otpField?.state(null);   /* back to idle — a rejected code is not 'verifying' */
         /* Label matches the button's own text — it used to reset to "Verify →" and
            silently rename itself the first time a code was rejected. */
         if (btn) { btn.disabled = false; btn.textContent = 'Verify Code →'; }
@@ -2010,11 +2021,26 @@ function _setupOtpInputs() {
 
     _otpField = window.SokoniOtp.mount(mount, {
         length:     6,
-        boxes:      true,   /* 6 individual digit inputs with auto-advance, paste, backspace nav */
+        /* ORBIT, not boxes. The six-box mode puts six real inputs on the page,
+           and iOS SMS AutoFill fills exactly ONE field - the defect sokoni-otp.js
+           was built to remove. Orbit keeps the single field and renders the six
+           positions as a display around the SOKONI mark, so autofill, paste and
+           the keyboard suggestion all behave as they do everywhere else. */
+        orbit:      true,
         label:      'Verification code',
         /* Auto-verify the moment six digits are present, from any source: typing,
            paste, or the SMS AutoFill suggestion. The Verify Code button is the fallback. */
         onComplete: function() { verifyPhoneOTP(); },
+        /* VERIFY YOUR NUMBER -> VERIFYING -> VERIFIED. The component announces
+           every transition and the page moves its own copy, so the words cannot
+           disagree with what the orbit is doing. */
+        onState: function (st) {
+            const el = document.getElementById('otpStateLbl');
+            if (!el) return;
+            el.textContent = st === 'verifying' ? 'Verifying' :
+                             st === 'verified'  ? '✓ Verified' : 'Verify your number';
+            el.style.color = st === 'verified' ? '#71ff00' : 'rgba(255,255,255,.55)';
+        },
     });
 }
 
