@@ -1,3 +1,48 @@
+## [2026-08-24] - The till captured the M-Pesa code and threw it away at settlement.
+
+Hosting only. **No Functions, no rules, no auth change.** Not deployed.
+`sokoni-merchant-sell.js`, `scripts/test-sell-composition.js`.
+
+The phone-first till (`till.html` / the native Sell tab) already composes the
+canonical `SokoniReceiptDoc` and already emits `unitMinor` per line, so the
+receipt authority from `08e517f` — unit price, branch, employee number,
+per-tender references — renders here with no adapter.
+
+### The defect
+
+`stkPoll` stores the confirmed payment on the tender:
+
+    S.tenders.concat([{ method:'mpesa', amount: ..., ref: ref, code: d.mpesaCode }])
+
+and the settle builder rebuilt each tender as `{ method, amountMinor }` — so the
+code was **captured, held in state, and discarded** one layer above the
+settlement that had just been taught to preserve it. A confirmed M-Pesa payment
+reached the receipt with no reference, and a split sale could not say which half
+the code belonged to.
+
+The code is preferred over the checkout id: `code` is what the customer sees in
+their SMS and what reconciliation matches against; `ref` is our own request id
+and is only a fallback.
+
+### Evidence
+
+T1-T6, asserted on BOTH the source and the rendered receipt — either alone can
+pass while the number is still lost. `test-sell-composition` 44/2,
+`test-till-payment` 25/0, `test-receipt-contract` 132/0.
+
+### Adoption gaps that remain — the till cannot supply these yet
+
+* **`orderNumber`** is not mapped at all, so the Receipt No. / Order No.
+  distinction cannot render from this surface.
+* **`branch`** depends on `ctx.shop` carrying one; the shell supplies
+  `ctx.shopName` and the branch field is unverified.
+* **`taxMinor`** — `totals` carries subtotal and discount only.
+
+### Pre-existing, unchanged
+
+`test-sell-composition` 2 failures and `test-servedby-wire` 1, identical on the
+pristine tree at the same commit.
+
 ## [2026-08-24] - Receipt authority: the unit price existed for months and was never printed.
 
 Hosting only. **No Functions, no rules, no auth change.** Not deployed.

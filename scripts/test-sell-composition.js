@@ -202,6 +202,50 @@ ck('an unresolved server yields NO line rather than a guess',
    RD.servedByLine({ servedBy: { role: 'employee' } }) === null &&
    RD.servedByLine({}) === null);
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE GATEWAY REFERENCE SURVIVES THE TILL
+   ══════════════════════════════════════════════════════════════════════════
+   stkPoll stores the confirmed M-Pesa code on the tender, and the settle builder
+   used to rebuild each tender from method and amount alone — destroying it one
+   layer above the settlement that had just been taught to keep it. Asserted on
+   the SOURCE (the till must pass it) and on the RENDERED receipt (it must
+   arrive), because either one alone can pass while the number is still lost. */
+const sellSrc = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-sell.js'), 'utf8');
+ck('T1 the till passes a tender reference into SokoniCash.settle',
+   /_t\.reference *= *_tref/.test(sellSrc) && /S\.tenders\[i\]\.code/.test(sellSrc));
+ck('T2 ...preferring the M-PESA CODE over our own checkout id — the code is what ' +
+   'the customer sees and what reconciliation matches',
+   /S\.tenders\[i\]\.code *\|\| *S\.tenders\[i\]\.ref/.test(sellSrc));
+ck('T3 NC ...and the old reference-dropping form is gone',
+   !/ts\.push\(\{ method: S\.tenders\[i\]\.method, amountMinor: m \}\)/.test(sellSrc));
+
+/* End to end: a split sale settled with an M-Pesa code must PRINT that code. */
+const splitSettled = Cash.settle({
+  totalMinor: 400000,
+  tenders: [
+    { method: 'cash', amountMinor: 150000 },
+    { method: 'mpesa', amountMinor: 250000, reference: 'TFG7H2K9QQ' },
+  ],
+});
+ck('T4 the settlement keeps the reference on the tender',
+   splitSettled.tenders.some((t) => t.reference === 'TFG7H2K9QQ'));
+const splitText = Rcpt.toText(Rcpt.render({
+  receiptId: 'RCPT-9', serverTimestamp: 1756000000000, shop: { name: 'Duka' },
+  items: [{ name: 'Item', qty: 2, unitMinor: 100000, lineMinor: 200000 }],
+  totals: { subtotalMinor: 400000 }, totalMinor: 400000, settlement: splitSettled,
+}), { cols: 32 });
+ck('T5 ...and the printed receipt carries it against the right tender',
+   /MPESA REF: TFG7H2K9QQ/.test(splitText), splitText.split('\n').filter((l) => /REF/.test(l)).join(' | '));
+ck('T6 NC a tender with NO reference prints no empty REF line',
+   !/REF/.test(Rcpt.toText(Rcpt.render({
+     receiptId: 'RCPT-8', serverTimestamp: 1756000000000, shop: { name: 'Duka' },
+     items: [{ name: 'Item', qty: 1, unitMinor: 100000, lineMinor: 100000 }],
+     totals: { subtotalMinor: 100000 }, totalMinor: 100000,
+     settlement: Cash.settle({ totalMinor: 100000,
+       tenders: [{ method: 'cash', amountMinor: 100000 }] }),
+   }), { cols: 32 })));
+
 console.log('\n' + '='.repeat(74));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('='.repeat(74) + '\n');

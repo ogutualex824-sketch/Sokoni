@@ -407,7 +407,21 @@
       for (var i = 0; i < S.tenders.length; i++) {
         var m = C.toMinor(S.tenders[i].amount);
         if (m == null) return null;
-        ts.push({ method: S.tenders[i].method, amountMinor: m });
+        /* THE GATEWAY REFERENCE TRAVELS WITH THE TENDER.
+
+           stkPoll already stores the confirmed M-Pesa code on the tender
+           (`code`) alongside the checkout id (`ref`) — and this line used to
+           rebuild the tender from method and amount alone, discarding both. So
+           a confirmed M-Pesa payment reached the receipt with no reference on
+           it, and a split sale could not say which half the code belonged to.
+
+           The code is preferred over the checkout id: `code` is what the
+           customer sees in their SMS and what reconciliation matches against;
+           `ref` is our own request id and is only a fallback. */
+        var _tref = S.tenders[i].code || S.tenders[i].ref || null;
+        var _t = { method: S.tenders[i].method, amountMinor: m };
+        if (typeof _tref === 'string' && _tref) _t.reference = _tref;
+        ts.push(_t);
       }
       if (S.method === 'cash' && S.cashGiven != null && Number(S.cashGiven) > 0) {
         var cm = C.toMinor(Number(S.cashGiven));
