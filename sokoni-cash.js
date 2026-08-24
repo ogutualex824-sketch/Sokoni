@@ -77,7 +77,19 @@
       amt = Math.round(amt);
       paid += amt;
       if (t.method === 'cash') cash += amt;
-      clean.push({ method: t.method, amountMinor: amt });
+      /* THE GATEWAY REFERENCE SURVIVES THE SETTLEMENT.
+         This previously kept only method and amount, so an M-Pesa code or a card
+         terminal reference was discarded the moment the sale settled. On a SPLIT
+         that is unrecoverable: two electronic tenders, two references, nowhere to
+         record either — and reconciling or reversing one half of a mixed-tender
+         sale needs exactly that number. Carried through as OPAQUE STRINGS: this
+         module still never interprets them, it only stops destroying them. */
+      var _ref = t.reference || t.mpesaCode || t.receiptNumber || t.terminalRef;
+      var _tid = t.terminalId;
+      var _t = { method: t.method, amountMinor: amt };
+      if (typeof _ref === 'string' && _ref.trim()) _t.reference = _ref.trim().slice(0, 64);
+      if (typeof _tid === 'string' && _tid.trim()) _t.terminalId = _tid.trim().slice(0, 40);
+      clean.push(_t);
     });
 
     var diff = paid - totalMinor;

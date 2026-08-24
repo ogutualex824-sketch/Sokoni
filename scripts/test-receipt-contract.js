@@ -281,7 +281,12 @@ ck('the printed receipt then carries no QR block either',
    R.toText(noRef).indexOf('SOKONI QR') === -1);
 
 head('12 - the close brings the customer back INTO SOKONI');
-ck('thanks the customer', tFull.indexOf('Thank you for shopping with us') > -1);
+/* Asserted on the STRUCTURE plus both fragments: at 32 columns the phrase wraps
+   across two lines, so an indexOf on the whole sentence fails against a receipt
+   that is perfectly correct. */
+ck('thanks the customer BY PLATFORM NAME',
+   /Thank you for shopping with SOKONI/.test(full.blocks.find((b) => b.type === 'closing').thanks)
+   && /Thank you for shopping/.test(tFull) && /SOKONI/.test(tFull));
 ck('offers help INSIDE SOKONI', tFull.indexOf('Message us on SOKONI') > -1);
 ck('...and does NOT send them to WhatsApp', !/whatsapp/i.test(tFull));
 
@@ -368,6 +373,95 @@ ck('NC an empty order produces warnings rather than a clean receipt',
 head('17 - it does not squat on a global that is already in use');
 /* `window.SokoniReceipt` belongs to the EXISTING POS receipt path and carries a
    .print()/.doc() API this module does not have. */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RECEIPT AUTHORITY — branch, employee number, unit price, per-tender refs
+   ══════════════════════════════════════════════════════════════════════════
+   Every claim is asserted on RENDERED OUTPUT, and each one carries a negative
+   control, because "the field is in the object" and "the field reaches the
+   paper" are different statements — the unit price was computed on every row
+   for months and never printed once. */
+
+const _shop = { name: 'Bravilex Duka', branch: 'Westlands', kraPin: 'A012345678Z' };
+const _served = { name: 'Alex Ogutu', role: 'cashier', employeeNo: 'CASH-0042' };
+
+/* A multi-quantity sale settled by SPLIT tender, each tender with its own ref. */
+const _splitSettle = Cash.settle({
+  totalMinor: 400000,
+  tenders: [
+    { method: 'cash', amountMinor: 150000 },
+    { method: 'mpesa', amountMinor: 250000, reference: 'TFG7H2K9QQ' },
+  ],
+});
+const authOrder = {
+  receiptId: 'RCPT-000042', orderNumber: 'ORD-8F29A1', serverTimestamp: 1756000000000,
+  shop: _shop, servedBy: _served,
+  items: [
+    { name: 'Sugar 2kg', qty: 1, unitMinor: 280000, lineMinor: 280000 },
+    { name: 'Maize Flour', qty: 2, unitMinor: 75000, lineMinor: 150000 },
+  ],
+  totals: { subtotalMinor: 430000, discountMinor: 30000, taxMinor: 0 },
+  totalMinor: 400000,
+  settlement: _splitSettle,
+  customer: { name: 'Jane Doe', phone: '+254712345678' },
+  fulfilment: { mode: 'pickup' },
+};
+const authText = R.toText(R.render(authOrder), { cols: 32 });
+const authDoc = R.render(authOrder);
+
+ck('A1 the BRANCH reaches the paper', authText.indexOf('Westlands') > -1);
+ck('A2 NC a shop with no branch prints no Branch line',
+   R.toText(R.render(Object.assign({}, authOrder, {
+     shop: { name: 'Bravilex Duka', kraPin: 'A012345678Z' },
+   })), { cols: 32 }).indexOf('Branch:') === -1);
+
+ck('A3 the EMPLOYEE NUMBER reaches the paper', authText.indexOf('CASH-0042') > -1);
+ck('A4 NC no employee number when the order carries none',
+   R.toText(R.render(Object.assign({}, authOrder, {
+     servedBy: { name: 'Alex Ogutu', role: 'cashier' },
+   })), { cols: 32 }).indexOf('Employee No') === -1);
+ck('A5 NC an employee number WITHOUT a name is refused — it identifies a payroll ' +
+   'record, not a person', R.employeeNoLine({ servedBy: { employeeNo: 'CASH-0042' } }) === null);
+
+ck('A6 UNIT is a real column once any line has qty > 1', /UNIT/.test(authText));
+ck('A7 ...and the unit price itself is printed', /750/.test(authText));
+ck('A8 NC an all-qty-1 sale does NOT spend paper on a UNIT column',
+   !/UNIT/.test(R.toText(R.render(Object.assign({}, authOrder, {
+     items: [{ name: 'Sugar 2kg', qty: 1, unitMinor: 280000, lineMinor: 280000 }],
+   })), { cols: 32 })));
+ck('A9 the UNIT column does NOT overflow 32 columns',
+   authText.split(NL).every((l) => l.length <= 32 || /^https:/.test(l)),
+   authText.split(NL).filter((l) => l.length > 32 && !/^https:/.test(l)).join(' | '));
+
+ck('A10 a SPLIT prints both tenders', /CASH/.test(authText) && /MPESA/.test(authText));
+ck('A11 the M-Pesa reference is printed AGAINST its tender, not as a loose REF',
+   /MPESA REF/.test(authText) && authText.indexOf('TFG7H2K9QQ') > -1);
+ck('A12 NC a single-tender sale still uses the plain REF line', (() => {
+  const one = R.render(Object.assign({}, authOrder, {
+    settlement: Cash.settle({ totalMinor: 400000,
+      tenders: [{ method: 'mpesa', amountMinor: 400000 }] }),
+    paymentRef: 'SINGLE123',
+  }));
+  const t = R.toText(one, { cols: 32 });
+  return /REF/.test(t) && t.indexOf('SINGLE123') > -1;
+})());
+
+ck('A13 the QR caption says VERIFY, not merely view',
+   /verify/i.test(authDoc.blocks.find((b) => b.type === 'closing').qr.caption));
+ck('A14 ...and the caption reaches the paper', /verify/i.test(authText));
+ck('A15 the keep-this-receipt line is printed', /Keep this receipt/i.test(authText));
+
+ck('A16 receipt number and order number are DISTINCT fields',
+   authOrder.receiptId !== authOrder.orderNumber &&
+   authText.indexOf('RCPT-000042') > -1);
+ck('A17 the customer prints only because this order has one',
+   authText.indexOf('Jane Doe') > -1 &&
+   R.toText(R.render(Object.assign({}, authOrder, { customer: null })), { cols: 32 })
+     .indexOf('Jane Doe') === -1);
+
+ck('A18 80mm paper keeps the UNIT column too',
+   /UNIT/.test(R.toText(authDoc, { cols: 42 })));
+
 const self = fs.readFileSync(path.join(ROOT, 'sokoni-receipt.js'), 'utf8');
 ck('this module publishes SokoniReceiptDoc', /global\.SokoniReceiptDoc =/.test(self));
 ck('...and never assigns window/global SokoniReceipt', !/(global|window)\.SokoniReceipt\s*=/.test(self));

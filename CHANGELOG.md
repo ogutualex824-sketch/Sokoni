@@ -1,3 +1,74 @@
+## [2026-08-24] - Receipt authority: the unit price existed for months and was never printed.
+
+Hosting only. **No Functions, no rules, no auth change.** Not deployed.
+`sokoni-receipt.js`, `sokoni-cash.js`, `scripts/test-receipt-contract.js`.
+
+Implemented against the canonical `SokoniReceiptDoc` — which is ALREADY LIVE.
+Most of the specification was already built; this closes the gaps rather than
+rebuilding the contract. Receipt suite **132/0** (was 114/0), till suite 25/0.
+
+### What was already there — and stays
+
+Receipt No. and Order No. as distinct fields, payment reference, terminal id,
+split tender, change, discount, tax, KRA PIN, optional customer, and a QR that
+already resolved to a verification URL rather than encoding raw data.
+
+### The defect worth naming
+
+**Unit price was computed on every row and then thrown away.** `unitMinor` became
+`unit: _money(unit)` on each item — and the column list was
+`['PRODUCT','QTY','AMOUNT']`. The value reached the object and never reached the
+paper. It is now a column, added **only when at least one line has qty > 1**: at
+qty 1 the unit and the line amount are the same number, and a fourth column costs
+~8 characters of product name on 32-column paper to print something the customer
+can already read.
+
+### A reconciliation gap, not just a printing one
+
+`SokoniCash.settle()` built `{ method, amountMinor }` and **discarded every other
+field**. An M-Pesa code or card terminal reference was destroyed the moment the
+sale settled. On a SPLIT that is unrecoverable: two electronic tenders, two
+gateway references, nowhere to record either — and reversing one half of a mixed
+tender needs exactly that number. References now survive as opaque strings; the
+module still never interprets them, it only stops destroying them.
+
+### A truncation that would have printed a wrong number
+
+Rendered as `{label, amount}` a reference lands in the 9-character amount column,
+so a 10-character M-Pesa code came out **silently clipped** — an
+authoritative-looking value that is not the one the gateway holds. References are
+full-width string lines and wrap intact.
+
+### Also
+
+* **Branch** on the identity block — a multi-branch merchant whose receipt cannot
+  say which branch sold the item cannot reconcile a till or accept a return at
+  the right counter. Printed only when the shop record carries one.
+* **Employee No.** under SERVED BY, and refused when there is no name: an employee
+  number alone identifies a payroll record, not a person.
+* **`cashier` no longer collapses to "Staff"** — that discarded the one role a
+  customer can act on. `staff`/`employee` stay generic because they are.
+* QR caption now says view **or verify**; `Keep this receipt for your records.`
+* Attribution per the brand authority: SOKONI / Developed / owned / operated by /
+  Bravilex International Co. Limited.
+
+### The heart is not decoration
+
+Removing `❤` from the thanks line silently made TWO printer assertions vacuous —
+it is the only non-ASCII character in the composition, and the paper adapter's
+ASCII transliteration is proven against it. Kept deliberately, with a comment
+saying why.
+
+### Not changed
+
+Provisioning (`posEnabled` is read by `pos-bi.js` and `pos-shift-scheduler.js`
+and **written by nobody**) is the next slice, not this one.
+
+### Pre-existing, verified against the pristine tree at the same commit
+
+`test-sell-composition` 38/2 and `test-servedby-wire` 10/1 fail identically on
+`c774608` untouched. Not caused by this change; still open.
+
 ## [2026-08-24] - Mixed tender: part M-Pesa, part cash, one gate for every combination.
 
 Hosting only. **No Functions change** — the server already handled a split.

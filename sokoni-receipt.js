@@ -50,7 +50,11 @@
 
   var PLATFORM = 'SOKONI';
   var BRAVILEX = 'Bravilex International Co. Limited';
-  var POWERED_BY = 'Powered by SOKONI';
+  /* The attribution is fixed by the brand authority: SOKONI, then who owns it.
+     Rendered as PLATFORM above this line, so the closing reads
+       SOKONI / Developed / owned / operated by / Bravilex International Co. Limited
+     rather than collapsing the platform and the company into one claim. */
+  var POWERED_BY = 'Developed / owned / operated by';
   var TAGLINE = 'Digital commerce for everyday business';
   var SAMPLE_NOTICE = 'SAMPLE / TEST — NOT A SALES RECORD';
 
@@ -98,6 +102,16 @@
      rather than filled in with the likeliest person. */
   var SERVER_ROLES = ['owner', 'employee', 'staff', 'cashier', 'manager'];
 
+  /* The employee NUMBER, and only for a named server. An employee number with
+     no name attached identifies a payroll record rather than a person, which
+     is the opposite of what a customer-facing receipt is for. */
+  function employeeNoLine (order) {
+    var sb = (order && order.servedBy) || null;
+    if (!sb || !_s(sb.name, 60)) return null;
+    var no = _s(sb.employeeNo || sb.employeeNumber || sb.staffNo || sb.code, 24);
+    return no ? 'Employee No: ' + no : null;
+  }
+
   function servedByLine (order) {
     var sb = (order && order.servedBy) || null;
     if (!sb) return null;
@@ -114,7 +128,10 @@
      caller that supplied a bare role. An unknown role yields NO line rather than a
      guess — and there is no line at all without a valid Served by, so a role can
      never appear attached to nobody. */
-  var ROLE_LABEL = { owner: 'Owner', manager: 'Manager', cashier: 'Staff',
+  /* `cashier` used to collapse to 'Staff'. On a customer receipt that discards
+     the one role a customer can act on — the person at the till who can take a
+     return. `staff` and `employee` stay generic because they ARE generic. */
+  var ROLE_LABEL = { owner: 'Owner', manager: 'Manager', cashier: 'Cashier',
                      staff: 'Staff', employee: 'Staff' };
 
   function servedRoleLine (order) {
@@ -161,6 +178,12 @@
         _s(shop.email, 80),
         [_s(shop.address), _s(shop.city || shop.town)].filter(Boolean).join(', '),
         _s(tax.kraPin || tax.pin || shop.kraPin) ? 'KRA PIN: ' + _s(tax.kraPin || tax.pin || shop.kraPin, 32) : '',
+        /* BRANCH. A multi-branch merchant whose receipts cannot say WHICH branch
+           sold the item cannot reconcile a till, settle a dispute, or accept a
+           return at the right counter. Printed only when the shop record
+           actually carries one — a single-branch shop gets no empty line. */
+        _s(shop.branch || shop.branchName || shop.branchLabel)
+          ? 'Branch: ' + _s(shop.branch || shop.branchName || shop.branchLabel, 40) : '',
       ].filter(Boolean),
     });
     if (!shopName) out.warnings.push('the shop has no name on its record');
@@ -178,6 +201,11 @@
       saleLines.push(served);
       var roleLine = servedRoleLine(o);
       if (roleLine) saleLines.push(roleLine);
+      /* EMPLOYEE NUMBER. The name answers 'who', the number answers 'which
+         record' — two cashiers called John are not a hypothetical in a chain.
+         Same rule as the name: only when the order actually carries it. */
+      var empNo = employeeNoLine(o);
+      if (empNo) saleLines.push(empNo);
     } else out.warnings.push('who served this sale is not recorded');
     /* A terminal id ONLY when a real terminal exists. */
     if (_s(o.terminalId)) saleLines.push('Terminal: ' + _s(o.terminalId, 40));
@@ -190,9 +218,20 @@
 
     /* ── 4. ITEMS — a real grid: product, qty, amount ────────────────────────── */
     var items = Array.isArray(o.items) ? o.items : [];
+    /* UNIT PRICE was already computed on every row and then never shown.
+
+       It is added as a COLUMN only when at least one line has qty > 1. At qty 1
+       the unit price and the line amount are the same number, so on 32-column
+       paper a fourth column would cost ~8 characters of product name to print
+       a value the customer can already read. Where quantity actually varies —
+       the case that makes a receipt hard to check — the column appears. */
+    var _multi = items.some(function (it) { return Number(it.qty || it.quantity || 1) > 1; });
+    var _hasUnit = items.some(function (it) { return typeof it.unitMinor === 'number'; });
+    var _showUnit = _multi && _hasUnit;
     out.blocks.push({
       type: 'items',
-      columns: ['PRODUCT', 'QTY', 'AMOUNT'],
+      showUnit: _showUnit,
+      columns: _showUnit ? ['PRODUCT', 'QTY', 'UNIT', 'AMOUNT'] : ['PRODUCT', 'QTY', 'AMOUNT'],
       rows: items.map(function (it) {
         var qty = Number(it.qty || it.quantity || 1);
         var unit = typeof it.unitMinor === 'number' ? it.unitMinor : null;
@@ -220,7 +259,26 @@
     if (o.settlement && _cash()) {
       var pay = _cash().receiptPayment(o.settlement);
       var reference = _s(o.paymentRef || (o.payment && (o.payment.reference || o.payment.mpesaCode)), 64);
-      if (reference) pay.lines = pay.lines.concat([{ label: 'REF', amount: reference }]);
+      /* A SPLIT sale can carry a reference PER TENDER — one M-Pesa code, one
+         card reference. A single trailing REF line cannot say which tender it
+         belongs to, so per-tender references are printed against their own
+         tender and the trailing REF is kept only for the single-tender case
+         it was written for. */
+      var _tenders = (o.settlement && o.settlement.tenders) || [];
+      var _perTender = [];
+      _tenders.forEach(function (t) {
+        var r = _s(t && (t.reference || t.mpesaCode || t.receiptNumber || t.terminalRef), 64);
+        /* A REFERENCE IS A STRING LINE, NOT AN AMOUNT.
+           Pushed as {label, amount} it lands in the 9-character amount column,
+           and a 10-character M-Pesa code comes out silently CLIPPED — an
+           authoritative-looking number that is not the one the gateway holds.
+           As a plain line it wraps to the paper width and stays whole. */
+        if (r) _perTender.push(_s(t.method, 20).toUpperCase() + ' REF: ' + r);
+        var tid = _s(t && t.terminalId, 40);
+        if (tid) _perTender.push(_s(t.method, 20).toUpperCase() + ' TERMINAL: ' + tid);
+      });
+      if (_perTender.length) pay.lines = pay.lines.concat(_perTender);
+      else if (reference) pay.lines = pay.lines.concat(['REF: ' + reference]);
       out.blocks.push(pay);
     } else if (o.payment && o.payment.method) {
       out.blocks.push({ heading: 'PAYMENT', lines: [{ label: _s(o.payment.method).toUpperCase(), amount: null }] });
@@ -236,13 +294,23 @@
     /* ── 8. THE CLOSE — and it brings the customer back INTO SOKONI ──────────── */
     out.blocks.push({
       type: 'closing',
-      thanks: 'Thank you for shopping with us ❤',
+      /* The heart is NOT decoration in this file: it is the only non-ASCII
+         character in the composition, and the paper adapter proves its
+         transliteration against it. Removing it silently made two printer
+         assertions vacuous. Platform named per the brand authority; heart kept
+         because a test needs something real to transliterate. */
+      thanks: 'Thank you for shopping with ' + PLATFORM + ' ❤',
       help: 'Message us on SOKONI',
       /* The QR is functional, not decorative: it resolves to the customer's own
          receipt on SOKONI. With no receipt number there is NO QR — one pointing
          nowhere is worse than none, because the customer scans it, lands on an
          error and concludes SOKONI is broken. */
-      qr: ref ? { url: RECEIPT_URL_BASE + encodeURIComponent(ref), caption: 'Scan for your receipt' } : null,
+      /* The caption says VERIFY, not just view: the QR resolves to SOKONI's own
+         record of this sale, which is what makes it usable for a return or a
+         dispute rather than a decorative link. */
+      qr: ref ? { url: RECEIPT_URL_BASE + encodeURIComponent(ref),
+                  caption: 'Scan to view or verify this receipt' } : null,
+      keep: 'Keep this receipt for your records.',
       poweredBy: POWERED_BY,
       company: BRAVILEX,
       tagline: TAGLINE,
@@ -321,13 +389,21 @@
     var qtyW = 5;
     var nameW = cols - amtW - qtyW;
 
-    function row (name, qty, amount) {
-      var chunks = _wrap(name, nameW);
+    /* When the UNIT column is present the name column pays for it, because the
+       paper width is fixed. A wrapped product name is still legible; a receipt
+       wider than the paper is not printed at all. */
+    function row (name, qty, amount, unit, unitW) {
+      var nw = nameW - (unitW || 0);
+      var chunks = _wrap(name, nw);
       return chunks.map(function (chunk, i) {
         var last = (i === chunks.length - 1);
-        return (_padR(chunk, nameW) +
-                (last ? _padL(qty == null ? '' : qty, qtyW) + _padL(amount == null ? '' : amount, amtW) : ''))
-               .replace(/\s+$/, '');
+        var tail = '';
+        if (last) {
+          tail = _padL(qty == null ? '' : qty, qtyW);
+          if (unitW) tail += _padL(unit == null ? '' : unit, unitW);
+          tail += _padL(amount == null ? '' : amount, amtW);
+        }
+        return (_padR(chunk, nw) + tail).replace(/\s+$/, '');
       });
     }
 
@@ -348,9 +424,13 @@
       }
       if (b.type === 'reference') { b.lines.forEach(function (l) { L.push(l); }); L.push(rule); return; }
       if (b.type === 'items') {
-        L.push(_padR(b.columns[0], nameW) + _padL(b.columns[1], qtyW) + _padL(b.columns[2], amtW));
+        var uW = b.showUnit ? Math.min(9, Math.max(6, amtW - 1)) : 0;
+        var hdr = _padR(b.columns[0], nameW - uW) + _padL(b.columns[1], qtyW);
+        if (uW) hdr += _padL(b.columns[2], uW);
+        hdr += _padL(b.columns[b.columns.length - 1], amtW);
+        L.push(hdr);
         L.push(rule);
-        b.rows.forEach(function (r) { L.push.apply(L, row(r.name, r.qty, r.amount)); });
+        b.rows.forEach(function (r) { L.push.apply(L, row(r.name, r.qty, r.amount, r.unit, uW)); });
         L.push(rule);
         return;
       }
@@ -368,9 +448,15 @@
         /* The URL is pushed WHOLE. Hard-wrapping it to the column would split it
            mid-path, and a split URL is not tappable in WhatsApp — which is where
            most of these receipts actually go. The printer wraps it itself. */
-        if (b.qr) { L.push(_centre('[ SOKONI QR ]', cols)); L.push(b.qr.url); }
+        if (b.qr) {
+          L.push(_centre('[ SOKONI QR ]', cols));
+          _wrap(b.qr.caption, cols).forEach(function (l) { L.push(_centre(l, cols)); });
+          L.push(b.qr.url);
+        }
+        if (b.keep) { L.push(''); _wrap(b.keep, cols).forEach(function (l) { L.push(_centre(l, cols)); }); }
         L.push('');
-        L.push(_centre(b.poweredBy, cols));
+        L.push(_centre(PLATFORM, cols));
+        _wrap(b.poweredBy, cols).forEach(function (l) { L.push(_centre(l, cols)); });
         _wrap(b.company, cols).forEach(function (l) { L.push(_centre(l, cols)); });
         /* `copyright` is deliberately NOT printed: on a 32-column receipt it is a
            second Bravilex line directly under the first. It stays in the structure
@@ -398,6 +484,7 @@
   global.SokoniReceiptDoc = {
     render: render, toText: toText, formatTime: formatTime,
     servedByLine: servedByLine, servedRoleLine: servedRoleLine, ROLE_LABEL: ROLE_LABEL,
+    employeeNoLine: employeeNoLine,
     PLATFORM: PLATFORM, BRAVILEX: BRAVILEX, POWERED_BY: POWERED_BY, TAGLINE: TAGLINE,
     SAMPLE_NOTICE: SAMPLE_NOTICE, RECEIPT_URL_BASE: RECEIPT_URL_BASE,
     DEFAULT_COLS: DEFAULT_COLS, SERVER_ROLES: SERVER_ROLES,
