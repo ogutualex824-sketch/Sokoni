@@ -171,6 +171,17 @@ const BIZ = [{ id: UID, name: 'KASS SHOP', ownerId: UID, status: 'active' }];
   const till = fs2.readFileSync(path.join(ROOT, 'till.html'), 'utf8');
   ck('L15 the till handles lookup-failed separately from no-owned-business',
      /decision === 'lookup-failed'/.test(till));
+  /* THE ORDERING BUG. lookup-failed carries ok:false on purpose, so if the
+     generic !ok guard is tested FIRST the honest message is unreachable and the
+     merchant sees 'Could not open the till'. That is exactly what shipped in the
+     first version of this fix and exactly what the phone reported. */
+  const iLookup = till.indexOf("decision === 'lookup-failed'");
+  const iNotOk = till.indexOf('!ctxResult.ok');
+  ck('L24 lookup-failed is tested BEFORE the generic !ok guard',
+     iLookup > -1 && iNotOk > -1 && iLookup < iNotOk,
+     'lookup-failed@' + iLookup + '  !ok@' + iNotOk);
+  ck('L25 the underlying error CODE reaches the screen — a phone has no console',
+     /ctxResult.reason/.test(till));
   ck('L16 ...and offers a RETRY rather than a verdict about their account',
      /Could not check your shop/.test(till) && /Try again/.test(till));
 

@@ -162,7 +162,7 @@
        rather than being handed a confident wrong answer. */
     function ownedWithRetry() {
       return ownedBusinesses(db, uid).catch(function (e1) {
-        return new Promise(function (res) { setTimeout(res, 700); })
+        return new Promise(function (res) { setTimeout(res, 350); })
           .then(function () { return ownedBusinesses(db, uid); })
           .catch(function (e2) { throw (e2 && e2.__lookupFailed ? e2 : e1); });
       });
@@ -206,7 +206,7 @@
       }
       return Promise.all([
         branchesForAll().catch(function (e1) {
-          return new Promise(function (res) { setTimeout(res, 700); })
+          return new Promise(function (res) { setTimeout(res, 350); })
             .then(branchesForAll)
             .catch(function (e2) { throw (e2 && e2.__lookupFailed ? e2 : e1); });
         }),

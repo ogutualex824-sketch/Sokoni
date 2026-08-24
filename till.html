@@ -261,7 +261,16 @@
   async function run() {
     stagesReset();
     stage('begin');
-    msg.textContent = 'Checking who you are…';
+    msg.textContent = 'Opening your till…';
+    /* START EVERYTHING AT ONCE.
+       This used to await auth, THEN wait for the context module, THEN import
+       the Firestore SDK — three waits in series when none of them depends on
+       the previous one. The SDK import is the slowest and was last; it now
+       runs from the first millisecond, so by the time auth resolves the module
+       is usually already there. Nothing here changes WHAT is checked, only
+       how much of it happens in parallel. */
+    var fsP  = import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var ctxP = waitFor('SokoniPosContext', 6000);
     var uid = await whenAuth();
     stage('auth:' + (uid ? 'yes' : 'no'));
 
@@ -283,12 +292,12 @@
     msg.textContent = 'Finding your shop…';
     stage('context:start');
 
-    var CTX = await waitFor('SokoniPosContext', 8000);
+    var CTX = await ctxP;
     if (!CTX) return show('Could not start', 'The till could not load one of its parts. Reload to try again.');
 
     var fs, db, ctxResult;
     try {
-      fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      fs = await fsP;
       db = window.firebaseDB || fs.getFirestore();
       FSMOD = fs; DBREF = db;
       ctxResult = await CTX.resolve({ db: compatDb(fs, db), uid: uid });
@@ -299,16 +308,24 @@
     }
     stage('context:' + (ctxResult && ctxResult.decision));
 
+    /* ORDER MATTERS, AND I GOT IT WRONG THE FIRST TIME.
+       `lookup-failed` deliberately carries ok:false — the question was never
+       answered — but the generic !ok guard used to run FIRST, so the honest
+       'Could not check your shop, try again' was unreachable and the merchant
+       got 'Could not open the till' instead. The specific case has to be
+       tested before the general one. */
+    if (ctxResult && ctxResult.decision === 'lookup-failed') {
+      /* THE ERROR CODE GOES ON SCREEN. A phone has no console, and 'usually a
+         slow connection' is a guess — permission-denied, unavailable and
+         failed-precondition are three different faults with three different
+         fixes, and only the device can tell us which one it hit. */
+      var why = String((ctxResult.reason || '')).replace(/^.*failed: /, '').slice(0, 90);
+      return show('Could not check your shop',
+        'SOKONI could not read your business just now.' + (why ? '  (' + why + ')' : ''),
+        'Try again', location.pathname + location.search);
+    }
     if (!ctxResult || !ctxResult.ok) {
       return show('Could not open the till', 'SOKONI could not confirm your account.');
-    }
-    /* A LOOKUP THAT FAILED IS NOT A MERCHANT WITHOUT A SHOP. Offering a retry
-       is the honest response to a question that was never answered; telling
-       them their POS is not set up is a false statement about their account. */
-    if (ctxResult.decision === 'lookup-failed') {
-      return show('Could not check your shop',
-        'SOKONI could not read your business just now. This is usually a slow ' +
-        'connection.', 'Try again', location.pathname + location.search);
     }
     if (ctxResult.decision === 'no-owned-business') {
       /* This used to read "This account is not the owner of a shop yet", which
