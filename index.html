@@ -3150,15 +3150,22 @@ import SokoniDB from "./sokoni-db.js";
     });
   </script>
   <script>
-    /* ══ SECRET ADMIN ACCESS — 7 taps on logo within 2.5 seconds ══ */
+    /* ══ SECRET ADMIN ACCESS ══════════════════════════════════════════════
+       The 7-tap counter USED TO LIVE HERE, as `window._secretTap` — a function
+       nothing ever called. No listener, no onclick, no reference anywhere in
+       this file or shared-header.js. It read like a working feature and was
+       unreachable code, which is exactly why "7 taps doesn't work" went
+       unexplained for so long.
+
+       It now lives in the logo tap handler further down, beside the 9-tap
+       super-admin unlock, because two independent listeners counting the same
+       physical taps is how they would race. Removed rather than left in place:
+       a second definition of a feature that is implemented elsewhere is the
+       thing that sends the next reader hunting in the wrong file.
+
+       The keyboard path below is unaffected — it calls _showAdminLock directly
+       and has always worked. */
     (function () {
-      let _taps = 0, _t = null;
-      window._secretTap = function () {
-        _taps++;
-        clearTimeout(_t);
-        if (_taps >= 7) { _taps = 0; _showAdminLock(); return; }
-        _t = setTimeout(() => { _taps = 0; }, 2500);
-      };
       /* Also: type "sokoni" anywhere while holding Ctrl+Shift → admin */
       let _seq = '';
       document.addEventListener('keydown', function (e) {
@@ -4166,7 +4173,7 @@ document.addEventListener('DOMContentLoaded', function() {
      (3) a generous 1500ms rolling window. Delegated so shared-header re-rendering the
      logo can't detach it. A single tap on home is a no-op (you're already home). */
   (function(){
-    var taps = 0, last = 0, guard = 0, tip = null, tipT = null;
+    var taps = 0, last = 0, guard = 0, tip = null, tipT = null, adminT = null;
     function showTip(n){
       if (n < 3) return;                      /* stay hidden for casual taps */
       if (!tip){
@@ -4189,7 +4196,35 @@ document.addEventListener('DOMContentLoaded', function() {
       taps = (now - last < 1500) ? (taps + 1) : 1;
       last = now;
       showTip(taps);
-      if (taps >= 9){ taps = 0; setTimeout(function(){ location.href = '/super-admin.html'; }, 300); }
+
+      /* ── SEVEN taps → ADMIN.  NINE → SUPER ADMIN. ─────────────────────────
+         Seven never worked. `window._secretTap` was defined to do it and was
+         then called from NOWHERE — no listener, no onclick, no reference
+         anywhere in the file. An orphaned function reads exactly like a working
+         feature, which is why nobody spotted it: the code was there, it simply
+         was never reachable.
+
+         Both unlocks now live in the ONE handler that already works, rather
+         than a second listener racing this one for the same taps.
+
+         SEVEN IS DEFERRED, and it has to be. _showAdminLock() opens a PIN
+         overlay covering the logo, so firing it the instant the seventh tap
+         lands would make the ninth unreachable. Instead the admin gate waits to
+         see whether tapping CONTINUES: if an eighth arrives inside the same
+         1500ms window the timer is cancelled and the run carries on to nine. */
+      clearTimeout(adminT);
+      if (taps === 7) {
+        adminT = setTimeout(function () {
+          if (taps === 7 && typeof window._showAdminLock === 'function') {
+            taps = 0; window._showAdminLock();
+          }
+        }, 900);
+      }
+
+      if (taps >= 9){
+        clearTimeout(adminT);
+        taps = 0; setTimeout(function(){ location.href = '/super-admin.html'; }, 300);
+      }
     }
     document.addEventListener('click', bump, true);
     document.addEventListener('touchend', bump, true);

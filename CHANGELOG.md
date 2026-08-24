@@ -1,3 +1,54 @@
+## [2026-08-24] - Seven taps never worked: the function was called from nowhere.
+
+Hosting only. `index.html`, `scripts/browser/verify-logo-tap-unlock.mjs` (7/7).
+Not deployed.
+
+### The defect, measured on the DEPLOYED file
+
+`window._secretTap` is defined in production `index.html` at line 3156 and
+invoked from **nowhere**. No `onclick`, no listener, no reference — in
+`index.html`, `shared-header.js`, `sokoni-ui.js`, `sokoni-init.js`, `splash.js`
+or `sokoni-nav-engine.js`. An orphaned function reads exactly like a working
+feature, which is why it survived: the code was there, it was simply never
+reachable.
+
+The keyboard path (`Ctrl+Shift` + "sokoni") IS wired via `addEventListener`,
+which is why admin entry worked on a desktop while tapping never did anywhere.
+
+**It could not have worked as written even if it had been called.** The logo
+renders as `<a href="/" id="sk-nav-logo">` — a plain anchor. Every tap navigates
+to `/` and reloads the page, so a counter held in a closure is destroyed between
+taps by construction.
+
+### The controller
+
+One delegated handler for both `click` and `touchend`, matching
+`e.target.closest('#sk-nav-logo')`:
+
+* an 80ms dedupe, because one physical tap fires touchend AND click;
+* `preventDefault()`, which is what makes counting on an anchor possible at all;
+* a 1500ms window between taps, resetting the run when it lapses;
+* the counter reset after every unlock;
+* **7 is DEFERRED by 900ms.** `_showAdminLock()` opens a PIN overlay that covers
+  the logo, so firing on the seventh tap makes the ninth unreachable. The gate
+  waits to see whether tapping continues; an eighth inside the window cancels it
+  and the run carries on to nine.
+
+### Security — the unlock grants nothing
+
+Verified rather than assumed: the handler writes **zero** localStorage,
+sessionStorage or role state (0 matches). Seven opens a PIN overlay — the admin
+gate, not admin. Nine navigates to `super-admin.html`, which guards itself on
+`getIdTokenResult()` → `claims.superAdmin`, a server-issued claim. Browser-local
+state is never the authority, consistent with the standing rule.
+
+### Provenance
+
+Transplanted from `sok-diag` as a 3-hunk diff against `c774608`, checked with
+`git apply --check` first. The deployed `index.html` is byte-identical to
+`c774608`'s, and the patched file here is byte-identical to the one the suite
+ran against — so the 7/7 is evidence for this tree's file, not a lookalike.
+
 ## [2026-08-24] - Approval now provisions the POS business. It never did.
 
 **Cloud Functions + hosting.** Not deployed. **No new Cloud Function** — the
