@@ -658,6 +658,27 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      nobody. ONE renderer, per the receipt contract; this shell was simply not
      loading it. -->
 <script src="sokoni-receipt.js"></script>
+<!-- THE REMAINING THREE AUTHORITIES sokoni-merchant-sell.js composes, and the
+     fourth, fifth and sixth time this exact gap has been found. Each module
+     degrades POLITELY when its authority is absent, which is correct behaviour
+     and is precisely why nothing ever appeared in a console:
+
+       · SokoniBuyerLocations — without it the till answered "Delivery addresses
+         are unavailable on this device" to every merchant. That message is the
+         right message for a missing authority; it was simply never supplied.
+       · SokoniFulfilment    — buildFulfilment() returns null, so pickup/delivery
+         could not be attached to a sale at all.
+       · SokoniShift         — eventsForSale() emits nothing, so NO cash-drawer
+         movement was ever handed to the shell. The drawer figures the money
+         position now records had no counterpart in the till's own event stream.
+
+     All three are pure, side-effect-free UMD modules (~31 KB total, no listeners,
+     no fetches at load) and register their own global, exactly like the two
+     above. scripts/test-module-authorities.js now fails the build if any module
+     composes an authority this host does not load. -->
+<script src="sokoni-buyer-locations.js"></script>
+<script src="sokoni-fulfilment.js"></script>
+<script src="sokoni-shift.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
