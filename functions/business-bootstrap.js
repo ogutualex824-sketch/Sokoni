@@ -910,6 +910,72 @@ async function _getMyBusinesses(req) {
   return { businesses, count: businesses.length };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ENSURE — the IDEMPOTENT entry point. Approval is retried; onboarding is
+   re-entered; a device pairs twice. _createBusiness itself has NO guard: it
+   mints a fresh merchantId with _generateMerchantId() and unconditionally
+   commits, so calling it twice produces TWO businesses, two branch sets, two
+   pairing tokens and two identities for one merchant.
+
+   Two locks, because one is not enough:
+
+     1. An OWNERSHIP read — businesses where ownerId == uid. This is what
+        catches a merchant provisioned before this guard existed, and it is
+        the same question sokoni-pos-context.js asks, so 'provisioned' and
+        'the till can see it' cannot disagree.
+
+     2. A TRANSACTIONAL claim at posProvisioning/{uid}. The read above cannot
+        stop two concurrent approvals both finding nothing and both creating.
+        The claim is keyed on the CANONICAL uid — never a browser value — and
+        winning it is what grants the right to create.
+
+   Returns { created:false } when a business already exists. It does NOT
+   repair or migrate an existing record: silently rewriting a live merchant's
+   identity from an approval retry is a larger risk than a missing default. */
+async function _ensureBusinessForOwner(o) {
+  const uid = _san(o && o.uid, 128);
+  if (!uid) throw new Error('_ensureBusinessForOwner requires a uid');
+
+  const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
+  if (!owned.empty) {
+    const doc = owned.docs[0];
+    return { created: false, reason: 'already-provisioned', merchantId: doc.id,
+             provisionedBy: (doc.data() || {}).provisionedBy || null };
+  }
+
+  const guard = db.collection('posProvisioning').doc(uid);
+  const won = await db.runTransaction(async (t) => {
+    const g = await t.get(guard);
+    if (g.exists) return false;
+    t.set(guard, { uid, provisionedBy: 'approval',
+                   startedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return true;
+  });
+  if (!won) return { created: false, reason: 'claim-held', merchantId: null };
+
+  try {
+    const res = await _createBusiness({
+      auth: { uid: uid },
+      data: {
+        businessName: _san(o.businessName || '', 200).trim() || 'My Business',
+        category: _san(o.category || '', 80).trim() || 'General',
+        phone: o.phone || '', county: o.county || '', city: o.city || '',
+        __provisionedBy: 'approval',
+      },
+    });
+    await guard.set({ merchantId: res.merchantId, ok: true,
+                      finishedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { created: true, reason: 'provisioned', merchantId: res.merchantId,
+             branchId: res.branchId };
+  } catch (e) {
+    /* RELEASE THE CLAIM ON FAILURE. A claim held by a run that died leaves the
+       merchant permanently unprovisionable — the exact failure this guard
+       exists to prevent, arrived at from the other direction. */
+    await guard.delete().catch(() => {});
+    throw e;
+  }
+}
+
 /* createBusiness — first-time onboarding. Auto-generates the Merchant ID and
    Business ID, provisions defaults (branch, owner staff+role, payment methods,
    tax/receipt/flags/settings, starter category), and returns a pairing QR. */
@@ -951,7 +1017,11 @@ async function _createBusiness(req) {
       inventoryReady: false, hardwareConnected: false, testSaleSuccessful: false,
     },
     productionReady: false,
-    provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
+    /* WHO provisioned this business. An allowlist, not a passthrough: this is
+       a provenance label on a canonical record, and a caller must not be able
+       to write an arbitrary string onto it. */
+    provisionedBy: (d.__provisionedBy === 'approval') ? 'approval' : 'onboarding-v2',
+    createdAt: now, updatedAt: now,
   });
   /* Auto-activate a free trial (Step 7 — activates automatically where applicable).
    *
@@ -1304,6 +1374,8 @@ module.exports = {
   /* Canonical merchant tenant-guard. Exported so other POS modules reuse it instead of
      re-implementing membership checks (owner / active branch staff / merchant admin). */
   _assertMerchantAccess,
+  /* Idempotent provisioning, called by the approval path. */
+  _ensureBusinessForOwner,
   /* Onboarding v2 handlers — served through smartPosDispatch (no new CF). */
   _h: {
     getMyBusinesses:        _getMyBusinesses,

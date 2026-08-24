@@ -1,3 +1,79 @@
+## [2026-08-24] - Approval now provisions the POS business. It never did.
+
+**Cloud Functions + hosting.** Not deployed. **No new Cloud Function** — the
+budget is capped, and this adds an internal helper plus one call site.
+`functions/business-bootstrap.js`, `functions/application-lifecycle.js`,
+`till.html`, `scripts/test-approval-provisioning.js` (new, 28/0).
+
+### The defect
+
+An approved merchant had a `sellers` record and **no `businesses` record**. The
+only writer of one was the `pos-setup.html` onboarding wizard; the approval path
+in `application-lifecycle.js` wrote `businesses` **zero times**. The till asks
+
+    businesses where ownerId == uid
+
+got nothing, and told an approved merchant *"This account is not the owner of a
+shop yet"* — a provisioning failure reported as a fact about their account.
+
+Same root as the old `pos.html` grey splash. That was remediated by removing the
+redirect; the underlying no-business state was never fixed, only silenced.
+
+### Idempotency, because approval is retried
+
+`_createBusiness` has **no guard of its own**: it mints a fresh merchantId with
+`_generateMerchantId()` and commits unconditionally, so two calls produce two
+businesses, two branch sets, two pairing tokens and two identities for one
+merchant. `_ensureBusinessForOwner` wraps it with two locks:
+
+1. an **ownership read** — `businesses where ownerId == uid` — which also catches
+   merchants provisioned before this guard existed, and asks the exact question
+   `sokoni-pos-context.js` asks, so "provisioned" and "the till can see it"
+   cannot disagree;
+2. a **transactional claim** at `posProvisioning/{uid}`, because the read alone
+   cannot stop two concurrent approvals both finding nothing. Keyed on the
+   canonical uid — never a browser value.
+
+**The claim is released if provisioning throws.** A claim held by a dead run
+would leave the merchant permanently unprovisionable — the same failure arrived
+at from the other direction.
+
+It does NOT repair or migrate an existing business. Silently rewriting a live
+merchant's identity from an approval retry is a larger risk than a missing
+default.
+
+### Non-fatal by design
+
+Approval is the merchant's status change and is not rolled back because a POS
+default failed to write. The outcome is recorded on the application
+(`posProvisioning: { ok, created, reason, merchantId }`) so a reviewer sees it
+rather than discovering it when a till says the wrong thing.
+
+`provisionedBy` is chosen from an **allowlist**, not written from caller input:
+it is provenance on a canonical record.
+
+### No client fallback
+
+Explicitly not added, and asserted against: `users/{uid}.merchantId`,
+`localStorage.shopId`, `?shopId=`, or any client-created business.
+
+### Wording
+
+*"This account is not the owner of a shop yet"* →
+*"SOKONI has not finished setting up this business for POS."* The old line stated
+something about the merchant when the cause was ours.
+
+### Evidence
+
+`test-approval-provisioning.js` **28/0** — firebase-admin is substituted in the
+module loader so the REAL logic runs against a controlled database. Covers first
+provision, retry, two racing approvals, failure-releases-the-claim, and
+retry-after-failure. Receipt 132/0, till 25/0, sell 44/2 (2 pre-existing).
+
+**What this does NOT prove:** Firestore's own transaction semantics. The fake
+models serializable isolation; the real guarantee needs the emulator or a real
+approval.
+
 ## [2026-08-24] - The till captured the M-Pesa code and threw it away at settlement.
 
 Hosting only. **No Functions, no rules, no auth change.** Not deployed.

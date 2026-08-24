@@ -303,8 +303,14 @@
       return show('Could not open the till', 'SOKONI could not confirm your account.');
     }
     if (ctxResult.decision === 'no-owned-business') {
-      return show('No shop on this account',
-        'This account is not the owner of a shop yet. If you are an employee, shop access is being rolled out.');
+      /* This used to read "This account is not the owner of a shop yet", which
+         states something about the MERCHANT when the true cause is that SOKONI
+         never provisioned their business record. Approval now provisions it;
+         if this still appears for an approved merchant, it is our failure and
+         the wording should send them to us rather than imply they have not
+         finished signing up. */
+      return show('Your POS is not ready yet',
+        'SOKONI has not finished setting up this business for POS. If this continues, contact SOKONI support.');
     }
     if (ctxResult.decision === 'device-suspended') {
       return show('This device is suspended',

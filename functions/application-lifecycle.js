@@ -1052,6 +1052,45 @@ async function applyDecision(appId, app, opts = {}) {
       ...(opts.decidedBy ? { decidedBy: opts.decidedBy } : {}),
     }, { merge: true });
 
+    /* ── POS/BUSINESS PROVISIONING ────────────────────────────────────────
+       An approved merchant had a `sellers` record and NO `businesses` record,
+       because the only writer of one was the pos-setup wizard. The till asks
+       `businesses where ownerId == uid` and got nothing, so it told an
+       approved merchant "No shop on this account" — a provisioning failure
+       reported as a fact about their account.
+
+       Reuses _ensureBusinessForOwner rather than writing a second provisioning
+       implementation: two of them would drift, and this one already mints the
+       full identity set, the default branch and the setup checklist.
+
+       NON-FATAL BY DESIGN. Approval is the merchant's status change and must
+       not be rolled back because a POS default failed to write. The outcome is
+       recorded on the application so a reviewer can see it rather than
+       discovering it when a till says the wrong thing. */
+    if (status === 'approved' && (role === 'seller' || role === 'merchant')) {
+      try {
+        const bb = require('./business-bootstrap');
+        const prov = await bb._ensureBusinessForOwner({
+          uid,
+          businessName: app.businessName || app.name || '',
+          category: app.category || app.businessType || '',
+          phone: app.phoneNumber || '',
+          county: app.county || '', city: app.city || '',
+        });
+        await db.collection('applications').doc(appId).set({
+          posProvisioning: { ok: true, created: prov.created === true,
+                             reason: prov.reason || null,
+                             merchantId: prov.merchantId || null, at: _ts() },
+        }, { merge: true });
+        logger.info('[appLifecycle] pos provisioning', { appId, uid, ...prov });
+      } catch (e) {
+        await db.collection('applications').doc(appId).set({
+          posProvisioning: { ok: false, error: String(e && e.message || e).slice(0, 300), at: _ts() },
+        }, { merge: true }).catch(() => {});
+        logger.error('[appLifecycle] pos provisioning FAILED', { appId, uid, error: e.message });
+      }
+    }
+
     /* Tell the applicant. notify.js is the single entry point (it owns channel
        selection, quiet hours and dedupe) so this is one call, not a bespoke
        SMS. dedupeKey makes a retried trigger silent rather than spammy. */
