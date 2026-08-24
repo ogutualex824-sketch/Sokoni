@@ -206,6 +206,30 @@ let LAST = null;
     /RECORDED as taken on the cashier's word/.test(src),
     'card has no terminal to confirm against and must not borrow M-Pesa\'s language');
 
+  /* ── THE STANDALONE TILL MUST WIRE M-PESA, AS TWO HALVES ────────────────
+     till.html mounted SokoniMerchantSell with neither callStk nor callVerify,
+     so the module refused: "M-Pesa is not available in this workspace yet".
+     The refusal was CORRECT — the capability genuinely was not passed — and it
+     is NOT a merchant-configuration fault: the gate tests the TYPE of
+     ctx.callStk, never a lookup of any document, so nothing about the identity
+     merge could have caused or fixed it. But the standalone till is now the
+     phone-first surface, and a till that cannot take the primary Kenyan
+     payment method is not a till. */
+  const tillSrc = require('fs').readFileSync(path.join(__dirname, '..', 'till.html'), 'utf8');
+  const shellSrc = require('fs').readFileSync(path.join(__dirname, '..', 'merchant-v2.html'), 'utf8');
+  ck('W1  the standalone till wires callStk', /callStk:/.test(tillSrc), 'till.html');
+  ck('W2  ...and callVerify', /callVerify:/.test(tillSrc), 'till.html');
+  ck('W3  they are DISTINCT callables — one REQUESTS, one CONFIRMS',
+     /callStk:[^\r\n]*darajaSTKPush/.test(tillSrc) &&
+     /callVerify:[^\r\n]*verifyPaymentStatus/.test(tillSrc),
+     'one callable for both would let a sent push read as a payment');
+  ck('W4  NC the till does not treat a SENT push as a payment',
+     !/callStk\([\s\S]{0,300}(paid|confirmed)\s*[:=]\s*true/.test(tillSrc),
+     'no optimistic confirm');
+  ck('W5  it matches the shell — same two callables, not a second vocabulary',
+     /darajaSTKPush/.test(shellSrc) && /verifyPaymentStatus/.test(shellSrc),
+     'merchant-v2.html');
+
   const passed = rows.filter((r) => r.ok).length;
   console.log('');
   console.log('  TILL PAYMENT — what the sheet sends, and what it refuses to do');

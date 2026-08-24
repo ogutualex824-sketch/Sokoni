@@ -438,6 +438,24 @@
         origin: location.origin,
         servedBy: null,
         callSale: (window.sokoniCallable ? window.sokoniCallable('posCompleteCheckout') : null),
+        /* ── M-PESA, AS TWO HALVES THAT MUST STAY SEPARATE ──────────────────
+           This mount passed neither, so SokoniMerchantSell refused with
+           "M-Pesa is not available in this workspace yet" — an honest refusal
+           from the module, and a capability the STANDALONE till simply never
+           had. merchant-v2's Sell tab wires both; till.html did not. Nothing to
+           do with the identity merge: the gate is `typeof ctx.callStk`, not a
+           lookup of any merchant document.
+
+           Wired as DISTINCT callables, matching merchant-v2 exactly:
+           `callStk` REQUESTS the money and makes the phone ring; `callVerify`
+           READS BACK what the server knows and is the only thing that may turn
+           a request into a payment. Keeping them apart is what stops any path
+           mistaking "a push was sent" for "we were paid" — darajaSTKPush
+           cannot report success, verifyPaymentStatus cannot cause a charge, and
+           the record they meet on is written by the Daraja callback, which this
+           client cannot reach at all. */
+        callStk: (window.sokoniCallable ? window.sokoniCallable('darajaSTKPush') : null),
+        callVerify: (window.sokoniCallable ? window.sokoniCallable('verifyPaymentStatus') : null),
         onToast: function (t) { sub(String(t || '')); },
         onPrint: function () { return Promise.resolve(); }
       });
