@@ -1,3 +1,68 @@
+## [2026-08-25] - A rules deploy from this lineage would have re-opened admin -> superAdmin.
+
+`scripts/guard-rules-lineage.js` (new), `package.json`. Guard only — no rules,
+no product code. Production rules are NOT affected and were never at risk from
+a hosting deploy.
+
+### What was proven, against the SERVED ruleset
+
+Production exposure was settled by fetching the ruleset Firestore actually
+enforces — not `firestore.rules.live` (stale) and not the working tree:
+
+    projects/sokoni-aeb26/releases/cloud.firestore
+      -> rulesets/f1c4e35b-bcc2-418b-b7a3-8990c1c8dad0   updated 2026-08-23
+
+| ruleset | scripts/test-role-switch-rules.js |
+|---|---|
+| **served production** | **49 / 0 — safe** |
+| this working tree | 38 / 11 |
+
+Production already scopes the bypass, and its own comment records the defect.
+So the escalation is **source-only/stale**, not a live vulnerability.
+
+### The actual risk — and why nothing else would catch it
+
+`deploy:rules` and `deploy:all` publish `firestore.rules` **from the working
+tree** (`firebase.json` -> `(default)` -> `firestore.rules`). Any lineage
+missing `80297d4` still carries:
+
+    allow update: if isAdmin() || (self && guards...)
+
+`isAdmin()` is the FIRST disjunct, so it short-circuits `noAdminFields()`,
+`noPrivilegeEscalation()` and `noProviderForgery()` on ANY user doc **including
+the admin's own** — measured `admin -> driver` and `admin -> superAdmin` both
+ALLOW. Deploying it would regress production, and no other predeploy step reads
+the rule text. `80297d4` is contained in **one** branch: `audit/employee-attribution`.
+
+### The guard — two independent checks
+
+1. **CONTENT** — the `users/{userId}` `allow update` clause in the file that will
+   actually be published must carry `request.auth.uid != userId` **and** the
+   `activeRole` exclusion. This is the real invariant: it holds even if someone
+   hand-edits the file on an otherwise-good lineage.
+2. **LINEAGE** — `80297d4` must be an ancestor of HEAD. Catches a tree never updated.
+   A commit that is *absent* (shallow clone) warns rather than silently passing —
+   a missing object must never read as a pass.
+
+Scoped to rules publication only. `deploy`, `deploy:hosting` and
+`deploy:functions` do not publish rules and are deliberately **untouched**, so
+POS preview deploys are unaffected.
+
+### Controls — the guard was proven able to both fail and pass
+
+| tree state | result |
+|---|---|
+| this stale tree | ABORT, exit 1, names both missing predicates |
+| served rules content + stale lineage | ABORT on the LINEAGE check — proves check 1 discriminates and check 2 is independent |
+| `audit/employee-attribution` | ancestry passes; 3 scoping predicates present (needs 2) |
+
+### Security / breaking
+
+Security: preventive only; closes a path by which a correct production ruleset
+could be silently regressed by an ordinary deploy from the wrong branch.
+Breaking: `deploy:rules` / `deploy:all` now ABORT on stale lineages. That is the
+intent — rebase or cherry-pick `80297d4` first.
+
 ## [2026-08-25] - Three routing assertions encoded a contract the platform had already changed.
 
 Tests only. `scripts/test-merchant-home-back.js` (93/1 -> 97/0),
