@@ -341,10 +341,30 @@ console.log('\nI. Nothing leaks the challenge to the caller');
   ck('I', 'the enabled flag agrees with that cutoff',
      st.enforcement.enabled === (policy.CUTOFF_ISO !== policy.SENTINEL_ISO),
      JSON.stringify(st.enforcement));
-  /* This account is old (created by the harness moments ago, but before any sane activation
-     instant), so it must be grandfathered whether enforcement is on or off. */
-  ck('I', 'and this account is not subject to enforcement either way',
-     st.enforcement.applies === false, JSON.stringify(st.enforcement));
+  /* THIS WAS A TIME BOMB, and it detonated on 2026-08-20.
+
+     It asserted the harness account is grandfathered "whether enforcement is on
+     or off", reasoning that the account was created "before any sane activation
+     instant". That held only while the shipped cutoff lay in the FUTURE: the
+     account is created moments before the check, so once the cutoff passed, a
+     brand-new account is AFTER it and enforcement correctly applies. The gate
+     armed on schedule and the assertion, not the product, was wrong.
+
+     A test that turns red on a date nobody changed anything on is worse than one
+     that always fails: it passes review and detonates later. So the direction is
+     now DERIVED from policy.CUTOFF_ISO — the same source the two assertions above
+     already use — instead of assuming which side of it today falls on.
+
+     The deterministic BOUNDARY proof is immediately below: cutoff moved to a past
+     instant must enforce this same account, and moved to a future instant must
+     grandfather it. That pair never depends on the calendar. */
+  const _cutoffMs = Date.parse(policy.CUTOFF_ISO);
+  const _cutoffIsFuture = !isFinite(_cutoffMs) || _cutoffMs > Date.now();
+  ck('I', 'enforcement follows the SHIPPED cutoff, whichever side of it today falls',
+     st.enforcement.applies === !_cutoffIsFuture,
+     'cutoff ' + policy.CUTOFF_ISO + ' is ' + (_cutoffIsFuture ? 'AHEAD' : 'PAST') +
+     ' so a just-created account must be ' + (_cutoffIsFuture ? 'grandfathered' : 'enforced') +
+     '  ->  ' + JSON.stringify(st.enforcement));
 
   /* Now the part that catches a handler which never reads the record: flip the server
      cutoff to a long-past date and the SAME account must become enforced. If metadata is
