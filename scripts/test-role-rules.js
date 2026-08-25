@@ -198,11 +198,29 @@ const RULES_FILE = _rulesArg || process.env.RULES_FILE || 'firestore.rules';
      creating someone else's document from a client was always denied and still is. */
   await reset();
   await seed(OTHER, { uid: OTHER, name: 'Beta', roles: ['buyer'], accountStatus: 'active' });
-  await allowed('an admin may set another account\'s roles',
+  /* THESE TWO WERE THE PRE-FIX BEHAVIOUR STATED AS FACT.
+
+     80297d4 SCOPED the isAdmin() branch on users/{userId}: an admin may no longer reach
+     their OWN document through it, may not write activeRole at all, and is now subject to
+     noPrivilegeEscalation(). These assertions described the permissive rule that fix
+     deliberately removed, so they kept passing only while the escalation was open.
+
+     Left as `allowed`, this suite and scripts/test-role-switch-rules.js asserted OPPOSITE
+     things about the same clause — so whichever ran second reported a defect that was really
+     the other suite's expectation, and fixing either one MOVED the failure instead of
+     clearing it. That is exactly what happened: cherry-picking 80297d4 turned
+     test-role-switch-rules green and this suite red on the same run.
+
+     Both now agree, and both match the SERVED production ruleset, which has carried the
+     scoped rule since 2026-08-23 (measured 49/0).
+
+     This makes the suite STRICTER, not weaker: it demands a denial where it previously
+     accepted the write. */
+  await denied('an admin may NOT set another account\'s roles',
     adminUser().firestore().collection('users').doc(OTHER)
       .set({ roles: ['buyer', 'seller'] }, { merge: true }));
   await reset();
-  await allowed('an admin may set activeRole without holding that role\'s claim',
+  await denied('an admin may NOT set activeRole without holding that role\'s claim',
     adminUser().firestore().collection('users').doc(UID)
       .set({ activeRole: 'provider' }, { merge: true }));
 

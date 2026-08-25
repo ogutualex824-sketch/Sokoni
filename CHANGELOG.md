@@ -1,3 +1,38 @@
+## [2026-08-25] - Two suites asserted OPPOSITE things about the same rule.
+
+`scripts/test-role-rules.js` (55/2 -> 57/0). Test only. No rules, no product code.
+
+Cherry-picking `80297d4` turned `test-role-switch-rules` green (38/11 -> 49/0) and
+this suite red on the SAME run. The failure did not appear — it MOVED, which is the
+signature of two tests disagreeing rather than a regression.
+
+`test-role-rules` carried:
+
+    allowed('an admin may set another account\'s roles', ...)
+    allowed('an admin may set activeRole without holding that role\'s claim', ...)
+
+That is precisely the behaviour `80297d4` removed as a security fix. The two
+assertions were the pre-fix rule stated as fact, and they passed only while the
+escalation was open. `test-role-switch-rules` asserts the same boundary from the
+other side, so no ruleset could satisfy both.
+
+Both now assert the DENIAL, matching the SERVED production ruleset — which has
+carried the scoped rule since 2026-08-23 and measures 49/0.
+
+**This makes the suite stricter, not weaker:** it now demands a denial where it
+previously accepted the write.
+
+### Control
+
+Reverting `firestore.rules` to the pre-pick text fails both flipped assertions with
+`ALLOWED — Expected request to fail, but it succeeded.` They discriminate; they are
+not vacuous passes.
+
+### Security
+
+No production change. Removes a standing contradiction that would have made every
+future gate run report a defect on whichever suite happened to run second.
+
 ## [2026-08-25] - A rules deploy from this lineage would have re-opened admin -> superAdmin.
 
 `scripts/guard-rules-lineage.js` (new), `package.json`. Guard only — no rules,
