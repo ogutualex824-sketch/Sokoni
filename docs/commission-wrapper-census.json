@@ -1,0 +1,72 @@
+{
+  "readings": [
+    {
+      "takenAt": "2026-08-25T00:51:04.288Z",
+      "label": "baseline-at-cutover",
+      "window": {
+        "requestedDays": 30,
+        "startTime": "2026-07-25T23:30:42.336Z",
+        "endTime": "2026-08-24T23:30:42.336Z",
+        "note": "Cloud Monitoring retention bounds this window. A function invoked less often than the window cannot be distinguished from an unused one by this census alone."
+      },
+      "dispatcher": {
+        "name": "commissionDispatch",
+        "count": null
+      },
+      "wrappers": [
+        {
+          "name": "createCommissionRule",
+          "count": null
+        },
+        {
+          "name": "updateCommissionRule",
+          "count": null
+        },
+        {
+          "name": "deleteCommissionRule",
+          "count": null
+        },
+        {
+          "name": "listCommissionRules",
+          "count": null
+        },
+        {
+          "name": "previewCommission",
+          "count": null
+        },
+        {
+          "name": "getCommissionConfig",
+          "count": null
+        },
+        {
+          "name": "getSellerEarningsReport",
+          "count": null
+        },
+        {
+          "name": "getAdminRevenueByHub",
+          "count": null
+        },
+        {
+          "name": "processSettlement",
+          "count": null
+        },
+        {
+          "name": "requestWithdrawal",
+          "count": 1
+        },
+        {
+          "name": "approveWithdrawal",
+          "count": null
+        },
+        {
+          "name": "rejectWithdrawal",
+          "count": null
+        },
+        {
+          "name": "getWithdrawals",
+          "count": null
+        }
+      ]
+    }
+  ]
+}
