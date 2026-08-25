@@ -178,6 +178,107 @@ input:checked+.slider:before{transform:translateX(18px)}
 </head>
 <body>
 
+<!-- ══ SOKONI POS CONTROL CENTRE ═════════════════════════════════════════════
+     The merchant's one surface. Everything below it on this page is Advanced
+     Printer Settings and stays exactly where it was — hidden until asked for,
+     because a shop owner should never meet transport negotiation or ESC/OS
+     capability grids on the way to opening their till. ══════════════════════ -->
+<style>
+  /* Hide the ORIGINAL page while the control centre is the view. Applied to
+     body's direct children so <script> tags keep executing normally — wrapping
+     them in a container would have changed their context. */
+  body > *:not(#sk-cc-root):not(script):not(style) { display: none; }
+  body.sk-cc-advanced > *:not(#sk-cc-root) { display: revert; }
+  body.sk-cc-advanced #sk-cc-root { display: none; }
+
+  #sk-cc-root { --bg:#0b0f0a; --card:#131a12; --line:rgba(255,255,255,.10);
+    --txt:#eaf5e6; --dim:rgba(234,245,230,.58); --acc:#71ff00; --warn:#ffb020;
+    background:var(--bg); color:var(--txt); min-height:100vh; min-height:100dvh;
+    font:15px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    padding:16px 14px calc(28px + env(safe-area-inset-bottom,0px));
+    max-width:640px; margin:0 auto; }
+  #sk-cc-root h1 { font-size:19px; font-weight:900; margin:0 0 2px; letter-spacing:-.01em; }
+  #sk-cc-root .sub { color:var(--dim); font-size:13px; margin:0 0 16px; }
+  .cc-card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 15px; margin-bottom:12px; }
+  .cc-card h2 { font-size:11px; font-weight:800; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--dim); margin:0 0 10px; }
+  .cc-row { display:flex; align-items:center; gap:9px; padding:4px 0; font-size:14px; }
+  .cc-row b { font-weight:700; }
+  .cc-dot { width:8px; height:8px; border-radius:50%; flex:none; background:var(--dim); }
+  .cc-dot.ok { background:var(--acc); }
+  .cc-dot.warn { background:var(--warn); }
+  .cc-dot.off { background:rgba(255,255,255,.22); }
+  .cc-muted { color:var(--dim); }
+  .cc-btn { display:block; width:100%; padding:13px 14px; border-radius:11px;
+    border:1px solid var(--line); background:rgba(255,255,255,.05); color:var(--txt);
+    font:700 14px/1 inherit; margin-top:9px; cursor:pointer; min-height:46px; }
+  .cc-btn.primary { background:var(--acc); color:#06210a; border-color:var(--acc); font-weight:900; }
+  .cc-btn:disabled { opacity:.5; }
+  .cc-in { width:100%; padding:12px 13px; border-radius:10px; border:1px solid var(--line);
+    background:rgba(0,0,0,.28); color:var(--txt); font:15px/1 inherit; margin-top:6px;
+    min-height:46px; -webkit-appearance:none; }
+  .cc-lbl { font-size:12px; color:var(--dim); margin-top:10px; display:block; }
+  .cc-prog { height:7px; border-radius:99px; background:rgba(255,255,255,.09); overflow:hidden; margin:10px 0 4px; }
+  .cc-prog i { display:block; height:100%; background:var(--acc); width:0; transition:width .4s ease; }
+  .cc-note { font-size:12.5px; color:var(--dim); margin:6px 0 0; }
+  #sk-cc-receipt { white-space:pre; font:11px/1.42 ui-monospace,Menlo,monospace;
+    background:#fff; color:#111; padding:12px; border-radius:9px; overflow-x:auto; margin-top:9px; }
+</style>
+
+<div id="sk-cc-root">
+  <h1 id="cc-shop">POS Setup</h1>
+  <p class="sub" id="cc-state">Checking your shop…</p>
+
+  <div class="cc-card">
+    <h2>Setup</h2>
+    <div class="cc-prog"><i id="cc-bar"></i></div>
+    <div id="cc-checklist"></div>
+    <button class="cc-btn primary" id="cc-open" disabled>Open Till</button>
+  </div>
+
+  <div class="cc-card">
+    <h2>Business</h2>
+    <div id="cc-business"><div class="cc-row cc-muted">Loading…</div></div>
+  </div>
+
+  <div class="cc-card">
+    <h2>Payments</h2>
+    <div id="cc-pay"><div class="cc-row cc-muted">Loading…</div></div>
+    <p class="cc-note">Customers pay your own M-PESA Till or PayBill directly.
+      SOKONI records the sale and the transaction reference — your money never
+      passes through SOKONI.</p>
+    <div id="cc-pay-form" style="display:none">
+      <label class="cc-lbl" for="cc-till">Till / PayBill number</label>
+      <input class="cc-in" id="cc-till" inputmode="numeric" autocomplete="off" placeholder="e.g. 3588275">
+      <label class="cc-lbl" for="cc-acct">Account name on M-PESA</label>
+      <input class="cc-in" id="cc-acct" autocomplete="organization" placeholder="KASS SHOP">
+      <button class="cc-btn primary" id="cc-pay-save">Save payment destination</button>
+    </div>
+    <button class="cc-btn" id="cc-pay-edit">Payment settings</button>
+    <p class="cc-note" id="cc-stk-note"></p>
+  </div>
+
+  <div class="cc-card">
+    <h2>Receipt</h2>
+    <div class="cc-row"><i class="cc-dot ok"></i><span>SOKONI receipt</span></div>
+    <button class="cc-btn" id="cc-preview">Preview receipt</button>
+    <button class="cc-btn" id="cc-testprint">Test printer</button>
+    <div id="sk-cc-receipt" style="display:none"></div>
+  </div>
+
+  <div class="cc-card">
+    <h2>Devices</h2>
+    <div id="cc-devices"><div class="cc-row cc-muted">Loading…</div></div>
+    <button class="cc-btn" id="cc-advanced">Advanced diagnostics</button>
+  </div>
+
+  <div class="cc-card">
+    <h2>SOKONI commission</h2>
+    <div id="cc-comm"><div class="cc-row cc-muted">Loading…</div></div>
+  </div>
+</div>
+
 <div class="pos-header">
   <span class="pos-header-icon">&#128424;</span>
   <h1>Advanced Printer Settings</h1>
@@ -955,6 +1056,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 <script src="sokoni-bluetooth-printer.js"></script>
 <script src="sokoni-printer-manager.js"></script>
 <script src="sokoni-receipt-id.js"></script>
+<script src="sokoni-receipt.js"></script>
 <script src="sokoni-pos-print-service.js"></script>
 <script>
 /* ── Firebase init ── */
@@ -2533,6 +2635,247 @@ Promise.race([
   renderP58EPanel();
   renderChecklist();
 }).catch(() => { /* no paired printer, or the browser lacks getDevices() */ });
+</script>
+
+<script>
+/* ══ SK-CC LOGIC ═══════════════════════════════════════════════════════════
+   Every figure on this screen comes from the SERVER. Nothing is computed in
+   the browser and nothing is read from localStorage: a setup screen that
+   reports readiness from device-local state is how a merchant on a new phone
+   was told they had no business at all.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var row = function (state, html) {
+    return '<div class="cc-row"><i class="cc-dot ' + state + '"></i><span>' + html + '</span></div>';
+  };
+
+  /* ── the ONE door to the server ──────────────────────────────────────── */
+  function op(name, data) {
+    try {
+      var fns = firebase.functions();
+      return fns.httpsCallable('smartPosDispatch')(
+        Object.assign({ op: name }, data || {})
+      ).then(function (r) { return (r && r.data) || {}; });
+    } catch (e) { return Promise.reject(e); }
+  }
+
+  var MERCHANT = null;
+
+  function whenSignedIn() {
+    return new Promise(function (res) {
+      try {
+        var u = firebase.auth().currentUser;
+        if (u) return res(u);
+        var off = firebase.auth().onAuthStateChanged(function (usr) {
+          if (usr) { try { off(); } catch (_) {} res(usr); }
+        });
+        setTimeout(function () { res(firebase.auth().currentUser || null); }, 9000);
+      } catch (e) { res(null); }
+    });
+  }
+
+  /* ── SETUP STATUS — the checklist and the readiness gate ─────────────── */
+  function renderStatus(st) {
+    var items = [
+      ['Business', !!st.hasBusiness],
+      ['Branch', !!(st.checklist && (st.checklist.branchCreated || st.checklist.branch))],
+      ['Payment method', !!window.__ccPaymentReady],
+      ['Device', !!(st.checklist && (st.checklist.deviceRegistered || st.checklist.device))],
+      ['Receipt', true]
+    ];
+    var done = items.filter(function (x) { return x[1]; }).length;
+    $('cc-bar').style.width = Math.round((done / items.length) * 100) + '%';
+    $('cc-checklist').innerHTML = items.map(function (x) {
+      return row(x[1] ? 'ok' : 'off', (x[1] ? '' : '<span class="cc-muted">') +
+        esc(x[0]) + (x[1] ? '' : '</span>'));
+    }).join('');
+
+    var ready = done === items.length;
+    $('cc-state').textContent = ready ? 'POS ready' : (done + ' of ' + items.length + ' complete');
+    var btn = $('cc-open');
+    btn.disabled = !ready;
+    btn.textContent = ready ? 'Open Till' : 'Finish setup to open the till';
+    btn.onclick = function () { if (ready) location.href = '/till'; };
+  }
+
+  /* ── BUSINESS — authoritative, and never re-created here ─────────────── */
+  function renderBusiness(cfg) {
+    var b = cfg || {};
+    MERCHANT = b.merchantId || MERCHANT;
+    if (b.name) $('cc-shop').textContent = b.name;
+    var html = '';
+    html += row(b.name ? 'ok' : 'off', b.name ? '<b>' + esc(b.name) + '</b>' : '<span class="cc-muted">No business name</span>');
+    html += row(b.branchName || b.defaultBranchId ? 'ok' : 'off',
+      esc(b.branchName || b.defaultBranchId || 'No branch'));
+    html += row(b.kraPin ? 'ok' : 'off',
+      b.kraPin ? 'KRA PIN ' + esc(b.kraPin) : '<span class="cc-muted">No KRA PIN on record</span>');
+    html += row(b.status === 'active' ? 'ok' : 'warn', 'Status: ' + esc(b.status || 'unknown'));
+    $('cc-business').innerHTML = html;
+  }
+
+  /* ── PAYMENTS — manual M-PESA, no credentials, ever ──────────────────── */
+  function renderPayments(pd) {
+    var configured = !!(pd && pd.configured);
+    window.__ccPaymentReady = configured;
+    var html = '';
+    if (configured) {
+      html += row('ok', '<b>M-PESA manual</b> &mdash; ready');
+      html += row('ok', esc(pd.mpesaKind === 'paybill' ? 'PayBill' : 'Till') + ' ' + esc(pd.mpesaTill));
+      if (pd.mpesaAccountName) html += row('ok', esc(pd.mpesaAccountName));
+    } else {
+      html += row('off', '<span class="cc-muted">M-PESA not configured</span>');
+    }
+    html += row(pd && pd.autoStkEnabled ? 'ok' : 'off',
+      '<span class="cc-muted">Automatic STK prompts &mdash; ' +
+      (pd && pd.autoStkEnabled ? 'enabled' : 'not enabled') + '</span>');
+    $('cc-pay').innerHTML = html;
+    $('cc-stk-note').textContent = (pd && pd.autoStkEnabled) ? '' :
+      'You can sell now without automatic prompts. Automatic STK is an upgrade and ' +
+      'needs your own Safaricom Daraja app — SOKONI never asks for your API keys.';
+    if (pd) {
+      $('cc-till').value = pd.mpesaTill || '';
+      $('cc-acct').value = pd.mpesaAccountName || '';
+    }
+  }
+
+  $('cc-pay-edit').onclick = function () {
+    var f = $('cc-pay-form');
+    var open = f.style.display !== 'none';
+    f.style.display = open ? 'none' : 'block';
+    this.textContent = open ? 'Payment settings' : 'Cancel';
+  };
+
+  $('cc-pay-save').onclick = function () {
+    var btn = this;
+    var till = ($('cc-till').value || '').replace(/\D/g, '');
+    if (!till) { $('cc-stk-note').textContent = 'Enter your Till or PayBill number.'; return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    op('savePaymentDestination', { till: till, accountName: $('cc-acct').value || '' })
+      .then(function () { return op('getPaymentDestination', {}); })
+      .then(function (pd) {
+        renderPayments(pd);
+        $('cc-pay-form').style.display = 'none';
+        $('cc-pay-edit').textContent = 'Payment settings';
+        return op('getSetupStatus', {}).then(renderStatus);
+      })
+      .catch(function (e) {
+        /* The reason goes on screen. A merchant cannot open a console. */
+        $('cc-stk-note').textContent = 'Could not save: ' +
+          ((e && (e.message || e.code)) || 'unknown error');
+      })
+      .then(function () { btn.disabled = false; btn.textContent = 'Save payment destination'; });
+  };
+
+  /* ── RECEIPT — the SAME renderer a real sale uses ────────────────────── */
+  function sampleReceipt() {
+    var R = window.SokoniReceiptDoc;
+    if (!R) return null;
+    var C = window.SokoniCash;
+    var st = null;
+    try {
+      st = C && C.settle({ totalMinor: 430000, tenders: [
+        { method: 'cash', amountMinor: 200000 },
+        { method: 'mpesa', amountMinor: 230000, reference: 'SAMPLE1234' }] });
+    } catch (_) {}
+    return R.render({
+      sample: true,
+      receiptId: 'SAMPLE-0001',
+      serverTimestamp: Date.now(),
+      shop: window.__ccShop || { name: 'Your shop' },
+      items: [
+        { name: 'Sugar 2kg', qty: 1, unitMinor: 280000, lineMinor: 280000 },
+        { name: 'Maize Flour 1kg', qty: 2, unitMinor: 75000, lineMinor: 150000 }
+      ],
+      totals: { subtotalMinor: 430000 },
+      totalMinor: 430000,
+      settlement: st
+    }, { locale: 'en-KE' });
+  }
+
+  $('cc-preview').onclick = function () {
+    var box = $('sk-cc-receipt');
+    if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+    var R = window.SokoniReceiptDoc, doc = sampleReceipt();
+    box.textContent = (R && doc) ? R.toText(doc, { cols: 32 })
+      : 'The receipt renderer is not loaded on this device.';
+    box.style.display = 'block';
+  };
+
+  $('cc-testprint').onclick = function () {
+    var btn = this; btn.disabled = true; btn.textContent = 'Printing…';
+    var doc = sampleReceipt();
+    var svc = window.SokoniPosPrintService || window.SokoniPrinterManager || null;
+    var done = function (msg) { btn.disabled = false; btn.textContent = msg;
+      setTimeout(function () { btn.textContent = 'Test printer'; }, 2600); };
+    try {
+      if (svc && typeof svc.printReceipt === 'function') {
+        Promise.resolve(svc.printReceipt(doc))
+          .then(function () { done('Sent to printer'); })
+          .catch(function (e) { done('Printer error: ' + ((e && e.message) || 'failed')); });
+      } else { done('No printer connected'); }
+    } catch (e) { done('Printer error'); }
+  };
+
+  /* ── DEVICES — plain language; the technical view is behind a button ── */
+  function renderDevices(list) {
+    var html = row('ok', 'This phone &mdash; <span class="cc-muted">connected</span>');
+    var n = (list || []).length;
+    html += row(n ? 'ok' : 'off', n
+      ? esc(n) + ' paired device' + (n === 1 ? '' : 's')
+      : '<span class="cc-muted">No paired devices</span>');
+    $('cc-devices').innerHTML = html;
+  }
+
+  $('cc-advanced').onclick = function () {
+    document.body.classList.add('sk-cc-advanced');
+    window.scrollTo(0, 0);
+  };
+
+  /* ── COMMISSION — DELIBERATELY NOT ACTIVE ───────────────────────────────
+     The rate is not frozen: the deployed table aliases POS to marketplace at
+     3%, while every historical commissionLedger row carries commissionPct 5.
+     Showing a figure computed from whichever configuration happens to be
+     present would put a number in front of a merchant that cannot be
+     defended, and this screen is one step away from asking them to pay it. So
+     it states the position instead of inventing an amount. */
+  function renderCommission() {
+    $('cc-comm').innerHTML =
+      row('warn', 'Commission billing is not active yet') +
+      '<p class="cc-note">SOKONI charges a commission on completed sales. ' +
+      'The rate and billing cycle are being finalised — nothing is owed through ' +
+      'this screen today, and your sales are recorded in full.</p>';
+  }
+
+  /* ── BOOT ────────────────────────────────────────────────────────────── */
+  whenSignedIn().then(function (u) {
+    if (!u) {
+      $('cc-state').textContent = 'Sign in to set up your POS.';
+      $('cc-business').innerHTML = row('off', '<span class="cc-muted">Not signed in</span>');
+      return;
+    }
+    renderCommission();
+    var jobs = [
+      op('getSetupStatus', {}).catch(function () { return null; }),
+      op('getPaymentDestination', {}).catch(function () { return null; }),
+      op('getBusinessConfig', {}).catch(function () { return null; })
+    ];
+    Promise.all(jobs).then(function (r) {
+      var st = r[0] || {}, pd = r[1], cfg = r[2] || {};
+      var biz = cfg.business || cfg || {};
+      window.__ccShop = { name: biz.name, branch: biz.branchName || biz.defaultBranchId,
+                          kraPin: biz.kraPin };
+      renderBusiness(biz);
+      renderPayments(pd);
+      renderDevices((cfg && cfg.devices) || st.devices || []);
+      renderStatus(st);
+      if (!r[0]) $('cc-state').textContent = 'Could not read your setup status. Reload to try again.';
+    });
+  });
+})();
 </script>
 </body>
 </html>

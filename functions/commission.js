@@ -867,3 +867,79 @@ exports.getCommissionConfig = onCall(
     };
   }
 );
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   commissionDispatch — ONE callable in front of the thirteen
+   ══════════════════════════════════════════════════════════════════════════
+   The estate holds 1,693 deployed functions against a 1,480 hard cap. Every
+   onCall is its own Cloud Run service, so the way back under the cap is fewer
+   DOORS, not less capability.
+
+   THE HANDLERS ARE NOT REIMPLEMENTED. firebase-functions v2 exposes .run() on
+   the object onCall() returns, so this dispatches into the exact same function
+   body the standalone export already runs — same authorisation, same
+   validation, same response and error shapes. A reimplementation here would be
+   a second copy of thirteen authority checks, drifting from the first the day
+   after it was written; that is the failure this consolidation exists to avoid,
+   not one to introduce.
+
+   APP CHECK IS ENFORCED AT THIS DOOR (OPT60 carries enforceAppCheck), and
+   req.auth is passed through unchanged so every handler's own auth guard still
+   runs exactly as before.
+
+   THE THIRTEEN STAY EXPORTED FOR NOW. They are compatibility wrappers during
+   the pilot: this estate has already produced callers that no source search
+   found, and removing a door before proving nobody is still knocking is how a
+   consolidation becomes an outage. They come out in a second, separate change
+   once the census shows zero traffic on them.
+
+   So this pilot's honest arithmetic is:
+     logical consolidation      13 -> 1
+     deployed exports THIS step +1   (the dispatcher; the thirteen remain)
+     deployed exports LATER    -13   (when the wrappers are withdrawn)
+   ══════════════════════════════════════════════════════════════════════════ */
+const _COMMISSION_OPS = {
+  createCommissionRule:    exports.createCommissionRule,
+  updateCommissionRule:    exports.updateCommissionRule,
+  deleteCommissionRule:    exports.deleteCommissionRule,
+  listCommissionRules:     exports.listCommissionRules,
+  previewCommission:       exports.previewCommission,
+  getCommissionConfig:     exports.getCommissionConfig,
+  getSellerEarningsReport: exports.getSellerEarningsReport,
+  getAdminRevenueByHub:    exports.getAdminRevenueByHub,
+  processSettlement:       exports.processSettlement,
+  requestWithdrawal:       exports.requestWithdrawal,
+  approveWithdrawal:       exports.approveWithdrawal,
+  rejectWithdrawal:        exports.rejectWithdrawal,
+  getWithdrawals:          exports.getWithdrawals,
+};
+
+exports.commissionDispatch = onCall(OPT60, async (req) => {
+  const data = req.data || {};
+  const op = String(data.op || '').trim();
+  if (!op) throw new HttpsError('invalid-argument', 'op is required.');
+
+  const target = Object.prototype.hasOwnProperty.call(_COMMISSION_OPS, op)
+    ? _COMMISSION_OPS[op] : null;
+  /* An UNKNOWN op is refused by name rather than silently doing nothing — a
+     dispatcher that quietly returns undefined for a typo is indistinguishable
+     from a handler that succeeded and found nothing. */
+  if (typeof target !== 'function' || typeof target.run !== 'function') {
+    throw new HttpsError('not-found', 'Unknown commission operation: ' + op);
+  }
+
+  /* The op key is removed so a handler cannot see a field it never had, and every
+     other key is passed through untouched. */
+  const rest = {};
+  Object.keys(data).forEach((k) => { if (k !== 'op') rest[k] = data[k]; });
+
+  return target.run({
+    auth: req.auth,
+    data: rest,
+    app: req.app,
+    rawRequest: req.rawRequest,
+    instanceIdToken: req.instanceIdToken,
+    acceptsStreaming: false,
+  });
+});

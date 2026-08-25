@@ -153,7 +153,9 @@
     refresh: function () {
       try {
         if (!window.firebase || !firebase.functions) return Promise.resolve(false);
-        return firebase.functions().httpsCallable('getCommissionConfig')({})
+        /* COMMISSION CUTOVER — through the one door. Same handler, same
+           response; only the transport changed. */
+        return firebase.functions().httpsCallable('commissionDispatch')({ op: 'getCommissionConfig' })
           .then(function (res) {
             var d = res && res.data;
             if (!d || !d.rates) return false;

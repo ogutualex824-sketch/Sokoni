@@ -239,6 +239,18 @@ var _hasMore   = false;
 var _loading   = false;
 var _wallet    = {};
 var _fn        = firebase.functions();
+/* COMMISSION CUTOVER — one door, the same handlers. Only the transport moves:
+   the op name is added to the payload and nothing else about the call changes.
+   The thirteen originals remain deployed as compatibility wrappers. */
+function _skComm(op){
+  var _d = _fn.httpsCallable('commissionDispatch');
+  return function (payload) {
+    var body = { op: op };
+    var p = payload || {};
+    Object.keys(p).forEach(function (k) { body[k] = p[k]; });
+    return _d(body);
+  };
+}
 
 /* ── Auth guard ── */
 firebase.auth().onAuthStateChanged(function(user){
@@ -280,7 +292,7 @@ function _load(){
     pageSize:    30,
   };
 
-  _fn.httpsCallable('getSellerEarningsReport')(params).then(function(res){
+  _skComm('getSellerEarningsReport')(params).then(function(res){
     var d = res.data;
     _wallet  = d.wallet || {};
     _hasMore = d.hasMore || false;
@@ -312,7 +324,7 @@ function _loadMore(){
     cursor:      _cursor,
   };
 
-  _fn.httpsCallable('getSellerEarningsReport')(params).then(function(res){
+  _skComm('getSellerEarningsReport')(params).then(function(res){
     var d = res.data;
     _hasMore = d.hasMore || false;
     _cursor  = d.nextCursor || null;

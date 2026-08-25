@@ -297,6 +297,18 @@ if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const fns  = firebase.app().functions('us-central1');
+/* COMMISSION CUTOVER — one door, the same handlers. Only the transport moves:
+   the op name is added to the payload and nothing else about the call changes.
+   The thirteen originals remain deployed as compatibility wrappers. */
+function _skComm(op){
+  var _d = fns.httpsCallable('commissionDispatch');
+  return function (payload) {
+    var body = { op: op };
+    var p = payload || {};
+    Object.keys(p).forEach(function (k) { body[k] = p[k]; });
+    return _d(body);
+  };
+}
 
 // Helpers
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML}
@@ -345,7 +357,7 @@ function setPeriod(key,btn){
 
 async function loadPeriod(key){
   const {s,e}=PERIODS[key]();
-  const getReport=fns.httpsCallable('getSellerEarningsReport');
+  const getReport=_skComm('getSellerEarningsReport');
   try{
     const res=await getReport({periodStart:s,periodEnd:e});
     const {summary,wallet,entries}=res.data;
@@ -423,7 +435,7 @@ function setTypeFilter(type,btn){
 async function loadMore(){
   if(!nextCursor||!hasMore)return;
   try{
-    const res=await fns.httpsCallable('getSellerEarningsReport')({cursor:nextCursor});
+    const res=await _skComm('getSellerEarningsReport')({cursor:nextCursor});
     const newEntries=res.data.entries||[];
     currentEntries=[...currentEntries,...newEntries];
     nextCursor=res.data.nextCursor;
@@ -449,7 +461,7 @@ function exportCSV(){
 // Withdrawals
 async function loadWithdrawals(){
   try{
-    const res=await fns.httpsCallable('getWithdrawals')({pageSize:50});
+    const res=await _skComm('getWithdrawals')({pageSize:50});
     const list=res.data.withdrawals||[];
     const tbody=document.getElementById('wd-tbody');
     if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub)">No withdrawals yet.</td></tr>';return}
@@ -495,7 +507,7 @@ async function submitWithdrawal(){
     }
   }
   try{
-    const res=await fns.httpsCallable('requestWithdrawal')({amountCents:Math.round(amount*100),method,accountDetails});
+    const res=await _skComm('requestWithdrawal')({amountCents:Math.round(amount*100),method,accountDetails});
     toast(`Withdrawal of KES ${amount.toFixed(2)} requested — pending approval`,'success');
     closeWdPanel();
     loadWithdrawals();
@@ -526,7 +538,7 @@ async function loadStatement(monthStr){
   const card=document.getElementById('stmt-card');
   card.innerHTML='<div class="spinner" style="margin:20px auto"></div>';
   try{
-    const res=await fns.httpsCallable('getSellerEarningsReport')({periodStart:start,periodEnd:end});
+    const res=await _skComm('getSellerEarningsReport')({periodStart:start,periodEnd:end});
     const {summary,wallet}=res.data;
     const month=new Date(y,m-1,1).toLocaleDateString('en-KE',{month:'long',year:'numeric'});
     card.innerHTML=`

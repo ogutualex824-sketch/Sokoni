@@ -638,6 +638,18 @@ if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const fns  = firebase.app().functions('us-central1');
+/* COMMISSION CUTOVER — one door, the same handlers. Only the transport moves:
+   the op name is added to the payload and nothing else about the call changes.
+   The thirteen originals remain deployed as compatibility wrappers. */
+function _skComm(op){
+  var _d = fns.httpsCallable('commissionDispatch');
+  return function (payload) {
+    var body = { op: op };
+    var p = payload || {};
+    Object.keys(p).forEach(function (k) { body[k] = p[k]; });
+    return _d(body);
+  };
+}
 
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML}
 function fmtKES(c){return 'KES '+Number((c||0)/100).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -984,7 +996,7 @@ async function loadPayouts() {
 }
 async function approvePayout(id) {
   try {
-    await fns.httpsCallable('approveWithdrawal')({ withdrawalId: id });
+    await _skComm('approveWithdrawal')({ withdrawalId: id });
     toast('Payout approved','s'); loadPayouts();
   } catch(e) { toast('Error: '+e.message,'e'); }
 }
@@ -992,7 +1004,7 @@ async function rejectPayout(id) {
   const reason = prompt('Reason for rejection:');
   if (!reason) return;
   try {
-    await fns.httpsCallable('rejectWithdrawal')({ withdrawalId: id, reason });
+    await _skComm('rejectWithdrawal')({ withdrawalId: id, reason });
     toast('Payout rejected','s'); loadPayouts();
   } catch(e) { toast('Error: '+e.message,'e'); }
 }

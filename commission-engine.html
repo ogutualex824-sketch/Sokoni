@@ -484,7 +484,30 @@ var CATEGORIES=[
   {v:'classifieds',l:'Classifieds'},{v:'subscriptions',l:'Subscriptions'},{v:'advertising',l:'Advertising'},
 ];
 
-function _cf(name){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(name);}
+/* COMMISSION CUTOVER — the thirteen commission callables now travel through
+   ONE door, commissionDispatch, which routes into the SAME handler bodies via
+   firebase-functions .run(). Authorisation, validation and response shapes are
+   unchanged because the handler is unchanged.
+
+   Only the FACTORY is redirected. Every call site keeps its exact form, so the
+   payload each operation sends is provably untouched — the op name is added,
+   nothing else is moved. Non-commission callables fall through to the ordinary
+   path, so this file keeps working exactly as before for everything else.
+
+   The thirteen originals REMAIN DEPLOYED as compatibility wrappers. This
+   change moves traffic; it does not remove a door. */
+var _SK_COMM_OPS = ['createCommissionRule','updateCommissionRule','deleteCommissionRule','listCommissionRules','previewCommission','getCommissionConfig','getSellerEarningsReport','getAdminRevenueByHub','processSettlement','requestWithdrawal','approveWithdrawal','rejectWithdrawal','getWithdrawals'];
+function _cf(name){
+  if(!_fns)_fns=firebase.functions();
+  if (_SK_COMM_OPS.indexOf(name) === -1) return _fns.httpsCallable(name);
+  var _d = _fns.httpsCallable('commissionDispatch');
+  return function (payload) {
+    var body = { op: name };
+    var p = payload || {};
+    Object.keys(p).forEach(function (k) { body[k] = p[k]; });
+    return _d(body);
+  };
+}
 
 /* â”€â”€ Nav â”€â”€ */
 var _panelTitles={overview:'Commission Overview',rules:'Commission Rules',categories:'Category Rates',preview:'Rate Preview Calculator',holidays:'Zero-Commission Campaigns'};

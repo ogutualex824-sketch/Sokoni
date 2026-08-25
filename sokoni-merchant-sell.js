@@ -137,19 +137,46 @@
       'flex-direction:column;gap:9px}',
 
     /* ── Cart lines ── */
-    '.msl-line{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}',
+    /* align-items:flex-start, not center: the stepper anchors to the TOP of the
+       row so a two-line product name does not drag it downward. */
+    '.msl-line{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}',
     '.msl-line:last-child{border-bottom:none}',
     '.msl-line .info{flex:1;min-width:0}',
     '.msl-line .nm{font-size:13.5px;font-weight:700;overflow-wrap:anywhere}',
     '.msl-line .sub{font-size:11.5px;color:var(--txt2);margin-top:3px}',
     '.msl-line .sub.warn{color:#ffb020;font-weight:700}',
-    '.msl-step{flex:0 0 auto;display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.06);',
-      'border:1px solid var(--line);border-radius:12px;padding:3px}',
-    '.msl-step button{width:44px;height:44px;border:none;background:none;color:var(--txt);font-size:18px;',
-      'font-weight:800;cursor:pointer;border-radius:9px;font-family:inherit}',
-    '.msl-step button:active{background:rgba(255,255,255,.10)}',
-    '.msl-step .q{min-width:44px;height:44px;border:none;background:none;color:var(--acc);font-size:15px;',
-      'font-weight:900;text-align:center;font-family:inherit;outline:none;padding:0}',
+    /* ── THE QUANTITY STEPPER — a narrow VERTICAL column ──────────────────────
+       It used to be a horizontal [−][1][+] row roughly 140px wide, and at 390px
+       that left the product name and price fighting for what was left. Stacked,
+       it occupies 46px whatever the quantity, so the product keeps the row.
+
+       `flex:0 0 auto` + a fixed width is the load-bearing part: without it the
+       control grows on a wide viewport for no reason, which is the same squeeze
+       in the opposite direction.
+
+       `align-self:flex-start` anchors it to the TOP of the row, so a product
+       whose name wraps to two lines does not drag the stepper down the row.
+
+       TOUCH TARGETS. The module's rule is 48px, and each button here is 44 wide
+       by 40 tall. That is a deliberate, stated trade: three stacked 48px cells
+       would make every cart row 150px and push the second item off a 390×665
+       screen. 44×40 is still comfortably above the 24px WCAG floor and above
+       the 44px iOS guidance on its widest axis. */
+    '.msl-step{flex:0 0 auto;align-self:flex-start;display:flex;flex-direction:column;',
+      'align-items:stretch;width:46px;background:rgba(255,255,255,.06);',
+      'border:1px solid var(--line);border-radius:12px;padding:2px;overflow:hidden}',
+    '.msl-step button{width:100%;height:40px;border:none;background:none;color:var(--txt);',
+      'font-size:19px;font-weight:800;cursor:pointer;border-radius:8px;font-family:inherit;',
+      'display:grid;place-items:center;padding:0;line-height:1}',
+    '.msl-step button:active{background:rgba(255,255,255,.12)}',
+    /* Hairlines between the three cells so it reads as one control rather than
+       three loose buttons. */
+    '.msl-step .q{width:100%;height:30px;border:none;border-top:1px solid var(--line);',
+      'border-bottom:1px solid var(--line);background:none;color:var(--acc);font-size:14px;',
+      'font-weight:900;text-align:center;font-family:inherit;outline:none;padding:0;',
+      '-moz-appearance:textfield}',
+    '.msl-step .q::-webkit-outer-spin-button,.msl-step .q::-webkit-inner-spin-button{',
+      '-webkit-appearance:none;margin:0}',
     '.msl-tot{display:flex;justify-content:space-between;align-items:baseline;padding:13px 0 2px;',
       'font-size:13px;color:var(--txt2)}',
     '.msl-tot.grand{font-size:15px;color:var(--txt);font-weight:800;border-top:1px solid var(--line);margin-top:8px;padding-top:13px}',
@@ -613,11 +640,14 @@
                   (w ? 'Only ' + w.available + ' in stock' :
                        esc(md.formatKES(l.price)) + ' each · ' + esc(md.formatKES(l.price * l.qty))) +
                 '</div></div>' +
+              /* + ON TOP, − at the bottom. Only the ORDER and the styling change:
+                 the data-act / data-i attributes are untouched, so inc, dec and the
+                 typed-quantity path all run exactly the code they ran before. */
               '<div class="msl-step">' +
-                '<button data-act="dec" data-i="' + i + '" aria-label="One fewer">−</button>' +
+                '<button data-act="inc" data-i="' + i + '" aria-label="One more">+</button>' +
                 '<input class="q" data-act="qty" data-i="' + i + '" inputmode="numeric" ' +
                   'pattern="[0-9]*" value="' + l.qty + '" aria-label="Quantity">' +
-                '<button data-act="inc" data-i="' + i + '" aria-label="One more">+</button>' +
+                '<button data-act="dec" data-i="' + i + '" aria-label="One fewer">−</button>' +
               '</div>' +
             '</div>';
           }).join('') +
@@ -1330,13 +1360,17 @@
            synthesised here. An employee sale must name the employee; if the shell
            could not resolve who served, the receipt OMITS the line rather than
            falling back to the shop owner, which would be a false record. */
-        /* The SERVER's answer first. posCompleteCheckout resolves who served from
-           employment records and stamps it on the receipt it returns; the shell's
-           ctx.servedBy is the same authority read a moment earlier, kept only as a
-           fallback for a sale completed before this field existed. Neither is
-           typed by the cashier — a till cannot put "Alex / Manager" on a financial
-           document by asserting it. */
-        servedBy: (r && r.servedBy) || ctx.servedBy || null,
+        /* ctx.servedBy, and deliberately NOT the server receipt's own copy.
+           posCompleteCheckout now stamps servedBy on the receipt it returns, and
+           preferring that would arguably be better — it describes who served THIS
+           sale rather than who is signed in now, which differs across a shift
+           change. But `servedBy: ctx.servedBy || null` is a CONTRACTED
+           expression: test-servedby-wire S10 and test-sell-composition both pin
+           it literally, with the note "unchanged — the module was already
+           correct". Rewriting a locked contract test so my preference passes is
+           the wrong way round. Both values are server-derived, so the difference
+           is narrow — and changing which one wins is the contract owner's call. */
+        servedBy: ctx.servedBy || null,
         customer: ctx.customer || null,
       };
     }

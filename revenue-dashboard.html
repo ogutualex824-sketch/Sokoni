@@ -226,6 +226,18 @@ h2.sec-title .material-icons{font-size:16px}
 
 var _days = 7;
 var _fn   = firebase.functions();
+/* COMMISSION CUTOVER — one door, the same handlers. Only the transport moves:
+   the op name is added to the payload and nothing else about the call changes.
+   The thirteen originals remain deployed as compatibility wrappers. */
+function _skComm(op){
+  var _d = _fn.httpsCallable('commissionDispatch');
+  return function (payload) {
+    var body = { op: op };
+    var p = payload || {};
+    Object.keys(p).forEach(function (k) { body[k] = p[k]; });
+    return _d(body);
+  };
+}
 var _data = null;
 
 /* Hub colour palette */
@@ -271,8 +283,8 @@ document.querySelectorAll('.period-tab').forEach(function(btn){
 function _load(){
   _resetSkeletons();
   Promise.all([
-    _fn.httpsCallable('getAdminRevenueByHub')({ periodDays: _days }),
-    _fn.httpsCallable('listCommissionRules')({ includeInactive: false }),
+    _skComm('getAdminRevenueByHub')({ periodDays: _days }),
+    _skComm('listCommissionRules')({ includeInactive: false }),
   ]).then(function(results){
     _data = results[0].data;
     var rules = results[1].data.rules || [];

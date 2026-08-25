@@ -187,9 +187,21 @@ let LAST = null;
     /discountMinor: toM\(r\.discount\)/.test(src),
     'subtotal set to the total hid the discount whenever there was one');
 
-  ck('T14 Served by comes from the server receipt first',
-    /servedBy: \(r && r\.servedBy\) \|\| ctx\.servedBy \|\| null/.test(src),
-    'never from anything the cashier typed');
+  /* T14 USED TO ASSERT THE OPPOSITE, and the assertion was the stale half.
+     The cart-stepper lineage deliberately moved this to ctx.servedBy alone —
+     its own comment states the server receipt's copy is NOT used because
+     ctx.servedBy is a CONTRACTED shape. Applying that patch here reverted the
+     form T14 demanded, so the honest resolution is to take the decision AND
+     its assertion together, rather than re-reverting a deliberate change to
+     keep an old test green. What must never hold is a cashier-supplied value,
+     and that is what this now checks.
+
+     Cross-lineage patches carry more than their headline: this one was applied
+     for a cart stepper and quietly changed a financial-document field. */
+  ck('T14 Served by comes from the server-resolved identity, never the client',
+    /servedBy: ctx\.servedBy \|\| null/.test(src) &&
+    !/servedBy:[^\n]*(prompt|input\.value|typed)/.test(src),
+    'a till cannot put "Alex / Manager" on a financial document by asserting it');
 
   /* ── CONTROLS — a detector that cannot fail proves nothing ────────────────── */
   ck('T15 CONTROL the detector reports a pattern that is genuinely absent',

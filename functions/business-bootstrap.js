@@ -1153,6 +1153,91 @@ async function _regeneratePairingQR(req) {
 /* getSetupStatus — authoritative resume logic + production-readiness checklist,
    computed from REAL Firestore state so the wizard resumes at the first
    incomplete step and never marks a merchant production-ready prematurely. */
+/* ── THE MERCHANT'S PAYMENT DESTINATION — MANUAL M-PESA ────────────────────
+   Under DIRECT_TO_SELLER the customer pays the shop's OWN till and the shop
+   keeps 100%; SOKONI records the sale and holds the commission as a
+   receivable. So the only thing SOKONI needs is WHERE the money goes, for the
+   receipt and for reconciliation — a till number and an account name.
+
+   THIS DELIBERATELY ACCEPTS NO API CREDENTIALS. Consumer key, consumer secret
+   and LNM passkey are not parameters here and must never become merchant-
+   editable fields. Automatic STK needs them because Safaricom binds the
+   passkey to the shortcode — base64(ShortCode + PassKey + Timestamp) cannot be
+   signed for a till SOKONI does not hold the passkey for — which is exactly
+   why automatic STK is an upgrade requiring the merchant's own Daraja app,
+   and not a prerequisite for selling.
+
+   Written SERVER-SIDE because posSettings has no Firestore rule at all, and
+   an unmatched collection denies by default. That is the correct posture for
+   POS configuration: it is not client-writable, and this is the one door. */
+async function _savePaymentDestination(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) {
+    const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
+    if (owned.empty) _err('No business on this account.', 'not-found');
+    merchantId = owned.docs[0].id;
+  }
+  /* TENANCY. Never trust a client-supplied merchantId — the whole point of
+     resolving it above is defeated if a caller may simply pass another one. */
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  if ((bizSnap.data() || {}).ownerId !== uid && !_isAdmin(req)) {
+    _err('Access denied.', 'permission-denied');
+  }
+
+  const till = _san(d.till || '', 20).replace(/\D/g, '');
+  const accountName = _san(d.accountName || '', 60).trim();
+  const kind = (d.kind === 'paybill') ? 'paybill' : 'till';
+  if (!till) _err('A Till or PayBill number is required.');
+  if (till.length < 5 || till.length > 12) _err('That does not look like a Till or PayBill number.');
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.collection('posSettings').doc(merchantId).set({
+    merchantId,
+    mpesaMode: 'manual',        /* the customer pays the till directly */
+    mpesaKind: kind,
+    mpesaTill: till,
+    mpesaAccountName: accountName || (bizSnap.data() || {}).name || '',
+    mpesaConfiguredAt: now,
+    mpesaConfiguredBy: uid,
+    updatedAt: now,
+  }, { merge: true });
+
+  return { ok: true, merchantId, mpesaMode: 'manual', mpesaKind: kind,
+           mpesaTill: till, mpesaAccountName: accountName };
+}
+
+/* Read it back for the setup screen. Same tenancy guard; no secrets exist here
+   to leak, because none are ever accepted. */
+async function _getPaymentDestination(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) {
+    const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
+    if (owned.empty) return { configured: false, reason: 'no-business' };
+    merchantId = owned.docs[0].id;
+  }
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  if ((bizSnap.data() || {}).ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
+  const ps = await db.collection('posSettings').doc(merchantId).get();
+  const v = ps.exists ? (ps.data() || {}) : {};
+  return {
+    configured: !!v.mpesaTill,
+    merchantId,
+    mpesaMode: v.mpesaMode || 'manual',
+    mpesaKind: v.mpesaKind || 'till',
+    mpesaTill: v.mpesaTill || '',
+    mpesaAccountName: v.mpesaAccountName || '',
+    /* Automatic STK is an UPGRADE and is reported, never assumed. It requires
+       the merchant's own Daraja credentials, which this door does not accept. */
+    autoStkEnabled: false,
+  };
+}
+
 async function _getSetupStatus(req) {
   const uid = _requireAuth(req);
   const d = req.data || {};
@@ -1168,12 +1253,28 @@ async function _getSetupStatus(req) {
   if (b.ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
   const cl = b.setupChecklist || {};
 
-  const [subSnap, branchSnap, taxSnap, prodSnap, deviceSnap] = await Promise.all([
+  const [subSnap, branchSnap, taxSnap, prodSnap, deviceSnap, shopProdSnap] = await Promise.all([
     db.collection('subscriptions').where('merchantId', '==', merchantId).where('status', 'in', ['active', 'trialing']).limit(1).get().catch(() => ({ empty: true })),
     db.collection('branches').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
     db.collection('taxConfig').doc(merchantId).get().catch(() => ({ exists: false })),
+    /* THE CATALOGUE IS NOT WHERE THIS WAS LOOKING.
+
+       This asked posProducts for merchantId. A live census found the platform
+       keys its catalogue the other way: of 108 products, 103 carry
+       `products.shopId == the OWNER'S UID` and ZERO carry a SOK- merchantId.
+       So a shop with 103 products on the shelf reported an empty catalogue and
+       the setup screen would have told its owner they were not ready to sell.
+
+       BOTH vocabularies are accepted rather than swapped. posProducts is real
+       for merchants who use it, and answering 'does this shop have anything to
+       sell' with only one of the two collections is the mistake being fixed —
+       replacing it with the opposite mistake would be no better.
+
+       Scoped by ownerId, not merchantId: ownerId is what products actually
+       carry, and for a wizard-provisioned business the two differ. */
     db.collection('posProducts').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
     db.collection('posDevices').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('products').where('shopId', '==', String(b.ownerId || '')).limit(1).get().catch(() => ({ empty: true })),
   ]);
 
   const checklist = {
@@ -1184,7 +1285,7 @@ async function _getSetupStatus(req) {
     branchCreated:       !branchSnap.empty,
     taxesConfigured:     taxSnap.exists || cl.taxesConfigured === true,
     staff:               cl.staff === true,                                  // optional
-    inventoryReady:      !prodSnap.empty || cl.inventoryReady === true,
+    inventoryReady:      !prodSnap.empty || !shopProdSnap.empty || cl.inventoryReady === true,
     hardwareConnected:   !deviceSnap.empty || cl.hardwareConnected === true, // connected OR intentionally skipped
     testSaleSuccessful:  cl.testSaleSuccessful === true,
   };
@@ -1385,6 +1486,8 @@ module.exports = {
     saveOnboardingProgress: _saveOnboardingProgress,
     getOnboardingProgress:  _getOnboardingProgress,
     getSetupStatus:         _getSetupStatus,
+    savePaymentDestination: _savePaymentDestination,
+    getPaymentDestination:  _getPaymentDestination,
     markSetupStep:          _markSetupStep,
     setStaffPin:            _setStaffPin,
   },

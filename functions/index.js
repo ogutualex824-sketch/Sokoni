@@ -5910,7 +5910,18 @@ exports.revokeShopInvite = onCall({}, async (request) => {
 ══════════════════════════════════════════════════════════════════════ */
 
 /* Initiate a card payment on a Cloud-connected terminal */
-exports.posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
+/* RETIRED — superseded by pos-terminal-live.js, which provides the full set
+   (initiate, poll, cancel, reverse, settleBatch, capabilities, health, batch
+   report, event webhook). These two are 2026-era inline implementations with a
+   DIFFERENT tenancy check: they compare businesses.uid, while the canonical
+   guard everywhere else uses ownerId — so they are not merely older, they ask a
+   different question of the same document.
+
+   Census: zero callers in the repo and NO Cloud Run service in Cloud Monitoring,
+   i.e. never invoked. De-exported rather than deleted: the body is left intact
+   and inert so the change is reversible by restoring one word, and so no
+   surrounding line is disturbed in a 12,000-line file. */
+const _retired_posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { terminalId, bizId, amount, currency = "KES", reference } = request.data || {};
@@ -5986,7 +5997,7 @@ exports.posPollTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request) 
 });
 
 /* Cancel a pending terminal payment (v1 legacy — superseded by posTerminalLive) */
-exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
+const _retired_posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { paymentId, bizId } = request.data || {};
@@ -11146,6 +11157,9 @@ exports.previewCommission         = commission.previewCommission;
 exports.getCommissionConfig       = commission.getCommissionConfig;
 exports.getSellerEarningsReport   = commission.getSellerEarningsReport;
 exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
+/* ONE door in front of the thirteen above. They remain exported as
+   compatibility wrappers until the census proves nobody still calls them. */
+exports.commissionDispatch        = commission.commissionDispatch;
 
 /* ══════════════════════════════════════════════════════════════════
    Subscription & Billing Engine  v1.0
