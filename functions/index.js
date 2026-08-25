@@ -3444,6 +3444,37 @@ exports.onNewOrderCreated = onDocumentCreated(
      7. POS listens real-time and auto-confirms the sale
 ============================================================ */
 
+/* ── Helper: Daraja request timestamp ──────────────────────────────────────
+   Daraja's `Timestamp` field is YYYYMMDDHHmmss in EAST AFRICA TIME, and the
+   SAME value is hashed into `Password` = base64(ShortCode + PassKey + Timestamp).
+   So a timestamp in the wrong zone does not merely look odd — it produces a
+   password Safaricom cannot reproduce, and the request is refused.
+
+   This was `new Date().toISOString()`, which is ALWAYS UTC. Kenya is UTC+3, so
+   every SOKONI STK request carried a timestamp three hours behind Daraja's
+   clock and was rejected with ResultCode 2001, "The initiator information is
+   invalid" — an error that points at credentials and sent us auditing the
+   passkey, the consumer key/secret and the Daraja app, all of which were
+   correct.
+
+   EVIDENCE (2026-08-25, sandbox, checkout ws_CO_250820262212318708374149):
+   SOKONI generated the STK timestamp in UTC (20260825191232) while the
+   successful Daraja simulator establishes the expected sandbox request
+   behaviour; Daraja's own CheckoutRequestID for the same call embeds
+   25082026221231 (22:12:31). The resulting 3-hour timestamp mismatch is
+   consistent with the 2001 initiator error. The simulator succeeds because
+   Daraja builds the password itself and never uses ours.
+
+   EAT observes no daylight saving, so a fixed +3h offset is correct year-round
+   and needs no timezone dependency. One helper, three call sites — the previous
+   shape had the same expression copy-pasted, which is how two of them could
+   have been fixed and the third left silently broken. */
+const DARAJA_UTC_OFFSET_MS = 3 * 60 * 60 * 1000;   /* Africa/Nairobi, no DST */
+function _darajaTimestamp(now) {
+  return new Date((now === undefined ? Date.now() : now) + DARAJA_UTC_OFFSET_MS)
+    .toISOString().replace(/\D/g, "").slice(0, 14);
+}
+
 /* ── Helper: get Daraja OAuth access token ── */
 async function _darajaToken(consumerKey, consumerSecret, env) {
   const base = env === "production"
@@ -3715,7 +3746,7 @@ exports.darajaSTKPush = onCall(
     const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
 
     /* Build STK push password: base64(ShortCode + PassKey + Timestamp) */
-    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+    const timestamp = _darajaTimestamp();
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
 
     /* Normalise phone to 254XXXXXXXXX */
@@ -4024,6 +4055,29 @@ const SAFARICOM_CALLBACK_IPS = new Set([
   "196.201.214.208","196.201.213.109","196.201.213.115","196.201.214.202",
 ]);
 
+/* ── Daraja SANDBOX callback lane ──────────────────────────────────────────
+   Safaricom's sandbox posts STK callbacks from infrastructure outside the
+   published production IP list above, so a sandbox result is rejected before it
+   can settle its own posPayments row — the endpoint answers 200, Safaricom sees
+   success, and the payment sits pending forever. This lane admits those
+   callbacks, and ONLY those.
+
+   INERT BY CONSTRUCTION. Empty ⇒ the lane does not exist: the callback rejects
+   an untrusted IP without reading Firestore, exactly as it did before. That is
+   the production configuration; this is set only for the duration of a sandbox
+   certification run and removed afterwards.
+
+   TWO conditions, not one. `posPayments.env` is copied from
+   shopSettings/{sellerUid}.darajaEnv, and firestore.rules lets a seller write
+   their OWN shopSettings — so `env === "sandbox"` is a seller-forgeable claim.
+   Trusting it alone would let any merchant mark their live payments sandbox and
+   make them forge-completable by anyone who learns the CheckoutRequestID.
+   Pinning to UIDs fixed at deploy time is what makes the claim safe to act on. */
+const _DARAJA_SANDBOX_SELLER_UIDS = new Set(
+  String(process.env.DARAJA_SANDBOX_SELLER_UIDS || "")
+    .split(",").map(s => s.trim()).filter(Boolean)
+);
+
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
   { timeoutSeconds: 30, invoker: "public" },
@@ -4035,7 +4089,14 @@ exports.darajaSTKCallback = onRequest(
       /* Validate origin IP against Safaricom's published callback IP list.
          In development (non-prod) we allow bypass so ngrok tunnels work. */
       const callerIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
-      if (process.env.NODE_ENV !== "development" && !SAFARICOM_CALLBACK_IPS.has(callerIp)) {
+      const ipTrusted = process.env.NODE_ENV === "development"
+                     || SAFARICOM_CALLBACK_IPS.has(callerIp);
+
+      /* Untrusted IP and no sandbox lane configured — reject before touching
+         Firestore, exactly as before. Staying read-free on this branch also
+         keeps a public endpoint from being an amplifier for unauthenticated
+         reads: without it, anyone could force a document read per request. */
+      if (!ipTrusted && _DARAJA_SANDBOX_SELLER_UIDS.size === 0) {
         console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
         db.collection("auditLogs").add({
           type: "stk_callback_ip_rejected", ip: callerIp,
@@ -4047,7 +4108,12 @@ exports.darajaSTKCallback = onRequest(
       const body = req.body?.Body?.stkCallback;
       if (!body) return;
 
-      const checkoutId = body.CheckoutRequestID;
+      const checkoutId = String(body.CheckoutRequestID || "");
+      /* A caller-supplied document id containing "/" addresses a different
+         Firestore path entirely, and an empty one throws. Both are reachable by
+         an untrusted caller once the sandbox lane is open, so validate the id
+         before it is handed to .doc(). */
+      if (!checkoutId || checkoutId.length > 200 || checkoutId.includes("/")) return;
       const resultCode = body.ResultCode;
       const resultDesc = body.ResultDesc;
 
@@ -4059,6 +4125,33 @@ exports.darajaSTKCallback = onRequest(
         return;
       }
       const payData = paySnap.data();
+
+      /* Sandbox lane: an untrusted IP may settle ONLY a row that is explicitly
+         sandbox AND belongs to an explicitly enrolled sandbox seller. Anything
+         else is rejected on exactly the terms that applied before this lane
+         existed — same log line, same audit type. */
+      if (!ipTrusted) {
+        if (payData.env !== "sandbox"
+            || !_DARAJA_SANDBOX_SELLER_UIDS.has(payData.sellerUid)) {
+          console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
+          db.collection("auditLogs").add({
+            type: "stk_callback_ip_rejected", ip: callerIp, checkoutId,
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+          return;
+        }
+        console.warn(`[darajaSTKCallback] SANDBOX callback accepted from ${callerIp} for ${checkoutId}`);
+        db.collection("auditLogs").add({
+          type: "stk_callback_sandbox_accepted", ip: callerIp, checkoutId,
+          sellerUid: payData.sellerUid,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+
+      /* Sandbox money is not money. Read once here, used below to keep test
+         payments out of the seller-credit and financial-reporting paths. */
+      const _isSandbox = payData.env === "sandbox" || payData.isTest === true;
+
       if (payData.status === "completed" || payData.status === "failed") {
         console.log(`[darajaSTKCallback] Already processed: ${checkoutId} (${payData.status})`);
         return;
@@ -4140,6 +4233,12 @@ exports.darajaSTKCallback = onRequest(
           sellerName:  payData.sellerName || null,
           description: payData.description || null,
           status:      "completed",
+          /* Carried across from the posPayments row. sendTestSTKPush has always
+             stamped isTest there, but this record never copied it — so the
+             `if (data.isTest) return;` guard in onSellerPaymentCreated was
+             unreachable from this path and a KES 1 test booked a real
+             commission. Propagating the flag is what arms that guard. */
+          isTest:      _isSandbox,
           createdAt:   ts,
         };
         /* Deterministic ID — one credit per STK checkout request; idempotent by construction. */
@@ -4263,6 +4362,32 @@ exports.darajaSTKCallback = onRequest(
         }
       }
 
+      /* ── Payment-destination verification ─────────────────────────────────
+         A destination-test STK is the ONLY way a merchant Till/PayBill reaches
+         VERIFIED, and this callback is the only place that transition happens.
+         Deliberately server-side and callback-driven: an STK request being
+         ACCEPTED proves nothing — the customer may never enter a PIN — so
+         "the browser said it worked" can never activate a destination.
+
+         confirmVerified() performs the atomic swap (promote pending, retire the
+         old destination into history) and refuses if the CheckoutRequestID does
+         not match the test that was started. A failed result marks only the
+         ATTEMPT failed, leaving any existing verified destination collecting. */
+      if (payData.hub === "destination_test" && payData.sellerUid) {
+        try {
+          const _pd = require("./payment-destinations");
+          if (resultCode === 0) {
+            const r = await _pd.confirmVerified(payData.sellerUid, checkoutId);
+            console.log(`[destination] verify ${payData.sellerUid} swapped=${r.swapped} ${r.reason || ""}`);
+          } else {
+            await _pd.markFailed(payData.sellerUid, resultDesc);
+            console.log(`[destination] test FAILED ${payData.sellerUid}: ${resultDesc}`);
+          }
+        } catch (_dErr) {
+          console.error("[destination] verification threw:", _dErr && _dErr.message);
+        }
+      }
+
       /* Audit log */
       db.collection("auditLogs").add({
         type:       "mpesa_callback",
@@ -4301,7 +4426,12 @@ exports.darajaSTKCallback = onRequest(
         }
       } catch (_tlErr) { /* observability must never fail a payment */ }
 
-      if (resultCode === 0) {
+      /* Sandbox payments produce no invoice, receipt, journal entry or tax
+         record. No money moved, so booking paperwork against one would put
+         fabricated figures into production financial reporting — the exact
+         defect the UI Data Integrity rule exists to prevent, only in the
+         ledger rather than on screen. */
+      if (resultCode === 0 && !_isSandbox) {
         try {
           const _fin = require("./financial-engine");
           await _fin.recordConfirmedPayment({
@@ -4425,7 +4555,7 @@ exports.validateDarajaCredentials = onCall(
     try {
       const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
       /* Also verify timestamp/password generation */
-      const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+      const timestamp = _darajaTimestamp();
       Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
       await db.collection("auditLogs").add({
         action: "validateDarajaCredentials",
@@ -4490,7 +4620,7 @@ exports.sendTestSTKPush = onCall(
     }
 
     const { token, base } = await _darajaToken(darajaConsumerKey, darajaConsumerSecret, darajaEnv);
-    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+    const timestamp = _darajaTimestamp();
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
     const checkoutId = "TEST_" + uid.slice(0, 8) + "_" + Date.now();
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
@@ -4622,6 +4752,28 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
   };
 }
 
+/* ── 48-hour per-sale commission: which hubs it governs ────────────────────
+   ONLY marketplace product sales. Every other hub keeps monthly invoicing, and
+   subscriptions/advertising are contractual charges that were never per-sale
+   commission at all — sweeping them into a 48-hour deadline would invent a
+   payment obligation nobody agreed to.
+
+   Resolved through commission-config's own alias table rather than a second
+   list of hub names, so "pos", "shopping", "b2b", "product" and "products" all
+   land here exactly as they do for pricing. One vocabulary, one answer. */
+const COMMISSION_DUE_HOURS      = 48;
+const COMMISSION_REMINDER_HOURS = 46;   /* 2 hours before the deadline */
+function _is48hCommission(hub) {
+  try {
+    return require("./commission-config").categoryForHub(hub) === "marketplace";
+  } catch (_e) {
+    /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
+       Failing closed here means "bill it the old way", never "start a 48-hour
+       clock nobody can see". */
+    return false;
+  }
+}
+
 /* ── Auto-record commission when a seller payment is confirmed ── */
 exports.onSellerPaymentCreated = onDocumentCreated(
   "sellerPayments/{paymentId}",
@@ -4696,6 +4848,36 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         status: "pending",
         invoiceId: null,
         period,
+
+        /* ── BILLING MODEL — the migration cutoff, and the ONLY thing that
+              decides which collection system owns this row ──────────────────
+           Marketplace per-sale commission moved from MONTHLY invoicing to a
+           48-hour receivable. Both systems read commissionLedger, so a row that
+           did not say which model it belongs to would be billed twice: once by
+           generateMonthlyInvoices and once by the 48-hour sweep.
+
+           The cutoff is FIELD PRESENCE AT CREATION, deliberately not a date
+           comparison. Every row written before this change has no
+           `billingModel` and no `dueAt`:
+             • generateMonthlyInvoices skips only PER_SALE_48H, so historical
+               rows keep their monthly treatment untouched;
+             • the 48-hour sweep requires billingModel === PER_SALE_48H, so a
+               historical pending row can NEVER acquire a deadline or be judged
+               overdue retroactively.
+           A date cutoff would have done exactly that to every old pending row
+           the moment it shipped. */
+        billingModel: _is48hCommission(hub) ? "PER_SALE_48H" : "MONTHLY",
+        /* Absolute deadline, stamped once at creation and never recomputed —
+           a receivable whose due date can move is not a receivable. */
+        dueAt: _is48hCommission(hub)
+          ? admin.firestore.Timestamp.fromMillis(Date.now() + COMMISSION_DUE_HOURS * 3600000)
+          : null,
+        collectionStatus: _is48hCommission(hub) ? "DUE" : null,
+        penaltyKES: 0,
+        totalOutstanding: _is48hCommission(hub) ? totalOwed : null,
+        paidAt: null,
+        reminderSentAt: null,
+
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -5137,13 +5319,31 @@ exports.generateMonthlyInvoices = onSchedule(
       .where("period", "==", period)
       .get();
 
-    /* Group by seller */
+    /* Group by seller.
+
+       ── DOUBLE-BILLING GUARD ────────────────────────────────────────────────
+       This query selects on status+period only — it has no hub or category
+       filter, so before this guard it swept up EVERY pending row including the
+       marketplace commissions now owned by the 48-hour receivable. A seller
+       would have been billed for the same sale twice: once here on the 1st of
+       the month, once by the 48-hour sweep.
+
+       Filtered in code rather than in the query on purpose. A Firestore
+       `where('billingModel','!=','PER_SALE_48H')` EXCLUDES documents where the
+       field is absent — which is every historical row — so the query form would
+       have silently stopped invoicing all pre-migration commission. Field
+       presence is the cutoff, and absent means MONTHLY. */
     const bySellerMap = {};
+    let _skipped48h = 0;
     snap.forEach(d => {
       const data = d.data();
+      if (data.billingModel === "PER_SALE_48H") { _skipped48h++; return; }
       if (!bySellerMap[data.sellerUid]) bySellerMap[data.sellerUid] = [];
       bySellerMap[data.sellerUid].push({ id: d.id, ...data });
     });
+    if (_skipped48h) {
+      console.log(`[revenue] ${_skipped48h} marketplace row(s) skipped — owned by the 48-hour receivable, not monthly invoicing.`);
+    }
 
     const batch  = db.batch();
     let invoiceCount = 0;
@@ -12681,6 +12881,19 @@ exports.reconcileInvitations  = _adminInvites.reconcileInvitations;
 const _c2b = require("./mpesa-c2b");
 exports.mpesaC2BValidation   = _c2b.mpesaC2BValidation;
 exports.mpesaC2BConfirmation = _c2b.mpesaC2BConfirmation;
+
+/* ── Merchant payment destinations (functions/payment-destinations.js) ──
+   Re-exported BY NAME, per the deploy contract: a function that is not named
+   here is not deployed, however complete its module is. */
+const _pdest = require("./payment-destinations");
+exports.getPaymentDestination  = _pdest.getPaymentDestination;
+exports.savePaymentDestination = _pdest.savePaymentDestination;
+
+/* ── 48-hour commission receivable (functions/commission-collection.js) ── */
+const _ccol = require("./commission-collection");
+exports.sweepCommissionDue   = _ccol.sweepCommissionDue;
+exports.getCommissionBalance = _ccol.getCommissionBalance;
+exports.getSellerRestriction = _ccol.getSellerRestriction;
 
 /* ── Healthcare hub (functions/healthcare-hub.js) ──
    These 15 callables existed in the repo but were never required or

@@ -509,13 +509,32 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <h2 style="margin-bottom:16px;">🚀 Upload New Product</h2>
 
+        <!-- Every control below carries a VISIBLE <label for>. These fields were
+             placeholder-only: the placeholder is the sole field identification, it
+             disappears the moment the merchant types, and it is not a label to a
+             screen reader. -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;" class="upload-name-price-row">
-          <input type="text" id="productName" placeholder="Product Name" style="margin:0;">
-          <input type="number" id="productPrice" placeholder="Price (KES)" style="margin:0;">
+          <div class="sk-field">
+            <label class="sk-label" for="productName">Product name<span class="req">*</span></label>
+            <input type="text" id="productName" placeholder="e.g. Samsung A54 128GB" style="margin:0;" required>
+            <div class="sk-error" id="err-productName">⚠ Enter a product name</div>
+          </div>
+          <div class="sk-field">
+            <label class="sk-label" for="productPrice">Price (KES)<span class="req">*</span></label>
+            <input type="number" id="productPrice" placeholder="0.00" min="0" step="0.01" style="margin:0;" required>
+            <div class="sk-error" id="err-productPrice">⚠ Enter a price greater than 0</div>
+          </div>
         </div>
         <style>@media(max-width:480px){.upload-name-price-row{grid-template-columns:1fr!important;}}</style>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <!-- 2-col grid. #adultCategoryNote and #ownershipVerifyBox are ALSO children of
+             it, so once either unhides it takes a single 1fr cell and squeezes a full
+             disclosure panel into half the row. Both are spanned to the full width in
+             .upload-cat-loc-row below; they are display:none by default, which is why
+             this only ever showed up on an age-restricted or high-value category. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;" class="upload-cat-loc-row">
+        <div class="sk-field">
+        <label class="sk-label" for="productCategory">Category<span class="req">*</span></label>
         <select id="productCategory" style="margin:0;">
           <optgroup label="🛍️ Fashion & Style">
             <option value="fashion">👕 Clothing & Fashion</option>
@@ -657,6 +676,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="adult">🔞 Adult Products &amp; Novelties</option>
           </optgroup>
         </select>
+        <div class="sk-error" id="err-productCategory">⚠ Choose a category</div>
+        </div><!-- /.sk-field category -->
 
         <div id="adultCategoryNote" class="adult-category-note" style="display:none;">
             ⚠️ This is an age-restricted product. Buyers will be required to verify they are 18+ before purchasing. You confirm you are legally permitted to sell this product in Kenya.
@@ -722,6 +743,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <div style="font-size:10px;color:rgba(255,100,0,0.6);margin-top:8px;">⚠️ Your listing will be <strong>held for admin review</strong> before going live. Approved listings get a ✅ Verified Owner badge. False declarations will result in account suspension and police reporting.</div>
         </div>
 
+        <div class="sk-field">
+        <label class="sk-label" for="productLocation">Location<span class="req">*</span></label>
         <select id="productLocation" style="margin:0;">
             <option value="nairobi">📍 Nairobi</option>
             <option value="mombasa">📍 Mombasa</option>
@@ -746,7 +769,9 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="kenya">🌍 All Kenya</option>
             <option value="remote">💻 Online / Remote</option>
             <option value="worldwide">🌐 Worldwide</option>
-        </select></div><!-- end cat+location grid -->
+        </select>
+        </div><!-- /.sk-field location -->
+        </div><!-- end cat+location grid -->
 
         <!-- Category-dependent variants (colours, sizes, storage, pack size …).
              Rendered by SokoniProductSchema.renderVariants() from the selected
@@ -756,7 +781,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <div style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.05em;">Description <span style="color:rgba(255,255,255,0.25);font-weight:400;text-transform:none;">(optional)</span></label>
+                <label class="sk-label" for="productDescription" style="margin-bottom:0;">Description <span class="opt">(optional)</span></label>
                 <button type="button" id="aiWriteBtn" onclick="quickAIDesc(this)" title="Generate with AI">
                     ✨ AI Write
                 </button>
@@ -765,7 +790,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         </div>
 
         <div id="kebsField" style="margin-bottom:10px;">
-            <input type="text" id="kebsCert" placeholder="KEBS Cert No. (optional — e.g. KS EAS 67-3)" maxlength="40" style="margin:0;">
+            <label class="sk-label" for="kebsCert">KEBS certificate no. <span class="opt">(optional)</span></label>
+            <input type="text" id="kebsCert" placeholder="e.g. KS EAS 67-3" maxlength="40" style="margin:0;">
             <div class="kebs-notice" id="kebsNotice" style="display:none;">
                 🏅 <strong>KEBS Recommended:</strong> Optional — adds a verified badge. <a href="https://www.kebs.org" target="_blank" style="color:#71ff00;">kebs.org</a>
             </div>
@@ -889,7 +915,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <!-- Photo Upload — Premium mobile touch zone -->
         <div style="margin-bottom:12px;">
-          <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:8px;">Product Photos * <span style="color:#71ff00;font-size:10px;">✨ AI enhanced · up to 5 views</span></label>
+          <label class="sk-label" for="productImageInput">Product images<span class="req">*</span> <span style="color:#71ff00;font-size:10px;font-weight:700;">✨ AI enhanced · up to 5 views</span></label>
           <div id="productImagesGrid" style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;min-height:72px;align-items:center;"></div>
           <input type="file" id="productImageInput" accept="image/*" multiple style="display:none;" onchange="addProductImages(this.files); this.value=''">
           <button type="button" onclick="document.getElementById('productImageInput').click()"
@@ -901,7 +927,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
         <!-- Optional Product Video -->
         <div style="margin-bottom:8px;margin-top:12px;">
-          <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:6px;">Product Video (optional) <span style="color:#00aaff;font-size:10px;">🎥 Auto-enhanced · max 50MB</span></label>
+          <label class="sk-label" for="productVideoFile">Product video <span class="opt">(optional)</span> <span style="color:#00aaff;font-size:10px;font-weight:700;">🎥 Auto-enhanced · max 50MB</span></label>
           <input type="file" id="productVideoFile" accept="video/*" onchange="handleProductVideoUpload(event)" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px dashed rgba(0,170,255,0.25);border-radius:12px;color:rgba(255,255,255,0.6);font-size:16px;cursor:pointer;font-family:inherit;">
           <div id="productVideoPreviewArea" style="display:none;margin-top:10px;position:relative;border-radius:12px;overflow:hidden;text-align:center;">
             <video id="productVideoPreview" muted playsinline controls style="max-width:100%;width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;background:#000;"></video>
@@ -911,9 +937,17 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           <input type="hidden" id="productVideoPoster">
         </div>
 
-        <button type="button" onclick="addProduct()">
-            🚀 Upload Product
-        </button>
+        <!-- ONE submit action. The brief also asked for "Save Draft"; it is deliberately
+             absent. `draft` is a status the visibility engine already HIDES
+             (sokoni-product-visibility.js), but no write path in addProduct() ever
+             creates one — so the button would either be dead or would need a new
+             product write. That is business logic, not presentation, and it is not
+             something to slip into a UI commit during the RC freeze. -->
+        <div class="sk-actions">
+            <button type="button" onclick="addProduct()">
+                🚀 Publish Product
+            </button>
+        </div>
 
     </div>
 
@@ -1540,7 +1574,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:14px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;">
           ✅ By submitting, you confirm all information is accurate. Sokoni will review your application within 24–48 hours. False information will result in permanent suspension.
         </div>
-        <button type="button" class="flash-go-btn" style="background:linear-gradient(135deg,#0066cc,#00aaff);" onclick="submitVerification()">
+
+        <!-- Seller Agreement acknowledgement. The binding record is written on the
+             `applications` document by the business-registration flow and enforced at
+             approval by applicationDecide; this screen states the same terms so a
+             seller cannot reach submission without having been shown them. -->
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;margin-bottom:12px;font-size:12.5px;color:rgba(255,255,255,0.72);line-height:1.55;">
+          <div style="font-weight:800;color:#fff;margin-bottom:8px;">Seller Agreement — Commission: 5% per completed sale</div>
+          <p style="margin:0 0 8px;">SOKONI charges a <strong>5% commission</strong> on each completed marketplace sale, subject to a <strong>minimum commission of KES 10 per sale</strong>.</p>
+          <p style="margin:0;">Customer payments are sent directly to your configured payment destination. SOKONI does <strong>not</strong> deduct this commission from the customer's payment; it is recorded as payable to SOKONI under the <a href="/seller-terms" target="_blank" rel="noopener" style="color:#71ff00;">Seller Agreement</a>.</p>
+        </div>
+        <label for="verifyAgree" style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.85);">
+          <input type="checkbox" id="verifyAgree" onchange="syncVerifyAgree()" style="margin-top:2px;width:18px;height:18px;flex-shrink:0;cursor:pointer;">
+          <span>I have read and agree to the SOKONI Seller Agreement and the 5% per-sale commission.</span>
+        </label>
+
+        <button type="button" id="verifySubmitBtn" class="flash-go-btn" disabled aria-disabled="true" style="background:linear-gradient(135deg,#0066cc,#00aaff);opacity:.5;cursor:not-allowed;" onclick="submitVerification()">
           📤 Submit Verification Application
         </button>
       </div>

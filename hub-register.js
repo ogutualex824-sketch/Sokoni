@@ -250,7 +250,43 @@
         '</div>' +
       '</div>' +
 
-      '<button class="sreg-btn" onclick="HubRegister._submit()">✅ Register My Business</button>' +
+      /* ── Payment Setup ───────────────────────────────────────────────────
+         Captured with the application so an approved merchant already has a
+         destination on file. It is recorded as SUBMITTED CONFIGURATION, never
+         as verified: the binding record is written server-side to
+         paymentDestinations after approval, and only a Daraja test can verify
+         it. Nothing here may imply money is already routed. */
+      '<div class="sreg-label" style="margin-top:18px;">Payment destination</div>' +
+      '<div class="sreg-hint" style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px;line-height:1.5;">' +
+        'Where your customers\' M-PESA payments will be sent. This is <strong>your own</strong> account — ' +
+        'SOKONI does not hold your sale proceeds.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;" role="radiogroup" aria-label="Destination type">' +
+        '<button type="button" role="radio" aria-checked="true" id="sreg_dt_TILL" class="sreg-plan sel" style="flex:1 1 140px;min-width:0;min-height:44px;" onclick="HubRegister._selectDest(\'TILL\')">Buy Goods Till</button>' +
+        '<button type="button" role="radio" aria-checked="false" id="sreg_dt_PAYBILL" class="sreg-plan" style="flex:1 1 140px;min-width:0;min-height:44px;" onclick="HubRegister._selectDest(\'PAYBILL\')">PayBill</button>' +
+      '</div>' +
+      '<input id="sreg_destnum" class="sreg-input" inputmode="numeric" maxlength="7" placeholder="Till / PayBill number (5–7 digits)">' +
+      '<input id="sreg_destname" class="sreg-input" style="margin-top:8px;" maxlength="120" placeholder="Business / account name on M-PESA">' +
+      '<div class="sreg-hint" style="font-size:11.5px;color:rgba(255,255,255,.42);margin-top:8px;line-height:1.5;">' +
+        'Saved securely. Verification by test payment is activated once SOKONI\'s payment-provider ' +
+        'authorization completes — you do not need to do anything.</div>' +
+
+      /* ── Seller Agreement acknowledgement ────────────────────────────────
+         The commercial obligation is disclosed BEFORE approval, not after, and
+         the acknowledgement is written to the application document so it is
+         server-verifiable — applicationDecide refuses to approve without it.
+         The checkbox is a convenience gate; the server check is the authority. */
+      '<div class="sreg-label" style="margin-top:18px;">Seller Agreement</div>' +
+      '<div id="sreg_agreement" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;font-size:12.5px;line-height:1.55;color:rgba(255,255,255,0.72);">' +
+        '<p style="margin:0 0 8px;"><strong style="color:#fff;">Commission: 5% per completed sale</strong></p>' +
+        '<p style="margin:0 0 8px;">SOKONI charges a <strong>5% commission</strong> on each completed marketplace sale, subject to a <strong>minimum commission of KES 10 per sale</strong>.</p>' +
+        '<p style="margin:0;">Customer payments are sent directly to your configured payment destination. SOKONI does <strong>not</strong> deduct this commission from the customer\'s payment; the commission is recorded as payable to SOKONI under the ' +
+        '<a href="/seller-terms" target="_blank" rel="noopener" style="color:#71ff00;">Seller Agreement</a>.</p>' +
+      '</div>' +
+      '<label for="sreg_agree" style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.85);">' +
+        '<input type="checkbox" id="sreg_agree" onchange="HubRegister._syncAgree()" style="margin-top:2px;width:18px;height:18px;flex-shrink:0;cursor:pointer;">' +
+        '<span>I have read and agree to the SOKONI Seller Agreement and the 5% per-sale commission.</span>' +
+      '</label>' +
+      '<button class="sreg-btn" id="sreg_submit" disabled aria-disabled="true" style="opacity:.5;cursor:not-allowed;" onclick="HubRegister._submit()">✅ Register My Business</button>' +
       '<div id="sreg_msg" class="sreg-msg"></div>';
 
     window._sokoniRegPlan = 'free';
@@ -263,6 +299,37 @@
       if (el) el.classList.toggle('sel', p === plan);
     });
     window._sokoniRegPlan = plan;
+  }
+
+  /* ── Seller Agreement version ─────────────────────────────────────────────
+     Bump this whenever the commercial terms change, so an acknowledgement can
+     be tied to the exact text the seller saw. A bare `true` cannot answer
+     "agreed to WHAT?" years later, which is the question a dispute asks. */
+  var AGREEMENT_VERSION = '2026-08-25-commission-5pct';
+
+  /* Keep the submit button in step with the acknowledgement. This is a
+     convenience gate only — _submit re-checks, and applicationDecide refuses
+     approval server-side, because a disabled attribute is not an authority. */
+  /* Destination type selector for the application step. */
+  function _selectDest(t) {
+    window._sokoniRegDest = (t === 'PAYBILL') ? 'PAYBILL' : 'TILL';
+    ['TILL', 'PAYBILL'].forEach(function (k) {
+      var el = document.getElementById('sreg_dt_' + k);
+      if (el) { el.classList.toggle('sel', k === window._sokoniRegDest); el.setAttribute('aria-checked', String(k === window._sokoniRegDest)); }
+    });
+    var num = document.getElementById('sreg_destnum');
+    if (num) num.placeholder = (window._sokoniRegDest === 'PAYBILL' ? 'PayBill' : 'Till') + ' number (5–7 digits)';
+  }
+
+  function _syncAgree() {
+    var cb  = document.getElementById('sreg_agree');
+    var btn = document.getElementById('sreg_submit');
+    if (!btn) return;
+    var ok = !!(cb && cb.checked);
+    btn.disabled = !ok;
+    btn.setAttribute('aria-disabled', String(!ok));
+    btn.style.opacity = ok ? '' : '.5';
+    btn.style.cursor  = ok ? '' : 'not-allowed';
   }
 
   /* ── Validate Kenyan phone ───────────────────────────────── */
@@ -351,6 +418,28 @@
     if (!loc)   { _err('Enter your location.'); return; }
     if (!desc)  { _err('Add a brief description.'); return; }
 
+    /* Re-checked here, not just on the button: a disabled attribute is a hint to
+       a person, not a control. The binding check is server-side in
+       applicationDecide, which refuses approval when the acknowledgement is
+       absent or false. */
+    /* Payment destination: optional at application time (a merchant may not
+       have their Till to hand), but if given it must be well-formed. Accepting
+       a malformed number here would produce an application that looks complete
+       and a destination that can never verify. */
+    var destNum  = (document.getElementById('sreg_destnum')?.value  || '').replace(/\D/g, '');
+    var destName = (document.getElementById('sreg_destname')?.value || '').trim().slice(0, 120);
+    if (destNum && !/^\d{5,7}$/.test(destNum)) {
+      _err('Enter a valid M-PESA Till or PayBill number (5–7 digits), or leave it blank for now.');
+      return;
+    }
+    if (destNum && !destName) { _err('Add the business / account name on your M-PESA account.'); return; }
+
+    var agreeEl = document.getElementById('sreg_agree');
+    if (!agreeEl || !agreeEl.checked) {
+      _err('Please read and accept the Seller Agreement and the 5% per-sale commission.');
+      return;
+    }
+
     if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'rgba(255,255,255,0.4)'; }
 
     var catObj = CATS.find(function (c) { return c.id === cat; }) || { label: cat, emoji: '🏢', hub: 'other' };
@@ -398,6 +487,27 @@
       status:      'pending',
       type:        'business',
       uid:         uid,
+      /* ── Seller Agreement acknowledgement (server-verifiable) ──────────────
+         Recorded on the application itself so approval can be gated on it and
+         so the record survives the browser that made it. `agreementAcceptedAt`
+         is the client clock here because this document is written directly by
+         the client under firestore.rules; applicationDecide stamps a SERVER
+         timestamp (agreementVerifiedAt) at approval, which is the one to trust
+         for anything legal. */
+      agreementAccepted:   true,
+      agreementVersion:    AGREEMENT_VERSION,
+      agreementAcceptedAt: new Date().toISOString(),
+
+      /* ── Payment destination AS SUBMITTED ─────────────────────────────────
+         Deliberately namespaced `requested*` and carrying no status field. This
+         is what the applicant TYPED, not a configured destination and certainly
+         not a verified one — the authoritative record is written server-side to
+         paymentDestinations, which no client can write. Naming it `destination`
+         with a status here would put a merchant-authored verification claim
+         into a document the merchant controls. */
+      requestedPaymentType:   (window._sokoniRegDest === 'PAYBILL' ? 'PAYBILL' : 'TILL'),
+      requestedPaymentNumber: destNum,
+      requestedPaymentName:   destName,
       submittedAt: new Date().toISOString(),
       createdAt:   Date.now()
     };
@@ -451,7 +561,10 @@
       document.body.style.overflow = '';
     },
     _selectPlan: _selectPlan,
-    _submit:     _submit
+    _syncAgree:  _syncAgree,
+    _selectDest: _selectDest,
+    _submit:     _submit,
+    AGREEMENT_VERSION: AGREEMENT_VERSION
   };
 
   /* Escape key to close */

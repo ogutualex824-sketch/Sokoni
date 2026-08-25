@@ -103,6 +103,93 @@
     '@keyframes mstSpin{to{transform:rotate(360deg)}}',
     '@media (prefers-reduced-motion:reduce){.mst-spin{animation:none}}',
     '@media (min-width:821px){.mst-body{max-width:760px;margin:0 auto;width:100%}}',
+
+    /* ── Payment destination ────────────────────────────────────────────────
+       Mobile-first and authored for 320px, not shrunk down to it. Every rule
+       that could overflow is constrained: min-width:0 on flex children (a long
+       account name otherwise forces the row wider than the viewport), and the
+       segmented control wraps rather than squeezing its labels. */
+    '.mst-pd{display:flex;flex-direction:column;gap:0}',
+    '.mst-pd .mst-h{font-size:16px;font-weight:800;color:var(--txt);margin:2px 0 6px}',
+    '.mst-pd .mst-p{font-size:13px;line-height:1.55;color:var(--txt2);margin:0 0 14px}',
+    '.mst-pd-label{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;',
+      'color:var(--txt2);margin:18px 0 8px}',
+    '.mst-pd-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.03);margin-bottom:10px}',
+    '.mst-pd-card.live{border-color:rgba(113,255,0,.35);background:rgba(113,255,0,.05)}',
+    '.mst-pd-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}',
+    '.mst-pd-type{font-size:12px;font-weight:700;color:var(--txt2);min-width:0}',
+    '.mst-pd-badge{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;',
+      'padding:4px 9px;border-radius:999px;white-space:nowrap;flex:0 0 auto}',
+    '.mst-pd-badge.ok{background:rgba(113,255,0,.14);color:#8dff3c}',
+    '.mst-pd-badge.warn{background:rgba(255,180,0,.14);color:#ffc74d}',
+    '.mst-pd-badge.bad{background:rgba(255,68,68,.14);color:#ff7b7b}',
+    '.mst-pd-badge.mut{background:rgba(255,255,255,.07);color:var(--txt2)}',
+    /* Tabular figures so a Till number never reflows as it is typed. */
+    '.mst-pd-num{font-size:24px;font-weight:800;color:var(--txt);margin:8px 0 2px;',
+      'font-variant-numeric:tabular-nums;letter-spacing:1px;overflow-wrap:anywhere}',
+    '.mst-pd-sub{font-size:12px;color:var(--txt2);overflow-wrap:anywhere}',
+    '.mst-pd-seg{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}',
+    '.mst-seg{flex:1 1 140px;min-width:0;min-height:44px;padding:11px 12px;border-radius:12px;cursor:pointer;',
+      'border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--txt2);',
+      'font-size:13px;font-weight:700}',
+    '.mst-seg.on{border-color:var(--acc);background:rgba(113,255,0,.10);color:var(--txt)}',
+    '.mst-seg:focus-visible,.mst-in:focus-visible{outline:2px solid var(--acc);outline-offset:2px}',
+    '.mst-lab{display:block;font-size:12px;font-weight:700;color:var(--txt2);margin:12px 0 6px}',
+    '.mst-in{display:block;width:100%;box-sizing:border-box;min-height:48px;padding:12px 14px;',
+      'border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);',
+      'color:var(--txt);font-size:16px;font-variant-numeric:tabular-nums}',   /* 16px: iOS zooms below it */
+    '.mst-note{border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.55;',
+      'background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--txt2);margin:10px 0}',
+    '.mst-note.warn{background:rgba(255,180,0,.07);border-color:rgba(255,180,0,.28)}',
+    '.mst-note.bad{background:rgba(255,68,68,.07);border-color:rgba(255,68,68,.28);color:#ffb3b3}',
+    '.mst-pd .mst-btn.wide{width:100%;margin-top:14px}',
+    '.mst-pd .mst-btn[disabled]{opacity:.45;cursor:not-allowed}',
+    /* Tablet and up: the two type choices sit side by side comfortably. */
+    '@media (min-width:600px){.mst-seg{flex:1 1 0}}',
+
+    /* ── Commission & penalties ─────────────────────────────────────────────
+       The money grid stacks at 320px and only goes multi-column when there is
+       genuinely room — auto-fit with a min() floor, so a KSh figure never gets
+       squeezed narrower than it can render. */
+    '.mst-cb{display:block}',
+    '.mst-cb-grid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));margin-bottom:12px}',
+    '.mst-cb-cell{border:1px solid var(--line);border-radius:14px;padding:12px 13px;background:rgba(255,255,255,.03);min-width:0}',
+    '.mst-cb-cell .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt3)}',
+    '.mst-cb-cell .v{font-size:19px;font-weight:900;color:var(--txt);margin-top:4px;',
+      'font-variant-numeric:tabular-nums;overflow-wrap:anywhere}',
+    '.mst-cb-cell.tot{border-color:rgba(113,255,0,.35);background:rgba(113,255,0,.06)}',
+    '.mst-cb-cell.tot .v{color:var(--acc)}',
+    '.mst-cb-meta{display:flex;flex-direction:column;gap:8px;padding:12px 13px;border:1px solid var(--line);',
+      'border-radius:14px;background:rgba(255,255,255,.03);margin-bottom:12px}',
+    '.mst-cb-meta>div{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}',
+    '.mst-cb-meta .k{font-size:11.5px;color:var(--txt3);min-width:0}',
+    '.mst-cb-meta .v{font-size:12.5px;font-weight:700;color:var(--txt);text-align:right;overflow-wrap:anywhere}',
+    /* Itemised sales. A grid, not a table element, so the columns can restack
+       on a narrow phone without a horizontal scrollbar. */
+    '.mst-cb-table{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}',
+    '.mst-cb-tr{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:8px;',
+      'padding:11px 13px;border-top:1px solid var(--line);align-items:baseline}',
+    '.mst-cb-tr:first-child{border-top:none}',
+    '.mst-cb-tr.head{background:rgba(255,255,255,.04);font-size:10px;text-transform:uppercase;',
+      'letter-spacing:.05em;color:var(--txt3);font-weight:800}',
+    '.mst-cb-tr .ref{font-size:12.5px;font-weight:700;color:var(--txt);min-width:0;overflow-wrap:anywhere}',
+    '.mst-cb-tr .due{font-size:11px;color:var(--txt3);min-width:0;overflow-wrap:anywhere}',
+    '.mst-cb-tr .amt{font-size:13px;font-weight:800;color:var(--txt);text-align:right;white-space:nowrap;',
+      'font-variant-numeric:tabular-nums}',
+    '.mst-cb-tr .amt .pen{display:block;font-size:10.5px;font-style:normal;color:#ff9b9b;font-weight:700}',
+    '.mst-cb-st{display:block;font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;',
+      'letter-spacing:.04em;margin-top:3px}',
+    '.mst-cb-st.ok{color:#8dff3c}.mst-cb-st.warn{color:#ffc74d}',
+    '.mst-cb-st.bad{color:#ff7b7b}.mst-cb-st.mut{color:var(--txt3)}',
+    '.mst-cb-tr.more{color:var(--txt3);font-size:11.5px;display:block}',
+    '.mst-note.ok{background:rgba(113,255,0,.07);border-color:rgba(113,255,0,.28);color:#a9ff6d}',
+    /* At 320px the "Due" column has nowhere useful to go — fold it under the
+       reference rather than letting three columns fight over 292 usable pixels. */
+    '@media (max-width:359px){',
+      '.mst-cb-tr{grid-template-columns:minmax(0,1fr) auto}',
+      '.mst-cb-tr .due{grid-column:1;font-size:10.5px}',
+      '.mst-cb-tr.head span:nth-child(2){display:none}',
+    '}',
   ].join('');
 
   function injectCSS(doc) {
@@ -190,6 +277,302 @@
       }).catch(function () {});
     }
 
+    /* ══ PAYMENT DESTINATION ═══════════════════════════════════════════════
+       Where this merchant's customers pay: their own M-PESA Till or PayBill.
+
+       EVERY status shown here comes from the SERVER. Nothing in this file may
+       render VERIFIED from local state — a merchant who could talk their own
+       browser into showing "Verified" would believe money was flowing to a
+       destination nobody tested. `paymentDestinations` is CF-write-only for the
+       same reason; this UI is a window onto that document, never an author of
+       it. */
+    var PD = {
+      loaded: false, busy: false, err: null,
+      status: 'NOT_CONFIGURED', active: null, pending: null,
+      productionAuthorized: false, lastVerifiedAt: null, lastFailureReason: null,
+      draftType: 'TILL', draftNumber: '', draftName: '',
+    };
+
+    function loadPayments() {
+      if (typeof ctx.callPaymentDestination !== 'function') { PD.loaded = true; paint(); return; }
+      PD.err = null;
+      return ctx.callPaymentDestination({}).then(function (r) {
+        var d = (r && r.data) || {};
+        PD.loaded = true;
+        PD.status = d.status || 'NOT_CONFIGURED';
+        PD.active = d.activeDestination || null;
+        PD.pending = d.pending || null;
+        PD.productionAuthorized = d.productionAuthorized === true;
+        PD.lastVerifiedAt = d.lastVerifiedAt || null;
+        PD.lastFailureReason = d.lastFailureReason || null;
+        /* Seed the form from whatever is being changed, else from the live one. */
+        var seed = PD.pending || PD.active;
+        if (seed && !PD.draftNumber) {
+          PD.draftType = seed.destinationType || 'TILL';
+          PD.draftNumber = seed.destinationNumber || '';
+          PD.draftName = seed.accountName || '';
+        }
+        if (S.tab === 'payments') paint();
+      }).catch(function (e) {
+        PD.loaded = true;
+        PD.err = (e && e.message) || 'Your payment settings could not be loaded.';
+        if (S.tab === 'payments') paint();
+      });
+    }
+
+    function savePayments() {
+      if (typeof ctx.callSavePaymentDestination !== 'function') return;
+      PD.busy = true; PD.err = null; paint();
+      ctx.callSavePaymentDestination({
+        destinationType: PD.draftType,
+        destinationNumber: PD.draftNumber,
+        accountName: PD.draftName,
+      }).then(function () {
+        PD.busy = false;
+        toast('Payment destination saved.', 'ok');
+        return loadPayments();
+      }).catch(function (e) {
+        PD.busy = false;
+        PD.err = (e && e.message) || 'Could not save your payment destination.';
+        paint();
+      });
+    }
+
+    var PD_LABEL = {
+      NOT_CONFIGURED: 'Not configured',
+      PENDING_TEST:   'Awaiting verification',
+      TESTING:        'Verifying…',
+      VERIFIED:       'Verified',
+      FAILED:         'Verification failed',
+    };
+    var PD_TONE = {
+      NOT_CONFIGURED: 'mut', PENDING_TEST: 'warn', TESTING: 'warn',
+      VERIFIED: 'ok', FAILED: 'bad',
+    };
+
+    function destCard(d, isActive) {
+      if (!d) return '';
+      var st = d.status || (isActive ? 'VERIFIED' : 'PENDING_TEST');
+      return '<div class="mst-pd-card' + (isActive ? ' live' : '') + '">' +
+        '<div class="mst-pd-row">' +
+          '<span class="mst-pd-type">' + esc(d.destinationType === 'PAYBILL' ? 'M-PESA PayBill' : 'M-PESA Till') + '</span>' +
+          '<span class="mst-pd-badge ' + (PD_TONE[st] || 'mut') + '">' + esc(PD_LABEL[st] || st) + '</span>' +
+        '</div>' +
+        '<div class="mst-pd-num">' + esc(d.destinationNumber || '—') + '</div>' +
+        '<div class="mst-pd-sub">' + esc(d.accountName || '') +
+          (isActive ? ' · <strong>Currently collecting</strong>' : '') + '</div>' +
+      '</div>';
+    }
+
+    function paymentsHTML() {
+      if (!PD.loaded) {
+        return '<div class="mst-body"><div class="sk-line" style="width:64%"></div>' +
+               '<div class="sk-line" style="width:44%"></div></div>';
+      }
+
+      var h = '<div class="mst-body mst-pd">';
+
+      h += '<div class="mst-h">Payment destination</div>' +
+           '<p class="mst-p">Customer payments go <strong>directly</strong> to your own M-PESA account. ' +
+           'SOKONI does not hold your sale proceeds — its 5% commission (minimum KES 10 per sale) is billed to you separately.</p>';
+
+      if (PD.err) h += '<div class="mst-note bad">' + esc(PD.err) + '</div>';
+
+      if (PD.active) h += destCard(PD.active, true);
+
+      /* A change in flight. Stating plainly that the old one still collects is
+         the difference between a calm change and a merchant who thinks their
+         payments have stopped. */
+      if (PD.pending) {
+        h += '<div class="mst-pd-label">Replacement — not yet active</div>' + destCard(PD.pending, false);
+        if (PD.active) {
+          h += '<div class="mst-note">Your existing destination keeps collecting until the new one is verified.</div>';
+        }
+      }
+      if (!PD.active && !PD.pending) {
+        h += '<div class="mst-note">No payment destination configured yet.</div>';
+      }
+      if (PD.lastFailureReason) {
+        h += '<div class="mst-note bad">Last verification attempt failed: ' + esc(PD.lastFailureReason) + '</div>';
+      }
+
+      /* Form */
+      h += '<div class="mst-pd-label">' + (PD.active ? 'Change destination' : 'Add your destination') + '</div>' +
+        '<div class="mst-pd-seg" role="radiogroup" aria-label="Destination type">' +
+          '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'TILL' ? 'true' : 'false') + '" class="mst-seg' + (PD.draftType === 'TILL' ? ' on' : '') + '" data-act="pdtype" data-t="TILL">Buy Goods Till</button>' +
+          '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'PAYBILL' ? 'true' : 'false') + '" class="mst-seg' + (PD.draftType === 'PAYBILL' ? ' on' : '') + '" data-act="pdtype" data-t="PAYBILL">PayBill</button>' +
+        '</div>' +
+        '<label class="mst-lab" for="pdNum">' + (PD.draftType === 'PAYBILL' ? 'PayBill number' : 'Till number') + '</label>' +
+        '<input id="pdNum" class="mst-in" inputmode="numeric" autocomplete="off" maxlength="7" ' +
+          'placeholder="e.g. 123456" value="' + esc(PD.draftNumber) + '" data-act="pdnum">' +
+        '<label class="mst-lab" for="pdName">Business / account name</label>' +
+        '<input id="pdName" class="mst-in" maxlength="120" placeholder="Name shown on your M-PESA account" ' +
+          'value="' + esc(PD.draftName) + '" data-act="pdname">';
+
+      var canSave = /^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy;
+      h += '<button class="mst-btn solid wide" data-act="pdsave"' + (canSave ? '' : ' disabled') + '>' +
+             (PD.busy ? 'Saving…' : 'Save payment destination') + '</button>';
+
+      /* ── The test button, and the truth about why it is off ──────────────
+         Disabled because the BACKEND refuses to route live customer money to a
+         merchant destination until Safaricom authorises the multi-merchant
+         arrangement. Saying "coming soon" would be a lie; saying nothing would
+         leave a dead button. The merchant is told exactly what is pending. */
+      if (!PD.productionAuthorized) {
+        h += '<div class="mst-note warn" role="status">' +
+               '<strong>Payment verification unavailable</strong><br>' +
+               'Your M-PESA payment destination is saved securely. SOKONI is awaiting payment-provider ' +
+               'authorization before verification can be activated. You do not need to do anything — ' +
+               'we will enable the test as soon as it is available.' +
+             '</div>' +
+             '<button class="mst-btn wide" disabled aria-disabled="true" ' +
+               'title="Awaiting payment-provider authorization">Test payment — unavailable</button>';
+      } else {
+        h += '<button class="mst-btn wide" data-act="pdtest"' + (PD.pending ? '' : ' disabled') + '>' +
+               'Send test payment</button>';
+      }
+
+      return h + balanceHTML() + '</div>';
+    }
+
+    /* ══ COMMISSION & PENALTIES ════════════════════════════════════════════
+       What this merchant owes SOKONI: 5% of each completed sale, minimum KES 10,
+       due 48 hours after the sale.
+
+       EVERY FIGURE IS RENDERED FROM THE SERVER RESPONSE. This surface never adds
+       up the line items to produce a total, never derives a penalty, and never
+       decides whether an account is restricted. Those are financial facts owned
+       by commissionLedger and sellerRestrictions, both `allow write: if false`.
+       A client that computed its own total would eventually disagree with the
+       ledger, and the merchant would be looking at a number nobody will bill. */
+    var CB = {
+      loaded: false, busy: false, err: null,
+      commissionKES: null, penaltyKES: null, totalOutstanding: null,
+      items: [], restricted: false, penaltyPolicy: null,
+    };
+
+    function loadBalance() {
+      if (typeof ctx.callCommissionBalance !== 'function') { CB.loaded = true; return; }
+      CB.err = null;
+      return ctx.callCommissionBalance({}).then(function (r) {
+        var d = (r && r.data) || {};
+        CB.loaded = true;
+        /* null, not 0, when the server did not say. A missing figure rendered as
+           zero is an invented balance — the merchant would believe they owe
+           nothing. Unknown shows as an em dash. */
+        CB.commissionKES    = (typeof d.commissionKES === 'number') ? d.commissionKES : null;
+        CB.penaltyKES       = (typeof d.penaltyKES === 'number') ? d.penaltyKES : null;
+        CB.totalOutstanding = (typeof d.totalOutstanding === 'number') ? d.totalOutstanding : null;
+        CB.items            = Array.isArray(d.items) ? d.items : [];
+        CB.restricted       = d.restricted === true;
+        CB.penaltyPolicy    = d.penaltyPolicy || null;
+        if (S.tab === 'payments') paint();
+      }).catch(function (e) {
+        CB.loaded = true;
+        CB.err = (e && e.message) || 'Your commission balance could not be loaded.';
+        if (S.tab === 'payments') paint();
+      });
+    }
+
+    function money(n) {
+      /* Unknown is "—", never 0. */
+      if (typeof n !== 'number' || !isFinite(n)) return '—';
+      return 'KSh ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function when(ms) {
+      if (!ms) return '—';
+      try {
+        return new Date(ms).toLocaleString('en-KE', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+      } catch (_) { return '—'; }
+    }
+    var CB_LABEL = { DUE: 'Due', REMINDED: 'Due soon', OVERDUE: 'Overdue', PAID: 'Paid', WAIVED: 'Waived' };
+    var CB_TONE  = { DUE: 'mut', REMINDED: 'warn', OVERDUE: 'bad', PAID: 'ok', WAIVED: 'ok' };
+
+    function balanceHTML() {
+      if (!CB.loaded) {
+        return '<div class="mst-cb"><div class="sk-line" style="width:50%"></div>' +
+               '<div class="sk-line" style="width:38%"></div></div>';
+      }
+      var h = '<div class="mst-cb">';
+      h += '<div class="mst-pd-label" style="margin-top:26px">SOKONI commission &amp; penalties</div>';
+
+      if (CB.err) return h + '<div class="mst-note bad">' + esc(CB.err) + '</div></div>';
+
+      /* Oldest due drives the headline deadline — it is the one that expires
+         first and therefore the one that triggers restriction. */
+      var open = CB.items.filter(function (i) { return i.status !== 'PAID' && i.status !== 'WAIVED'; });
+      var oldest = open.reduce(function (a, b) {
+        if (!a || !a.dueAt) return b; if (!b || !b.dueAt) return a;
+        return b.dueAt < a.dueAt ? b : a;
+      }, null);
+      var worst = open.some(function (i) { return i.status === 'OVERDUE'; }) ? 'OVERDUE'
+                : open.some(function (i) { return i.status === 'REMINDED'; }) ? 'REMINDED'
+                : open.length ? 'DUE' : 'PAID';
+
+      if (!open.length && CB.totalOutstanding === 0) {
+        return h + '<div class="mst-note ok"><strong>Nothing outstanding.</strong> ' +
+               'Your commission is fully settled.</div></div>';
+      }
+
+      h += '<div class="mst-cb-grid">' +
+        '<div class="mst-cb-cell"><div class="k">Outstanding commission</div><div class="v">' + esc(money(CB.commissionKES)) + '</div></div>' +
+        '<div class="mst-cb-cell"><div class="k">Penalty</div><div class="v">' + esc(money(CB.penaltyKES)) + '</div></div>' +
+        '<div class="mst-cb-cell tot"><div class="k">Total to pay</div><div class="v">' + esc(money(CB.totalOutstanding)) + '</div></div>' +
+      '</div>';
+
+      h += '<div class="mst-cb-meta">' +
+        '<div><span class="k">Oldest amount due</span><span class="v">' + esc(when(oldest && oldest.dueAt)) + '</span></div>' +
+        '<div><span class="k">Payment deadline</span><span class="v">' + esc(when(oldest && oldest.dueAt)) + '</span></div>' +
+        '<div><span class="k">Status</span><span class="mst-pd-badge ' + (CB_TONE[worst] || 'mut') + '">' +
+          esc(CB_LABEL[worst] || worst) + '</span></div>' +
+      '</div>';
+
+      if (CB.restricted) {
+        h += '<div class="mst-note bad"><strong>Merchant access restricted.</strong> ' +
+             'Settle the balance to restore full access. Access is restored automatically once ' +
+             'SOKONI confirms your payment.</div>';
+      }
+
+      /* Itemised sales. Each row is a real ledger entry; nothing is summarised
+         into an invented "other" bucket. */
+      if (open.length) {
+        h += '<div class="mst-cb-table" role="table" aria-label="Sales with commission outstanding">' +
+             '<div class="mst-cb-tr head" role="row"><span role="columnheader">Sale</span>' +
+             '<span role="columnheader">Due</span><span role="columnheader">Commission</span></div>';
+        open.slice(0, 50).forEach(function (i) {
+          h += '<div class="mst-cb-tr" role="row">' +
+            '<span class="ref" role="cell">' + esc(i.reference || i.id || '—') +
+              '<em class="mst-cb-st ' + (CB_TONE[i.status] || 'mut') + '">' + esc(CB_LABEL[i.status] || i.status || '') + '</em></span>' +
+            '<span class="due" role="cell">' + esc(when(i.dueAt)) + '</span>' +
+            '<span class="amt" role="cell">' + esc(money(i.commissionKES)) +
+              (i.penaltyKES ? '<em class="pen">+ ' + esc(money(i.penaltyKES)) + '</em>' : '') + '</span>' +
+          '</div>';
+        });
+        if (open.length > 50) {
+          h += '<div class="mst-cb-tr more" role="row"><span role="cell">' +
+               (open.length - 50) + ' more not shown</span></div>';
+        }
+        h += '</div>';
+      }
+
+      /* Payment. Gated on the SAME backend authorization as the destination
+         test — if SOKONI cannot collect through Daraja yet, a Pay button that
+         appears to start an STK would be a lie about where the money went. */
+      if (!PD.productionAuthorized) {
+        h += '<div class="mst-note warn" role="status"><strong>Payment not yet available</strong><br>' +
+             'Commission payment is being enabled and is awaiting payment-provider authorization. ' +
+             'Contact SOKONI support to settle this balance in the meantime.</div>' +
+             '<button class="mst-btn wide" disabled aria-disabled="true" ' +
+             'title="Awaiting payment-provider authorization">Pay outstanding balance — unavailable</button>';
+      } else {
+        h += '<button class="mst-btn solid wide" data-act="cbpay">Pay outstanding balance</button>';
+      }
+
+      return h + '</div>';
+    }
+
     /* ── Render ───────────────────────────────────────────────────────────── */
     function paint() {
       host.innerHTML = '<div class="mst">' + topHTML() + bodyHTML() + ctaHTML() + '</div>';
@@ -201,6 +584,7 @@
         '<button class="mst-tab' + (S.tab === 'storefront' ? ' on' : '') + '" data-act="tab" data-t="storefront">Storefront</button>' +
         '<button class="mst-tab' + (S.tab === 'details' ? ' on' : '') + '" data-act="tab" data-t="details">Details</button>' +
         '<button class="mst-tab' + (S.tab === 'share' ? ' on' : '') + '" data-act="tab" data-t="share">Share</button>' +
+        '<button class="mst-tab' + (S.tab === 'payments' ? ' on' : '') + '" data-act="tab" data-t="payments">Payments</button>' +
       '</div></div>';
     }
 
@@ -236,6 +620,7 @@
           '<div style="margin-top:18px"><button class="mst-btn" data-act="reload">Try again</button></div>' +
           '</div></div>';
       }
+      if (S.tab === 'payments') return paymentsHTML();
       if (S.tab === 'details') return detailsHTML();
       if (S.tab === 'share') return shareHTML();
       return storefrontHTML();
@@ -401,7 +786,13 @@
       var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
       if (!el || !host.contains(el)) return;
       var act = el.getAttribute('data-act');
-      if (act === 'tab')              { S.tab = el.getAttribute('data-t') || 'storefront'; S.opError = null; S.opDone = null; paint(); return; }
+      if (act === 'tab')              {
+        S.tab = el.getAttribute('data-t') || 'storefront'; S.opError = null; S.opDone = null; paint();
+        if (S.tab === 'payments') { if (!PD.loaded) loadPayments(); if (!CB.loaded) loadBalance(); }
+        return;
+      }
+      if (act === 'pdtype')           { PD.draftType = el.getAttribute('data-t') || 'TILL'; paint(); return; }
+      if (act === 'pdsave')           { savePayments(); return; }
       if (act === 'reload')           { load(); return; }
       if (act === 'reload-analytics') { S.analyticsError = null; paint(); loadAnalytics(); return; }
       if (act === 'save')             { save(); return; }
@@ -413,6 +804,17 @@
 
     function onInput(ev) {
       var el = ev.target; if (!el) return;
+      /* Payment fields update state and the save button IN PLACE. Repainting on
+         every keystroke would tear the keyboard down mid-number on mobile. */
+      var pact = el.getAttribute && el.getAttribute('data-act');
+      if (pact === 'pdnum' || pact === 'pdname') {
+        if (pact === 'pdnum') PD.draftNumber = (el.value || '').replace(/\D/g, '').slice(0, 7);
+        else PD.draftName = el.value || '';
+        if (pact === 'pdnum' && el.value !== PD.draftNumber) el.value = PD.draftNumber;
+        var sv = host.querySelector('[data-act="pdsave"]');
+        if (sv) sv.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy);
+        return;
+      }
       if (el.id === 'mst-handle') {
         S.handleDraft = el.value || '';
         var btn = host.querySelector('[data-act="claim"]');

@@ -967,6 +967,36 @@ exports.applicationDecide = onCall(
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Application not found.');
 
+    /* ── Seller Agreement gate ────────────────────────────────────────────
+       A business may not be APPROVED until it has acknowledged the commercial
+       terms it will be bound by — the 5% per-sale commission (minimum KES 10)
+       and the fact that SOKONI does not deduct it from the customer's payment.
+
+       Enforced here rather than only in the browser: the submit button is a
+       hint, and an application can reach this collection by any client that can
+       satisfy firestore.rules. Approval is the moment the obligation attaches,
+       so approval is where the check belongs.
+
+       Only `approve` is gated. Reject, suspend and request_info must keep
+       working on an application that never acknowledged anything — otherwise a
+       reviewer could not clear the very applications this rule holds back.
+
+       Applications created BEFORE this gate existed have no acknowledgement and
+       will be refused. That is deliberate: the alternative is approving a
+       merchant onto commercial terms they were never shown. Use request_info to
+       send them back for acknowledgement. */
+    if (decision === 'approve') {
+      const _a = snap.data() || {};
+      if (_a.agreementAccepted !== true) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This application cannot be approved: the applicant has not accepted the SOKONI ' +
+          'Seller Agreement and the 5% per-sale commission. Use "request_info" to ask them ' +
+          'to complete the acknowledgement.'
+        );
+      }
+    }
+
     const STATUS = { approve: 'approved', reject: 'rejected', suspend: 'suspended', request_info: 'info_requested' };
     const status = STATUS[decision];
     const actor = req.auth.uid;
@@ -977,6 +1007,14 @@ exports.applicationDecide = onCall(
       reviewReason: _sanText(reason, 500) || null,
       decidedBy: actor,
       decidedAt: _ts(),
+      /* SERVER-stamped proof that the acknowledgement was present and verified
+         at the moment of approval. `agreementAcceptedAt` on the application is a
+         CLIENT clock (the browser wrote that document), so it is evidence of
+         intent but not of time. This field is the one to rely on. */
+      ...(decision === 'approve' ? {
+        agreementVerifiedAt:      _ts(),
+        agreementVerifiedVersion: (snap.data() || {}).agreementVersion || null,
+      } : {}),
       /* Force re-projection even when the status is unchanged (a repair). */
       decisionAppliedFor: FieldValue.delete(),
       updatedAt: _ts(),

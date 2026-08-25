@@ -20,7 +20,7 @@
 
   var RATES = {
     "marketplace": {
-      "pct": 3,
+      "pct": 5,
       "fixedKES": 0
     },
     "food_delivery": {
@@ -102,6 +102,8 @@
   };
 
   var ALIASES = {
+    "product": "marketplace",
+    "products": "marketplace",
     "shopping": "marketplace",
     "pos": "marketplace",
     "b2b": "marketplace",

@@ -2211,6 +2211,25 @@ window.submitSellerAnswer = submitSellerAnswer;
    VERIFIED SELLER APPLICATION
 ========================= */
 
+/* Seller Agreement version shown on this screen. Kept identical to
+   hub-register.js AGREEMENT_VERSION so one acknowledgement means one text. */
+const SELLER_AGREEMENT_VERSION = "2026-08-25-commission-5pct";
+
+/* Enable submission only once the agreement is acknowledged. A convenience gate:
+   submitVerification re-checks, and the BINDING record lives on the
+   `applications` document, enforced server-side by applicationDecide. */
+function syncVerifyAgree(){
+  const cb  = document.getElementById("verifyAgree");
+  const btn = document.getElementById("verifySubmitBtn");
+  if(!btn) return;
+  const ok = !!(cb && cb.checked);
+  btn.disabled = !ok;
+  btn.setAttribute("aria-disabled", String(!ok));
+  btn.style.opacity = ok ? "" : ".5";
+  btn.style.cursor  = ok ? "" : "not-allowed";
+}
+window.syncVerifyAgree = syncVerifyAgree;
+
 function submitVerification(){
   const business = document.getElementById("verifyBusiness")?.value.trim();
   const phone    = document.getElementById("verifyPhone")?.value.trim();
@@ -2222,13 +2241,37 @@ function submitVerification(){
     showNotification("Please fill Business Name, Phone and National ID", "error"); return;
   }
 
+  /* Re-checked here, not just on the button: a disabled attribute is a hint to a
+     person, not a control. */
+  const agree = document.getElementById("verifyAgree");
+  if(!agree || !agree.checked){
+    showNotification("Please read and accept the Seller Agreement and the 5% per-sale commission.", "error");
+    return;
+  }
+
   const verification = {
     business, phone, idNum, kra, desc,
+    /* Recorded for parity with the application document. NOTE: this screen
+       persists to localStorage only — see the comment on the setItem below —
+       so this copy is NOT evidence. The server-verifiable record is the one
+       written to `applications` by the business-registration flow. */
+    agreementAccepted: true,
+    agreementVersion: SELLER_AGREEMENT_VERSION,
+    agreementAcceptedAt: new Date().toISOString(),
     status: "pending",
     submittedAt: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
     timestamp: Date.now()
   };
 
+  /* ⚠️ THIS SCREEN IS CLIENT-ONLY. Nothing here reaches a server: the record is
+     written to localStorage and read straight back by showVerificationStatus(),
+     which is also what renders "Verified Seller". Clearing site data erases it,
+     and no reviewer ever sees it.
+
+     The authoritative, server-backed path is the business application
+     (hub-register.js -> `applications`), decided by applicationDecide, which
+     refuses approval without agreementAccepted. Do not treat the value below as
+     proof of anything. */
   localStorage.setItem("sokoniSellerVerification", JSON.stringify(verification));
   showNotification("✅ Verification submitted! Review within 24-48 hrs.", "success");
   showVerificationStatus();

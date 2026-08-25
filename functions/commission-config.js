@@ -42,7 +42,12 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%' },
+  /* 5% per completed marketplace sale — the canonical commercial rule, set 2026-08-25.
+     Subject to MIN_COMMISSION_KES below, which dominates small sales: a KES 97 order
+     is charged KES 10 (10.3%), not KES 4.85. Any seller-facing copy that says a flat
+     "5%" without the minimum is inaccurate under ~KES 200; legal.html and
+     seller-terms.html disclose both. */
+  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3->5 on 2026-08-25' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
@@ -85,6 +90,14 @@ const RATES = {
  * used different vocabularies for the same hubs. Both vocabularies resolve here, so no caller
  * has to know which one it holds. */
 const ALIASES = {
+  /* `product` is what checkout.html and the IntaSend webhook actually send as the
+     category (`payData.meta?.category || "default"`). It matched nothing in RATES and
+     nothing here, so every real sale resolved through RATES.default — 5% by accident.
+     Verified 2026-08-25: all 11 live commissionLedger rows carry category "product"
+     and commissionPct 5, written by webhookIntasend. Left unmapped, the rate would have
+     silently CHANGED the moment anyone "corrected" the string to "marketplace".
+     Mapping it deliberately is what makes the 5% intentional rather than incidental. */
+  product: 'marketplace', products: 'marketplace',
   shopping: 'marketplace', pos: 'marketplace', b2b: 'marketplace',
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',

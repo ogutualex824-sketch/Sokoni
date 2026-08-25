@@ -1666,5 +1666,114 @@
     "owner": "Booking Engine",
     "dateAdded": "2026-08-01",
     "expectedLifespan": "permanent"
+  },
+  "auditLogs|action:ASCENDING,sellerUid:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Rate-limit test STK pushes to 3 per seller per hour. Without it the query throws FAILED_PRECONDITION and no STK request is ever sent.",
+    "feature": "Payments / Daraja STK",
+    "query": "sendTestSTKPush: where(action==sendTestSTKPush).where(sellerUid==uid).where(createdAt>=cutoff)",
+    "owner": "Payments",
+    "dateAdded": "2026-08-25",
+    "expectedLifespan": "permanent"
+  },
+  "auditLogs|callerUid:ASCENDING,type:ASCENDING,ts:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "claimableTransfers|idempotencyKey:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "claimableTransfers|normalizedPhone:ASCENDING,status:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "claimableTransfers|status:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsAuditLog|entityId:ASCENDING,seq:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsAuditLog|sellerUid:ASCENDING,atTs:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "hubInvoiceQueue|status:ASCENDING,nextRetryAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "providerBookings|providerId:ASCENDING,scheduledAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "providerBookings|providerId:ASCENDING,status:ASCENDING,scheduledAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "providerBookings|providerId:ASCENDING,status:ASCENDING,scheduledAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "providerPayouts|providerId:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "returns|buyerId:ASCENDING,submittedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "returns|sellerId:ASCENDING,submittedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|status:ASCENDING,currentPeriodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|status:ASCENDING,graceEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|status:ASCENDING,trialEndsAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "walletTransactions|idempotencyKey:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "commissionLedger|billingModel:ASCENDING,collectionStatus:ASCENDING": {
+    "purpose": "Hourly sweep selects only rows owned by the 48-hour model, in a non-terminal collection state.",
+    "feature": "Commission / 48-hour receivable",
+    "query": "sweepCommissionDue: where(billingModel==PER_SALE_48H).where(collectionStatus in [DUE,REMINDED,OVERDUE])",
+    "owner": "Payments",
+    "dateAdded": "2026-08-25",
+    "expectedLifespan": "permanent"
+  },
+  "commissionLedger|sellerUid:ASCENDING,billingModel:ASCENDING,collectionStatus:ASCENDING": {
+    "purpose": "Seller commission balance: outstanding rows for one seller under the 48-hour model.",
+    "feature": "Commission / 48-hour receivable",
+    "query": "getCommissionBalance / settleConfirmedPayment: where(sellerUid==).where(billingModel==).where(collectionStatus in [...])",
+    "owner": "Payments",
+    "dateAdded": "2026-08-25",
+    "expectedLifespan": "permanent"
   }
 }
