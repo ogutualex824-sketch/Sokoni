@@ -1,3 +1,68 @@
+## [2026-08-25] - Three routing assertions encoded a contract the platform had already changed.
+
+Tests only. `scripts/test-merchant-home-back.js` (93/1 -> 97/0),
+`scripts/test-merchant-capability.js` (40/1 -> 43/0),
+`scripts/test-home-logo-routing.js` (24/1 -> 28/0, 2 unproven unchanged).
+No product file was modified — verified clean. Not deployed.
+
+### What was actually wrong
+
+All three failures were the same shape: the suite restated a routing decision as a
+literal, the decision moved, and the restated copy went red. None of them found a
+product defect.
+
+1. **The till slot.** `test-merchant-home-back` walked `#mbnav .mbnav-item[data-id="pos"]`.
+   The bottom bar's till slot is `sell` (`BOTTOM_NAV`, `sokoni-merchant-routes.js`).
+   Measured live: `["home","orders","sell","__more"]`.
+
+2. **Withheld-slot resolution.** `test-merchant-capability` resolved a withheld slot only
+   through `fallback`. The till slot resolves through `crossShell:'/merchant-v2#sell'`
+   instead — deliberately, because the capability layer's own rule is that falling `sell`
+   back to POS "would quietly merge exactly what the platform has decided must stay apart".
+
+3. **The seller workspace hub.** `test-home-logo-routing` required
+   `WORKSPACE_HUBS.seller === 'merchant-v2.html'`. It is `merchant.html`, and that is
+   **intentional**: `sokoni-merchant-entry.js` pins `MERCHANT_URL = '/merchant'` under
+   "THE CUTOVER IS A SEPARATE RELEASE", because Hosting publishes the TREE and flipping it
+   would ship an uncertified workspace cutover as a side effect of an unrelated release.
+
+### The decision
+
+merchant-v2 is the canonical merchant destination; merchant.html is legacy/reference-only.
+The suites now assert that contract instead of the superseded literals. Case 3 is the one
+that could have gone wrong: "canonical" describes the destination, **not** a cutover that has
+been performed. Flipping `WORKSPACE_HUBS.seller` to satisfy a test would have performed the
+workspace cutover — the exact side effect the entry resolver exists to prevent. It is pinned
+as a tripwire instead.
+
+### Coverage went up, not down
+
+Nothing was deleted to reach green. Each suite gained assertions:
+
+* `sell` leaving the shell is proven as a **handoff** (`/merchant-v2#sell`), not asserted
+  under the one-shell invariant it legitimately breaks.
+* POS is still proven reachable and still its own destination — via the sidebar, where it
+  lives (`tier:'primary'`), with the shell invariant intact.
+* New: POS must NOT appear in the bottom bar; a withheld slot resolved by NEITHER `fallback`
+  nor `crossShell` is a dead thumb; a cross-shell target must be a clean route (cleanUrls
+  means `.html` 301s and a till must open in ONE navigation); the workspace hub and the
+  entry resolver must never disagree on the merchant shell.
+
+### Negative controls — every new assertion was proven able to fail
+
+| simulated regression | result |
+|---|---|
+| `WORKSPACE_HUBS.seller` -> `merchant-v2.html` (perform the cutover) | 2 FAIL |
+| delete `crossShell` from the `sell` route | 2 FAIL |
+| `BOTTOM_NAV` till slot `sell` -> `pos` (merge POS back in) | 4 FAIL |
+
+The third is the regression that matters: restoring `fallback:'pos'` merges Sell and POS
+back together, and under the old suites every assertion still passed.
+
+### Security / performance / breaking
+
+None. No product code, no rules, no schema, no API.
+
 ## [2026-08-24] - The till said "no shop" because a query FAILED, not because it answered.
 
 Hosting only. `sokoni-pos-context.js`, `till.html`,

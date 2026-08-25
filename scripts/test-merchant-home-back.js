@@ -314,7 +314,14 @@ server.listen(0, async () => {
        control a merchant has for it. */
     const ROUTES = [
       { id: 'orders',   label: 'Orders',     how: 'bnav' },
-      { id: 'pos',      label: 'Sell (POS)', how: 'bnav' },
+      /* POS is reached from the SIDEBAR, not the bottom bar. The four-up bar's till slot
+         is `sell` (sokoni-merchant-routes.js BOTTOM_NAV) — the capability layer's own rule
+         is that "falling `sell` back to POS would quietly merge exactly what the platform
+         has decided must stay apart", so the two are separate destinations and this matrix
+         asserts the one that stays INSIDE this shell. POS is tier:'primary', so it has a
+         sidebar row. The bar's `sell` slot LEAVES the shell by design and is proven as a
+         handoff in section 7 — it cannot be asserted here, where the invariant is one shell. */
+      { id: 'pos',      label: 'POS',        how: 'nav'  },
       { id: 'products', label: 'Products',   how: 'nav'  },
       /* KASS Shop needs a longer budget, and the reason is deliberate design rather than
          slowness: __openMiniShop() resolves ownership BEFORE navigating, and _resolve()
@@ -390,6 +397,44 @@ server.listen(0, async () => {
     });
     ck('More opens the drawer', opened === 'open', opened);
     assertShell('More drawer open', await chrome(page));
+    await ctx.close();
+  }
+
+  /* ── 7. The till slot: legacy hands off, it does not substitute ──────────────
+     merchant-v2 is the canonical merchant destination; merchant.html is legacy. v1 has no
+     native Sell renderer and no integration layer for one, so its till slot must send the
+     merchant to the shell that CAN render Sell (crossShell:'/merchant-v2#sell') rather than
+     substituting POS into the slot. This is the one place a route legitimately leaves the
+     shell, so it is proven here instead of inside the one-shell matrix.
+
+     What this guards is a real regression with a quiet failure mode: restoring
+     `fallback:'pos'` on the till slot would merge Sell and POS back together and every
+     other assertion in this file would still pass. */
+  head('7 · legacy till slot hands off to the canonical shell');
+  {
+    const ctx = await browser.newContext(session()); await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(BASE + '/merchant.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await routed(page, 'dashboard');
+
+    const slot = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('#mbnav .mbnav-item')]
+        .map((el) => el.getAttribute('data-id'));
+      const el = document.querySelector('#mbnav .mbnav-item[data-id="sell"]');
+      if (el) el.click();
+      return { items: items, clicked: !!el };
+    });
+    ck('the bottom bar offers Sell in its till slot (not POS)',
+       slot.clicked === true, JSON.stringify(slot.items));
+    ck('...and POS is NOT in the bottom bar — the two stay apart',
+       slot.items.indexOf('pos') === -1, JSON.stringify(slot.items));
+
+    /* A till must open in ONE navigation — hence the clean route, no .html to 301 through. */
+    await page.waitForFunction(() => location.pathname.indexOf('merchant-v2') !== -1,
+      null, { timeout: 20000 }).catch(() => null);
+    const landed = await state(page);
+    ck('Sell hands off to the canonical shell', landed.path.indexOf('/merchant-v2') === 0, landed.path);
+    ck('...landing on the Sell surface itself', landed.hash === '#sell', landed.hash || '(none)');
     await ctx.close();
   }
 

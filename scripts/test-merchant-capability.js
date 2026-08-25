@@ -219,9 +219,34 @@ check('Settings hub links to no withheld route', settingsLinks.every(id => !with
 const resolveSlot = b => (b.id !== '__more' && withheldSet.has(b.id) && b.fallback && !withheldSet.has(b.fallback))
   ? b.fallback : b.id;
 const bottomIds = C.BOTTOM_NAV.map(resolveSlot).filter(id => id !== '__more');
-check('bottom nav points at no withheld route (after fallback resolution)',
-      bottomIds.every(id => !withheldSet.has(id)),
-      bottomIds.filter(id => withheldSet.has(id)).join(',') || bottomIds.join(','));
+/* A withheld slot is resolved one of TWO legitimate ways, and the thumb lands on a real
+   destination either way:
+     - `fallback`   substitute a route THIS shell can render;
+     - `crossShell` hand the merchant to the shell that renders the real thing.
+   The till slot deliberately uses the second. v1 has no native Sell renderer, and the
+   capability layer's own rule is that falling `sell` back to POS "would quietly merge
+   exactly what the platform has decided must stay apart". A handoff reaches Sell ITSELF,
+   so it satisfies what this assertion is actually about — no control may promise a
+   destination the merchant cannot arrive at. A slot with NEITHER is the real defect,
+   and that is asserted separately below so removing both is still caught. */
+const crossOf = (id) => ((C.get(id) || {}).crossShell) || null;
+const deadSlots = bottomIds.filter(id => withheldSet.has(id) && !crossOf(id));
+check('bottom nav points at no withheld route (fallback or cross-shell handoff)',
+      deadSlots.length === 0,
+      deadSlots.join(',') || bottomIds.map(id => id + (crossOf(id) ? ' -> ' + crossOf(id) : '')).join(', '));
+/* The converse: a withheld slot resolved by NOTHING is a dead thumb. Without this, deleting
+   both the fallback and the crossShell would silently satisfy the check above. */
+const unresolved = C.BOTTOM_NAV.filter(b => b.id !== '__more' && withheldSet.has(b.id) &&
+  !(b.fallback && !withheldSet.has(b.fallback)) && !crossOf(b.id));
+check('every withheld bottom-nav slot resolves — never a dead thumb',
+      unresolved.length === 0, unresolved.map(b => b.id).join(',') || 'all slots resolve');
+/* A cross-shell target must be a CLEAN route: cleanUrls:true means '<page>.html' 301s, and
+   a till must open in ONE navigation. */
+C.BOTTOM_NAV.filter(b => crossOf(b.id)).forEach(b => {
+  const t = crossOf(b.id);
+  check('cross-shell target is a clean, single-navigation route: ' + b.id + ' -> ' + t,
+        t.charAt(0) === '/' && t.indexOf('.html') === -1, t);
+});
 check('...and every resolved slot is a real, mobile-safe route',
       bottomIds.every(id => { const r = C.get(id); return r && r.mobile === true; }),
       bottomIds.filter(id => { const r = C.get(id); return !r || r.mobile !== true; }).join(',') || 'all 3 + More');

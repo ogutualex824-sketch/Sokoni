@@ -36,8 +36,37 @@ ck('CANONICAL contains no superAdmin', !!canon && !/superAdmin/.test(canon[1]));
 ck('WORKSPACE_HUBS contains no admin entry', !!hubs && !/\badmin\s*:/.test(hubs[1]));
 ck('WORKSPACE_HUBS contains no superAdmin entry', !!hubs && !/superAdmin\s*:/.test(hubs[1]));
 ck('WORKSPACE_HUBS still routes the workspace roles', !!hubs &&
-   /buyer:\s*'index\.html'/.test(hubs[1]) && /seller:\s*'merchant-v2\.html'/.test(hubs[1]) &&
-   /rider:\s*'driver\.html'/.test(hubs[1]));
+   /buyer:\s*'index\.html'/.test(hubs[1]) && /rider:\s*'driver\.html'/.test(hubs[1]));
+
+/* THE SELLER HUB IS A STAGED CUTOVER, asserted as staged rather than as finished.
+
+   This previously required seller:'merchant-v2.html'. merchant-v2 IS the canonical
+   merchant destination — but pointing the workspace hub at it is THE WORKSPACE CUTOVER,
+   and sokoni-merchant-entry.js gates that deliberately: its MERCHANT_URL is '/merchant'
+   under the banner "THE CUTOVER IS A SEPARATE RELEASE", because Hosting publishes the
+   TREE, so flipping it ships an uncertified cutover as a side effect of whatever release
+   happens to go out. That module states the boundary in terms of this very constant:
+   "My Store, Business and the workspace cutover do NOT resolve through this module ...
+   they remain on /merchant under their own gate."
+
+   So the assertion below pins the SHIPPED value. It is a tripwire, not an endorsement:
+   when the workspace cutover is performed it turns red, forcing that flip to be a
+   deliberate, reviewed moment instead of a silent side effect. Update it THEN — together
+   with sokoni-merchant-entry.js MERCHANT_URL, which must not diverge from it. */
+const sellerHub = (hubs && (hubs[1].match(/seller:\s*'([^']+)'/) || [])[1]) || null;
+ck('seller hub is a real merchant shell',
+   sellerHub === 'merchant.html' || sellerHub === 'merchant-v2.html', sellerHub);
+ck('workspace cutover is still STAGED (flip this WITH sokoni-merchant-entry.js, not before)',
+   sellerHub === 'merchant.html', sellerHub + (sellerHub === 'merchant-v2.html'
+     ? '  <- cutover performed: certify v2 + update MERCHANT_URL'
+     : '  (cutover pending its own release)'));
+/* The two must never disagree — a hub sending sellers one way while the entry resolver
+   sends them the other is exactly the split this constant exists to prevent. */
+const entrySrc = read('sokoni-merchant-entry.js');
+const entryUrl = (entrySrc.match(/var MERCHANT_URL\s*=\s*'([^']+)'/) || [])[1] || null;
+ck('the workspace hub and the entry resolver agree on the merchant shell',
+   !!entryUrl && !!sellerHub && sellerHub.replace(/\.html$/, '') === entryUrl.replace(/^\//, ''),
+   'hub=' + sellerHub + '  entry=' + entryUrl);
 
 /* ── 2. the administrative destination lives with the administrative authority ── */
 console.log('\n2 — adminHomeFor() is defined beside the authority that decides admin access');
