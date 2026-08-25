@@ -173,8 +173,36 @@ try { Ful.buildFulfilment({ type: 'delivery' }); } catch (_) { threw = true; }
 ck('buildFulfilment REFUSES an address-less delivery', threw);
 ck('the till disables Complete until the fulfilment is ready',
    /fulReady = !delivering \|\| !!fulfilment\(\)/.test(code) && /!canPay \|\| !fulReady \? ' disabled'/.test(code));
+/* THE ASSERTION WAS STALE, NOT THE CODE.
+
+   It pinned the literal `canPay = st ? st.canComplete : false`. Commit 71be27d
+   (mixed tender — one gate for every combination) made completion STRICTER:
+
+     canPay = !!(st && st.canComplete) && !stranded && !S.discountErr
+
+   The settlement gate is untouched; two further blockers were added. A literal
+   match could not tell 'the guard was removed' from 'the guard was strengthened',
+   and it read a hardening as a failure — the same shape as the servedBy
+   assertion the stepper transplant exposed.
+
+   So this now asserts the CONTRACT and protects all three gates by name, which
+   is what a later change would actually need to preserve. Pinning the exact
+   expression again would just re-arm the same false alarm on the next
+   improvement. */
 ck('...and until the money is all there, per the settlement',
-   /canPay = st \? st\.canComplete : false/.test(code));
+   /canPay\s*=\s*!!\(st && st\.canComplete\)/.test(code),
+   'the settlement, not the screen, decides whether a sale may complete');
+ck('...nor while an overpayment cannot be given back',
+   /var stranded = !!\(st && st\.unrefundableMinor > 0\)/.test(code) &&
+   /canPay\s*=[^;]*&& !stranded/.test(code),
+   'unrefundableMinor > 0 must block completion, not be rounded away');
+ck('...nor while the discount is invalid',
+   /canPay\s*=[^;]*&& !S\.discountErr/.test(code),
+   'a rejected discount must not be completable at the un-discounted price');
+ck('NC the Complete button is genuinely disabled when it cannot pay',
+   /!canPay \|\| !fulReady \? ' disabled'/.test(code) ||
+   /busy \|\| !canPay \|\| !fulReady \? ' disabled'/.test(code),
+   'a gate that does not reach the button is not a gate');
 
 head('8 - the receipt describes the sale that HAPPENED');
 ck('the settlement is frozen at completion, not re-derived on render',
