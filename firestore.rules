@@ -287,7 +287,31 @@ service cloud.firestore {
                     && noAdminFields()
                     && noPrivilegeEscalation()
                     && noProviderForgery();
-      allow update: if isAdmin()
+      /* The admin branch is deliberately NARROWER than isAdmin() alone. Measured before this
+         change (scripts/test-role-switch-rules.js, 36/6): because isAdmin() was the first
+         disjunct it short-circuited noPrivilegeEscalation() — and with it activeRoleApproved(),
+         noSelfGrant(), rolesUnchanged() and noAdminFields() — on ANY user document INCLUDING
+         the admin's own. An admin could set their own activeRole to 'driver' without a driver
+         claim, or to 'superAdmin', and could rewrite another user's activeRole.
+
+         Two constraints, and only two, so admin user-management is otherwise unchanged:
+
+           request.auth.uid != userId   an admin editing their OWN document goes through the
+                                        owner branch, so activeRoleApproved() and noSelfGrant()
+                                        apply to them exactly as to anyone else. Role switching
+                                        selects an already-authorised role; it never grants one.
+
+           activeRole unchanged         activeRole is the user's OWN claim-gated surface
+                                        selection. Admin user-management has no reason to move
+                                        it, and letting the generic bypass do so made the field
+                                        universally writable.
+
+         Every other field an admin console legitimately edits on OTHER users is untouched. */
+      allow update: if (isAdmin()
+                        && request.auth.uid != userId
+                        && !request.resource.data.diff(resource.data)
+                              .affectedKeys().hasAny(['activeRole'])
+                        && noPrivilegeEscalation())
                     || (isAuthed() && request.auth.uid == userId
                         && uidUnchanged()
                         && noAdminFields()

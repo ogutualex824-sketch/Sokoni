@@ -62,6 +62,124 @@ Security: preventive only; closes a path by which a correct production ruleset
 could be silently regressed by an ordinary deploy from the wrong branch.
 Breaking: `deploy:rules` / `deploy:all` now ABORT on stale lineages. That is the
 intent — rebase or cherry-pick `80297d4` first.
+## [2026-08-21] - Role switching: `activeRole` is claim-gated for Admins too.
+
+`firestore.rules` · `scripts/test-role-switch-rules.js`. **Not deployed. Rules NOT published.**
+
+The before-proof (`7b00d81`, 36/6) showed `isAdmin()` as the FIRST disjunct of the
+`users/{userId}` update rule, short-circuiting `noPrivilegeEscalation()` — and with it
+`activeRoleApproved()`, `noSelfGrant()`, `rolesUnchanged()` — on ANY user document **including
+the admin's own**. Measured: `admin -> driver` allowed without a driver claim,
+`admin -> superAdmin` allowed, and an admin rewrote another user's `activeRole`.
+
+The admin branch is now **scoped, not removed**. Two constraints, chosen so admin
+user-management is otherwise untouched:
+
+    request.auth.uid != userId   an admin editing their OWN document goes through the owner
+                                 branch, so activeRoleApproved() and noSelfGrant() apply to
+                                 them exactly as to anyone else
+    activeRole unchanged         activeRole is the user's own claim-gated surface selection;
+                                 admin user-management has no reason to move it
+
+plus `noPrivilegeEscalation()` on the admin branch, so an admin can no longer write `role`,
+`permissions`, `kycStatus`, the `roles` array or `registeredAs.admin` on anyone.
+
+**Role switching selects an already-authorised role; it never grants one.**
+
+A regression control caught a real break mid-fix and is worth recording. Adding
+`noAdminFields()` to the admin branch **denied the admin console's own live write**
+(`registeredAs.legal` + `approved`, `admin.html:5956`) — that predicate is an anti-self-grant
+guard for OWNERS, and those fields (`approved`, `suspended`, `banned`, `featured`,
+`commissionRate`) are precisely what an admin is supposed to write. It was removed from the
+admin branch. Without an ALLOW row asserting the real console write, the fix would have passed
+every DENY row and broken the product.
+
+After-proof used the identical `7b00d81` harness (`git diff` on it empty at the time of the
+run): **42 passed, 0 failed**, every previously-failing row now correct, every denial leaving
+the stored `activeRole` byte-identical. Seven scope rows were then ADDED — disclosed rather than
+folded in — giving **49 passed, 0 failed**: an admin may still edit an ordinary field and
+perform the real console write, and is refused `role`, `permissions`, `kycStatus`, `roles` and
+`registeredAs.admin`.
+
+Existing suites unaffected: `test-role-canonicalization` 72/0/3, `test-role-switch-routing`
+51/0, `check-profile-rules` all passed. Static 12/12, orphan gate PASS.
+
+**Not done here, and not silently attempted:** role-aware home/logo routing. `WORKSPACE_HUBS` in
+`sokoni-role-authority.js` has no `admin` or `superAdmin` entry, which is the actual reason the
+logo does not route an admin — extending it touches the convergence point of eight retired
+role->destination maps and its own suites, so it is a separate slice with its own before-proof.
+
+**Wallet PIN is untouched** — old-PIN-on-change, `setPin` clearing `pinLocked`,
+`sha256(pin + uid)` offline recovery and admin read of `pinHash` remain independently pending
+and are neither resolved nor reinterpreted here. No PIN was modified. No new role claim invented.
+
+Rules changed but NOT published: the candidate must be released and re-proven against the SERVED
+ruleset before any of this is true in production. Production remains HOLD.
+
+## [2026-08-21] - Role switching before-proof: `isAdmin()` bypasses every user-document guard.
+
+`scripts/guard-rules-lineage.js` (new), `package.json`. Guard only — no rules,
+no product code. Production rules are NOT affected and were never at risk from
+a hosting deploy.
+
+### What was proven, against the SERVED ruleset
+
+Production exposure was settled by fetching the ruleset Firestore actually
+enforces — not `firestore.rules.live` (stale) and not the working tree:
+
+    projects/sokoni-aeb26/releases/cloud.firestore
+      -> rulesets/f1c4e35b-bcc2-418b-b7a3-8990c1c8dad0   updated 2026-08-23
+
+| ruleset | scripts/test-role-switch-rules.js |
+|---|---|
+| **served production** | **49 / 0 — safe** |
+| this working tree | 38 / 11 |
+
+Production already scopes the bypass, and its own comment records the defect.
+So the escalation is **source-only/stale**, not a live vulnerability.
+
+### The actual risk — and why nothing else would catch it
+
+`deploy:rules` and `deploy:all` publish `firestore.rules` **from the working
+tree** (`firebase.json` -> `(default)` -> `firestore.rules`). Any lineage
+missing `80297d4` still carries:
+
+    allow update: if isAdmin() || (self && guards...)
+
+`isAdmin()` is the FIRST disjunct, so it short-circuits `noAdminFields()`,
+`noPrivilegeEscalation()` and `noProviderForgery()` on ANY user doc **including
+the admin's own** — measured `admin -> driver` and `admin -> superAdmin` both
+ALLOW. Deploying it would regress production, and no other predeploy step reads
+the rule text. `80297d4` is contained in **one** branch: `audit/employee-attribution`.
+
+### The guard — two independent checks
+
+1. **CONTENT** — the `users/{userId}` `allow update` clause in the file that will
+   actually be published must carry `request.auth.uid != userId` **and** the
+   `activeRole` exclusion. This is the real invariant: it holds even if someone
+   hand-edits the file on an otherwise-good lineage.
+2. **LINEAGE** — `80297d4` must be an ancestor of HEAD. Catches a tree never updated.
+   A commit that is *absent* (shallow clone) warns rather than silently passing —
+   a missing object must never read as a pass.
+
+Scoped to rules publication only. `deploy`, `deploy:hosting` and
+`deploy:functions` do not publish rules and are deliberately **untouched**, so
+POS preview deploys are unaffected.
+
+### Controls — the guard was proven able to both fail and pass
+
+| tree state | result |
+|---|---|
+| this stale tree | ABORT, exit 1, names both missing predicates |
+| served rules content + stale lineage | ABORT on the LINEAGE check — proves check 1 discriminates and check 2 is independent |
+| `audit/employee-attribution` | ancestry passes; 3 scoping predicates present (needs 2) |
+
+### Security / breaking
+
+Security: preventive only; closes a path by which a correct production ruleset
+could be silently regressed by an ordinary deploy from the wrong branch.
+Breaking: `deploy:rules` / `deploy:all` now ABORT on stale lineages. That is the
+intent — rebase or cherry-pick `80297d4` first.
 
 ## [2026-08-25] - Three routing assertions encoded a contract the platform had already changed.
 

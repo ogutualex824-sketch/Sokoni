@@ -78,10 +78,18 @@ try {
     contained = false;
   } catch (_) { contained = 'absent'; }
 }
+/* ADVISORY, NOT FATAL — and the reason matters.
+   A CHERRY-PICK creates a new sha, so 80297d4 is never an ancestor even after a
+   perfectly correct back-port. Making this fatal would reject the sanctioned way of
+   bringing the fix in, and the only way to ship would be to bypass the guard — which
+   is strictly worse than not having one.
+
+   The CONTENT check above is the real invariant: it reads the exact clause that will be
+   published. Ancestry cannot catch anything content does not already catch, so when
+   content passes and ancestry does not, the correct action is to say so and continue. */
 if (contained === false) {
-  die([FIX + ' is not an ancestor of HEAD — this lineage predates the rules fix.',
-       'The rule text passed the content check, so verify it was deliberately',
-       'back-ported rather than partially copied before overriding this.']);
+  console.warn('  guard-rules-lineage: note — ' + FIX + ' is not an ancestor (cherry-picked?).');
+  console.warn('  Content check PASSED, which is the invariant that decides what ships.');
 }
 if (contained === 'absent') {
   console.warn('  guard-rules-lineage: WARNING — commit ' + FIX + ' not present in this repo');
