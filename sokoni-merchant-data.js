@@ -233,6 +233,31 @@
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
     if (p.status !== undefined) out.status = String(p.status || 'active');
     if (p.lowStockThreshold !== undefined) out.lowStockThreshold = Number(p.lowStockThreshold);
+
+    /* ── SPECIFICATIONS, UNITS AND VARIANTS ───────────────────────────────
+       This whitelist DROPS anything it does not name, which is why it is the right
+       place for these: without an entry here, specs and variants would be silently
+       discarded and the editor would appear to save them.
+
+       SokoniProductSpecs owns the shape — one canonical model for groceries, vehicles,
+       electronics and everything else, rather than a schema per category. It returns an
+       ADDITIVE patch: it never writes name, price, category or the plural colors/sizes/
+       weights arrays that live documents already carry.
+
+       `stock` is the exception, and deliberately. Where a product has variants the
+       product-level figure is their SUM, recomputed there rather than taken from input —
+       POS reads products.stock, and two places to change one number is how a till and a
+       catalogue come to disagree about a shelf.
+
+       Absent module = specs simply not stored. It is optional data, so a missing script
+       must not stop a merchant saving a product; price, stock and name are unaffected. */
+    var SP = (typeof window !== 'undefined' && window.SokoniProductSpecs) ||
+             (typeof globalThis !== 'undefined' && globalThis.SokoniProductSpecs) || null;
+    if (SP && (p.specs !== undefined || p.variants !== undefined || p.stockUnit !== undefined)) {
+      var built = SP.build({ specs: p.specs, variants: p.variants, stockUnit: p.stockUnit, stock: out.stock });
+      if (!built.ok) { var se = new Error(built.problems[0]); se.validation = built.problems; throw se; }
+      Object.keys(built.patch).forEach(function (k) { out[k] = built.patch[k]; });
+    }
     return out;
   }
 

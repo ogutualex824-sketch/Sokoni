@@ -700,6 +700,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      consume, so the till and the catalogue cannot disagree about stock. The module holds
      no Firestore import of its own: ctx.db is the only way it can touch storage.
      sokoni-merchant-media.js first — the product editor composes through it for images. -->
+<!-- ONE product specification model for every category — groceries, vehicles,
+     electronics, clothing. Loaded before the writer that consults it; without it specs
+     are simply not stored and a product still saves. -->
+<script src="sokoni-product-specs.js"></script>
 <script src="sokoni-merchant-media.js"></script>
 <script src="sokoni-merchant-products.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
