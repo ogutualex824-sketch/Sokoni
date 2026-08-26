@@ -238,6 +238,79 @@ orphan the `commissionRules` viewer before it has a home.
 **The distinction to preserve:** D2 is a **navigation/registry** violation; the
 `finos.html` gate is a **separate authority** defect. Fixing one does not fix the other.
 
+##### AUTHORITY VERIFIED 2026-08-26 — commission-engine is server-enforced
+
+`functions/commission.js:25`
+
+```js
+function _assertAdmin(req) {
+  if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin)
+    throw new HttpsError('permission-denied', 'Admin access required');
+}
+```
+
+**Fails closed** — optional chaining yields `undefined` for absent auth, absent token or
+absent claims, so every one throws.
+
+| Callable | `_assertAdmin` | Note |
+|---|---|---|
+| `listCommissionRules` | ✅ | before the query is even constructed |
+| `createCommissionRule` | ✅ | before validation/write |
+| `updateCommissionRule` | ✅ | before read/update |
+| `deleteCommissionRule` | ✅ | soft-delete, records `deletedBy` |
+| `previewCommission` | ❌ **by design** | authenticated only; calculator, returns no rule data |
+| `getCommissionConfig` | ❌ **by design** | authenticated only; DEFAULT table, **never reads `commissionRules`** |
+| `getAdminRevenueByHub` | ✅ (inline) | same claim check |
+
+**FOUR deliberately separated concepts**, per the file's own comment (848-852):
+
+| Concept | Endpoint | Authority | Reads `commissionRules` |
+|---|---|---|---|
+| Rule administration | the four rule callables | **admin/superAdmin** | yes |
+| Authoritative calculation | `previewCommission` | authenticated | yes, via `finos-utils` |
+| Seller display | `getCommissionConfig` | authenticated | **no — defaults only** |
+| Admin revenue | `getAdminRevenueByHub` | **admin/superAdmin** | — |
+
+> *"it deliberately requires no admin claim: a seller must be able to see what they will
+> be charged… for a real, order-specific, authoritative figure the caller must use
+> `previewCommission()`. That distinction is the point: this endpoint is for DISPLAY,
+> never for computing money."*
+
+##### What this settles
+
+| Path | Authority |
+|---|---|
+| `commission-engine.html` → callables | **admin/superAdmin claims, server-enforced** |
+| `finos.html` → direct Firestore read | `allow read: if isAuthed()` |
+
+`finos.html` reads **`commissionRules` directly** — the collection the design reserves for
+admin-gated administration — while the sanctioned authenticated-display path
+(`getCommissionConfig`) deliberately returns defaults and never reads it. It is not merely
+a weaker duplicate; it is an authenticated surface reading the administration collection
+that the intended display endpoint pointedly avoids.
+
+**D2 disposition CONFIRMED: retire `finos.html` from Admin navigation. Do not register it.**
+`commission-engine.html` is already the authoritative home, already linked from
+`financial-os.html:171`. No migration and no replacement UI are required.
+
+##### Boundaries that must NOT be blurred
+
+1. **D2 is navigation/certification.** Removing the link resolves D2 only.
+2. **`finos.html` stays directly reachable** behind the unenforced `data-require-role` /
+   `localStorage` gate. Retiring the link does **not** fix that — separate role-authority track.
+3. **`commissionRules` remains `isAuthed()`-readable.** Retiring a page does **not** change a
+   Firestore rule. Whether `isAuthed()` is the right authority for that collection is its own
+   backend-policy question.
+4. **`functions/finos-utils.js:397` reads `commissionRules` directly** server-side. That is a
+   server utility, **not** a client-reachable bypass — and it means `commission.js` is not the
+   only server module touching the collection.
+
+##### Not yet actioned
+
+The navigation removal is a **product change** and awaits explicit authorization. Production
+HOLD stands; D2 remains FAIL in the ledger until the change is made and re-tested.
+
+
 
 
 ### D3 — `enterprise-ops` header collision · ✅ **SCOPE AGREED 2026-08-26**
