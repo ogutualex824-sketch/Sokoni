@@ -287,26 +287,10 @@ service cloud.firestore {
                     && noAdminFields()
                     && noPrivilegeEscalation()
                     && noProviderForgery();
-      /* The admin branch is deliberately NARROWER than isAdmin() alone. Measured before this
-         change (scripts/test-role-switch-rules.js, 36/6): because isAdmin() was the first
-         disjunct it short-circuited noPrivilegeEscalation() — and with it activeRoleApproved(),
-         noSelfGrant(), rolesUnchanged() and noAdminFields() — on ANY user document INCLUDING
-         the admin's own. An admin could set their own activeRole to 'driver' without a driver
-         claim, or to 'superAdmin', and could rewrite another user's activeRole.
-
-         Two constraints, and only two, so admin user-management is otherwise unchanged:
-
-           request.auth.uid != userId   an admin editing their OWN document goes through the
-                                        owner branch, so activeRoleApproved() and noSelfGrant()
-                                        apply to them exactly as to anyone else. Role switching
-                                        selects an already-authorised role; it never grants one.
-
-           activeRole unchanged         activeRole is the user's OWN claim-gated surface
-                                        selection. Admin user-management has no reason to move
-                                        it, and letting the generic bypass do so made the field
-                                        universally writable.
-
-         Every other field an admin console legitimately edits on OTHER users is untouched. */
+      /* isAdmin() was the FIRST disjunct, so an admin short-circuited every guard on ANY
+         user doc INCLUDING their own: measured admin -> driver and admin -> superAdmin both
+         allowed without the claim. Scoped to other users, activeRole excluded, escalation
+         guards applied. See docs/ROLE_SWITCH_BEFORE.md. */
       allow update: if (isAdmin()
                         && request.auth.uid != userId
                         && !request.resource.data.diff(resource.data)
@@ -1866,15 +1850,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    /* BUYER SAVED PLACES. Deliberately NOT named deliveryLocations — that collection,
-       immediately below, is a RIDER's live GPS keyed by riderId. Different data,
-       different owner, and conflating them is a privacy boundary crossed.
-
-       Owned by the buyer ALONE. No seller, no rider, no other buyer may read or write
-       them. A seller receives a destination only through an ORDER that authorises
-       them to see it — a saved place is never copied into a shop document, and the
-       order takes an immutable SNAPSHOT so editing "Home" later cannot rewrite the
-       address on a past purchase. */
     match /userLocations/{uid}/places/{placeId} {
       function mine() { return isAuthed() && request.auth.uid == uid; }
       allow read, delete: if mine();
@@ -2628,10 +2603,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    function ownsBiz(mid) {
+      return isAuthed() && mid is string
+             && exists(/databases/$(database)/documents/businesses/$(mid))
+             && get(/databases/$(database)/documents/businesses/$(mid)).data.ownerId == request.auth.uid;
+    }
     match /posDevices/{deviceId} {
-      allow create: if claimsPosOwner();
-      allow read:   if isPosOwner() || isAdmin();
-      allow update: if isPosOwner() || isAdmin();
+      allow create: if claimsPosOwner() || ownsBiz(request.resource.data.merchantId);
+      allow read:   if isPosOwner() || isAdmin() || ownsBiz(resource.data.merchantId);
+      allow update: if isPosOwner() || isAdmin() || ownsBiz(resource.data.merchantId);
       allow delete: if isAdmin();
     }
 
@@ -4867,6 +4847,24 @@ service cloud.firestore {
       allow write: if false; // CF-only — createBundleDeal
     }
 
+
+    /* ── Stories ──────────────────────────────────────────────────────────
+       Merchant-authored, buyer-visible, 24h. Shaped on mktFlashSales: readable by any
+       signed-in account because buyers discover them, and CF-only for writes because
+       publication, the weekly allocation claim, moderation state, the view counter and
+       expiry are all server decisions. A client that could write here could publish
+       without an allocation and set its own expiry. */
+    match /merchantStories/{storyId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — publishStory, recordStoryView, expireStories
+    }
+
+    /* One free Story per merchant identity per ISO week. Claimed with create()
+       server-side; no client may read another merchant's allocation. */
+    match /storyAllocations/{allocationId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — publishStory claims it atomically
+    }
     match /mktFlashSales/{saleId} {
       allow read:  if isAuthed();
       allow write: if false; // CF-only — createFlashSale, recordFlashSalePurchase
