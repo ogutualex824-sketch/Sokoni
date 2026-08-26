@@ -173,7 +173,7 @@ const negotiated = v1.rows.filter(r => r.outcome !== 'native').map(r => r.id).so
 /* 10 since Products became native in v2. A route only becomes negotiable when one shell
    renders it natively and the other does not; products was kind:'seller' — identical in
    both shells — until the merchant-v2 migration. */
-check('exactly 11 routes need negotiation in v1', negotiated.length === 11, negotiated.join(','));
+check('exactly 12 routes need negotiation in v1', negotiated.length === 12, negotiated.join(','));
 
 /* ── 3. PROOF 1 — v1 + certified registry: no blank native surfaces ──────── */
 console.log('\n3. PROOF — Merchant v1 loading the CERTIFIED registry');
@@ -182,8 +182,8 @@ check('v1 opens NO blank panel on any of the ' + C.ROUTES.length + ' routes', v1
       v1.blanks.length ? v1.blanks.map(b => b.id).join(',') : '0 blanks / ' + C.ROUTES.length + ' routes');
 
 const v1down = v1.rows.filter(r => r.outcome === 'downgrade').map(r => r.id).sort();
-check('the 9 upgraded surfaces DOWNGRADE rather than blank',
-      v1down.join(',') === 'customers,disputes,kra-tax,marketing,messages,products,receipts,shop,staff',
+check('the 10 upgraded surfaces DOWNGRADE rather than blank',
+      v1down.join(',') === 'customers,disputes,flash-sale,kra-tax,marketing,messages,products,receipts,shop,staff',
       v1down.join(','));
 
 const v1hold = v1.rows.filter(r => r.outcome === 'withhold').map(r => r.id).sort();
@@ -283,7 +283,7 @@ check('v2 mechanism supports downgrade for an unported future surface',
       /* 8 with products: the LEGACY map is what makes a downgrade possible, and products
          gained an entry there when it became native. Counting the map's size is the point —
          a shell that cannot downgrade a surface it has not ported blanks instead. */
-      v2Degraded.rows.filter(r => r.outcome === 'downgrade').length === 9,
+      v2Degraded.rows.filter(r => r.outcome === 'downgrade').length === 10,
       v2Degraded.rows.filter(r => r.outcome === 'downgrade').map(r => r.id).join(','));
 const v2SellerKindOk = /m\.kind\s*===\s*'seller'/.test(R('merchant-v2.html'));
 check('...and v2 really mounts kind:"seller" (a downgrade it cannot mount is a lie)',

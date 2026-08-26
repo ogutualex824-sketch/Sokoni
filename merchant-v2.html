@@ -716,6 +716,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
      receipt a merchant reads is the document the till prints, not a second layout. -->
 <script src="sokoni-merchant-receipts.js"></script>
+<script src="sokoni-merchant-flash.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
      inline shell script reads it during first paint. -->
@@ -1530,6 +1531,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      Dashboard and Orders are rebuilt here. Every other native route renders an
      honest placeholder that names itself rather than an empty panel — a blank
      screen is indistinguishable from a broken button. */
+  /* Flash sales, owner-scoped in the QUERY — the same shape Orders uses, so the rule and
+     the read agree rather than the client filtering after the fact. mktFlashSales is
+     `allow write: if false`; every mutation goes through commerceDispatch. */
+  function _flashSales () {
+    var sc = _scope();
+    if (!sc.ok) return Promise.resolve([]);
+    return _q({ collection: 'mktFlashSales',
+                where: [['merchantId', '==', sc.sellerUid]], limit: 100 },
+              'Flash sales are not available yet.');
+  }
+
   function renderNative (id) {
     var p = nativePanel(id);
     if (id === 'orders') return renderOrders(p);
@@ -1917,6 +1929,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        shell's ONE canonical order reader, so a receipt shown here is the same document the
        till prints. It does not read posReceipts — the served rule is `allow write: if false`
        and reads are Cloud-Function-only, so a client read would be denied and swallowed. */
+    /* Flash Sale. The SERVER owns the campaign: commerceDispatch validates the window, the
+       prices and the stock limit and DERIVES discountPct and status itself. This surface
+       does no pricing math, writes nothing, and models no entitlement — a second answer to
+       "what is 30% of this price" is how two figures for one sale appear. */
+    'flash-sale': { global: 'SokoniMerchantFlash',  ctx: function () { return {
+                    scope: _scope(), db: _mdb, shopName: _shopName(),
+                    sales: function () { return _flashSales(); },
+                    callDispatch: function (payload) {
+                      return _callable('commerceDispatch')(payload)
+                        .then(function (r) { return (r && r.data) || r; });
+                    },
+                    go: go,
+                    onToast: toast }; } },
     receipts:   { global: 'SokoniMerchantReceipts',    ctx: function () { return {
                     scope: _scope(), shopName: _shopName(),
                     shop: S.shop || null,

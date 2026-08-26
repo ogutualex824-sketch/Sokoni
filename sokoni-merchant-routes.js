@@ -286,7 +286,9 @@
            'claimed -> /shop/<handle>, unclaimed -> claim flow. Also reachable from the header button.' },
 
     { id:'flash-sale', name:'Flash Sale', icon:'⚡', tier:'more',
-      kind:'seller', sec:'flash',
+      /* NATIVE. sec:'flash' stays as the legacy inbound key — the compatibility
+         resolver forwards ?sec=flash here by that name, and the contract maps it. */
+      kind:'native', sec:'flash',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'flash-sale' },
 

@@ -84,7 +84,10 @@
     products:  'products',
     /* seller.js has a real 'receipts' section (PAGES.receipts), so v1 DOWNGRADES to it
        rather than withholding the route and dropping it from every nav projection. */
-    receipts:  'receipts'
+    receipts:  'receipts',
+    /* seller.js has a real 'flash' section (PAGES.flash), so v1 downgrades to it rather
+       than withholding the route and dropping it from every nav projection. */
+    'flash-sale': 'flash'
   };
 
   /* Routes that are native in the certified registry and were ALSO native in
