@@ -81,7 +81,10 @@
        projection. It is not a new capability with no old equivalent: seller.js has a real
        'products' section (PAGES.products), which is exactly what v1 rendered until now.
        So v1 DOWNGRADES to it and keeps working, while v2 renders natively. */
-    products:  'products'
+    products:  'products',
+    /* seller.js has a real 'receipts' section (PAGES.receipts), so v1 DOWNGRADES to it
+       rather than withholding the route and dropping it from every nav projection. */
+    receipts:  'receipts'
   };
 
   /* Routes that are native in the certified registry and were ALSO native in

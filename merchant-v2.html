@@ -712,6 +712,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
 <script src="sokoni-merchant-products.js"></script>
+<!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in
+     sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
+     receipt a merchant reads is the document the till prints, not a second layout. -->
+<script src="sokoni-merchant-receipts.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
      inline shell script reads it during first paint. -->
@@ -1907,6 +1911,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     go: go,
                     onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
+    /* Receipts — native as of this commit; it was kind:'seller' and framed the legacy shell.
+       It is handed NEITHER a db adapter NOR a callable, and that is the design: it writes
+       nothing. It renders through SokoniReceiptDoc (the locked receipt contract) over the
+       shell's ONE canonical order reader, so a receipt shown here is the same document the
+       till prints. It does not read posReceipts — the served rule is `allow write: if false`
+       and reads are Cloud-Function-only, so a client read would be denied and swallowed. */
+    receipts:   { global: 'SokoniMerchantReceipts',    ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(),
+                    shop: S.shop || null,
+                    orders: function () { return loadOrders(false); },
+                    onPrint: _ctx().onPrint,
+                    onToast: toast }; } },
     staff:      { global: 'SokoniMerchantTeam',        ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callList: _callable('listShopEmployees'), callInvites: _callable('listShopInvites'),

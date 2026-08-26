@@ -169,7 +169,9 @@
            'seller-delivery.html scopes every read to sellerUid == the signed-in seller.' },
 
     { id:'receipts', name:'Receipts', icon:'🧾', tier:'primary',
-      kind:'seller', sec:'receipts',
+      /* NATIVE. sec:'receipts' stays as the legacy inbound key — seller.html's
+         compatibility resolver forwards ?sec=receipts here by that name. */
+      kind:'native', sec:'receipts',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'receipts' },
 
