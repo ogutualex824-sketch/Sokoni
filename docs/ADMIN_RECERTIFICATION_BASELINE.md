@@ -132,8 +132,41 @@ two have no recorded decision at all.
 | `automation-engine.html` | no recorded authorization decision |
 
 Each needs an explicit product/authority decision **later**. Until then they are not
-registered, not reachable from any admin surface, and not certified. This is a confirmation
-of the standing position, not a new restriction.
+registered and not certified.
+
+> **Correction (2026-08-26):** the earlier wording said they were "not reachable from any
+> admin surface". That was assumed, not measured. It is false for `finos.html` — see the
+> violation below.
+
+#### VIOLATION FOUND 2026-08-26 — `financial-os.html` → `finos.html` · 🔴 **FAIL**
+
+Measured by `scripts/recertify-admin-baseline.js` (Phase 2) after three probe defects
+were corrected. The first run's assertion counted *all* reachable cross-page links, so
+this page failed for the wrong reason and other pages failed spuriously. The corrected
+assertion asks the only question D2 cares about: **is an unregistered destination
+reachable?**
+
+| Fact | |
+|---|---|
+| Page | `financial-os.html` |
+| Link | page-local chrome → `finos.html` |
+| Registry | `finos.html` is **NOT registered** |
+| Reachable | **YES** — 1 unregistered present, 1 reachable |
+| D2 result | **5/6 PASS, 1 FAIL** |
+
+**`admin-os.html` remains compliant** — 3 unregistered links present, **0 reachable**.
+They sit buried beneath the shell, which is precisely the state D1 chose to leave
+alone. Presence is not the violation; reachability is.
+
+**Do NOT resolve this by registering `finos.html`.** That would make the test pass by
+granting an uncertified surface an authority nobody has decided. `finos.html` has no
+recorded authorization decision — see D2 above. Nor is this to be fixed by altering
+z-index or shell behaviour.
+
+**Do not fix it before the integration candidate is measured.** Fixing now destroys the
+baseline that shows what the Admin programme actually introduces versus what production
+already had.
+
 
 ### D3 — `enterprise-ops` header collision · ✅ **SCOPE AGREED 2026-08-26**
 

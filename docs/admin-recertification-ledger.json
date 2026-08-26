@@ -1,0 +1,160 @@
+{
+  "tally": {
+    "PASS": 14,
+    "BLOCKED": 7,
+    "FAIL": 3,
+    "UNPROVEN": 1
+  },
+  "rows": [
+    {
+      "phase": "1",
+      "item": "shell renders on 12/12 sampled pages",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "1",
+      "item": "workspace stamped on 12/12",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "1",
+      "item": "shell destinations all registered (12/12)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "1",
+      "item": "authenticated non-admin denial",
+      "state": "BLOCKED",
+      "note": "needs a real non-admin session; stubbing claims proves the stub, not the gate"
+    },
+    {
+      "phase": "2",
+      "item": "admin-os.html chrome preserved (25 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "admin-os.html -- D1 unregistered destinations unreachable",
+      "state": "PASS",
+      "note": "3 unregistered present, 0 reachable"
+    },
+    {
+      "phase": "2",
+      "item": "trust-safety.html chrome preserved (2 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "trust-safety.html -- D1 unregistered destinations unreachable",
+      "state": "PASS",
+      "note": "none present"
+    },
+    {
+      "phase": "2",
+      "item": "financial-os.html chrome preserved (3 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "financial-os.html -- D1 unregistered destinations unreachable",
+      "state": "FAIL",
+      "note": "1 unregistered present, 1 reachable"
+    },
+    {
+      "phase": "2",
+      "item": "subscription-billing.html chrome preserved (0 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "subscription-billing.html -- D1 unregistered destinations unreachable",
+      "state": "PASS",
+      "note": "none present"
+    },
+    {
+      "phase": "2",
+      "item": "commission-engine.html chrome preserved (0 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "commission-engine.html -- D1 unregistered destinations unreachable",
+      "state": "PASS",
+      "note": "none present"
+    },
+    {
+      "phase": "2",
+      "item": "search-quality.html chrome preserved (7 controls, content=true)",
+      "state": "PASS",
+      "note": ""
+    },
+    {
+      "phase": "2",
+      "item": "search-quality.html -- D1 unregistered destinations unreachable",
+      "state": "PASS",
+      "note": "none present"
+    },
+    {
+      "phase": "3/4",
+      "item": "SokoniAdminEntry.guard(admin)",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "3/4",
+      "item": "adminContext resolution",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "3/4",
+      "item": "claims gate on admin.html",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "3/4",
+      "item": "superAdmin path on super-admin.html",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "3/4",
+      "item": "denial on unknown/error state",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "3/4",
+      "item": "verification-admin.html current model",
+      "state": "BLOCKED",
+      "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
+    },
+    {
+      "phase": "5",
+      "item": "section anchors reachable (9/10)",
+      "state": "FAIL",
+      "note": ""
+    },
+    {
+      "phase": "5",
+      "item": "#sec-alerts specifically",
+      "state": "FAIL",
+      "note": "covered by HEADER"
+    },
+    {
+      "phase": "6",
+      "item": "platform-health metric cards",
+      "state": "UNPROVEN",
+      "note": "App Check 403 -- metrics never render; cards cannot be certified here"
+    }
+  ]
+}
