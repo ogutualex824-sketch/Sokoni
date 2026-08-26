@@ -1,3 +1,60 @@
+## [2026-08-26] - FREEZE: implementation-complete, physical E2E unproven.
+
+**The print bridge is frozen for the real-device run.** No further code before a handset, a
+desktop and an actual P58E have produced paper.
+
+```
+phone sale → committed posRetailSales → durable print intent → shop-scoped host
+           → atomic claim → canonical receipt → P58E
+```
+
+**Frozen at `bfbea7c`**, four slices: `de14e27` host registration · `0b8e46a` durable lifecycle ·
+`b887010` phone-sale bridge · `bfbea7c` desktop host UI.
+
+**Freeze verdict — one clean run of everything:**
+
+| suite | result |
+|---|---|
+| `test-printer-host-registration` | 39/0 |
+| `test-printer-autoreconnect` | 23/0 |
+| `test-printer-globals` | 7/0 |
+| `test-print-intent-lifecycle` | 83/0 |
+| `test-print-sale-bridge` | 63/0 |
+| `test-printer-host-ui` | 73/0 |
+| **total** | **288 assertions, 0 failing** |
+| sabotage runners | **32 caught, 0 missed** |
+| `firestore.rules` vs HEAD | **0 changes** — the 255,490 / 256,000 artifact is untouched |
+
+**State: implementation-complete; physical E2E unproven.** 288/0 proves the logic under a stubbed
+environment. It proves **nothing** about Bluetooth, Firebase deployment, browser permissions, the
+real P58E, or the physical print path. Those are different claims and the distinction is kept
+deliberately.
+
+### ⛔ A deploy blocker found while freezing
+
+**A hosting deploy from this worktree would roll production back.** Measured against
+`https://mysokoni.co.ke/version.json` (live `fda3df8`, cache `v558`): this branch lacks **4 live
+commits** and would regress **5 files** — `pos-setup.html`, `service-worker.js`,
+`scripts/deploy/bump-sw-version.js`, `sokoni-responsive.css`, `version.json`. The branch's SW cache
+version is **v555** against live's **v557**, so it also regresses the `-vNN` counter.
+`guard-no-rollback.js` should abort it; if it does, that is the guard working — never force past it.
+
+Checked and safe: the `sokoni_device_id` write in `pos-setup.html` is **identical** on both sides,
+so the print-host identity chain is unaffected. What would be lost is live's extra `pos-setup.html`
+work (+339 lines).
+
+**Indexes and Functions are safe from this worktree** — live's four commits touch neither
+`firestore.indexes.json` nor `functions/`. Only hosting is blocked, and only until those four
+commits are merged in.
+
+**Files:** `docs/findings/PRINT_BRIDGE_E2E_CHECKLIST.md` (deploy blocker, corrected order, and the
+single controlled first transaction added ahead of the eleven attacks).
+
+**Next, and only this:** deploy indexes → deploy the six functions by name → resolve the hosting
+divergence → connect a real P58E → register the desktop explicitly → **one** sale with a
+distinctive amount → confirm 1 sale / 1 intent / 1 claim / 1 print / 1 PRINTED → only then attack
+it with reloads, duplicates, offline and failures.
+
 ## [2026-08-26] - The desktop can now be told it is the printer, and only then does it listen.
 
 **Desktop printer-host UI + startup.** The last missing link: a desktop had no way to *learn* it

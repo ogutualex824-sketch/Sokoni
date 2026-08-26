@@ -29,17 +29,58 @@ Desktop                                     Phone
 
 ---
 
-## Deploy first — in this order
+## ⛔ Read this before deploying hosting
+
+**`feat/merchant-v2-canonical` @ `bfbea7c` is BEHIND LIVE. A hosting deploy from this worktree
+would roll production back.** Measured 2026-08-26 against `https://mysokoni.co.ke/version.json`
+(live = `fda3df8`, cache `v558`):
+
+| | |
+|---|---|
+| commits live has that this branch lacks | **4** |
+| files that would regress | **5** |
+
+```
+fda3df8  chore: stamp production release v557
+f26b0b3  fix: advance shipped service worker version floor
+a4672dc  chore: record live POS setup state
+3795dca  fix: allow vertical scroll chaining from horizontal carousels
+
+pos-setup.html  service-worker.js  scripts/deploy/bump-sw-version.js
+sokoni-responsive.css  version.json
+```
+
+The service-worker cache version on this branch is **`v555`**; live is **`v557`**. Deploying
+hosting from here regresses the `-vNN` counter, which is explicitly forbidden. The predeploy guard
+`scripts/deploy/guard-no-rollback.js` should abort this — **if it does, that is the guard working.
+Never force past it.**
+
+**Checked and safe:** the `sokoni_device_id` write in `pos-setup.html` is *identical* on both
+sides, so the print-host identity chain is not affected by the divergence. Live's extra
+`pos-setup.html` work (+339 lines) is what would be lost.
+
+**Remedy before step 3:** merge or rebase live's four commits into this branch, re-run the suites,
+and re-verify `version.json` after deploying.
+
+## Deploy — in this order
 
 1. **`firebase deploy --only firestore:indexes`.** The listener query is
    `kind == 'printIntent' AND shopId == SHOP AND status == 'PENDING' ORDER BY createdAt`, and the
    composite index must exist *before* anything starts listening, or every listener errors.
+   **Safe from this worktree** — live's four commits do not touch `firestore.indexes.json`.
 2. **Functions**, by name: `registerPrinterHost`, `getPrinterHostStatus`, `createPrintIntent`,
    `claimPrintJob`, `advancePrintJob`, `onPosSaleCompleted`.
-3. **Hosting** — from the latest commit only, and verify `version.json` after.
+   **Safe from this worktree** — live's four commits do not touch `functions/`.
+3. **Hosting** — **BLOCKED** until the divergence above is resolved. Hosting publishes the working
+   tree (`public: "."`), which is exactly why this matters. Verify `version.json` after.
 
 **No rules deploy.** The ruleset is frozen at 255,490 / 256,000 and this work spends none of it.
 Re-verify `firestore.rules` is byte-identical to HEAD before deploying anything else.
+
+Nothing in the print chain is reachable from the UI until step 3 lands, so steps 1–2 can go ahead
+now and change no behaviour on their own — the trigger is the one exception: once deployed it will
+begin writing intents for completed sales at shops that already have a registered host. There are
+none yet, so it writes nothing until a desktop is deliberately registered.
 
 ## Set up once
 
@@ -49,6 +90,28 @@ Re-verify `firestore.rules` is byte-identical to HEAD before deploying anything 
 | Open merchant-v2 → Devices | desktop | `○ Printer not connected · This desktop is not currently the printing host for this shop.` |
 | Press **Connect P58E** | desktop | browser chooser → pairs → `registerPrinterHost` → `● Connected · P58E · Ready to print` |
 | Reload the PWA | desktop | `autoReconnect` restores the link with **no chooser** → `● Connected` |
+
+## The first transaction — do this one alone
+
+**Do not open with ten sales.** One controlled transaction, with a distinctive amount you can find
+by eye in the backend:
+
+```
+PHONE  Sale → KES X
+                ↓
+        posRetailSales/{saleId}          1 sale
+                ↓
+        posPrintJobs/{shopId}__{saleId}  1 intent
+                ↓
+        status CLAIMED, claimedBy = host 1 claim
+                ↓
+        P58E                             1 physical receipt
+                ↓
+        status PRINTED (terminal)        1 terminal state
+```
+
+Establish all five before touching anything else. Five ones, or stop and find out why. Only then
+attack it.
 
 ## The eleven attacks
 
