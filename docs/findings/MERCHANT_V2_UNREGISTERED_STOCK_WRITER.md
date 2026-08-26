@@ -83,3 +83,67 @@ Not attempted here; the print bridge is frozen and this is unrelated to it.
 `gate-inventory-writers` fails, so `test-inventory --gate` fails, so **hosting cannot deploy**.
 The printer-host panel therefore cannot reach production and the five-ones physical test cannot
 run — on a blocker that predates the print bridge entirely.
+
+---
+
+## The "does anything rely on it?" proof — and it inverts the expected answer
+
+Before deleting `stock` from `_productFields`, the question was whether the Products editor
+legitimately relies on create/update to establish stock. **It does — and not only at create.**
+
+`sokoni-merchant-products.js:1474` renders a real, editable field:
+
+```js
+fld('stock', 'Stock', 'type="number" inputmode="numeric" min="0" step="1"', p.stock)
+```
+
+The chain is live from keystroke to document:
+
+```
+"Stock" input (:1474)
+  → data-pf="stock" → captureForm() → S.editor.values.stock
+  → fieldsFromForm()      FORM_KEYS = [name, price, costPrice, stock, sku, category, description, status]
+                          NUMERIC   = { price:1, costPrice:1, stock:1 }
+  → createProduct(product) / updateProduct(patch)
+  → _productFields()      allowlists out.stock
+  → merchant-v2 writeProduct adapter
+  → create: tx.set(ref, data)                    transaction, but for REPLAY idempotency
+    edit:   setDoc(ref, data, { merge: true })   no transaction at all
+       ↑ neither carries inventoryVersion, neither floors at zero
+```
+
+### This contradicts the module's own header, twice
+
+`sokoni-merchant-products.js` states:
+
+> *"Still absent, deliberately: no stock adjustment (Inventory owns that)"* — line 18
+> *"This surface shows stock as a READ and offers no way to change it. The two must not merge."* — lines 37–38
+
+Both are false as written. The surface offers a numeric Stock input and writes it. The prose
+describes the intended design; the code implements a different one. **The prose is not the
+authority — `fld('stock', …)` is.**
+
+### Therefore the fix is NOT deletion
+
+Removing `stock` from `_productFields` would leave a visible, editable "Stock" field in the
+Products editor that silently stops saving. A merchant would type a figure, press save, see
+"Changes saved.", and the shelf count would not move — a fabricated success, and a worse defect
+than the one being fixed.
+
+The correction has to be deliberate, and it has at least three parts:
+
+1. Decide whether product **create** may declare an opening stock. If yes, it needs an explicit
+   adapter into the inventory authority — a transactional write carrying `inventoryVersion` — not
+   a field smuggled through the metadata writer.
+2. **Edit must stop writing stock through this path** regardless. Changing stock on an existing
+   product is inventory movement, and `merchantAdjustStock` already owns it.
+3. The editor's Stock field must then either disappear from edit mode, or route to the inventory
+   authority and *say so*. Whichever is chosen, the module header must be corrected — it currently
+   documents a design the code does not implement, and a future reader trusting it would be
+   misled exactly as this investigation nearly was.
+
+### Scope
+
+None of this belongs in the print bridge. It is an inventory-authority slice with its own proof
+obligation, and it is now the sole remaining blocker between the frozen printer implementation and
+a hosting deploy.
