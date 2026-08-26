@@ -428,7 +428,16 @@ onAuthStateChanged(auth, async (user) => {
   const result = await user.getIdTokenResult(true);
   const claims = result.claims;
 
-  if (!claims.admin && !claims.superAdmin && !claims.moderator) {
+  /* AUTHORIZATION DECISION 2026-08-26: the canonical authority for this console is
+     the registry / shared guard = admin (and firestore.rules isAdmin() = admin ||
+     superAdmin agrees). This gate previously admitted moderator as well, so the
+     page-local declaration was BROADER than the actual authority. Tightened so
+     registry -> shared guard -> page gate -> Firestore rules all state the same
+     tier. This does not weaken access.
+     Consequence: the MODERATOR badge fallback and the role-management hide below
+     are now unreachable. Left in place rather than deleted — they are the shape of
+     a moderator tier, and reversing this decision should not require rebuilding it. */
+  if (!claims.admin && !claims.superAdmin) {
     gate.querySelector(".gate-icon").textContent = "🚫";
     gate.querySelector("h2").textContent = "Access Denied";
     gate.querySelector("p").textContent = "This page is restricted to platform administrators.";
