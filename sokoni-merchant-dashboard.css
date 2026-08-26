@@ -1,0 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SokoniMerchantDashboard — premium, emoji-forward, unmistakably SOKONI
+   ═══════════════════════════════════════════════════════════════════════════════
+   Premium fintech with personality: large intentional emoji, generous type, deep colour,
+   restrained motion. Not a children's app, not a Bootstrap dashboard.
+
+   IT INHERITS THE SHELL'S TOKENS. Colours come from --sk-* / --txt / --bg where the shell
+   defines them, with fallbacks so the module still renders standalone. One override
+   surface, per the design system — this file adds no global resets and no !important.
+
+   MOTION IS OPT-OUT. Every animation sits behind prefers-reduced-motion, and the pulse is
+   additionally gated in JS so an unknown value never moves. Delight a merchant cannot
+   switch off is noise.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.sd {
+  --sd-r: 20px;
+  --sd-gap: 14px;
+  --sd-ink: var(--txt, #0d1117);
+  --sd-sub: var(--txt3, #6b7280);
+  --sd-card: var(--card, #fff);
+  --sd-line: var(--line, rgba(0,0,0,.07));
+  display: flex; flex-direction: column; gap: 22px;
+  padding: 4px 0 28px;
+  color: var(--sd-ink);
+}
+
+/* ── Greeting ─────────────────────────────────────────────────────────────── */
+.sd-hi-t {
+  font-size: clamp(21px, 5.2vw, 27px); font-weight: 800;
+  letter-spacing: -.02em; line-height: 1.2;
+}
+.sd-hi-s { margin-top: 3px; font-size: 14px; color: var(--sd-sub); font-weight: 600; }
+
+/* ── HERO ─────────────────────────────────────────────────────────────────────
+   The day's money. Deep gradient so it reads as the centre of gravity — and a visibly
+   quieter treatment when the figure is unknown, so "we don't know" never wears the same
+   confident skin as a real number. */
+.sd-hero {
+  position: relative; overflow: hidden;
+  border-radius: var(--sd-r);
+  padding: 22px 20px 18px;
+  color: #fff;
+  background:
+    radial-gradient(120% 140% at 100% 0%, #2b6cf6 0%, transparent 55%),
+    radial-gradient(120% 140% at 0% 100%, #7b3fe4 0%, transparent 55%),
+    linear-gradient(135deg, #101a35 0%, #17224a 100%);
+  box-shadow: 0 14px 34px rgba(16,26,53,.24);
+}
+.sd-hero::after {                      /* the slow SOKONI shimmer — decoration only */
+  content: ''; position: absolute; inset: -40% -10% auto -10%; height: 70%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.09), transparent);
+  transform: translateX(-60%); animation: sd-sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+.sd-hero-unknown {
+  background: linear-gradient(135deg, #1b2130 0%, #232a3b 100%);
+  box-shadow: 0 10px 26px rgba(16,26,53,.16);
+}
+.sd-hero-unknown::after { animation: none; }
+
+.sd-hero-l { font-size: 13px; font-weight: 700; letter-spacing: .04em;
+             text-transform: uppercase; opacity: .82; }
+.sd-hero-l span { font-size: 15px; }
+.sd-hero-v {
+  margin-top: 6px;
+  font-size: clamp(34px, 9.4vw, 50px); font-weight: 850;
+  letter-spacing: -.03em; line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.sd-hero-unknown .sd-hero-v { opacity: .55; font-weight: 700; }
+.sd-trend { margin-top: 4px; font-size: 14px; font-weight: 700; color: #6ee7a8; }
+/* The reason a figure is unknown, said plainly rather than hidden in a tooltip. */
+.sd-why  { margin-top: 6px; font-size: 12.5px; font-weight: 600; opacity: .62; }
+
+.sd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.sd-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border-radius: 999px;
+  background: rgba(255,255,255,.11);
+  font-size: 13px; font-weight: 650;
+}
+.sd-chip-e { font-size: 11px; }
+.sd-chip b { font-variant-numeric: tabular-nums; font-weight: 800; }
+.sd-chip-unknown { opacity: .5; }
+.sd-part {
+  margin-left: 4px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(255,255,255,.16); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+.sd-h {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 12px; font-size: 12.5px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--sd-sub);
+}
+.sd-h span { font-size: 15px; }
+
+/* ── Quick actions ────────────────────────────────────────────────────────── */
+.sd-acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sd-gap); }
+@media (max-width: 360px) { .sd-acts { grid-template-columns: repeat(2, 1fr); } }
+
+.sd-act {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 18px 8px 15px;
+  border: 1px solid var(--sd-line); border-radius: 18px;
+  background: var(--sd-card); color: var(--sd-ink);
+  font: inherit; cursor: pointer;
+  /* 44px minimum touch target, comfortably exceeded */
+  min-height: 92px;
+  transition: transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s ease;
+  animation: sd-rise .42s cubic-bezier(.2,.8,.3,1) backwards;
+  animation-delay: calc(var(--i, 0) * 42ms);
+}
+.sd-act::before {                     /* the tone wash, per action */
+  content: ''; position: absolute; inset: 0; opacity: .1;
+  background: var(--sd-tone, #2b6cf6); transition: opacity .18s ease;
+}
+.sd-act:hover  { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(16,26,53,.10); }
+.sd-act:active { transform: translateY(0) scale(.97); }
+.sd-act:active::before { opacity: .2; }
+.sd-act:focus-visible { outline: 3px solid #2b6cf6; outline-offset: 2px; }
+.sd-act-e { position: relative; font-size: 27px; line-height: 1; }
+.sd-act-l { position: relative; font-size: 13px; font-weight: 750; letter-spacing: -.01em; }
+
+.sd-ta { --sd-tone: #16a34a; }   /* Sell     */
+.sd-tb { --sd-tone: #2b6cf6; }   /* Orders   */
+.sd-tc { --sd-tone: #7b3fe4; }   /* Products */
+.sd-td { --sd-tone: #e0791b; }   /* Messages */
+.sd-te { --sd-tone: #0891b2; }   /* Track    */
+.sd-tf { --sd-tone: #c2410c; }   /* Payments */
+
+/* ── Your shop today ──────────────────────────────────────────────────────── */
+.sd-ins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.sd-in {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid var(--sd-line); border-radius: 15px;
+  background: var(--sd-card);
+  animation: sd-slide .44s cubic-bezier(.2,.8,.3,1) backwards;
+  animation-delay: calc(var(--i, 0) * 65ms);
+}
+.sd-in[data-go] { cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
+.sd-in[data-go]:hover { transform: translateX(2px); box-shadow: 0 6px 16px rgba(16,26,53,.08); }
+.sd-in[data-go]:focus-visible { outline: 3px solid #2b6cf6; outline-offset: 2px; }
+.sd-in-e { font-size: 21px; line-height: 1; flex: 0 0 auto; }
+.sd-in-t { font-size: 14.5px; font-weight: 650; line-height: 1.35; }
+
+.sd-empty {
+  margin: 0; padding: 18px 16px;
+  border: 1px dashed var(--sd-line); border-radius: 15px;
+  font-size: 14px; font-weight: 600; color: var(--sd-sub); line-height: 1.45;
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────── */
+@keyframes sd-rise  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes sd-slide { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes sd-sheen { 0%, 62% { transform: translateX(-60%); } 100% { transform: translateX(160%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-act, .sd-in { animation: none; }
+  .sd-hero::after { animation: none; }
+  .sd-act:hover, .sd-in[data-go]:hover { transform: none; }
+  .sd-act, .sd-in { transition: none; }
+}
+
+/* ── Dark ─────────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .sd {
+    --sd-ink: var(--txt, #e6e9ef);
+    --sd-sub: var(--txt3, #98a2b3);
+    --sd-card: var(--card, #161b26);
+    --sd-line: var(--line, rgba(255,255,255,.09));
+  }
+}

@@ -679,6 +679,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-buyer-locations.js"></script>
 <script src="sokoni-fulfilment.js"></script>
 <script src="sokoni-shift.js"></script>
+<link rel="stylesheet" href="sokoni-merchant-dashboard.css">
+<script src="sokoni-merchant-dashboard.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
@@ -1623,7 +1625,40 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     { k: 'aov',      label: 'Avg order' },
     { k: 'refunds',  label: 'Refunds' },
   ];
+  /* ── THE LIVING DASHBOARD ─────────────────────────────────────────────────────
+     SokoniMerchantDashboard owns this surface when it is loaded. It renders the same
+     honest figures the legacy path did — a canonical source or an em dash, never a
+     zero standing in for an unknown — and adds the narrative layer on top.
+
+     The legacy renderer below is KEPT as the fallback for the case where the module
+     script fails to load. A dashboard that renders nothing is worse than a plain one,
+     and the merchant should never meet an empty panel because one file 404'd. */
   function renderDashboard (p) {
+    if (root_hasDashboardModule()) return mountDashboardModule(p);
+    return renderDashboardLegacy(p);
+  }
+  function root_hasDashboardModule () {
+    return !!(window.SokoniMerchantDashboard && typeof window.SokoniMerchantDashboard.mount === 'function');
+  }
+  var _dashInst = null;
+  function mountDashboardModule (p) {
+    try { if (_dashInst && _dashInst.destroy) _dashInst.destroy(); } catch (_) {}
+    _dashInst = window.SokoniMerchantDashboard.mount(p, {
+      scope: _scope(),
+      shopName: _shopName(),
+      userName: merchantDisplayName(),
+      /* THROUGH THE CONTRACT — go() resolves the id and refuses anything undeclared. */
+      go: function (id) { go(id); },
+      db: {
+        queryOrders:        function (spec) { return _q(spec, 'Orders are not available yet.'); },
+        queryProducts:      function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
+        queryStats:         function (spec) { return _q(spec, 'Product statistics are not available yet.'); },
+        queryConversations: function (spec) { return _q(spec, 'Conversations are not available yet.'); },
+      },
+    });
+    return _dashInst;
+  }
+  function renderDashboardLegacy (p) {
     /* getHours() is the DEVICE's local time, which is the merchant's own — not UTC and
        not a server clock. A merchant in Nairobi at 09:00 must read "Good morning". */
     var hour = new Date().getHours();
