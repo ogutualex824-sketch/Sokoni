@@ -1,3 +1,54 @@
+## [2026-08-26] - A phone cannot name another shop and become its printer.
+
+**`registerPrinterHost`** — the desktop PWA holds the Bluetooth link to the P58E; a phone sale
+must never reach that printer directly. This establishes who the authorised host is, server-side.
+
+The invariant the whole design rests on: **the caller never supplies `merchantId`.** It is read
+from the stored `posDevices/{deviceId}` document, so the request is only a pointer to a record
+whose ownership is already fixed. Passing someone else's shop id changes nothing.
+
+- Authorisation is the check `registerDevice` already makes — `businesses.ownerId`,
+  `merchants.ownerId`, `merchants.adminUids`, active `posStaff` — reused rather than re-derived,
+  so the two functions cannot drift into two answers about who runs a shop.
+- **One active host per shop.** A second registration is refused unless `replace: true` is passed.
+  Clear-old and set-new happen in ONE transaction, with the existing-hosts query inside it, so two
+  desktops racing cannot both end up hosting. Two hosts sharing print duty is how one sale becomes
+  two receipts.
+- **Device ids are taken as found.** `registerDevice` demands a UUID v4; `bootstrapDevice` writes
+  any sanitised string, and production holds both. Re-validating here would make a
+  bootstrap-created desktop permanently ineligible to host.
+- The write is additive: only `printerHost*` fields. `printerHostAt` is not reset by a repeat
+  registration, so it means "has held since", not "last heartbeat".
+
+**No rules change.** `posDevices` stays server-write-only; `printerHost: true` is not the
+authority, the server-verified chain is. No Bluetooth or GATT code was touched.
+
+**Files:** `functions/device-manager.js` (new callable), `functions/index.js:12124`
+(re-export by name — a function index.js does not re-export is never deployed),
+`scripts/test-printer-host-registration.js` (new), `docs/findings/POSDEVICES_SELLERID_DEAD_DISJUNCT.md` (new).
+
+**Proof:** 39/0, executing the callable against a Firestore stub with real transaction semantics —
+not inspecting its source. Four sabotages confirm the suite bites: trusting a caller-supplied
+`merchantId` (2 fails), skipping the ownership check (4), moving the clear outside the transaction
+(2), and `set` without `merge` (5). An earlier sabotage round reported 0 failures for two of these
+and was wrong twice over — `String.replace` had hit the identical check inside `registerDevice`
+instead, and a throwing case aborted the file, which prints no FAIL lines and reads exactly like a
+clean pass to anything counting them. Both instruments were fixed before the result was believed.
+
+**Recorded, not fixed:** `isPosOwner()` resolves against `sellerId`, present on **0/20** live
+posDevices while `merchantId` is on 20/20 — a dead disjunct, which retroactively proves that the
+lineage which dropped `ownsBiz` would have denied every merchant access to all their own POS
+devices. `sellerId` is deliberately NOT being added; see the finding.
+
+**Known gap:** `scripts/migrate-canonical-business.js` re-identifies devices (`mergedFrom` on 5/20)
+and does not carry `printerHost` across. A re-run silently costs a merchant their print
+destination. Documented rather than automated — guessing which of two merged devices should host is
+worse than asking.
+
+**Database:** additive `printerHost`, `printerHostAt`, `printerHostLastSeenAt`,
+`printerHostReplacedAt`, `printerHostReplacedBy`, `printerName`, `printerDeviceKey`,
+`printerTransport` on `posDevices`. **Breaking:** none.
+
 ## [2026-08-25] - Two suites asserted OPPOSITE things about the same rule.
 
 `scripts/test-role-rules.js` (55/2 -> 57/0). Test only. No rules, no product code.

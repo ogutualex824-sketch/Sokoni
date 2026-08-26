@@ -651,9 +651,169 @@ exports.cleanupStaleDevices = onSchedule(
   }
 );
 
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   registerPrinterHost — declare THIS device the shop's printer host
+   ═══════════════════════════════════════════════════════════════════════════════
+   The desktop SOKONI PWA holds the Bluetooth link to the P58E. A phone sale must never
+   reach that printer directly; it creates durable work, and an authorised host executes it.
+   This establishes who that host is.
+
+   THE CALLER NEVER SUPPLIES merchantId. It is read from the STORED posDevices document, so
+   a phone cannot name somebody else's shop and become its print destination. The device
+   record is the ownership fact; the request is only a pointer to it.
+
+   `printerHost: true` is NOT the authority. The authority is the server-verified chain:
+
+       authenticated user -> owns/administers the shop -> that shop owns this device
+
+   which is why this is a callable and why posDevices remains `allow write: if false` for
+   clients. No rules change accompanies this.
+
+   AUTHORISATION is the same check registerDevice already makes — businesses.ownerId,
+   merchants.ownerId, merchants.adminUids, or active posStaff on the branch — reused rather
+   than re-derived, so the two functions cannot drift into two answers about who runs a shop.
+   It is also the server mirror of the rules' ownsBiz(), so client reads and server writes
+   agree on what ownership means.
+
+   ONE ACTIVE HOST PER SHOP. A second registration is REFUSED unless the caller passes
+   replace:true. Two desktops silently sharing print responsibility is how one sale becomes
+   two receipts, and the atomic transaction below is what makes the winner unambiguous.
+
+   DEVICE IDS ARE TAKEN AS FOUND. registerDevice demands a UUID v4; bootstrapDevice writes
+   any sanitised string, and production holds both. Re-imposing UUID validation here would
+   make a bootstrap-created desktop permanently ineligible to host.
+
+   MIGRATION INVARIANT: scripts/migrate-canonical-business.js re-identifies devices and
+   stamps mergedFrom/mergedAt (present on 5 of 20 live devices). It does not carry
+   printerHost across. If that migration runs again, a merchant silently loses their print
+   destination and must re-register. Documented rather than automated: the migration is a
+   one-off, and guessing which of two merged devices should host is worse than asking.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+exports.registerPrinterHost = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+  const { deviceId, printerIdentity, replace } = req.data || {};
+
+  if (!deviceId) _err('deviceId is required.');
+  /* Taken as found — see the note above on the two id vocabularies. */
+  const safeDeviceId = _san(String(deviceId), 200);
+
+  const deviceRef = db.collection('posDevices').doc(safeDeviceId);
+  const deviceSnap = await deviceRef.get();
+  if (!deviceSnap.exists) {
+    _err('That device is not registered. Register the device before making it a printer host.',
+         'not-found');
+  }
+
+  const device = deviceSnap.data() || {};
+  /* THE SHOP, from the record. Never from the request. */
+  const merchantId = device.merchantId;
+  const branchId = device.branchId || null;
+  if (!merchantId) {
+    _err('That device has no shop on its record, so it cannot host a printer.', 'failed-precondition');
+  }
+
+  /* ── Authorisation: identical to registerDevice ─────────────────────────── */
+  const [bizSnap, merchantSnap, staffSnap] = await Promise.all([
+    db.collection('businesses').doc(merchantId).get(),
+    db.collection('merchants').doc(merchantId).get(),
+    branchId
+      ? db.collection('posStaff')
+          .where('branchId', '==', branchId)
+          .where('uid', '==', uid)
+          .where('status', '==', 'active')
+          .limit(1)
+          .get()
+      : Promise.resolve({ empty: true }),
+  ]);
+
+  if (!_isAdmin(req)) {
+    const isOwner =
+      (bizSnap.exists && bizSnap.data().ownerId === uid) ||
+      (merchantSnap.exists && (
+        merchantSnap.data().ownerId === uid ||
+        (Array.isArray(merchantSnap.data().adminUids) && merchantSnap.data().adminUids.includes(uid))
+      ));
+    if (!isOwner && staffSnap.empty) {
+      _err('You do not have permission to set a printer host for this shop.', 'permission-denied');
+    }
+  }
+
+  const ident = printerIdentity || {};
+  const printerDeviceKey = ident.deviceKey ? _san(String(ident.deviceKey), 200) : null;
+  const printerTransport = ident.transport ? _san(String(ident.transport), 32) : 'bluetooth';
+  const printerName = ident.name ? _san(String(ident.name), 120) : null;
+
+  /* ── The assignment, atomically ─────────────────────────────────────────── */
+  const result = await db.runTransaction(async (txn) => {
+    /* Every existing host for this shop. A query inside the transaction so a second desktop
+       racing the same registration cannot slip between the read and the write. */
+    const hostsSnap = await txn.get(
+      db.collection('posDevices')
+        .where('merchantId', '==', merchantId)
+        .where('printerHost', '==', true)
+        .limit(10)
+    );
+
+    const others = hostsSnap.docs.filter((d) => d.id !== safeDeviceId);
+
+    /* Re-registering the same device is idempotent: it refreshes the identity and the
+       heartbeat, and does not create a second host or need `replace`. */
+    const alreadyThis = hostsSnap.docs.some((d) => d.id === safeDeviceId);
+
+    if (others.length && !replace) {
+      const err = new HttpsError(
+        'already-exists',
+        'This shop already has a printer host. Pass replace to move printing to this device.',
+      );
+      err.details = { currentHost: others[0].id, currentHostName: (others[0].data() || {}).printerName || null };
+      throw err;
+    }
+
+    /* Replacement clears the previous host IN THE SAME TRANSACTION, so the shop is never
+       momentarily hostless and never briefly double-hosted. */
+    others.forEach((d) => {
+      txn.update(d.ref, {
+        printerHost: false,
+        printerHostReplacedAt: F.serverTimestamp(),
+        printerHostReplacedBy: safeDeviceId,
+      });
+    });
+
+    /* ADDITIVE. Only printerHost* fields are written; deviceId, merchantId, branchId,
+       cashierId, status, connectivity and the heartbeats are untouched. */
+    const patch = {
+      printerHost: true,
+      printerHostLastSeenAt: F.serverTimestamp(),
+      printerTransport,
+    };
+    if (!alreadyThis) patch.printerHostAt = F.serverTimestamp();
+    if (printerDeviceKey) patch.printerDeviceKey = printerDeviceKey;
+    if (printerName) patch.printerName = printerName;
+    txn.set(deviceRef, patch, { merge: true });
+
+    return { replaced: others.map((d) => d.id), wasAlreadyHost: alreadyThis };
+  });
+
+  _log('INFO', 'printer host registered', {
+    deviceId: safeDeviceId, merchantId, uid,
+    replaced: result.replaced, idempotent: result.wasAlreadyHost,
+  });
+
+  return {
+    ok: true,
+    deviceId: safeDeviceId,
+    merchantId,
+    printerHost: true,
+    replaced: result.replaced,
+    alreadyHost: result.wasAlreadyHost,
+  };
+});
+
 /* ── Exports ─────────────────────────────────────────────────────── */
 module.exports = {
   registerDevice:      exports.registerDevice,
+  registerPrinterHost: exports.registerPrinterHost,
   deviceHeartbeat:     exports.deviceHeartbeat,
   lockDevice:          exports.lockDevice,
   unlockDevice:        exports.unlockDevice,

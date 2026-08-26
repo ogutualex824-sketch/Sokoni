@@ -12121,6 +12121,7 @@ exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
 /* ── Device Manager v1.0 ────────────────────────────────────────────────── */
 const deviceMgr = require('./device-manager');
 exports.registerDevice            = deviceMgr.registerDevice;
+exports.registerPrinterHost       = deviceMgr.registerPrinterHost;
 exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
 exports.lockDevice                = deviceMgr.lockDevice;
 exports.unlockDevice              = deviceMgr.unlockDevice;
