@@ -1603,6 +1603,27 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     };
     var blank = function () { TILES.forEach(function (t) { set(t.k, null); }); };
 
+    /* ── THE DATASET IS KNOWN-INCOMPLETE, SO THE TILES STAY DARK ──────────────
+       These figures would be computed correctly, from the canonical engine, over
+       every order this shell can read — and they would still be WRONG, because the
+       shell cannot read POS sales at all.
+
+       Measured against the live collection on 2026-08-26: all 5 posRetailSales
+       documents carry `merchantId` + `sellerUid`, while the served rule authorises
+       `sellerId` / `cashierUid`. Every merchant read of their own POS sales is denied,
+       and the denial is swallowed. That is real money missing from the top line.
+
+       A correct number over an incomplete dataset is the worst of the three states: a
+       merchant cannot tell it from a complete one, whereas a dash asks a question. So
+       Dashboard money stays neutral until the POS ownership authority is repaired —
+       which is a POS/payments change, not a merchant-v2 one (see
+       docs/findings/POS_RETAIL_SALES_OWNERSHIP.md).
+
+       Flip this to true in ONE place when that lands. The wiring below is finished and
+       proven; it is the data authority that is not. */
+    var POS_SALES_READABLE = false;
+    if (!POS_SALES_READABLE) { blank(); return noteIncomplete(); }
+
     if (ORD.rows) return paint(ORD.rows);
     if (ORD.loading) return;
     ORD.loading = true;
@@ -1612,6 +1633,21 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       ORD.rows = r.rows;                       /* the SAME cache Orders and Analytics use */
       paint(r.rows);
     }).catch(function () { ORD.loading = false; blank(); });
+
+    /* Say WHY the dashes are there. An unexplained dash reads as a bug; an explained one
+       is a statement about the data. Never a zero, and never a figure we know is short. */
+    function noteIncomplete () {
+      var host2 = document.getElementById('dash-stats');
+      if (!host2 || host2.dataset.noted === '1') return;
+      host2.dataset.noted = '1';
+      var n = document.createElement('div');
+      n.className = 'note';
+      n.innerHTML = '<b>Today’s figures are not shown yet.</b> This workspace cannot ' +
+        'currently read POS sales, so any revenue total here would be missing your ' +
+        'in-shop takings. A dash is shown rather than a number that looks complete and ' +
+        'is not. Online orders are unaffected and still listed under Orders.';
+      host2.parentNode.insertBefore(n, host2.nextSibling);
+    }
 
     function paint (rows) {
       var a = metricsFor(inRange(rows));

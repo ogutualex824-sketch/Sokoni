@@ -148,6 +148,27 @@ ok(/'—'/.test(painter) && /blank\s*\(/.test(painter),
 ok(!/\bset\([^)]*,\s*0\s*\)/.test(painter),
    'no tile is ever set to a literal 0 as a stand-in for unknown');
 
+/* ── DASHBOARD MONEY MAY NOT OUTRUN THE DATASET ───────────────────────────────
+   merchant-v2 cannot read posRetailSales: all 5 live documents carry merchantId/sellerUid
+   while the served rule authorises sellerId/cashierUid, so every merchant read of their own
+   POS sales is denied (docs/findings/POS_RETAIL_SALES_OWNERSHIP.md — KES 13,680).
+
+   A revenue total computed correctly over an incomplete dataset is worse than no total: the
+   merchant cannot tell it from a complete one. So the tiles stay dark behind one flag.
+
+   This is NOT asserted as "the flag is false" — that would have to be edited on the day the
+   fix lands, which is when nobody wants a test in the way. It asserts the INVARIANT: money
+   may only light up once a POS source is actually registered. It therefore keeps passing
+   through the real fix and fails only on a premature flip. */
+const flagOn = /var\s+POS_SALES_READABLE\s*=\s*true/.test(v2);
+const hasPosSource = /setPosProvider|posRetailSales['"]\s*\)|SokoniOrderService/.test(v2);
+ok(/POS_SALES_READABLE/.test(v2),
+   'CONTROL: the dataset-completeness flag exists (otherwise this check is vacuous)');
+ok(!flagOn || hasPosSource,
+   'Dashboard money is not enabled while merchant-v2 still has no POS sales source');
+ok(/noteIncomplete|not shown yet/.test(v2),
+   'the dash is EXPLAINED on screen — an unexplained dash reads as a bug, not as a statement');
+
 /* Commission display. 5% is the marketplace rate, but MIN_COMMISSION_KES = 10 dominates
    small sales: a KES 97 order is charged KES 10 — 10.3%, not 5%. A surface that renders a
    flat "5%" is inaccurate under ~KES 200, so wherever merchant-v2 shows commission it must
