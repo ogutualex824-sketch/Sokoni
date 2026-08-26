@@ -117,6 +117,16 @@ const APPCHECK_DEBUG_KEY = 'SOKONI_APPCHECK_DEBUG_TOKEN';
 let _appCheck = null;
 let _pinnedToken = null;
 
+/* Whether App Check SDK INITIALISATION itself failed (initializeAppCheck threw, or
+   the debug bootstrap threw) — as opposed to a token exchange being rejected, which
+   is a normal, intermittent condition and NOT an init failure. The fresh-session gate
+   (sokoni-appcheck-gate.js) reads this to decide fail-closed: a genuine init failure
+   must keep the app blocked, whereas a rejected/timed-out token still means the SDK
+   initialised and the gate may reveal (the auth calls handle token issues themselves,
+   because identitytoolkit.googleapis.com does not enforce App Check). Additive signal
+   only — it changes nothing about App Check enforcement. */
+window.__sokoniAppCheckInitFailed = false;
+
 try {
   if (IS_LOCALHOST) {
     try { _pinnedToken = localStorage.getItem(APPCHECK_DEBUG_KEY); } catch (_) {}
@@ -147,6 +157,9 @@ try {
     isTokenAutoRefreshEnabled: true,
   });
 } catch (e) {
+  /* Genuine initialisation failure — record it so the fresh-session gate fails
+     closed instead of silently letting the app through. */
+  window.__sokoniAppCheckInitFailed = true;
   /* Never leak internals to end users; developers get the detail. */
   if (IS_LOCALHOST) console.error('[SOKONI] App Check init failed:', e.message);
   else console.error('[SOKONI] Security check unavailable. Please refresh and try again.');

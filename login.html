@@ -1,7 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" data-appcheck-gate="form">
 <head>
   <script src="sokoni-crash-sentinel.js"></script>
+  <!-- Fresh-session security gate: hold the login form behind App Check init, then
+       reveal. Fails closed on init failure. See sokoni-appcheck-gate.js. -->
+  <script src="sokoni-appcheck-gate.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">

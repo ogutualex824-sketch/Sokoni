@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" style="background:#050505">
+<html lang="en" data-splash="1" data-appcheck-gate="app" style="background:#050505">
 
 <head>
   <!-- ── CANONICAL TEMPLATE IDENTIFIER ─────────────────────────────────────────
@@ -24,6 +24,13 @@
        accounts crash/reload. Read the captured reason on the phone at /android-doctor.
        Self-contained, no dependencies, fails open. -->
   <script src="sokoni-crash-sentinel.js"></script>
+
+  <!-- Fresh-session security gate — paints an interaction-blocking overlay until
+       App Check / reCAPTCHA has initialised, then (signed-out) shows the Login/Sign
+       Up gate or (signed-in) reveals the app. Fails CLOSED on init failure. Runs
+       early and NOT deferred so nothing usable renders underneath first. See
+       sokoni-appcheck-gate.js. -->
+  <script src="sokoni-appcheck-gate.js"></script>
   <!-- Canonical root guard — verifies this really is the marketplace shell and self-heals
        if a different template ever renders at "/". Loads FIRST and synchronously so the
        check runs before the user can interact with a wrong page. Fails open. -->
