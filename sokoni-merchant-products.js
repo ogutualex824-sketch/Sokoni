@@ -173,6 +173,19 @@
     '.pr-dvar i{font-style:normal;font-weight:800;color:var(--acc,#71ff00);margin-left:10px}',
     '.pr-dacts{display:grid;gap:8px;margin-top:18px}',
     '.pr-dacts .pr-btn.danger{color:#ff6b6b;border-color:rgba(255,107,107,.34)}',
+    '.pr-picks{display:grid;gap:10px;margin-bottom:10px}',
+    '.pr-pick{display:flex;gap:11px;align-items:flex-start;padding:10px;border-radius:14px;',
+      'background:rgba(255,255,255,.04);position:relative}',
+    '.pr-pimg{width:82px;height:82px;flex:0 0 82px;border-radius:11px;object-fit:cover;',
+      'background:rgba(255,255,255,.06);display:block}',
+    '.pr-ptools{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}',
+    '.pr-ptool{padding:8px 11px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;',
+      'font-weight:800;background:transparent;color:inherit;',
+      'border:1px solid var(--line,rgba(255,255,255,.16))}',
+    '.pr-ptool[disabled]{opacity:.45;cursor:default}',
+    '.pr-pbusy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;',
+      'border-radius:14px;background:rgba(0,0,0,.55);font-size:12.5px;font-weight:800}',
+
 
 
 
@@ -827,6 +840,9 @@
        a repaint replaces the <input type=file>, and a replaced file input is
        empty. Reading it later would silently upload nothing. */
     var _picked = [];
+    /* Pre-edit copies, so an AI edit can be undone without re-picking the photo. */
+    var _originals = [];
+    var _previewUrls = [];
 
     function onFiles (fileList) {
       var E = S.editor;
@@ -836,6 +852,7 @@
 
       var check = M.validateAll(fileList);
       _picked = check.accepted;
+      _originals = [];                 /* a new selection has nothing to undo back to */
       E.rejected = check.rejected;
       E.err = null;
       /* Every refusal is shown, and the acceptable files are still offered —
@@ -888,6 +905,136 @@
       });
     }
 
+
+    /* ── AI PHOTO EDITING ─────────────────────────────────────────────────────
+       The tools already exist: sokoni-creative.js has removeBackground,
+       enhanceProduct and smartCrop, each returning a canvas. This connects them to the
+       product being created. Nothing here is a second image pipeline.
+
+       WHAT IT CHANGES. The IMAGE, and only the image. An edit replaces the pending File
+       in _picked and nothing else — name, price, stock, SKU, specifications and variants
+       are canonical product data and are not this feature's business. The upload path is
+       untouched: submitPhotos still uploads _picked through the same media module and the
+       same Storage convention, so the rule that checks request.auth.uid == uid is still
+       what stops a bad write.
+
+       HONEST PROVENANCE: seller.html labelled its product-image input "✨ AI enhanced" and
+       nothing behind it did anything — addProductImages() made a blob URL and
+       sokoni-creative.js was never loaded on that page. This is the first time product
+       photos are actually edited, so it is a build rather than a restore.
+
+       THE QUOTA IS NOT OURS TO DECIDE. SokoniAISubs.checkAndGate() owns entitlement and
+       shows its own upgrade prompt; a refusal here is a refusal, never a silent downgrade
+       to running the tool anyway. */
+    var AI_TOOLS = [
+      { id: 'rmbg',    label: '✨ Remove background', feature: 'removeBackground', fn: 'removeBackground' },
+      { id: 'enhance', label: '💡 Enhance',           feature: 'enhanceImage',     fn: 'enhanceProduct' },
+      { id: 'crop',    label: '⬜ Square crop',        feature: 'smartCrop',        fn: 'smartCrop' },
+    ];
+
+    function creative () {
+      return (typeof window !== 'undefined' && window.SokoniCreative) || null;
+    }
+
+    /* A canvas back to a File, keeping the original name so the upload path and any
+       error message still refer to the photo the merchant chose. PNG for a removed
+       background — JPEG has no alpha, and re-encoding a cut-out as JPEG silently paints
+       the transparency black. */
+    function canvasToFile (canvas, original, tool) {
+      return new Promise(function (resolve, reject) {
+        var png = (tool === 'rmbg');
+        var type = png ? 'image/png' : 'image/jpeg';
+        var name = String((original && original.name) || 'photo').replace(/\.[^.]+$/, '') +
+                   (png ? '.png' : '.jpg');
+        try {
+          canvas.toBlob(function (blob) {
+            if (!blob) return reject(new Error('The edited photo could not be prepared.'));
+            try {
+              resolve(new File([blob], name, { type: type }));
+            } catch (e) {
+              /* Older WebKit has no File constructor — the Blob carries the data and the
+                 media module reads .name/.type defensively. */
+              blob.name = name;
+              resolve(blob);
+            }
+          }, type, png ? undefined : 0.92);
+        } catch (e) { reject(e); }
+      });
+    }
+
+    async function applyAiTool (index, toolId) {
+      var E = S.editor;
+      if (!E || E.mode !== 'photos') return;
+      var tool = null;
+      AI_TOOLS.forEach(function (t) { if (t.id === toolId) tool = t; });
+      var file = _picked[index];
+      var C = creative();
+      if (!tool || !file || !C || typeof C[tool.fn] !== 'function') {
+        E.err = 'The photo editor is not available just now.';
+        return paint();
+      }
+
+      /* Entitlement FIRST, before any work — a merchant must not watch a photo process
+         and then be told they cannot have it. */
+      var gate = (typeof window !== 'undefined') && window.SokoniAISubs;
+      if (gate && typeof gate.checkAndGate === 'function') {
+        var allowed = false;
+        try { allowed = await gate.checkAndGate(tool.feature, tool.label); }
+        catch (e) { allowed = false; }
+        if (!allowed) return;              /* the authority showed its own prompt */
+      }
+
+      E.aiBusy = index; E.err = null; paint();
+      try {
+        var canvas = await C[tool.fn](file);
+        var edited = await canvasToFile(canvas, file, toolId);
+        /* Keep the ORIGINAL so an edit can be undone without re-picking the photo. */
+        _originals[index] = _originals[index] || file;
+        _picked[index] = edited;
+      } catch (e) {
+        E.err = 'That edit could not be applied. The original photo is unchanged.';
+      }
+      E.aiBusy = null;
+      paint();
+    }
+
+    function undoAiTool (index) {
+      if (_originals[index]) { _picked[index] = _originals[index]; _originals[index] = null; }
+      paint();
+    }
+
+    /* Per-photo preview + tools. Previously the sheet showed only a COUNT of chosen
+       photos, so a merchant could not see what they were about to upload, let alone edit
+       it. objectURLs are revoked on the next paint to avoid leaking one per repaint. */
+    function pickedHTML () {
+      if (!_picked.length) return '';
+      var C = creative();
+      var E = S.editor || {};
+      _revokePreviews();
+      return '<div class="pr-picks">' + _picked.map(function (f, i) {
+        var url = null;
+        try { url = URL.createObjectURL(f); _previewUrls.push(url); } catch (_) {}
+        var busy = E.aiBusy === i;
+        return '<div class="pr-pick">' +
+          (url ? '<img class="pr-pimg" alt="" src="' + esc(url) + '">' : '<div class="pr-pimg"></div>') +
+          '<div class="pr-ptools">' +
+            (C ? AI_TOOLS.map(function (t) {
+                   return '<button class="pr-ptool" data-pr="ai" data-i="' + i + '" data-tool="' + t.id + '"' +
+                     (busy ? ' disabled' : '') + '>' + t.label + '</button>';
+                 }).join('')
+               : '<div class="pr-note">Photo editing is unavailable on this device.</div>') +
+            (_originals[i] ? '<button class="pr-ptool" data-pr="aiundo" data-i="' + i + '">↩︎ Undo edit</button>' : '') +
+          '</div>' +
+          (busy ? '<div class="pr-pbusy">Working…</div>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    function _revokePreviews () {
+      _previewUrls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (_) {} });
+      _previewUrls = [];
+    }
+
     function photosHTML () {
       var E = S.editor, p = E.product || {};
       var M = (typeof window !== 'undefined') && window.SokoniMerchantMedia;
@@ -902,7 +1049,7 @@
           'It can still be sold — a photo simply helps it sell.</div>';
 
       var chosen = _picked.length
-        ? '<div class="pr-note">' + _picked.length +
+        ? pickedHTML() + '<div class="pr-note">' + _picked.length +
           (_picked.length === 1 ? ' photo ready to upload.' : ' photos ready to upload.') + '</div>'
         : '';
 
@@ -1367,6 +1514,17 @@
          them — otherwise Edit would open a detail sheet instead of the editor. */
       /* The overflow menu. One open at a time, and tapping the same control closes it —
          a menu that only ever opens is a menu a merchant has to navigate away from. */
+      var aiBtn = ev.target.closest && ev.target.closest('[data-pr="ai"]');
+      if (aiBtn && aiBtn.getAttribute && aiBtn.getAttribute('data-pr') === 'ai') {
+        applyAiTool(Number(aiBtn.getAttribute('data-i')), aiBtn.getAttribute('data-tool'));
+        return;
+      }
+      var aiUndo = ev.target.closest && ev.target.closest('[data-pr="aiundo"]');
+      if (aiUndo && aiUndo.getAttribute && aiUndo.getAttribute('data-pr') === 'aiundo') {
+        undoAiTool(Number(aiUndo.getAttribute('data-i')));
+        return;
+      }
+
       var menuBtn = ev.target.closest && ev.target.closest('[data-pr="menu"]');
       if (menuBtn && menuBtn.getAttribute && menuBtn.getAttribute('data-pr') === 'menu') {
         var mi = Number(menuBtn.getAttribute('data-i'));

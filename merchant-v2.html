@@ -705,6 +705,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      are simply not stored and a product still saves. -->
 <script src="sokoni-product-specs.js"></script>
 <script src="sokoni-merchant-media.js"></script>
+<!-- AI product photography. sokoni-creative.js already implements removeBackground,
+     enhanceProduct and smartCrop; sokoni-ai-subscriptions.js owns the per-plan quota and
+     shows its own upgrade prompt. Products connects them to the photo being uploaded — it
+     adds no second image pipeline and no entitlement logic of its own. -->
+<script src="sokoni-ai-subscriptions.js"></script>
+<script src="sokoni-creative.js"></script>
 <script src="sokoni-merchant-products.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
