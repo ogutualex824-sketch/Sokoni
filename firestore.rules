@@ -3382,8 +3382,11 @@ service cloud.firestore {
     }
 
     match /posPrintJobs/{jobId} {
+      /* Shop-owner path is ADDITIVE — a cashier-created job carries the cashier's uid.
+         Rationale: docs/findings/PWA_PRINTER_HOST_PLAN.md */
       allow read:             if isAdmin()
-                              || (isAuthed() && resource.data.uid == request.auth.uid);
+                              || (isAuthed() && resource.data.uid == request.auth.uid)
+                              || (isAuthed() && ownsBiz(resource.data.shopId));
       allow create, update, delete: if false;  
     }
 
