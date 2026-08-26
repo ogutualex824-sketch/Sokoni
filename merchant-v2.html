@@ -695,6 +695,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-store-ui.js"></script>
 <script src="sokoni-merchant-tax.js"></script>
 <script src="sokoni-merchant-tax-ui.js"></script>
+<!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
+     Reports comes from here; this shell computes none of its own. Not deferred: the
+     inline shell script reads it during first paint. -->
+<script src="sokoni-analytics-engine.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1555,9 +1559,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       '<div class="greet"><b>' + part + (who ? ', ' + esc(who) : '') + '</b>' +
       '<small>Here’s what’s happening with your business today.</small></div>' +
       '<div class="sec-t">Today</div>' +
-      '<div class="stats">' +
+      '<div class="stats" id="dash-stats">' +
         TILES.map(function (t) {
-          return '<div class="stat neutral"><b>—</b><small>' + esc(t.label) + '</small></div>';
+          return '<div class="stat neutral" data-tile="' + t.k + '"><b>—</b><small>' +
+                 esc(t.label) + '</small></div>';
         }).join('') +
       '</div>' +
       '<div class="sec-t">Quick actions</div>' +
@@ -1567,9 +1572,57 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         '<button class="act ghost" data-route="inventory">📦 Inventory</button>' +
         '<button class="act ghost" data-route="products">🏷️ Products</button>' +
       '</div>' +
-      '<div class="note"><b>Figures show — until a canonical source is connected.</b> ' +
-      'This shell does not compute revenue locally; an unknown is shown as a dash rather ' +
-      'than as a zero, because a zero reads as a real result.</div>';
+      '<div class="note"><b>Commission is 5% of each completed sale, or KES 10, ' +
+      'whichever is greater.</b> The minimum dominates small sales — a KES 97 order is ' +
+      'charged KES 10, not KES 4.85 — so the effective rate on low-value orders is higher ' +
+      'than 5%. Refunded and cancelled sales are not charged commission.</div>';
+
+    paintDashTiles();
+  }
+
+  /* Dashboard KPIs, from the ONE engine. The route contract has always described this as a
+     "Native KPI surface. Reads AnalyticsEngine.compute()" — it did not; it rendered six
+     hardcoded em-dashes and referenced no engine at all. Honest on screen, but the note was
+     not honest about the code, and a contract nobody checks is how the local aggregate
+     survived here in the first place.
+
+     Every tile stays a NEUTRAL em-dash until a real figure arrives, and goes back to one on
+     failure. A zero here would read as a real trading result — "no sales today" — when the
+     truth is that we do not know. That distinction is the whole rule (CLAUDE.md, UI Data
+     Integrity), and it is why the error path repaints dashes instead of leaving stale ones. */
+  function paintDashTiles () {
+    var host = document.getElementById('dash-stats');
+    if (!host) return;
+
+    var set = function (k, text) {
+      var el = host.querySelector('[data-tile="' + k + '"] b');
+      if (!el) return;
+      var known = text !== null && text !== undefined;
+      el.textContent = known ? text : '—';
+      el.parentNode.classList.toggle('neutral', !known);
+    };
+    var blank = function () { TILES.forEach(function (t) { set(t.k, null); }); };
+
+    if (ORD.rows) return paint(ORD.rows);
+    if (ORD.loading) return;
+    ORD.loading = true;
+    loadOrders().then(function (r) {
+      ORD.loading = false;
+      if (r.error || !r.rows) return blank();
+      ORD.rows = r.rows;                       /* the SAME cache Orders and Analytics use */
+      paint(r.rows);
+    }).catch(function () { ORD.loading = false; blank(); });
+
+    function paint (rows) {
+      var a = metricsFor(inRange(rows));
+      if (!a) return blank();                  /* engine absent — never substitute a local sum */
+      set('revenue', money(a.revenue));
+      set('orders',  a.orders);
+      set('walkin',  money((a.pos || {}).revenue));
+      set('online',  (a.online || {}).count);
+      set('aov',     money(a.aov));
+      set('refunds', a.refunded);
+    }
   }
 
   /* ══ MODULE ADAPTER ═══════════════════════════════════════════════════════
@@ -2125,54 +2178,62 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      The surfaces therefore say "online orders only" rather than presenting a total
      they cannot stand behind. When the rules defect is fixed, this engine gains one
      more source and every view updates with it. */
-  function aggregate (rows) {
-    var a = {
-      count: rows.length, revenue: 0, paidRevenue: 0, pendingAmount: 0, cancelledAmount: 0,
-      units: 0, aov: 0,
-      completed: 0, pending: 0, cancelled: 0, refunded: 0,
-      byStatus: {}, byMethod: {}, byChannel: {}, products: {},
-      days: {}, hasMethod: false, hasChannel: false,
-    };
-    rows.forEach(function (o) {
-      var live = ST.live(o);
-      if (live) a.revenue += o.total; else a.cancelledAmount += o.total;
-      if (live && ST.paid(o)) a.paidRevenue += o.total;
-      if (live && !ST.paid(o)) a.pendingAmount += o.total;
+  /* ── THE CANONICAL ENGINE, NOT A SECOND TABLE ─────────────────────────────
+     This function used to BE the aggregation: ~50 lines summing revenue, AOV, units
+     and status counts over the same orders sokoni-analytics-engine.js was already
+     summing for merchant.html. Two implementations meant two sets of numbers, and
+     they disagreed measurably — same three orders (completed 1000, refunded 500,
+     processing 300):
 
-      if (ST.completed(o)) a.completed++;
-      else if (ST.cancelled(o)) a.cancelled++;
-      else a.pending++;
-      if (ST.refunded(o)) a.refunded++;
+       revenue   engine 1800   this shell 1300   (a refund was revenue there, not here)
+       aov       engine  600   this shell  650   (different denominators, no rounding)
+       pending   engine    0   this shell    1   (anything not completed/cancelled)
 
-      a.byStatus[o.status] = (a.byStatus[o.status] || 0) + 1;
-      /* Revenue breakdowns count LIVE orders only — a bucket is created solely when it
-         actually carries revenue. Recording a cancelled order's method produced a
-         "Card · KES 0" row: a payment category the shop never took money through,
-         presented alongside real ones. A zero row here is worse than a missing one. */
-      if (live && o.method)  { a.hasMethod = true;  a.byMethod[o.method]   = (a.byMethod[o.method]   || 0) + o.total; }
-      if (live && o.channel) { a.hasChannel = true; a.byChannel[o.channel] = (a.byChannel[o.channel] || 0) + o.total; }
+     test-analytics-parity existed to prevent exactly this and read merchant.html only,
+     so the merchant application sat outside its own parity gate.
 
-      (o.items || []).forEach(function (it) {
-        var q = Number(it.qty || it.quantity || 1) || 1;
-        if (live) a.units += q;
-        var k = it.name || it.title || 'Item';
-        var p = a.products[k] || { qty: 0, revenue: 0 };
-        p.qty += q; p.revenue += (Number(it.price) || 0) * q;
-        a.products[k] = p;
-      });
+     What remains here is NAMING, not arithmetic. The engine owns every figure; this maps
+     its field names onto the ones these views already render. The only computed values
+     are the two has* booleans, which are existence checks used to hide an empty panel —
+     not metrics. Nothing below re-derives money. */
+  function metricsFor (rows) {
+    var AE = window.SokoniAnalyticsEngine;
+    /* No engine, no numbers. Returning a locally-computed fallback is how a second
+       table comes back, and a fabricated figure is worse than a missing one — the
+       views already render a neutral em-dash when a field is absent. */
+    if (!AE || typeof AE.aggregate !== 'function') return null;
 
-      if (o.when) {
-        var key = o.when.getFullYear() + '-' + pad(o.when.getMonth() + 1) + '-' + pad(o.when.getDate());
-        var d = a.days[key] || { revenue: 0, orders: 0 };
-        d.orders++; if (live) d.revenue += o.total;
-        a.days[key] = d;
-      }
-    });
-    /* AOV over orders that actually count as revenue — dividing by cancelled ones too
-       would quietly depress it. */
-    var billable = a.count - a.cancelled;
-    a.aov = billable > 0 ? a.revenue / billable : 0;
+    var a = AE.aggregate(rows.map(toEngineOrder));
+
+    /* Presentation aliases. Same numbers, the names these views were written against. */
+    a.count  = a.orders;
+    a.units  = a.unitsSold;
+    a.byMethod  = a.paymentMethods;
+    a.byChannel = a.channelRevenue;
+    a.hasMethod  = Object.keys(a.byMethod || {}).length > 0;
+    a.hasChannel = Object.keys(a.byChannel || {}).some(function (k) { return a.byChannel[k] > 0; });
     return a;
+  }
+
+  /* This shell's normalised row -> the engine's UnifiedOrderView shape. A rename only:
+     `payment` and `method` are what normaliseOrder() produces, `paymentStatus` and
+     `paymentMethod` are what the engine reads. Getting this wrong is silent — an
+     unmapped paymentStatus reads as absent, and the engine then counts the money as
+     NOT banked, which is the safe direction but still the wrong number. */
+  function toEngineOrder (o) {
+    return {
+      status: o.status,
+      paymentStatus: o.payment,
+      paymentMethod: o.method,
+      channel: o.channel,
+      total: Number(o.total) || 0,
+      items: o.items || [],
+      customer: o.customer,
+      tax: Number(o.tax) || 0,
+      discount: Number(o.discount) || 0,
+      deliveryFee: Number(o.deliveryFee) || 0,
+      source: o.channel === 'in_store' ? 'pos' : 'online',
+    };
   }
   function pad (n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -2270,7 +2331,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var host = document.getElementById('an-body'); if (!host) return;
     paintRangeSegs();
     var rows = inRange(ORD.rows);
-    var a = aggregate(rows);
+    var a = metricsFor(rows);
     host.innerHTML = (AN.view === 'revenue' ? revenueView(a, rows) : analyticsView(a, rows)) + sourceNote();
   }
 
