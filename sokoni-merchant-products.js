@@ -146,6 +146,34 @@
     '.pr-vtot{margin-top:10px;padding:11px 13px;border-radius:12px;font-size:12.5px;font-weight:700;',
       'background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.22)}',
     '.pr-vtot b{font-weight:900}',
+    '.pr-card{cursor:pointer;position:relative}',
+    '.pr-menu{position:absolute;right:10px;bottom:52px;z-index:6;min-width:186px;padding:6px;',
+      'border-radius:14px;background:var(--card,#141414);border:1px solid var(--line,rgba(255,255,255,.16));',
+      'box-shadow:0 18px 44px rgba(0,0,0,.5)}',
+    '.pr-menu button{display:block;width:100%;text-align:left;padding:11px 12px;border:0;border-radius:10px;',
+      'background:transparent;color:inherit;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}',
+    '.pr-menu button.danger{color:#ff6b6b}',
+    '.pr-detail{padding-bottom:18px}',
+    '.pr-dimg{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:16px;display:block;margin-bottom:14px}',
+    '.pr-dph{width:100%;aspect-ratio:1/1;border-radius:16px;display:flex;align-items:center;',
+      'justify-content:center;font-size:52px;background:rgba(255,255,255,.04);margin-bottom:14px}',
+    '.pr-dname{font-size:21px;font-weight:900;line-height:1.2;letter-spacing:-.01em}',
+    '.pr-dprice{font-size:24px;font-weight:900;color:var(--acc,#71ff00);margin-top:5px}',
+    '.pr-dpill{margin-top:9px}',
+    '.pr-dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-top:16px}',
+    '.pr-dcell{padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.04)}',
+    '.pr-dcell small{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;',
+      'letter-spacing:.05em;color:var(--txt3,#8b8b8b)}',
+    '.pr-dcell b{display:block;font-size:14px;font-weight:800;margin-top:3px}',
+    '.pr-ddesc{margin-top:14px;font-size:13.5px;line-height:1.6;color:var(--txt2,#c9c9c9)}',
+    '.pr-dspec,.pr-dvar{display:flex;align-items:center;gap:10px;padding:9px 0;',
+      'border-bottom:1px solid var(--line,rgba(255,255,255,.07));font-size:13px}',
+    '.pr-dspec span,.pr-dvar span{flex:1;color:var(--txt3,#8b8b8b);font-weight:600}',
+    '.pr-dspec b,.pr-dvar b{font-weight:800}',
+    '.pr-dvar i{font-style:normal;font-weight:800;color:var(--acc,#71ff00);margin-left:10px}',
+    '.pr-dacts{display:grid;gap:8px;margin-top:18px}',
+    '.pr-dacts .pr-btn.danger{color:#ff6b6b;border-color:rgba(255,107,107,.34)}',
+
 
 
 
@@ -229,6 +257,7 @@
       err: null,
       q: '',
       status: 'all',
+      menu: null,        /* index of the card whose overflow menu is open; one at a time */
       sort: 'recent',
       limit: undefined,  /* undefined = unknown; -1 = unlimited */
       editor: null,      /* null = closed; otherwise the open create/edit/delete form */
@@ -379,7 +408,8 @@
       var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
       var price = money(p.price);
       var draft = p.status && p.status !== 'active';
-      return '<div class="pr-card">' +
+      return '<div class="pr-card" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
+        'aria-label="' + esc(p.name || 'Product') + ' — open details">' +
         (img ? '<img class="pr-img" loading="lazy" alt="" src="' + esc(img) + '">'
              : '<div class="pr-ph" aria-hidden="true">📦</div>') +
         '<div class="pr-b">' +
@@ -393,10 +423,23 @@
           /* Indices, never interpolated ids: an id spliced into an inline handler
              is the inline-handler XSS this codebase has already been bitten by. */
           '<div class="pr-acts">' +
-            '<button class="pr-act" data-pr="edit" data-i="' + i + '">Edit</button>' +
+            '<button class="pr-act" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
             '<button class="pr-act" data-pr="photos" data-i="' + i + '">' +
-              (p.image ? 'Photos' : '+ Photo') + '</button>' +
-            '<button class="pr-act danger" data-pr="del" data-i="' + i + '">Delete</button>' +
+              (p.image ? '📸 Photos' : '📸 + Photo') + '</button>' +
+            '<button class="pr-act" data-pr="menu" data-i="' + i + '" aria-label="More actions" ' +
+              'aria-haspopup="true">⋮</button>' +
+          '</div>' +
+          /* The menu is ALWAYS in the DOM and toggled with [hidden], never conditionally
+             rendered. Rendering it only when open removed Delete from the document for
+             every closed card, so deletion existed only after a second tap — the
+             certification caught exactly that. [hidden] also takes it out of the
+             accessibility tree and the tab order, so a closed menu is not reachable by
+             keyboard either, and toggling no longer needs a full repaint of the row. */
+          '<div class="pr-menu" role="menu"' + (S.menu === i ? '' : ' hidden') + '>' +
+            '<button role="menuitem" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
+            '<button role="menuitem" data-pr="go" data-route="inventory">📦 Adjust stock</button>' +
+            '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
+            '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1120,9 +1163,115 @@
         variantsHTML(p);
     }
 
+
+    /* ── PRODUCT DETAIL ───────────────────────────────────────────────────────
+       Renders the product AS STORED. Every field here comes from the record the
+       authority returned — nothing is derived, defaulted or invented for display. A
+       product with no category shows no category row rather than "Uncategorised", which
+       would be this surface asserting something the merchant never entered. */
+    function specRows (p) {
+      var SP = specModel();
+      var specs = p.specs || {};
+      var rows = [];
+
+      var show = function (label, val) {
+        if (val === null || val === undefined || val === '') return;
+        rows.push([label, val]);
+      };
+      /* A measurement prints in the merchant's OWN unit, not the comparison base. The
+         base exists for sorting; showing "1010000 g" to someone who typed 1010 kg would
+         be technically the same figure and practically wrong. */
+      var measure = function (label, m) {
+        if (!m) return;
+        var v = (m.v !== undefined) ? m.v : m.value;
+        if (v === null || v === undefined || v === '') return;
+        show(label, v + (m.u ? ' ' + m.u : ''));
+      };
+
+      show('Brand', specs.brand);
+      show('Barcode', specs.barcode);
+      show('Condition', specs.condition);
+      measure('Weight', specs.weight);
+      measure('Capacity', specs.capacity);
+      if (specs.dimensions) {
+        var d = specs.dimensions;
+        var part = function (m) { return m ? ((m.v !== undefined ? m.v : m.value) + (m.u ? m.u : '')) : null; };
+        var bits = [part(d.length), part(d.width), part(d.height)].filter(Boolean);
+        if (bits.length) show('Dimensions', bits.join(' × '));
+      }
+      /* Category-suggested keys, labelled the way the editor labelled them. */
+      if (SP) {
+        SP.suggestionsFor(p.category).forEach(function (def) {
+          var val = specs[def.key];
+          if (val === undefined) return;
+          if (val && typeof val === 'object') measure(def.label, val);
+          else show(def.label, val);
+        });
+      }
+      (specs.custom || []).forEach(function (c) {
+        show(c.name, (c.value === '' ? c.number : c.value) + (c.unit ? ' ' + c.unit : ''));
+      });
+      return rows;
+    }
+
+    function detailHTML (p, i) {
+      var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
+      var price = money(p.price);
+      var rows = specRows(p);
+      var vars = p.variants || [];
+
+      return '<div class="pr-sheet"><div class="pr-scrim" data-pr="close"></div>' +
+        '<div class="pr-panel pr-detail" role="dialog" aria-modal="true" aria-label="Product detail">' +
+        (img ? '<img class="pr-dimg" alt="" src="' + esc(img) + '">'
+             : '<div class="pr-dph" aria-hidden="true">📦</div>') +
+        '<div class="pr-dname">' + esc(p.name || p.title || 'Untitled') + '</div>' +
+        '<div class="pr-dprice">' + esc(price === null ? '—' : price) + '</div>' +
+        '<div class="pr-dpill">' + statusPill(p) + '</div>' +
+
+        '<div class="pr-dgrid">' +
+          '<div class="pr-dcell"><small>Inventory</small><b>' + stockLine(p) + '</b></div>' +
+          (p.category ? '<div class="pr-dcell"><small>Category</small><b>' + esc(p.category) + '</b></div>' : '') +
+          (p.sku ? '<div class="pr-dcell"><small>SKU</small><b>' + esc(p.sku) + '</b></div>' : '') +
+        '</div>' +
+
+        (p.description ? '<div class="pr-ddesc">' + esc(p.description) + '</div>' : '') +
+
+        (rows.length
+          ? '<div class="pr-sec">📏 Specifications</div>' +
+            '<div class="pr-dspecs">' + rows.map(function (r) {
+              return '<div class="pr-dspec"><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>';
+            }).join('') + '</div>'
+          : '') +
+
+        (vars.length
+          ? '<div class="pr-sec">🔀 Variants</div>' +
+            '<div class="pr-dvars">' + vars.map(function (v) {
+              var label = Object.keys(v.attrs || {}).map(function (k) {
+                return esc(k) + ': ' + esc(v.attrs[k]);
+              }).join(' · ');
+              return '<div class="pr-dvar"><span>' + label + '</span>' +
+                '<b>' + esc(v.stock == null ? '—' : v.stock) + '</b>' +
+                (v.price != null ? '<i>' + esc(money(v.price) || '') + '</i>' : '') + '</div>';
+            }).join('') + '</div>'
+          : '') +
+
+        /* Actions. Adjust inventory ROUTES through the shell — stock corrections belong to
+           Inventory, which writes them through merchantAdjustStock so a correction is never
+           recorded as a sale. This sheet reads stock; it does not change it. */
+        '<div class="pr-dacts">' +
+          '<button class="pr-add" data-pr="edit" data-i="' + i + '">✏️ Edit product</button>' +
+          '<button class="pr-btn" data-pr="go" data-route="inventory">📦 Adjust inventory</button>' +
+          '<button class="pr-btn" data-pr="photos" data-i="' + i + '">📸 Photos</button>' +
+          '<button class="pr-btn danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
+        '</div>' +
+        '<button class="pr-cancel" style="width:100%;margin-top:10px" data-pr="close">Close</button>' +
+        '</div></div>';
+    }
+
     function editorHTML () {
       var E = S.editor;
       if (E.mode === 'photos') return photosHTML();
+      if (E.mode === 'detail') return detailHTML(E.product || {}, E.index);
       /* Render from the TYPED values, falling back to the stored record. */
       var p = (E.mode === 'delete') ? (E.product || {}) : (E.values || {});
       if (E.mode === 'delete') {
@@ -1190,7 +1339,7 @@
         clearTimeout(_t);
         var v = el.value;
         _t = setTimeout(function () {
-          S.q = v;
+          S.q = v; S.menu = null;
           paint();
           var s = host.querySelector('[data-pr="q"]');
           if (s) { s.focus(); try { s.setSelectionRange(v.length, v.length); } catch (_) {} }
@@ -1206,13 +1355,35 @@
         return;
       }
       var k = el.getAttribute('data-pr');
-      if (k === 'status') { S.status = el.value; paint(); }
-      if (k === 'sort')   { S.sort = el.value; paint(); }
+      if (k === 'status') { S.status = el.value; S.menu = null; paint(); }
+      if (k === 'sort')   { S.sort = el.value; S.menu = null; paint(); }
     }
     function onClick (ev) {
       /* One more empty custom row. captureForm() first, so the rows the merchant has
          already typed survive the repaint — rebuilding the sheet without capturing would
          discard them, which is the kind of loss that makes people distrust a form. */
+      /* Tapping the card BODY opens the detail sheet. Checked after the explicit action
+         buttons below would have matched, and guarded on the tap not landing on one of
+         them — otherwise Edit would open a detail sheet instead of the editor. */
+      /* The overflow menu. One open at a time, and tapping the same control closes it —
+         a menu that only ever opens is a menu a merchant has to navigate away from. */
+      var menuBtn = ev.target.closest && ev.target.closest('[data-pr="menu"]');
+      if (menuBtn && menuBtn.getAttribute && menuBtn.getAttribute('data-pr') === 'menu') {
+        var mi = Number(menuBtn.getAttribute('data-i'));
+        S.menu = (S.menu === mi) ? null : mi;
+        paint();
+        return;
+      }
+
+      var openCard = ev.target.closest && ev.target.closest('[data-pr="open"]');
+      if (openCard && openCard.getAttribute && openCard.getAttribute('data-pr') === 'open' &&
+          !(ev.target.closest && ev.target.closest('[data-pr="edit"],[data-pr="photos"],[data-pr="del"],[data-pr="menu"]'))) {
+        var oi = Number(openCard.getAttribute('data-i'));
+        var op = S.painted && S.painted[oi];
+        if (op) { S.editor = { mode: 'detail', product: op, index: oi }; paint(); }
+        return;
+      }
+
       var addvar = ev.target.closest && ev.target.closest('[data-pr="addvariant"]');
       if (addvar && addvar.getAttribute && addvar.getAttribute('data-pr') === 'addvariant') {
         captureForm();
@@ -1247,7 +1418,7 @@
       var chip = ev.target.closest && ev.target.closest('[data-pr="chip"]');
       var chipKey = chip && ((chip.dataset && chip.dataset.chip) ||
                              (chip.getAttribute && chip.getAttribute('data-chip')));
-      if (chipKey) { S.status = chipKey; paint(); return; }
+      if (chipKey) { S.status = chipKey; S.menu = null; paint(); return; }
 
 
       /* Navigation belongs to the SHELL. This module never sets location and never links
