@@ -58,13 +58,27 @@
        seller.html in an iframe — a second merchant application inside the first, with
        its own auth boot, its own product query and its own idea of stock.
 
-       `sec:'products'` STAYS. It is not dead: it is the legacy inbound vocabulary, and
-       seller.html's compatibility resolver forwards ?sec=products here by that name.
-       Removing it would break every existing bookmark, email link and server-generated
-       URL the moment this shipped. The gate asserts every sec value against
-       SELLER_SECTIONS, so it also stays validated. */
+       `sec:'products'` IS GONE, and the paragraph that used to defend it was wrong.
+
+       It claimed removing it "would break every existing bookmark, email link and
+       server-generated URL". It would not. TWO DIFFERENT THINGS SHARE THE NAME:
+
+         the URL PARAMETER  ?sec=products   read by seller.html's redirect, which carries no
+                                            map and forwards the raw key as a hash
+         the ROUTE FIELD    sec:'products'  a property on this declaration
+
+       seller.html never reads the route field. Neither does resolve(), which matches by route
+       `id` and then ALIASES. The only runtime reader of the field is merchant-v2.html's mount
+       branch, and that is gated on `kind === 'seller'` — so on a native route it is read by
+       nothing at all.
+
+       Inbound compatibility is carried entirely by the id and the aliases: ?sec=products
+       becomes #products, which matches THIS ROUTE'S ID. Proven by executing every legacy URL
+       through the real redirect and the real resolver in
+       scripts/test-route-native-sec-contract.js, both before and after this removal — the
+       inbound matrix was identical. */
     { id:'products', name:'Products', icon:'🏷️', tier:'primary',
-      kind:'native', sec:'products',
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },
@@ -169,9 +183,9 @@
            'seller-delivery.html scopes every read to sellerUid == the signed-in seller.' },
 
     { id:'receipts', name:'Receipts', icon:'🧾', tier:'primary',
-      /* NATIVE. sec:'receipts' stays as the legacy inbound key — seller.html's
-         compatibility resolver forwards ?sec=receipts here by that name. */
-      kind:'native', sec:'receipts',
+      /* NATIVE. ?sec=receipts becomes #receipts, which matches this route's ID — the field
+         played no part and is gone. See the products declaration for the full reasoning. */
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'receipts' },
 
@@ -308,9 +322,10 @@
            'claimed -> /shop/<handle>, unclaimed -> claim flow. Also reachable from the header button.' },
 
     { id:'flash-sale', name:'Flash Sale', icon:'⚡', tier:'more',
-      /* NATIVE. sec:'flash' stays as the legacy inbound key — the compatibility
-         resolver forwards ?sec=flash here by that name, and the contract maps it. */
-      kind:'native', sec:'flash',
+      /* NATIVE. ?sec=flash becomes #flash, which is NOT this route's id — the ALIAS
+         flash -> flash-sale is what carries that bookmark, and it is the only thing that ever
+         did. The field played no part and is gone. */
+      kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'flash-sale' },
 
@@ -527,7 +542,11 @@
        capability anywhere in merchant.html today, so Export is declared and NOT drawn.
        Rendering it as a live chip would be exactly the "hard-coded fake button" this
        registry exists to make impossible. */
-    products: { owner:'seller', bars:[
+    /* owner:'native' since Products became a native module. It said 'seller' — correct when the
+       route was an iframe of the legacy dashboard, stale the moment it flipped, and the contract
+       caught the drift. Every chip here is status:'planned', so no live handler moves with it;
+       what changes is which surface is declared to own them when they are built. */
+    products: { owner:'native', bars:[
       { key:'actions', status:'planned', chips:[
         { id:'add',   label:'Add Product' }, { id:'stock', label:'Stock' },
         { id:'flash', label:'Flash Sale'  }, { id:'scan',  label:'Scan'  } ] } ] },
