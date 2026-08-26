@@ -137,8 +137,17 @@ for (const n of V2_VIEWS) {
 const dashV2 = v2body('renderDashboard');
 const painter = v2body('paintDashTiles');
 ok(painter.length > 200, 'CONTROL: paintDashTiles located (' + painter.length + ' chars)');
-ok(/paintDashTiles\s*\(/.test(dashV2),
+/* Either route satisfies the intent: the native module (certified separately at
+   scripts/test-merchant-dashboard.js, which asserts every figure comes from a canonical
+   source or renders an em dash WITH its reason), or the legacy painter. What must never
+   be true is a Dashboard that reaches neither and prints fixed placeholders. */
+const dashLegacy = v2body('renderDashboardLegacy');
+ok(/paintDashTiles\s*\(/.test(dashV2) ||
+   (/mountDashboardModule\s*\(/.test(dashV2) && /paintDashTiles\s*\(/.test(dashLegacy)),
    'Dashboard reaches its KPI painter rather than rendering fixed placeholders');
+ok(!/mountDashboardModule\s*\(/.test(dashV2) || dashLegacy.length > 200,
+   'and when it delegates, the legacy painter is STILL present as the fallback',
+   'a module that fails to load must not leave an empty panel');
 ok(/metricsFor\s*\(/.test(painter),
    'the KPI painter reads figures through the engine wrapper');
 /* The neutral-state rule: an unknown must render as a dash, never as a zero. Asserted on
