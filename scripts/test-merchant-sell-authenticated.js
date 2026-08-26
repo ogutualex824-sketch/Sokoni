@@ -171,7 +171,7 @@ server.listen(0, async () => {
      identitytoolkit/securetoken request through the emulator, and waiting for the full
      document couples this navigation to whatever the SDK happens to be doing on the network.
      The real readiness signal is the DOM condition asserted afterwards, not the load event. */
-  await page.goto(BASE + '/seller.html?sec=products&shell=merchant', { waitUntil: 'commit', timeout: 30000 }).catch(() => null);
+  await page.goto(BASE + '/seller.html?sec=products&shell=merchant&legacy=1', { waitUntil: 'commit', timeout: 30000 }).catch(() => null);
   await page.waitForFunction(() => !!document.getElementById('inventory-section'), null, { timeout: 30000 }).catch(() => null);
   /* firebase.js is a module — wait for it to have RUN before asking its registry anything.
      Without this the probe raced it and reported "no Firebase app on the page", which reads
@@ -262,7 +262,7 @@ server.listen(0, async () => {
      identitytoolkit/securetoken request through the emulator, and waiting for the full
      document couples this navigation to whatever the SDK happens to be doing on the network.
      The real readiness signal is the DOM condition asserted afterwards, not the load event. */
-  await page.goto(BASE + '/seller.html?sec=products&shell=merchant', { waitUntil: 'commit', timeout: 30000 }).catch(() => null);
+  await page.goto(BASE + '/seller.html?sec=products&shell=merchant&legacy=1', { waitUntil: 'commit', timeout: 30000 }).catch(() => null);
   await page.waitForFunction(() => !!document.getElementById('inventory-section'), null, { timeout: 30000 }).catch(() => null);
   await page.waitForFunction(() => {
     const s = (id) => { const el = document.getElementById(id); if (!el) return null;
