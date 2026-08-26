@@ -1691,49 +1691,91 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 
   var _mdb = {
     queryProducts: function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
-    /* ── LIVE ──────────────────────────────────────────────────────────────
-       The same spec shape as queryProducts, delivered continuously instead of
-       once. This is what makes two devices one till: a sale rung up on the
-       phone decrements canonical `products`, and every other signed-in device
-       sees the new stock without anyone reloading.
-
-       Returns an UNSUBSCRIBE function, and the caller must call it. A listener
-       that outlives its surface keeps a socket open and bills reads for a panel
-       nobody is looking at — the same class of leak as the STK poll that
-       survived destroy().
-
-       `onError` is a separate argument on purpose: a listener that fails
-       silently is worse than no listener, because the screen keeps showing
-       stale numbers that look current. */
-    subscribeProducts: function (spec, onRows, onError) {
-      var stopped = false, unsub = null;
-      sdk().then(function (m) {
-        if (stopped) return;
-        if (!window.firebaseDB) throw new Error('The product catalogue is not available yet.');
-        var parts = (spec.where || []).map(function (w) { return m.fs.where(w[0], w[1], w[2]); });
-        if (spec.orderBy) parts.push(m.fs.orderBy(spec.orderBy[0], spec.orderBy[1]));
-        if (spec.limit) parts.push(m.fs.limit(spec.limit));
-        var q = m.fs.query.apply(null, [m.fs.collection(window.firebaseDB, spec.collection)].concat(parts));
-        unsub = m.fs.onSnapshot(q, function (snap) {
-          if (!stopped) { try { onRows(_rows(snap)); } catch (_) {} }
-        }, function (err) {
-          if (!stopped && typeof onError === 'function') onError(err);
-        });
-        /* Unsubscribed before the SDK finished loading — honour it now. */
-        if (stopped && unsub) { try { unsub(); } catch (_) {} }
-      }).catch(function (err) {
-        if (!stopped && typeof onError === 'function') onError(err);
-      });
-      return function () {
-        stopped = true;
-        if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
-      };
-    },
     queryProfiles: function (spec) { return _q(spec, 'Customers are not available yet.'); },
     queryMovements: function (spec) { return _q(spec, 'Adjustment history is not available yet.'); },
     /* The one subcollection read: a conversation's messages. `path` is an array so the
        caller never assembles a string and a conversation id cannot be spliced into the
        wrong one. */
+    /* ── The product write path (2b) ──────────────────────────────────────
+       These four are adapters, not authority: they perform exactly the write
+       SokoniMerchantData asks for and make no decision of their own. Every
+       ownership check, validation, publication gate, projection and idempotency
+       rule lives in the writer, which is certified independently.
+
+       `create` uses a TRANSACTION rather than get()-then-set() so a double tap or
+       a retry after a dropped response claims the same document instead of
+       racing into a second product. */
+    writeProduct: function (o) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Products cannot be saved just now.');
+        var ref = m.fs.doc(window.firebaseDB, 'products', o.id);
+        /* Timestamps are stamped HERE, with serverTimestamp(), not by the writer
+           and never from Date.now(). A device clock is not a timestamp authority:
+           a merchant whose phone is a day slow would file today's product under
+           yesterday and sort it to the bottom of their own catalogue. */
+        var data = Object.assign({}, o.data, { updatedAt: m.fs.serverTimestamp() });
+        if (o.mode === 'create') {
+          data.createdAt = m.fs.serverTimestamp();
+          return m.fs.runTransaction(window.firebaseDB, function (tx) {
+            return tx.get(ref).then(function (snap) {
+              /* A replay claims the SAME document rather than adding a second.
+                 Read-then-write inside the transaction, so two taps racing each
+                 other cannot both see "absent". */
+              if (snap.exists()) return { replayed: true };
+              tx.set(ref, data);
+              return { replayed: false };
+            });
+          });
+        }
+        return m.fs.setDoc(ref, data, { merge: true }).then(function () { return { replayed: false }; });
+      });
+    },
+    deleteProduct: function (o) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Products cannot be changed just now.');
+        return m.fs.deleteDoc(m.fs.doc(window.firebaseDB, 'products', o.id));
+      });
+    },
+    getProduct: function (id) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('Products cannot be read just now.');
+        return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'products', id));
+      }).then(function (s) { return s.exists() ? s.data() : null; });
+    },
+    /* The Inventory + POS projections. `path` is an array so no caller ever
+       assembles a collection string. A failure here is REPORTED by the writer,
+       never swallowed — a product that did not reach the till must not be
+       announced as if it had. */
+    writeMirror: function (o) {
+      return sdk().then(function (m) {
+        if (!window.firebaseDB) throw new Error('mirror unavailable');
+        var ref = m.fs.doc.apply(null, [window.firebaseDB].concat(o.path));
+        return m.fs.setDoc(ref, o.data, { merge: o.merge !== false });
+      });
+    },
+
+    /* ── Storage: product photographs (2c) ────────────────────────────────
+       The ONE place this workspace puts bytes in a bucket. Like the product
+       writes above it is an adapter, not authority: the path, the content type
+       and the cache header all arrive from SokoniMerchantMedia, which took them
+       from the conventions seller.js already established and production already
+       contains. Nothing here decides anything.
+
+       firebase-storage.js is imported ON DEMAND — a merchant who never adds a
+       photo never downloads the Storage SDK. */
+    putImage: function (o) {
+      return sdk().then(function () {
+        if (!window.firebaseStorage) throw new Error('Photo upload is not available just now.');
+        return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+      }).then(function (st) {
+        var ref = st.ref(window.firebaseStorage, o.path);
+        return st.uploadBytes(ref, o.blob, {
+          contentType: o.contentType,
+          cacheControl: o.cacheControl,
+        }).then(function (snap) { return st.getDownloadURL(snap.ref); });
+      });
+    },
+
     queryMessages: function (spec) {
       return sdk().then(function (m) {
         if (!window.firebaseDB) throw new Error('Messages are not available yet.');

@@ -140,3 +140,8 @@ scripts/*-output*
 
 # Performance probe auth fixture — a LIVE SESSION, never commit
 .perf-auth.json
+
+# Served Storage ruleset, fetched at audit time (scripts/test-merchant-products-2c-media.js
+# refuses to assert against a repo copy). Regenerate:
+#   gcloud auth print-access-token  ->  firebaserules.googleapis.com rulesets/<storage release>
+storage.rules.deployed
