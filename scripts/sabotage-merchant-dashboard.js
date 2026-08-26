@@ -62,6 +62,31 @@ const CASES = [
   ['the shell stops mounting the module', 'merchant-v2.html',
    "    if (root_hasDashboardModule()) return mountDashboardModule(p);",
    "    if (false) return mountDashboardModule(p);"],
+
+  /* ── MONEY: a wrong figure here is the merchant's income ────────────────── */
+  ['a hardcoded commission rate replaces the ledger', 'sokoni-merchant-dashboard.js',
+   "    if (r.mixed) return 'Commission rate varies across recent sales';",
+   "    return 'Commission rate 5%';"],
+
+  ['disagreeing ledger rates are averaged into one', 'sokoni-merchant-dashboard.js',
+   "          pct: keys.length === 1 ? Number(keys[0]) : null,",
+   "          pct: Number(keys[0]),"],
+
+  ['earnings are derived from a half-known pair', 'sokoni-merchant-dashboard.js',
+   "        if (isFinite(gross) && isFinite(comm)) out.earnings = known(gross - comm);",
+   "        out.earnings = known((isFinite(gross) ? gross : 0) - (isFinite(comm) ? comm : 0));"],
+
+  ['a missing billing document becomes zero', 'sokoni-merchant-dashboard.js',
+   "          out.sales = unknown('No sales recorded this period');",
+   "          out.sales = known(0);"],
+
+  ['the commission deduction loses its minus sign', 'sokoni-merchant-dashboard.js',
+   "'<b class=\"sd-flow-v\">' + (f.commission.state === 'known' ? '−' + esc(money(f.commission.value)) : UNKNOWN) + '</b></li>' +",
+   "'<b class=\"sd-flow-v\">' + (f.commission.state === 'known' ? esc(money(f.commission.value)) : UNKNOWN) + '</b></li>' +"],
+
+  ['a paid payout counts as pending', 'sokoni-merchant-dashboard.js',
+   "          return r && ['pending', 'processing', 'requested'].indexOf(String(r.status)) > -1;",
+   "          return !!r;"],
 ];
 
 let caught = 0, missed = 0;

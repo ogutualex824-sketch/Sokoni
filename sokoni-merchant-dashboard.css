@@ -175,3 +175,83 @@
     --sd-line: var(--line, rgba(255,255,255,.09));
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   💰 MONEY — visually distinct from operational metrics, on purpose
+   ═══════════════════════════════════════════════════════════════════════════════
+   A merchant must be able to tell at a glance what SOKONI earned from what THEY earned.
+   So commission gets its own card with its own colour identity — warm, not the blue of
+   the operational hero — and the deduction is styled as a deduction while the net is
+   styled as theirs. Nothing here shares a treatment with a partial count. */
+
+.sd-per {
+  margin-left: auto; padding: 2px 8px; border-radius: 999px;
+  background: var(--sd-line); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .03em; color: var(--sd-sub); text-transform: none;
+}
+
+.sd-comm {
+  position: relative; overflow: hidden;
+  border-radius: var(--sd-r); padding: 20px 18px 16px;
+  color: #fff;
+  background:
+    radial-gradient(120% 150% at 0% 0%, #f0a020 0%, transparent 58%),
+    linear-gradient(135deg, #7a3a10 0%, #4a2109 100%);
+  box-shadow: 0 12px 30px rgba(122,58,16,.26);
+}
+.sd-comm-l { font-size: 12.5px; font-weight: 700; letter-spacing: .04em;
+             text-transform: uppercase; opacity: .85; }
+.sd-comm-v {
+  margin-top: 5px; font-size: clamp(28px, 7.4vw, 38px); font-weight: 850;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.08;
+}
+.sd-comm-r { margin-top: 3px; font-size: 12.5px; font-weight: 650; opacity: .74; }
+
+/* The flow: pays → commission → receives. An ordered list because it IS an order. */
+.sd-flow { list-style: none; margin: 16px 0 0; padding: 0;
+           border-top: 1px solid rgba(255,255,255,.15); }
+.sd-flow-i {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; font-size: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.sd-flow-i:last-child { border-bottom: 0; }
+.sd-flow-e { font-size: 15px; line-height: 1; }
+.sd-flow-k { font-weight: 600; opacity: .9; }
+.sd-flow-v { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sd-flow-cut .sd-flow-v { color: #ffc9a3; }          /* a deduction reads as a deduction */
+.sd-flow-net { padding-top: 12px; }
+.sd-flow-net .sd-flow-k { font-weight: 750; opacity: 1; }
+.sd-flow-net .sd-flow-v { color: #86efac; font-size: 16px; }  /* the merchant's own */
+
+.sd-comm-a {
+  margin-top: 14px; width: 100%;
+  padding: 11px 14px; min-height: 44px;
+  border: 1px solid rgba(255,255,255,.22); border-radius: 12px;
+  background: rgba(255,255,255,.1); color: #fff;
+  font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  transition: background .16s ease, transform .16s ease;
+}
+.sd-comm-a:hover  { background: rgba(255,255,255,.17); }
+.sd-comm-a:active { transform: scale(.985); }
+.sd-comm-a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+/* Pending payout / available balance — quieter than commission, still money. */
+.sd-money2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sd-gap); margin-top: var(--sd-gap); }
+@media (max-width: 340px) { .sd-money2 { grid-template-columns: 1fr; } }
+.sd-mt {
+  padding: 15px 15px 13px;
+  border: 1px solid var(--sd-line); border-radius: 16px;
+  background: var(--sd-card);
+}
+.sd-mt-l { font-size: 12px; font-weight: 700; color: var(--sd-sub); letter-spacing: .02em; }
+.sd-mt-v {
+  margin-top: 5px; font-size: clamp(18px, 4.6vw, 22px); font-weight: 800;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
+.sd-mt-unknown .sd-mt-v { opacity: .45; font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-comm-a { transition: none; }
+  .sd-comm-a:active { transform: none; }
+}

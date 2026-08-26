@@ -85,7 +85,9 @@ function mkCtx (over) {
   return Object.assign({
     calls, scope: SCOPE, shopName: 'Mama Njeri Stores', userName: 'Alex Ogutu',
     go: (id) => calls.go.push(id),
-    db: { queryOrders: empty, queryProducts: empty, queryStats: empty, queryConversations: empty },
+    db: { queryOrders: empty, queryProducts: empty, queryStats: empty, queryConversations: empty,
+          queryCommission: empty, queryPayouts: empty,
+          readBilling: async () => null, readWallet: async () => null },
   }, over || {});
 }
 
@@ -309,6 +311,130 @@ function mkCtx (over) {
     i2.destroy();
     global.matchMedia = realMM;
   }
+
+  head('12 - 💰 money: the merchant must see what SOKONI earned and what they earned');
+  const MONEY = (over) => mkCtx({ db: Object.assign({
+    queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+    queryConversations: async () => [], queryCommission: async () => [], queryPayouts: async () => [],
+    readBilling: async () => null, readWallet: async () => null,
+  }, over || {}) });
+
+  /* The real shape: sellerBilling is the aggregate the SERVER increments inside the same
+     transaction as each ledger entry, so its totals cannot drift from the ledger. */
+  ctx = MONEY({ readBilling: async () => ({ grossSalesKES: 48240, totalCommissionKES: 1842.5 }) });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('sales come from the billing aggregate', /KES 48,240/.test(host.innerHTML));
+  ck('commission is shown as its own headline figure', /KES 1,843|KES 1,842/.test(host.innerHTML));
+  ck('earnings are DERIVED from both, not guessed', /KES 46,398|KES 46,397/.test(host.innerHTML),
+     '48,240 − 1,842.50 = 46,397.50');
+  ck('the deduction is signed as a deduction', /−KES 1,84/.test(host.innerHTML),
+     'a merchant must never misread the cut for the net');
+  /* Scoped to the flow LIST. Searching the whole card matched the headline
+     "💰 SOKONI commission" above the list, so the ordering check was reading the wrong
+     occurrence and would have passed on any arrangement. */
+  {
+    const fl = host.innerHTML.slice(host.innerHTML.indexOf('sd-flow"'),
+                                    host.innerHTML.indexOf('sd-comm-a'));
+    ck('CONTROL: the flow list was located', fl.length > 200, fl.length + ' chars');
+    ck('the flow reads pays → commission → receives',
+       fl.indexOf('>Sales<') < fl.indexOf('>SOKONI commission<') &&
+       fl.indexOf('>SOKONI commission<') < fl.indexOf('>Your earnings<'),
+       'the order IS the explanation');
+  }
+  ck('"View commission" routes by contract id', /data-go="revenue"/.test(host.innerHTML));
+  inst.destroy();
+
+  head('13 - the commission RATE is read, never assumed');
+  ck('no rate at all → it says so, and names no number', D._rateLine(null) === 'Commission rate — not recorded yet');
+  ck('a single recorded rate is stated', D._rateLine({ pct: 5, mixed: false, fixed: null }) === 'Commission rate 5%');
+  ck('a fixed fee rides along when recorded',
+     D._rateLine({ pct: 5, mixed: false, fixed: 20 }) === 'Commission rate 5% + KES 20 per sale');
+  ck('DISAGREEING entries are reported as varying, not averaged',
+     D._rateLine({ pct: null, mixed: true, fixed: null }) === 'Commission rate varies across recent sales',
+     'picking one would state a commercial fact this file cannot know');
+  const CSRC = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-dashboard.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  ck('no commission percentage is hardcoded anywhere',
+     CSRC.indexOf('3%') < 0 && CSRC.indexOf('5%') < 0 && CSRC.indexOf('commissionPct:') < 0,
+     'the rate is a server authority — Track A set production truth, not this file');
+
+  ctx = MONEY({
+    readBilling: async () => ({ grossSalesKES: 1000, totalCommissionKES: 50 }),
+    queryCommission: async () => ([{ commissionPct: 5 }, { commissionPct: 5 }, { commissionPct: 5 }]),
+  });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('the rate rendered is the one the LEDGER recorded', /Commission rate 5%/.test(host.innerHTML));
+  inst.destroy();
+
+  ctx = MONEY({
+    readBilling: async () => ({ grossSalesKES: 1000, totalCommissionKES: 50 }),
+    queryCommission: async () => ([{ commissionPct: 5 }, { commissionPct: 3 }]),
+  });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('mixed ledger rates render as "varies"', /varies across recent sales/.test(host.innerHTML));
+  inst.destroy();
+
+  /* The FACT, not only the rendering. Setting pct while mixed stayed true produced
+     byte-identical output, so asserting the rendered line could never catch it — the
+     sabotage passed cleanly. rateLine() checks mixed FIRST, which masks the value. */
+  {
+    const mixedFacts = await D._loadFacts(MONEY({
+      queryCommission: async () => ([{ commissionPct: 5 }, { commissionPct: 3 }]),
+    }));
+    ck('with disagreeing entries, NO single rate is chosen',
+       !!mixedFacts.rate && mixedFacts.rate.mixed === true && mixedFacts.rate.pct === null,
+       'pct=' + (mixedFacts.rate && mixedFacts.rate.pct) +
+       ' — choosing one averages away a real commercial difference');
+    const agreeFacts = await D._loadFacts(MONEY({
+      queryCommission: async () => ([{ commissionPct: 5 }, { commissionPct: 5 }]),
+    }));
+    ck('CONTROL: agreeing entries DO yield a single rate',
+       !!agreeFacts.rate && agreeFacts.rate.mixed === false && agreeFacts.rate.pct === 5,
+       'without this control, the check above would pass on a rate that is always null');
+  }
+
+  head('14 - money degrades honestly');
+  ctx = MONEY();   /* no billing document yet */
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  /* Scoped to the COMMISSION CARD. Checking the whole surface caught the pending-payout
+     tile, which legitimately renders KES 0: the query succeeded and found no pending
+     requests, so zero is a canonical fact there. Sales/commission/earnings are the ones
+     that must stay dashes when nothing has been billed. */
+  {
+    const card = host.innerHTML.slice(host.innerHTML.indexOf('sd-comm"'),
+                                      host.innerHTML.indexOf('sd-money2'));
+    ck('CONTROL: the commission card was located', card.length > 200);
+    ck('no billing document is NOT zero earnings',
+       card.indexOf('KES 0') < 0, 'nothing billed yet is not "you earned nothing"');
+  }
+  ck('the money figures render as em dashes', (host.innerHTML.match(/—/g) || []).length >= 3);
+  inst.destroy();
+
+  ctx = MONEY({ readBilling: async () => ({ grossSalesKES: 5000 }) });   /* commission absent */
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  {
+    /* Read the earnings ROW directly. The previous check used a windowed lookahead whose
+       escapes had been mangled to [sS] — it matched literal s/S characters, so it could
+       not fail however wrong the value was. A scoped substring says the same thing and
+       cannot be corrupted the same way. */
+    const h = host.innerHTML;
+    const row = h.slice(h.indexOf('sd-flow-net'), h.indexOf('sd-comm-a'));
+    ck('CONTROL: the earnings row was located', row.length > 60, row.length + ' chars');
+    ck('sales are known', h.indexOf('KES 5,000') > -1);
+    ck('but earnings stay UNKNOWN when commission is missing',
+       row.indexOf('—') > -1 && row.indexOf('KES') < 0,
+       'deriving from one known and one unknown is a confident number built on a guess');
+  }
+  inst.destroy();
+
+  ctx = MONEY({ readWallet: async () => ({ balance: 12500 }),
+                queryPayouts: async () => ([{ status: 'pending', amount: 3000 },
+                                            { status: 'paid', amount: 9999 }]) });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('available balance comes from the wallet', /KES 12,500/.test(host.innerHTML));
+  ck('pending payout counts only pending states', /KES 3,000/.test(host.innerHTML),
+     'a paid payout is not pending');
+  inst.destroy();
 
   head('11 - shell wiring');
   const MV2 = fs.readFileSync(path.join(ROOT, 'merchant-v2.html'), 'utf8');

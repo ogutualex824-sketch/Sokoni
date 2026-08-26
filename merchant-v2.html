@@ -1654,6 +1654,26 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         queryProducts:      function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
         queryStats:         function (spec) { return _q(spec, 'Product statistics are not available yet.'); },
         queryConversations: function (spec) { return _q(spec, 'Conversations are not available yet.'); },
+        /* ── MONEY ────────────────────────────────────────────────────────────────
+           commissionLedger and sellerBilling are both seller-readable in the served
+           ruleset (resource.data.sellerUid == uid, and the {sellerUid} path segment
+           respectively). The RATE is never passed in — it is read off the ledger
+           entries, because commission is a commercial authority the client has no
+           standing to assert. */
+        queryCommission: function (spec) { return _q(spec, 'Commission history is not available yet.'); },
+        queryPayouts:    function (spec) { return _q(spec, 'Payout requests are not available yet.'); },
+        readBilling: function (sellerUid, period) {
+          return sdk().then(function (m) {
+            if (!window.firebaseDB) throw new Error('Billing is not available yet.');
+            return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'sellerBilling', sellerUid, 'monthly', period));
+          }).then(function (d) { return d.exists() ? d.data() : null; });
+        },
+        readWallet: function (uid) {
+          return sdk().then(function (m) {
+            if (!window.firebaseDB) throw new Error('Wallet is not available yet.');
+            return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'wallets', uid));
+          }).then(function (d) { return d.exists() ? d.data() : null; });
+        },
       },
     });
     return _dashInst;

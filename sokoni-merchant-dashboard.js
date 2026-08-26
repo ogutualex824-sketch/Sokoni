@@ -81,6 +81,13 @@
     return null;
   }
 
+  /* The billing period the server uses: YYYY-MM. Read from the same clock the merchant
+     reads, because a shop in Nairobi at 23:00 on the 31st is still in that month. */
+  function _period (d) {
+    var x = d || new Date();
+    return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0');
+  }
+
   function greeting (d) {
     var h = (d || new Date()).getHours();
     if (h < 12) return 'Good morning';
@@ -118,6 +125,15 @@
       customers: unknown('No customer aggregate yet'),
       deliveries: unknown('Delivery totals are not available'),
       bestSeller: null, lowStock: null, waiting: null,
+      /* MONEY. Separate from the operational figures on purpose: this is the merchant's
+         income and SOKONI's cut, and it must never be mixed with counts that are partial. */
+      sales:      unknown('No billing period yet'),
+      commission: unknown('No billing period yet'),
+      earnings:   unknown('No billing period yet'),
+      rate:       null,      /* {pct, fixed, mixed} READ from the ledger, never assumed */
+      pendingPayout: unknown('Payout requests not readable'),
+      balance:       unknown('Wallet not readable'),
+      period: null,
     };
     if (!scope.ok) return out;
 
@@ -198,6 +214,89 @@
       }).catch(function () { /* leave null */ }));
     }
 
+    /* ── COMMISSION — from sellerBilling, the aggregate the SERVER maintains ──────
+       sellerBilling/{uid}/monthly/{period} is incremented inside the same transaction
+       that writes each commissionLedger entry, so its totals cannot drift from the
+       ledger. It is readable by the seller, and it is pre-aggregated — which matters,
+       because summing a page of ledger entries client-side would silently under-report
+       the moment a merchant exceeded the page size. A truncated total is a wrong total. */
+    var period = _period();
+    out.period = period;
+    if (ctx.db.readBilling) {
+      jobs.push(ctx.db.readBilling(scope.sellerUid, period).then(function (b) {
+        if (!b) {
+          /* No document yet is not zero — it means nothing has been billed this period,
+             which for a shop that has traded would be wrong to assert either way. */
+          out.sales = unknown('No sales recorded this period');
+          out.commission = unknown('No sales recorded this period');
+          out.earnings = unknown('No sales recorded this period');
+          return;
+        }
+        var gross = Number(b.grossSalesKES);
+        var comm  = Number(b.totalCommissionKES);
+        if (isFinite(gross)) out.sales = known(gross);
+        if (isFinite(comm))  out.commission = known(comm);
+        /* Earnings is DERIVED, and only when both inputs are real. Deriving from one
+           known and one unknown would produce a confident number built on a guess. */
+        if (isFinite(gross) && isFinite(comm)) out.earnings = known(gross - comm);
+      }).catch(function () { /* leave unknown */ }));
+    }
+
+    /* ── THE RATE — read from the ledger entries, NEVER a constant ────────────────
+       Each entry records the commissionPct actually applied to that payment, plus any
+       fixedFee. The rate is a commercial authority that lives on the server and can
+       differ by plan, hub and agreement; hardcoding "3%" or "5%" here would state as
+       fact something this file has no standing to know. If the entries disagree, say
+       so rather than picking one. */
+    if (ctx.db.queryCommission) {
+      jobs.push(ctx.db.queryCommission({
+        collection: 'commissionLedger',
+        where: [['sellerUid', '==', scope.sellerUid]],
+        orderBy: ['createdAt', 'desc'], limit: 50,
+      }).then(function (rows) {
+        var pcts = {}, fixed = {}, n = 0;
+        (rows || []).forEach(function (e) {
+          var p = Number(e && e.commissionPct);
+          if (!isFinite(p)) return;
+          pcts[p] = 1; n++;
+          var f = Number(e && e.fixedFee); if (isFinite(f) && f > 0) fixed[f] = 1;
+        });
+        var keys = Object.keys(pcts);
+        if (!n || !keys.length) return;               /* no entries -> no rate claim */
+        out.rate = {
+          pct: keys.length === 1 ? Number(keys[0]) : null,
+          mixed: keys.length > 1,
+          fixed: Object.keys(fixed).length === 1 ? Number(Object.keys(fixed)[0]) : null,
+          sampled: n,
+        };
+      }).catch(function () { /* leave null */ }));
+    }
+
+    /* ── PENDING PAYOUT — payoutRequests is seller-readable ───────────────────── */
+    if (ctx.db.queryPayouts) {
+      jobs.push(ctx.db.queryPayouts({
+        collection: 'payoutRequests',
+        where: [['sellerUid', '==', scope.sellerUid]],
+        limit: 50,
+      }).then(function (rows) {
+        var pend = (rows || []).filter(function (r) {
+          return r && ['pending', 'processing', 'requested'].indexOf(String(r.status)) > -1;
+        });
+        var sum = 0, ok = pend.length > 0 || (rows || []).length >= 0;
+        pend.forEach(function (r) { var a = Number(r.amount); if (isFinite(a)) sum += a; });
+        if (ok) out.pendingPayout = known(sum);
+      }).catch(function () { /* leave unknown */ }));
+    }
+
+    /* ── AVAILABLE BALANCE — wallets/{uid}.balance, in shillings ──────────────── */
+    if (ctx.db.readWallet) {
+      jobs.push(ctx.db.readWallet(scope.sellerUid).then(function (w) {
+        var b = w && Number(w.balance);
+        if (isFinite(b)) out.balance = known(b);
+        else out.balance = unknown('No wallet yet');
+      }).catch(function () { /* leave unknown */ }));
+    }
+
     await Promise.all(jobs.map(function (p) { return p.catch(function () {}); }));
     return out;
   }
@@ -257,6 +356,25 @@
       esc(val) + '</b> ' + esc(label) + part + '</span>';
   }
 
+  /* The rate, said only as strongly as the evidence allows. */
+  function rateLine (r) {
+    if (!r) return 'Commission rate — not recorded yet';
+    if (r.mixed) return 'Commission rate varies across recent sales';
+    var out = 'Commission rate ' + r.pct + '%';
+    if (r.fixed) out += ' + ' + money(r.fixed) + ' per sale';
+    return out;
+  }
+
+  function moneyTile (emoji, label, v) {
+    var isKnown = v && v.state === 'known';
+    return '<div class="sd-mt' + (isKnown ? '' : ' sd-mt-unknown') + '"' +
+      (v && v.note ? ' title="' + esc(v.note) + '"' : '') + '>' +
+      '<div class="sd-mt-l"><span aria-hidden="true">' + emoji + '</span> ' + esc(label) + '</div>' +
+      '<div class="sd-mt-v' + (isKnown ? ' sd-num' : '') + '"' +
+        (isKnown ? ' data-count="' + esc(String(v.value)) + '" data-money="1"' : '') + '>' +
+        esc(isKnown ? money(v.value) : UNKNOWN) + '</div></div>';
+  }
+
   function view (S) {
     var f = S.facts, ctx = S.ctx;
     var name = ctx.userName ? String(ctx.userName).split(' ')[0] : null;
@@ -284,6 +402,43 @@
           statChip('🟢', f.orders, 'orders') +
           statChip('🔵', f.customers, 'customers') +
           statChip('🟠', f.deliveries, 'deliveries') +
+        '</div>' +
+      '</section>' +
+
+      /* ── 💰 MONEY ─────────────────────────────────────────────────────────────
+         The flow stated as a flow, because that is the thing a merchant must be able to
+         read in one glance:  customer pays -> SOKONI commission -> merchant receives.
+         Commission is styled as a DEDUCTION and earnings as the merchant's own, so the
+         two can never be misread for one another. Nothing here is a percentage this file
+         invented: the rate is whatever the ledger entries actually recorded. */
+      '<section class="sd-sec">' +
+        '<h2 class="sd-h"><span aria-hidden="true">💰</span> Money' +
+          (f.period ? ' <span class="sd-per">' + esc(f.period) + '</span>' : '') + '</h2>' +
+        '<div class="sd-comm">' +
+          '<div class="sd-comm-l"><span aria-hidden="true">💰</span> SOKONI commission</div>' +
+          '<div class="sd-comm-v' + (f.commission.state === 'known' ? ' sd-num' : '') + '"' +
+            (f.commission.state === 'known'
+              ? ' data-count="' + esc(String(f.commission.value)) + '" data-money="1"' : '') + '>' +
+            esc(f.commission.state === 'known' ? money(f.commission.value) : UNKNOWN) + '</div>' +
+          '<div class="sd-comm-r">' + esc(rateLine(f.rate)) + '</div>' +
+
+          '<ol class="sd-flow">' +
+            '<li class="sd-flow-i"><span class="sd-flow-e" aria-hidden="true">🛍️</span>' +
+              '<span class="sd-flow-k">Sales</span>' +
+              '<b class="sd-flow-v">' + esc(f.sales.state === 'known' ? money(f.sales.value) : UNKNOWN) + '</b></li>' +
+            '<li class="sd-flow-i sd-flow-cut"><span class="sd-flow-e" aria-hidden="true">📉</span>' +
+              '<span class="sd-flow-k">SOKONI commission</span>' +
+              '<b class="sd-flow-v">' + (f.commission.state === 'known' ? '−' + esc(money(f.commission.value)) : UNKNOWN) + '</b></li>' +
+            '<li class="sd-flow-i sd-flow-net"><span class="sd-flow-e" aria-hidden="true">💵</span>' +
+              '<span class="sd-flow-k">Your earnings</span>' +
+              '<b class="sd-flow-v">' + esc(f.earnings.state === 'known' ? money(f.earnings.value) : UNKNOWN) + '</b></li>' +
+          '</ol>' +
+          '<button type="button" class="sd-comm-a" data-go="revenue">View commission →</button>' +
+        '</div>' +
+
+        '<div class="sd-money2">' +
+          moneyTile('⏳', 'Pending payout', f.pendingPayout) +
+          moneyTile('🏦', 'Available balance', f.balance) +
         '</div>' +
       '</section>' +
 
@@ -398,5 +553,6 @@
     _known: known, _partial: partial, _unknown: unknown,
     _renderValue: renderValue, _insights: insights, _money: money, _greeting: greeting,
     _loadFacts: loadFacts, UNKNOWN: UNKNOWN, ACTIONS: ACTIONS,
+    _rateLine: rateLine, _period: _period,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
