@@ -1921,6 +1921,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     scope: _scope(), shopName: _shopName(),
                     shop: S.shop || null,
                     orders: function () { return loadOrders(false); },
+                    /* The printer state the SHELL already tracks — five honest states, and
+                       "saved" is not "connected". Receipts reports it rather than
+                       guessing; with no device layer it says the status is unavailable. */
+                    device: function () {
+                      var p = DEV && DEV.printer;
+                      return p ? { connected: p.state === 'connected', name: p.name || null, state: p.state } : null;
+                    },
                     onPrint: _ctx().onPrint,
                     onToast: toast }; } },
     staff:      { global: 'SokoniMerchantTeam',        ctx: function () { return {

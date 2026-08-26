@@ -27,7 +27,12 @@ const ok = (c, label, detail) => {
 
 /* ── 1. PRINTING IS REPORTED HONESTLY ─────────────────────────────────────── */
 console.log('\n1. A printer that failed is never reported as printed');
-const printBlock = SRC.slice(SRC.indexOf("if (k === 'print')"), SRC.indexOf("function onKey"));
+/* Anchored on the handler as it now reads. It was `k === 'print'` until the print OPTIONS
+   sheet arrived and split opening options from printing; the old anchor then matched nothing
+   and this whole section silently measured an empty string — five assertions passing or
+   failing against "". The length CONTROL is what caught it, which is why it is here. */
+const printBlock = SRC.slice(SRC.indexOf("if (k === 'doprint' || k === 'print')"),
+                             SRC.indexOf("function onKey"));
 ok(printBlock.length > 300, 'CONTROL: the print handler was located (' + printBlock.length + ' chars)');
 ok(/res && res\.ok === true/.test(printBlock),
    'success requires an explicit ok:true from the device layer');
@@ -122,6 +127,85 @@ console.log('\n9. Navigation stays in merchant-v2');
 ok(!/seller\.html/.test(CODE), 'no reference to seller.html');
 ok(!/location\s*\.\s*(href|assign|replace)/.test(CODE), 'it never sets location');
 ok(!/<a\s[^>]*href=/i.test(CODE), 'it renders no anchor that could leave the workspace');
+
+/* ── 10. THE VIEWER ───────────────────────────────────────────────────────── */
+console.log('\n10. The receipt viewer');
+const sheetFn = CODE.slice(CODE.indexOf('function sheet ()'), CODE.indexOf('function sel ('));
+ok(sheetFn.length > 500, 'CONTROL: the sheet body was located (' + sheetFn.length + ' chars)');
+ok(/rc-backb/.test(sheetFn), 'it has a back control INSIDE the sheet, not a floating page button');
+ok(/rc-vamt/.test(sheetFn) && /PAID/.test(SRC), 'the header states paid status and the total');
+['openprint', 'share', 'copyref', 'verify'].forEach((a) => {
+  ok(new RegExp('data-rc="' + a + '"').test(sheetFn), 'offers the ' + a + ' action');
+});
+
+/* ── 11. VERIFICATION USES THE CONTRACT'S OWN URL ─────────────────────────── */
+console.log('\n11. Verification');
+const vfn = CODE.slice(CODE.indexOf('function verifyUrl'), CODE.indexOf('function deliveryBlock'));
+ok(vfn.length > 80, 'CONTROL: verifyUrl located');
+ok(/RECEIPT_URL_BASE/.test(vfn),
+   'the link is the contract\'s own base — the same URL the printed QR encodes');
+/* The contract is explicit that the QR must carry a reference and nothing else. */
+ok(!/phone|uid|total|amount/i.test(vfn),
+   'the verification link carries no phone, uid or amount');
+ok(/if \(!base \|\| !ref\) return null;/.test(SRC),
+   'no reference means no link — rather than one that leads nowhere');
+ok(/vurl\s*\n?\s*\?/.test(sheetFn) || /\(vurl/.test(sheetFn),
+   'the verify control renders only when a link actually resolves');
+
+/* ── 12. DELIVERY IN THE SHEET ────────────────────────────────────────────── */
+console.log('\n12. Delivery detail, without reaching for a rider');
+const dfn = CODE.slice(CODE.indexOf('function deliveryBlock'), CODE.indexOf('function printSheet'));
+ok(dfn.length > 200, 'CONTROL: deliveryBlock located');
+ok(/saleKind\(o\) !== 'delivery'\) return '';/.test(SRC),
+   'it renders nothing at all for a counter sale');
+['deliveryId', 'address', 'rider', 'deliveryFee'].forEach((f) => {
+  ok(dfn.indexOf(f) > -1, 'shows ' + f + ' from the order');
+});
+ok(/stage \?/.test(dfn), 'the fulfilment stage renders only when the order carries one');
+ok(!/lat|lng|coords|geo|position/i.test(dfn),
+   'it never reads rider position — that authority is not widened to decorate a receipt');
+ok(/data-route="fulfilment"/.test(dfn),
+   'tracking is a ROUTE into the workspace, not a coordinate read here');
+
+/* ── 13. THE PRINT OPTIONS SHEET ──────────────────────────────────────────── */
+console.log('\n13. Printing is a decision, not a reflex');
+const pfn = CODE.slice(CODE.indexOf('function printSheet'), CODE.indexOf('function sheet ()'));
+ok(pfn.length > 400, 'CONTROL: printSheet located');
+ok(/data-rc="openprint"/.test(sheetFn) && /data-rc="doprint"/.test(pfn),
+   'opening options is separate from printing');
+/* The device state is reported, never assumed — "saved" is not "connected". */
+ok(/dev === null \? 'Status unavailable'/.test(SRC),
+   'with no device layer it says the status is UNAVAILABLE, not "Connected"');
+ok(/Reconnect/.test(pfn), 'a disconnected printer offers Reconnect rather than a dead PRINT');
+ok(/copies: S\.copies/.test(SRC) && /includeQr: S\.withQr/.test(SRC),
+   'the chosen copies and QR option actually reach the print job');
+ok(/Math\.max\(1, Math\.min\(9, S\.copies \+ dstep\)\)/.test(SRC),
+   'the copy count is bounded — never zero, never unbounded');
+
+/* ── 14. DAY OVER DAY, ONLY WHEN THERE IS A YESTERDAY ─────────────────────── */
+console.log('\n14. A trend is stated only when one exists');
+const delta = CODE.slice(CODE.indexOf('function deltaHTML'), CODE.indexOf('function summaryHTML'));
+ok(delta.length > 300, 'CONTROL: deltaHTML located');
+ok(/if \(!yest\.count \|\| !yest\.total\) return '';/.test(SRC),
+   'no yesterday data means NO percentage — a shop that did not trade did not fall 100%');
+ok(/S\.range !== 'today'/.test(delta), 'the comparison is only offered for today');
+ok(/saleKind\(o\) === 'cancelled'\) return;/.test(delta),
+   'cancelled sales are excluded from both sides of the comparison');
+/* Executed, not merely read — the arithmetic is the claim. */
+const grab = (re) => SRC.match(re)[0];
+const runDelta = (function () {
+  const src = grab(/function dayStart \(offsetDays\) \{[\s\S]*?\n    \}/) + '\n' +
+              grab(/function saleKind \(o\) \{[\s\S]*?\n    \}/) + '\n' +
+              grab(/function deltaHTML \(\) \{[\s\S]*?\n    \}/) + '\nreturn deltaHTML();';
+  return (rows, range) => new Function('S', src)({ rows, range });
+})();
+const DAY = 86400000, NOW = Date.now();
+ok(runDelta([{ ts: NOW, total: 100 }], 'today') === '',
+   'a first-day shop is shown no trend at all');
+ok(/12\.4% from yesterday/.test(runDelta([{ ts: NOW - DAY, total: 1000 }, { ts: NOW, total: 1124 }], 'today')),
+   '1000 yesterday to 1124 today reads as 12.4%');
+ok(runDelta([{ ts: NOW - DAY, total: 100 }, { ts: NOW, total: 200 }], 'all') === '',
+   'no trend outside the today range');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

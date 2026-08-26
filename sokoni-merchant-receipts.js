@@ -93,6 +93,32 @@
     '.rc-perr{margin-top:12px;padding:12px 13px;border-radius:12px;font-size:12.5px;',
       'background:rgba(255,107,107,.10);border:1px solid rgba(255,107,107,.30)}',
     '.rc-empty-i{font-size:40px;margin-bottom:10px}',
+    '.rc-delta{display:inline-block;margin-top:8px;padding:5px 10px;border-radius:20px;',
+      'font-size:11.5px;font-weight:800;background:rgba(255,255,255,.06)}',
+    '.rc-delta.up{background:rgba(113,255,0,.12);color:var(--acc,#71ff00)}',
+    '.rc-delta.down{background:rgba(255,176,32,.13);color:#ffb020}',
+    '.rc-back{display:flex;align-items:center;gap:10px;margin-bottom:14px}',
+    '.rc-backb{border:0;background:transparent;color:inherit;font-size:20px;cursor:pointer;padding:2px 6px}',
+    '.rc-back span{font-size:13px;font-weight:800;color:var(--txt3,#8b8b8b)}',
+    '.rc-vhd{text-align:center;margin-bottom:16px}',
+    '.rc-vref{font-size:12.5px;font-weight:800;color:var(--txt3,#8b8b8b);margin-top:9px;letter-spacing:.03em}',
+    '.rc-vamt{font-size:30px;font-weight:900;letter-spacing:-.02em;margin-top:4px}',
+    '.rc-dsec{margin-top:14px;padding:13px;border-radius:14px;',
+      'background:rgba(0,170,255,.08);border:1px solid rgba(0,170,255,.24)}',
+    '.rc-dsec-h{font-size:11.5px;font-weight:900;letter-spacing:.05em;margin-bottom:9px}',
+    '.rc-dk{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px}',
+    '.rc-dk span{flex:1;color:var(--txt3,#8b8b8b);font-weight:600}',
+    '.rc-dk b{font-weight:800;display:flex;align-items:center;gap:8px}',
+    '.rc-ver{margin-top:14px;padding:12px 13px;border-radius:13px;font-size:12.5px;font-weight:800;',
+      'background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.24)}',
+    '.rc-ver span{display:block;font-weight:600;color:var(--txt2,#c9c9c9);margin-top:3px}',
+    '.rc-vacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:16px}',
+    '.rc-ph{font-size:17px;font-weight:900;margin-bottom:14px}',
+    '.rc-step{width:34px;height:34px;border-radius:9px;cursor:pointer;font:inherit;font-size:16px;',
+      'font-weight:900;background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.18))}',
+    '.rc-copies{min-width:26px;text-align:center;font-size:15px;font-weight:900}',
+    '.rc-chk{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:13px;font-weight:700;cursor:pointer}',
+
 
     '.rc-search{flex:1 1 180px;min-width:0;min-height:44px;border-radius:12px;padding:0 14px;font:inherit;font-size:16px;',
     'background:var(--card,#0e0e0e);border:1px solid var(--line,rgba(255,255,255,.12));color:inherit}',
@@ -256,6 +282,34 @@
       return AE.aggregate(rows.map(toEngineOrder));
     }
 
+    /* ── DAY OVER DAY ─────────────────────────────────────────────────────────
+       Shown ONLY when yesterday genuinely has sales to compare against. With no rows for
+       yesterday there is no percentage to state — a shop that did not trade did not fall
+       100%, and a first-day shop has nothing to be up from. Both would be this surface
+       inventing a trend out of an absence, which is the same defect class as rendering an
+       unknown total as zero. */
+    function deltaHTML () {
+      if (S.range !== 'today') return '';           /* only meaningful for today */
+      var all = S.rows || [];
+      var t0 = dayStart(0), t1 = dayStart(1);
+      var sum = function (from, to) {
+        var n = 0, seen = 0;
+        all.forEach(function (o) {
+          var t = o.ts || (o.when && o.when.getTime());
+          if (!t || t < from || (to && t >= to)) return;
+          if (saleKind(o) === 'cancelled') return;
+          seen++; n += Number(o.total) || 0;
+        });
+        return { total: n, count: seen };
+      };
+      var today = sum(t0, null), yest = sum(t1, t0);
+      if (!yest.count || !yest.total) return '';    /* nothing to compare against */
+      var pct = ((today.total - yest.total) / yest.total) * 100;
+      var up = pct >= 0;
+      return '<div class="rc-delta ' + (up ? 'up' : 'down') + '">' +
+        (up ? '↑ ' : '↓ ') + Math.abs(pct).toFixed(1) + '% from yesterday</div>';
+    }
+
     function summaryHTML (rows) {
       var a = summaryFor(rows);
       var dash = '—';
@@ -276,6 +330,7 @@
           '<div class="rc-sum-s">' + rows.length +
             (rows.length === 1 ? ' receipt' : ' receipts') +
             (a ? '' : ' · totals unavailable') + '</div>' +
+          deltaHTML() +
         '</div>' +
         '<div class="rc-tiles">' +
           '<div class="rc-tile"><small>💳 M-PESA</small><b>' + esc(money(byPay.mpesa)) + '</b></div>' +
@@ -415,6 +470,79 @@
       } catch (_) { return null; }
     }
 
+
+    /* ── VERIFICATION ─────────────────────────────────────────────────────────
+       The QR destination is the contract's own RECEIPT_URL_BASE — the customer-facing
+       verification page keyed by REFERENCE only. The contract is explicit that the QR must
+       never carry a phone number, a uid or an amount, and this surface must not invent a
+       richer link: it composes the same URL the printed QR encodes, so scanning the paper
+       and tapping the screen reach the same place. */
+    function verifyUrl (o) {
+      var R = (typeof window !== 'undefined') && window.SokoniReceiptDoc;
+      var base = R && R.RECEIPT_URL_BASE;
+      var ref = o && (o.ref || o.id);
+      if (!base || !ref) return null;
+      return base + encodeURIComponent(String(ref));
+    }
+
+    /* ── DELIVERY, IN THE SHEET ───────────────────────────────────────────────
+       Everything here is a field the ORDER already carries. Rider LOCATION is deliberately
+       absent: live position belongs to the tracking authority and its own rules, and a
+       receipt reaching for it would be this surface widening a security boundary to
+       decorate a document. The tracking ENTRY POINT is a route, not a coordinate. */
+    function deliveryBlock (o) {
+      if (saleKind(o) !== 'delivery') return '';
+      var fee = money(o.deliveryFee, o.currency);
+      var stage = o.fulfilment || o.deliveryStatus || null;
+      return '<div class="rc-dsec">' +
+        '<div class="rc-dsec-h">🚚 SOKONI DELIVERY</div>' +
+        (o.deliveryId ? '<div class="rc-dk"><span>Delivery ID</span><b>' + esc(o.deliveryId) + '</b></div>' : '') +
+        (o.address ? '<div class="rc-dk"><span>Address</span><b>' + esc(o.address) + '</b></div>' : '') +
+        (o.rider ? '<div class="rc-dk"><span>Rider</span><b>' + esc(o.rider) + '</b></div>' : '') +
+        (fee !== null ? '<div class="rc-dk"><span>Delivery fee</span><b>' + esc(fee) + '</b></div>' : '') +
+        /* Stage is shown only when the order carries one. "Pending" invented for an order
+           with no fulfilment field would be this surface asserting a delivery state. */
+        (stage ? '<div class="rc-dk"><span>Stage</span><b>' + esc(stage) + '</b></div>' : '') +
+        '<button class="rc-btn" data-rc="go" data-route="fulfilment">📍 Open tracking</button>' +
+      '</div>';
+    }
+
+    /* ── THE PRINT OPTIONS SHEET ──────────────────────────────────────────────
+       Opening options is NOT printing. The old flow fired a job the moment Print was
+       pressed; a merchant reprinting a customer copy had no way to say "two". */
+    function printSheet () {
+      var o = S.open;
+      var dev = (typeof ctx.device === 'function') ? ctx.device() : null;
+      var connected = dev && dev.connected;
+      var name = (dev && dev.name) || 'Printer';
+      return '<div class="rc-sheet"><div class="rc-scrim" data-rc="closeprint"></div>' +
+        '<div class="rc-panel" role="dialog" aria-modal="true" aria-label="Print receipt">' +
+        '<div class="rc-ph">🖨️ Print receipt</div>' +
+        /* The device state is REPORTED, never assumed. With no device layer we say we
+           cannot tell — not "Connected", which a merchant would act on. */
+        '<div class="rc-dk"><span>Printer</span><b>' +
+          (dev === null ? 'Status unavailable'
+                        : (connected ? '● ' + esc(name) + ' — Connected'
+                                     : '○ ' + esc(name) + ' — Disconnected')) + '</b></div>' +
+        (dev && !connected
+          ? '<div class="rc-perr"><b>Printer disconnected.</b><br>Reconnect ' + esc(name) +
+            ' to continue.<br><button class="rc-btn" data-rc="reconnect">Reconnect</button></div>'
+          : '') +
+        '<div class="rc-dk"><span>Copies</span><b>' +
+          '<button class="rc-step" data-rc="copies" data-d="-1" aria-label="Fewer copies">−</button>' +
+          '<span class="rc-copies">' + S.copies + '</span>' +
+          '<button class="rc-step" data-rc="copies" data-d="1" aria-label="More copies">+</button>' +
+        '</b></div>' +
+        '<label class="rc-chk"><input type="checkbox" data-rc="qr"' + (S.withQr ? ' checked' : '') +
+          '> Include QR verification</label>' +
+        (S.printErr ? '<div class="rc-perr"><b>The receipt did not print.</b><br>' + esc(S.printErr) + '</div>' : '') +
+        '<div class="rc-foot">' +
+          '<button class="rc-close" data-rc="closeprint">Cancel</button>' +
+          '<button class="rc-print" data-rc="doprint"' + (S.printing ? ' disabled' : '') + '>' +
+            (S.printing ? 'Printing…' : 'PRINT') + '</button>' +
+        '</div></div></div>';
+    }
+
     function sheet () {
       var o = S.open;
       var d = docFor(o);
@@ -424,9 +552,35 @@
           'Nothing is shown rather than a different-looking receipt.</div>';
       var warn = (d && d.warnings.length)
         ? '<div class="rc-note">' + d.warnings.map(esc).join('<br>') + '</div>' : '';
+      var amt = money(o.total, o.currency);
+      var paid = /paid|success|complete/i.test(String(o.payment || ''));
+      var vurl = verifyUrl(o);
       return '<div class="rc-sheet"><div class="rc-scrim" data-rc="close"></div>' +
         '<div class="rc-panel" role="dialog" aria-modal="true" aria-label="Receipt">' +
+        '<div class="rc-back"><button class="rc-backb" data-rc="close" aria-label="Back">←</button>' +
+          '<span>Receipt</span></div>' +
+        '<div class="rc-vhd">' +
+          (saleKind(o) === 'cancelled' ? '<span class="rc-b bad">✕ Cancelled</span>'
+            : paid ? '<span class="rc-b ok">✓ PAID</span>' : '<span class="rc-b">Unpaid</span>') +
+          '<div class="rc-vref">' + esc(o.ref || o.id) + '</div>' +
+          '<div class="rc-vamt">' + esc(amt === null ? '—' : amt) + '</div>' +
+        '</div>' +
         body + warn +
+        deliveryBlock(o) +
+        /* Verification, only when a reference actually resolves to a URL. A verify control
+           that leads nowhere is worse than none: it invites a customer to check something
+           that will not confirm. */
+        (vurl
+          ? '<div class="rc-ver">✓ Verified SOKONI receipt' +
+            '<span>Scan the QR on the printed receipt, or open the verification page.</span>' +
+            '</div>'
+          : '') +
+        '<div class="rc-vacts">' +
+          '<button class="rc-btn" data-rc="openprint">🖨️ Print</button>' +
+          '<button class="rc-btn" data-rc="share">📤 Share</button>' +
+          '<button class="rc-btn" data-rc="copyref">📋 Copy reference</button>' +
+          (vurl ? '<button class="rc-btn" data-rc="verify">🔗 Verify receipt</button>' : '') +
+        '</div>' +
         /* The print OUTCOME, stated. A failure names what to do about it; it never
            disappears into a toast the merchant may have missed while looking at the
            printer. */
@@ -502,7 +656,8 @@
             sel('cancelled', '❌ Cancelled', S.kind) +
           '</select>' +
         '</div>' + body +
-        (S.open ? sheet() : '');
+        (S.open ? sheet() : '') +
+        (S.open && S.printSheet ? printSheet() : '');
     }
 
     /* ── LOAD: the shell's ONE orders reader ────────────────────────────── */
@@ -571,7 +726,58 @@
         S.q = ''; S.range = 'today'; S.pay = 'all'; S.kind = 'all'; paint();
         return;
       }
-      if (k === 'print') {
+      if (k === 'openprint') { S.printSheet = true; S.printErr = null; paint(); return; }
+      if (k === 'closeprint') { S.printSheet = false; paint(); return; }
+      if (k === 'copies') {
+        var dstep = Number(el.getAttribute('data-d')) || 0;
+        S.copies = Math.max(1, Math.min(9, S.copies + dstep));
+        paint(); return;
+      }
+      if (k === 'reconnect') {
+        if (typeof ctx.reconnectPrinter === 'function') {
+          Promise.resolve(ctx.reconnectPrinter()).then(function () { paint(); })
+            .catch(function () { paint(); });
+        } else { say('Reconnect the printer from POS settings.'); }
+        return;
+      }
+      if (k === 'copyref') {
+        var ref = S.open && (S.open.ref || S.open.id);
+        if (!ref) return;
+        /* Reported honestly: clipboard access is refused in plenty of contexts, and a
+           "Copied" toast over a failed write is a small lie the merchant acts on. */
+        try {
+          navigator.clipboard.writeText(String(ref))
+            .then(function () { say('Reference copied.'); })
+            .catch(function () { say('Could not copy. The reference is ' + ref + '.'); });
+        } catch (e) { say('Could not copy. The reference is ' + ref + '.'); }
+        return;
+      }
+      if (k === 'verify') {
+        var vu = verifyUrl(S.open);
+        if (!vu) return;
+        try { window.open(vu, '_blank', 'noopener'); } catch (e) { say('Could not open the verification page.'); }
+        return;
+      }
+      if (k === 'share') {
+        var sd = docFor(S.open);
+        if (!sd) return;
+        /* The SAME text the printer receives — a shared receipt that differs from the
+           printed one is the very divergence this surface exists to prevent. */
+        if (navigator.share) {
+          Promise.resolve(navigator.share({ title: 'Receipt ' + (S.open.ref || ''), text: sd.text }))
+            .catch(function () {});
+        } else { say('Sharing is not available on this device.'); }
+        return;
+      }
+      if (k === 'go') {
+        var r2 = el.getAttribute('data-route');
+        try {
+          if (typeof ctx.go === 'function') ctx.go(r2);
+          else if (window.SokoniShell && window.SokoniShell.go) window.SokoniShell.go(r2);
+        } catch (e) {}
+        return;
+      }
+      if (k === 'doprint' || k === 'print') {
         var d = docFor(S.open);
         if (!d) return;
         /* Printing goes through the shell's device layer — the same connection POS uses,
@@ -586,12 +792,15 @@
           return;
         }
         S.printing = true; paint();
-        Promise.resolve(ctx.onPrint({ text: d.text, order: S.open })).then(function (res) {
+        Promise.resolve(ctx.onPrint({
+          text: d.text, order: S.open,
+          copies: S.copies, includeQr: S.withQr,
+        })).then(function (res) {
           S.printing = false;
           /* undefined is NOT success. A device layer that returns nothing has told us
              nothing, and this surface must not upgrade silence into a printed receipt. */
           var okd = res && res.ok === true;
-          if (okd) { say('Receipt printed.'); }
+          if (okd) { say(S.copies > 1 ? S.copies + ' copies printed.' : 'Receipt printed.'); S.printSheet = false; }
           else {
             S.printErr = (res && (res.error || res.reason)) ||
               'The receipt did not print. Check the printer is connected, then try again.';
