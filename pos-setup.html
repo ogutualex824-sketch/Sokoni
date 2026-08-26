@@ -1304,6 +1304,83 @@
         margin-top: 16px;
       }
     }
+
+    /* ── Payment destination card (step 7) ────────────────────────────────
+       Authored at 320px first. Every horizontal axis is constrained: min-width:0
+       on flex children so a long account name cannot force the panel wider than
+       the viewport, and the type selector wraps rather than squeezing. */
+    .pd-card {
+      border: 1px solid var(--sk-line, rgba(255,255,255,.10));
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(255,255,255,.03);
+    }
+    .pd-badge {
+      font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+      padding: 4px 9px; border-radius: 999px; white-space: nowrap; flex: 0 0 auto;
+    }
+    .pd-badge.ok   { background: rgba(113,255,0,.14);  color: #8dff3c; }
+    .pd-badge.warn { background: rgba(255,180,0,.14);  color: #ffc74d; }
+    .pd-badge.bad  { background: rgba(255,68,68,.14);  color: #ff7b7b; }
+    .pd-badge.mut  { background: rgba(255,255,255,.07); color: var(--sk-muted, rgba(255,255,255,.55)); }
+
+    .pd-live {
+      border: 1px solid rgba(113,255,0,.32); background: rgba(113,255,0,.05);
+      border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    }
+    .pd-pending {
+      border: 1px solid rgba(255,180,0,.28); background: rgba(255,180,0,.05);
+      border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    }
+    .pd-num {
+      font-size: 22px; font-weight: 800; margin: 6px 0 2px;
+      font-variant-numeric: tabular-nums; letter-spacing: 1px; overflow-wrap: anywhere;
+      color: var(--sk-text, #fff);
+    }
+    .pd-sub  { font-size: 12px; color: var(--sk-muted, rgba(255,255,255,.55)); overflow-wrap: anywhere; }
+    .pd-lbl  { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+               color: var(--sk-muted, rgba(255,255,255,.55)); margin: 14px 0 8px; }
+    .pd-seg  { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pd-seg button {
+      flex: 1 1 140px; min-width: 0; min-height: 44px; padding: 11px 12px; border-radius: 12px;
+      border: 1px solid var(--sk-line, rgba(255,255,255,.10));
+      background: rgba(255,255,255,.04); color: var(--sk-muted, rgba(255,255,255,.6));
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .pd-seg button.on {
+      border-color: var(--sk-green, #71ff00); background: rgba(113,255,0,.10);
+      color: var(--sk-text, #fff);
+    }
+    .pd-in {
+      display: block; width: 100%; box-sizing: border-box; min-height: 48px;
+      padding: 12px 14px; margin-bottom: 10px; border-radius: 12px;
+      border: 1px solid var(--sk-line, rgba(255,255,255,.10));
+      background: rgba(255,255,255,.04); color: var(--sk-text, #fff);
+      font-size: 16px;              /* 16px+ — anything smaller triggers iOS zoom */
+      font-family: inherit; font-variant-numeric: tabular-nums;
+    }
+    .pd-in:focus-visible, .pd-seg button:focus-visible, .pd-btn:focus-visible {
+      outline: 2px solid var(--sk-green, #71ff00); outline-offset: 2px;
+    }
+    .pd-btn {
+      width: 100%; min-height: 48px; border-radius: 12px; cursor: pointer;
+      font-size: 14px; font-weight: 800; font-family: inherit; margin-top: 4px;
+      border: 1px solid rgba(113,255,0,.32); background: rgba(113,255,0,.13);
+      color: var(--sk-green, #71ff00);
+    }
+    .pd-btn.solid { background: var(--sk-green, #71ff00); border-color: var(--sk-green, #71ff00); color: #04120a; }
+    .pd-btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .pd-note {
+      border-radius: 12px; padding: 11px 13px; margin: 10px 0 0;
+      font-size: 12px; line-height: 1.55;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--sk-line, rgba(255,255,255,.10));
+      color: var(--sk-muted, rgba(255,255,255,.6));
+    }
+    .pd-note.warn { background: rgba(255,180,0,.07); border-color: rgba(255,180,0,.28); }
+    .pd-note.bad  { background: rgba(255,68,68,.07); border-color: rgba(255,68,68,.28); color: #ffb3b3; }
+    .pd-note strong { color: var(--sk-text, #fff); }
+    @media (min-width: 600px) { .pd-seg button { flex: 1 1 0; } }
   </style>
 </head>
 <body>
@@ -1740,6 +1817,25 @@
             <span id="setup-ready-badge" style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;"></span>
           </div>
           <div id="setup-checklist" role="list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+
+        <!-- ── Payment destination (M-PESA Till / PayBill) ─────────────────
+             Post-provisioning only. Steps 1–6 do not touch this and it cannot
+             affect device pairing; a merchant who ignores it still reaches
+             "Open POS" exactly as before.
+
+             Reuses the existing getPaymentDestination / savePaymentDestination
+             callables — no new endpoint, and the canonical
+             auth.uid → activeShopId authority is unchanged. Rendering is
+             owner-only: a cashier cannot read or write this document (rules
+             restrict it to owner/admin), so they get an honest read-only
+             notice rather than a form that fails on save. -->
+        <div id="pd-card-wrap" style="width:100%;margin:6px 0 14px;text-align:left;display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:800;color:var(--sk-text);">M-PESA payment destination</span>
+            <span id="pd-badge" class="pd-badge mut">Not configured</span>
+          </div>
+          <div id="pd-card" class="pd-card"></div>
         </div>
 
         <button class="btn-primary" id="btn-open-pos" aria-label="Open the POS and start selling">
@@ -3241,8 +3337,251 @@ function initReadyStep() {
   // Mandatory setup checklist + production-readiness gate (getSetupStatus).
   renderSetupChecklist();
 
+  // M-PESA payment destination (Till / PayBill) — owner-only, additive.
+  renderPaymentDestination();
+
   // Legal agreements gate — merchant must accept required agreements (legalDispatch).
   renderLegalGate();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAYMENT DESTINATION — M-PESA Till / PayBill  (step 7, additive)
+
+   Where this merchant's customers pay. Their own account: SOKONI does not hold
+   the sale proceeds, and its commission is billed separately.
+
+   AUTHORITY. Every status shown here comes from getPaymentDestination. Nothing
+   in this file may render VERIFIED from local state — a merchant who talked
+   their own browser into showing "Verified" would believe money was reaching a
+   destination nobody tested. paymentDestinations is `allow write: if false`;
+   savePaymentDestination only ever STAGES a replacement, and only the Daraja
+   STK callback can promote one.
+
+   SCOPE. Deliberately owner-only, and deliberately NOT merchantId-scoped. POS
+   setup selects a business by `merchantId`, while the payment backend resolves
+   auth.uid → users/{uid}.activeShopId → shops/{shopId}. Passing merchantId in
+   would need a backend authorization change; instead this card renders only
+   when the signed-in account's own shop IS the selected business, and says so
+   plainly otherwise. That way it can never mis-scope a save to the wrong
+   business — the failure mode this guards against is silent and financial.
+════════════════════════════════════════════════════════════════ */
+const PD = {
+  loaded: false, busy: false, mode: 'loading',   /* loading | owner | readonly | error */
+  reason: null, err: null,
+  status: 'NOT_CONFIGURED', active: null, pending: null,
+  productionAuthorized: false, lastFailureReason: null,
+  draftType: 'TILL', draftNumber: '', draftName: '',
+};
+
+const PD_LABEL = {
+  NOT_CONFIGURED: 'Not configured', PENDING_TEST: 'Awaiting verification',
+  TESTING: 'Verifying…', VERIFIED: 'Verified', FAILED: 'Verification failed',
+};
+const PD_TONE = {
+  NOT_CONFIGURED: 'mut', PENDING_TEST: 'warn', TESTING: 'warn',
+  VERIFIED: 'ok', FAILED: 'bad',
+};
+
+async function renderPaymentDestination() {
+  const wrap = document.getElementById('pd-card-wrap');
+  if (!wrap) return;
+  wrap.style.display = 'block';
+  PD.mode = 'loading'; _pdPaint();
+
+  try {
+    const res = await CF('getPaymentDestination')({});
+    const d = (res && res.data) || {};
+
+    /* The selected business must BE this account's shop. If it is not, the save
+       would silently target a different business — refuse rather than mis-scope. */
+    const selected = (WIZ.selectedBiz && (WIZ.selectedBiz.id || WIZ.selectedBiz.merchantId)) || null;
+    if (selected && d.shopId && String(selected) !== String(d.shopId)) {
+      PD.mode = 'readonly';
+      PD.reason = 'Payment details for this business are managed from its own owner account.';
+      _pdPaint();
+      return;
+    }
+
+    PD.status               = d.status || 'NOT_CONFIGURED';
+    PD.active               = d.activeDestination || null;
+    PD.pending              = d.pending || null;
+    PD.productionAuthorized = d.productionAuthorized === true;
+    PD.lastFailureReason    = d.lastFailureReason || null;
+
+    const seed = PD.pending || PD.active;
+    if (seed && !PD.draftNumber) {
+      PD.draftType   = seed.destinationType || 'TILL';
+      PD.draftNumber = seed.destinationNumber || '';
+      PD.draftName   = seed.accountName || '';
+    }
+    PD.mode = 'owner';
+    PD.loaded = true;
+    _pdPaint();
+    _pdSyncReadyTile();
+  } catch (e) {
+    /* A cashier legitimately cannot read this document — rules restrict it to
+       owner/admin. That is not an error to shout about, it is the expected
+       answer for a till operator, so it renders as a calm read-only notice. */
+    const code = (e && (e.code || e.message)) || '';
+    if (/permission-denied|failed-precondition|not-found/i.test(String(code))) {
+      PD.mode = 'readonly';
+      PD.reason = 'Business owner required to change payment details.';
+    } else {
+      PD.mode = 'error';
+      PD.err = (e && e.message) || 'Payment settings could not be loaded.';
+    }
+    _pdPaint();
+  }
+}
+
+function _pdDestCard(d, isActive) {
+  if (!d) return '';
+  const st = d.status || (isActive ? 'VERIFIED' : 'PENDING_TEST');
+  return '<div class="' + (isActive ? 'pd-live' : 'pd-pending') + '">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
+      '<span style="font-size:12px;font-weight:700;min-width:0;">' +
+        esc(d.destinationType === 'PAYBILL' ? 'M-PESA PayBill' : 'M-PESA Till') + '</span>' +
+      '<span class="pd-badge ' + (PD_TONE[st] || 'mut') + '">' + esc(PD_LABEL[st] || st) + '</span>' +
+    '</div>' +
+    '<div class="pd-num">' + esc(d.destinationNumber || '—') + '</div>' +
+    '<div class="pd-sub">' + esc(d.accountName || '') +
+      (isActive ? ' · <strong>Currently collecting</strong>' : '') + '</div>' +
+  '</div>';
+}
+
+function _pdPaint() {
+  const host  = document.getElementById('pd-card');
+  const badge = document.getElementById('pd-badge');
+  if (!host) return;
+
+  if (PD.mode === 'loading') {
+    host.innerHTML = '<div class="pd-sub">Loading payment settings…</div>';
+    if (badge) { badge.className = 'pd-badge mut'; badge.textContent = 'Checking…'; }
+    return;
+  }
+  if (PD.mode === 'error') {
+    host.innerHTML = '<div class="pd-note bad">' + esc(PD.err) + '</div>';
+    if (badge) { badge.className = 'pd-badge bad'; badge.textContent = 'Unavailable'; }
+    return;
+  }
+  if (PD.mode === 'readonly') {
+    host.innerHTML = '<div class="pd-note"><strong>' + esc(PD.reason) + '</strong><br>' +
+      'Customer payments go directly to the business owner\'s own M-PESA account. ' +
+      'Ask the owner to set or change it from Business Setup.</div>';
+    if (badge) { badge.className = 'pd-badge mut'; badge.textContent = 'Owner only'; }
+    return;
+  }
+
+  /* Owner mode */
+  const st = PD.active ? 'VERIFIED' : PD.status;
+  if (badge) { badge.className = 'pd-badge ' + (PD_TONE[st] || 'mut'); badge.textContent = PD_LABEL[st] || st; }
+
+  let h = '<div class="pd-sub" style="margin-bottom:10px;">Customer payments go <strong>directly</strong> to your own ' +
+          'M-PESA account. SOKONI does not hold your sale proceeds — its 5% commission ' +
+          '(minimum KES 10 per sale) is billed to you separately.</div>';
+
+  if (PD.active) h += _pdDestCard(PD.active, true);
+  if (PD.pending) {
+    h += '<div class="pd-lbl">Replacement — not yet active</div>' + _pdDestCard(PD.pending, false);
+    if (PD.active) {
+      h += '<div class="pd-note">Your existing destination keeps collecting until the new one is verified.</div>';
+    }
+  }
+  if (!PD.active && !PD.pending) h += '<div class="pd-note">No payment destination configured yet.</div>';
+  if (PD.lastFailureReason) {
+    h += '<div class="pd-note bad">Last verification attempt failed: ' + esc(PD.lastFailureReason) + '</div>';
+  }
+
+  h += '<div class="pd-lbl">' + (PD.active ? 'Change destination' : 'Add your destination') + '</div>' +
+    '<div class="pd-seg" role="radiogroup" aria-label="Destination type">' +
+      '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'TILL' ? 'true' : 'false') + '" ' +
+        'class="' + (PD.draftType === 'TILL' ? 'on' : '') + '" data-pd="type" data-v="TILL">Buy Goods Till</button>' +
+      '<button type="button" role="radio" aria-checked="' + (PD.draftType === 'PAYBILL' ? 'true' : 'false') + '" ' +
+        'class="' + (PD.draftType === 'PAYBILL' ? 'on' : '') + '" data-pd="type" data-v="PAYBILL">PayBill</button>' +
+    '</div>' +
+    '<label class="pd-lbl" for="pd-num" style="margin-top:0;">' +
+      (PD.draftType === 'PAYBILL' ? 'PayBill number' : 'Till number') + '</label>' +
+    '<input id="pd-num" class="pd-in" inputmode="numeric" autocomplete="off" maxlength="7" ' +
+      'placeholder="e.g. 123456" value="' + esc(PD.draftNumber) + '">' +
+    '<label class="pd-lbl" for="pd-name" style="margin-top:0;">Business / account name</label>' +
+    '<input id="pd-name" class="pd-in" maxlength="120" placeholder="Name on your M-PESA account" ' +
+      'value="' + esc(PD.draftName) + '">';
+
+  const canSave = /^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy;
+  h += '<button class="pd-btn solid" data-pd="save"' + (canSave ? '' : ' disabled') + '>' +
+       (PD.busy ? 'Saving…' : 'Save payment destination') + '</button>';
+
+  /* Disabled because the BACKEND refuses to route live customer money to a
+     merchant destination until Safaricom authorises the multi-merchant
+     arrangement. Same wording as Business Setup, deliberately. */
+  if (!PD.productionAuthorized) {
+    h += '<div class="pd-note warn" role="status"><strong>Payment verification unavailable</strong><br>' +
+         'Your M-PESA payment destination is saved securely. SOKONI is awaiting payment-provider ' +
+         'authorization before verification can be activated. You do not need to do anything — ' +
+         'we will enable the test as soon as it is available.</div>' +
+         '<button class="pd-btn" disabled aria-disabled="true" ' +
+         'title="Awaiting payment-provider authorization">Test payment — unavailable</button>';
+  } else {
+    h += '<button class="pd-btn" data-pd="test"' + (PD.pending ? '' : ' disabled') + '>Send test payment</button>';
+  }
+
+  host.innerHTML = h;
+}
+
+/* Keep the existing "Payment Methods" tile consistent with the destination.
+   It counts configured payment METHODS from bootstrap; a verified M-PESA
+   destination is one more of those, so the tile gains a suffix rather than
+   being overwritten with an unrelated number. */
+function _pdSyncReadyTile() {
+  const el = document.getElementById('ready-payments');
+  if (!el || PD.mode !== 'owner') return;
+  const verified = !!(PD.active && PD.active.status === 'VERIFIED');
+  el.title = verified
+    ? 'M-PESA destination verified'
+    : (PD.active || PD.pending ? 'M-PESA destination awaiting verification' : 'No M-PESA destination configured');
+}
+
+/* Delegated — the card is re-rendered wholesale, so per-element listeners would
+   be lost on every repaint. */
+document.addEventListener('click', function (ev) {
+  const el = ev.target && ev.target.closest ? ev.target.closest('[data-pd]') : null;
+  if (!el) return;
+  const act = el.getAttribute('data-pd');
+  if (act === 'type') { PD.draftType = el.getAttribute('data-v') || 'TILL'; _pdPaint(); return; }
+  if (act === 'save') { _pdSave(); return; }
+});
+
+/* Typed values update state and the save button IN PLACE — repainting on every
+   keystroke would tear the keyboard down mid-number on a phone. */
+document.addEventListener('input', function (ev) {
+  const el = ev.target; if (!el || !el.id) return;
+  if (el.id === 'pd-num') {
+    PD.draftNumber = (el.value || '').replace(/\D/g, '').slice(0, 7);
+    if (el.value !== PD.draftNumber) el.value = PD.draftNumber;
+  } else if (el.id === 'pd-name') {
+    PD.draftName = el.value || '';
+  } else return;
+  const btn = document.querySelector('[data-pd="save"]');
+  if (btn) btn.disabled = !(/^\d{5,7}$/.test(PD.draftNumber) && PD.draftName.trim().length > 0 && !PD.busy);
+});
+
+async function _pdSave() {
+  if (PD.busy) return;
+  PD.busy = true; _pdPaint();
+  try {
+    await CF('savePaymentDestination')({
+      destinationType:   PD.draftType,
+      destinationNumber: PD.draftNumber,
+      accountName:       PD.draftName,
+    });
+    PD.busy = false;
+    await renderPaymentDestination();
+  } catch (e) {
+    PD.busy = false;
+    PD.err = (e && e.message) || 'Could not save your payment destination.';
+    PD.mode = 'error';
+    _pdPaint();
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
