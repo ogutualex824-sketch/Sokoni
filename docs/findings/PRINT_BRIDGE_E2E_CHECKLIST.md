@@ -125,8 +125,41 @@ than a button.
 
 ### Predeploy gate timings, so a slow gate is not mistaken for a hang
 
-`scripts/predeploy-syntax-gate.js` spawns a fresh `node --check` **per file** across ~1650 files.
-On Windows that is minutes, with no progress output after its first line. It is slow, not stuck.
+**Measured 2026-08-26, not estimated.** `scripts/predeploy-syntax-gate.js` — a mandatory *functions*
+predeploy hook — takes **355 s (5m55s)** on this machine and prints **nothing** between its first
+line and its last. It spawns a fresh `node --check` per file across **1661 JS files + 442 inline
+`<script>` blocks**.
+
+```
+[predeploy] syntax gate — checking JavaScript…
+   … 355 seconds of complete silence …
+[predeploy] 1661 JavaScript files and 442 inline <script> blocks parse cleanly
+            (12 markup-building blocks skipped — regex extraction is ambiguous there)
+exit=0
+```
+
+It is **slow, not stuck**. Do not bypass it, do not modify it to speed up a deploy, and do not
+interpret the silence as a hang — a first reading of this mistook ~6 minutes for 20+ because
+wall-clock across other work was read as gate runtime.
+
+All four functions predeploy hooks, measured the same day:
+
+| gate | result |
+|---|---|
+| `predeploy-syntax-gate` | exit 0 — 355 s |
+| `verify-commission-single-source` | exit 0 |
+| `verify-delivery-engine-sync` | exit 0 (`5ed76ec286fc`) |
+| `predeploy-payout-gate` | exit 0 — 7 payoutRequests, 0 mismatches |
+
+`verify-architecture.js` is **not** a functions predeploy hook, so the intentionally-red CF export
+budget gate does not block a functions deploy.
+
+### Deploy from the WORKTREE, not the main checkout
+
+The six exports live on `feat/merchant-v2-canonical` in the `C:\temp\sok-mv2` worktree. The main
+checkout at `C:\Users\USER1\OneDrive\Desktop\SOKONI` has **0** of them. A functions deploy launched
+from the wrong directory either fails on unknown filters or deploys the wrong tree — always confirm
+the working directory first.
 
 ## Set up once
 
