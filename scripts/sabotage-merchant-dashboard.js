@@ -87,6 +87,26 @@ const CASES = [
   ['a paid payout counts as pending', 'sokoni-merchant-dashboard.js',
    "          return r && ['pending', 'processing', 'requested'].indexOf(String(r.status)) > -1;",
    "          return !!r;"],
+
+  /* -- STRUCTURE: pulse, areas, period window ---------------------------- */
+  ['a truncated ledger window is totalled anyway', 'sokoni-merchant-dashboard.js',
+   '    if (rows.length >= limit) return null;', '    if (false) return null;'],
+
+  ['deliveries claim a zero they cannot support', 'sokoni-merchant-dashboard.js',
+   "      deliveries: unknown('Delivery totals need the dispatch authority'),",
+   '      deliveries: known(0),'],
+
+  ['a shipped order still needs attention', 'sokoni-merchant-dashboard.js',
+   "      var OPEN = ['pending', 'paid', 'confirmed', 'processing'];",
+   "      var OPEN = ['pending','paid','confirmed','processing','shipped','completed'];"],
+
+  ['an unresolvable area is rendered anyway', 'sokoni-merchant-dashboard.js',
+   "      navOk[n.id] = (typeof ctx.resolves === 'function') ? !!ctx.resolves(n.id) : true;",
+   "      navOk[n.id] = true;"],
+
+  ['a delivery sentence is invented', 'sokoni-merchant-dashboard.js',
+   "    if (f.deliveries && f.deliveries.state !== 'unknown' && f.deliveries.value > 0) {",
+   "    if (true) { f.deliveries = { state: 'known', value: 4 };"],
 ];
 
 let caught = 0, missed = 0;

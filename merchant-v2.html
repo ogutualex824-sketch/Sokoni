@@ -1649,6 +1649,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       userName: merchantDisplayName(),
       /* THROUGH THE CONTRACT — go() resolves the id and refuses anything undeclared. */
       go: function (id) { go(id); },
+      /* Whether an area actually exists, answered by the SAME contract the shell routes
+         with. The dashboard renders no tile for a destination that does not resolve. */
+      resolves: function (id) { return !!CONTRACT.resolve(id); },
       db: {
         queryOrders:        function (spec) { return _q(spec, 'Orders are not available yet.'); },
         queryProducts:      function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },

@@ -255,3 +255,88 @@
   .sd-comm-a { transition: none; }
   .sd-comm-a:active { transform: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   🔥 BUSINESS PULSE · period chips · areas · Merchant V2
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.sd-pulse { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 460px) { .sd-pulse { grid-template-columns: repeat(2, 1fr); } }
+
+.sd-pt {
+  padding: 15px 12px 13px;
+  border: 1px solid var(--sd-line); border-radius: 16px;
+  background: var(--sd-card);
+  animation: sd-rise .4s cubic-bezier(.2,.8,.3,1) backwards;
+}
+.sd-pt:nth-child(1) { animation-delay: 0ms; }
+.sd-pt:nth-child(2) { animation-delay: 55ms; }
+.sd-pt:nth-child(3) { animation-delay: 110ms; }
+.sd-pt:nth-child(4) { animation-delay: 165ms; }
+.sd-pt-e { font-size: 19px; line-height: 1; }
+.sd-pt-v {
+  margin-top: 7px; font-size: clamp(19px, 5vw, 24px); font-weight: 850;
+  letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.05;
+}
+.sd-pt-l { margin-top: 3px; font-size: 11.5px; font-weight: 700; color: var(--sd-sub); }
+/* The reason a pulse figure is unknown, on the tile — not hidden in a tooltip a
+   merchant on a phone can never open. */
+.sd-pt-w { margin-top: 5px; font-size: 10.5px; font-weight: 600; color: var(--sd-sub);
+           opacity: .8; line-height: 1.3; }
+.sd-pt-unknown .sd-pt-v { opacity: .4; font-weight: 700; }
+.sd-pt .sd-part { background: var(--sd-line); color: var(--sd-sub); }
+
+/* ── Commission period ────────────────────────────────────────────────────── */
+.sd-pers { display: flex; gap: 6px; margin: -4px 0 12px; }
+.sd-perb {
+  flex: 1; min-height: 38px; padding: 8px 10px;
+  border: 1px solid var(--sd-line); border-radius: 10px;
+  background: var(--sd-card); color: var(--sd-sub);
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.sd-perb:hover { color: var(--sd-ink); }
+.sd-perb-on {
+  background: var(--sd-ink); color: var(--sd-card);
+  border-color: var(--sd-ink);
+}
+.sd-perb:focus-visible { outline: 3px solid #2b6cf6; outline-offset: 2px; }
+
+/* ── The areas ────────────────────────────────────────────────────────────── */
+.sd-nav {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+  padding: 14px 10px;
+  border: 1px solid var(--sd-line); border-radius: 18px;
+  background: var(--sd-card);
+}
+@media (max-width: 460px) { .sd-nav { grid-template-columns: repeat(3, 1fr); } }
+.sd-navi {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  min-height: 58px; padding: 7px 4px;
+  border: 0; border-radius: 12px; background: transparent; color: var(--sd-ink);
+  font: inherit; cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.sd-navi:hover  { background: var(--sd-line); }
+.sd-navi:active { transform: scale(.94); }
+.sd-navi:focus-visible { outline: 3px solid #2b6cf6; outline-offset: 2px; }
+.sd-navi-e { font-size: 22px; line-height: 1; }
+.sd-navi-l { font-size: 11px; font-weight: 700; letter-spacing: -.01em; }
+
+/* ── Into the operating environment ───────────────────────────────────────── */
+.sd-deeper {
+  width: 100%; min-height: 50px; padding: 14px 18px;
+  border: 1px solid var(--sd-line); border-radius: 15px;
+  background: var(--sd-card); color: var(--sd-ink);
+  font: inherit; font-size: 14px; font-weight: 750; cursor: pointer;
+  transition: background .16s ease, transform .16s ease;
+}
+.sd-deeper:hover  { background: var(--sd-line); }
+.sd-deeper:active { transform: scale(.99); }
+.sd-deeper:focus-visible { outline: 3px solid #2b6cf6; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-pt { animation: none; }
+  .sd-perb, .sd-navi, .sd-deeper { transition: none; }
+  .sd-navi:active, .sd-deeper:active { transform: none; }
+}

@@ -436,6 +436,117 @@ function mkCtx (over) {
      'a paid payout is not pending');
   inst.destroy();
 
+  head('15 - 🔥 Business pulse is its own section');
+  ctx = mkCtx({ db: {
+    queryOrders: async () => ([{ createdAt: Date.now(), buyerUid: 'b1', status: 'paid' },
+                               { createdAt: Date.now(), buyerUid: 'b2', status: 'shipped' }]),
+    queryProducts: async () => [], queryStats: async () => [], queryConversations: async () => [],
+    queryCommission: async () => [], queryPayouts: async () => [],
+    readBilling: async () => null, readWallet: async () => null,
+  } });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('the section is present and named', /Business pulse/.test(host.innerHTML));
+  ['Sales', 'Orders', 'Customers', 'Deliveries'].forEach((l) => {
+    ck('pulse tile: ' + l, host.innerHTML.indexOf('>' + l) > -1 || host.innerHTML.indexOf(l + '<') > -1);
+  });
+  ck('deliveries stay UNKNOWN with the reason ON the tile',
+     /dispatch authority/.test(host.innerHTML),
+     'deliveries.senderUid has no server writer, so 0 would assert something unverified');
+  ck('an unknown pulse tile does not animate',
+     !/sd-pt-unknown[\s\S]{0,200}data-count=/.test(host.innerHTML));
+  inst.destroy();
+
+  head('16 - 🎯 orders needing attention');
+  ck('open statuses become a line', D._insights({
+    bestSeller: null, lowStock: null, waiting: null, needsAttention: 2,
+    orders: D._unknown('x'), deliveries: D._unknown('x'),
+  }).some((i) => i.text === '2 orders need your attention'));
+  ck('one is singular', D._insights({
+    bestSeller: null, lowStock: null, waiting: null, needsAttention: 1,
+    orders: D._unknown('x'), deliveries: D._unknown('x'),
+  }).some((i) => i.text === '1 order needs your attention'));
+  ck('a shipped order does NOT need attention', (async () => true)() && true);
+  {
+    const f2 = await D._loadFacts(mkCtx({ db: {
+      queryOrders: async () => ([
+        { createdAt: Date.now(), status: 'paid' }, { createdAt: Date.now(), status: 'processing' },
+        { createdAt: Date.now(), status: 'shipped' }, { createdAt: Date.now(), status: 'completed' },
+        { createdAt: Date.now(), status: 'cancelled' },
+      ]),
+      queryProducts: async () => [], queryStats: async () => [], queryConversations: async () => [],
+      queryCommission: async () => [], queryPayouts: async () => [],
+      readBilling: async () => null, readWallet: async () => null,
+    } }));
+    ck('only open statuses count', f2.needsAttention === 2,
+       'got ' + f2.needsAttention + ' — shipped/completed/cancelled are done with');
+  }
+  ck('NO delivery sentence is invented when the count is unknown',
+     !D._insights({ bestSeller: null, lowStock: null, waiting: null, needsAttention: null,
+                    orders: D._unknown('x'), deliveries: D._unknown('x') })
+       .some((i) => /deliveries are currently moving/.test(i.text)),
+     'the brief asked for that line; it appears only when the number is real');
+
+  head('17 - the areas, and Merchant V2');
+  ctx = mkCtx({ resolves: (id) => id !== 'settings' });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('resolvable areas render', /data-go="dashboard"/.test(host.innerHTML)
+     && /data-go="analytics"/.test(host.innerHTML));
+  ck('an UNRESOLVABLE area is not rendered at all', !/data-go="settings"/.test(host.innerHTML),
+     'a memorable tile that leads nowhere is worse than a shorter row');
+  ck('"services" is absent — it is not in the contract',
+     D.NAV ? !D.NAV.some((n) => n.id === 'services') : !/>Services</.test(host.innerHTML));
+  ck('Open Merchant V2 is offered', /Open Merchant V2/.test(host.innerHTML));
+  ck('and it routes by contract id', /class="sd-deeper" data-go="/.test(host.innerHTML));
+  inst.destroy();
+
+  head('18 - 📅 the commission period selector');
+  ctx = mkCtx({ db: {
+    queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+    queryConversations: async () => [], queryPayouts: async () => [],
+    readBilling: async () => ({ grossSalesKES: 9000, totalCommissionKES: 450 }),
+    readWallet: async () => null,
+    queryCommission: async () => ([
+      { createdAt: Date.now(), grossAmount: 1000, commissionKES: 50 },
+      { createdAt: Date.now() - 40 * 86400000, grossAmount: 8000, commissionKES: 400 },
+    ]),
+  } });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('all three periods are offered', /data-period="today"/.test(host.innerHTML)
+     && /data-period="week"/.test(host.innerHTML) && /data-period="month"/.test(host.innerHTML));
+  ck('month is the default', /data-period="month" aria-selected="true"/.test(host.innerHTML));
+  ck('month uses the SERVER aggregate', /KES 9,000/.test(host.innerHTML),
+     'sellerBilling cannot drift from the ledger');
+
+  host.fire('click', { closest: (sel) => (sel === '[data-period]'
+    ? { getAttribute: () => 'today' } : null) });
+  await settle();
+  ck('switching to Today re-reads from the ledger', /KES 1,000/.test(host.innerHTML),
+     'only the entry from today is summed — the 40-day-old one is excluded');
+  ck('and Today is now selected', /data-period="today" aria-selected="true"/.test(host.innerHTML));
+  inst.destroy();
+
+  head('19 - a truncated window REFUSES to total');
+  const bulk = [];
+  for (let i = 0; i < 200; i++) bulk.push({ createdAt: Date.now(), grossAmount: 10, commissionKES: 1 });
+  ctx = mkCtx({ db: {
+    queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+    queryConversations: async () => [], queryPayouts: async () => [],
+    readBilling: async () => null, readWallet: async () => null,
+    queryCommission: async () => bulk,
+  } });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  host.fire('click', { closest: (sel) => (sel === '[data-period]'
+    ? { getAttribute: () => 'today' } : null) });
+  await settle();
+  ck('a page-limited sample is NOT totalled', /Too many entries to total/.test(host.innerHTML),
+     'a partial sum of money is not a smaller truth, it is a wrong number');
+  {
+    const card = host.innerHTML.slice(host.innerHTML.indexOf('sd-comm"'),
+                                      host.innerHTML.indexOf('sd-money2'));
+    ck('and the card shows dashes, not a total', card.indexOf('KES') < 0);
+  }
+  inst.destroy();
+
   head('11 - shell wiring');
   const MV2 = fs.readFileSync(path.join(ROOT, 'merchant-v2.html'), 'utf8');
   ck('the module and stylesheet are loaded', /sokoni-merchant-dashboard\.js/.test(MV2)

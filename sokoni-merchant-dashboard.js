@@ -116,14 +116,38 @@
   /* ═══════════════════════════════════════════════════════════════════════════
      DATA — every read is shop-scoped and every failure degrades to unknown
      ═══════════════════════════════════════════════════════════════════════════ */
-  async function loadFacts (ctx) {
+  /* Sum ledger entries inside a window. Used ONLY for today/week, where no server
+     aggregate exists. Returns null when the window cannot be trusted — specifically when
+     the sample hit its page limit, because a truncated sum is a wrong sum and a wrong
+     commission figure is the merchant's money. */
+  function _sumWindow (rows, sinceMs, limit) {
+    if (!Array.isArray(rows)) return null;
+    if (rows.length >= limit) return null;           /* truncated — refuse to total it */
+    var gross = 0, comm = 0, n = 0;
+    rows.forEach(function (e) {
+      var ms = _millis(e && e.createdAt);
+      if (ms === null || ms < sinceMs) return;
+      var g = Number(e.grossAmount), c = Number(e.commissionKES);
+      if (!isFinite(g) || !isFinite(c)) return;
+      gross += g; comm += c; n++;
+    });
+    return { gross: gross, comm: comm, count: n };
+  }
+
+  async function loadFacts (ctx, window_) {
     var scope = ctx.scope || {};
     var out = {
       takings:   unknown('Till sales are not readable yet'),
       trend:     unknown('Needs yesterday’s takings'),
       orders:    unknown('Orders are not available'),
       customers: unknown('No customer aggregate yet'),
-      deliveries: unknown('Delivery totals are not available'),
+      /* DELIVERIES stay unknown on purpose. `deliveries` is readable by senderUid, but no
+         server writer sets senderUid anywhere in functions/, so whether the SHOP is the
+         sender is unverified. An empty result would then be indistinguishable from "the
+         rules filtered everything out", and rendering 0 would assert a fact about the
+         shop's dispatch activity that nothing establishes. See docs/findings. */
+      deliveries: unknown('Delivery totals need the dispatch authority'),
+      needsAttention: null,
       bestSeller: null, lowStock: null, waiting: null,
       /* MONEY. Separate from the operational figures on purpose: this is the merchant's
          income and SOKONI's cut, and it must never be mixed with counts that are partial. */
@@ -163,6 +187,13 @@
         return ms !== null && ms >= today.getTime();
       });
       out.orders = partial(t.length, 'Online orders only · till sales not included');
+      /* NEEDS ATTENTION — an order the merchant still has to act on. Derived from the
+         order's own status, which is the merchant-readable authority; shipped, completed,
+         cancelled and refunded are done with. */
+      var OPEN = ['pending', 'paid', 'confirmed', 'processing'];
+      out.needsAttention = (rows || []).filter(function (o) {
+        return o && OPEN.indexOf(String(o.status)) > -1;
+      }).length;
       var ids = {};
       t.forEach(function (o) { var b = o.buyerUid || o.buyerId || o.uid; if (b) ids[b] = 1; });
       out.customers = partial(Object.keys(ids).length, 'From online orders only');
@@ -222,7 +253,32 @@
        the moment a merchant exceeded the page size. A truncated total is a wrong total. */
     var period = _period();
     out.period = period;
-    if (ctx.db.readBilling) {
+    var win = window_ || 'month';
+
+    /* TODAY and THIS WEEK have no server aggregate — sellerBilling only totals by month.
+       They are summed from ledger entries, and REFUSED when the sample was truncated,
+       because a partial sum of money is not a smaller truth, it is a wrong number. */
+    if (win !== 'month' && ctx.db.queryCommission) {
+      var LIM = 200;
+      var since = new Date();
+      if (win === 'today') since.setHours(0, 0, 0, 0);
+      else { since.setDate(since.getDate() - 7); since.setHours(0, 0, 0, 0); }
+      jobs.push(ctx.db.queryCommission({
+        collection: 'commissionLedger',
+        where: [['sellerUid', '==', scope.sellerUid]],
+        orderBy: ['createdAt', 'desc'], limit: LIM,
+      }).then(function (rows) {
+        var w = _sumWindow(rows, since.getTime(), LIM);
+        if (!w) {
+          var why = 'Too many entries to total for this window';
+          out.sales = unknown(why); out.commission = unknown(why); out.earnings = unknown(why);
+          return;
+        }
+        out.sales = known(w.gross);
+        out.commission = known(w.comm);
+        out.earnings = known(w.gross - w.comm);
+      }).catch(function () { /* leave unknown */ }));
+    } else if (ctx.db.readBilling) {
       jobs.push(ctx.db.readBilling(scope.sellerUid, period).then(function (b) {
         if (!b) {
           /* No document yet is not zero — it means nothing has been billed this period,
@@ -324,6 +380,20 @@
                               : f.waiting + ' customers are waiting for replies',
         route: 'messages' });
     }
+    if (f.needsAttention !== null && f.needsAttention > 0) {
+      out.push({ emoji: '🎯',
+        text: f.needsAttention === 1 ? '1 order needs your attention'
+                                     : f.needsAttention + ' orders need your attention',
+        route: 'orders' });
+    }
+    /* Delivery activity earns a line only when the count is REAL. Today it never is, so
+       no cheerful "4 deliveries are moving" appears — that sentence would be fiction. */
+    if (f.deliveries && f.deliveries.state !== 'unknown' && f.deliveries.value > 0) {
+      out.push({ emoji: '🚚',
+        text: f.deliveries.value === 1 ? '1 delivery is currently moving'
+                                       : f.deliveries.value + ' deliveries are currently moving',
+        route: 'deliveries' });
+    }
     if (f.orders && f.orders.state !== 'unknown' && f.orders.value > 0) {
       out.push({ emoji: '🛍️',
         text: f.orders.value === 1 ? '1 online order came in today'
@@ -336,6 +406,29 @@
   /* ═══════════════════════════════════════════════════════════════════════════
      VIEW
      ═══════════════════════════════════════════════════════════════════════════ */
+  /* ── THE MAIN AREAS ───────────────────────────────────────────────────────────
+     Each names a CONTRACT ROUTE ID. A tile whose id does not resolve is not rendered at
+     all — a memorable navigation that leads somewhere broken is worse than a shorter one.
+     'services' is deliberately absent: it is not in the merchant route contract, and
+     inventing a destination for it would be a dead tile with a nice emoji. */
+  var NAV = [
+    { id: 'dashboard', emoji: '🏠', label: 'Home' },
+    { id: 'shop',      emoji: '🛍️', label: 'Shop' },
+    { id: 'messages',  emoji: '💬', label: 'Messages' },
+    { id: 'deliveries', emoji: '🚚', label: 'Track' },
+    { id: 'analytics', emoji: '📊', label: 'Insights' },
+    { id: 'settings',  emoji: '⚙️', label: 'Settings' },
+  ];
+
+  /* The commission window. 'month' matches the server's billing period exactly; the
+     shorter windows are DERIVED from ledger entries and are labelled as such, because
+     sellerBilling only aggregates by month. */
+  var PERIODS = [
+    { id: 'today', label: 'Today' },
+    { id: 'week',  label: 'This week' },
+    { id: 'month', label: 'This month' },
+  ];
+
   var ACTIONS = [
     { id: 'pos',       emoji: '🛒', label: 'Sell',     tone: 'a' },
     { id: 'orders',    emoji: '📦', label: 'Orders',   tone: 'b' },
@@ -363,6 +456,20 @@
     var out = 'Commission rate ' + r.pct + '%';
     if (r.fixed) out += ' + ' + money(r.fixed) + ' per sale';
     return out;
+  }
+
+  function pulseTile (emoji, label, v, isMoney) {
+    var isKnown = v && v.state !== 'unknown';
+    var txt = isKnown ? (isMoney ? money(v.value) : String(v.value)) : UNKNOWN;
+    return '<div class="sd-pt' + (isKnown ? '' : ' sd-pt-unknown') + '">' +
+      '<div class="sd-pt-e" aria-hidden="true">' + emoji + '</div>' +
+      '<div class="sd-pt-v' + (isKnown ? ' sd-num' : '') + '"' +
+        (isKnown ? ' data-count="' + esc(String(v.value)) + '"' + (isMoney ? ' data-money="1"' : '') : '') +
+        '>' + esc(txt) + '</div>' +
+      '<div class="sd-pt-l">' + esc(label) +
+        (v && v.state === 'partial' ? ' <span class="sd-part">partial</span>' : '') + '</div>' +
+      (v && v.note && !isKnown ? '<div class="sd-pt-w">' + esc(v.note) + '</div>' : '') +
+    '</div>';
   }
 
   function moneyTile (emoji, label, v) {
@@ -405,6 +512,19 @@
         '</div>' +
       '</section>' +
 
+      /* ── 🔥 BUSINESS PULSE ────────────────────────────────────────────────────
+         The day's operational shape, promoted out of the hero into its own section so
+         each figure carries its own label, its own state and its own reason. */
+      '<section class="sd-sec">' +
+        '<h2 class="sd-h"><span aria-hidden="true">🔥</span> Business pulse</h2>' +
+        '<div class="sd-pulse">' +
+          pulseTile('🛍️', 'Sales', f.takings, true) +
+          pulseTile('📦', 'Orders', f.orders) +
+          pulseTile('👥', 'Customers', f.customers) +
+          pulseTile('🚚', 'Deliveries', f.deliveries) +
+        '</div>' +
+      '</section>' +
+
       /* ── 💰 MONEY ─────────────────────────────────────────────────────────────
          The flow stated as a flow, because that is the thing a merchant must be able to
          read in one glance:  customer pays -> SOKONI commission -> merchant receives.
@@ -412,15 +532,26 @@
          two can never be misread for one another. Nothing here is a percentage this file
          invented: the rate is whatever the ledger entries actually recorded. */
       '<section class="sd-sec">' +
-        '<h2 class="sd-h"><span aria-hidden="true">💰</span> Money' +
-          (f.period ? ' <span class="sd-per">' + esc(f.period) + '</span>' : '') + '</h2>' +
+        '<h2 class="sd-h"><span aria-hidden="true">💰</span> Money</h2>' +
+        '<div class="sd-pers" role="tablist" aria-label="Commission period">' +
+          PERIODS.map(function (pr) {
+            return '<button type="button" role="tab" class="sd-perb' +
+              (S.period === pr.id ? ' sd-perb-on' : '') + '" data-period="' + esc(pr.id) + '"' +
+              ' aria-selected="' + (S.period === pr.id ? 'true' : 'false') + '">' +
+              esc(pr.label) + '</button>';
+          }).join('') +
+        '</div>' +
         '<div class="sd-comm">' +
           '<div class="sd-comm-l"><span aria-hidden="true">💰</span> SOKONI commission</div>' +
           '<div class="sd-comm-v' + (f.commission.state === 'known' ? ' sd-num' : '') + '"' +
             (f.commission.state === 'known'
               ? ' data-count="' + esc(String(f.commission.value)) + '" data-money="1"' : '') + '>' +
             esc(f.commission.state === 'known' ? money(f.commission.value) : UNKNOWN) + '</div>' +
-          '<div class="sd-comm-r">' + esc(rateLine(f.rate)) + '</div>' +
+          '<div class="sd-comm-r">' +
+            /* When the figure is unknown, the REASON replaces the rate line. Dashes with
+               no explanation leave a merchant wondering whether their money vanished. */
+            esc(f.commission.state === 'unknown' && f.commission.note
+                  ? f.commission.note : rateLine(f.rate)) + '</div>' +
 
           '<ol class="sd-flow">' +
             '<li class="sd-flow-i"><span class="sd-flow-e" aria-hidden="true">🛍️</span>' +
@@ -468,6 +599,18 @@
           : '<p class="sd-empty">Nothing to report yet — as your shop trades today, ' +
             'this is where it will show up.</p>') +
       '</section>' +
+
+      /* ── THE AREAS ────────────────────────────────────────────────────────── */
+      '<nav class="sd-nav" aria-label="Main areas">' +
+        NAV.filter(function (n) { return S.navOk[n.id]; }).map(function (n) {
+          return '<button type="button" class="sd-navi" data-go="' + esc(n.id) + '">' +
+            '<span class="sd-navi-e" aria-hidden="true">' + n.emoji + '</span>' +
+            '<span class="sd-navi-l">' + esc(n.label) + '</span></button>';
+        }).join('') +
+      '</nav>' +
+
+      '<button type="button" class="sd-deeper" data-go="orders">' +
+        'Open Merchant V2 <span aria-hidden="true">→</span></button>' +
     '</div>';
   }
 
@@ -504,9 +647,22 @@
   function mount (host, ctx) {
     if (!host) throw new Error('dashboard: a host element is required');
     ctx = ctx || {};
-    var S = { host: host, ctx: ctx, facts: null, insights: [], destroyed: false };
+    /* Which areas actually resolve. Asked ONCE, at mount, through the same contract the
+       shell uses — so a tile can never be drawn for a destination that does not exist. */
+    var navOk = {};
+    NAV.forEach(function (n) {
+      navOk[n.id] = (typeof ctx.resolves === 'function') ? !!ctx.resolves(n.id) : true;
+    });
+    var S = { host: host, ctx: ctx, facts: null, insights: [], destroyed: false, navOk: navOk,
+              period: 'month' };
 
     function onClick (e) {
+      var pb = e.target && e.target.closest ? e.target.closest('[data-period]') : null;
+      if (pb) {
+        var next = pb.getAttribute('data-period');
+        if (next && next !== S.period) { S.period = next; refresh(); }
+        return;
+      }
       var t = e.target && e.target.closest ? e.target.closest('[data-go]') : null;
       if (!t) return;
       var id = t.getAttribute('data-go');
@@ -525,7 +681,7 @@
 
     async function refresh () {
       if (S.destroyed) return;
-      try { S.facts = await loadFacts(ctx); }
+      try { S.facts = await loadFacts(ctx, S.period); }
       catch (e) {
         /* Everything unknown is a legitimate state and renders honestly. */
         S.facts = { takings: unknown('Could not load'), trend: unknown('Could not load'),
