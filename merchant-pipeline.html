@@ -285,36 +285,81 @@ function _mpCheckSession() {
   return sessionStorage.getItem(SESS_KEY) === '1' &&
     (Date.now() - parseInt(sessionStorage.getItem(SESS_TS)||'0')) < MAX_AGE;
 }
+/* ── Admin admission — authority is the Firebase admin/superAdmin CLAIM ──────
+   SECURITY: browser storage (sokoniAdminPin / sokoniAdminSess) is attacker-
+   controlled input, never an authorization source. Two client-gate bypasses
+   existed here and are both closed below:
+     1. _mpAuth fell back to `ok = !!stored` when there was no Firebase user, so a
+        signed-out visitor who set sokoniAdminPin to any value and typed the
+        matching PIN was admitted with NO Firebase authentication at all.
+     2. `if (_mpCheckSession()) { ...reveal... }` revealed the console at parse
+        time on the sessionStorage flag ALONE, evaluating no claim.
+   Invariant: no Firebase-authenticated admin/superAdmin => no admission, whatever
+   localStorage holds. The PIN is only ever a SECOND factor. This closes the
+   client-gate bypass only; the separate Firestore/App Check data-exposure
+   question is NOT addressed here. */
+
+function _mpReveal() {
+  document.getElementById('mp-gate').style.display = 'none';
+  document.getElementById('mp-app').style.display  = 'block';
+  _mpLoad();
+}
+
+/* Resolves ONLY when window.firebaseAuth exposes a signed-in user carrying an
+   admin or superAdmin claim; rejects otherwise. firebase.js is a deferred module,
+   so we poll for firebaseAuth.currentUser, bounded, then fail closed. */
+function _mpClaimVerified() {
+  return new Promise(function (resolve, reject) {
+    var done = false, tries = 0;
+    (function poll() {
+      if (done) return;
+      var a = window.firebaseAuth;
+      var u = a && a.currentUser;
+      if (u) {
+        done = true;
+        u.getIdTokenResult(true).then(function (t) {
+          if (t && t.claims && (t.claims.admin === true || t.claims.superAdmin === true)) resolve(t);
+          else reject(new Error('not-admin'));
+        }).catch(function () { reject(new Error('token-error')); });
+        return;
+      }
+      if (++tries > 120) { reject(new Error('no-auth')); return; }   /* ~12s -> fail closed */
+      setTimeout(poll, 100);
+    })();
+  });
+}
+
 async function _mpAuth() {
   var pin = (document.getElementById('mp-pin').value||'').trim();
   var err = document.getElementById('mp-auth-err');
   if (!pin) return;
   err.textContent = '';
   try {
-    var buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-    var hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    /* Claim FIRST and unconditionally. No verified admin claim => no admission,
+       and we do not leak whether the PIN was correct. */
+    try { await _mpClaimVerified(); }
+    catch (_) { err.textContent = 'Admin access required. Please sign in.'; return; }
+
+    /* PIN is a SECOND factor, checked only when one is configured — never on its
+       own. */
     var stored = localStorage.getItem('sokoniAdminPin')||localStorage.getItem('sokoniAdminPass');
-    var ok = !stored;
-    if (stored && hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
-    var fbUser = window.firebaseAuth && window.firebaseAuth.currentUser;
-    if (fbUser) {
-      var tok = await fbUser.getIdTokenResult(true);
-      ok = tok.claims && (tok.claims.admin === true || tok.claims.superAdmin === true);
-    } else {
-      ok = !!stored;
+    if (stored) {
+      var buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+      var hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      if (hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
     }
-    if (!ok) { err.textContent = 'Admin claim not found.'; return; }
+
     sessionStorage.setItem(SESS_KEY,'1');
     sessionStorage.setItem(SESS_TS, Date.now().toString());
-    document.getElementById('mp-gate').style.display='none';
-    document.getElementById('mp-app').style.display='block';
-    _mpLoad();
+    _mpReveal();
   } catch(e) { err.textContent = 'Verification error.'; }
 }
-if (_mpCheckSession()) {
-  document.getElementById('mp-gate').style.display='none';
-  document.getElementById('mp-app').style.display='block';
-}
+
+/* Session restore never reveals on the sessionStorage flag alone — it waits for a
+   verified admin claim, then honours the remembered session. */
+_mpClaimVerified()
+  .then(function () { if (_mpCheckSession()) _mpReveal(); })
+  .catch(function () { /* not a verified admin — the gate stays closed */ });
 
 /* ── Completeness scoring ─────────────────────────────────── */
 var CRITERIA = [
@@ -611,10 +656,12 @@ document.getElementById('mp-modal-backdrop').addEventListener('click', function(
 (window.waitForFirebaseReady ? window.waitForFirebaseReady()
   : new Promise(function(r){ document.addEventListener('sokoniFirebaseReady', function(){r();}, {once:true}); setTimeout(r, 3000); })
 ).then(function(){
-  if (_mpCheckSession()) _mpLoad();
+  /* Data load also waits for the verified admin claim — a bare session flag must
+     not trigger it. */
+  _mpClaimVerified().then(function(){ if (_mpCheckSession()) _mpLoad(); }).catch(function(){});
 });
 setTimeout(function(){
-  if (_mpCheckSession() && !_all.length) _mpLoad();
+  _mpClaimVerified().then(function(){ if (_mpCheckSession() && !_all.length) _mpLoad(); }).catch(function(){});
 }, 2000);
 </script>
 </body>
