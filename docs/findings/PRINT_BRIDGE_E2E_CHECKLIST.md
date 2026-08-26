@@ -81,6 +81,27 @@ and re-verify `version.json` after deploying. — *done at `d70a7c2`.*
 
 </details>
 
+## ✅ DEPLOYED — 2026-08-26. The remaining work is physical only.
+
+| | |
+|---|---|
+| Firestore index `posPrintJobs (kind, shopId, status, createdAt)` | deployed, **READY** |
+| Six functions | deployed by name; `onPosSaleCompleted` **ACTIVE** on `posRetailSales/{saleId}` |
+| Hosting | **v559 live** — `version.json` commit `3bb63bd`, cache `sokoni-20260826152424-v559` |
+| Rules | **NOT deployed** — production remains `f1c4e35b`, and this slice spends none of it |
+| Full deployment gate | **277/277, 0 fail, 0 skip** |
+
+Verified live after the deploy, with a cache-buster: both new files serve 200
+(`sokoni-printer-host-ui.js` 13,063 B, `sokoni-print-host-listener.js` 15,125 B); the served
+`merchant-v2` carries `sk-printer-host-mount`, `mountPrinterHost`, `connectPrinterNow`,
+`getPrinterHostStatus`, `registerPrinterHost`, `pos-provision`; and the SERVED route contract
+parses with **0 validation errors**, Products/Receipts/Flash Sale `kind=native`, Stories
+`kind=seller sec=stories`, `resolve('flash') → flash-sale`.
+
+**Nothing below needs doing again.** Go straight to the one-time setup, then the five-ones test.
+
+<details><summary>The deploy sequence as originally planned</summary>
+
 ## Deploy — in this order
 
 1. **`firebase deploy --only firestore:indexes`.** The listener query is
@@ -104,6 +125,8 @@ Nothing in the print chain is reachable from the UI until step 3 lands, so steps
 now and change no behaviour on their own — the trigger is the one exception: once deployed it will
 begin writing intents for completed sales at shops that already have a registered host. There are
 none yet, so it writes nothing until a desktop is deliberately registered.
+
+</details>
 
 ### Registering the first host is an operational boundary
 
