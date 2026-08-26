@@ -47,7 +47,7 @@ reached that conclusion first, with measurement, and recorded it inline.
 
 ## Open decisions blocking the baseline
 
-### D1 — ADMIN-OS local navigation architecture · **DECISION REQUIRED** (not a defect)
+### D1 — ADMIN-OS local navigation architecture · ✅ **DECIDED 2026-08-26**
 
 `admin-os.html` is the Admin home. Its own chrome carries 9 cross-page links that are
 **unreachable** beneath the shared shell (all 9 sit below the fold; the shell's sidebar owns
@@ -79,7 +79,42 @@ The question is therefore architectural, not corrective:
 **Do not remove the 6 links as a quick fix.** They are redundant, but removing them hollows
 out the Admin home's own chrome — a UX regression traded for no functional gain.
 
-### D2 — Three unregistered destinations · **AUTHORITY DECISION REQUIRED**
+#### DECISION
+
+> **The shared Admin shell is the authoritative cross-page navigation.** `admin-os` keeps its
+> page-local operator chrome and in-page controls, but does not need a second set of
+> cross-page shortcuts.
+
+**Retained on `admin-os`:**
+
+- the Dashboard / Users / Marketplace local groups
+- the ticket badge (`sidebarTicketBadge`), user information (`aosUserName`, `aosUserRole`),
+  counters, and the other 22 non-link controls
+- the visual structure that makes `admin-os` useful as an operator workspace
+
+**Consequences that follow from this decision, and are now binding:**
+
+- **One navigation authority.** No second cross-page navigation surface is created.
+- **The three unregistered destinations stay unavailable** — see D2. Fixing the collision is
+  not a route to exposing them.
+- **The global shell z-index is not altered.** The shell remains z-890; `admin-os`'s chrome
+  remains z-100. The buried links are redundant, not load-bearing.
+- **The 6 registered shortcuts are NOT removed yet.** Every one is already reachable through
+  the shell at the same authority, so removing them costs nothing functionally — but it would
+  hollow out the Admin home's own chrome. That is a **UI cleanup to be designed**, not a
+  "fix the broken links" hack. Sequence: decide how the local groups should read without the
+  shortcuts, then change the markup once.
+
+**What this decision does NOT do:** it does not make the buried links reachable, does not
+change the shell, and does not touch product code. It fixes the *target* so recertification
+measures the intended model rather than a moving one.
+
+**Status of the underlying defect:** the 9 unreachable links remain unreachable, deliberately.
+With 6 duplicated in the shell and 3 unregistered, there is **no functional requirement** to
+expose them. The defect is downgraded from a navigation failure to a **pending UI cleanup**.
+
+
+### D2 — Three unregistered destinations · ⏸ **CONFIRMED UNAVAILABLE 2026-08-26**
 
 `platform-hub.html`, `finos.html`, `automation-engine.html` — all three exist on disk, none
 are in the registry, none carry a certified authority.
@@ -88,12 +123,34 @@ are in the registry, none carry a certified authority.
 `platform-hub.html` was deliberately excluded for unproven `claims.role` semantics; the other
 two have no recorded decision at all.
 
-### D3 — `enterprise-ops` header collision · **NARROW LAYOUT DEFECT**
+#### DECISION — keep them unavailable
+
+| Page | Why it stays out |
+|---|---|
+| `platform-hub.html` | authority semantics unresolved (`claims.role`) |
+| `finos.html` | no recorded authorization decision |
+| `automation-engine.html` | no recorded authorization decision |
+
+Each needs an explicit product/authority decision **later**. Until then they are not
+registered, not reachable from any admin surface, and not certified. This is a confirmation
+of the standing position, not a new restriction.
+
+### D3 — `enterprise-ops` header collision · ✅ **SCOPE AGREED 2026-08-26**
 
 `nav#sidebar.eoc-sidebar` is z-900, **above** the shell's z-890, and its 10 links are
 in-page section anchors (`#sec-overview` … `#sec-dr`) with **no** shell equivalent — legitimate
 unique navigation that must be preserved. One genuine defect: `#sec-alerts` is covered by the
 shell header. Fix locally; **do not** change the shell's global z-index or authority to solve it.
+
+#### AGREED SCOPE
+
+- **Preserve** the unique section navigation (`#sec-overview` … `#sec-dr`, 10 anchors, 0 shell
+  equivalents).
+- **Fix only** `#sec-alerts` being hidden under the shell header.
+- **No global shell z-index change.** The fix is local to this page.
+
+This is the only one of the three that involves a product change, and it is contained to a
+single link on a single page.
 
 ---
 
