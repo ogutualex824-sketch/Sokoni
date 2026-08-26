@@ -1,6 +1,7 @@
 # Phone→desktop print bridge — the end-to-end run
 
-**Status:** READY TO RUN, nothing deployed yet · **Date:** 2026-08-26
+**Status:** DEPLOYED — index, functions and hosting (v559) are live. **Physical print UNPROVEN.**
+**Date:** 2026-08-26
 
 Related: [[PWA_PRINTER_HOST_PLAN]] · [[PRINT_INTENT_LIFECYCLE]] · [[POS_DEVICE_ID_TWO_KEYS]] ·
 [[POSDEVICES_SELLERID_DEAD_DISJUNCT]]
@@ -118,8 +119,14 @@ parses with **0 validation errors**, Products/Receipts/Flash Sale `kind=native`,
    Its predeploy chain is 11 gates and includes `bump-sw-version.js` — **never hand-edit
    `CACHE_VERSION`; the predeploy owns it.**
 
-**No rules deploy.** The ruleset is frozen at 255,490 / 256,000 and this work spends none of it.
-Re-verify `firestore.rules` is byte-identical to HEAD before deploying anything else.
+**No rules deploy.** Production stays on ruleset `f1c4e35b` — **255,404 compiled of 256,000, 596
+bytes free** — and this work spends none of it. Re-verify `firestore.rules` is byte-identical to
+HEAD before deploying anything else.
+
+An earlier draft quoted "255,490 / 256,000" here. That was a SOURCE-character count weighed against
+a COMPILED ceiling — a correct measurement in the wrong currency, and the comparison was void. Size
+a rules change only by the released executable (`releases/<name>:getExecutable`), never by
+`firestore.rules`.length.
 
 Nothing in the print chain is reachable from the UI until step 3 lands, so steps 1–2 can go ahead
 now and change no behaviour on their own — the trigger is the one exception: once deployed it will
