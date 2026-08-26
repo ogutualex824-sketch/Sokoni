@@ -1842,6 +1842,85 @@ class PosPrintService {
 /* ── Export ─────────────────────────────────────────────────────── */
 window.PosPrintService = new PosPrintService();
 
+/* ══ SILENT RECONNECT ═══════════════════════════════════════════════════════════
+   merchant-v2 has always called `eng.autoReconnect()` and NOTHING implemented it — not this
+   file, not pos-printer.js, not any of the five modules that touch GATT. The call site reads
+
+       var ok = await (eng.autoReconnect ? eng.autoReconnect() : Promise.resolve(false));
+
+   so the ternary always took the false branch and the printer state fell to 'saved' on every
+   load. A merchant reloads and reads that as "my printer is gone", when the browser has held
+   the grant the whole time.
+
+   THIS ADDS NO BLUETOOTH CODE. SokoniDeviceHub already owns discovery, the registry, GATT and
+   backoff; its Bluetooth adapter's discover() is navigator.bluetooth.getDevices(), which
+   re-links a previously granted device with NO chooser and NO user gesture. This is the wire
+   between the two, and nothing more.
+
+   WHAT IT MUST NOT DO
+     · never requestDevice() — that opens the browser chooser, needs a user gesture, and would
+       ambush a merchant who only reloaded a page
+     · never adopt a device that is not the saved printer
+     · never report connected on a device it could not actually reach
+     · never print, enqueue or drain anything — a reload is not a print trigger
+
+   Returns true ONLY when a printer is genuinely connected afterwards. */
+window.PosPrintService.autoReconnect = async function autoReconnect () {
+  const hub = window.SokoniDeviceHub;
+  if (!hub || typeof hub.discover !== 'function') return false;
+
+  try {
+    /* Already up — say so without touching the transport. Reconnecting a live GATT link
+       would drop it and re-establish it for no reason. */
+    if (typeof hub.getPrinter === 'function' && hub.getPrinter()) {
+      try { _printerState.set('connected', { name: (hub.getPrinter() || {}).name || null }); } catch (_) {}
+      return true;
+    }
+
+    /* Previously granted devices only. discover() walks each transport adapter, and the
+       Bluetooth one calls getDevices() — no chooser, no gesture, and it lists devices that
+       are currently powered off or out of range too. */
+    await hub.discover(['printer']);
+
+    const saved = (typeof hub.getDevicesByType === 'function') ? hub.getDevicesByType('printer') : [];
+    if (!saved.length) return false;
+
+    /* Prefer one already connected, then one the browser handed back a live handle for.
+       A profile with no nativeDevice is a REMEMBERED device the browser did not return: it
+       cannot be connected silently, and treating it as connectable is the "saved means
+       connected" lie this change exists to remove. */
+    const target = saved.filter((p) => p.status === 'connected')[0]
+                || saved.filter((p) => !!p.nativeDevice)[0];
+    if (!target) return false;
+
+    if (target.status !== 'connected') await hub.connect(target.id);
+
+    /* Ask the hub; do not infer success from the absence of a throw. */
+    const up = (typeof hub.isConnected === 'function') ? !!hub.isConnected(target.id) : false;
+    if (up) { try { _printerState.set('connected', { name: target.name || null }); } catch (_) {} }
+    return up;
+  } catch (e) {
+    /* A failed reconnect leaves the saved device ALONE. The merchant should see
+       "reconnecting" or "saved" — never be sent back through setup because a printer happened
+       to be switched off. */
+    return false;
+  }
+};
+
+/* A dropped link is not a forgotten device. Returning the surface to a state from which
+   reconnect is still possible is the whole difference between "Reconnecting…" and
+   "Set up printer". The hub owns the gattserverdisconnected listener and its own backoff;
+   this only mirrors the state the POS status surfaces already read. */
+try {
+  if (window.SokoniDeviceHub && typeof window.SokoniDeviceHub.on === 'function') {
+    window.SokoniDeviceHub.on('disconnected', function (profile) {
+      if (!profile || profile.type !== 'printer') return;
+      try { _printerState.set('disconnected', { name: profile.name || null }); } catch (_) {}
+    });
+  }
+} catch (_) {}
+
+
 /* Start health monitor after DOM is ready */
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => window.PosPrintService.health.start());
