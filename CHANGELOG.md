@@ -1,3 +1,65 @@
+## [2026-08-26] - The desktop can now be told it is the printer, and only then does it listen.
+
+**Desktop printer-host UI + startup.** The last missing link: a desktop had no way to *learn* it
+was the shop's printing host. It does now, and the two boundaries that make it safe are executed,
+not asserted in prose.
+
+**Opening SOKONI never registers a host.** `mount()` and `refresh()` are read-only — the callable
+they use (`getPrinterHostStatus`, new) has no write path at all, and `registerPrinterHost` has
+exactly one call site in the whole shell, behind a button. Registration is a merchant action.
+Later launches reconnect silently because the browser already holds the Bluetooth grant.
+
+**The listener starts in exactly one state.** All 20 host×printer combinations were executed and
+exactly one may start: host **and** printer genuinely connected. A host whose printer is merely
+*saved* may not — otherwise jobs accumulate while the PWA is open and all print at once the moment
+a printer appears. Losing the printer **stops** the listener, because a listener claiming jobs it
+cannot print would mark them CLAIMED and strand them.
+
+**Saved is never dressed as connected.** `saved`, `connecting`, `unknown`, `unsupported` and
+`disconnected` were each checked: none renders as Connected, none gets the filled dot. Only a live
+link reads `● Connected · P58E · Ready to print`.
+
+- **The browser never asserts a shop.** `getPrinterHostStatus` takes a `deviceId` and reads
+  `merchantId` off the stored `posDevices` document, exactly as `registerPrinterHost` does. The UI
+  sends a deviceId and nothing else, and starts the listener with the server-supplied `shopId`.
+- **Connect before register.** Registering a host that cannot print is a promise the shop cannot
+  keep, and the merchant would only discover it at the next sale. A printer that will not connect
+  produces no registration.
+- **Replace is always explicit.** A plain Connect passes `replace:false` and lets the server refuse
+  with `already-exists`; taking over is a separate, labelled action that says which desktop it will
+  stop.
+- **One connect path.** `connectPrinterNow()` extracted so the Devices button and host registration
+  cannot drift into two answers about how a printer comes up.
+
+**A real bug found by the tests and fixed:** `listenerStarted` is module state and `mount()` did not
+reset it. A re-mount — shop switch, re-login, device change — would leave `_apply()` believing a
+listener was already running, so it never started the new one: the surface would read *Connected*
+while nothing consumed print intents. It surfaced as test-ordering contamination; it is now reset on
+mount, with its own case that fails 3 assertions when the reset is removed.
+
+**Files:** `functions/device-manager.js` (`getPrinterHostStatus`), `functions/index.js` (re-export by
+name), `sokoni-printer-host-ui.js` (new), `merchant-v2.html` (mount point, one connect, deps),
+`scripts/test-printer-host-ui.js` + `scripts/sabotage-printer-host-ui.js` (new),
+`docs/findings/PRINT_BRIDGE_E2E_CHECKLIST.md` (new).
+
+**Proof:** 73/0 executed, 11/11 sabotages caught by exit code. Whole stack re-run green: host
+registration 39/0, autoReconnect 23/0, lifecycle 83/0, bridge 63/0, host UI 73/0 — 288 assertions,
+32 sabotages, 0 missed. One of my own assertions counted `navigator.bluetooth` occurrences and was
+wrong, because the feature-detect names it twice; replaced with a check that it reads capability and
+never drives the transport.
+
+**No rules change** — `firestore.rules` byte-identical to HEAD; the frozen 255,490 / 256,000 artifact
+is untouched, and the remaining work is application and device wiring only.
+
+**Not deployed.** `docs/findings/PRINT_BRIDGE_E2E_CHECKLIST.md` carries the deploy order (indexes
+**before** anything listens), the one-time setup, and the eleven attacks — refresh, Bluetooth
+drop, duplicate event, duplicate trigger, PWA reopen, two hosts racing, offline sale, wrong shop,
+already-printed, failed retry, host replacement — each with the sheet count that counts as a pass.
+
+**Database:** none. **Deployment:** `firestore:indexes` first, then the six functions by name, then
+hosting from the latest commit. CF exports 1696 → 1697; the budget gate remains intentionally red as
+accepted capacity debt. **Breaking:** none.
+
 ## [2026-08-26] - The phone sells, the desktop prints, and neither knows about the other.
 
 **Phone-sale bridge.** A completed sale on a phone now produces durable print work that only an

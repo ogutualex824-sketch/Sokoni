@@ -799,9 +799,83 @@ exports.registerPrinterHost = onCall(OPT, async (req) => {
 });
 
 /* ── Exports ─────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   getPrinterHostStatus — "am I this shop's printer host?"
+   ═══════════════════════════════════════════════════════════════════════════════
+   The desktop UI needs three facts before it can show an honest state, and it must not
+   assert any of them itself:
+
+       is this browser's device registered at all?
+       which shop does it belong to?
+       is it that shop's printer host — and if not, who is?
+
+   THE CALLER SUPPLIES ONLY A deviceId. The shop is read from the stored posDevices document,
+   exactly as registerPrinterHost does. A browser naming a shop proves nothing; a browser naming
+   a device it cannot read proves nothing either, because access is checked against the shop on
+   that record.
+
+   Read-only. It registers nothing. Opening the PWA must never make a desktop the host — that
+   is an explicit merchant action, and this function deliberately cannot perform it.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+exports.getPrinterHostStatus = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+  const deviceId = _san(String((req.data || {}).deviceId || ''), 200);
+  if (!deviceId) _err('deviceId is required.');
+
+  const snap = await db.collection('posDevices').doc(deviceId).get();
+  if (!snap.exists) {
+    /* Not an error. A fresh desktop that has never run POS setup is a normal state, and the
+       UI needs to say so rather than show a failure. */
+    return { ok: true, registered: false, deviceId, isHost: false };
+  }
+
+  const device = snap.data() || {};
+  const shopId = device.merchantId || null;
+  if (!shopId) {
+    return { ok: true, registered: true, deviceId, shopId: null, isHost: false,
+             reason: 'device has no shop on its record' };
+  }
+
+  await assertShopAccess({
+    db, uid, shopId, branchId: device.branchId || null,
+    isAdmin: _isAdmin(req), HttpsError,
+    message: 'You do not have permission to view printer settings for this shop.',
+  });
+
+  /* Who holds it right now — so "another desktop is the host" can be said plainly instead of
+     appearing as an unexplained refusal when the merchant presses Connect. */
+  const hostsSnap = await db.collection('posDevices')
+    .where('merchantId', '==', shopId)
+    .where('printerHost', '==', true)
+    .limit(5)
+    .get();
+  const hosts = hostsSnap.docs.map((d) => ({
+    deviceId: d.id,
+    printerName: (d.data() || {}).printerName || null,
+    lastSeenAt: (d.data() || {}).printerHostLastSeenAt || null,
+  }));
+  const isHost = device.printerHost === true;
+
+  return {
+    ok: true,
+    registered: true,
+    deviceId,
+    shopId,
+    branchId: device.branchId || null,
+    isHost,
+    printerName:  device.printerName || null,
+    printerHostAt: device.printerHostAt || null,
+    printerHostLastSeenAt: device.printerHostLastSeenAt || null,
+    /* Present only when SOMEONE ELSE holds it. */
+    otherHost: isHost ? null : (hosts.filter((h) => h.deviceId !== deviceId)[0] || null),
+    hostCount: hosts.length,
+  };
+});
+
 module.exports = {
   registerDevice:      exports.registerDevice,
   registerPrinterHost: exports.registerPrinterHost,
+  getPrinterHostStatus: exports.getPrinterHostStatus,
   deviceHeartbeat:     exports.deviceHeartbeat,
   lockDevice:          exports.lockDevice,
   unlockDevice:        exports.unlockDevice,

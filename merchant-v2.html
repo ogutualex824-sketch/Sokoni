@@ -2850,6 +2850,41 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   /* ══ DEVICES ══════════════════════════════════════════════════════════════
      A control centre over the registry the SHELL already owns — not a status page,
      and not another discovery implementation. */
+  /* ── PRINTER HOST ───────────────────────────────────────────────────────────
+     Mounting is READ-ONLY: it asks the server whether this desktop is already the shop's
+     printer host and renders the answer. It cannot register one — registration is an explicit
+     merchant action behind a button, and the listener starts only once this desktop is the
+     host AND the printer is genuinely connected. */
+  var _phLoaded = false;
+  async function mountPrinterHost () {
+    var el = document.getElementById('sk-printer-host-mount');
+    if (!el) return;
+    if (!_phLoaded) {
+      await loadScript('sokoni-printer-host-ui.js').catch(function () {});
+      _phLoaded = !!window.SokoniPrinterHostUI;
+    }
+    if (!window.SokoniPrinterHostUI) return;
+    try {
+      await window.SokoniPrinterHostUI.mount(el, {
+        getStatus:    function (pl) { return _callable('getPrinterHostStatus')(pl).then(function (r) { return r.data; }); },
+        registerHost: function (pl) { return _callable('registerPrinterHost')(pl).then(function (r) { return r.data; }); },
+        /* Reuses the shell's ONE connect, so registration cannot pair a printer a different
+           way from the Devices button. */
+        connectPrinter: function () { return connectPrinterNow(); },
+        printerState: function () { return DEV.printer.state; },
+        startListener: async function (o) {
+          var m = await printHostModule();
+          if (m) m.start(o);
+        },
+        stopListener: function () { if (window.SokoniPrintHost) window.SokoniPrintHost.stop(); },
+        reconnect:    function () { return autoConnectPrinter(); },
+        testPrint:    function () { var btn = document.querySelector('[data-dev="test"]'); if (btn) btn.click(); },
+        openSetup:    function () { location.href = '/pos-setup'; },
+      });
+    } catch (_) {}
+    paintStatus();
+  }
+
   function renderDevices (p) {
     var d = DEV.printer;
     var bt = !!(navigator.bluetooth);
@@ -2861,6 +2896,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var dotCls = d.state === 'connected' ? 'ok' : d.state === 'connecting' ? 'warn' : '';
 
     p.innerHTML =
+      /* The printer-host surface sits ABOVE the device controls: whether this desktop prints
+         for the shop is a different question from whether a printer is paired, and answering
+         them in one block is how "saved" starts reading as "ready to trade". */
+      '<div id="sk-printer-host-mount"></div>' +
       '<div class="sec-t">Receipt printer</div>' +
       '<div class="dev">' +
         '<div class="dev-head">' +
@@ -2900,6 +2939,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       'POS had to pair again.</div>' +
       '<div class="note" style="margin-top:12px">Devices are remembered per signed-in account on this browser, ' +
       'so a shared till never shows the previous merchant’s hardware.</div>';
+
+    /* The mount point above is now in the DOM — bind the host surface to it. Read-only:
+       it can report that this desktop is not the host, never make it one. */
+    mountPrinterHost();
   }
 
   document.addEventListener('click', function (e) {
@@ -2919,22 +2962,32 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   function busy (btn, txt) { btn.disabled = true; btn.dataset.old = btn.textContent; btn.textContent = txt; }
   function done (btn) { btn.disabled = false; if (btn.dataset.old) btn.textContent = btn.dataset.old; }
 
+  /* THE ONE CONNECT. Both the Devices panel button and the printer-host registration flow go
+     through here, so there are never two answers to "how does this shop's printer come up".
+     Must be called from inside a user gesture the first time — eng.connect() opens the browser
+     chooser, and a chooser without a gesture is refused. */
+  async function connectPrinterNow () {
+    var eng = await printerEngine();
+    if (!eng) return { ok: false, reason: 'engine-unavailable' };
+    /* A SAVED device reconnects silently — no chooser. Only a first-time pairing
+       opens the browser prompt, and that needs the user gesture we are inside. */
+    var ok = DEV.printer.saved && eng.autoReconnect ? await eng.autoReconnect() : false;
+    if (!ok && eng.connect) ok = await eng.connect();
+    if (ok) {
+      DEV.printer.name = DEV.printer.name || 'Printer';
+      saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
+    }
+    DEV.printer.state = ok ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
+    return { ok: !!ok, identity: ok ? { name: DEV.printer.name, transport: 'bluetooth' } : null };
+  }
+
   async function deviceConnect (btn) {
     busy(btn, 'Connecting…');
     DEV.printer.state = 'connecting'; paintStatus();
-    var eng = await printerEngine();
-    if (!eng) { DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown'; done(btn); paintStatus();
-                return toast('The printer service could not be loaded.'); }
     try {
-      /* A SAVED device reconnects silently — no chooser. Only a first-time pairing
-         opens the browser prompt, and that needs the user gesture we are inside. */
-      var ok = DEV.printer.saved && eng.autoReconnect ? await eng.autoReconnect() : false;
-      if (!ok && eng.connect) ok = await eng.connect();
-      DEV.printer.state = ok ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
-      if (ok) {
-        DEV.printer.name = DEV.printer.name || 'Printer';
-        saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
-      } else { toast('No printer connected.'); }
+      var r = await connectPrinterNow();
+      if (r.reason === 'engine-unavailable') toast('The printer service could not be loaded.');
+      else if (!r.ok) toast('No printer connected.');
     } catch (e) { DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown'; toast('Could not connect: ' + (e.message || e)); }
     done(btn); paintStatus(); broadcastDevices(); renderDevices(nativePanel('devices'));
   }

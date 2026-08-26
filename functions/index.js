@@ -12122,6 +12122,7 @@ exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
 const deviceMgr = require('./device-manager');
 exports.registerDevice            = deviceMgr.registerDevice;
 exports.registerPrinterHost       = deviceMgr.registerPrinterHost;
+exports.getPrinterHostStatus      = deviceMgr.getPrinterHostStatus;
 
 /* ── Durable print lifecycle ─────────────────────────────────────────────────
    PENDING -> CLAIMED -> PRINTING -> PRINTED, with FAILED -> PENDING retry. The claim is a
