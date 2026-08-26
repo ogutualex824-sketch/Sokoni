@@ -58,6 +58,11 @@
     voltage: { base: 'V', units: { mV: 0.001, V: 1, kV: 1000 } },
     frequency: { base: 'Hz', units: { Hz: 1, kHz: 1000, MHz: 1000000, GHz: 1000000000 } },
     charge: { base: 'mAh', units: { mAh: 1, Ah: 1000 } },
+    /* ENERGY is not CHARGE. A phone battery is rated in mAh and a laptop battery in Wh, and
+       they are not interchangeable: converting between them needs the cell voltage, which
+       the product document does not carry. Two families, so neither pretends to be the
+       other and no conversion is invented across them. */
+    energy: { base: 'Wh', units: { mWh: 0.001, Wh: 1, kWh: 1000 } },
     /* Counts. A base of 1 with no conversion between siblings is deliberate: a carton is
        not a fixed number of packs across shops, so stockUnit.perPack carries that, per
        product, rather than this table pretending there is a universal answer. */
@@ -140,6 +145,72 @@
       { key: 'connectivity', label: 'Connectivity' }, { key: 'colour', label: 'Colour' },
       { key: 'warranty', label: 'Warranty' }, { key: 'condition', label: 'Condition' },
     ],
+    /* Screens. One family for laptops, TVs and monitors: they differ by which fields matter,
+       not by kind. Screen size is a LENGTH in inches — a 15.6" laptop and a 55" TV are the
+       same attribute at different scales, and neither is a "size" in the clothing sense. */
+    laptops: [
+      { key: 'model', label: 'Model' },
+      { key: 'screenSize', label: 'Screen size', type: 'measure', dim: 'length', unit: 'in' },
+      { key: 'resolution', label: 'Resolution' },
+      { key: 'ram', label: 'RAM', type: 'measure', dim: 'storage', unit: 'GB' },
+      { key: 'storage', label: 'Storage', type: 'measure', dim: 'storage', unit: 'GB' },
+      { key: 'processor', label: 'Processor' }, { key: 'graphics', label: 'Graphics' },
+      { key: 'batteryEnergy', label: 'Battery', type: 'measure', dim: 'energy', unit: 'Wh' },
+      { key: 'operatingSystem', label: 'Operating system' },
+      { key: 'weight', label: 'Weight', type: 'measure', dim: 'weight', unit: 'kg' },
+      { key: 'condition', label: 'Condition' }, { key: 'warranty', label: 'Warranty' },
+    ],
+    tv: [
+      { key: 'screenSize', label: 'Screen size', type: 'measure', dim: 'length', unit: 'in' },
+      { key: 'resolution', label: 'Resolution' },
+      { key: 'panelType', label: 'Panel type' }, { key: 'smartPlatform', label: 'Smart platform' },
+      { key: 'refreshRate', label: 'Refresh rate', type: 'measure', dim: 'frequency', unit: 'Hz' },
+      { key: 'power', label: 'Power', type: 'measure', dim: 'power', unit: 'W' },
+      { key: 'weight', label: 'Weight', type: 'measure', dim: 'weight', unit: 'kg' },
+      { key: 'warranty', label: 'Warranty' },
+    ],
+    monitors: [
+      { key: 'screenSize', label: 'Screen size', type: 'measure', dim: 'length', unit: 'in' },
+      { key: 'resolution', label: 'Resolution' },
+      { key: 'refreshRate', label: 'Refresh rate', type: 'measure', dim: 'frequency', unit: 'Hz' },
+      { key: 'responseTime', label: 'Response time' }, { key: 'panelType', label: 'Panel type' },
+      { key: 'connectivity', label: 'Connectivity' },
+    ],
+    cameras: [
+      { key: 'sensor', label: 'Sensor' },
+      { key: 'megapixels', label: 'Megapixels', type: 'number' },
+      { key: 'focalLength', label: 'Focal length', type: 'measure', dim: 'length', unit: 'mm' },
+      { key: 'lensMount', label: 'Lens mount' }, { key: 'videoResolution', label: 'Video resolution' },
+      { key: 'batteryEnergy', label: 'Battery', type: 'measure', dim: 'energy', unit: 'Wh' },
+      { key: 'weight', label: 'Weight', type: 'measure', dim: 'weight', unit: 'g' },
+      { key: 'condition', label: 'Condition' },
+    ],
+    watches: [
+      { key: 'caseSize', label: 'Case size', type: 'measure', dim: 'length', unit: 'mm' },
+      { key: 'strapSize', label: 'Strap size', type: 'size' },
+      { key: 'waterResistance', label: 'Water resistance' },
+      { key: 'movement', label: 'Movement' }, { key: 'material', label: 'Material' },
+      { key: 'batteryCapacity', label: 'Battery', type: 'measure', dim: 'charge', unit: 'mAh' },
+      { key: 'connectivity', label: 'Connectivity' },
+    ],
+    audio: [
+      { key: 'driverSize', label: 'Driver size', type: 'measure', dim: 'length', unit: 'mm' },
+      { key: 'batteryCapacity', label: 'Battery', type: 'measure', dim: 'charge', unit: 'mAh' },
+      { key: 'impedance', label: 'Impedance' },
+      { key: 'frequencyResponse', label: 'Frequency response' },
+      { key: 'connectivity', label: 'Connectivity' },
+      { key: 'weight', label: 'Weight', type: 'measure', dim: 'weight', unit: 'g' },
+    ],
+    /* A fridge is a CAPACITY in litres that draws POWER at a VOLTAGE — three different
+       families on one product, which is exactly why they are not one generic "size". */
+    appliances: [
+      { key: 'capacity', label: 'Capacity', type: 'measure', dim: 'volume', unit: 'l' },
+      { key: 'power', label: 'Power', type: 'measure', dim: 'power', unit: 'W' },
+      { key: 'voltage', label: 'Voltage', type: 'measure', dim: 'voltage', unit: 'V' },
+      { key: 'energyRating', label: 'Energy rating' },
+      { key: 'weight', label: 'Weight', type: 'measure', dim: 'weight', unit: 'kg' },
+      { key: 'colour', label: 'Colour' }, { key: 'warranty', label: 'Warranty' },
+    ],
     clothing: [
       { key: 'size', label: 'Size', type: 'size' }, { key: 'fit', label: 'Fit' },
       { key: 'gender', label: 'Gender' }, { key: 'colour', label: 'Colour' },
@@ -205,7 +276,17 @@
      the common fields only, which is a complete product, not a degraded one. */
   var CATEGORY_ALIASES = {
     vehicle: 'vehicles', cars: 'vehicles', car: 'vehicles', motorbikes: 'vehicles',
-    electronic: 'electronics', phones: 'electronics', computers: 'electronics',
+    electronic: 'electronics', phones: 'electronics', phone: 'electronics',
+    tablets: 'electronics', smartphones: 'electronics',
+    laptop: 'laptops', computers: 'laptops', computer: 'laptops', notebooks: 'laptops',
+    pcs: 'laptops', desktops: 'laptops',
+    tvs: 'tv', television: 'tv', televisions: 'tv', screens: 'tv',
+    monitor: 'monitors', displays: 'monitors',
+    camera: 'cameras', photography: 'cameras',
+    watch: 'watches', smartwatch: 'watches', smartwatches: 'watches',
+    headphones: 'audio', earphones: 'audio', speakers: 'audio', sound: 'audio',
+    appliance: 'appliances', fridge: 'appliances', fridges: 'appliances',
+    refrigerator: 'appliances', kitchen: 'appliances', 'home-appliances': 'appliances',
     clothes: 'clothing', fashion: 'clothing', shoes: 'clothing',
     groceries: 'food', grocery: 'food', produce: 'food', agriculture: 'food',
     pharmacy: 'medicine', medicines: 'medicine', drugs: 'medicine', health: 'medicine',
@@ -247,7 +328,13 @@
     if (v === null) return null;
     var u = canonicalUnit(dim, unit);
     if (!u) return { v: v, u: _str(unit) || null, base: null, dim: dim, unresolved: true };
-    return { v: v, u: u, dim: dim, base: v * UNITS[dim].units[u], baseUnit: UNITS[dim].base };
+    /* Rounded to 6 decimals. 15.6 * 25.4 is 396.23999999999995 in binary floating point, and
+       storing fifteen digits of that noise in every product document is not precision — it is
+       an artefact. Six decimals keeps the smallest real unit exact (1 mg = 0.001 g) while
+       making two equal measurements actually compare equal, which they otherwise would not.
+       `v` is untouched: the merchant's own number is never rounded, only the derived base. */
+    var base = v * UNITS[dim].units[u];
+    return { v: v, u: u, dim: dim, base: Math.round(base * 1e6) / 1e6, baseUnit: UNITS[dim].base };
   }
 
   /* A size, normalised WITHOUT coercing to a number. "XL" must survive as "XL"; the

@@ -219,6 +219,13 @@ const ROUND_TRIP = [
   { label: '5000 mAh',  specs: { batteryCapacity: { v: 5000, u: 'mAh' } },    path: 'batteryCapacity', keep: 5000, base: 5000 },
   { label: '220 V',     specs: { voltage: { v: 220, u: 'V' } },               path: 'voltage', keep: 220,    base: 220 },
   { label: '50 Hz',     specs: { refreshRate: { v: 50, u: 'Hz' } },           path: 'refreshRate', keep: 50, base: 50 },
+  /* Screens and appliances — the rows a new attribute type is meant to be covered by. */
+  { label: '15.6 in screen', specs: { screenSize: { v: 15.6, u: 'in' } },     path: 'screenSize', keep: 15.6, base: 396.24 },
+  { label: '70 Wh battery',  specs: { batteryEnergy: { v: 70, u: 'Wh' } },    path: 'batteryEnergy', keep: 70, base: 70 },
+  { label: '350 L fridge',   specs: { capacity: { v: 350, u: 'l' } },         path: 'capacity', keep: 350, base: 350000 },
+  { label: '2000 W',         specs: { power: { v: 2000, u: 'W' } },           path: 'power',   keep: 2000, base: 2000 },
+  { label: '44 mm case',     specs: { caseSize: { v: 44, u: 'mm' } },         path: 'caseSize', keep: 44,  base: 44 },
+  { label: '3 in nail',      specs: { length: { v: 3, u: 'in' } },            path: 'length',  keep: 3,    base: 76.2 },
 ];
 ROUND_TRIP.forEach((c) => {
   const built = S.build({ specs: c.specs });
@@ -236,6 +243,56 @@ ROUND_TRIP.forEach((c) => {
        c.label + ' derives base ' + c.base, 'got ' + (got && got.base));
   }
 });
+
+
+/* Float noise is an artefact, not precision. 15.6 * 25.4 is 396.23999999999995 in binary
+   floating point; storing that in every product document makes two equal measurements compare
+   UNEQUAL, which is the one thing base exists to do. The merchant's own value is never
+   rounded — only the derived base. */
+ok(S.measure('length', 15.6, 'in').base === 396.24, 'a derived base carries no float noise');
+ok(S.measure('weight', 1, 'mg').base === 0.001, 'the smallest real unit stays exact under rounding');
+ok(S.measure('length', 1, 'ft').base === S.measure('length', 12, 'in').base,
+   '1 ft and 12 in compare EQUAL — they would not without rounding');
+ok(S.measure('length', 15.6, 'in').v === 15.6, 'the merchant value itself is never rounded');
+
+/* ── 14. "SIZE" IS NOT ONE FIELD ──────────────────────────────────────────
+   A laptop's 15.6-inch screen, a shirt's XL, a shoe's EU 42 and a nail's 3-inch length are
+   four DIFFERENT kinds of attribute. If any of them were forced through one hardcoded
+   "size" field, three of the four would be wrong — and the wrongness would be invisible,
+   because each would still render a number next to a label. */
+console.log('\n14. Four kinds of "size", none of them the same field');
+const FOUR = S.build({ specs: {
+  screenSize: { v: 15.6, u: 'in' },     /* a length, in inches */
+  size: { value: 'XL' },                /* an alpha size, no number at all */
+  length: { v: 3, u: 'in' },            /* also a length — same family, different meaning */
+} }).patch.specs;
+ok(FOUR.screenSize.dim === 'length' && FOUR.screenSize.base === 396.24,
+   'a 15.6" screen is a LENGTH with a real base');
+ok(FOUR.size.system === 'alpha' && FOUR.size.number === undefined,
+   'XL is an alpha size with no numeric value at all');
+ok(FOUR.length.dim === 'length' && FOUR.length.base === 76.2,
+   'a 3" nail is a length too — same family, its own attribute');
+ok(FOUR.screenSize.v !== FOUR.length.v,
+   'they are separate attributes, not one overwritten "size"');
+const shoe = S.build({ specs: { size: { value: 42, system: 'EU' } } }).patch.specs.size;
+ok(shoe.system === 'EU' && shoe.number === 42,
+   'EU 42 keeps its system AND sorts — a third kind again');
+
+/* Every screen category must reach screenSize as a real measure, not free text. */
+['laptop', 'tvs', 'monitor'].forEach((cat) => {
+  const def = S.suggestionsFor(cat).filter((x) => x.key === 'screenSize')[0];
+  ok(def && def.type === 'measure' && def.dim === 'length',
+     cat + ' offers screen size as a measurable length');
+});
+/* An appliance carries capacity, power and voltage — three different families on ONE
+   product, which is exactly why a single generic "size" cannot work. */
+const fridge = S.suggestionsFor('fridge').map((x) => x.dim).filter(Boolean);
+ok(fridge.indexOf('volume') >= 0 && fridge.indexOf('power') >= 0 && fridge.indexOf('voltage') >= 0,
+   'a fridge spans volume, power and voltage on one product');
+/* Energy and charge stay apart: converting Wh to mAh needs the cell voltage, which the
+   document does not carry. */
+ok(S.canonicalUnit('charge', 'Wh') === null && S.canonicalUnit('energy', 'mAh') === null,
+   'NEGATIVE CONTROL: Wh is not mAh — no conversion is invented between them');
 
 /* 500 mg and 24 tablets are TWO attributes. Multiplying them into one "12000" would be an
    invented figure that matches nothing on the packet. */
