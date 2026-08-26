@@ -450,14 +450,26 @@ onAuthStateChanged(auth, async (user) => {
 
   const badge = document.getElementById("role-badge");
   if (claims.superAdmin) badge.textContent = "SUPER ADMIN";
-  else if (claims.admin) badge.textContent = "ADMIN";
-  else badge.textContent = "MODERATOR";
+  else badge.textContent = "ADMIN";
 
-  // Hide role management for non-admins
-  if (!claims.admin && !claims.superAdmin) {
-    document.getElementById("role-mgmt-section").style.display = "none";
-    document.getElementById("role-mgmt-panels").style.display = "none";
-  }
+  /* ── HISTORICAL CONTEXT — the former moderator tier (retired 2026-08-26) ──────
+     This page once admitted moderators with a reduced surface: a MODERATOR badge,
+     and role management hidden. The authorization decision of 2026-08-26 made the
+     canonical tier ADMIN across registry -> shared guard -> page gate -> rules,
+     so both branches became unreachable. They are recorded here as DESIGN, not
+     kept as dormant authorization logic:
+
+         else badge.textContent = "MODERATOR";
+
+         if (!claims.admin && !claims.superAdmin) {
+           roleMgmtSection.style.display = "none";
+           roleMgmtPanels.style.display  = "none";
+         }
+
+     If moderator access is ever restored it MUST come back through the registry
+     and the complete authority chain — NOT by uncommenting a page-local exception.
+     A page-local re-broadening is exactly the divergence the authority gate
+     (scripts/audit-admin-authority.js) exists to fail on. ─────────────────────── */
 
   // Init monitor
   window.SokoniMonitor.init(db, user, fns, claims);

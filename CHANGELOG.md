@@ -1,3 +1,67 @@
+## [2026-08-26] — Admin certification frozen; role-authority convergence opened as its own track
+
+**Not deployed.** Production HOLD stands.
+
+### Admin certification — FROZEN
+
+Commits `52a2b22` (programme) · `634ebe6` (authorization alignment) · `c801b22` (five-state
+ledger + authority gate).
+
+| State | Count |
+|---|---|
+| PASS | 39 |
+| BLOCKED | 9 |
+| UNPROVEN | 1 |
+| LEGACY | 1 |
+| NOT RUN | 0 |
+| Registry surfaces | 50 |
+
+Registry valid · authority gate aligned · denial invariant 0/50 · shared controls 35/35 ·
+navigation 2/2 · responsive 14/14 · `sokoni-admin-responsive.css` correctly scoped (4
+consumers, 0 surfaces needing it without loading it) · 92 files of concurrent work untouched.
+
+The earlier **50/50 certified** claim is withdrawn: its counts read 30+0+11+0 = 41, and its
+membership was wrong in two directions that cancelled out.
+
+### monitor.html — moderator tier recorded as design, not dormant logic
+
+After the authorization decision the MODERATOR badge fallback and the role-management hide
+were unreachable but still executable. They are now recorded as a documented historical
+block rather than left as dormant authorization logic. If moderator access is restored it
+must come back through the registry and the full authority chain — never by uncommenting a
+page-local exception, which is exactly what `scripts/audit-admin-authority.js` fails on.
+
+### Role authority convergence — NEW TRACK, OPEN
+
+`docs/ROLE_AUTHORITY_CONVERGENCE_TRACK.md`. Server-side identity/authorization architecture,
+deliberately **not** an admin-navigation cleanup.
+
+`functions/role-authority.js` declares itself "the ONE primitive… and the ONE writer of the
+Auth custom claim". Census of production code: **16 `setCustomUserClaims()` call sites across
+10 modules**, the primitive being one of ten. Only 3 modules consume it.
+
+Two role representations, neither writer maintaining the other's:
+`role-authority.js` writes `users.roles[]` (array) + `registeredAs` + `approved`;
+`super-admin.js setUserRole` writes `users.role` (string). ~34 files read the array, ~69 read
+the string, so each writer is invisible to the other's readers.
+
+**Not to be fixed by writing both fields everywhere** — that hides the divergence and invents
+undesigned synchronization semantics. The track specifies canonical representation, writer
+contract, projection contract, reader migration, reconciliation, tests, and no-silent-
+escalation before any code changes.
+
+### Security
+
+- No gate weakened, no overlay dismissed, no baseline edited to green.
+- Client side has **no** competing role authority: the admin guard only reads the claim.
+- The divergence is entirely server-side and is now tracked, not silently carried.
+
+### Breaking changes
+
+None.
+
+---
+
 ## [2026-08-26] — Admin programme committed; certification ledger made machine-derived
 
 **Not deployed.** Production HOLD stands. Firestore review indexes remain staged and unpushed.
