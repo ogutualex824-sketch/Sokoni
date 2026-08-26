@@ -57,6 +57,54 @@ that property is not reliably configurable in Chrome, the redefinition threw, an
 `try/catch` swallowed it. The probe then reported "not a location assignment", which
 was wrong. **Prove the instrument fires before trusting a negative result.**
 
+## LIVE-SITE CONFIRMATION 2026-08-26 — mechanism observed on production
+
+Measured on `https://mysokoni.co.ke` as an **unauthenticated visitor**. No credentials
+were used, entered, or invented.
+
+| Page | Destination | Destination preserved? | Admin UI |
+|---|---|---|---|
+| `admin-os` | `/login` | **no** | none |
+| `admin` | `/login` | **no** | none |
+| `super-admin` | `/login?redirect=super-admin.html` | yes | none |
+| **`verification-admin`** | **`/`** | **no** | none |
+| `financial-os` | `/login?redirect=financial-os.html` | yes | none |
+
+**Defect B is no longer only a local observation.** The page-local `authGuard()` deny
+route reaches `/` on the **actual production site**. The mechanism is live.
+
+**No admin UI is exposed on any of the five** — the signed-out boundary itself holds.
+
+### What this does NOT establish
+
+It does **not** show that a legitimate administrator is rejected. Severity still turns on
+whether the direct gstatic Firebase auth succeeds for a real admin — if it does, `deny()`
+never runs and this closes as an environment artifact. **Severity remains UNPROVEN.**
+
+### Separate finding — inconsistent signed-out destination handling
+
+Three different behaviours across four admin surfaces in the same denial class:
+
+- `?redirect=` preserved — `super-admin`, `financial-os`
+- bare `/login`, destination lost — `admin`, `admin-os`
+- `/` — `verification-admin`
+
+Pre-existing production behaviour, visible without credentials. It belongs to the broader
+routing/denial track. **Do NOT fold it into Defect A**, which concerns specifically the
+signed-in non-admin path through `sokoni-admin-entry.js` and its `hub || '/'` fallback —
+a different code path that nothing above exercises.
+
+### Step 1 gate — remains OPEN
+
+| Test | Status |
+|---|---|
+| Real **non-admin** → `admin-os.html` (Defect A) | ⏸️ **UNPROVEN** — no accounts available |
+| Real **admin** → `verification-admin.html` (Defect B severity) | ⏸️ **UNPROVEN** — no accounts available |
+
+Marked UNPROVEN deliberately rather than substituting the signed-out results, which
+exercise a different path. Both require a human operator with genuine accounts on an
+origin where Firebase Auth works — not `127.0.0.1:3101`, where App Check returns 403.
+
 ## Impact on the Admin candidate
 
 `verification-admin.html` is the one page of six that could not be integration-tested.
