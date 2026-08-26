@@ -1,10 +1,10 @@
 {
-  "commit": "6817700be118e6b631475a7a88a95d24ff8aeec9",
-  "commitShort": "6817700",
+  "commit": "3bb63bd39c5b6ae0a7180bda5c191a567991cd6f",
+  "commitShort": "3bb63bd",
   "branch": "feat/merchant-v2-canonical",
-  "buildTime": "2026-08-26T08:09:50.062Z",
+  "buildTime": "2026-08-26T15:24:25.733Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260826080949-v558",
+  "cacheVersion": "sokoni-20260826152424-v559",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
