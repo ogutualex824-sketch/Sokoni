@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html lang="en" data-admin-guard="admin" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -159,7 +162,7 @@
       onkeydown="if(event.key==='Enter')_mpAuth()">
     <button class="mp-pin-btn" onclick="_mpAuth()">Enter Dashboard</button>
     <div class="mp-auth-err" id="mp-auth-err"></div>
-    <div style="margin-top:14px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,.3);">← Back to Admin</a></div>
+    <div style="margin-top:14px;"><a href="account-centre.html" style="font-size:11px;color:rgba(255,255,255,.3);">← Back to Admin</a></div>
   </div>
 </div>
 
@@ -285,36 +288,73 @@ function _mpCheckSession() {
   return sessionStorage.getItem(SESS_KEY) === '1' &&
     (Date.now() - parseInt(sessionStorage.getItem(SESS_TS)||'0')) < MAX_AGE;
 }
+/* AUTHORIZATION MODEL — read before changing.
+
+   The verified Firebase admin claim is the ONLY thing that authorizes this page,
+   and it is enforced by sokoni-admin-guard.js (data-admin-guard on <html>), which
+   blocks rendering until the claim resolves and fails CLOSED.
+
+   The PIN is a SECOND FACTOR layered on top. It can never authorize on its own,
+   and sessionStorage can only skip re-entering the PIN — never the claim check.
+
+   Two real bypasses existed here before:
+
+     1. `else { ok = !!stored; }` — with no Firebase user, authorization collapsed
+        to "does a localStorage key exist". A signed-out visitor set
+        `sokoniAdminPin` to any value, typed the matching PIN, and was admitted
+        with no Firebase authentication at all.
+
+     2. `if (_mpCheckSession()) { ...reveal... }` ran at parse time and consulted
+        ONLY sessionStorage. Setting `sokoniAdminSess='1'` opened the console
+        without evaluating any claim, bypassing _mpAuth() entirely.
+
+   Both came from treating browser-owned storage as an authorization source. It
+   is attacker-controlled input; it may hold preferences, never permissions. */
+
+function _mpReveal() {
+  document.getElementById('mp-gate').style.display = 'none';
+  document.getElementById('mp-app').style.display  = 'block';
+  _mpLoad();
+}
+
+/** Resolves only once the guard has verified an admin/superAdmin claim. */
+function _mpClaimVerified() {
+  if (!window.SokoniAdminGuard || !window.SokoniAdminGuard.verified) {
+    return Promise.reject(new Error('admin guard not loaded'));
+  }
+  return window.SokoniAdminGuard.verified;
+}
+
 async function _mpAuth() {
   var pin = (document.getElementById('mp-pin').value||'').trim();
   var err = document.getElementById('mp-auth-err');
   if (!pin) return;
   err.textContent = '';
   try {
-    var buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-    var hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    /* Claim FIRST, unconditionally. If the guard has not verified an admin, no
+       PIN can help — and we must not leak whether the PIN was correct. */
+    try { await _mpClaimVerified(); }
+    catch (_) { err.textContent = 'Admin access required.'; return; }
+
     var stored = localStorage.getItem('sokoniAdminPin')||localStorage.getItem('sokoniAdminPass');
-    var ok = !stored;
-    if (stored && hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
-    var fbUser = window.firebaseAuth && window.firebaseAuth.currentUser;
-    if (fbUser) {
-      var tok = await fbUser.getIdTokenResult(true);
-      ok = tok.claims && (tok.claims.admin === true || tok.claims.superAdmin === true);
-    } else {
-      ok = !!stored;
+    if (stored) {
+      var buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+      var hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      if (hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
     }
-    if (!ok) { err.textContent = 'Admin claim not found.'; return; }
+    /* No PIN configured: the verified admin claim alone is sufficient. */
+
     sessionStorage.setItem(SESS_KEY,'1');
     sessionStorage.setItem(SESS_TS, Date.now().toString());
-    document.getElementById('mp-gate').style.display='none';
-    document.getElementById('mp-app').style.display='block';
-    _mpLoad();
+    _mpReveal();
   } catch(e) { err.textContent = 'Verification error.'; }
 }
-if (_mpCheckSession()) {
-  document.getElementById('mp-gate').style.display='none';
-  document.getElementById('mp-app').style.display='block';
-}
+
+/* Session restore NEVER reveals on its own — it waits for the verified claim and
+   only then honours the remembered PIN step. */
+_mpClaimVerified()
+  .then(function () { if (_mpCheckSession()) _mpReveal(); })
+  .catch(function () { /* guard is already showing its denial panel */ });
 
 /* ── Completeness scoring ─────────────────────────────────── */
 var CRITERIA = [
@@ -611,10 +651,14 @@ document.getElementById('mp-modal-backdrop').addEventListener('click', function(
 (window.waitForFirebaseReady ? window.waitForFirebaseReady()
   : new Promise(function(r){ document.addEventListener('sokoniFirebaseReady', function(){r();}, {once:true}); setTimeout(r, 3000); })
 ).then(function(){
-  if (_mpCheckSession()) _mpLoad();
+  /* Gated on the verified claim, not on sessionStorage — these previously fired
+     Firestore reads for anyone who could set sokoniAdminSess. */
+  _mpClaimVerified().then(function(){ if (_mpCheckSession()) _mpLoad(); }).catch(function(){});
 });
 setTimeout(function(){
-  if (_mpCheckSession() && !_all.length) _mpLoad();
+  _mpClaimVerified()
+    .then(function(){ if (_mpCheckSession() && !_all.length) _mpLoad(); })
+    .catch(function(){});
 }, 2000);
 </script>
 </body>

@@ -1,0 +1,2018 @@
+{
+  "base": "http://127.0.0.1:3000",
+  "widths": [
+    1440,
+    1280,
+    1024,
+    768,
+    430,
+    390,
+    360
+  ],
+  "checks": [
+    "no-h-overflow",
+    "header",
+    "logo-aspect",
+    "nav-usable",
+    "active-state",
+    "crumbs-fit",
+    "header-no-cover",
+    "tap-targets",
+    "drawer"
+  ],
+  "summary": {
+    "pages": 50,
+    "pass": 39,
+    "notPass": 11,
+    "combinations": 350,
+    "passed": 303
+  },
+  "pages": [
+    {
+      "page": "admin-os.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "admin.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "ops-center.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "ops-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "reliability-center.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "monitor.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "fleet-monitor.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "merchant-pipeline.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "admin-subscriptions.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "subscription-os.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "subscription-billing.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "sasos-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "automation-center.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "trust-safety.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "moderation.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "verification-admin.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "security-center.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "security-zero-trust-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "platform-health.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "platform.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "admin-messages.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "messages-admin.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "admin-feedback.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "async-jobs.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "redis-monitor.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "search-quality.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "beta-control.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "beta-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "executive-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "release-readiness.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "launch-readiness.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "launch-metrics.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "uat-center.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "no-h-overflow",
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [
+            "no-h-overflow",
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "1280": {
+          "failed": [
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        },
+        "1440": {
+          "failed": [
+            "no-h-overflow",
+            "header",
+            "nav-usable",
+            "active-state"
+          ],
+          "error": null
+        }
+      },
+      "passWidths": 0,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "header",
+        "nav-usable",
+        "active-state",
+        "no-h-overflow"
+      ]
+    },
+    {
+      "page": "financial-os.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "finos-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "fos-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "revenue.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "revenue-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "commission-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "commission-engine.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "settlement-dashboard.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "sfos-monitor.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "etims-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "enterprise-ops.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "enterprise-certification.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "franchise.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    },
+    {
+      "page": "legal-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "security-compliance.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "super-admin.html",
+      "widths": {
+        "360": {
+          "failed": [],
+          "error": null
+        },
+        "390": {
+          "failed": [],
+          "error": null
+        },
+        "430": {
+          "failed": [],
+          "error": null
+        },
+        "768": {
+          "failed": [],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 7,
+      "totalWidths": 7,
+      "result": "PASS",
+      "failedChecks": []
+    },
+    {
+      "page": "superadmin.html",
+      "widths": {
+        "360": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "390": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "430": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "768": {
+          "failed": [
+            "drawer"
+          ],
+          "error": null
+        },
+        "1024": {
+          "failed": [],
+          "error": null
+        },
+        "1280": {
+          "failed": [],
+          "error": null
+        },
+        "1440": {
+          "failed": [],
+          "error": null
+        }
+      },
+      "passWidths": 3,
+      "totalWidths": 7,
+      "result": "NOT_PASS",
+      "failedChecks": [
+        "drawer"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -191,7 +194,7 @@
       onkeydown="if(event.key==='Enter')_lrAuth()" autocomplete="current-password">
     <button class="lr-auth-btn" onclick="_lrAuth()">View Dashboard</button>
     <div class="lr-auth-error" id="lr-auth-err"></div>
-    <div style="margin-top:16px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,0.3);">← Back to Admin</a></div>
+    <div style="margin-top:16px;"><a href="account-centre.html" style="font-size:11px;color:rgba(255,255,255,0.3);">← Back to Admin</a></div>
   </div>
 </div>
 

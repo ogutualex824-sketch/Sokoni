@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html data-admin-guard="admin" lang="en">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -32,7 +35,10 @@
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ── TOPBAR ── */
-.topbar{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);
+/* flex-wrap:wrap — a 44px icon button (the tap-target floor, which must NOT be
+   reduced) pushed this nowrap row 5px past the viewport at 390px. The row wraps;
+   the button keeps its size. */
+.topbar{flex-wrap:wrap;position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);
   padding:0 24px;height:60px;display:flex;align-items:center;gap:12px}
 .topbar h1{font-size:18px;font-weight:700;flex:1}
 .icon-btn{width:36px;height:36px;border:none;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sub)}
@@ -248,10 +254,10 @@ var HUB_LABELS = {
 
 /* ── Auth guard — admin only ── */
 firebase.auth().onAuthStateChanged(function(user){
-  if(!user){ location.href='login.html?redirect=revenue-dashboard.html'; return; }
+  if(!user){ if (window.SokoniAdminGuard) return; location.href='login.html?redirect=revenue-dashboard.html'; return; }
   user.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){
-      location.href='/'; return;
+      location.href='admin-os.html?error=insufficient_privileges'; return;
     }
     _load();
   }).catch(function(){ _load(); });

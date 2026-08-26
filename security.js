@@ -632,6 +632,29 @@ const SokoniSecurity = (() => {
            all. The shell (or whatever top-level page embeds this one) asks for consent once;
            an embedded module must never ask again. Standalone pages are unaffected. */
         try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
+
+        /* AUTHENTICATED ADMIN WORKSPACE — do not mount the consumer banner.
+           sokoni-admin-nav.js stamps data-sokoni-workspace="admin" on <html>
+           for pages in the admin registry (and ONLY those). Rationale:
+
+             - This modal is fixed at z-index 300001 and COVERS the admin
+               hamburger at 390/360px, which breaks the admin responsive
+               contract that fixed UI must never cover a control.
+             - Admin consoles are authenticated internal tools reached only with
+               a verified admin/superAdmin claim, not consumer surfaces.
+
+           This is SCOPED suppression, deliberately narrow:
+             - consent logic and consentRecords are untouched
+             - every consumer, seller and POS surface is unaffected
+             - the banner's z-index is NOT lowered, and this is NOT a CSS hide —
+               preventing the mount avoids creating an interactive consent
+               surface that is then made inaccessible.
+           Do not broaden this test to a filename or a path pattern; registry
+           membership is the only thing that may grant it. */
+        try {
+          if (document.documentElement.getAttribute('data-sokoni-workspace') === 'admin') return;
+        } catch (_) {}
+
         if(document.getElementById("_sokoniPrivacyBanner")) return;
         const b = document.createElement("div");
         b.id = "_sokoniPrivacyBanner";

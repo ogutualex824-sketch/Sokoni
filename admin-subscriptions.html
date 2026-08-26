@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html data-admin-guard="admin" lang="en" data-splash="1">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -370,7 +373,7 @@
     /* ── Admin auth guard ─────────────────────────────────────── */
     async function checkAdminAccess() {
       const auth = window.firebaseAuth;
-      if (!auth?.currentUser) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return false; }
+      if (!auth?.currentUser) { if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return false; }
       const token = await auth.currentUser.getIdTokenResult(true).catch(() => null);
       if (!token?.claims?.admin && !token?.claims?.superAdmin) {
         SK.dialog.alert('Admin access required.'); history.back(); return false;

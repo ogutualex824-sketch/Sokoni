@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html data-admin-guard="admin" lang="en">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -93,7 +97,7 @@
 <script>
   (function(){
     const u = JSON.parse(localStorage.getItem('sokoniUser')||'{}');
-    if (!u.uid) { window.location.href='login.html?next=revenue.html'; }
+    if (!u.uid) { if (window.SokoniAdminGuard) return; window.location.href='login.html?next=revenue.html'; }
   })();
 </script>
 
@@ -453,9 +457,9 @@ buildPeriods();
 _period = document.getElementById("revPeriod").value;
 
 onAuthStateChanged(_auth, async u => {
-  if (!u) { window.location.href = "login.html?next=revenue.html"; return; }
+  if (!u) { if (window.SokoniAdminGuard) return; window.location.href = "login.html?next=revenue.html"; return; }
   const tok = await u.getIdTokenResult(true);
-  if (!tok.claims.admin) { (window._skToast||alert)("Admin access required."); window.location.href = "admin.html"; return; }
+  if (!tok.claims.admin) { (window._skToast||alert)("Admin access required."); window.location.href = "account-centre.html"; return; }
   _uid = u.uid;
   loadRevenue();
 });

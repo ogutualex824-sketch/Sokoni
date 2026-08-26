@@ -192,6 +192,18 @@ body {
     border-bottom: 1px solid var(--brd, rgba(255,255,255,0.08)) !important;
     -webkit-overflow-scrolling: touch;
   }
+  /* ── The CONTAINER must stack too ──────────────────────────────────────────
+     The rule above makes the rail `width:100%`, but a 100%-wide flex item in a
+     ROW container consumes the whole line and leaves the content pane zero
+     width. On trust-safety.html that collapsed `.main` to 0px and pushed every
+     panel off-screen — a 181px page overflow at every width <= 768.
+
+     Restyling the rail without restyling its container only half-applies the
+     pattern. `:has()` targets whatever the page calls its shell (.shell,
+     .layout, .wrap — the class name differs per console) without needing to
+     enumerate them. */
+  :has(> .sidebar) { flex-direction: column !important; }
+
   .sidebar .logo, .sidebar .sidebar-foot { display: none !important; }
   .sidebar nav, .sidebar .nav { display: flex !important; flex-direction: row !important; }
   .sidebar .ni, .sidebar .nav-item {

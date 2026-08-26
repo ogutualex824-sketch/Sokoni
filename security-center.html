@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -40,6 +44,13 @@
       min-height: 100vh;
     }
     /* ── Header ── */
+    /* Below 430px the header contents (187px of controls) exceed the row and
+       cannot wrap, overflowing the page by 28px. Wrapping needs the fixed 56px
+       height to yield as well, or the second row is clipped. */
+    @media (max-width: 430px) {
+      .soc-header { flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 8px; }
+      .soc-header-right { margin-left: 0; }
+    }
     .soc-header {
       background: var(--bg2);
       border-bottom: 1px solid var(--border);

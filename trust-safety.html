@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -24,7 +27,11 @@
 :root{--bg:#09090b;--sur:#111113;--sur2:#18181b;--brd:#1e1e22;--brd2:#2a2a30;--g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;--y:#fbbf24;--txt:#e5e7eb;--sub:#6b7280;--radius:12px}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
 .shell{display:flex;min-height:100vh}
-.sidebar{width:220px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+/* min-width:0 — a flex item's automatic minimum is MIN-CONTENT, which overrides a
+   declared width. The sidebar content forced this 220px column to 390px (the whole
+   viewport), collapsing .main to zero width and pushing every panel off-screen.
+   Third instance of the min-width:auto root cause in this remediation pass. */
+.sidebar{width:220px;min-width:0;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
 .logo{padding:18px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px}
 .logo-text{font-size:13px;font-weight:900;color:var(--r);line-height:1.2}
 .logo-sub{font-size:10px;color:var(--sub)}
@@ -39,7 +46,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .topbar h1{font-size:16px;font-weight:900;color:var(--r);flex:1}
 .content{padding:20px;flex:1}
 .panel{display:none}.panel.active{display:block}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+/* minmax(min(140px,100%),1fr) — a bare minmax(140px,...) makes 140px a HARD floor
+   for every track, so the grid overflowed rather than shrinking. min() lets the
+   floor collapse to the container width when that is narrower. */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:12px;margin-bottom:18px;min-width:0}
 .stat{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);padding:14px}
 .stat.crit{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.04)}
 .sv{font-size:24px;font-weight:900;color:var(--r);line-height:1}
@@ -319,9 +329,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 (function(){
 'use strict';
 firebase.auth().onAuthStateChanged(function(u){
-  if(!u){location.href='login.html?redirect=trust-safety.html';return;}
+  if(!u){ if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ location.href='login.html?redirect=trust-safety.html';return;}
   u.getIdTokenResult(true).then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='admin-os.html?error=insufficient_privileges';return;}
     _isSuperAdmin=t.claims.superAdmin||false;
     if(!_isSuperAdmin){document.getElementById('rv-ban').parentElement.style.opacity='.4';document.getElementById('rv-ban').disabled=true;}
     _loadDashboard();

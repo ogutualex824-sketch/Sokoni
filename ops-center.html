@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -36,7 +40,9 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
-header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+/* flex-wrap:wrap — .header-actions (151px) could not shrink or wrap, overflowing
+   the page by 129px at 390px. */
+header { flex-wrap: wrap; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
 header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.03em; }
 .header-badge { background: #1a2e1a; color: var(--green); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 100px; border: 1px solid #22c55e44; }
 .header-badge.red { background: #2e1a1a; color: var(--red); border-color: #ef444444; }
@@ -312,6 +318,7 @@ window.refresh = refresh;
 
 onAuthStateChanged(auth, user => {
   if (!user) {
+    if (window.SokoniAdminGuard) return; /* shared guard owns this redirect */ 
     window.location.href = 'login.html?redirect=ops-center.html';
     return;
   }

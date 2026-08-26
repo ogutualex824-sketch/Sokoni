@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html data-admin-guard="admin" lang="en">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -47,6 +50,10 @@
   .sec{margin:26px 0 12px;font-size:13px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  /* A grid item defaults to min-width:auto and will not shrink below its
+     min-content size, so a 632px block overflowed its 1fr track once the admin
+     shell reserved a 244px sidebar column. min-width:0 lets the track govern. */
+  .two>*{min-width:0}
   @media(max-width:820px){.two{grid-template-columns:1fr}}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
@@ -157,9 +164,9 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
   firebase.auth().onAuthStateChanged(function(u){
-    if(!u){ location.href='login.html?redirect=settlement-dashboard.html'; return; }
+    if(!u){ if (window.SokoniAdminGuard) return; location.href='login.html?redirect=settlement-dashboard.html'; return; }
     u.getIdTokenResult(true).then(function(t){
-      if(!t.claims.admin && !t.claims.superAdmin){ location.href='/'; return; }
+      if(!t.claims.admin && !t.claims.superAdmin){ location.href='admin-os.html?error=insufficient_privileges'; return; }
       loadAll();
     });
   });

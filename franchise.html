@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -590,7 +594,8 @@ document.querySelectorAll('.tab').forEach(tab => {
 ═══════════════════════════════════════════════ */
 auth.onAuthStateChanged(async user => {
   if (!user) {
-    window.location.href = 'index.html?redirect=' + encodeURIComponent(location.pathname);
+    if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ 
+    window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
     return;
   }
   currentUser = user;

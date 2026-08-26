@@ -1,6 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html data-admin-guard="admin" lang="en">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -671,7 +674,7 @@ async function checkAdminAuth() {
             document.getElementById('auth-gate-msg').textContent =
               'Not signed in — redirecting…';
             setTimeout(() => {
-              location.href = 'login.html?redirect=sfos-monitor.html';
+              if (window.SokoniAdminGuard) return; location.href = 'login.html?redirect=sfos-monitor.html';
             }, 1200);
             return;
           }
@@ -681,7 +684,7 @@ async function checkAdminAuth() {
             document.getElementById('auth-gate-msg').textContent =
               'Access denied — admin privileges required.';
             setTimeout(() => {
-              location.href = 'login.html?redirect=sfos-monitor.html';
+              if (window.SokoniAdminGuard) return; location.href = 'login.html?redirect=sfos-monitor.html';
             }, 2000);
             return;
           }

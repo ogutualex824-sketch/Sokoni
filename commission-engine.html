@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -40,6 +43,14 @@ a{color:inherit;text-decoration:none}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
+/* min-width:0 on the flex CHILDREN. A flex item defaults to min-width:auto, so
+   h1#pageTitle (157px) could not shrink and pushed this row 5px past a 390px
+   viewport. No element measured wider than the viewport, which is why the first
+   two probes found nothing — the overflow was the SUM of a row that refused to
+   compress. Same root cause as settlement-dashboard, commission-admin and the
+   trust-safety sidebar. */
+.topbar>*{min-width:0}
+.topbar #pageTitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topbar h1{font-size:18px;font-weight:900;color:var(--g);flex:1}
 .content{padding:24px;flex:1}
 
@@ -453,9 +464,9 @@ textarea.form-input{resize:vertical;min-height:72px}
 
 /* â”€â”€ Auth guard â”€â”€ */
 firebase.auth().onAuthStateChanged(function(user){
-  if(!user){location.href='login.html?redirect=commission-engine.html';return;}
+  if(!user){if (window.SokoniAdminGuard) return; location.href='login.html?redirect=commission-engine.html';return;}
   user.getIdTokenResult(true).then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='admin-os.html?error=insufficient_privileges';return;}
     _init();
   });
 });

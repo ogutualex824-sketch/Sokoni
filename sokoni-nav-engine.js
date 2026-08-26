@@ -38,6 +38,25 @@
      own customer nav regardless of workspace. */
   var _KEEP_OWN_BOTTOM = ['seller', 'pos', 'provider', 'services'];
 
+  /* AUTHENTICATED ADMIN WORKSPACE — inject nothing.
+     sokoni-admin-nav.js stamps data-sokoni-workspace="admin" on <html> for every
+     page in the admin registry, and only those.
+
+     This supersedes the hand-maintained admin entries in _SKIP above
+     ('admin', 'platform', 'sasos-admin', 'superadmin', 'monitor', 'moderation',
+     'verification-admin'). That list is why SOME admin consoles were clean while
+     others silently received the customer bottom nav: it had to be updated by
+     hand for every new admin page, and it was not. Registry membership now
+     answers the question for all 50 surfaces at once.
+
+     The old entries are LEFT IN PLACE deliberately — they still guard those
+     pages if this script somehow runs before the registry has stamped the
+     marker. Removing them would trade one race for another.
+
+     Consumer, seller and POS pages are untouched: _KEEP_OWN_BOTTOM and the rest
+     of the engine behave exactly as before. */
+  if (document.documentElement.getAttribute('data-sokoni-workspace') === 'admin') return;
+
   if (_SKIP.indexOf(_page) > -1) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
 

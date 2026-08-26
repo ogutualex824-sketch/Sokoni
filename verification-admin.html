@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -293,12 +297,12 @@
 <!-- ══ TOP BAR ══ -->
 <nav class="va-topbar" style="display:none" id="va-main-ui">
   <div class="va-topbar-left">
-    <a href="/"><img src="assets/sokoni-logo-dark.png" alt="SOKONI" class="va-topbar-logo"></a>
+    <a href="admin-os.html"><img src="assets/sokoni-logo-dark.png" alt="SOKONI" class="va-topbar-logo"></a>
     <div class="va-topbar-title"><i class="fa-solid fa-shield-halved"></i> Verification Admin</div>
   </div>
   <div class="va-topbar-right">
     <span class="va-admin-pill"><i class="fa-solid fa-user-shield"></i> Admin</span>
-    <a href="/" class="va-back-link"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+    <a href="admin.html" class="va-back-link"><i class="fa-solid fa-arrow-left"></i> Admin Dashboard</a>
   </div>
 </nav>
 
@@ -466,7 +470,7 @@
         `<i class="fa-solid fa-lock" style="font-size:40px;color:rgba(239,68,68,0.6);"></i>
          <p style="color:#ef4444;font-weight:700;">${msg}</p>
          <p style="font-size:12px;color:rgba(255,255,255,0.3);">Redirecting…</p>`;
-      setTimeout(() => { window.location.href = "/"; }, 1800);
+      setTimeout(() => { window.location.href = 'admin-os.html?error=insufficient_privileges'; }, 1800);
     };
     try {
       const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
@@ -475,7 +479,7 @@
                   initializeApp(FB_CFG, "sokoni-va");
       const auth = getAuth(app);
       onAuthStateChanged(auth, async (user) => {
-        if (!user) { deny("Sign in required"); return; }
+        if (!user) { if (window.SokoniAdminGuard) return; /* shared guard owns this */ deny("Sign in required"); return; }
         /* Force-refresh token to get latest custom claims */
         const token = await user.getIdTokenResult(true);
         if (token.claims.admin !== true) { deny("Admin access required"); return; }

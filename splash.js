@@ -16,6 +16,23 @@
   if (window.self !== window.top) return;
   if (document.documentElement.dataset.noSplash === 'true') return;
 
+  /* AUTHENTICATED ADMIN WORKSPACE — no consumer splash.
+     sokoni-admin-nav.js stamps data-sokoni-workspace="admin" on <html> for pages
+     in the admin registry, and only those.
+
+     Two reasons:
+       1. The splash overlay measured WIDER THAN THE VIEWPORT at every width on
+          revenue.html (1446px vs 1440, 403px vs 390, ...), so it alone failed the
+          "no horizontal page overflow" contract on admin surfaces.
+       2. A brand splash is consumer first-impression chrome. An admin console
+          reached only with a verified admin/superAdmin claim is not a landing
+          surface, and the splash also transiently covers admin controls.
+
+     Scoped exactly like the consent banner, the consumer header and the bottom
+     nav: registry membership is the only thing that grants it. Consumer, seller
+     and POS pages keep the splash unchanged. */
+  if (document.documentElement.getAttribute('data-sokoni-workspace') === 'admin') return;
+
   window.SokoniSplash = true;
 
   /* ── Page detection ───────────────────────────────────────────────────── */

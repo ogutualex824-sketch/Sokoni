@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -2148,6 +2152,7 @@ function _showApp() {
 }
 
 function _redirectLogin() {
+  if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ 
   window.location.href = '/login.html?redirect=' + encodeURIComponent('/executive-dashboard.html');
 }
 
@@ -2156,14 +2161,27 @@ _auth.onAuthStateChanged(async user => {
 
   let isAuthorized = false;
   try {
-    const tokenResult = await user.getIdTokenResult(/* forceRefresh */ false);
+    /* forceRefresh MUST be true. A claim granted after this session's token was
+       minted is invisible until refresh — the stale-token defect fixed platform
+       wide in d366c30. */
+    const tokenResult = await user.getIdTokenResult(/* forceRefresh */ true);
     const claims      = tokenResult.claims || {};
-    const roleVal     = claims.role || claims.userRole || claims.accessLevel || 0;
-    const roleNum     = typeof roleVal === 'string' ? parseInt(roleVal, 10) : Number(roleVal);
-    isAuthorized = roleNum >= 4 || claims.admin === true || claims.isAdmin === true;
+    /* The authoritative claim shape, matching firestore.rules isAdmin() and
+       setUserRole(). Previously this also accepted `claims.isAdmin` — a claim
+       SOKONI NEVER MINTS (setUserRole issues admin/superAdmin/seller/driver/
+       moderator/buyer) — and a numeric `role >= 4` that no issuer sets either;
+       `parseInt('superAdmin')` is NaN, so that branch was dead. Both are gone
+       rather than left as decorative conditions implying a role model that does
+       not exist. */
+    isAuthorized = claims.admin === true || claims.superAdmin === true;
   } catch (tokenErr) {
-    console.warn('[token]', tokenErr.message);
-    isAuthorized = true; // fail-open: user is signed in, let app render
+    /* FAIL CLOSED. This previously set isAuthorized = true with the comment
+       "user is signed in, let app render" — so any signed-in user reached the
+       Executive BI console by making the token read fail (a network blip or an
+       App Check rejection is enough). An authorization check that grants on
+       error is a bypass, not a fallback. */
+    console.warn('[executive-dashboard] claim verification failed — denying access:', tokenErr.message);
+    isAuthorized = false;
   }
 
   if (!isAuthorized) {
@@ -2173,10 +2191,10 @@ _auth.onAuthStateChanged(async user => {
         <div style="text-align:center;max-width:320px;padding:24px">
           <div style="font-size:40px;margin-bottom:16px">&#128512;</div>
           <div style="font-size:20px;font-weight:700;color:#f85149;margin-bottom:8px">Access Denied</div>
-          <div style="color:#8b949e;font-size:14px">Executive dashboard requires admin role (level 4+).</div>
-          <div style="margin-top:20px;display:flex;gap:12px;justify-content:center">
-            <a href="/" style="color:#58a6ff;text-decoration:none;font-size:13px">&#8592; Home</a>
-            <a href="/login.html" style="color:#58a6ff;text-decoration:none;font-size:13px">Sign In</a>
+          <div style="color:#8b949e;font-size:14px">This console requires a platform admin or super admin role.</div>
+          <div style="margin-top:20px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+            <a href="admin-os.html?error=insufficient_privileges" style="color:#58a6ff;text-decoration:none;font-size:13px">&#8592; Admin Console</a>
+            <a href="account-centre.html" style="color:#58a6ff;text-decoration:none;font-size:13px">My Account</a>
           </div>
         </div>
       `;

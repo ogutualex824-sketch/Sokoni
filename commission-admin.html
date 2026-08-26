@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -70,7 +74,9 @@ body{background:var(--bg);color:var(--txt);display:flex;flex-direction:column;mi
 .mobile-title{font-size:15px;font-weight:800;color:var(--g)}
 
 /* ── Main ── */
-.main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh}
+/* min-width:0 — a flex item defaults to min-width:auto and refuses to shrink
+   below min-content, so .main measured 402px inside a 390px shell. */
+.main{margin-left:var(--sidebar);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
 .topbar{background:var(--sur);border-bottom:1px solid var(--bor);padding:12px 24px;
   display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
 .topbar-title{font-size:17px;font-weight:800;color:var(--txt);flex:1}
@@ -807,10 +813,10 @@ var auth = firebase.auth();
 
 /* ── Auth guard ── */
 auth.onAuthStateChanged(function(user){
-  if(!user){ location.href='login.html?redirect=commission-admin.html'; return; }
+  if(!user){ if (window.SokoniAdminGuard) return; location.href='login.html?redirect=commission-admin.html'; return; }
   user.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){
-      location.href='/'; return;
+      location.href='admin-os.html?error=insufficient_privileges'; return;
     }
     document.getElementById('userEmail').textContent = user.email || user.uid;
     document.getElementById('avatarLetter').textContent =

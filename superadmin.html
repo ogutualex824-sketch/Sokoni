@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-no-header="true">
+<html data-admin-guard="superAdmin" lang="en" data-splash="1" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -78,7 +82,18 @@
                display:flex;align-items:center;justify-content:space-between;
                position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);}
     .sa-page-title{font-size:16px;font-weight:900;display:flex;align-items:center;gap:8px;}
-    .sa-topbar-right{display:flex;align-items:center;gap:12px;}
+    .sa-topbar-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    /* flex-wrap + min-width:0 applied PROACTIVELY, not after a certification failure.
+       min-width:auto on flex children accounted for six responsive defects elsewhere in
+       this programme; a nowrap topbar with a badge, a link and an avatar is exactly that
+       shape. */
+    .sa-topbar{flex-wrap:wrap;}
+    .sa-topbar>*,.sa-topbar-right>*{min-width:0;}
+    .sa-legacy-badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:900;letter-spacing:.08em;
+      background:rgba(245,158,11,.14);color:#f59e0b;border:1px solid rgba(245,158,11,.35);white-space:nowrap;}
+    .sa-canonical-link{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 12px;
+      border-radius:10px;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;
+      color:#71ff00;background:rgba(113,255,0,.10);border:1px solid rgba(113,255,0,.28);}
     .sa-env-badge{font-size:10px;font-weight:800;padding:4px 10px;border-radius:6px;
                   background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;}
     .sa-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4db800);
@@ -246,6 +261,13 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
         <i class="fas fa-chart-line" style="color:#c8ff80;"></i> Dashboard
       </div>
       <div class="sa-topbar-right">
+        <!-- LEGACY marker + the canonical destination. This console is on a controlled
+             retirement path (registry: legacy:true, migrateTo super-admin.html). An
+             operator who lands here should be able to see that and reach the canonical
+             console in one click, without this page linking itself back into the admin
+             navigation as a competing root. -->
+        <span class="sa-legacy-badge" title="This console is being retired. super-admin.html is canonical.">LEGACY</span>
+        <a class="sa-canonical-link" href="super-admin.html">Canonical Super Admin →</a>
         <span class="sa-env-badge">⚡ PRODUCTION</span>
         <div class="sa-avatar" id="saAvatar">S</div>
       </div>
@@ -451,7 +473,13 @@ const gCard  = gate.querySelector('.sa-gate-card');
 onAuthStateChanged(auth, async (user) => {
   if (!user) { _showDenied('Not signed in'); return; }
   const token = await user.getIdTokenResult(true);
-  if (!token.claims.superAdmin && !token.claims.admin) {
+  /* STRICT superAdmin, matching this page's own stated contract, the registry
+     authority, and super-admin.html. It previously accepted 'admin' as well —
+     weaker than the comment above it claimed (audit D4), so an admin without
+     superAdmin reached a console whose server-side callables would reject every
+     action. Server-side _requireSuperAdmin remains the real boundary; this is
+     defence in depth, now consistent with it. */
+  if (token.claims.superAdmin !== true) {
     _showDenied('Super Admin access only'); return;
   }
   document.getElementById('saAvatar').textContent = (user.email||'S')[0].toUpperCase();
@@ -466,7 +494,7 @@ function _showDenied(msg) {
   gCard.innerHTML = `<div class="sa-gate-denied">🚫</div>
     <div class="sa-gate-title">Access Denied</div>
     <div class="sa-gate-sub">${msg}</div>
-    <a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;
+    <a href="admin-os.html?error=insufficient_privileges" style="display:inline-block;margin-top:20px;padding:10px 24px;
        background:rgba(113,255,0,.2);border:1px solid rgba(113,255,0,.35);border-radius:10px;
        color:#c8ff80;font-weight:700;font-size:13px;text-decoration:none;">Back to Home</a>`;
 }
@@ -732,13 +760,29 @@ window.SAApp = {
 
   openGrantModal() { document.getElementById('saGrantModal').style.display='flex'; },
 
+  /* Resolve an email to the canonical uid. setUserRole takes {uid, role} — it has
+     no email lookup — so a page whose UI collects an email must do this itself.
+     Returns null when the address matches no account, so the caller can say so
+     instead of firing a call that will fail with a less useful message. */
+  async _uidForEmail(email) {
+    const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email), limit(2)));
+    if (snap.empty) return null;
+    if (snap.size > 1) throw new Error('More than one account uses that email — resolve manually.');
+    return snap.docs[0].id;
+  },
+
   async grantRole() {
     const email = document.getElementById('grantEmail').value.trim();
     const role  = document.getElementById('grantRole').value;
     if (!email) { this.toast('Enter an email'); return; }
     try {
+      const uid = await this._uidForEmail(email);
+      if (!uid) { this.toast('No account found for ' + email); return; }
+      /* CANONICAL CONTRACT: {uid, role}. This previously sent {email, role}, which
+         the server rejected with INVALID_ARGUMENT — every grant silently failed
+         while the UI reported success. */
       const setRoleFn = httpsCallable(fns, 'setUserRole');
-      await setRoleFn({ email, role });
+      await setRoleFn({ uid, role });
       document.getElementById('saGrantModal').style.display='none';
       this.toast(`Role ${role} granted to ${email}`);
       this.loadAdmins();
@@ -748,8 +792,10 @@ window.SAApp = {
   async revokeRole(uid, email) {
     if (!(await SK.dialog.confirm(`Revoke admin/moderator role from ${email}?`, null, null, { title: 'Revoke role', variant: 'danger', confirmLabel: 'Revoke' }))) return;
     try {
+      /* uid is already in hand here; the previous code sent the email instead and
+         the call always failed. */
       const setRoleFn = httpsCallable(fns, 'setUserRole');
-      await setRoleFn({ email, role: 'buyer' });
+      await setRoleFn({ uid, role: 'buyer' });
       this.toast('Role revoked'); this.loadAdmins();
     } catch(e){ this.toast('Error: '+e.message); }
   },
@@ -757,7 +803,11 @@ window.SAApp = {
   async suspendUser(uid) {
     if (!(await SK.dialog.confirm('Suspend this user?', null, null, { title: 'Suspend user', variant: 'danger', confirmLabel: 'Suspend' }))) return;
     try {
-      await updateDoc(doc(db,'users',uid), { suspended: true, suspendedAt: serverTimestamp(), suspendedBy: this._user?.uid });
+      /* Call the CANONICAL callable, which runs getAuth().updateUser({disabled:true})
+         and actually ends the session. This previously wrote users.suspended
+         directly — a field NO auth path reads — so "suspended" users kept working. */
+      const suspendFn = httpsCallable(fns, 'suspendUser');
+      await suspendFn({ uid, suspend: true });
       this.toast('User suspended'); this.loadUsers();
     } catch(e){ this.toast('Error: '+e.message); }
   },
@@ -854,7 +904,7 @@ window.SAApp = {
     document.getElementById('mon-cf').textContent = (Math.floor(Math.random()*800+200)).toLocaleString();
   },
 
-  exportUsers() { this.toast('Export queued — you'll receive a download link shortly'); },
+  exportUsers() { this.toast("Export queued — you'll receive a download link shortly"); },
 
   async signOut() {
     await signOut(auth);

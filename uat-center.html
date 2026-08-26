@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <script src="security.js"></script>
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
@@ -409,6 +409,10 @@ tr:hover td { background: rgba(255,255,255,.012); }
 
 <!-- PAGE HEADER -->
 <header class="pg-header">
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -655,16 +659,17 @@ auth = firebase.auth();
 
 /* ── Auth guard ── */
 auth.onAuthStateChanged(async user => {
-  if (!user) { location.href = '/login.html'; return; }
+  if (!user) { if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
   try {
     const tok = await user.getIdTokenResult(true);
-    if (!tok.claims.admin && !tok.claims.superAdmin) { location.href = '/login.html'; return; }
+    if (!tok.claims.admin && !tok.claims.superAdmin) { location.href = 'admin-os.html?error=insufficient_privileges'; return; }
     currentUser = user;
     document.getElementById('auth-overlay').style.display = 'none';
     init();
   } catch (e) {
     console.error('[UAT] auth', e);
-    location.href = '/login.html';
+    if (window.SokoniAdminGuard) return; /* guard owns it */
+    location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
   }
 });
 

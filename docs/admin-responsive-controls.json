@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "Certified responsive controls for the shared admin shell.",
+    "",
+    "These pages reached 7/7 (9 checks x 7 widths) on 2026-08-25 AFTER the workspace-boundary",
+    "fixes: inline !important display on the shell header/sidebar/breadcrumbs, consumer-header",
+    "suppression by registry membership, and ResizeObserver-driven chrome measurement.",
+    "",
+    "WHY THEY EXIST: sokoni-admin-shell.js, sokoni-admin-nav.js, shared-header.js and",
+    "security.js are SHARED. A Batch-2 change to any of them can silently break pages already",
+    "certified. Rerun these after every shared-shell change:",
+    "",
+    "    node scripts/certify-admin-responsive.js --controls",
+    "",
+    "A regression here means the shared shell broke, not that one page drifted. Do NOT edit",
+    "this baseline to make a run green - fix the shell, or establish that the ASSERTION was",
+    "wrong (see docs/ADMIN_BATCH1_CERTIFICATION.md, 'Control integrity')."
+  ],
+  "_baseline": [
+    "FROZEN SHELL BASELINE — 2026-08-25, after the shared tap-target fix.",
+    "",
+    "Sequence that produced it:",
+    "  fix #sk-adm-logo / #sk-adm-home hit areas  ->  beta-control 7/7  ->  controls 28/28  ->  FREEZE",
+    "",
+    "beta-control is included as a control precisely BECAUSE it detected the tap-target",
+    "regression that the original four missed: below 430px the header collapses the wordmark",
+    "and the home label, which is the only condition under which those hit areas shrink.",
+    "Dropping it would remove the only sentinel for that path."
+  ],
+  "certifiedOn": "2026-08-25",
+  "harness": "scripts/certify-admin-responsive.js",
+  "widths": [1440, 1280, 1024, 768, 430, 390, 360],
+  "checks": [
+    "no-h-overflow", "header", "logo-aspect", "nav-usable", "active-state",
+    "crumbs-fit", "header-no-cover", "tap-targets", "drawer"
+  ],
+  "controls": [
+    { "page": "ops-dashboard.html",      "expect": "7/7", "note": "was: header + logo-aspect + nav-usable failing at all widths" },
+    { "page": "beta-dashboard.html",     "expect": "7/7", "note": "was: header + nav-usable failing; drawer blocked by consumer nav overlay" },
+    { "page": "reliability-center.html", "expect": "7/7", "note": "was: header-no-cover, chrome 124 vs pad 95 from a 3-line breadcrumb reflow" },
+    { "page": "admin-feedback.html",     "expect": "7/7", "note": "was: header + logo-aspect failing at all widths" },
+    { "page": "beta-control.html",       "expect": "7/7", "note": "was: tap targets under 44px at <=430 (sk-adm-logo 22x44, sk-adm-home 34x44) — a SHARED-shell defect it alone exposed; kept as the sentinel for the narrow-width collapsed-header path" }
+  ]
+}

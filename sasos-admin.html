@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-splash="1" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -1176,12 +1179,13 @@ async function loadAuditLog() {
 /* ── Init ─────────────────────────────────────────── */
 firebase.auth().onAuthStateChanged(user => {
   if (!user) {
+    if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ 
     window.location.href = '/login.html?redirect=sasos-admin.html';
     return;
   }
   user.getIdTokenResult(true).then(tok => {
     if (!tok.claims.admin && !tok.claims.superAdmin && !tok.claims.moderator) {
-      window.location.href = '/index.html';
+      window.location.href = 'admin-os.html?error=insufficient_privileges';
       return;
     }
     tabActivated('overview');

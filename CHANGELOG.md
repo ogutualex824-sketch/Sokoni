@@ -1,3 +1,73 @@
+## [2026-08-26] — Admin programme committed; certification ledger made machine-derived
+
+**Not deployed.** Production HOLD stands. Firestore review indexes remain staged and unpushed.
+
+### superadmin.html — FUNCTIONALLY REMEDIATED · LEGACY · RETIREMENT PENDING
+
+- **Parse:** an apostrophe in "you'll" terminated a single-quoted string at line 861,
+  discarding the ENTIRE 429-line module. Every action on this privileged console was dead.
+  Pre-existing (verified identical at HEAD), not introduced by this programme.
+- **Auth:** gate tightened from `admin || superAdmin` to strict `superAdmin`, matching the
+  registry authority and this page's own stated contract.
+- **Operations:** both privileged operations were broken, and are now delegated to the
+  canonical server contracts so there is ONE authority rather than two drifting
+  implementations:
+  - `setUserRole` was sent `{email, role}`; the callable destructures `{uid, role}` and has
+    no email lookup, so EVERY grant and revoke failed with INVALID_ARGUMENT while the UI
+    reported success. Added `_uidForEmail()` resolution.
+  - Suspension wrote `users.suspended` directly — a field NO auth path reads — so a
+    suspended user kept a valid session and full access. Now calls the `suspendUser`
+    callable, which disables the Auth account.
+- **Routing:** 9/9. Added a LEGACY badge and a canonical link to `super-admin.html`.
+- **Certification: BLOCKED, not "layout 3/7".** `#saShell` computes `display:none` for the
+  entire run, so the harness measured shared chrome only. Recording 3/7 as a layout result
+  would repeat the error that invalidated the index scroll PASS.
+
+### Certification ledger — derived, not hand-maintained
+
+The hand-maintained table read 30 PASS + 0 PARTIAL + 11 BLOCKED + 0 NOT RUN = **41**, not
+50. Its membership was wrong in two directions that cancelled out: `search-quality`
+(PASS 7/7) was listed and `superadmin` was omitted, so the total of 11 looked correct.
+
+Replaced with: registry → machine ledger → cause classification → derived summary.
+`scripts/derive-certification-summary.js` **fails** rather than printing a table when its
+inputs disagree. Derived: **39 PASS / 10 BLOCKED of 49 counted surfaces** (`superadmin.html`
+excluded as legacy). Navigation: **49/50**.
+
+All 11 NOT_PASS causes are evidence-backed. `admin.html` blanks its whole document
+(`body{visibility:hidden}`, admin.html:6389) behind the 3026 passcode rather than being
+overlay-intercepted; `uat-center` lands on `login.html?next=`, so its 0/7 measured the login
+page and is recorded as a harness limitation, not dressed up as a security control.
+
+### Files affected
+
+- **Admin runtime (new):** `sokoni-admin-guard.js`, `sokoni-admin-nav.js` (50-page registry),
+  `sokoni-admin-shell.js`, `sokoni-admin-responsive.css`
+- **Injector guards:** `security.js`, `shared-header.js`, `splash.js`, `sokoni-nav-engine.js`
+  — consumer surfaces suppressed by registry membership rather than a hand-maintained
+  `_SKIP` list
+- **50 registry pages** wired to the shared shell
+- **Harnesses:** responsive (+`--out` ledger), navigation, denial-path, registry validation,
+  `audit-page-actions.js`, `derive-certification-summary.js`
+- **Evidence:** `docs/admin-certification-ledger.json`, `docs/admin-certification-causes.json`
+
+### Security
+
+- No gate weakened, no overlay dismissed, no baseline edited to green.
+- Denial-path invariant: **0 violations** across 50 surfaces.
+- Guard vs registry authority mismatches: **0**. Admin runtime loads on exactly the 50
+  registry pages and none of the other 281 root HTML files.
+- **OPEN (decision required):** `monitor.html:431` and `sasos-admin.html:1187` admit
+  `moderator` where the registry says `admin`. Not exploitable — `sasosAuditLog` is
+  `allow read: if isAdmin()`, so the server denies the reads — but the page-local gates
+  disagree with the registry and should be reconciled.
+
+### Breaking changes
+
+None.
+
+---
+
 ## [2026-08-25] — Batch 2 CLOSED: Finance section certified (10 pages)
 
 **Not deployed.** Production HOLD stands. Firestore indexes remain staged and unpushed.

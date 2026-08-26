@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -340,15 +343,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,Bl
 
 /* ── Auth guard ───────────────────────────────────────────────────────────── */
 firebase.auth().onAuthStateChanged(function (user) {
-  if (!user) { window.location.href = 'login.html?redirect=security-zero-trust-dashboard.html'; return; }
+  if (!user) { if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ window.location.href = 'login.html?redirect=security-zero-trust-dashboard.html'; return; }
 
   user.getIdTokenResult(true).then(function (tok) {
     const role = tok.claims.role || tok.claims.admin || tok.claims.superAdmin;
     const isAdminOrSuper = tok.claims.admin === true || tok.claims.superAdmin === true
       || role === 4 || role === 5 || role === 'admin' || role === 'super_admin';
-    if (!isAdminOrSuper) { window.location.href = "/"; return; }
+    if (!isAdminOrSuper) { window.location.href = "admin-os.html?error=insufficient_privileges"; return; }
     _initDashboard();
-  }).catch(function () { window.location.href = 'login.html'; });
+  }).catch(function () { if (window.SokoniAdminGuard) return; /* guard owns it */ window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); });
 });
 
 var _db, _cf;

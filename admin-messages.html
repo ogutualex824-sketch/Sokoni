@@ -1,6 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -614,9 +617,9 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 
 /* ── Auth guard ── */
 firebase.auth().onAuthStateChanged(function(user){
-  if(!user){location.href='login.html?redirect=admin-messages.html';return;}
+  if(!user){ if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ location.href='login.html?redirect=admin-messages.html';return;}
   user.getIdTokenResult(true).then(function(t){
-    if(!t.claims.admin && !t.claims.superAdmin){location.href='/';return;}
+    if(!t.claims.admin && !t.claims.superAdmin){location.href='admin-os.html?error=insufficient_privileges';return;}
     _init();
   });
 });

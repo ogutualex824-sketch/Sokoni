@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -46,7 +50,16 @@
     /* ── Header ─────────────────────────────────────── */
     .eoc-header {
       position: fixed;
-      top: 0; left: 0; right: 0;
+      /* Anchored BELOW the admin shell chrome, not at top:0.
+         This page owns a header + hamburger that drive its OWN sub-navigation
+         (Overview / Infrastructure / Platform) — legitimate page-level nav worth
+         keeping. But at top:0 it sat directly over the shell header, so the page
+         hamburger covered the shell hamburger and the workspace drawer could not
+         be opened below 1024px.
+         The shell publishes --sk-adm-header-h as a MEASURED value; the shared
+         responsive module documents this same hazard for sticky bars. One
+         authoritative workspace control (the shell), with page sub-nav beneath. */
+      top: var(--sk-adm-header-h, 0px); left: 0; right: 0;
       height: var(--eoc-header-h);
       background: var(--eoc-surface);
       border-bottom: 1px solid var(--eoc-border);
@@ -781,7 +794,8 @@ const db        = firebase.firestore();
 ═══════════════════════════════════════════════════════ */
 auth.onAuthStateChanged(user => {
   if (!user) {
-    window.location.href = '/index.html';
+    if (window.SokoniAdminGuard) return; /* shared guard owns this redirect */ 
+    window.location.replace('login.html?next=' + encodeURIComponent(location.pathname + location.search));
     return;
   }
   init();

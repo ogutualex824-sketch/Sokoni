@@ -1,0 +1,49 @@
+{
+  "_comment": [
+    "CAUSE CLASSIFICATION for every page the machine ledger records as NOT_PASS.",
+    "",
+    "docs/admin-certification-ledger.json records OBSERVATIONS ONLY and deliberately",
+    "does not decide whether a failure is a deliberate security control or a real",
+    "defect. That decision needs per-page evidence and is recorded HERE, by a human,",
+    "with the observation that supports it.",
+    "",
+    "RULE: a page may only appear here with an `evidence` field describing a real",
+    "measurement. 'BLOCKED' is not a weaker PASS and must never be assigned to make",
+    "a count look complete. Resolution for every security-class entry is real",
+    "authenticated-session verification, NOT a code change and NOT dismissing the",
+    "control.",
+    "",
+    "Measured 2026-08-26 at 390px with admin+superAdmin claims stubbed. For each",
+    "drawer failure two questions were asked: is a control topmost at the burger,",
+    "and does the drawer move on a direct click? Overlay present + mechanism working",
+    "= blocked by design. Nothing was dismissed, removed, or clicked through."
+  ],
+  "pages": {
+    "admin.html": {
+      "class": "second-factor",
+      "blocker": "3026 passcode gate blanks the document",
+      "evidence": "body{visibility:hidden} set at admin.html:6389, restored only at 6394/6399 on successful unlock. The burger inherits hidden, so elementFromPoint returns HTML. Drawer mechanism verified working (-300->0).",
+      "note": "Distinct mechanism from the z-100010 overlays: the whole body is blanked, not covered."
+    },
+    "merchant-pipeline.html": { "class": "second-factor", "blocker": "#mp-gate PIN", "evidence": "DIV#mp-gate topmost at burger centre, z=100010; drawer -300->0." },
+    "launch-readiness.html": { "class": "second-factor", "blocker": "#lr-auth-gate PIN", "evidence": "DIV#lr-auth-gate topmost, z=100010; drawer -300->0." },
+    "verification-admin.html": { "class": "own-auth-flow", "blocker": "#va-auth-check, own named Firebase app", "evidence": "DIV#va-auth-check topmost, z=100010; drawer -300->0." },
+    "enterprise-certification.html": { "class": "own-auth-flow", "blocker": "#cert-loading, reCAPTCHA", "evidence": "DIV#cert-loading topmost, z=100010; drawer -300->0." },
+    "franchise.html": { "class": "own-auth-flow", "blocker": "#authOverlay, reCAPTCHA", "evidence": "DIV#authOverlay topmost, z=100010; drawer -300->0." },
+    "executive-dashboard.html": { "class": "own-auth-flow", "blocker": "#auth-overlay, reCAPTCHA", "evidence": "DIV#auth-overlay topmost, z=100010; drawer -300->0." },
+    "messages-admin.html": { "class": "own-auth-flow", "blocker": "#auth-guard, reCAPTCHA", "evidence": "DIV#auth-guard topmost, z=100010; drawer -300->0." },
+    "release-readiness.html": { "class": "own-auth-flow", "blocker": "#authLoading, auth/invalid-api-key", "evidence": "DIV#authLoading topmost, z=100010; drawer -300->0." },
+    "superadmin.html": {
+      "class": "own-auth-flow",
+      "blocker": "#saGate, ES-module getAuth() unreachable by the compat stub",
+      "evidence": "DIV#saGate topmost, z=100010; drawer -300->0. Separately, #saShell computes display:none for the ENTIRE run, so the 3/7 measures shared chrome only and certifies nothing about this page's own layout.",
+      "note": "LEGACY surface. Excluded from the 50-page certification count."
+    },
+    "uat-center.html": {
+      "class": "harness-limitation",
+      "blocker": "real firebase.js overwrites the stub; the shared guard redirects to login",
+      "evidence": "Lands on login.html?next=%2Fuat-center.html with no shell header. The 0/7 measured the LOGIN page, so it says nothing about uat-center's layout. The preserved ?next= is correct denial behaviour.",
+      "note": "Recorded as a harness limitation, NOT dressed up as a security control."
+    }
+  }
+}

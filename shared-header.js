@@ -244,6 +244,11 @@
 
   /* Design tokens (CSS) — load first; tokens referenced by all CSS */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
+  /* Canonical toast containment — makes every toast on the page viewport-safe
+     (width clamp + safe-area + bottom-nav clearance) WITHOUT rewriting the ~81
+     page-local toast implementations. Must load after the tokens it reads
+     (--sk-safe-*, --sk-bottom-nav-h, --sk-z-toast). See sokoni-toast.css. */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-toast.css' }, 'sk-toast-link');
   /* Premium component library — .sk-card, .sk-btn-*, .sk-badge, .sk-stat, etc. */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-components.css' }, 'sk-components-link');
   /* Quality design system — --so-* tokens, focus-visible ring, WCAG touch targets, skip links */
@@ -1099,7 +1104,10 @@
       background: rgba(255,255,255,.06); display: flex; align-items: center;
       justify-content: center; font-size: 14px;
     }
-    #sk-ws-bar-logo img { width: 100%; height: 100%; object-fit: cover; }
+    /* A business logo is rarely square. width+height:100% into a 26x26 box with
+       object-fit:cover CROPPED wide logos to a square. contain preserves the
+       intrinsic aspect ratio; max-* lets it shrink without being forced to fill. */
+    #sk-ws-bar-logo img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
     #sk-ws-bar-biz {
       font-size: 12.5px; font-weight: 800; color: rgba(255,255,255,.9);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
@@ -2373,6 +2381,27 @@
 
   /* ── Inject on DOM ready ── */
   function _inject() {
+    /* AUTHENTICATED ADMIN WORKSPACE — do not inject the consumer header.
+       sokoni-admin-nav.js stamps data-sokoni-workspace="admin" on <html> for
+       pages in the admin registry, and ONLY those.
+
+       Two reasons, both observed rather than theoretical:
+         1. The injected consumer top-nav/search sat OVER the admin header and
+            made the admin hamburger unclickable at <1024px — the drawer could
+            not be opened at all on ops-dashboard, beta-dashboard and
+            reliability-center.
+         2. It is the "customer navigation masquerading as admin navigation"
+            defect from the routing audit (section C3): admin consoles were
+            inheriting Home/Shop/Services/Orders/Profile.
+
+       Scoped exactly like the consent suppression: registry membership is the
+       only thing that grants it, so a non-admin page cannot acquire it and a
+       future admin page cannot forget it. Consumer, seller and POS pages are
+       untouched. Do not widen this to a filename or path test. */
+    try {
+      if (document.documentElement.getAttribute('data-sokoni-workspace') === 'admin') return;
+    } catch (_) {}
+
     /* If the page already has a static #sk-top-nav (e.g. index.html bakes it
        in for zero-flash render), skip DOM insertion but still wire all events. */
     const _navExists = !!document.getElementById('sk-top-nav');

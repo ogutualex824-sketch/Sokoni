@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html data-admin-guard="admin" lang="en" data-splash="1">
 <head>
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -636,7 +640,7 @@ body.adm-light .adm-sec-h{color:#111;}
       <button type="button" id="bootstrapBtn" onclick="runBootstrap()" style="padding:10px 22px;background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(57,230,0,0.08));border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;font-family:inherit;width:100%;">⚡ Activate Admin Account</button>
       <div id="bootstrapMsg" style="font-size:11px;margin-top:8px;min-height:16px;"></div>
     </div>
-    <a href="seller.html" class="adm-lock-back">← Back to Seller Dashboard</a>
+    <a href="account-centre.html" class="adm-lock-back">← Back to My Account</a>
   </div>
 </div>
 
@@ -671,7 +675,7 @@ body.adm-light .adm-sec-h{color:#111;}
   <!-- TOP NAV -->
   <nav class="adm-nav">
     <div class="adm-nav-left">
-      <a href="/" style="display:flex;align-items:center;text-decoration:none;">
+      <a href="admin-os.html" style="display:flex;align-items:center;text-decoration:none;">
         <img src="assets/sokoni-logo-dark.png" class="adm-nav-logo" onerror="this.style.display='none'" alt="">
       </a>
       <span class="adm-nav-title">⚡ SOKONI Admin</span>
@@ -679,7 +683,7 @@ body.adm-light .adm-sec-h{color:#111;}
       <span class="nav-alert-dot" id="navAlertDot">0</span>
     </div>
     <div class="adm-nav-right">
-      <a href="/" class="adm-pill" style="background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);text-decoration:none;display:flex;align-items:center;gap:4px;">🏠 Home</a>
+      <a href="admin-os.html" class="adm-pill" style="background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);text-decoration:none;display:flex;align-items:center;gap:4px;">🏠 Home</a>
       <button class="adm-pill adm-pill-blue" onclick="exportAll()">📥 Export</button>
       <button class="adm-pill adm-pill-green" onclick="refreshAll()">🔄</button>
       <button class="adm-pill" id="darkModeBtn" onclick="toggleDarkMode()" title="Toggle dark/light mode" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">🌙</button>
@@ -776,7 +780,7 @@ body.adm-light .adm-sec-h{color:#111;}
         <a href="admin-feedback.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">💬 Feedback &amp; Bugs ↗</a>
         <a href="moderation.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">⚖️ Mod Dashboard ↗</a>
         <a href="email-center.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">✉️ Email Center ↗</a>
-        <a href="superadmin.html" class="adm-sidebar-btn adm-sidebar-ext" id="link-superadmin" style="text-decoration:none;display:flex;color:#c084fc!important;">👑 Super Admin ↗</a>
+        <a href="super-admin.html" class="adm-sidebar-btn adm-sidebar-ext" id="link-superadmin" style="text-decoration:none;display:flex;color:#c084fc!important;">👑 Super Admin ↗</a>
         <a href="monitor.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">🖥️ System Monitor ↗</a>
       </div>
 
@@ -6384,7 +6388,7 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/f
    the same way every other administrator does — by holding the claim. */
 document.body.style.visibility = 'hidden';
 onAuthStateChanged(auth, async function(user) {
-  if (!user) { window.location.replace('login.html'); return; }
+  if (!user) { if (window.SokoniAdminGuard) return; /* shared guard owns the signed-out redirect */ window.location.replace('login.html?next=' + encodeURIComponent(location.pathname + location.search)); return; }
   const token = await user.getIdTokenResult(true).catch(() => null);
   if (token && (token.claims.admin || token.claims.superAdmin)) {
     document.body.style.visibility = '';
@@ -6403,9 +6407,9 @@ onAuthStateChanged(auth, async function(user) {
       '<p style="font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.42);margin:0 0 18px;">' +
       'If admin rights were granted recently, sign out and back in — the token on ' +
       'this device still carries the old claims until it is reissued.</p>' +
-      '<a href="/" style="display:inline-flex;align-items:center;min-height:44px;padding:0 20px;' +
+      '<a href="account-centre.html" style="display:inline-flex;align-items:center;min-height:44px;padding:0 20px;' +
       'border-radius:11px;border:1px solid rgba(113,255,0,.3);background:rgba(113,255,0,.12);' +
-      'color:#71ff00;font-weight:700;font-size:13px;text-decoration:none;">Back to SOKONI</a>' +
+      'color:#71ff00;font-weight:700;font-size:13px;text-decoration:none;">Back to My Account</a>' +
       '</div></div>';
   }
 });

@@ -1,6 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-no-header="true">
 <head>
+<script src="/sokoni-admin-guard.js"></script>
+<script src="/sokoni-admin-nav.js"></script>
+<script src="/sokoni-admin-shell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -81,7 +84,13 @@
     .topbar  {
       position:sticky; top:0; z-index:50; background:rgba(5,5,5,.85); backdrop-filter:blur(12px);
       border-bottom:1px solid var(--bor); padding:12px 24px; display:flex; align-items:center; gap:16px;
+      /* flex-wrap + min-width:0 on the children. A flex item defaults to
+         min-width:auto and will not shrink below min-content, so this nowrap row
+         floored at 442px and overflowed every viewport <=430px. Same root cause as
+         the ops-center / security-center / automation-center headers. */
+      flex-wrap: wrap;
     }
+    .topbar > * { min-width: 0; }
     .topbar-title { font-size:18px; font-weight:700; flex:1 }
     .period-btns  { display:flex; gap:4px }
     .period-btn {
@@ -250,7 +259,7 @@
     <div class="auth-icon">🔒</div>
     <div class="auth-title">Search Quality</div>
     <div class="auth-sub">Admin access required to view search metrics.</div>
-    <button class="auth-btn" onclick="window.location='/admin'">Go to Admin Login</button>
+    <button class="auth-btn" onclick="window.location='account-centre.html'">Go to Admin Login</button>
   </div>
 </div>
 
@@ -294,7 +303,7 @@
         <div class="sb-user-role">Admin</div>
       </div>
     </div>
-    <button class="signout-btn" onclick="firebase.auth().signOut().then(()=>location.href='/login')">
+    <button class="signout-btn" onclick="firebase.auth().signOut().then(()=>location.href='login.html')">
       Sign Out
     </button>
   </div>
