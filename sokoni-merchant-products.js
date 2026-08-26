@@ -79,6 +79,45 @@
     '.pr-tag.out{color:#ff6b6b;border-color:rgba(255,107,107,.4)}',
     '.pr-tag.draft{color:#ffb020;border-color:rgba(255,176,32,.4)}',
     '.pr-state{padding:30px 18px;text-align:center;color:var(--txt2,rgba(255,255,255,.6));font-size:13.5px;line-height:1.7}',
+    '.pr-ov{padding:14px 2px 10px}',
+    '.pr-ovn{font-size:30px;font-weight:900;line-height:1;letter-spacing:-.02em}',
+    '.pr-ovn span{font-size:13px;font-weight:700;color:var(--txt3,#8b8b8b);margin-left:8px;letter-spacing:0}',
+    '.pr-ovs{margin-top:7px;font-size:12.5px;font-weight:600;color:var(--txt3,#8b8b8b)}',
+    '.pr-alert{display:flex;align-items:center;gap:8px;width:100%;margin:4px 0 12px;padding:12px 14px;',
+      'border-radius:14px;border:1px solid rgba(255,176,32,.34);background:rgba(255,176,32,.10);',
+      'color:inherit;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;text-align:left}',
+    '.pr-alert span{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--txt3,#8b8b8b);white-space:nowrap}',
+    '.pr-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}',
+    '.pr-chips::-webkit-scrollbar{display:none}',
+    '.pr-chip{flex:0 0 auto;min-width:78px;padding:9px 13px;border-radius:13px;cursor:pointer;font-family:inherit;',
+      'border:1px solid var(--line,rgba(255,255,255,.12));background:var(--card,#0e0e0e);color:inherit;text-align:left}',
+    '.pr-chip b{display:block;font-size:17px;font-weight:900;line-height:1.15}',
+    '.pr-chip small{display:block;font-size:10.5px;font-weight:700;color:var(--txt3,#8b8b8b);',
+      'text-transform:uppercase;letter-spacing:.04em;margin-top:2px}',
+    '.pr-chip.on{border-color:var(--acc,#71ff00);background:rgba(113,255,0,.09)}',
+    '.pr-chip.warn.on{border-color:#ffb020;background:rgba(255,176,32,.12)}',
+    '.pr-chip.bad.on{border-color:#ff6b6b;background:rgba(255,107,107,.12)}',
+    '.pr-quick{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}',
+    '.pr-q{flex:1 1 auto;min-height:44px;padding:11px 15px;border-radius:13px;border:0;cursor:pointer;',
+      'font-family:inherit;font-size:13.5px;font-weight:800;background:var(--acc,#71ff00);color:#050505}',
+    '.pr-q.ghost{background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.14))}',
+    '.pr-cat{font-size:11px;font-weight:700;color:var(--txt3,#8b8b8b);text-transform:uppercase;',
+      'letter-spacing:.04em;margin-top:3px}',
+    '.pr-pack{display:block;font-size:10.5px;font-weight:600;color:var(--txt3,#8b8b8b);margin-top:2px}',
+    '.pr-tag.ok{background:rgba(113,255,0,.13);color:var(--acc,#71ff00)}',
+    '.pr-tag.low{background:rgba(255,176,32,.14);color:#ffb020}',
+    '.pr-tag.unk{background:rgba(255,255,255,.07);color:var(--txt3,#8b8b8b)}',
+    '.pr-empty-i{font-size:40px;margin-bottom:10px}',
+    /* Mobile: a card/list hybrid, not desktop cards shrunk. The image becomes a thumbnail
+       beside the text so a one-handed merchant reads a real row. */
+    '@media (max-width:520px){',
+      '.pr-grid{grid-template-columns:1fr;gap:10px}',
+      '.pr-card{display:flex;gap:12px;align-items:stretch}',
+      '.pr-img,.pr-ph{width:104px;height:104px;aspect-ratio:auto;flex:0 0 104px;border-radius:12px}',
+      '.pr-b{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}',
+      '.pr-ovn{font-size:26px}',
+    '}',
+
     '.pr-sk{aspect-ratio:1/1;border-radius:14px;background:var(--card,#0e0e0e);',
     'border:1px solid var(--line,rgba(255,255,255,.10));animation:prsk 1.1s ease-in-out infinite}',
     '@keyframes prsk{0%,100%{opacity:.55}50%{opacity:.85}}',
@@ -186,19 +225,87 @@
       return n + (n === 1 ? ' product' : ' products');
     }
 
+
+    /* ── STOCK STATE, DECIDED ONCE ────────────────────────────────────────
+       Every count, chip, card badge and filter below classifies through THIS, so the
+       strip cannot say "5 low" while the list shows 4. lowStockThreshold is the
+       merchant's own field on the product (it is in the writer's whitelist); DEFAULT_LOW
+       is used only where they have not set one, and is deliberately small — inventing a
+       generous threshold would put products into "needs attention" that the merchant
+       never asked to be warned about. */
+    var DEFAULT_LOW = 5;
+    function stockState (p) {
+      /* Number(null) is 0 and isFinite(0) is true, so a bare Number() would report a
+         product with no stock figure as OUT OF STOCK — a definite claim about a shelf,
+         made from an absent field. Same trap as Number(null) rendering "KSh 0".
+         null / undefined / '' / boolean are rejected BEFORE the numeric test. */
+      var raw = p.stock;
+      if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return 'unknown';
+      var n = Number(raw);
+      if (!isFinite(n)) return 'unknown';        /* NOT "out" — unknown is not zero */
+      if (n <= 0) return 'out';
+      var t = Number(p.lowStockThreshold);
+      if (!isFinite(t) || t < 0) t = DEFAULT_LOW;
+      return n <= t ? 'low' : 'in';
+    }
+
+    function counts () {
+      var c = { all: 0, in: 0, low: 0, out: 0, unknown: 0 };
+      (S.rows || []).forEach(function (p) { c.all++; c[stockState(p)]++; });
+      return c;
+    }
+
+    /* The overview strip. Figures come from the loaded rows and nowhere else; before rows
+       exist it renders nothing rather than zeros, because 0 products and "not loaded yet"
+       are different statements. */
+    function overviewHTML () {
+      if (!S.rows) return '';
+      var c = counts();
+      var chip = function (key, label, n, cls) {
+        return '<button class="pr-chip' + (S.status === key ? ' on' : '') + (cls ? ' ' + cls : '') +
+          '" data-pr="chip" data-chip="' + key + '" aria-pressed="' + (S.status === key ? 'true' : 'false') + '">' +
+          '<b>' + n + '</b><small>' + label + '</small></button>';
+      };
+      return '<div class="pr-ov">' +
+          '<div class="pr-ovn">' + c.all + '<span>' + (c.all === 1 ? 'product' : 'products') + '</span></div>' +
+          '<div class="pr-ovs">' + c.in + ' available · ' + c.low + ' low stock · ' + c.out + ' out of stock' +
+            (c.unknown ? ' · ' + c.unknown + ' stock unknown' : '') + '</div>' +
+        '</div>' +
+        (c.low ? '<button class="pr-alert" data-pr="chip" data-chip="low">' +
+          '⚠️ ' + c.low + (c.low === 1 ? ' product needs' : ' products need') + ' attention' +
+          '<span>View low stock</span></button>' : '') +
+        '<div class="pr-chips">' +
+          chip('all', 'All', c.all) + chip('in', 'In stock', c.in) +
+          chip('low', 'Low stock', c.low, 'warn') + chip('out', 'Out of stock', c.out, 'bad') +
+        '</div>';
+    }
+
     function visible () {
       var rows = (S.rows || []).slice();
       var q = S.q.trim().toLowerCase();
       if (q) {
+        /* Searchable identifiers, all of them EXISTING product fields — brand and barcode
+           come from the specs model, variant SKUs and barcodes from the variants array.
+           A merchant holding a scanner types a barcode; a merchant holding the product
+           types its name. Both must find it. */
         rows = rows.filter(function (p) {
-          return String(p.name || p.title || '').toLowerCase().indexOf(q) > -1 ||
-                 String(p.sku || '').toLowerCase().indexOf(q) > -1 ||
-                 String(p.category || '').toLowerCase().indexOf(q) > -1;
+          var sp = p.specs || {};
+          var hay = [p.name, p.title, p.sku, p.category, sp.brand, sp.barcode, sp.model];
+          (p.variants || []).forEach(function (v) { hay.push(v.sku, v.barcode); });
+          for (var i = 0; i < hay.length; i++) {
+            if (hay[i] && String(hay[i]).toLowerCase().indexOf(q) > -1) return true;
+          }
+          return false;
         });
       }
       if (S.status === 'active')  rows = rows.filter(function (p) { return p.status === 'active'; });
       if (S.status === 'draft')   rows = rows.filter(function (p) { return p.status && p.status !== 'active'; });
-      if (S.status === 'out')     rows = rows.filter(function (p) { return Number(p.stock) === 0; });
+      /* Stock filters go through stockState — the SAME classifier the counts use, so a
+         chip reading 5 cannot open a list of 4. The old 'out' test was its own
+         `Number(p.stock) === 0`, which also swallowed a missing stock as "out". */
+      if (S.status === 'in' || S.status === 'low' || S.status === 'out') {
+        rows = rows.filter(function (p) { return stockState(p) === S.status; });
+      }
 
       var by = S.sort;
       rows.sort(function (a, b) {
@@ -213,10 +320,33 @@
       return rows;
     }
 
+
+    /* Stock, in the merchant's own unit. "24" alone is not an inventory figure — the
+       stockUnit model exists precisely so a shop counting boxes is not read as pieces.
+       An unknown stock stays an em-dash: it is not zero. */
+    function stockLine (p) {
+      var n = Number(p.stock);
+      if (!isFinite(n)) return 'Stock —';
+      var u = p.stockUnit && p.stockUnit.name ? p.stockUnit.name : null;
+      var body = esc(n) + (u ? ' ' + esc(u) : (n === 1 ? ' in stock' : ' in stock'));
+      var pack = p.stockUnit && p.stockUnit.perPack
+        ? ' <span class="pr-pack">1 ' + esc(u || 'pack') + ' = ' + esc(p.stockUnit.perPack) +
+          ' ' + esc(p.stockUnit.packUnit || 'pieces') + '</span>' : '';
+      return body + (u ? ' available' : '') + pack;
+    }
+
+    /* One visible availability state per card, from the same classifier as the counts. */
+    function statusPill (p) {
+      var st = stockState(p);
+      if (st === 'out')     return '<span class="pr-tag out">● Out of stock</span>';
+      if (st === 'low')     return '<span class="pr-tag low">⚠ Low stock</span>';
+      if (st === 'unknown') return '<span class="pr-tag unk">Stock unknown</span>';
+      return '<span class="pr-tag ok">● In stock</span>';
+    }
+
     function card (p, i) {
       var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
       var price = money(p.price);
-      var out = Number(p.stock) === 0;
       var draft = p.status && p.status !== 'active';
       return '<div class="pr-card">' +
         (img ? '<img class="pr-img" loading="lazy" alt="" src="' + esc(img) + '">'
@@ -225,8 +355,9 @@
           '<div class="pr-n">' + esc(p.name || p.title || 'Untitled') + '</div>' +
           '<div class="pr-p">' + esc(price === null ? '—' : price) + '</div>' +
           /* Stock is READ here. Changing it belongs to Inventory. */
-          '<div class="pr-m">' + (typeof p.stock === 'number' ? esc(p.stock) + ' in stock' : 'Stock —') + '</div>' +
-          (out ? '<span class="pr-tag out">Out of stock</span>' : '') +
+          '<div class="pr-m">' + stockLine(p) + '</div>' +
+          (p.category ? '<div class="pr-cat">' + esc(p.category) + '</div>' : '') +
+          statusPill(p) +
           (draft ? '<span class="pr-tag draft">' + esc(p.status) + '</span>' : '') +
           /* Indices, never interpolated ids: an id spliced into an inline handler
              is the inline-handler XSS this codebase has already been bitten by. */
@@ -257,8 +388,13 @@
       var body;
       if (!rows.length) {
         body = '<div class="pr-state">' +
-          (S.rows.length ? 'No products match this search or filter.'
-                         : 'No products yet.<br>Add your first product to start selling.') +
+          (S.rows.length
+            ? 'No products match this search or filter.<br>' +
+              '<button class="pr-btn" style="margin-top:14px" data-pr="chip" data-chip="all">Clear filters</button>'
+            : '<div class="pr-empty-i">🛍️</div>' +
+              '<b>Your shop is ready for its first product</b><br>' +
+              'Add your first item and start selling.<br>' +
+              '<button class="pr-add" style="margin-top:16px" data-pr="add">＋ Add product</button>') +
           '</div>';
       } else {
         body = '<div class="pr-grid">' + rows.map(function (p, i) { return card(p, i); }).join('') + '</div>';
@@ -268,11 +404,16 @@
       S.painted = rows;
 
       host.innerHTML =
-        '<div class="pr-top"><div class="pr-h">Products</div>' +
+        '<div class="pr-top"><div class="pr-h">🛍️ Products</div>' +
           '<div class="pr-count">' + esc(countLine()) + '</div></div>' +
-        '<div class="pr-tools" style="margin-bottom:10px">' +
-          '<button class="pr-add" data-pr="add">+ Add product</button></div>' +
-        '<div class="pr-sub">Your catalogue</div>' +
+        '<div class="pr-sub">Manage your shop catalogue</div>' +
+        overviewHTML() +
+        /* Quick actions. Inventory is a REAL merchant-v2 route and is reached through the
+           shell's own router — never a link out to the legacy shell. */
+        '<div class="pr-quick">' +
+          '<button class="pr-q" data-pr="add">＋ Add product</button>' +
+          '<button class="pr-q ghost" data-pr="go" data-route="inventory">📦 Inventory</button>' +
+        '</div>' +
         '<div class="pr-tools">' +
           '<input class="pr-search" type="search" inputmode="search" placeholder="Search products" ' +
             'aria-label="Search products" value="' + esc(S.q) + '" data-pr="q">' +
@@ -744,6 +885,34 @@
       if (k === 'sort')   { S.sort = el.value; paint(); }
     }
     function onClick (ev) {
+      /* Filter chips write the SAME S.status the select does — one filter state, so the
+         chip strip and the dropdown can never disagree about what is being shown. */
+      var chip = ev.target.closest && ev.target.closest('[data-pr="chip"]');
+      /* MATCHED, THEN VERIFIED. closest() is trusted only as far as the attribute it was
+         asked for actually being present: the certification harness stubs closest() to
+         return the same button for EVERY selector, so trusting it alone made this branch
+         swallow the submit click and no product was ever created. Reading the value and
+         requiring it is both harness-proof and stricter than the original. */
+      var chip = ev.target.closest && ev.target.closest('[data-pr="chip"]');
+      var chipKey = chip && ((chip.dataset && chip.dataset.chip) ||
+                             (chip.getAttribute && chip.getAttribute('data-chip')));
+      if (chipKey) { S.status = chipKey; paint(); return; }
+
+
+      /* Navigation belongs to the SHELL. This module never sets location and never links
+         to seller.html; it asks merchant-v2 to route, so Back, reload and the deep link
+         keep working and there is no floating back control to get wrong. */
+      var go = ev.target.closest && ev.target.closest('[data-pr="go"]');
+      var goRoute = go && ((go.dataset && go.dataset.route) || (go.getAttribute && go.getAttribute('data-route')));
+      if (goRoute) {
+        var r = goRoute;
+        try {
+          if (typeof ctx.go === 'function') ctx.go(r);
+          else if (window.SokoniShell && typeof window.SokoniShell.go === 'function') window.SokoniShell.go(r);
+        } catch (_) {}
+        return;
+      }
+
       var el = ev.target && ev.target.closest && ev.target.closest('[data-pr]');
       if (!el) return;
       var k = el.getAttribute('data-pr');

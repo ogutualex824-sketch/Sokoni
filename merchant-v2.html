@@ -1895,6 +1895,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     },
                     canPublish: _callable('canPublishProduct'),
                     storage: _mdb,
+                    /* Navigation is the SHELL's. The module asks to route rather than setting
+                       location, so Back, reload and #products keep working and it needs no
+                       navigation control of its own. */
+                    go: go,
                     onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
     staff:      { global: 'SokoniMerchantTeam',        ctx: function () { return {
