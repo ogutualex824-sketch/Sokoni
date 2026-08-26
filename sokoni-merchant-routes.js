@@ -252,6 +252,28 @@
            'express this as kind:page — iframing index.html would boot the customer application ' +
            'inside the merchant shell, the double-shell defect e0dbdca fixed.' },
 
+    /* POS setup is a REAL page outside the shell — it provisions this browser's device record
+       and writes sokoni_device_id, which is the identity the printer host is claimed with. The
+       printer-host surface points at it when a desktop is not registered.
+
+       THE ID IS NOT 'pos-setup'. That id is already taken by a kind:page route pointing at
+       pos-printer-setup.html — a DIFFERENT page that provisions nothing (0 references to
+       sokoni_device_id, bootstrapDevice or registerDevice). Two similarly named setup pages,
+       one of which is the device identity source and one of which is not; reusing the id would
+       have sent a desktop that needs provisioning to the page that cannot provision it.
+
+       It is DECLARED rather than reached with location.href = '/pos-setup'. That literal shipped
+       once, inside the printer-host wiring, and the exit contract caught it: a navigation the
+       contract cannot see is a navigation nothing can govern, which is the whole reason
+       leaveShell() refuses any route it has not been told about. */
+    { id:'pos-provision', name:'Set up this device', icon:'🛠', tier:'hidden',
+      kind:'exit', href:'/pos-setup',
+      role:['seller','merchant'], ctx:[],
+      mobile:true, desktop:true, activeKey:'pos-provision',
+      note:'Leaves the shell (full-page navigation). NEVER kind:page — pos-setup.html runs its own ' +
+           'Firebase bootstrap and device provisioning; iframing it inside the shell would give ' +
+           'a device two provisioning contexts.' },
+
     /* Signing out is a REAL navigation out of the shell, so it is declared here rather than
        performed by a raw location.assign() buried in a shell. That distinction is the whole
        security property: a module's postMessage escalating to /login once threw a merchant out

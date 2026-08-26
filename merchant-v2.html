@@ -2879,7 +2879,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         stopListener: function () { if (window.SokoniPrintHost) window.SokoniPrintHost.stop(); },
         reconnect:    function () { return autoConnectPrinter(); },
         testPrint:    function () { var btn = document.querySelector('[data-dev="test"]'); if (btn) btn.click(); },
-        openSetup:    function () { location.href = '/pos-setup'; },
+        /* Through the contract, never a literal URL. leaveShell() refuses any route the
+           contract has not declared, which is exactly the guarantee a raw location.href
+           bypasses — and did, until the exit-contract gate caught it. */
+        openSetup:    function () { go('pos-provision'); },
       });
     } catch (_) {}
     paintStatus();
