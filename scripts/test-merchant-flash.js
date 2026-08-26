@@ -157,16 +157,41 @@ const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g
   ck('NC the comment stripper left the code intact', code.indexOf('function launch') > -1);
 
   head('2 - the DISCOUNT is the server\'s, never computed here');
-  ck('the stored discountPct is displayed', /30% off/.test(ui.host.innerHTML));
+  ck('the stored discountPct is displayed', /30% off/i.test(ui.host.innerHTML));
   /* `discountPct\s*=` also matched `s.discountPct === 'number'` — a COMPARISON,
      which is the surface reading the server's value, exactly what it should do.
      The check is for an ASSIGNMENT. */
-  ck('no percentage arithmetic in the surface',
-     !/\/\s*100|\*\s*0\.\d|1\s*-\s*\w*[Pp]ct|discountPct\s*=[^=]/.test(code),
-     'a second pricing calculation is a second answer for one sale');
+
+  /* SCOPED TO THE RENDER PATH, and the narrowing is deliberate.
+     The original banned `* 100` anywhere in the file. That was right while the surface only
+     LISTED sales: any percentage here would have been a second answer to a stored figure.
+     It cannot, however, tell a stored figure from a PRE-PUBLISH PREVIEW — a sale that does
+     not exist yet, whose number is never sent and never stored.
+     The invariant that actually matters is that no computed percentage is ever shown for a
+     SAVED sale, beside the server's own. That is what is asserted now, on the two functions
+     that render saved sales; the preview is asserted separately below to stay contained. */
+  const renderPath = code.slice(code.indexOf('function saleRow'), code.indexOf('function paint'))
+                   + code.slice(code.indexOf('function performanceHTML'), code.indexOf('function openEditor'));
+  ck('NC the render path was located', renderPath.length > 600, renderPath.length + ' chars');
+  ck('no percentage arithmetic where a SAVED sale is rendered',
+     !/\/\s*100|\*\s*0\.\d|1\s*-\s*\w*[Pp]ct|discountPct\s*=[^=]/.test(renderPath),
+     'a second pricing calculation beside the server\'s is a second answer for one sale');
   ck('NC the check would catch a real computation',
      /discountPct\s*=[^=]/.test('var discountPct = (a-b)/a;'),
      'so the pass above is an absence, not a broken pattern');
+  ck('the saved card renders the SERVER value and nothing else',
+     /s2\.discountPct/.test(renderPath) && !/Math\.round\(\(\(/.test(renderPath));
+
+  /* THE PREVIEW IS CONTAINED. It may compute, because nothing has been created yet — but it
+     must never reach the server and must never be rendered for a saved sale. */
+  const preview = code.slice(code.indexOf('function discountPreview'), code.indexOf('function saleRow'));
+  ck('NC the preview was located', preview.length > 200, preview.length + ' chars');
+  ck('the preview says it is a preview',
+     /Preview/.test(code), 'so a merchant does not read it as the confirmed discount');
+  const launchFn = code.slice(code.indexOf('function launch'), code.indexOf('function load'));
+  ck('the preview value is NEVER sent to the server',
+     !/discountPct|pct/.test(launchFn),
+     'the payload carries the two prices; the server derives the discount from them');
   ck('the form asks for a PRICE, not a percentage',
      /data-ff="salePrice"/.test(code) && !/data-ff="discount(Pct)?"/.test(code),
      'so nothing here converts a percentage into money');
