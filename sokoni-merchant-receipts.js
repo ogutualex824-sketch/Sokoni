@@ -209,7 +209,25 @@
     }
 
 
-    var S = { rows: null, err: null, q: '', open: null, destroyed: false };
+    /* EVERY filter key is declared here with its default. An undefined filter is not a
+       neutral one: `if (S.pay !== 'all')` is TRUE for undefined, so the list would filter on
+       payKind(o) === undefined — which matches nothing, and every merchant would see an
+       empty Receipts page. That is exactly what shipped in b6371ad and 4043df7, because the
+       state extension silently failed to apply and the suites asserted SOURCE TEXT rather
+       than behaviour. Anything read by visible() must have a value from the first paint. */
+    var S = {
+      rows: null, err: null, q: '', open: null, destroyed: false,
+      range: 'today',          /* today | yesterday | 7d | 30d | all */
+      pay: 'all',              /* all | cash | mpesa | mixed */
+      kind: 'all',             /* all | shop | delivery | returned | cancelled */
+      cashier: 'all',          /* all | <served-by name> */
+      pins: [],                /* replaced by loadPins() on mount */
+      printSheet: false,       /* the print OPTIONS sheet, not the print itself */
+      printing: false,
+      printErr: null,
+      copies: 1,
+      withQr: true,
+    };
 
     function skeleton () {
       var c = '';
@@ -224,6 +242,23 @@
     /* ── ONE CLASSIFIER PER QUESTION ──────────────────────────────────────────
        Every count, filter and badge below asks THESE, so the summary strip cannot report a
        figure the list does not contain. */
+    /* WHO SERVED IT, read from the order exactly as the server resolved it. Never defaulted
+       to the shop owner: the receipt contract refuses to launder an unnamed employee sale
+       into an owner sale, and a filter that did so would undo that. */
+    function servedName (o) {
+      return (o.servedBy && (o.servedBy.name || o.servedBy.label)) || o.cashierName || null;
+    }
+    /* The cashier list is derived from the loaded rows, so it can only ever offer people who
+       actually served a sale in this shop — no staff directory read, no invented names. */
+    function cashierNames () {
+      var seen = {}, out = [];
+      (S.rows || []).forEach(function (o) {
+        var n = servedName(o);
+        if (n && !seen[n]) { seen[n] = 1; out.push(n); }
+      });
+      return out.sort();
+    }
+
     function payKind (o) {
       var m = String(o.method || o.paymentMethod || '').toLowerCase();
       if (/mixed|split/.test(m)) return 'mixed';
@@ -344,6 +379,7 @@
       rows = rows.filter(inRange);
       if (S.pay !== 'all')  rows = rows.filter(function (o) { return payKind(o) === S.pay; });
       if (S.kind !== 'all') rows = rows.filter(function (o) { return saleKind(o) === S.kind; });
+      if (S.cashier !== 'all') rows = rows.filter(function (o) { return servedName(o) === S.cashier; });
 
       var q = S.q.trim().toLowerCase();
       if (q) {
@@ -650,6 +686,12 @@
             sel('all', 'All payments', S.pay) + sel('mpesa', '💳 M-PESA', S.pay) +
             sel('cash', '💵 Cash', S.pay) + sel('mixed', '💰 Mixed', S.pay) +
           '</select>' +
+          (cashierNames().length > 1
+            ? '<select class="rc-sel" aria-label="Cashier" data-rc="cashier">' +
+                sel('all', '👤 All cashiers', S.cashier) +
+                cashierNames().map(function (n) { return sel(n, n, S.cashier); }).join('') +
+              '</select>'
+            : '') +
           '<select class="rc-sel" aria-label="Sale type" data-rc="kind">' +
             sel('all', 'All sales', S.kind) + sel('shop', '🛍️ Shop sale', S.kind) +
             sel('delivery', '🚚 Delivery', S.kind) + sel('returned', '↩️ Returned', S.kind) +

@@ -128,6 +128,54 @@ ok(!/seller\.html/.test(CODE), 'no reference to seller.html');
 ok(!/location\s*\.\s*(href|assign|replace)/.test(CODE), 'it never sets location');
 ok(!/<a\s[^>]*href=/i.test(CODE), 'it renders no anchor that could leave the workspace');
 
+/* ── 9b. THE FILTERS ACTUALLY RUN ─────────────────────────────────────────
+   EXECUTED, not read. Every assertion above this point checks source text, and source text
+   is exactly what hid a severe defect: the state extension silently failed to apply, so
+   S.pay and S.kind were UNDEFINED. `if (S.pay !== 'all')` is TRUE for undefined, so the list
+   filtered on payKind(o) === undefined — which matches nothing — and every merchant would
+   have opened Receipts to an empty page. Two commits shipped that way while these suites
+   stayed green.
+
+   So: run visible() against real rows, with the DEFAULT state, and require receipts back. */
+console.log('\n9b. Default filters return receipts, not an empty page');
+const runVisible = (function () {
+  const grab = (re) => (SRC.match(re) || [''])[0];
+  const parts = ['dayStart \\(offsetDays\\)', 'inRange \\(o\\)', 'payKind \\(o\\)',
+                 'saleKind \\(o\\)', 'servedName \\(o\\)', 'visible \\(\\)']
+    .map((n) => grab(new RegExp('function ' + n + ' \\{[\\s\\S]*?\\n    \\}')));
+  if (parts.some((p) => !p)) return null;
+  return (rows, over) => new Function('S',
+    parts.join('\n') + '\nreturn visible();')(Object.assign({ rows: rows }, over));
+})();
+ok(typeof runVisible === 'function', 'CONTROL: visible() and its helpers were extracted');
+
+/* The DEFAULTS as the module declares them — read from source so this cannot drift. */
+const defaults = (function () {
+  const blk = SRC.slice(SRC.indexOf('var S = {'), SRC.indexOf('function skeleton'));
+  const g = (k, d) => { const m = blk.match(new RegExp(k + ":\\s*'([a-z0-9]+)'")); return m ? m[1] : d; };
+  return { range: g('range'), pay: g('pay'), kind: g('kind'), cashier: g('cashier'), pins: [], q: '' };
+})();
+ok(defaults.pay === 'all' && defaults.kind === 'all' && defaults.cashier === 'all',
+   'the payment, type and cashier filters DEFAULT to "all"',
+   JSON.stringify(defaults));
+ok(defaults.range === 'today', 'the date filter defaults to today');
+
+const NOW_ = Date.now();
+const sample = [
+  { ref: 'R1', ts: NOW_, total: 2800, method: 'M-PESA', payment: 'paid', items: [] },
+  { ref: 'R2', ts: NOW_, total: 1500, method: 'Cash', payment: 'paid', items: [] },
+];
+const seen = runVisible(sample, defaults);
+ok(Array.isArray(seen) && seen.length === 2,
+   'today\'s receipts are RETURNED under the default filters',
+   'got ' + (seen ? seen.length : 'null') + ' of 2 — an empty page is the defect this catches');
+
+/* And the filters must genuinely narrow, or the check above passes for the wrong reason. */
+ok(runVisible(sample, Object.assign({}, defaults, { pay: 'cash' })).length === 1,
+   'CONTROL: the payment filter genuinely narrows (cash -> 1 of 2)');
+ok(runVisible(sample, Object.assign({}, defaults, { range: 'yesterday' })).length === 0,
+   'CONTROL: the date filter genuinely narrows (yesterday -> 0 of 2)');
+
 /* ── 10. THE VIEWER ───────────────────────────────────────────────────────── */
 console.log('\n10. The receipt viewer');
 const sheetFn = CODE.slice(CODE.indexOf('function sheet ()'), CODE.indexOf('function sel ('));
