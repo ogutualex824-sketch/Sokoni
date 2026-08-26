@@ -117,6 +117,22 @@
       '.pr-b{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}',
       '.pr-ovn{font-size:26px}',
     '}',
+    '.pr-sec{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;',
+      'color:var(--txt3,#8b8b8b);margin:18px 0 8px;padding-top:14px;',
+      'border-top:1px solid var(--line,rgba(255,255,255,.10))}',
+    '.pr-mrow{display:flex;gap:8px}',
+    '.pr-mrow .pr-i{flex:1;min-width:0}',
+    '.pr-u{flex:0 0 92px !important;min-width:92px}',
+    '.pr-dim{display:flex;gap:8px;align-items:center;margin-bottom:8px}',
+    '.pr-dim span{flex:0 0 62px;font-size:12px;font-weight:700;color:var(--txt3,#8b8b8b)}',
+    '.pr-dim .pr-i{flex:1;min-width:0}',
+    '.pr-cust{display:flex;gap:8px;margin-bottom:8px}',
+    '.pr-cust .pr-i{flex:1;min-width:0}',
+    '.pr-addspec{width:100%;min-height:44px;margin-top:4px;border-radius:12px;cursor:pointer;',
+      'font-family:inherit;font-size:13px;font-weight:800;background:transparent;color:inherit;',
+      'border:1px dashed var(--line,rgba(255,255,255,.22))}',
+    '.pr-unit{font-weight:700;color:var(--txt3,#8b8b8b);text-transform:none;letter-spacing:0}',
+
 
     '.pr-sk{aspect-ratio:1/1;border-radius:14px;background:var(--card,#0e0e0e);',
     'border:1px solid var(--line,rgba(255,255,255,.10));animation:prsk 1.1s ease-in-out infinite}',
@@ -534,6 +550,42 @@
           out[k] = raw;
         }
       });
+      /* ── SPECIFICATIONS ───────────────────────────────────────────────────
+         Spec inputs carry dotted keys (spec.weight.v, spec.dimensions.length.u,
+         stockUnit.perPack) because the form is flat and the model is not. They are
+         assembled here rather than added to FORM_KEYS: that whitelist is a fixed list of
+         top-level product fields, and specs are open-ended by design — a merchant may name
+         one we never anticipated.
+
+         An empty input is ABSENT, not zero — the same rule the numeric fields above follow.
+         A blank weight must not become a weight of 0. */
+      var nested = {};
+      Object.keys(v).forEach(function (k) {
+        if (k.indexOf('spec.') !== 0 && k.indexOf('stockUnit.') !== 0) return;
+        var raw = v[k];
+        if (raw === '' || raw === null || raw === undefined) return;
+        var path = k.split('.');
+        var cur = nested;
+        for (var i = 0; i < path.length - 1; i++) {
+          cur[path[i]] = cur[path[i]] || {};
+          cur = cur[path[i]];
+        }
+        cur[path[path.length - 1]] = raw;
+      });
+
+      /* custom.0.name / custom.0.value / custom.0.unit -> an array the model understands.
+         A row with no name is dropped: an unnamed value is not a specification. */
+      if (nested.spec && nested.spec.custom) {
+        var rows = nested.spec.custom;
+        nested.spec.custom = Object.keys(rows)
+          .sort(function (a, b) { return Number(a) - Number(b); })
+          .map(function (i) { return rows[i]; })
+          .filter(function (r) { return r && String(r.name || '').trim(); });
+        if (!nested.spec.custom.length) delete nested.spec.custom;
+      }
+
+      if (nested.spec && Object.keys(nested.spec).length) out.specs = nested.spec;
+      if (nested.stockUnit && nested.stockUnit.name) out.stockUnit = nested.stockUnit;
       return out;
     }
     /* Only what actually CHANGED is sent. Sending the whole form on every edit
@@ -797,6 +849,138 @@
         (note ? '<div class="pr-note">' + esc(note) + '</div>' : '') + '</div>';
     }
 
+
+    /* The specification model, or null when its script did not load. Specs are optional
+       data: without the model the section is simply not offered and a product still saves
+       with its name, price and stock. */
+    function specModel () {
+      return (typeof window !== 'undefined' && window.SokoniProductSpecs) || null;
+    }
+
+    /* A value + unit pair. The unit list comes from the model, so the editor cannot offer
+       a unit the writer would then refuse. */
+    function measureField (key, label, dim, cur, defUnit) {
+      var SP = specModel();
+      var units = (SP && SP.UNITS[dim]) ? Object.keys(SP.UNITS[dim].units) : [];
+      var v = (cur && (cur.v !== undefined ? cur.v : cur.value));
+      var u = (cur && (cur.u || cur.unit)) || defUnit || units[0] || '';
+      return '<div class="pr-f pr-meas">' +
+        '<label class="pr-l" for="pf-' + key + '-v">' + esc(label) + '</label>' +
+        '<div class="pr-mrow">' +
+          '<input class="pr-i" id="pf-' + key + '-v" data-pf="spec.' + key + '.v" type="number" ' +
+            'inputmode="decimal" step="any" placeholder="—" value="' + esc(v == null ? '' : v) + '">' +
+          '<select class="pr-i pr-u" aria-label="' + esc(label) + ' unit" data-pf="spec.' + key + '.u">' +
+            units.map(function (x) { return opt(x, x, u); }).join('') +
+          '</select>' +
+        '</div></div>';
+    }
+
+    /* Dimensions read as one thing, so they are grouped rather than three loose rows. */
+    function dimensionField (cur) {
+      var SP = specModel();
+      var units = (SP && SP.UNITS.length) ? Object.keys(SP.UNITS.length.units) : [];
+      var row = function (k, label) {
+        var m = (cur && cur[k]) || null;
+        var v = m && (m.v !== undefined ? m.v : m.value);
+        var u = (m && (m.u || m.unit)) || 'cm';
+        return '<div class="pr-dim">' +
+          '<span>' + esc(label) + '</span>' +
+          '<input class="pr-i" data-pf="spec.dimensions.' + k + '.v" type="number" inputmode="decimal" ' +
+            'step="any" placeholder="—" aria-label="' + esc(label) + '" value="' + esc(v == null ? '' : v) + '">' +
+          '<select class="pr-i pr-u" aria-label="' + esc(label) + ' unit" data-pf="spec.dimensions.' + k + '.u">' +
+            units.map(function (x) { return opt(x, x, u); }).join('') + '</select>' +
+        '</div>';
+      };
+      return '<div class="pr-f"><label class="pr-l">Dimensions</label>' +
+        row('length', 'Length') + row('width', 'Width') + row('height', 'Height') + '</div>';
+    }
+
+    /* Category-suggested specifications. SUGGESTIONS, not a schema: an unknown category
+       simply offers none, and the product is still complete. This is what stops a car
+       getting a meaningless "size" and gives it mileage and engine capacity instead. */
+    function suggestedHTML (category, specs) {
+      var SP = specModel();
+      if (!SP) return '';
+      var list = SP.suggestionsFor(category);
+      if (!list.length) return '';
+      var label = (SP.categoryKey(category) || category || '').toString();
+      return '<div class="pr-sec">' + esc(label.charAt(0).toUpperCase() + label.slice(1)) + ' details</div>' +
+        list.map(function (d) {
+          var cur = specs[d.key];
+          if (d.type === 'measure' && d.dim) return measureField(d.key, d.label, d.dim, cur, d.unit);
+          if (d.type === 'measure') {
+            /* A unit the dimension tables do not carry (mAh, cc) — fixed, and shown. */
+            return '<div class="pr-f"><label class="pr-l" for="pf-' + d.key + '">' + esc(d.label) +
+              ' <span class="pr-unit">' + esc(d.unit || '') + '</span></label>' +
+              '<input class="pr-i" id="pf-' + d.key + '" data-pf="spec.' + d.key + '.v" type="number" ' +
+              'inputmode="decimal" step="any" value="' + esc(cur && cur.v != null ? cur.v : '') + '">' +
+              '<input type="hidden" data-pf="spec.' + d.key + '.u" value="' + esc(d.unit || '') + '">' +
+              '</div>';
+          }
+          var val = (cur && cur.v !== undefined) ? cur.v : cur;
+          var attrs = d.type === 'number' ? 'type="number" inputmode="numeric" step="1"'
+                    : d.type === 'date' ? 'type="date"'
+                    : 'type="text" autocomplete="off" maxlength="120"';
+          return '<div class="pr-f"><label class="pr-l" for="pf-' + d.key + '">' + esc(d.label) + '</label>' +
+            '<input class="pr-i" id="pf-' + d.key + '" data-pf="spec.' + d.key + '" ' + attrs +
+            ' value="' + esc(val == null ? '' : val) + '"></div>';
+        }).join('');
+    }
+
+    /* Merchant-defined specifications. The escape hatch that means an unusual product does
+       not need a code change — a battery in mAh must not be forced into kilograms. */
+    function customHTML (specs) {
+      var rows = (specs && specs.custom) || [];
+      var extra = S.editor && S.editor.customRows ? S.editor.customRows : 0;
+      var n = Math.max(rows.length + extra, rows.length);
+      var out = '';
+      for (var i = 0; i < n; i++) {
+        var r = rows[i] || {};
+        out += '<div class="pr-cust">' +
+          '<input class="pr-i" data-pf="spec.custom.' + i + '.name" type="text" maxlength="60" ' +
+            'placeholder="Specification" aria-label="Specification name" value="' + esc(r.name || '') + '">' +
+          '<input class="pr-i" data-pf="spec.custom.' + i + '.value" type="text" maxlength="60" ' +
+            'placeholder="Value" aria-label="Value" value="' + esc(r.value == null ? '' : r.value) + '">' +
+          '<input class="pr-i pr-u" data-pf="spec.custom.' + i + '.unit" type="text" maxlength="16" ' +
+            'placeholder="Unit" aria-label="Unit" value="' + esc(r.unit || '') + '">' +
+        '</div>';
+      }
+      return '<div class="pr-sec">More specifications</div>' + out +
+        '<button type="button" class="pr-addspec" data-pr="addspec">＋ Add specification</button>';
+    }
+
+    /* What "20" means. Without this a stock figure is ambiguous the moment a shop counts
+       in anything but pieces, which is precisely what POS and Inventory read. */
+    function stockUnitHTML (p) {
+      var SP = specModel();
+      var units = SP ? SP.STOCK_UNITS : [];
+      var su = p.stockUnit || {};
+      return '<div class="pr-row">' +
+        '<div class="pr-f"><label class="pr-l" for="pf-su">Counted in</label>' +
+          '<select class="pr-i" id="pf-su" data-pf="stockUnit.name">' +
+            '<option value="">—</option>' +
+            units.map(function (x) { return opt(x, x, su.name || ''); }).join('') +
+          '</select></div>' +
+        '<div class="pr-f"><label class="pr-l" for="pf-supp">Units per pack</label>' +
+          '<input class="pr-i" id="pf-supp" data-pf="stockUnit.perPack" type="number" inputmode="numeric" ' +
+            'min="1" step="1" placeholder="—" value="' + esc(su.perPack == null ? '' : su.perPack) + '">' +
+          '<div class="pr-note">For boxes, crates or packs — how many pieces are inside one.</div>' +
+        '</div></div>';
+    }
+
+    function specsHTML (p) {
+      if (!specModel()) return '';
+      var specs = p.specs || {};
+      return '<div class="pr-sec">📏 Specifications</div>' +
+        fld('spec.brand', 'Brand', 'type="text" autocomplete="off" maxlength="80"', specs.brand) +
+        fld('spec.barcode', 'Barcode', 'type="text" autocomplete="off" maxlength="64" inputmode="numeric"', specs.barcode) +
+        measureField('weight', 'Weight', 'weight', specs.weight, 'kg') +
+        dimensionField(specs.dimensions) +
+        measureField('capacity', 'Capacity', 'volume', specs.capacity, 'l') +
+        suggestedHTML(p.category, specs) +
+        customHTML(specs);
+    }
+
     function editorHTML () {
       var E = S.editor;
       if (E.mode === 'photos') return photosHTML();
@@ -833,6 +1017,8 @@
           fld('sku', 'SKU', 'type="text" autocomplete="off" maxlength="64"', p.sku) +
         '</div>' +
         fld('category', 'Category', 'type="text" autocomplete="off" maxlength="64"', p.category) +
+        stockUnitHTML(p) +
+        specsHTML(p) +
         '<div class="pr-f"><label class="pr-l" for="pf-description">Description</label>' +
           '<textarea class="pr-i" id="pf-description" data-pf="description" maxlength="4000">' +
           esc(p.description || '') + '</textarea></div>' +
@@ -885,6 +1071,17 @@
       if (k === 'sort')   { S.sort = el.value; paint(); }
     }
     function onClick (ev) {
+      /* One more empty custom row. captureForm() first, so the rows the merchant has
+         already typed survive the repaint — rebuilding the sheet without capturing would
+         discard them, which is the kind of loss that makes people distrust a form. */
+      var addspec = ev.target.closest && ev.target.closest('[data-pr="addspec"]');
+      if (addspec && addspec.getAttribute && addspec.getAttribute('data-pr') === 'addspec') {
+        captureForm();
+        S.editor.customRows = (S.editor.customRows || 0) + 1;
+        paint();
+        return;
+      }
+
       /* Filter chips write the SAME S.status the select does — one filter state, so the
          chip strip and the dropdown can never disagree about what is being shown. */
       var chip = ev.target.closest && ev.target.closest('[data-pr="chip"]');
