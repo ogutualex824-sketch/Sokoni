@@ -41,6 +41,18 @@ Measured against the code, that invariant does not hold.
 Only **three** modules consume the primitive: `application-lifecycle.js`,
 `automation-engine.js`, `wap.js`.
 
+### A THIRD layer: `data-require-role` is declared but never read (found 2026-08-26)
+
+`auth-guard.js` gates on client-writable `localStorage` and contains **zero** references to
+`role` or `claims`, so `data-require-role` is enforced by nothing. Two pages rely on it as
+their only client gate: `finos.html` and `dispatch.html`.
+See `docs/DEFECT_UNENFORCED_REQUIRE_ROLE.md`.
+
+**Consequence for item 2 (writer contract):** the convergence work must also settle who READS
+role state on the client. Three mechanisms now coexist — `data-admin-guard` (claims),
+`data-require-role` (unenforced), and `sokoni-role-authority.js` — and only the first is known
+to enforce anything.
+
 ### A CLIENT-side authority also exists (found 2026-08-26)
 
 `sokoni-role-authority.js` is present in production and **absent from the branch**. This
