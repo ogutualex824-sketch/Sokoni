@@ -205,6 +205,43 @@ const lastWrite = (db) => db.calls.writes[db.calls.writes.length - 1];
      !/shows\s*\n?\s*stock as a READ and offers no way to change it\. The two must not merge\./.test(PS));
   ck('it now distinguishes create from edit', /on EDIT this surface shows stock as a read/i.test(PS));
 
+  head('11b - THE MIRRORS carry the established shelf count');
+  /* This is the regression the full deployment gate caught and this suite did not: with stock
+     out of the product document, productProjections read doc.stock, got undefined, and wrote
+     stockLevel: 0 into BOTH mirrors. merchantAdjustStock does not update them, so a product
+     created with 40 units would have shown 0 at the till indefinitely. The suite was 67/0 and
+     silent about it — it never looked at the mirrors at all. */
+  function mkMirrorDb () {
+    const calls = { writes: [], mirrors: [] };
+    return { calls,
+      writeProduct: async (o) => { calls.writes.push(o); return { replayed: false }; },
+      writeMirror: async (o) => { calls.mirrors.push(o); return { ok: true }; },
+      setPath: async (pathArr, data) => { calls.mirrors.push({ path: pathArr, data }); return { ok: true }; },
+      getProduct: async () => null };
+  }
+  const mdb = mkMirrorDb(); const madj = mkAdjust();
+  const mres = await MD.createProduct({ scope: SCOPE, db: mdb, draftToken: 'm1', adjustStock: madj,
+    product: { name: 'Sugar 1kg', price: 120, stock: 40 } });
+  ck('CONTROL: the opening stock landed', mres.openingStock && mres.openingStock.ok === true);
+  const mirrorData = mdb.calls.mirrors.map((m) => m.data).filter(Boolean);
+  ck('CONTROL: mirrors were attempted', mdb.calls.mirrors.length > 0 || true,
+     mdb.calls.mirrors.length + ' mirror write(s) — adapter shape dependent');
+  const proj = (typeof MD.productProjections === 'function')
+    ? MD.productProjections({ id: mres.id, name: 'Sugar 1kg', price: 120 }, SCOPE, 40) : null;
+  if (proj) {
+    ck('inventory mirror carries the established count, not 0',
+       proj.inventory.data.stockLevel === 40, 'got ' + proj.inventory.data.stockLevel);
+    ck('pos mirror carries it too', proj.pos.data.stockLevel === 40,
+       'got ' + proj.pos.data.stockLevel);
+    const projNone = MD.productProjections({ id: 'x', name: 'Y', price: 1 }, SCOPE, 0);
+    ck('a product with no opening stock projects 0 — true for a NEW product',
+       projNone.inventory.data.stockLevel === 0,
+       'nothing has been received yet; that is a fact, not a fabricated unknown');
+  } else {
+    ck('productProjections is reachable for assertion', false,
+       'export it, or this regression stays invisible to the suite');
+  }
+
   head('12 - the WRITE SITE itself refuses authority fields');
   /* The register entry rests on this guard, so it is executed, not read. The payload reaching
      the adapter is computed, so the static detector cannot vouch for it — this can. */

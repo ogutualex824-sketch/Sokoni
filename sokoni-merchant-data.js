@@ -356,7 +356,19 @@
          already committed — but it is never hidden either. */
   var PRODUCT_MIRRORS = ['inventory', 'pos'];
 
-  function productProjections(doc, scope) {
+  /* THE SHELF COUNT THE PROJECTIONS CARRY.
+     `doc.stock` no longer exists — stock left the product metadata write and moved to the
+     inventory authority. Reading it from the doc therefore yielded 0 for EVERY product, and
+     both mirrors (inventory_products.stockLevel, posProducts.stockLevel) told the till a
+     product with 40 units had none. merchantAdjustStock does not update these projections, so
+     that 0 would have stood indefinitely.
+
+     `established` is what the authority actually put on the shelf: the opening quantity when
+     the adjustment succeeded, and 0 when there was none. For a NEW product 0 is a true
+     statement — nothing has been received yet — which is different from rendering an unknown
+     count as zero. When an opening adjustment FAILED, the caller passes 0 too: claiming stock
+     the authority refused would be the fabrication. */
+  function productProjections(doc, scope, established) {
     /* The image the product actually has. Empty at creation — a product is valid
        without pictures — and filled once attachProductImages has real Storage
        addresses. Never a data: URI: the canonical rule rejects those outright,
@@ -367,7 +379,9 @@
     var wh  = doc.warehouseId || scope.shopId || 'main';
     var price = Number(doc.price) || 0;
     var cost  = Number(doc.costPrice) || 0;
-    var stock = Number(doc.stock) || 0;
+    var stock = (established !== undefined && established !== null)
+      ? Number(established) || 0
+      : Number(doc.stock) || 0;
     return {
       inventory: {
         path: ['tenants', scope.sellerUid, 'inventory_products', doc.id],
@@ -395,9 +409,9 @@
 
   /* Never throws. A mirror is a projection of a record that already exists; its
      failure is reported, not raised, and never rolls back the canonical write. */
-  async function _writeMirrors(db, doc, scope) {
+  async function _writeMirrors(db, doc, scope, established) {
     var out = {};
-    var proj = productProjections(doc, scope);
+    var proj = productProjections(doc, scope, established);
     for (var i = 0; i < PRODUCT_MIRRORS.length; i++) {
       var key = PRODUCT_MIRRORS[i];
       if (!db || typeof db.writeMirror !== 'function') { out[key] = { state: 'unavailable' }; continue; }
@@ -515,7 +529,9 @@
     /* Mirrors run on a replay too. They are merge-writes keyed by the same id, so
        repeating one changes nothing — and a replay is exactly how a mirror that
        failed the first time gets repaired. */
-    var mirrors = await _writeMirrors(o.db, doc, scope);
+    /* The mirrors run AFTER the opening adjustment, and carry what it actually established. */
+    var mirrors = await _writeMirrors(o.db, doc, scope,
+      (stockResult && stockResult.ok) ? stockResult.opening : 0);
 
     return {
       id: id, product: doc, replayed: !!(res && res.replayed),

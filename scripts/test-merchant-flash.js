@@ -287,7 +287,15 @@ const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g
 
   head('10 - the route is native, and lifecycle is clean');
   const routes = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8');
-  const entry = routes.slice(routes.indexOf("id:'flash-sale'"), routes.indexOf("id:'flash-sale'") + 300);
+  /* Brace-matched, not a fixed 300-char window. The window fell short the moment the
+     declaration's comment grew, reporting "not native" about a route that plainly is —
+     a test failing on formatting rather than on behaviour. */
+  const _fs0 = routes.lastIndexOf('{', routes.indexOf("id:'flash-sale'"));
+  let _fd = 0, _fe = -1;
+  for (let i = _fs0; i < routes.length; i++) {
+    if (routes[i] === '{') _fd++; else if (routes[i] === '}') { _fd--; if (!_fd) { _fe = i + 1; break; } }
+  }
+  const entry = routes.slice(_fs0, _fe);
   ck('the registry declares it native', /kind:'native'/.test(entry));
   /* `sec:'flash'` is RETAINED, and this assertion was inverted deliberately.
      It was written at 381bf04, before the compatibility resolver landed at 9f3ec8c. Back then
@@ -299,7 +307,19 @@ const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g
 
      The invariant the original was reaching for — that the legacy shell no longer serves this
      route — is asserted below on KIND, which is what actually decides. */
-  ck('it keeps sec as the legacy inbound key', /sec:'flash'/.test(entry));
+  /* sec is GONE. ?sec=flash becomes #flash, which is NOT this route's id — the ALIAS
+     flash -> flash-sale is what carries that bookmark, and always was. The field was never
+     read on a native route, so keeping it asserted a mechanism that did not exist. */
+  ck('the stale sec field is gone', !/sec:'flash'/.test(entry));
+  /* The contract is not otherwise loaded in this suite, so load a private copy rather than
+     assume a global exists — the first attempt referenced an `API` this file never had. */
+  const _rc = (function () {
+    const w = {}; w.window = w;
+    new Function('window', 'globalThis', routes)(w, w);
+    return w.SokoniMerchantRoutes;
+  })();
+  ck('and the ALIAS is what carries ?sec=flash',
+     _rc.resolve('flash') === 'flash-sale', 'resolve("flash") = ' + _rc.resolve('flash'));
   ck('and the legacy shell no longer RENDERS it (kind decides, not sec)',
      !/kind:'seller'[^}]*sec:'flash'/.test(routes));
   const before = listeners.filter((l) => l.el === doc).length;

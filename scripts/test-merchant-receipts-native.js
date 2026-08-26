@@ -30,7 +30,12 @@ const r = API.get('receipts');
 ok(!!r, 'CONTROL: the receipts route exists');
 ok(r.kind === 'native', 'receipts is kind:native (was kind:seller -> seller.html in a frame)',
    'kind is "' + r.kind + '"');
-ok(r.sec === 'receipts', 'sec:"receipts" is RETAINED as the legacy inbound key');
+/* sec is GONE. ?sec=receipts becomes #receipts, which matches this route's ID — the field
+   played no part in that and was never read on a native route. See
+   scripts/test-route-native-sec-contract.js for the full inbound matrix, executed. */
+ok(r.sec === undefined, 'the stale sec field is gone from the native route');
+ok(API.resolve('receipts') === 'receipts',
+   'and ?sec=receipts -> #receipts still lands here, by ID');
 ok(API.resolve('receipts') === 'receipts', 'the legacy section key still resolves');
 
 /* ── 2. THE SHELL MOUNTS IT ───────────────────────────────────────────────── */

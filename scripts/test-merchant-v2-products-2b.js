@@ -155,14 +155,20 @@ async function settle(n = 8) { for (let i = 0; i < n; i++) await tick(); }
 function mountUI(db, opts = {}) {
   const host = mkEl('div');
   const toasts = [];
+  const adjusted = [];
   const inst = UI.mount(host, {
     scope: opts.scope || SCOPE,
     db,
     entitlement: async () => ({ uploadLimit: 50 }),
     canPublish: opts.canPublish || allow,
+    /* THE INVENTORY AUTHORITY — the same dep the shell supplies. Opening stock no longer
+       rides in the product document; without this adapter the quantity never lands, and the
+       projections correctly report 0 rather than claiming a shelf count nobody established.
+       Omitting it here made this suite assert the OLD behaviour. */
+    adjustStock: opts.adjustStock || (async (payload) => { adjusted.push(payload); return { ok: true }; }),
     onToast: (m) => toasts.push(m),
   });
-  return { host, inst, toasts };
+  return { host, inst, toasts, adjusted };
 }
 function fire(host, type, node) {
   listeners.filter((l) => l.el === host && l.t === type).forEach((l) => l.fn({ target: node }));
@@ -209,6 +215,13 @@ function fill(host, values) {
      !!db.mirrors['tenants/' + UID + '/inventory_products/' + made.id]);
   ck('the POS projection landed', !!db.mirrors['posProducts/' + made.id]);
   const inv = db.mirrors['tenants/' + UID + '/inventory_products/' + made.id];
+  ck('the opening stock went to the inventory authority, not the document',
+     ui.adjusted.length === 1 && ui.adjusted[0].delta === 12,
+     'delta ' + (ui.adjusted[0] && ui.adjusted[0].delta));
+  ck('and the product document carries no stock', made.stock === undefined,
+     'stock in the doc would be an untransacted shelf count');
+  /* stockLevel still reads 12 — the projections carry what the authority ESTABLISHED, which
+     is the whole point: the till must not disagree with Inventory. */
   ck('Inventory is PRODUCTION-SHAPED, not a copy',
      inv.sellingPrice === 40 && inv.buyingPrice === 25 && inv.stockLevel === 12 &&
      inv.tenantId === UID && inv.sourceProductId === made.id,
@@ -249,7 +262,13 @@ function fill(host, values) {
   click(ui.host, '[data-pr="edit"]');
   ck('the form is pre-filled from the stored record',
      ui.host.querySelector('[data-pf="name"]').value === 'Old name');
-  fill(ui.host, { name: 'Old name', price: '150', costPrice: '', stock: '4', sku: '',
+  /* EDIT MODE OFFERS NO STOCK CONTROL. Changing an existing product's shelf count is
+     inventory movement and belongs to merchantAdjustStock; rendering an input the writer then
+     refuses would be a control that lies. Asserted, not just omitted from the fill. */
+  ck('the edit form offers no stock input',
+     !ui.host.querySelector('[data-pf="stock"]'),
+     'stock is changed in Inventory, and the form says so');
+  fill(ui.host, { name: 'Old name', price: '150', costPrice: '', sku: '',
                   category: 'Tools', description: '', status: 'active' });
   click(ui.host, '[data-pr="submit"]');
   await settle(14);

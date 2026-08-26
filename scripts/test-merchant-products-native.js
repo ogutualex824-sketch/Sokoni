@@ -38,11 +38,20 @@ ok(products.kind === 'native',
    'products is kind:native (was kind:seller -> seller.html in an iframe)',
    'kind is "' + products.kind + '"');
 
-/* sec MUST survive the flip. It is the legacy inbound vocabulary — seller.html's
-   compatibility resolver forwards ?sec=products by this name. Dropping it would break
-   every bookmark, email link and server-generated URL on the day this shipped. */
-ok(products.sec === 'products',
-   'sec:"products" is RETAINED as the legacy inbound key');
+/* sec is GONE from this native route, and the paragraph that used to defend it was wrong.
+
+   TWO DIFFERENT THINGS SHARE THE NAME:
+     URL PARAMETER  ?sec=products   read by seller.html's redirect, which carries NO map and
+                                    forwards the raw key as a hash
+     ROUTE FIELD    sec:'products'  a property on the declaration
+
+   seller.html never reads the field. resolve() never reads it either — it matches by route id,
+   then ALIASES. The only runtime reader is merchant-v2's mount branch, gated on
+   kind === 'seller'. Inbound compatibility is carried by THIS ROUTE'S ID, which is asserted
+   below by executing the resolver instead of trusting the field's presence. */
+ok(products.sec === undefined, 'the stale sec field is gone from the native route');
+ok(API.resolve('products') === 'products',
+   'and ?sec=products -> #products still lands here, by ID');
 ok(API.SELLER_SECTIONS.indexOf('products') >= 0,
    'products stays in SELLER_SECTIONS, so the gate keeps validating it');
 ok(API.resolve('products') === 'products',
@@ -61,8 +70,15 @@ ok(v2.indexOf('sokoni-merchant-media.js') < v2.indexOf('sokoni-merchant-products
    'media loads BEFORE products');
 
 const modEntry = (function () {
+  /* Brace-matched. The 900-char window stopped short once the module ctx gained the
+     inventory adapter, so canPublish fell outside and the test reported it missing. */
   const i = v2.indexOf('products:   { global:');
-  return i < 0 ? '' : v2.slice(i, i + 900);
+  if (i < 0) return '';
+  let d = 0, end = -1;
+  for (let j = v2.indexOf('{', i); j < v2.length; j++) {
+    if (v2[j] === '{') d++; else if (v2[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+  }
+  return v2.slice(i, end);
 })();
 ok(modEntry.length > 200, 'CONTROL: the MODULES entry was located (' + modEntry.length + ' chars)');
 ok(/global:\s*'SokoniMerchantProducts'/.test(modEntry),

@@ -173,9 +173,34 @@ console.log('\n5. The sale / correction wall');
 
 check('the server never touches products.sold', !/\bsold\b\s*:/.test(SRV),
       'sold absent from every write');
-check('the Sell module cannot express a correction',
-      !/merchantAdjustStock/.test(R('sokoni-merchant-data.js')),
-      'sokoni-merchant-data.js is clean');
+/* STRIP COMMENTS FIRST. This matched the words "merchantAdjustStock" in prose, so documenting
+   the boundary broke the assertion that guards it — the module names the authority in comments
+   precisely because it must not BE the authority.
+
+   And the property itself has moved on: createProduct may now establish an OPENING quantity
+   through an injected adapter, which the architecture deliberately allows. What must remain
+   impossible is a CORRECTION to an existing product's shelf count, so that is asserted
+   directly — by calling updateProduct and requiring it to throw — rather than by grepping for
+   a name. */
+(function () {
+  const src = R('sokoni-merchant-data.js').replace(/\/\*[\s\S]*?\*\//g, '');
+  check('the Sell module never calls the correction authority directly',
+        !/merchantAdjustStock/.test(src),
+        'it takes an injected adapter; the name appears only in prose');
+
+  const w = {}; w.window = w;
+  new Function('window', 'globalThis', R('sokoni-merchant-data.js'))(w, w);
+  let threw = null;
+  w.SokoniMerchantData.updateProduct({
+    scope: { ok: true, shopId: 's1', sellerUid: 'u1' },
+    db: { writeProduct: async () => ({}), getProduct: async () => null },
+    id: 'p1', patch: { stock: 99 },
+  }).catch((e) => { threw = e; }).then(() => {
+    check('and it cannot express a correction — updateProduct REFUSES a stock patch',
+          !!threw && threw.code === 'stock-not-editable',
+          threw ? threw.code : 'no error raised');
+  });
+})();
 check('a sale still routes to posCompleteCheckout, not here',
       /posCompleteCheckout/.test(SRV) && !/posCompleteCheckout\s*\(/.test(SRV),
       'referenced in prose only');

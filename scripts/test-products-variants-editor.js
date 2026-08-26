@@ -77,17 +77,28 @@ console.log('\n3. Product stock is the SUM, never the form\'s own figure');
   globalThis.SokoniProductSpecs = SPECS;
   const MD = require(path.join(ROOT, 'sokoni-merchant-data.js'));
   let captured = null;
+  const adjusted = [];
   await MD.createProduct({
     scope: { ok: true, shopId: 's1', sellerUid: 'u1' },
     db: { writeProduct: async (o) => { captured = o; return { ok: true }; } },
     draftToken: 't1',
+    /* The inventory authority, recorded — the derived total has to be observable, and this
+       is now where it goes. */
+    adjustStock: async (p) => { adjusted.push(p); return { ok: true }; },
     product: Object.assign({}, out, { price: 8500, stock: 0 }),
   });
   const d = (captured || {}).data || {};
   ok(!!captured, 'CONTROL: the write reached the adapter');
   ok(d.variants && d.variants.length === 3, 'all three variants reached the document');
-  ok(d.stock === 16,
-     'product stock is 16 (8+5+3) though the form said 0 — the till cannot disagree',
+  /* THE DERIVATION IS UNCHANGED — 8+5+3 = 16, not the form's 0. What changed is the
+     DESTINATION. It previously asserted d.stock === 16: the derived total written into the
+     product document through a plain setDoc(merge), with no transaction, no inventoryVersion
+     and no floor. That assertion was green while protecting exactly the untransacted shelf
+     mutation the inventory boundary now forbids. The total is an opening quantity, so it takes
+     the server authority every later movement takes. */
+  ok(d.stock === undefined, 'the derived total does NOT go into the product document');
+  ok(adjusted.length === 1 && adjusted[0].delta === 16,
+     'it reached the inventory authority as 16 (8+5+3), not the form-supplied 0',
      'got ' + d.stock);
   ok(d.variants.every((v) => v.id), 'every variant is given a stable id');
   ok(typeof d.variants[0].price === 'number' && typeof d.variants[0].stock === 'number',
