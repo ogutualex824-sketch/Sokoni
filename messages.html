@@ -81,6 +81,17 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 
 /* Dark is now the single default (folded into the base rules above), so the platform's
    forced data-theme="dark" is honoured on every device regardless of OS colour scheme. */
+/* pinned / favourite affordances — per-user, local, additive */
+.conv-item{position:relative}
+.conv-item.pinned{background:rgba(113,255,0,.045)}
+.conv-flags{position:absolute;top:8px;right:10px;display:flex;gap:4px;font-size:11px;line-height:1;pointer-events:none}
+.conv-actions{position:absolute;bottom:8px;right:8px;display:flex;gap:2px}
+.conv-actions button{min-width:34px;min-height:34px;border:0;background:transparent;cursor:pointer;
+  border-radius:8px;font-size:14px;opacity:.45}
+.conv-actions button.on{opacity:1}
+.conv-actions button:active{background:rgba(255,255,255,.08)}
+.conv-badge-dlv{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 6px;
+  border-radius:9px;font-size:10px;font-weight:800;background:rgba(113,255,0,.12);color:#71ff00}
 </style>
 </head>
 <body>
@@ -99,6 +110,9 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 
 <div class="filters">
   <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="unread">Unread</button>
+  <button class="filter-chip" data-filter="delivery">🚚 Delivery</button>
+  <button class="filter-chip" data-filter="favourites">⭐ Favourites</button>
   <button class="filter-chip" data-filter="order">Orders</button>
   <button class="filter-chip" data-filter="service_booking">Services</button>
   <button class="filter-chip" data-filter="food_order">Food</button>
@@ -171,7 +185,22 @@ document.getElementById('searchInput').addEventListener('input',function(e){
 
 function _render(){
   var list=_all;
-  if(_filter!=='all')list=list.filter(function(c){return c.transactionType===_filter;});
+  /* Unread / Delivery / Favourites are CROSS-CUTTING views, not transaction
+     types, so they are handled before the type filter rather than being folded
+     into it. Delivery matches the chat engine's own logistics context plus
+     order conversations that carry a delivery reference — the chat never
+     becomes a second source of delivery truth, it only reflects it. */
+  if(_filter==='unread'){
+    list=list.filter(function(c){return (c.unreadCount||0)>0;});
+  } else if(_filter==='delivery'){
+    list=list.filter(function(c){
+      return c.transactionType==='logistics_request' || _hasDelivery(c);
+    });
+  } else if(_filter==='favourites'){
+    list=list.filter(function(c){return _isFav(c.conversationId);});
+  } else if(_filter!=='all'){
+    list=list.filter(function(c){return c.transactionType===_filter;});
+  }
   if(_search)list=list.filter(function(c){
     return(c.title+' '+c.participantName+' '+(c.lastMessageText||'')).toLowerCase().includes(_search);
   });
@@ -182,6 +211,11 @@ function _render(){
        'Your conversations appear here when you place an order, make a booking, or submit an inquiry.')+
       '</p></div>';return;
   }
+  /* pinned first, then whatever order the source already provided */
+  list=list.slice().sort(function(a,b){
+    var pa=_isPin(a.conversationId)?1:0, pb=_isPin(b.conversationId)?1:0;
+    return pb-pa;
+  });
   el.innerHTML=list.map(_convHtml).join('');
 }
 
@@ -190,24 +224,71 @@ function _renderErr(){
     '<div class="empty"><span class="material-icons" aria-hidden="true">&#xe001;</span><h3>Could not load messages</h3><p>Check your connection and try again.</p></div>';
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Pins and favourites are PER-USER VIEW STATE, deliberately local.
+   They are not conversation data: the conversations rule permits updates to
+   only lastMessage/lastMessageAt/lastSenderId/unread*, so writing a pin flag
+   onto the document would be rejected. Storing locally is honest about that
+   rather than showing a control that silently fails.
+   Consequence, stated plainly: pins/favourites do not sync across devices.
+   ══════════════════════════════════════════════════════════════════════════ */
+var _LS_PIN='sk_conv_pins', _LS_FAV='sk_conv_favs';
+function _lsGet(k){try{return JSON.parse(localStorage.getItem(k)||'[]');}catch(e){return [];}}
+function _lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){/* private mode: view state only */}}
+function _isPin(id){return _lsGet(_LS_PIN).indexOf(id)>=0;}
+function _isFav(id){return _lsGet(_LS_FAV).indexOf(id)>=0;}
+function _toggle(k,id){
+  var a=_lsGet(k), i=a.indexOf(id);
+  if(i>=0)a.splice(i,1); else a.push(id);
+  _lsSet(k,a); return i<0;
+}
+/* One delegated listener: rows re-render on every filter change, so per-button
+   handlers would leak. Inline onclick was avoided because the conversation id
+   would need quote-escaping inside a generated attribute. */
+document.addEventListener("click",function(ev){
+  if(!ev.target||!ev.target.closest)return;
+  var p=ev.target.closest("[data-pin]");
+  if(p){ev.preventDefault();ev.stopPropagation();_toggle(_LS_PIN,p.getAttribute("data-pin"));_render();return;}
+  var f=ev.target.closest("[data-fav]");
+  if(f){ev.preventDefault();ev.stopPropagation();_toggle(_LS_FAV,f.getAttribute("data-fav"));_render();}
+},false);
+
+/* A conversation counts as delivery-related when the ORDER/DELIVERY authority
+   says so — via fields the conversation already carries. This reads that
+   reference; it never derives or stores delivery state itself. */
+function _hasDelivery(c){
+  return !!(c.deliveryId||c.dispatchId||c.riderId||
+            (c.context&&(c.context.deliveryId||c.context.dispatchId)));
+}
+
 function _convHtml(c){
   var ctx=SokoniChat.getContext(c.transactionType);
   var unread=(c.unreadCount||0)>0;
+  var cid=c.conversationId, pin=_isPin(cid), fav=_isFav(cid), dlv=_hasDelivery(c);
   var preview=c.lastMessageText||'No messages yet';
   var t=c.lastMessageAt?SokoniChat.timeStr(c.lastMessageAt):'';
   var avatar=c.participantAvatar
     ?'<img src="'+SokoniChat.esc(c.participantAvatar)+'" alt="">'
     :'<span class="material-icons">'+ctx.icon+'</span>';
-  return '<a class="conv-item'+(unread?' unread':'')+'" href="chat.html?id='+encodeURIComponent(c.conversationId)+'">'+
+  return '<a class="conv-item'+(unread?' unread':'')+(pin?' pinned':'')+'" href="chat.html?id='+encodeURIComponent(c.conversationId)+'">'+
     '<div class="conv-avatar">'+avatar+'</div>'+
     '<div class="conv-body">'+
-      '<div class="conv-title">'+SokoniChat.esc(c.participantName||'Unknown')+'</div>'+
+      '<div class="conv-title">'+SokoniChat.esc(c.participantName||'Unknown')+
+        (dlv?'<span class="conv-badge-dlv">🚚 Delivery</span>':'')+'</div>'+
       '<div class="conv-subtitle">'+SokoniChat.esc(c.title||'')+'</div>'+
       '<div class="conv-preview">'+SokoniChat.esc(preview)+'</div>'+
     '</div>'+
     '<div class="conv-meta">'+
       '<span class="conv-time">'+SokoniChat.esc(t)+'</span>'+
       (unread?'<span class="unread-badge">'+Math.min(c.unreadCount,99)+'</span>':'')+
+    '</div>'+
+    '<div class="conv-flags">'+(pin?'📌':'')+(fav?'⭐':'')+'</div>'+
+    '<div class="conv-actions">'+
+      '<button type="button" class="'+(pin?"on":"")+'" '+
+        'data-pin="'+cid+'" title="Pin conversation" aria-label="Pin conversation">📌</button>'+
+      '<button type="button" class="'+(fav?"on":"")+'" '+
+        'data-fav="'+cid+'" title="Favourite conversation" aria-label="Favourite conversation">⭐</button>'+
     '</div>'+
   '</a>';
 }

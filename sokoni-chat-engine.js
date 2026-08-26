@@ -488,6 +488,32 @@ function createConversation(transactionType, transactionId, participantUids, met
   }).then(function(r) { return r.data; });
 }
 
+/* Tap reaction. Routed through the same dispatcher as every other op — the
+   messages rule blocks direct client writes (MSG-1), so the callable is the
+   only write authority. Pass emoji === null to remove your reaction. */
+function reactToMessage(conversationId, messageId, emoji) {
+  return _cfMsg('reactToMessage', {
+    conversationId: conversationId,
+    messageId:      messageId,
+    emoji:          emoji === undefined ? null : emoji,
+  }).then(function(r) { return r.data; });
+}
+
+/* Derive counts from the reactions map the server stores (keyed by uid, one
+   per user) so a count can never be inflated client-side. */
+function reactionSummary(msg, myUid) {
+  var map = (msg && msg.reactions) || {};
+  var counts = {}, mine = null;
+  Object.keys(map).forEach(function (uid) {
+    var e = map[uid];
+    if (!e) return;
+    counts[e] = (counts[e] || 0) + 1;
+    if (uid === myUid) mine = e;
+  });
+  return { counts: counts, mine: mine,
+           total: Object.keys(map).length };
+}
+
 function markRead(conversationId) {
   return _cfMsg('markRead', { conversationId: conversationId })
     .then(function(r) { return r.data; })
@@ -608,6 +634,8 @@ var SokoniChat = {
 
   /* Read receipts */
   markRead: markRead,
+  reactToMessage:  reactToMessage,
+  reactionSummary: reactionSummary,
 
   /* Typing */
   handleTyping:    handleTyping,

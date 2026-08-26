@@ -402,6 +402,68 @@ input[type=file]{display:none}
   .sheet{max-width:720px;left:50%;right:auto;transform:translateX(-50%) translateY(100%)}
   .sheet.open{transform:translateX(-50%) translateY(0)}
 }
+/* ── SOKONI Quick Say + emoji panel ──────────────────────────────────────
+   Additive to the existing composer. The native keyboard is never replaced:
+   this is a panel ABOVE the textarea, so language, autocorrect, accessibility
+   and voice input keep working. Insert-only — nothing auto-sends. */
+#sk-quicksay{display:flex;gap:7px;overflow-x:auto;padding:7px 10px;
+  border-top:1px solid var(--c-line,rgba(255,255,255,.09));
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
+#sk-quicksay::-webkit-scrollbar{display:none}
+#sk-quicksay .qs{flex:0 0 auto;min-height:34px;padding:7px 12px;border-radius:17px;
+  border:1px solid var(--c-line,rgba(255,255,255,.12));background:transparent;
+  color:var(--c-text,#fff);font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer}
+#sk-quicksay .qs:active{transform:scale(.97)}
+#sk-quicksay .qs-greet{border-color:transparent;font-weight:800;opacity:.75;padding-left:4px}
+#sk-emoji{display:none;flex-direction:column;height:264px;
+  border-top:1px solid var(--c-line,rgba(255,255,255,.09));background:var(--c-surface,#111)}
+#sk-emoji.open{display:flex}
+#sk-emoji-search{margin:8px 10px;padding:9px 12px;border-radius:10px;
+  border:1px solid var(--c-line,rgba(255,255,255,.12));background:rgba(255,255,255,.05);
+  color:var(--c-text,#fff);font-size:13px;width:calc(100% - 20px);box-sizing:border-box}
+#sk-emoji-grid{flex:1 1 auto;overflow-y:auto;overscroll-behavior-y:contain;padding:0 6px 6px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:2px}
+#sk-emoji-grid button{min-width:40px;min-height:40px;font-size:22px;line-height:1;
+  border:0;background:transparent;cursor:pointer;border-radius:8px}
+#sk-emoji-grid button:active{background:rgba(255,255,255,.09)}
+#sk-emoji-grid .sk-cat{grid-column:1/-1;padding:8px 6px 2px;font-size:10.5px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--c-dim,rgba(255,255,255,.5))}
+#sk-emoji-tabs{display:flex;gap:2px;overflow-x:auto;padding:4px 6px 6px;
+  border-top:1px solid var(--c-line,rgba(255,255,255,.09));scrollbar-width:none}
+#sk-emoji-tabs::-webkit-scrollbar{display:none}
+#sk-emoji-tabs button{flex:0 0 auto;min-width:40px;min-height:36px;font-size:18px;border:0;
+  background:transparent;cursor:pointer;border-radius:8px;opacity:.55}
+#sk-emoji-tabs button.on{opacity:1;background:rgba(255,255,255,.08)}
+
+/* delivery/order card — presentation of a server system message */
+.sk-dlv-card{display:inline-block;max-width:min(300px,84vw);text-align:left;padding:11px 13px;
+  border-radius:14px;border:1px solid rgba(113,255,0,.28);background:rgba(113,255,0,.07)}
+.sk-dlv-h{font-size:12.5px;font-weight:800;color:#71ff00;margin-bottom:3px}
+.sk-dlv-route{font-size:12px;font-weight:600;opacity:.9;margin-bottom:2px}
+.sk-dlv-line{font-size:11.5px;opacity:.7}
+.sk-dlv-cta{display:inline-block;margin-top:8px;min-height:34px;line-height:34px;padding:0 12px;
+  border-radius:9px;font-size:12px;font-weight:800;text-decoration:none;color:#71ff00;
+  background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3)}
+/* favourited / pinned message affordance */
+.msg-row.sk-marked .msg-bub{box-shadow:inset 2px 0 0 #71ff00}
+/* Favourites view: hide everything that is not marked, without touching data */
+body.sk-favs-only .msg-row:not(.sk-marked){display:none}
+body.sk-favs-only #sk-favs-empty{display:block}
+#sk-favs-empty{display:none;padding:26px 18px;text-align:center;font-size:13px;opacity:.6}
+/* tap reactions */
+.cm-rx{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--c-line,rgba(255,255,255,.09))}
+.cm-rx button{min-width:38px;min-height:38px;font-size:19px;border:0;background:transparent;
+  cursor:pointer;border-radius:9px}
+.cm-rx button:active{background:rgba(255,255,255,.1)}
+.sk-rx{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.sk-rx-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:11px;
+  font-size:11px;background:rgba(255,255,255,.07);border:1px solid transparent}
+.sk-rx-chip.mine{border-color:rgba(113,255,0,.45);background:rgba(113,255,0,.12)}
+.sk-rx-chip b{font-weight:800;font-size:10px;opacity:.8}
+/* sticker rendering: emoji-only text messages shown large, no bubble chrome */
+.msg-bub.sk-sticker{background:transparent!important;border:0!important;box-shadow:none!important;
+  padding:2px 0!important;font-size:44px;line-height:1.15}
+#sk-emoji-grid button.sk-stk{font-size:28px;min-height:46px}
 </style>
 </head>
 <body>
@@ -418,6 +480,10 @@ input[type=file]{display:none}
       <div id="hdr-sub"></div>
       <div id="hdr-typing">typing…</div>
     </div>
+    <button class="hdr-btn" id="btn-favs-toggle" onclick="skToggleFavsView()"
+      aria-label="Show favourite messages" aria-pressed="false">
+      <span class="emo" aria-hidden="true">⭐</span>
+    </button>
     <button class="hdr-btn" id="btn-search-toggle" onclick="toggleSearch()" aria-label="Search messages">
       <span class="mir">search</span>
     </button>
@@ -487,8 +553,21 @@ input[type=file]{display:none}
     </button>
   </div>
 
+  <!-- SOKONI Quick Say (insert-only, never auto-sends) -->
+  <div id="sk-quicksay" role="toolbar" aria-label="Quick phrases"></div>
+
+  <!-- Emoji panel: sits ABOVE the native keyboard, never replaces it -->
+  <div id="sk-emoji" aria-label="Emoji picker">
+    <input id="sk-emoji-search" type="search" placeholder="Search emoji…" aria-label="Search emoji">
+    <div id="sk-emoji-grid" role="listbox"></div>
+    <div id="sk-emoji-tabs" role="tablist"></div>
+  </div>
+
   <!-- ── Input area ──────────────────────────────────────────────── -->
   <div id="input-area">
+    <button class="ia-btn" id="btn-emoji" onclick="skToggleEmoji()" aria-label="Emoji and stickers" aria-expanded="false">
+      <span class="emo" aria-hidden="true">😊</span>
+    </button>
     <button class="ia-btn" onclick="openAttachSheet()" aria-label="Attach file">
       <span class="emo" aria-hidden="true">📎</span>
     </button>
@@ -864,7 +943,13 @@ function _buildMsgEl(msg, msgs, idx) {
   if (msg.type === 'system') {
     var sys = document.createElement('div');
     sys.className = 'msg-row sys';
-    sys.innerHTML = '<div class="sys-pill">' + _esc(msg.text || '') + '</div>';
+    /* Richer delivery/order card when the server message carries a recognised
+       status; otherwise the original pill. Presentation only — no state is
+       written and no status is inferred. */
+    /* rider-offer card takes precedence when the message carries offers */
+    var card = (window.skRiderOfferCardHtml && window.skRiderOfferCardHtml(msg)) ||
+               (window.skDeliveryCardHtml  && window.skDeliveryCardHtml(msg))  || null;
+    sys.innerHTML = card || ('<div class="sys-pill">' + _esc(msg.text || '') + '</div>');
     return sys;
   }
 
@@ -873,6 +958,11 @@ function _buildMsgEl(msg, msgs, idx) {
   var row       = document.createElement('div');
   row.className = 'msg-row ' + (isSent ? 'sent' : 'received');
   row.dataset.id = msg.id;
+  /* restore any personal favourite/pin mark on (re)build */
+  if (window.SokoniMsgMarks &&
+      (window.SokoniMsgMarks.isFav(msg.id) || window.SokoniMsgMarks.isPin(msg.id))) {
+    row.classList.add('sk-marked');
+  }
 
   /* Received avatar (only show at bottom of consecutive group) */
   if (!isSent) {
@@ -906,6 +996,12 @@ function _buildMsgEl(msg, msgs, idx) {
       case 'text':
         var p = document.createElement('div');
         p.className = 'msg-txt'; p.textContent = msg.text || '';
+        /* emoji-only text renders as a sticker: large, no bubble chrome. The
+           STORED message is ordinary text, so search, retention and
+           moderation need no knowledge of stickers. */
+        if (window.SokoniStickers && window.SokoniStickers.isSticker(msg.text)) {
+          bub.classList.add('sk-sticker');
+        }
         inn.appendChild(p);
         break;
       case 'image':
@@ -1281,9 +1377,38 @@ function _showCtxMenu(x, y, msg, isSent) {
   }
   if (isSent && !IS_RO) items.push({ label: 'Delete', icon: 'delete', fn: function () { _deleteMsg(msg.id); }, danger: true });
 
+  /* Tap-reaction strip: shared conversation data, so it goes through the
+     server. Rendered as its own row above the text actions. */
+  var _rxRow = null;
+  if (window.SokoniReactions && !IS_RO && !msg.deleted && msg.id) {
+    _rxRow = document.createElement('div');
+    _rxRow.className = 'cm-rx';
+    window.SokoniReactions.palette().forEach(function (e) {
+      var rb = document.createElement('button');
+      rb.type = 'button'; rb.textContent = e; rb.setAttribute('aria-label', 'React ' + e);
+      rb.onclick = function () {
+        window.SokoniReactions.toggle(CONV_ID, msg, e, UID, function () { _renderMessages(_allMsgs || []); });
+        closeCtxMenu();
+      };
+      _rxRow.appendChild(rb);
+    });
+  }
+
+  /* Favourite / Pin: per-user local marks. Appended to the existing menu so
+     Reply/Forward/Copy/Edit/Delete keep their order and behaviour. */
+  if (window.SokoniMsgMarks) {
+    items = items.concat(window.SokoniMsgMarks.menuItems(msg, function () {
+      /* rows are identified by row.dataset.id — an earlier data-mid selector
+         matched nothing and the mark never appeared. */
+      var row = document.querySelector('.msg-row[data-id="' + msg.id + '"]');
+      if (row) row.classList.toggle('sk-marked', window.SokoniMsgMarks.isFav(msg.id) || window.SokoniMsgMarks.isPin(msg.id));
+    }));
+  }
+
   if (!items.length) return;
 
   menu.innerHTML = '';
+  if (_rxRow) menu.appendChild(_rxRow);
   items.forEach(function (it) {
     var btn = document.createElement('button');
     btn.className = 'cm-item' + (it.danger ? ' danger' : '');
@@ -1635,5 +1760,6 @@ window.addEventListener('beforeunload', function () {
 
 })();
 </script>
+<script src="/sokoni-chat-composer.js" defer></script>
 </body>
 </html>
