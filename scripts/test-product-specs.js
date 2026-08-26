@@ -196,6 +196,53 @@ ok(sizeDef && sizeDef.type === 'size',
 ok(S.build({ specs: { dose: { v: 500, u: 'mg' } } }).ok,
    'a dose can be recorded on ANY product — categories suggest, they do not constrain');
 
+/* ── 13. THE STANDING RULE, ENFORCED ACROSS EVERY ATTRIBUTE TYPE ──────────
+   "Never coerce a merchant's product attribute just to make it sortable. Preserve what they
+   entered, and derive a comparable numeric base ONLY when the unit or system genuinely
+   supports it."
+
+   Section 10 proves that for sizes and section 11 for units. This proves it for all of them
+   at once, as a round trip: what the merchant typed must come back out unchanged, and a
+   `base` must appear if and only if the family defines one. Written as one table so a NEW
+   attribute type added later is covered by adding a row rather than by remembering to write
+   a test — which is how the size case went missing until it was asked for. */
+console.log('\n13. Round trip — nothing is coerced, nothing is invented');
+const ROUND_TRIP = [
+  { label: 'XL',        specs: { size: { value: 'XL' } },                     path: 'size',    keep: 'XL',   base: false },
+  { label: 'EU 38',     specs: { size: { value: 38, system: 'EU' } },         path: 'size',    keep: '38',   base: false },
+  { label: '4T',        specs: { size: { value: '4T', system: 'toddler' } },  path: 'size',    keep: '4T',   base: false },
+  { label: '2 kg',      specs: { weight: { v: 2, u: 'kg' } },                 path: 'weight',  keep: 2,      base: 2000 },
+  { label: '2 L',       specs: { capacity: { v: 2, u: 'l' } },                path: 'capacity', keep: 2,     base: 2000 },
+  { label: '500 mg',    specs: { dose: { v: 500, u: 'mg' } },                 path: 'dose',    keep: 500,    base: 0.5 },
+  { label: '24 tablets', specs: { packCount: { v: 24, u: 'tablets' } },       path: 'packCount', keep: 24,   base: 24 },
+  { label: '256 GB',    specs: { storage: { v: 256, u: 'GB' } },              path: 'storage', keep: 256,    base: 262144 },
+  { label: '5000 mAh',  specs: { batteryCapacity: { v: 5000, u: 'mAh' } },    path: 'batteryCapacity', keep: 5000, base: 5000 },
+  { label: '220 V',     specs: { voltage: { v: 220, u: 'V' } },               path: 'voltage', keep: 220,    base: 220 },
+  { label: '50 Hz',     specs: { refreshRate: { v: 50, u: 'Hz' } },           path: 'refreshRate', keep: 50, base: 50 },
+];
+ROUND_TRIP.forEach((c) => {
+  const built = S.build({ specs: c.specs });
+  const got = (built.patch.specs || {})[c.path];
+  const value = got && (got.value !== undefined ? got.value : got.v);
+  ok(!!got, 'CONTROL: ' + c.label + ' produced a stored attribute');
+  ok(String(value) === String(c.keep),
+     c.label + ' round-trips as ' + JSON.stringify(c.keep),
+     'got ' + JSON.stringify(value));
+  if (c.base === false) {
+    ok(got && got.base === undefined,
+       c.label + ' has NO derived base — its system does not support one');
+  } else {
+    ok(got && got.base === c.base,
+       c.label + ' derives base ' + c.base, 'got ' + (got && got.base));
+  }
+});
+
+/* 500 mg and 24 tablets are TWO attributes. Multiplying them into one "12000" would be an
+   invented figure that matches nothing on the packet. */
+const pharm = S.build({ specs: { dose: { v: 500, u: 'mg' }, packCount: { v: 24, u: 'tablets' } } });
+ok(pharm.patch.specs.dose.v === 500 && pharm.patch.specs.packCount.v === 24,
+   'dose and pack count stay two distinct attributes, never one invented number');
+
 /* ── 9. IT REACHES THE DOCUMENT ───────────────────────────────────────────
    The model being correct is worth nothing if the writer drops it. _productFields is a
    strict whitelist: anything it does not name is silently discarded, and the editor
