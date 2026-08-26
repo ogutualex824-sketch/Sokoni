@@ -11,7 +11,7 @@ keys look like they would do that. **Only one does.**
 
 | key | written by | value | reaches the server? |
 |---|---|---|---|
-| **`sokoni_device_id`** | `pos-setup.html:2929` | `crypto.randomUUID()` | **yes** — passed to `bootstrapDevice`, which writes `posDevices/{deviceId}`. **This is the document id.** |
+| **`sokoni_device_id`** | `pos-setup.html:3025` | `crypto.randomUUID()` | **yes** — passed to `bootstrapDevice`, which writes `posDevices/{deviceId}`. **This is the document id.** |
 | `pos_device_id` | `pos-sync.js:303` | `dev_<ts>_<rand>` | **no** — read by `pos-health.js` and `pos-idempotency.js` only. It names nothing on the server. |
 
 ## Why this is worth writing down

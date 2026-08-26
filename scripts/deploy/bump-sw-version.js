@@ -63,7 +63,7 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    whether anyone remembered to commit the bump — which is exactly what this
    constant was introduced for. Raise it again if production ever ships higher than
    this floor from an uncommitted tree. */
-const LAST_SHIPPED_V = 530;
+const LAST_SHIPPED_V = 556;
 const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
 const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
 const newVer = `sokoni-${stamp}-v${nextN}`;

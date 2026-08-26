@@ -1,10 +1,10 @@
 {
-  "commit": "0c6819814db672b0903a8ed483f1f8a4c33ab99a",
-  "commitShort": "0c68198",
-  "branch": "release/quick-sell-ux",
-  "buildTime": "2026-08-22T20:54:30.708Z",
+  "commit": "f26b0b348957102122e3da40cfb7b05fcf996c17",
+  "commitShort": "f26b0b3",
+  "branch": "HEAD",
+  "buildTime": "2026-08-26T04:44:31.309Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260822205429-v555",
+  "cacheVersion": "sokoni-20260826044422-v557",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
