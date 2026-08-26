@@ -498,15 +498,42 @@ img {
   will-change: transform, opacity;
 }
 
-/* Promote scroll containers to compositor layers */
+/* Promote scroll containers to compositor layers.
+
+   SPLIT BY AXIS INTENT — these were one rule with the both-axis shorthand
+   `overscroll-behavior: contain`, which was wrong for BOTH groups in opposite
+   directions:
+
+     horizontal carousels : correctly contained x, but ALSO blocked vertical
+                            chaining, so the page stopped scrolling whenever the
+                            pointer sat over one
+     vertical lists       : correctly contained y, and pointlessly contained x
+
+   The rule also sits OUTSIDE every media query, so despite living in a
+   "responsive" stylesheet it applied at desktop. `[class*="hscroll"]` matched
+   .hubs-hscroll-wrap / .hubs-hscroll-section — a 1709px-tall region on the home
+   page — so a wheel over Sokoni Hubs / Tickys was captured by a container that
+   cannot scroll vertically and could not chain out. The page would not reach the
+   footer. A broad selector plus a shorthand property is how one rule silently
+   reaches unrelated surfaces. */
+
+/* Horizontal carousels: contain sideways overscroll, let the page scroll. */
 .h-scroll-wrap,
 .hscroll-track,
-[class*="hscroll"],
+[class*="hscroll"] {
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Vertical lists: contain DOWNWARD overscroll so reaching the end of a chat does
+   not start scrolling the page behind it. That containment is deliberate here —
+   the opposite of what the carousels need. */
 .chat-messages,
 [class*="messages-list"] {
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
 }
 
 /* ── 17. PAGE-SPECIFIC FIXES ─────────────────────────────────────────
