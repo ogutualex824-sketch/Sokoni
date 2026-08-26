@@ -6,20 +6,39 @@
 
        human-maintained table -> claimed 50/50 -> Administration found missing
 
+   It failed twice over: the counts read 30+0+11+0 = 41 rather than 50, and the
+   membership was wrong in two directions that CANCELLED — a page that actually
+   passed was listed as blocked, and a page that did not pass was omitted — so
+   the total looked correct. A count cannot detect that. A derivation can.
+
    The new process is:
 
        registry -> machine ledger -> cause classification -> derived summary
 
-   Inputs (both required):
-     docs/admin-certification-ledger.json   observations, emitted by
-                                            certify-admin-responsive.js --out
-     docs/admin-certification-causes.json   human judgement + evidence
+   FIVE STATES, deliberately distinct so that a legacy surface, an environment
+   limitation and a working security control are never collapsed into one red
+   bucket:
 
-   CONSISTENCY GATES — this exits non-zero rather than printing a pretty table:
+     PASS      runtime evidence proves the acceptance criteria
+     BLOCKED   a legitimate security/auth gate prevents certification
+     UNPROVEN  the harness/environment cannot establish the result — this does
+               NOT classify the page as broken
+     LEGACY    a reachable legacy surface outside the canonical population;
+               reported, excluded from the COUNT
+     NOT RUN   no valid certification evidence exists
+
+   UNPROVEN is not a weaker BLOCKED. BLOCKED is not a weaker PASS.
+
+   Inputs:
+     docs/admin-certification-ledger.json   observations (certify-admin-responsive --out)
+     docs/admin-certification-causes.json   human judgement + evidence + state
+
+   CONSISTENCY GATES — exits non-zero rather than printing a pretty table:
      - every ledger NOT_PASS must be classified
      - no classified page may actually be PASSing (stale entry)
-     - every classification must carry evidence
-     - pass + notPass must equal the registry page count
+     - every classification must carry evidence AND a valid state
+     - every registry page must appear in the ledger, or be counted NOT RUN
+     - the state tally must reconcile against the registry
 
    Usage: node scripts/derive-certification-summary.js [--check]
    ========================================================================= */
@@ -35,19 +54,32 @@ global.window = {}; global.location = { pathname: '/admin-os.html' };
 require(path.join(ROOT, 'sokoni-admin-nav.js'));
 const NAV = global.window.SokoniAdminNav;
 
-const notPass = ledger.pages.filter(p => p.result !== 'PASS');
-const pass = ledger.pages.filter(p => p.result === 'PASS');
+const VALID = ['PASS', 'BLOCKED', 'UNPROVEN', 'LEGACY', 'NOT RUN'];
 const classified = causes.pages || {};
+const inLedger = new Map(ledger.pages.map(p => [p.page, p]));
+const notPass = ledger.pages.filter(p => p.result !== 'PASS');
 
 const errs = [];
 notPass.forEach(p => { if (!classified[p.page]) errs.push('unclassified NOT_PASS: ' + p.page); });
-Object.keys(classified).forEach(k => {
+Object.entries(classified).forEach(([k, v]) => {
   if (!notPass.find(p => p.page === k)) errs.push('classified but PASSING (stale): ' + k);
-  if (!classified[k].evidence) errs.push('classification without evidence: ' + k);
+  if (!v.evidence) errs.push('classification without evidence: ' + k);
+  if (!v.state || VALID.indexOf(v.state) < 0) errs.push('invalid state for ' + k + ': ' + v.state);
 });
-if (pass.length + notPass.length !== NAV.pages.length) {
-  errs.push('ledger covers ' + (pass.length + notPass.length) + ' pages but the registry has ' + NAV.pages.length);
-}
+
+/* assign a state to every registry page */
+const state = {};
+NAV.pages.forEach(p => {
+  if (!inLedger.has(p.page)) { state[p.page] = 'NOT RUN'; return; }
+  const c = classified[p.page];
+  state[p.page] = c ? c.state : (inLedger.get(p.page).result === 'PASS' ? 'PASS' : 'BLOCKED');
+});
+
+const tally = {};
+VALID.forEach(s => tally[s] = 0);
+Object.values(state).forEach(s => tally[s]++);
+const total = Object.values(tally).reduce((a, b) => a + b, 0);
+if (total !== NAV.pages.length) errs.push('state tally ' + total + ' does not reconcile against ' + NAV.pages.length + ' registry pages');
 
 if (errs.length) {
   console.error('DERIVATION FAILED — the summary is not trustworthy:');
@@ -55,49 +87,50 @@ if (errs.length) {
   process.exit(1);
 }
 
-/* legacy surfaces are excluded from the certification COUNT but still reported */
-const legacy = new Set(NAV.pages.filter(p => p.legacy).map(p => p.page));
-const counted = ledger.pages.filter(p => !legacy.has(p.page));
-const cPass = counted.filter(p => p.result === 'PASS').length;
-const cBlocked = counted.length - cPass;
+/* LEGACY is reported but excluded from the certification COUNT */
+const counted = NAV.pages.length - tally['LEGACY'];
+const legacyPages = NAV.pages.filter(p => state[p.page] === 'LEGACY').map(p => p.page);
 
-const byClass = {};
-Object.entries(classified).forEach(([pg, v]) => (byClass[v.class] = byClass[v.class] || []).push(pg));
+if (process.argv.indexOf('--check') >= 0) {
+  console.log('derivation consistent: ' + VALID.map(s => tally[s] + ' ' + s).join(' / ') +
+              '  (counted ' + counted + ' of ' + NAV.pages.length + ')');
+  process.exit(0);
+}
 
 const L = [];
 L.push('<!-- GENERATED by scripts/derive-certification-summary.js — do not hand-edit.');
-L.push('     Regenerate after any certification run. Editing this by hand reintroduces');
-L.push('     exactly the drift this replaced. -->');
+L.push('     Regenerate after any certification run. Hand-editing this reintroduces');
+L.push('     exactly the drift it replaced. -->');
 L.push('');
 L.push('### Derived ledger');
+L.push('');
+L.push('| State | Count | Meaning |');
+L.push('|---|---|---|');
+VALID.forEach(s => L.push('| **' + s + '** | **' + tally[s] + '** | ' + (causes._states && causes._states[s] ? causes._states[s] : '') + ' |'));
 L.push('');
 L.push('| | Count |');
 L.push('|---|---|');
 L.push('| Registry surfaces | **' + NAV.pages.length + '** |');
-L.push('| Legacy, excluded from the count | **' + legacy.size + '**' + (legacy.size ? ' (`' + [...legacy].join('`, `') + '`)' : '') + ' |');
-L.push('| Counted surfaces | **' + counted.length + '** |');
-L.push('| **PASS** (7/7 widths) | **' + cPass + '** |');
-L.push('| **BLOCKED / UNPROVEN** | **' + cBlocked + '** |');
+L.push('| Legacy, reported but excluded from the count | **' + tally['LEGACY'] + '**' +
+       (legacyPages.length ? ' (`' + legacyPages.join('`, `') + '`)' : '') + ' |');
+L.push('| Counted surfaces | **' + counted + '** |');
 L.push('| Page-width combinations | ' + ledger.summary.passed + ' / ' + ledger.summary.combinations + ' |');
 L.push('');
-L.push('`PASS + BLOCKED = ' + (cPass + cBlocked) + '` — reconciles against the counted surfaces.');
+L.push('`PASS ' + tally['PASS'] + ' + BLOCKED ' + tally['BLOCKED'] + ' + UNPROVEN ' + tally['UNPROVEN'] +
+       ' + NOT RUN ' + tally['NOT RUN'] + ' = ' + counted + '` — reconciles against the counted surfaces.');
 L.push('');
-L.push('### NOT_PASS, with the cause and the evidence for it');
+L.push('### Not PASS, with state, cause and the evidence for it');
 L.push('');
-L.push('| Page | Widths | Failing check | Class | Blocker |');
+L.push('| Page | State | Widths | Failing check | Blocker |');
 L.push('|---|---|---|---|---|');
 notPass.forEach(p => {
   const c = classified[p.page];
-  L.push('| `' + p.page + '`' + (legacy.has(p.page) ? ' *(legacy)*' : '') + ' | ' +
-    p.passWidths + '/' + p.totalWidths + ' | ' + p.failedChecks.join(', ') + ' | ' +
-    c.class + ' | ' + c.blocker + ' |');
+  L.push('| `' + p.page + '` | **' + c.state + '** | ' + p.passWidths + '/' + p.totalWidths + ' | ' +
+    p.failedChecks.join(', ') + ' | ' + c.blocker + ' |');
 });
 L.push('');
-Object.entries(byClass).forEach(([k, v]) => L.push('- **' + k + '** — ' + v.length + ': `' + v.join('`, `') + '`'));
-L.push('');
-L.push('Resolution for every security-class entry is **real authenticated-session');
-L.push('verification** — not a code change, and not dismissing the control.');
+L.push('Resolution for every **BLOCKED** entry is **real authenticated-session verification**');
+L.push('— not a code change, and not dismissing the control. **UNPROVEN** means no valid');
+L.push('evidence exists yet; it must not be reported as a failure of the page.');
 
-const out = L.join('\n');
-if (process.argv.includes('--check')) { console.log('derivation consistent: ' + cPass + ' PASS / ' + cBlocked + ' BLOCKED of ' + counted.length); process.exit(0); }
-console.log(out);
+console.log(L.join('\n'));
