@@ -340,3 +340,12 @@
   .sd-perb, .sd-navi, .sd-deeper { transition: none; }
   .sd-navi:active, .sd-deeper:active { transform: none; }
 }
+
+/* ── The seven-day shape ──────────────────────────────────────────────────────
+   Movement, not values. No axis and no labels: the vertical scale is relative to the
+   window's own maximum, so reading a figure off it would be reading a number that is
+   not there. */
+.sd-sparkwrap { display: flex; align-items: center; gap: 9px; margin-top: 12px; }
+.sd-spark { width: 108px; height: 26px; color: #6ee7a8; flex: 0 0 auto; opacity: .95; }
+.sd-hero-unknown .sd-spark { color: rgba(255,255,255,.42); }
+.sd-sparkl { font-size: 11px; font-weight: 650; opacity: .6; letter-spacing: .02em; }

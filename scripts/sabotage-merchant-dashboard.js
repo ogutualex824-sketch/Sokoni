@@ -90,8 +90,8 @@ const CASES = [
 
   /* -- STRUCTURE: pulse, areas, period window ---------------------------- */
   ['a truncated ledger window is totalled anyway', 'sokoni-merchant-dashboard.js',
-   '    if (rows.length >= limit) return null;', '    if (false) return null;'],
-
+   "    if (rows.length >= limit) return null;           /* truncated — refuse to total it */",
+   "    if (false) return null;"],
   ['deliveries claim a zero they cannot support', 'sokoni-merchant-dashboard.js',
    "      deliveries: unknown('Delivery totals need the dispatch authority'),",
    '      deliveries: known(0),'],
@@ -107,6 +107,19 @@ const CASES = [
   ['a delivery sentence is invented', 'sokoni-merchant-dashboard.js',
    "    if (f.deliveries && f.deliveries.state !== 'unknown' && f.deliveries.value > 0) {",
    "    if (true) { f.deliveries = { state: 'known', value: 4 };"],
+
+  /* -- trend + subtitle -------------------------------------------------- */
+  ['a truncated sample still draws a sparkline', 'sokoni-merchant-dashboard.js',
+   "    if (rows.length >= limit) return null;          /* truncated — the shape would lie */",
+   "    if (false) return null;"],
+
+  ['an all-zero week is drawn as a flat line', 'sokoni-merchant-dashboard.js',
+   '    if (!isFinite(max) || max <= 0) return \'\';',
+   '    if (false) return \'\';'],
+
+  ['health is claimed without knowing takings', 'sokoni-merchant-dashboard.js',
+   "    if (f.takings && f.takings.state === 'known' && f.takings.value > 0) {",
+   '    if (true) {'],
 ];
 
 let caught = 0, missed = 0;

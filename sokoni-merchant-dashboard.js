@@ -134,6 +134,30 @@
     return { gross: gross, comm: comm, count: n };
   }
 
+  /* SEVEN DAYS OF SALES, one bucket per day, oldest first. Built from ledger entries the
+     merchant can actually read. Returns null unless there is something real to draw:
+     a sparkline of seven zeroes is a picture of a dead shop, and if the sample was
+     truncated the shape would be wrong in a way nobody could see. */
+  function _series (rows, limit) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    if (rows.length >= limit) return null;          /* truncated — the shape would lie */
+    var days = [], i, d;
+    for (i = 6; i >= 0; i--) {
+      d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      days.push({ from: d.getTime(), to: d.getTime() + 86400000, total: 0 });
+    }
+    var any = false;
+    rows.forEach(function (e) {
+      var ms = _millis(e && e.createdAt);
+      var g = Number(e && e.grossAmount);
+      if (ms === null || !isFinite(g)) return;
+      for (var k = 0; k < days.length; k++) {
+        if (ms >= days[k].from && ms < days[k].to) { days[k].total += g; any = true; break; }
+      }
+    });
+    return any ? days.map(function (x) { return x.total; }) : null;
+  }
+
   async function loadFacts (ctx, window_) {
     var scope = ctx.scope || {};
     var out = {
@@ -148,7 +172,7 @@
          shop's dispatch activity that nothing establishes. See docs/findings. */
       deliveries: unknown('Delivery totals need the dispatch authority'),
       needsAttention: null,
-      bestSeller: null, lowStock: null, waiting: null,
+      bestSeller: null, lowStock: null, waiting: null, series: null,
       /* MONEY. Separate from the operational figures on purpose: this is the merchant's
          income and SOKONI's cut, and it must never be mixed with counts that are partial. */
       sales:      unknown('No billing period yet'),
@@ -317,6 +341,7 @@
           pcts[p] = 1; n++;
           var f = Number(e && e.fixedFee); if (isFinite(f) && f > 0) fixed[f] = 1;
         });
+        out.series = _series(rows, 50);
         var keys = Object.keys(pcts);
         if (!n || !keys.length) return;               /* no entries -> no rate claim */
         out.rate = {
@@ -458,6 +483,27 @@
     return out;
   }
 
+  /* A seven-day shape, drawn as an inline SVG polyline. Deliberately unlabelled and
+     axis-free: it shows MOVEMENT, and putting numbers on it would invite reading values
+     off a picture whose vertical scale is relative to its own maximum. */
+  function sparkline (series) {
+    if (!Array.isArray(series) || series.length < 2) return '';
+    var max = Math.max.apply(null, series);
+    if (!isFinite(max) || max <= 0) return '';
+    var W = 100, H = 26, step = W / (series.length - 1);
+    var pts = series.map(function (v, i) {
+      var y = H - 2 - ((Number(v) || 0) / max) * (H - 5);
+      return (i * step).toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var lastY = H - 2 - ((Number(series[series.length - 1]) || 0) / max) * (H - 5);
+    return '<svg class="sd-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" ' +
+      'aria-hidden="true" focusable="false">' +
+      '<polyline points="' + pts + '" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />' +
+      '<circle cx="' + W + '" cy="' + lastY.toFixed(1) + '" r="2.6" fill="currentColor" />' +
+      '</svg>';
+  }
+
   function pulseTile (emoji, label, v, isMoney) {
     var isKnown = v && v.state !== 'unknown';
     var txt = isKnown ? (isMoney ? money(v.value) : String(v.value)) : UNKNOWN;
@@ -482,6 +528,27 @@
         esc(isKnown ? money(v.value) : UNKNOWN) + '</div></div>';
   }
 
+  /* "Your shop is looking healthy today" is a JUDGEMENT, and health cannot be judged
+     while the day's takings are unreadable. So the line is earned, not decorative: it
+     reflects what is actually known, and falls back to naming the shop rather than
+     cheerfully asserting a state nobody measured. */
+  function subtitle (f, ctx) {
+    if (!f) return ctx.shopName || 'Your shop';
+    if (f.needsAttention !== null && f.needsAttention > 0) {
+      return f.needsAttention === 1 ? 'One order is waiting for you'
+                                    : f.needsAttention + ' orders are waiting for you';
+    }
+    if (f.waiting !== null && f.waiting > 0) {
+      return f.waiting === 1 ? 'A customer is waiting for a reply'
+                             : f.waiting + ' customers are waiting for replies';
+    }
+    if (f.lowStock && f.lowStock.count > 0) return 'Some products are running low';
+    if (f.takings && f.takings.state === 'known' && f.takings.value > 0) {
+      return 'Your shop is looking healthy today';
+    }
+    return ctx.shopName || 'Your shop';
+  }
+
   function view (S) {
     var f = S.facts, ctx = S.ctx;
     var name = ctx.userName ? String(ctx.userName).split(' ')[0] : null;
@@ -491,7 +558,7 @@
     '<div class="sd">' +
       '<header class="sd-hi">' +
         '<div class="sd-hi-t">👋 ' + esc(greeting()) + (name ? ', ' + esc(name) : '') + '</div>' +
-        '<div class="sd-hi-s">' + esc(ctx.shopName || 'Your shop') + '</div>' +
+        '<div class="sd-hi-s">' + esc(subtitle(S.facts, ctx)) + '</div>' +
       '</header>' +
 
       /* ── HERO ─────────────────────────────────────────────────────────────── */
@@ -505,6 +572,8 @@
           ? '<div class="sd-trend">' + (f.trend.value >= 0 ? '↑' : '↓') + ' ' +
             esc(Math.abs(f.trend.value).toFixed(1)) + '% from yesterday</div>'
           : '<div class="sd-why">' + esc((f.takings && f.takings.note) || '') + '</div>') +
+        (S.facts.series ? '<div class="sd-sparkwrap">' + sparkline(S.facts.series) +
+          '<span class="sd-sparkl">Last 7 days</span></div>' : '') +
         '<div class="sd-chips">' +
           statChip('🟢', f.orders, 'orders') +
           statChip('🔵', f.customers, 'customers') +
@@ -710,5 +779,6 @@
     _renderValue: renderValue, _insights: insights, _money: money, _greeting: greeting,
     _loadFacts: loadFacts, UNKNOWN: UNKNOWN, ACTIONS: ACTIONS,
     _rateLine: rateLine, _period: _period,
+    _subtitle: subtitle, _sparkline: sparkline, _series: _series, NAV: NAV, PERIODS: PERIODS,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

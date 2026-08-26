@@ -547,6 +547,88 @@ function mkCtx (over) {
   }
   inst.destroy();
 
+  head('20 - 📈 the trend visualisation');
+  const dayAgo = (n) => Date.now() - n * 86400000;
+  ctx = mkCtx({ db: {
+    queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+    queryConversations: async () => [], queryPayouts: async () => [],
+    readBilling: async () => ({ grossSalesKES: 9000, totalCommissionKES: 450 }),
+    readWallet: async () => null,
+    queryCommission: async () => ([
+      { createdAt: dayAgo(0), grossAmount: 1200, commissionKES: 60, commissionPct: 5 },
+      { createdAt: dayAgo(1), grossAmount: 800,  commissionKES: 40, commissionPct: 5 },
+      { createdAt: dayAgo(3), grossAmount: 2000, commissionKES: 100, commissionPct: 5 },
+    ]),
+  } });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('a sparkline is drawn from real ledger entries', /class="sd-spark"/.test(host.innerHTML));
+  ck('it has seven points', (host.innerHTML.match(/polyline points="([^"]*)"/) || ['',''])[1]
+     .trim().split(/\s+/).length === 7, 'one bucket per day');
+  ck('it is labelled as a window, not as values', /Last 7 days/.test(host.innerHTML));
+  ck('and it is aria-hidden — it is decoration over facts stated elsewhere',
+     /class="sd-spark" viewBox="[^"]*" preserveAspectRatio="none" aria-hidden="true"/.test(host.innerHTML));
+  inst.destroy();
+
+  ctx = mkCtx();   /* no ledger entries at all */
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('NO sparkline when there is nothing real to draw', !/class="sd-spark"/.test(host.innerHTML),
+     'seven zeroes is a picture of a dead shop, not an absence of data');
+  inst.destroy();
+
+  {
+    const flat = [];
+    for (let i = 0; i < 50; i++) flat.push({ createdAt: Date.now(), grossAmount: 5, commissionKES: 1, commissionPct: 5 });
+    ctx = mkCtx({ db: {
+      queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+      queryConversations: async () => [], queryPayouts: async () => [],
+      readBilling: async () => null, readWallet: async () => null,
+      queryCommission: async () => flat,
+    } });
+    host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+    ck('a truncated sample draws NO sparkline', !/class="sd-spark"/.test(host.innerHTML),
+       'the shape would be wrong in a way nobody could see');
+    inst.destroy();
+  }
+
+  ctx = mkCtx({ db: {
+    queryOrders: async () => [], queryProducts: async () => [], queryStats: async () => [],
+    queryConversations: async () => [], queryPayouts: async () => [],
+    readBilling: async () => null, readWallet: async () => null,
+    /* Real dates, zero value — a week in which nothing sold. */
+    queryCommission: async () => ([
+      { createdAt: dayAgo(0), grossAmount: 0, commissionKES: 0, commissionPct: 5 },
+      { createdAt: dayAgo(2), grossAmount: 0, commissionKES: 0, commissionPct: 5 },
+    ]),
+  } });
+  host = mkEl('div'); inst = D.mount(host, ctx); await settle();
+  ck('an all-zero week draws NO flat line', !/class="sd-spark"/.test(host.innerHTML),
+     'a flat line at the baseline is a picture of a dead shop presented as a trend');
+  inst.destroy();
+
+  head('21 - the greeting subtitle is earned, not decorative');
+  ck('with orders waiting, it says so', D._subtitle(
+     { needsAttention: 3, waiting: 0, lowStock: null, takings: D._unknown('x') }, {}) ===
+     '3 orders are waiting for you');
+  ck('one order is singular', D._subtitle(
+     { needsAttention: 1, waiting: 0, lowStock: null, takings: D._unknown('x') }, {}) ===
+     'One order is waiting for you');
+  ck('then customers waiting', D._subtitle(
+     { needsAttention: 0, waiting: 2, lowStock: null, takings: D._unknown('x') }, {}) ===
+     '2 customers are waiting for replies');
+  ck('then low stock', D._subtitle(
+     { needsAttention: 0, waiting: 0, lowStock: { count: 2 }, takings: D._unknown('x') }, {}) ===
+     'Some products are running low');
+  ck('"looking healthy" is said ONLY when takings are known and positive', D._subtitle(
+     { needsAttention: 0, waiting: 0, lowStock: null, takings: D._known(5000) }, {}) ===
+     'Your shop is looking healthy today');
+  ck('with takings UNKNOWN it does NOT claim health', D._subtitle(
+     { needsAttention: 0, waiting: 0, lowStock: null, takings: D._unknown('x') },
+     { shopName: 'Mama Njeri Stores' }) === 'Mama Njeri Stores',
+     'health cannot be judged while the day\'s money is unreadable');
+  ck('and a real zero day is not called healthy', D._subtitle(
+     { needsAttention: 0, waiting: 0, lowStock: null, takings: D._known(0) },
+     { shopName: 'Shop' }) === 'Shop');
+
   head('11 - shell wiring');
   const MV2 = fs.readFileSync(path.join(ROOT, 'merchant-v2.html'), 'utf8');
   ck('the module and stylesheet are loaded', /sokoni-merchant-dashboard\.js/.test(MV2)
