@@ -8,7 +8,15 @@
 const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 const { chromium } = require(path.join(ROOT, "node_modules", "playwright"));
-const BASE = "http://127.0.0.1:3000";
+const argv = process.argv.slice(2);
+const BASE = (() => { const i = argv.indexOf("--base"); return i >= 0 ? argv[i + 1] : "http://127.0.0.1:3000"; })();
+/* Production pages authenticate through an ES module (import { auth } from "./firebase.js").
+   A window.firebase compat stub CANNOT satisfy that -- the page silently redirects to
+   login and the harness measures the LOGIN page. Intercept the MODULE instead. The
+   product file is never modified; only what the browser receives during the test. */
+const CLAIMS = (() => { const i = argv.indexOf("--claims"); return i >= 0 ? JSON.parse(argv[i + 1]) : { admin: true, superAdmin: true }; })();
+const STUB_MODULE = fs.readFileSync(path.join(__dirname, "fixtures", "firebase-stub-module.js"), "utf8")
+  .split("__CLAIMS__").join(JSON.stringify(CLAIMS));  /* global: a single replace hit the comment */
 global.window = {}; global.location = { pathname: "/admin-os.html" };
 require(path.join(ROOT, "sokoni-admin-nav.js"));
 const NAV = global.window.SokoniAdminNav;
@@ -37,6 +45,7 @@ const reachFn = () => {};
   const open = async (pg) => {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
     await ctx.addInitScript(ADMIN);
+    await ctx.route("**/firebase.js", r => r.fulfill({ status: 200, contentType: "application/javascript", body: STUB_MODULE }));
     const p = await ctx.newPage();
     await p.goto(BASE + "/" + pg, { waitUntil: "domcontentloaded", timeout: 20000 });
     await p.waitForTimeout(1200);
@@ -68,7 +77,7 @@ const reachFn = () => {};
   };
 
   console.log("\nPHASE 1 -- shared Admin shell");
-  let shellOk = 0, stampOk = 0, destOk = 0, checked = 0;
+  let shellOk = 0, stampOk = 0, destOk = 0, checked = 0; const p1fail = [];
   for (const pg of NAV.pages.slice(0, 12).map(x => x.page)) {
     try {
       const { ctx, p } = await open(pg);
@@ -82,12 +91,14 @@ const reachFn = () => {};
       if (r.header && r.side) shellOk++;
       if (r.ws === "admin") stampOk++;
       if (r.hrefs.length && r.hrefs.every(h => REG.has(String(h).replace(/^\.?\//, "")))) destOk++;
+      if (!(r.header && r.side) || r.ws !== "admin") p1fail.push(pg + " [shell=" + (r.header && r.side) + " ws=" + r.ws + "]");
       await ctx.close();
     } catch (e) { }
   }
   rec("1", "shell renders on " + shellOk + "/" + checked + " sampled pages", shellOk === checked && checked > 0 ? "PASS" : "FAIL");
   rec("1", "workspace stamped on " + stampOk + "/" + checked, stampOk === checked && checked > 0 ? "PASS" : "FAIL");
   rec("1", "shell destinations all registered (" + destOk + "/" + checked + ")", destOk === checked && checked > 0 ? "PASS" : "FAIL");
+  if (p1fail.length) console.log("    failing: " + p1fail.join(", "));
   rec("1", "authenticated non-admin denial", "BLOCKED",
       "needs a real non-admin session; stubbing claims proves the stub, not the gate");
 
@@ -137,7 +148,12 @@ const reachFn = () => {};
   }
 
   console.log("\nPHASE 3/4 -- production authentication model");
-  const hasEntry = fs.existsSync(path.join(ROOT, "sokoni-admin-entry.js"));
+  /* Probe the SERVED tree, not the harness filesystem: the pages under test come
+     from --base, which may be a different worktree entirely. Checking ROOT here
+     reported BLOCKED against the candidate even though it serves the file. */
+  let hasEntry = false;
+  try { const rsp = await fetch(BASE + "/sokoni-admin-entry.js"); hasEntry = rsp.ok; } catch (e) { hasEntry = false; }
+  console.log("  (sokoni-admin-entry.js served by " + BASE + ": " + (hasEntry ? "YES" : "NO") + ")");
   const why = "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch " +
               "admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would " +
               "certify the OBSOLETE model.";

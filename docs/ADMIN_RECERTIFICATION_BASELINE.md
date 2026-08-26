@@ -167,6 +167,78 @@ z-index or shell behaviour.
 baseline that shows what the Admin programme actually introduces versus what production
 already had.
 
+#### DISPOSITION ANALYSIS 2026-08-26 — evidence, and why the link stays for now
+
+**Recommendation: (a) obsolete legacy surface, retire from Admin navigation.**
+NOT registration, NOT keep-but-unreachable. **Not yet actioned** — see the
+dependency chain below.
+
+##### The three financial surfaces compared
+
+| | Registry | Gate | Claims refs | Collections |
+|---|---|---|---|---|
+| `financial-os.html` (66,130b) | **registered** finance/admin | `data-admin-guard="admin"` | 2 | escrows, finosAuditLog, fraudAlerts, ledger, payouts, **promotions** |
+| `finos-admin.html` (66,171b) | **registered** finance/admin | `data-admin-guard="admin"` | 2 | escrows, fosRefundQueue, subscriptionAuditLog, withdrawals |
+| **`finos.html`** (54,290b) | **not registered** | none — only the unenforced `data-require-role` | **0** | commissionRules, finosAuditLog, fraudAlerts, ledger, payouts |
+
+**`finos.html` is functionally near-subsumed.** Four of its five collections —
+`finosAuditLog`, `fraudAlerts`, `ledger`, `payouts` — are already served by
+`financial-os.html`, which is registered, claims-gated, larger, and covers two more.
+Both are "FinOS"; `finos.html` is the smaller, older-model one. File recency does not
+discriminate: all three were last touched by the same sweep commit.
+
+##### Its one unique function — narrow, and read-only
+
+`commissionRules`, read at `finos.html:688` in `_loadRules()`. **No other page reads
+that collection** (`commission-engine.html` reads none by that pattern;
+`commission-admin.html` reads `ledger`/`wallets`). So removing the link WOULD orphan a
+viewer — but the rules are:
+
+```
+match /commissionRules/{ruleId} {
+  allow read:   if isAuthed();
+  allow create: if isAdmin();
+  allow update: if isAdmin();
+}
+```
+
+`finos.html` cannot write them. It is a **read-only view of admin-managed data that
+any authenticated user may already read.**
+
+##### Why NOT the other two options
+
+- **(b) register it** — it has **zero** claims references. Registering would place an
+  uncertified surface into the population and grant it registry authority it does not
+  implement. That is registering to make D2 pass. Bringing it to standard means adding
+  `data-admin-guard` and a claims gate, at which point it duplicates `financial-os.html`.
+- **(c) keep but unreachable** — that is the status quo for `admin-os`'s three buried
+  links, and it leaves a surface carrying a **false role declaration** alive in the
+  workspace.
+
+##### Why the link is NOT removed yet — ORDERING MATTERS
+
+Deleting the link is **not sufficient**: `finos.html` stays reachable by direct URL
+behind only a `localStorage` gate regardless of navigation. Removing it would fix D2's
+**certification status** while leaving the authority defect untouched — and would
+orphan the `commissionRules` viewer before it has a home.
+
+**D2's resolution depends on the role-authority decision, not the reverse.**
+
+##### Dependency chain
+
+1. **Role-authority decision** — authoritative home for the `commissionRules` viewer;
+   address the unenforced `data-require-role`.
+2. **FinOS legacy disposition** — formally retire `finos.html` once its remaining
+   useful function has a proper home.
+3. **Navigation change** — remove the `financial-os` → `finos.html` shortcut.
+4. **Re-run D2** — confirm no registered Admin surface exposes an unregistered destination.
+5. **Direct-entry test** — separately verify `finos.html` cannot present an admin
+   console to an unauthorized user.
+
+**The distinction to preserve:** D2 is a **navigation/registry** violation; the
+`finos.html` gate is a **separate authority** defect. Fixing one does not fix the other.
+
+
 
 ### D3 — `enterprise-ops` header collision · ✅ **SCOPE AGREED 2026-08-26**
 

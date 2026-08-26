@@ -1,9 +1,9 @@
 {
   "tally": {
-    "PASS": 14,
-    "BLOCKED": 7,
-    "FAIL": 3,
-    "UNPROVEN": 1
+    "PASS": 16,
+    "BLOCKED": 1,
+    "FAIL": 1,
+    "UNPROVEN": 7
   },
   "rows": [
     {
@@ -105,50 +105,50 @@
     {
       "phase": "3/4",
       "item": "SokoniAdminEntry.guard(admin)",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "3/4",
       "item": "adminContext resolution",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "3/4",
       "item": "claims gate on admin.html",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "3/4",
       "item": "superAdmin path on super-admin.html",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "3/4",
       "item": "denial on unknown/error state",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "3/4",
       "item": "verification-admin.html current model",
-      "state": "BLOCKED",
+      "state": "UNPROVEN",
       "note": "sokoni-admin-entry.js ABSENT from this tree (present in production c774608); branch admin.html references SokoniAdminEntry 0 times vs 5 live. Testing this tree would certify the OBSOLETE model."
     },
     {
       "phase": "5",
-      "item": "section anchors reachable (9/10)",
-      "state": "FAIL",
+      "item": "section anchors reachable (10/10)",
+      "state": "PASS",
       "note": ""
     },
     {
       "phase": "5",
       "item": "#sec-alerts specifically",
-      "state": "FAIL",
-      "note": "covered by HEADER"
+      "state": "PASS",
+      "note": "reachable"
     },
     {
       "phase": "6",
