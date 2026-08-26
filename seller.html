@@ -2,6 +2,56 @@
 <html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true">
 
 <head>
+<!-- ═══ LEGACY COMPATIBILITY REDIRECT ═══════════════════════════════════════════
+     seller.html is no longer a merchant destination. merchant-v2 is the merchant
+     application; this file exists to keep old bookmarks, emails, server-generated
+     links and open tabs landing on the right module instead of on a second shell.
+
+     FIRST, and inline. A merchant who is leaving must not pay for auth-guard,
+     seller.js or a Firestore read on the way out, and nothing may paint. This runs
+     before the in-shell snippet below because a redirect that happens after first
+     paint is a visible flash of an application we are retiring.
+
+     IT CARRIES NO MAP. The raw section key is forwarded as the hash and
+     sokoni-merchant-routes.js names the destination at the other end — the same
+     contract merchant-v2 already resolves every route through. A copy here would be
+     the THIRD page-map in this file's history; the previous two drifted and silently
+     served Overview to every POS user, which is the failure the deep-link router was
+     written to prevent. One map, one truth.
+
+     ADDRESS FORMS. `#products` is transient in this shell — applied, then stripped by
+     the router below so the browser does not anchor-scroll — which is exactly why it
+     could never be the durable address here. `?sec=products` is durable because the
+     strip preserves location.search. merchant-v2 INVERTS this: its go() writes
+     `#<route>` with pushState and never strips it, and boot re-reads it, so the hash
+     is durable there. Both inbound forms therefore converge on one durable outbound
+     address — the migration removes the split rather than carrying it forward. The
+     hash still wins when both are present: it is the more recent navigation.
+
+     NEVER WHEN EMBEDDED. merchant-v2 still mounts this file in an iframe for the
+     four routes that declare kind:'seller'. Redirecting there would load the entire
+     merchant shell inside its own panel, recursively. The guard is the frame check,
+     not a URL test, so it holds however the shell addresses us. It is removed with
+     the last kind:'seller' route, not before.
+
+     ESCAPE HATCH. `?legacy=1` renders this shell untouched, so the old surface stays
+     reachable for a rollback or a side-by-side comparison while the four legacy
+     modules are ported. It is deliberately not a nav destination. -->
+<script>(function () {
+  try {
+    if (!window.parent || window.parent !== window) return;   /* embedded — see above */
+    var q = new URLSearchParams(location.search);
+    if (q.get('legacy') === '1') return;
+    var sec = (location.hash || '').slice(1).trim().toLowerCase()
+           || (q.get('sec') || '').trim().toLowerCase();
+    /* Everything except `sec` rides along: a deep link may carry state this file never
+       owned (?product=, ?order=), and dropping it silently would lose the merchant's
+       actual destination while appearing to route correctly. */
+    q.delete('sec'); q.delete('legacy');
+    var rest = q.toString();
+    location.replace('/merchant-v2' + (rest ? '?' + rest : '') + (sec ? '#' + sec : ''));
+  } catch (e) { /* never trap the merchant in a broken redirect — fall through to the shell */ }
+})();</script>
 <!-- In-shell boundary. The CLASS must land before first paint, or a module flashes its own
      bottom bar / consent modal inside the merchant panel before they are suppressed. An
      inline snippet does that with NO network request — strictly faster than a blocking

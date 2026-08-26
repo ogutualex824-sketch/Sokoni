@@ -530,7 +530,30 @@
     promotions:  'flash-sale',
     store:       'shop',
     tax:         'kra-tax',
-    'pos-printer-setup': 'pos-setup'
+    'pos-printer-setup': 'pos-setup',
+
+    /* ── LEGACY SELLER SECTIONS ────────────────────────────────────────────
+       seller.html is compatibility-only: every merchant destination now lives in
+       merchant-v2. Its resolver forwards the RAW section key it was addressed with
+       and lets this contract name the destination, so the legacy shell carries no
+       map of its own — a second copy is exactly how the two existing page maps
+       drifted and silently served Overview to every POS user.
+
+       SELLER_SECTIONS is the legacy vocabulary (16 keys). Thirteen already resolved
+       here, by route id or by an alias above. These are the three that did not, and
+       each returned null — which resolve() is documented to treat as "fail loudly",
+       so a merchant arriving on one would have been refused rather than routed.
+
+         overview  the legacy DEFAULT section, so it is the single most likely
+                   inbound key — a bare seller.html resolves to it.
+         history   'sales-history-section'. Reports/analytics/revenue share one
+                   renderer and one engine in v2, deliberately: two implementations
+                   would be two sets of numbers.
+         flash     the route was RENAMED to flash-sale. `promotions` was already
+                   aliased to it; the legacy spelling never was. */
+    overview:    'dashboard',
+    history:     'reports',
+    flash:       'flash-sale'
   };
 
   /* Mobile bottom navigation — exactly four, never more. Each MUST be a real route
