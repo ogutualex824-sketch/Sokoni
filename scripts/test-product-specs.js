@@ -136,6 +136,66 @@ const bad = S.build({ specs: { weight: { v: 5, u: 'furlongs' } } });
 ok(!bad.ok && /not a unit we recognise/i.test(bad.problems.join(' ')),
    'an unrecognised unit on a known measure is a problem the merchant sees');
 
+/* ── 10. SIZE IS NOT ALWAYS A MEASUREMENT ─────────────────────────────────
+   "XL" is a legitimate product attribute with no numeric value. Number('XL') is NaN, so any
+   path that coerces would drop it entirely — the same class of bug as Number(null) reporting
+   an absent stock as zero. And a bare 38 means nothing without its system: it is a different
+   shoe in EU and in US. */
+/* Null-safe reads. Under sabotage size() can return null, and a bare `.value` then THREW —
+   the suite died at the first assertion and printed NO failures at all, so a broken model
+   looked like a broken harness. A guard that crashes instead of failing is not a guard. */
+const sz = (v, sys) => S.size(v, sys) || {};
+
+console.log('\n10. Sizes — alpha, numeric and systemed');
+ok(sz('XL').value === 'XL' && sz('XL').system === 'alpha',
+   'XL survives as XL and identifies its own system');
+ok(sz('xl').value === 'XL', 'case is normalised for alpha sizes');
+ok(sz('XL').number === undefined, 'an alpha size carries NO number — it is not one');
+ok(sz(38, 'EU').system === 'EU' && sz(38, 'EU').number === 38,
+   'EU 38 keeps its system AND sorts, because it genuinely is a number');
+ok(sz(38, 'EU').system !== sz(38, 'US').system,
+   'EU 38 and US 38 are distinguishable — a 38 is a different shoe in each');
+ok(sz('4T', 'toddler').customSystem === true,
+   'a merchant\'s own sizing system is KEPT, not discarded over a vocabulary disagreement');
+ok(S.size('') === null && S.size(null) === null, 'an empty size is absent, not a blank value');
+/* No cross-system conversion is attempted, deliberately: alpha-to-EU differs by garment,
+   manufacturer and country, so a table would be a confident guess beside a real figure. */
+ok(sz('XL').base === undefined && sz(38, 'EU').base === undefined,
+   'NO cross-system conversion is invented');
+
+/* ── 11. THE UNIT FAMILIES A REAL SHOP NEEDS ──────────────────────────────── */
+console.log('\n11. Storage, power, voltage, frequency, charge and counts');
+['storage', 'power', 'voltage', 'frequency', 'charge', 'count'].forEach((dim) => {
+  ok(!!S.UNITS[dim], 'the ' + dim + ' family exists');
+});
+ok(S.measure('storage', 256, 'GB').base === 262144, '256 GB normalises to 262144 MB');
+ok(S.measure('charge', 5, 'Ah').base === 5000, '5 Ah normalises to 5000 mAh');
+ok(S.measure('frequency', 2.4, 'GHz').base === 2400000000, '2.4 GHz normalises to Hz');
+ok(S.canonicalUnit('count', 'tablets') === 'tablets', 'a pharmacy can count in tablets');
+ok(S.canonicalUnit('count', 'sachets') === 'sachets', '...and in sachets');
+/* Families must not leak into each other — a battery in mAh is not a weight. */
+ok(S.canonicalUnit('weight', 'mAh') === null,
+   'NEGATIVE CONTROL: mAh is refused as a WEIGHT');
+ok(S.canonicalUnit('storage', 'kg') === null,
+   'NEGATIVE CONTROL: kg is refused as STORAGE');
+
+/* ── 12. THE CATEGORIES A KENYAN MARKET ACTUALLY HAS ──────────────────────── */
+console.log('\n12. Medicine, hardware and cosmetics');
+const med = S.suggestionsFor('pharmacy').map((x) => x.key);
+ok(med.indexOf('dose') >= 0 && med.indexOf('packCount') >= 0 && med.indexOf('expiryDate') >= 0,
+   'a pharmacy is offered dose, pack count and expiry');
+const hw = S.suggestionsFor('tools').map((x) => x.key);
+ok(hw.indexOf('diameter') >= 0 && hw.indexOf('gauge') >= 0 && hw.indexOf('packQuantity') >= 0,
+   'hardware is offered diameter, gauge and pack quantity');
+const cos = S.suggestionsFor('beauty').map((x) => x.key);
+ok(cos.indexOf('spf') >= 0 && cos.indexOf('volume') >= 0, 'cosmetics are offered SPF and volume');
+const sizeDef = S.suggestionsFor('clothing').filter((x) => x.key === 'size')[0];
+ok(sizeDef && sizeDef.type === 'size',
+   'clothing size is a SIZE field, not free text and not a number');
+/* Still suggestions, not a schema. */
+ok(S.build({ specs: { dose: { v: 500, u: 'mg' } } }).ok,
+   'a dose can be recorded on ANY product — categories suggest, they do not constrain');
+
 /* ── 9. IT REACHES THE DOCUMENT ───────────────────────────────────────────
    The model being correct is worth nothing if the writer drops it. _productFields is a
    strict whitelist: anything it does not name is silently discarded, and the editor

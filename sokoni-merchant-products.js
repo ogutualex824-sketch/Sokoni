@@ -1122,6 +1122,28 @@
     }
 
     /* Dimensions read as one thing, so they are grouped rather than three loose rows. */
+    /* A size is value + SYSTEM, and the value is never coerced to a number — "XL" is a
+       real size that Number() would destroy. The system matters as much as the value: a
+       38 is a different shoe in EU and in US. */
+    function sizeField (key, label, cur) {
+      var SP = specModel();
+      var systems = (SP && SP.SIZE_SYSTEMS) ? Object.keys(SP.SIZE_SYSTEMS) : [];
+      var val = cur && (cur.value !== undefined ? cur.value : cur.v);
+      var sys = (cur && (cur.system || cur.u)) || "";
+      var alpha = (SP && SP.SIZE_SYSTEMS.alpha.values) || [];
+      return '<div class="pr-f pr-meas"><label class="pr-l" for="pf-' + key + '-v">' + esc(label) + '</label>' +
+        '<div class="pr-mrow">' +
+          '<input class="pr-i" id="pf-' + key + '-v" data-pf="spec.' + key + '.value" type="text" ' +
+            'maxlength="20" list="pf-sizes" placeholder="e.g. XL or 38" value="' + esc(val == null ? "" : val) + '">' +
+          '<select class="pr-i pr-u" aria-label="Size system" data-pf="spec.' + key + '.system">' +
+            '<option value="">Auto</option>' +
+            systems.map(function (x) { return opt(x, SP.SIZE_SYSTEMS[x].label, sys); }).join("") +
+          '</select>' +
+        '</div>' +
+        '<datalist id="pf-sizes">' + alpha.map(function (a) { return '<option value="' + a + '">'; }).join("") + '</datalist>' +
+      '</div>';
+    }
+
     function dimensionField (cur) {
       var SP = specModel();
       var units = (SP && SP.UNITS.length) ? Object.keys(SP.UNITS.length.units) : [];
@@ -1153,6 +1175,7 @@
       return '<div class="pr-sec">' + esc(label.charAt(0).toUpperCase() + label.slice(1)) + ' details</div>' +
         list.map(function (d) {
           var cur = specs[d.key];
+          if (d.type === 'size') return sizeField(d.key, d.label, cur);
           if (d.type === 'measure' && d.dim) return measureField(d.key, d.label, d.dim, cur, d.unit);
           if (d.type === 'measure') {
             /* A unit the dimension tables do not carry (mAh, cc) — fixed, and shown. */
