@@ -105,7 +105,10 @@ server.listen(0, async () => {
     /* seller.html sends an unauthenticated visitor to login; that is correct and is covered
        elsewhere. Block only that navigation so the header IIFE can be observed. */
     await page.route('**/login*', (r) => r.abort());
-    await page.goto(BASE + '/seller.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    /* ?legacy=1 — see the note at the head of PAGES in test-merchant-diag. The IIFE under test
+       runs in the legacy shell, which the shell still mounts in a frame for kind:'seller'
+       routes, so the defect this guards is live; a direct visit would just be redirected. */
+    await page.goto(BASE + '/seller.html?legacy=1', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2500);
 
     const st = await page.evaluate(() => ({

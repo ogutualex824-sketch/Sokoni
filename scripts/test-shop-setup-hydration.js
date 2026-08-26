@@ -166,7 +166,11 @@ server.listen(0, async () => {
       const isGapi = /apis\.google\.com|gapi/.test(stack) && /u\[v\] is not a function/.test(msg);
       if (!isGapi) errors.push(msg);
     });
-    await page.goto(BASE + '/seller.html#store', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    /* ?legacy=1. This suite tests the LEGACY getShopProfile -> seller.html#store form. The
+       native Shop surface (sokoni-merchant-store-ui.js, route kind:'native') is a different
+       authority entirely — getMyMinishop/saveMinishop — so pointing this at merchant-v2 would
+       not test the same thing. See docs/findings for the coverage gap that leaves. */
+    await page.goto(BASE + '/seller.html?legacy=1#store', { waitUntil: 'domcontentloaded', timeout: 60000 });
     /* Long enough for the stubbed round-trip plus any late overwrite. */
     await page.waitForTimeout(opts.settle || 9000);
     const form = await readForm(page);

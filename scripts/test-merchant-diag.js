@@ -34,7 +34,14 @@ const ck = (l, ok, d) => {
   ok ? pass++ : fail++;
 };
 
-const PAGES = ['seller.html', 'seller-analytics.html', 'inventory.html', 'profile.html'];
+/* ?legacy=1 IS THE ARCHITECTURAL CONTRACT, NOT A TEST BYPASS.
+   seller.html now redirects a DIRECT visit to /merchant-v2 — that is the supported behaviour,
+   and this suite is about the legacy shell itself, so it must ask for the legacy shell
+   explicitly. The redirect exempts exactly two cases and both are deliberate: an embedded
+   frame (window.parent !== window), which is how the shell still mounts kind:'seller' routes,
+   and ?legacy=1. Landing on /merchant-v2 instead is the redirect working, not a failure.
+   A test that quietly relied on direct navigation was asserting a contract that has moved. */
+const PAGES = ['seller.html?legacy=1', 'seller-analytics.html', 'inventory.html', 'profile.html'];
 
 srv.listen(0, async () => {
   const B = 'http://127.0.0.1:' + srv.address().port;
