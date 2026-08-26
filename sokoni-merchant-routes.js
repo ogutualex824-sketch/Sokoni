@@ -54,8 +54,17 @@
       mobile:true, desktop:true, activeKey:'dashboard',
       note:'Native KPI surface. Reads AnalyticsEngine.compute() — same source as Revenue/Analytics.' },
 
+    /* NATIVE as of the merchant-v2 migration. This was kind:'seller', which mounted
+       seller.html in an iframe — a second merchant application inside the first, with
+       its own auth boot, its own product query and its own idea of stock.
+
+       `sec:'products'` STAYS. It is not dead: it is the legacy inbound vocabulary, and
+       seller.html's compatibility resolver forwards ?sec=products here by that name.
+       Removing it would break every existing bookmark, email link and server-generated
+       URL the moment this shipped. The gate asserts every sec value against
+       SELLER_SECTIONS, so it also stays validated. */
     { id:'products', name:'Products', icon:'🏷️', tier:'primary',
-      kind:'seller', sec:'products',
+      kind:'native', sec:'products',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'products',
       note:'Canonical products list + Add Product + bulk upload. Writes products/{id}.' },

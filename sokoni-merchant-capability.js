@@ -72,7 +72,16 @@
     marketing: 'marketing',
     messages:  'messages',
     shop:      'store',    /* NOT 'shop'  — DASH_PAGES key is 'store'   */
-    staff:     'team'      /* NOT 'staff' — DASH_PAGES key is 'team'    */
+    staff:     'team',     /* NOT 'staff' — DASH_PAGES key is 'team'    */
+
+    /* Products became native in v2 (it was kind:'seller', mounting the legacy shell in
+       an iframe). That flip made it NEGOTIABLE for the first time, and without an entry
+       here it withheld — a v1 merchant would have opened their shell and found Products
+       simply gone from navigation, because withholding removes the route from every nav
+       projection. It is not a new capability with no old equivalent: seller.js has a real
+       'products' section (PAGES.products), which is exactly what v1 rendered until now.
+       So v1 DOWNGRADES to it and keeps working, while v2 renders natively. */
+    products:  'products'
   };
 
   /* Routes that are native in the certified registry and were ALSO native in

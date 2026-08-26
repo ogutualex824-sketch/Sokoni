@@ -695,6 +695,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-store-ui.js"></script>
 <script src="sokoni-merchant-tax.js"></script>
 <script src="sokoni-merchant-tax-ui.js"></script>
+<!-- Products, native. Reads the shop-scoped authority (SokoniMerchantData.listProducts)
+     and writes through the certified product writer — the SAME authority POS and Sell
+     consume, so the till and the catalogue cannot disagree about stock. The module holds
+     no Firestore import of its own: ctx.db is the only way it can touch storage.
+     sokoni-merchant-media.js first — the product editor composes through it for images. -->
+<script src="sokoni-merchant-media.js"></script>
+<script src="sokoni-merchant-products.js"></script>
 <!-- The canonical metric authority. Every figure on Dashboard, Revenue, Analytics and
      Reports comes from here; this shell computes none of its own. Not deferred: the
      inline shell script reads it during first paint. -->
@@ -1827,6 +1834,22 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      rather than refreshing a surface that would query the previous shop's data. */
   var MODULES = {
     sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
+    /* Products — native as of this commit; it was kind:'seller' and opened the legacy
+       shell in an iframe. Same ctx shape the module was certified against, taken rather
+       than re-derived: entitlement comes from SokoniAuthority (never from the page),
+       canPublish is a server callable, and `storage` is the same read-only db adapter,
+       because the bucket path derives from the resolved scope's sellerUid — which is
+       exactly what the Storage rule checks request.auth.uid against. */
+    products:   { global: 'SokoniMerchantProducts',    ctx: function () { return {
+                    scope: _scope(), db: _mdb, shopName: _shopName(),
+                    entitlement: function () {
+                      return window.SokoniAuthority
+                        ? window.SokoniAuthority.getMerchantEntitlements()
+                        : Promise.resolve(null);
+                    },
+                    canPublish: _callable('canPublishProduct'),
+                    storage: _mdb,
+                    onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
     staff:      { global: 'SokoniMerchantTeam',        ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
