@@ -519,6 +519,13 @@
           <div class="pay-method-grid">
             <button class="pay-method-btn active" data-method="cash" onclick="SPos.payment.setMethod('cash')"><span class="method-icon">💵</span>Cash</button>
             <button class="pay-method-btn mpesa" data-method="mpesa" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA</button>
+            <!-- Manual Till payment: the customer has ALREADY paid the merchant's own
+                 M-PESA Till directly, and the cashier records the confirmation code.
+                 Deliberately distinct from the "M-PESA" button above, which initiates an
+                 STK Push. Recording that a payment happened is not the same act as
+                 initiating one, and the transaction record must be able to tell them
+                 apart later — see docs/POS_MANUAL_TILL_PAYMENT.md. -->
+            <button class="pay-method-btn mpesa" data-method="mpesa_till" onclick="SPos.payment.setMethod('mpesa_till')"><span class="method-icon">🏪</span>M-PESA Till</button>
             <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
             <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
             <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
@@ -858,6 +865,40 @@
 </div>
 
 <!-- M-PESA payment -->
+<!-- ── Manual M-PESA Till payment ───────────────────────────────────────────────
+     The customer has already paid the merchant's Till directly. The cashier records
+     the confirmation code against THIS sale.
+
+     The wording is deliberate. This screen says the cashier is RECORDING a payment,
+     not that SOKONI verified one: with no C2B or STK integration on this path there
+     is no way to confirm with Safaricom that the money arrived. A screen that implied
+     verification would be making a claim the system cannot support. -->
+<div class="modal-overlay" id="mpesa-till-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title">M-PESA Till Payment</span><button class="modal-close" onclick="SPos.modal.close('mpesa-till-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Amount: <strong style="color:#00a84e;font-size:20px">KES <span id="mpesa-till-amount-disp">0</span></strong></div>
+      <div class="wiz-field">
+        <div class="wiz-label">M-PESA CONFIRMATION CODE</div>
+        <input class="wiz-input" id="mpesa-till-ref" placeholder="e.g. QK72ABC123" maxlength="10"
+               autocomplete="off" autocapitalize="characters" spellcheck="false"
+               style="text-transform:uppercase;letter-spacing:2px;font-family:monospace;font-size:18px"
+               oninput="SPos.mpesaTill.onInput()" onkeydown="if(event.key==='Enter')SPos.mpesaTill.confirm()">
+        <div id="mpesa-till-hint" style="font-size:12px;color:var(--txt2);margin-top:6px">10 characters, from the customer's M-PESA SMS.</div>
+      </div>
+      <div style="font-size:12px;color:var(--txt2);background:rgba(255,176,32,.10);border-left:3px solid #ffb020;padding:9px 11px;border-radius:8px;line-height:1.5">
+        This records that the customer paid the Till and supplies the reference.
+        It is <strong>not</strong> an independent confirmation from Safaricom.
+      </div>
+      <div id="mpesa-till-result" style="display:none;margin-top:12px;font-size:13px;padding:10px 12px;border-radius:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('mpesa-till-modal')">Cancel</button>
+      <button class="modal-btn" id="mpesa-till-confirm-btn" onclick="SPos.mpesaTill.confirm()" disabled style="background:#00a84e;color:#fff;flex:2">Record Payment</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mpesa-modal">
   <div class="modal" style="max-width:380px">
     <div class="modal-header"><span class="modal-title">M-PESA Payment</span><button class="modal-close" onclick="SPos.modal.close('mpesa-modal')">✕</button></div>

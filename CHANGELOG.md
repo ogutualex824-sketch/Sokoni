@@ -1,3 +1,86 @@
+## [2026-08-27] — POS manual M-PESA Till payment (no Safaricom API dependency)
+
+**Not deployed.** Requires a functions deploy + hosting deploy.
+
+### Added — `mpesa_till_manual`
+
+The customer pays the merchant's own Till directly; the cashier records the M-PESA
+confirmation code against that sale. `sale → Till payment → reference → paid → sync →
+receipt → print`, with **no** STK Push, Daraja credentials, callback, or shortcode.
+
+Recording is not verification: the record states that the cashier recorded a Till payment
+and supplied a reference — never that SOKONI confirmed the money arrived. Carried in data as
+`paymentVerified: false` / `paymentAttestedBy: 'operator'`, and stated on the UI. Other
+payment methods were deliberately NOT given a verification status this change cannot
+establish.
+
+`posTransactions` confirmed canonical (what `PosSyncEngine` actually writes, already
+idempotent). `posCompleteCheckout` is a `dryRun`/shadow harness, not an authoritative write.
+
+### Fixed — POS receipts printed no payment section at all
+
+`PosPrintService` renders its payment block from a `payments` array
+(`sokoni-pos-print-service.js:1243`). **Nothing ever populated it** — the transaction had no
+such field and the call site passed `undefined`. So `b.payment()` was never called: no
+method, no code, no tendered, no change, on every POS receipt. The renderer supported all of
+it.
+
+⚠️ **User-visible:** every POS receipt will now show a payment section that was previously
+absent. `amount` (applied) is kept distinct from `tendered` (handed over) — conflating them
+would overstate takings on every cash receipt.
+
+The live renderer is **`PosPrintService`, not `SokoniReceiptDoc`** — the latter is loaded by
+`pos.html:2383` but referenced zero times by the print service. Wiring to it would have
+printed nothing. The suite asserts this assumption so it fails loudly if it changes.
+
+### Fixed in review — a split sale is TWO tenders
+
+`payment.complete` receives `method: 'split'` with `splitCash`/`splitMpesa`. The first tender
+builder emitted ONE line labelled **`split`** — a word naming no payment method — carrying the
+M-PESA code, and would have printed that on the customer's receipt. Caught before deployment.
+A split now emits two tenders, the code on the M-PESA line only; a zero portion emits no line
+and a tender set is never empty. The suite **executes the shipped builder** rather than
+matching its source, because a split rendering wrongly is a runtime fact.
+
+Previously invisible precisely because the payment section never rendered.
+
+### Security — server-side reference uniqueness
+
+One M-PESA code may attach to at most one completed sale. Enforced by a deterministic
+transactional claim at `mpesaReferenceClaims/{merchantId}__{REF}`, idempotent for the same
+sale (the sync queue retries). The client check cannot be the guard: the POS is offline-first
+and two devices can accept the same reference independently.
+
+**A duplicate does not reject the sale.** The money moved before SOKONI heard about it;
+voiding would destroy the record of a real payment. Conflicts are written to
+`mpesaReferenceConflicts` and the sale is marked — status and total untouched. Mirrors the
+existing oversell rule.
+
+**Rules:** no change needed. Neither collection is matched by any clause and there is no
+`{document=**}` catch-all, so both are default-denied to clients and reachable only by Cloud
+Functions. This also avoids the compiled-ruleset size ceiling.
+
+### Documented, NOT fixed
+
+`posSales` is referenced by ten backend modules and written by nothing in `pos.js`. Three POS
+sale collections exist (`posTransactions`, `posRetailSales`, `posSales`). This is likely the
+mechanism behind the recorded "POS sales absent from Orders/Analytics/Revenue" defect, and is
+left as a separate pre-existing defect rather than fixed silently inside a payment change.
+
+**Files:** `pos.html` · `pos.js` · `sokoni-pos-print-service.js` ·
+`functions/pos-mpesa-refs.js` (new) · `functions/index.js` (re-export) ·
+`scripts/test-pos-manual-till-payment.js` (new, 57/0) · `docs/POS_MANUAL_TILL_PAYMENT.md` (new)
+
+**Regression:** `test-pos-payment-destination` 90/0 · `test-receipt-contract` 132/0 ·
+`test-single-shop-checkout` 29/0 · `test-daraja-stk-payload` 14/0
+
+**Untouched:** Daraja/STK · `productionAuthorized` · `darajaStoreNumber` · C2B · commission ·
+print bridge (`BRIDGE_ENABLED = false`).
+
+---
+
+---
+
 ## [2026-08-26] - FREEZE: implementation-complete, physical E2E unproven.
 
 **The print bridge is frozen for the real-device run.** No further code before a handset, a

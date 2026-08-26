@@ -202,8 +202,12 @@ class RawReceiptBuilder {
     const byMethod = {};
     for (const p of payments) byMethod[p.method] = p;
     for (const [m, p] of Object.entries(byMethod)) {
+      /* An unmapped method falls through to the raw key, which would print
+         "mpesa_till_manual" on a customer's receipt. Every method the POS can
+         actually record needs an entry here. */
       const label = { cash:'Cash', mpesa:'M-Pesa', card:'Card', wallet:'Wallet',
-                      gift_card:'Gift Card', loyalty_full:'Loyalty' }[m] || m;
+                      gift_card:'Gift Card', loyalty_full:'Loyalty',
+                      mpesa_till_manual:'M-Pesa Till' }[m] || m;
       this._col2(label + ':', _kes(p.amount));
       if (p.ref || p.mpesaCode)  this._col2('  Code:', p.ref || p.mpesaCode);
       if (p.tendered)            this._col2('  Tendered:', _kes(p.tendered));

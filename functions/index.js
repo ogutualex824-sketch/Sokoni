@@ -11343,6 +11343,11 @@ exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
 
+/* ── Manual M-PESA Till reference claims ────────────────────────────── */
+const posMpesaRefs = require('./pos-mpesa-refs');
+exports.claimPosMpesaReference   = posMpesaRefs.claimPosMpesaReference;
+exports.onPosTransactionMpesaRef = posMpesaRefs.onPosTransactionMpesaRef;
+
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');
 exports.facebookDataDeletion           = fbDeletion.facebookDataDeletion;
