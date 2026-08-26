@@ -311,9 +311,13 @@ console.log('\n9. Specs survive the writer whitelist and reach the document');
   const MD = require(path.join(__dirname, '..', 'sokoni-merchant-data.js'));
   let captured = null;
   const db = { writeProduct: async (o) => { captured = o; return { ok: true }; } };
+  /* The inventory authority, recorded rather than stubbed away — the derived total has to be
+     observable somewhere, and this is now where it goes. */
+  const adjusted = [];
+  const adjustStock = async (payload) => { adjusted.push(payload); return { ok: true }; };
 
   await MD.createProduct({
-    scope: { ok: true, shopId: 's1', sellerUid: 'u1' }, db, draftToken: 't1',
+    scope: { ok: true, shopId: 's1', sellerUid: 'u1' }, db, draftToken: 't1', adjustStock,
     product: {
       name: 'Nike Air Max', price: 8500, stock: 0, category: 'clothing',
       specs: { brand: 'Nike' }, stockUnit: { name: 'pairs' },
@@ -327,8 +331,22 @@ console.log('\n9. Specs survive the writer whitelist and reach the document');
   ok(d.specs && d.specs.brand === 'Nike', 'specs reached the document');
   ok(Array.isArray(d.variants) && d.variants.length === 2, 'variants reached the document');
   ok(d.stockUnit && d.stockUnit.name === 'pairs', 'the stock unit reached the document');
-  /* The one that matters to the till: input said 0, variants say 8+3. */
-  ok(d.stock === 11, 'product stock was DERIVED (11), not taken from the input 0', 'got ' + d.stock);
+  /* ── THE ONE THAT MATTERS TO THE TILL — and it changed destination ─────────
+     This previously asserted `d.stock === 11`: the derived variant total written straight into
+     the product document. That assertion was GREEN while protecting a defect — the write went
+     through a plain setDoc(merge) with no transaction, no inventoryVersion and no floor, which
+     is exactly the untransacted shelf mutation the inventory boundary now forbids.
+
+     The derivation itself was never wrong and is unchanged: input said 0, variants say 8+3, the
+     answer is 11. What changed is where 11 goes. It is an opening quantity, so it takes the same
+     server authority every later movement takes — transactional, floored, versioned, and filed
+     in stockMovements. A test that asserts the old destination would now be asserting the bug. */
+  ok(d.stock === undefined, 'the derived total does NOT go into the product document',
+     'got ' + d.stock);
+  ok(adjusted.length === 1, 'it went to the inventory authority instead', 'calls: ' + adjusted.length);
+  ok(adjusted[0] && adjusted[0].delta === 11,
+     'and the DERIVATION is intact — 8 + 3 = 11, not the input 0',
+     'got delta ' + (adjusted[0] && adjusted[0].delta));
   ok(d.price === 8500 && d.name === 'Nike Air Max' && d.category === 'clothing',
      'the existing fields are untouched');
   ok(d.shopId === 's1' && d.sellerUid === 'u1',

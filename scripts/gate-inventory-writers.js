@@ -129,6 +129,38 @@ const CLIENT = [
          'reports a denied write instead of swallowing it. Replaced PosOmni.pushStock in 6daec0b.' },
 ];
 
+/* merchant-v2.html is registered as a PRODUCT METADATA writer — never an inventory one.
+
+   It was NOT registered to make this gate green. It was registered only after the writer was
+   made structurally incapable of writing authority fields, and the sequence matters:
+
+     · SokoniMerchantData._productFields no longer allowlists `stock`;
+     · the specs path no longer copies `stock` out of built.patch (variant totals reached the
+       document that way, and removing the allowlist entry alone would NOT have closed it);
+     · updateProduct THROWS on a stock or variants patch rather than dropping it;
+     · opening stock at create is handed to merchantAdjustStock — the server authority — as the
+       product's first movement, so it is transactional, floored, versioned and filed in
+       stockMovements;
+     · and _mdb._refuseAuthorityFields() throws at the WRITE SITE if stock / sold /
+       inventoryVersion / stockQty appear in the payload at all.
+
+   The last one is why this entry is honest rather than aspirational. The payload is computed,
+   so this detector correctly reports it as unreadable; the guard means an unreadable payload
+   still cannot carry authority fields. Enforced by scripts/test-inventory-authority-boundary.js
+   (55/0) whose sabotage runner fails the suite the moment direct stock mutation is restored.
+
+   If a future change makes this file write stock again, the right move is to fix that change —
+   not to broaden this entry. */
+const METADATA = [
+  { file: 'merchant-v2.html', sites: 2,
+    why: 'Product METADATA writer (name/price/sku/category/description/status/specs) via the ' +
+         'SokoniMerchantData adapter. Writes canonical products/{id} with a computed payload, ' +
+         'which this detector cannot read — so the file guards its own write site: ' +
+         '_refuseAuthorityFields() THROWS on stock, sold, inventoryVersion or stockQty. Stock ' +
+         'moves only through merchantAdjustStock (correction/opening) and posCompleteCheckout ' +
+         '(sale). Proof: scripts/test-inventory-authority-boundary.js, 55/0 + 12/12 sabotages.' },
+];
+
 const QUARANTINE = [
   { file: 'sokoni-wap-definitions.js', sites: 2,
     why: 'wap.register(\'inventory.reserve\'/\'inventory.release\') writes canonical products/{id}.stock ' +
@@ -181,9 +213,10 @@ const AUTHORING = [
          'is why it was invisible until helper-body resolution was added.' },
 ];
 
-const REGISTER = [...SERVER, ...CLIENT, ...AUTHORING, ...QUARANTINE];
+const REGISTER = [...SERVER, ...CLIENT, ...METADATA, ...AUTHORING, ...QUARANTINE];
 const TIER = new Map([...SERVER.map((e) => [e.file, 'SERVER']),
                       ...CLIENT.map((e) => [e.file, 'CLIENT']),
+                      ...METADATA.map((e) => [e.file, 'METADATA']),
                       ...AUTHORING.map((e) => [e.file, 'AUTHORING']),
                       ...QUARANTINE.map((e) => [e.file, 'QUARANTINE'])]);
 
@@ -496,7 +529,7 @@ function scanSource(rel, raw) {
   return { hits, review };
 }
 
-module.exports = { scanSource, SERVER, CLIENT, AUTHORING, QUARANTINE, REGISTER, AUTHORITY_FIELDS };
+module.exports = { scanSource, SERVER, CLIENT, METADATA, AUTHORING, QUARANTINE, REGISTER, AUTHORITY_FIELDS };
 
 /* Everything below is the CLI. Requiring this file must not scan or exit. */
 if (require.main !== module) return;

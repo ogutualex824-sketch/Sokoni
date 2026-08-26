@@ -1775,9 +1775,34 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        `create` uses a TRANSACTION rather than get()-then-set() so a double tap or
        a retry after a dropped response claims the same document instead of
        racing into a second product. */
+    /* AUTHORITY FIELDS CANNOT PASS THIS POINT.
+       The payload is computed (Object.assign over a caller-built object), so no static
+       detector can prove what it contains — and it should not have to take a promise made
+       further upstream on trust. stock / sold / inventoryVersion / stockQty are inventory
+       authority: they move only through merchantAdjustStock and posCompleteCheckout, which are
+       transactional, floor at zero and write stock + updatedAt + inventoryVersion together.
+
+       This throws rather than stripping. A silently dropped field is how a merchant ends up
+       looking at a "Saved" toast while the shelf count never moved, and the whole point of the
+       inventory boundary is that such a thing should be impossible to express, not merely
+       discouraged. */
+    _AUTHORITY_FIELDS: ['stock', 'sold', 'inventoryVersion', 'stockQty'],
+    _refuseAuthorityFields: function (data, where) {
+      var self = this;
+      var bad = self._AUTHORITY_FIELDS.filter(function (k) {
+        return data && Object.prototype.hasOwnProperty.call(data, k);
+      });
+      if (bad.length) {
+        throw new Error('Stock is changed in Inventory, not here (' + where + ' tried to write ' +
+                        bad.join(', ') + ').');
+      }
+      return data;
+    },
     writeProduct: function (o) {
+      var self = this;
       return sdk().then(function (m) {
         if (!window.firebaseDB) throw new Error('Products cannot be saved just now.');
+        self._refuseAuthorityFields(o && o.data, 'writeProduct');
         var ref = m.fs.doc(window.firebaseDB, 'products', o.id);
         /* Timestamps are stamped HERE, with serverTimestamp(), not by the writer
            and never from Date.now(). A device clock is not a timestamp authority:
@@ -1954,6 +1979,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        exactly what the Storage rule checks request.auth.uid against. */
     products:   { global: 'SokoniMerchantProducts',    ctx: function () { return {
                     scope: _scope(), db: _mdb, shopName: _shopName(),
+                    /* The SAME server authority Inventory uses. Products never writes a shelf
+                       count itself; an opening quantity is handed to merchantAdjustStock so it
+                       is transactional, floored, versioned and recorded as a movement. */
+                    adjustStock: function (payload) {
+                      return _callable('merchantAdjustStock')(payload).then(function (r) { return r.data; });
+                    },
                     entitlement: function () {
                       return window.SokoniAuthority
                         ? window.SokoniAuthority.getMerchantEntitlements()

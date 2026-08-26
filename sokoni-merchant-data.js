@@ -4,9 +4,20 @@
    merchant.html's Sell and Inventory surfaces read and write through here, and
    through nothing else. The point of the module is what it CANNOT do:
 
-     • it has no stock-writing function at all — not one. Inventory movement is
-       the server's, via posCompleteCheckout, which deducts canonical
-       `products.stock` inside a transaction with `inventoryVersion`.
+     • it writes no stock into the product document — not one field. Product metadata and
+       shelf counts are different authorities. Inventory movement is the server's:
+       posCompleteCheckout deducts canonical `products.stock` inside a transaction with
+       `inventoryVersion`, and merchantAdjustStock is the correction path.
+
+       createProduct DOES accept an `openingStock`, and routes it through merchantAdjustStock
+       as the product's first movement — so it is transactional, floored, versioned and filed
+       in stockMovements like every other change. It is never a field in the metadata write.
+       updateProduct REFUSES a stock patch outright rather than dropping it silently.
+
+       This paragraph previously claimed the module had "no stock-writing function at all —
+       not one", while `_productFields` allowlisted `stock` and the specs path added it again
+       from variant totals. The prose was wrong and the code was authoritative. Corrected only
+       after the behaviour was fixed and executed against — never the other way round.
      • it never reads business state from localStorage. seller.js keeps 28
        device-local keys; every figure here comes from `products` / `orders` /
        the POS callables, or it is reported as unknown.
@@ -227,7 +238,12 @@
     /* Carried because the Inventory projection maps it to buyingPrice; without it
        every mirrored product would report a 0 cost and therefore a 100% margin. */
     if (p.costPrice !== undefined) out.costPrice = Number(p.costPrice);
-    if (p.stock !== undefined) out.stock = Number(p.stock);
+    /* stock is DELIBERATELY ABSENT from product metadata. It is inventory authority, and it
+       moves only through merchantAdjustStock — a server transaction that floors at zero and
+       writes stock + updatedAt + inventoryVersion together. Allowing it here let the Products
+       editor change a shelf count through a plain setDoc(merge): no transaction, no version,
+       no movement record. Opening stock at CREATE is still supported, routed through that same
+       server authority — see openingStockOf() and createProduct's openingStock. */
     if (p.sku !== undefined)   out.sku = p.sku ? String(p.sku).trim().slice(0, 64) : null;
     if (p.category !== undefined) out.category = p.category ? String(p.category).slice(0, 64) : null;
     if (p.description !== undefined) out.description = String(p.description || '').slice(0, 4000);
@@ -256,9 +272,36 @@
     if (SP && (p.specs !== undefined || p.variants !== undefined || p.stockUnit !== undefined)) {
       var built = SP.build({ specs: p.specs, variants: p.variants, stockUnit: p.stockUnit, stock: out.stock });
       if (!built.ok) { var se = new Error(built.problems[0]); se.validation = built.problems; throw se; }
-      Object.keys(built.patch).forEach(function (k) { out[k] = built.patch[k]; });
+      /* built.patch carries `stock` when variants are present (totalStock over the variant rows).
+         That is a SECOND way stock reached the metadata write, and removing it from the
+         allowlist above would not have closed it. Variant totals are still a shelf count, so
+         they take the same route as any other opening quantity. */
+      Object.keys(built.patch).forEach(function (k) { if (k !== 'stock') out[k] = built.patch[k]; });
     }
     return out;
+  }
+
+  /* The opening quantity a create is asking for, from either a plain stock figure or the sum of
+     variant rows. Returns null when none was asked for — null, never 0: an unknown shelf count
+     rendered as zero is a fabricated fact, and "no opening stock given" is not "there are none".
+     Whole numbers only, non-negative, and bounded by the server's own MAX_DELTA so a value the
+     authority will refuse is rejected here rather than after the product already exists. */
+  var MAX_OPENING = 1000000;
+  function openingStockOf(input) {
+    var p = input || {};
+    var raw = p.stock;
+    var SPm = (typeof window !== 'undefined' && window.SokoniProductSpecs) ||
+              (typeof globalThis !== 'undefined' && globalThis.SokoniProductSpecs) || null;
+    if (SPm && Array.isArray(p.variants) && p.variants.length && typeof SPm.totalStock === 'function') {
+      raw = SPm.totalStock(p.variants, p.stock);
+    }
+    if (raw === undefined || raw === null || raw === '') return null;
+    var n = Number(raw);
+    if (!isFinite(n)) throw new Error('Opening stock must be a number.');
+    if (!Number.isInteger(n)) throw new Error('Opening stock must be a whole number.');
+    if (n < 0) throw new Error('Opening stock cannot be negative.');
+    if (n > MAX_OPENING) throw new Error('Opening stock is implausibly large.');
+    return n;
   }
 
   function _validate(fields, opts) {
@@ -378,7 +421,11 @@
   }
 
   /**
-   * createProduct({ scope, db, draftToken, product, canPublish })
+   * createProduct({ scope, db, draftToken, product, canPublish, adjustStock })
+   *
+   * `adjustStock` is the caller's invoker for merchantAdjustStock. Opening stock is NOT written
+   * into the product document — it is the product's first inventory movement, so it goes through
+   * the same server authority every later movement uses.
    *
    * `canPublish` is the caller's invoker for the server's canPublishProduct.
    * It is CONSULTED — and a refusal means NOTHING is written. The check happens
@@ -389,6 +436,10 @@
     var scope = o.scope;
     if (!scope || !scope.ok) throw new Error('merchant data: a resolved shop scope is required');
     _requireWriter(o.db);
+
+    /* Computed BEFORE anything is written, so an invalid opening quantity refuses the whole
+       create rather than leaving a product behind that nobody asked for. */
+    var opening = openingStockOf(o.product);
 
     var fields = _productFields(o.product);
     var errs = _validate(fields, { creating: true });
@@ -423,6 +474,44 @@
        replay returns the existing record rather than adding a second one. */
     var res = await o.db.writeProduct({ id: id, data: doc, mode: 'create' });
 
+    /* ── OPENING STOCK — through the server authority, never written here ──────
+       The product document is created WITHOUT a stock field, so until this lands the shelf
+       count is unknown rather than zero. merchantAdjustStock is the only path that floors at
+       zero, bumps inventoryVersion and files a stockMovements row, so an opening quantity is
+       simply the first movement — auditable like every other one.
+
+       adjustmentId is DETERMINISTIC on the product id. A retried create claims the same
+       product id, so it also claims the same adjustment id, and the server's idempotency
+       returns the original outcome instead of stacking a second opening quantity on top.
+
+       A failure here does NOT fail the create. The product genuinely exists; its stock is
+       genuinely unknown; and the caller is told exactly that so it can offer a retry rather
+       than reporting a success it cannot support. Silence would leave a merchant believing a
+       shelf count was recorded when it was not. */
+    var stockResult = null;
+    if (opening !== null && opening > 0) {
+      if (typeof o.adjustStock !== 'function') {
+        stockResult = { ok: false, reason: 'no-inventory-adapter', opening: opening };
+      } else {
+        try {
+          await o.adjustStock({
+            productId: id, shopId: scope.shopId,
+            adjustmentId: 'open_' + id,
+            delta: opening, reason: 'restock',
+            note: 'Opening stock at product creation',
+          });
+          stockResult = { ok: true, opening: opening };
+        } catch (err) {
+          stockResult = { ok: false, opening: opening,
+                          reason: (err && (err.message || err.code)) || 'adjust-failed' };
+        }
+      }
+    } else if (opening === 0) {
+      /* An explicit zero is a real statement about the shelf, but merchantAdjustStock refuses
+         a zero delta by design. Nothing to move, and nothing to invent. */
+      stockResult = { ok: true, opening: 0, noop: true };
+    }
+
     /* Mirrors run on a replay too. They are merge-writes keyed by the same id, so
        repeating one changes nothing — and a replay is exactly how a mirror that
        failed the first time gets repaired. */
@@ -431,6 +520,7 @@
     return {
       id: id, product: doc, replayed: !!(res && res.replayed),
       mirrors: mirrors, complete: mirrorsComplete(mirrors),
+      openingStock: stockResult,
     };
   }
 
@@ -450,6 +540,16 @@
     /* Ownership is verified against the STORED record, not the caller's claim. */
     var existing = o.existing || (o.db.getProduct ? await o.db.getProduct(o.id) : null);
     if (existing) assertInScope(scope, Object.assign({ id: o.id }, existing));
+
+    /* REFUSED, not dropped. Silently ignoring a stock edit is worse than rejecting it: the
+       merchant types a figure, sees "Changes saved.", and the shelf count never moves. A
+       fabricated success is the one outcome this module must never produce. */
+    if (o.patch && (o.patch.stock !== undefined ||
+                    (Array.isArray(o.patch.variants) && o.patch.variants.length))) {
+      var sErr = new Error('Stock is changed in Inventory, not here.');
+      sErr.code = 'stock-not-editable';
+      throw sErr;
+    }
 
     var fields = _productFields(o.patch);
     if (!Object.keys(fields).length) throw new Error('merchant data: nothing to update');

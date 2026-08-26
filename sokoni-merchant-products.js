@@ -15,7 +15,8 @@
    then the canonical record, then the projections — so the product record is
    only ever told about addresses Storage actually returned.
 
-   Still absent, deliberately: no stock adjustment (Inventory owns that), no
+   Still absent, deliberately: no stock ADJUSTMENT of an existing product (Inventory owns
+   that — the editor shows the figure and sends the merchant there), no
    productCounters write, no boost or promote-to-story (2d), and no localStorage
    cache treated as authority — the list is re-READ from Firestore after every
    successful mutation.
@@ -34,8 +35,16 @@
                      the server's own refusal text rather than inventing one.
 
    ── PRODUCTS IS NOT INVENTORY ───────────────────────────────────────────────
-   Inventory owns stock and adjustment (merchantAdjustStock). This surface shows
-   stock as a READ and offers no way to change it. The two must not merge.
+   Inventory owns stock. Changing an existing product's shelf count happens ONLY through
+   merchantAdjustStock, which is transactional, floors at zero, bumps inventoryVersion and files
+   a stockMovements row. On EDIT this surface shows stock as a read and offers no way to change
+   it; on CREATE it accepts an opening quantity, which is handed to that same server authority
+   as the product's first movement rather than written as metadata. The two must not merge.
+
+   This block previously said the surface "offers no way to change it" while `fld('stock', …)`
+   rendered an editable numeric input on both create and edit, whose value reached a plain
+   setDoc(merge) with no transaction and no inventoryVersion. The prose was wrong; the field was
+   real. It is corrected here only because the behaviour now matches — a comment is not evidence.
 
    Contract: mount(host, ctx) -> { refresh, destroy }
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -606,6 +615,22 @@
       });
     }
 
+    /* EDIT-mode stock: the figure as Inventory holds it, and where to change it. Deliberately
+       carries NO data-pf attribute — captureForm() reads by data-pf, so this cannot contribute
+       to a patch even if FORM_KEYS still names stock. Two independent reasons it cannot mutate:
+       no input, and updateProduct refuses a stock patch outright. */
+    function stockReadHTML (p) {
+      var raw = p && p.stock;
+      var known = (raw !== undefined && raw !== null && raw !== '' && isFinite(Number(raw)));
+      return '<div class="pr-f"><span class="pr-l">Stock</span>' +
+        '<div class="pr-i pr-ro" aria-readonly="true">' +
+          /* Unknown is said, never rendered as 0 — a zero here is a claim about a shelf. */
+          (known ? esc(String(Number(raw))) : '—') +
+        '</div>' +
+        '<div class="pr-note">Stock is changed in Inventory, so every movement is recorded.' +
+        '</div></div>';
+    }
+
     function fieldsFromForm () {
       var v = (S.editor && S.editor.values) || {};
       var out = {};
@@ -772,6 +797,10 @@
           run = M.createProduct({
             scope: ctx.scope, db: ctx.db, draftToken: E.token,
             product: fieldsFromForm(),
+            /* Opening stock does NOT ride in the product document. This is the invoker for
+               merchantAdjustStock; the writer files the opening quantity as the product's first
+               movement, transactional and versioned, exactly like every later one. */
+            adjustStock: (typeof ctx.adjustStock === 'function') ? ctx.adjustStock : null,
             /* CONSULTED, not reimplemented — and consulted by the WRITER, before
                it writes anything, so a refusal mutates nothing at all. */
             canPublish: (typeof ctx.canPublish === 'function') ? ctx.canPublish : null,
@@ -1471,7 +1500,14 @@
           fld('costPrice', 'Cost (KES)', 'type="number" inputmode="decimal" min="0" step="any"', p.costPrice) +
         '</div>' +
         '<div class="pr-row">' +
-          fld('stock', 'Stock', 'type="number" inputmode="numeric" min="0" step="1"', p.stock) +
+          /* CREATE takes an opening quantity — it becomes the product's first inventory
+             movement, through merchantAdjustStock, not a metadata field.
+             EDIT shows the figure and does NOT offer to change it: an existing product's shelf
+             count is inventory movement and belongs to Inventory. Rendering an input here that
+             the writer then refused would be a control that lies about what it does. */
+          (creating
+            ? fld('stock', 'Opening stock', 'type="number" inputmode="numeric" min="0" step="1"', p.stock)
+            : stockReadHTML(p)) +
           fld('sku', 'SKU', 'type="text" autocomplete="off" maxlength="64"', p.sku) +
         '</div>' +
         fld('category', 'Category', 'type="text" autocomplete="off" maxlength="64"', p.category) +
