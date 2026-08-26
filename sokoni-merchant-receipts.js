@@ -565,14 +565,162 @@
 
     function say (m) { if (typeof ctx.onToast === 'function') ctx.onToast(m); }
 
+    /* ══ THE RECEIPT ADAPTER ═══════════════════════════════════════════════════
+       orders/{id} -> the canonical SokoniReceiptDoc input contract.
+
+       This did not exist. docFor() passed the order STRAIGHT THROUGH, so the renderer —
+       which reads totalMinor, totals.* and settlement — received `total` in major units and
+       nothing else it recognised. Every receipt in this workspace rendered TOTAL as an
+       em-dash and PAYMENT as "Not recorded". The renderer was right to refuse; it was never
+       given the figures.
+
+       THE ADAPTER TRANSLATES. It never calculates.
+
+       · MINOR UNITS ONCE. Orders store major (total: 100). toMinor runs here and nowhere
+         else — the shell now carries the raw values precisely so this is the only conversion.
+       · `pricing` IS THE LADDER. Measured in production: pricing.{subtotal,deliveryFee,total}
+         reconcile with each other. The TOP-LEVEL deliveryFee does NOT — one live order has
+         pricing.deliveryFee 0 against a top-level 220. Where they conflict the reconciled
+         source wins and the conflict is REPORTED, rather than resolved by guessing which
+         number the shop meant.
+       · TOTAL IS NEVER RECONSTRUCTED. Not subtotal + deliveryFee, not paidAmount. One live
+         order has total 100, deliveryFee 220 and paidAmount 97: no arithmetic makes those
+         agree, and inventing one would print a figure the shop never charged.
+       · OWED IS NOT PAID. paidAmount is the Safaricom callback Amount — what the customer
+         actually paid. It belongs in PAYMENT. Where it differs from the total BOTH are
+         shown, and the settlement authority renders the balance itself. That discrepancy is
+         real and is already audit-logged server-side as mpesa_amount_mismatch.
+       · A DELIVERY NEEDS A DESTINATION. buildFulfilment refuses one without, so a
+         delivery-typed order with no address yields NO fulfilment block rather than an empty
+         address on paper. */
+    function toReceiptInput (order) {
+      var C = (typeof window !== 'undefined') && window.SokoniCash;
+      var F = (typeof window !== 'undefined') && window.SokoniFulfilment;
+      var o = order || {};
+      var warn = [];
+
+      /* The ONE conversion. Absent stays absent — never 0. */
+      var toM = function (v) {
+        if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+        var n = Number(v);
+        if (!isFinite(n) || !C) return null;
+        return C.toMinor(n);
+      };
+
+      var p = o.pricing || {};
+      var pSub = toM(p.subtotal);
+      var pDel = toM(p.deliveryFee);
+      var pTot = toM(p.total);
+      var pDisc = toM(p.discount);
+
+      /* Total: the order's own figure, pricing.total as the fallback. Never derived. */
+      var totalMinor = toM(o.total);
+      if (totalMinor === null) totalMinor = pTot;
+
+      /* Delivery fee: the reconciled source only. A conflicting top-level value is reported,
+         never silently preferred and never averaged into existence. */
+      var topDel = toM(o.deliveryFeeTop);
+      if (pDel !== null && topDel !== null && pDel !== topDel) {
+        warn.push('this order carries two different delivery fees; the reconciled pricing figure is shown');
+      }
+      var deliveryMinor = (pDel !== null) ? pDel : topDel;
+
+      var totals = {};
+      var sub = (pSub !== null) ? pSub : toM(o.subtotalRaw);
+      if (sub !== null) totals.subtotalMinor = sub;
+      if (pDisc !== null && pDisc > 0) totals.discountMinor = pDisc;
+      if (deliveryMinor !== null && deliveryMinor > 0) totals.deliveryMinor = deliveryMinor;
+
+      /* Settlement through the cash authority, so TOTAL PAID and any balance are ITS figures
+         rather than a second sum computed here. */
+      var settlement = null;
+      var paidMinor = toM(o.paidAmount);
+      if (C && typeof C.settle === 'function' && paidMinor !== null && totalMinor !== null) {
+        try {
+          settlement = C.settle({
+            totalMinor: totalMinor,
+            tenders: [{
+              method: _tenderMethod(o.method || o.paymentMethod),
+              amountMinor: paidMinor,
+              reference: o.mpesaCode || null,
+            }],
+          });
+        } catch (e) { warn.push('the payment could not be settled: ' + ((e && e.message) || 'unknown')); }
+      }
+
+      /* Fulfilment: built by the authority, and only when the order really is a delivery
+         WITH somewhere to go. A counter sale produces nothing at all. */
+      var fulfilment = null;
+      var ftype = String(o.fulfillmentType || '').toLowerCase();
+      if (F && typeof F.buildFulfilment === 'function') {
+        try {
+          if (ftype === 'delivery' && o.deliveryAddress) {
+            fulfilment = F.buildFulfilment({
+              type: 'delivery',
+              destinationSnapshot: { formatted: String(o.deliveryAddress) },
+              /* buildAssignment's real contract: a METHOD from ['shop','sokoni','external']
+                 and a rider OBJECT. I first passed { riderName: 'Brian O.' } — a field it does
+                 not read — and the receipt printed 'Rider: Not yet assigned' while the order
+                 plainly named one. Guessing a field name rather than reading the contract is
+                 the same mistake as the fixture shapes earlier in this slice.
+
+                 'sokoni' is the method for a platform rider. 'external' is deliberately NOT
+                 used: it REFUSES a rider without a phone number, on the grounds that half a
+                 rider looks assigned and cannot be contacted — and the order carries no rider
+                 phone. Where the order names no rider at all the assignment is omitted, and
+                 the authority prints 'Not yet assigned', which is then true. */
+              assignment: o.rider ? { method: 'sokoni', rider: { name: String(o.rider) } } : undefined,
+            });
+          } else if (ftype === 'pickup') {
+            fulfilment = F.buildFulfilment({ type: 'pickup' });
+          }
+        } catch (e) { warn.push('fulfilment not shown: ' + ((e && e.message) || 'unknown')); }
+      }
+
+      var out = {
+        receiptId: o.receiptNumber || o.ref || o.id,
+        ref: o.ref || o.id,
+        createdAt: o.when || null,
+        customer: o.customer || null,
+        items: (o.items || []).map(function (it) {
+          var qty = Number(it.qty || it.quantity || 1) || 1;
+          var unit = toM(it.price != null ? it.price : it.unitPrice);
+          return {
+            name: it.name || it.title || 'Item',
+            qty: qty,
+            unitMinor: unit,
+            lineMinor: unit === null ? null : unit * qty,
+          };
+        }),
+      };
+      if (totalMinor !== null) out.totalMinor = totalMinor;
+      if (Object.keys(totals).length) out.totals = totals;
+      if (settlement) out.settlement = settlement;
+      else if (o.mpesaCode) out.paymentRef = o.mpesaCode;
+      if (fulfilment) out.fulfilment = fulfilment;
+      out._adapterWarnings = warn;
+      return out;
+    }
+
+    /* The tender vocabulary the cash authority accepts. `mpesa_intasend` is the gateway's
+       name for the rail, not a tender the customer chose. */
+    function _tenderMethod (m) {
+      var s2 = String(m || '').toLowerCase();
+      if (/mpesa|m-pesa|stk|paybill|till|intasend/.test(s2)) return 'mpesa';
+      if (/cash/.test(s2)) return 'cash';
+      if (/card|visa|master/.test(s2)) return 'card';
+      return s2 || 'other';
+    }
+
     function docFor (order) {
       var R = (typeof window !== 'undefined') && window.SokoniReceiptDoc;
       if (!R || typeof R.render !== 'function' || typeof R.toText !== 'function') return null;
       try {
-        var doc = R.render(Object.assign({}, order, {
-          shop: ctx.shop || { name: ctx.shopName || '' },
-        }), { shop: ctx.shop || { name: ctx.shopName || '' } });
-        return { text: R.toText(doc), warnings: (doc && doc.warnings) || [] };
+        var input = toReceiptInput(order);
+        var shop = ctx.shop || { name: ctx.shopName || '' };
+        var doc = R.render(Object.assign({}, input, { shop: shop }), { shop: shop });
+        var warns = ((doc && doc.warnings) || []).concat(input._adapterWarnings || []);
+        return { text: R.toText(doc), warnings: warns };
       } catch (_) { return null; }
     }
 

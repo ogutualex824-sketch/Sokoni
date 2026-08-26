@@ -288,8 +288,23 @@
     }
 
     /* ── 7. FULFILMENT — pickup or delivery, from the contract ───────────────── */
-    if (o.fulfilment && _ful()) out.blocks.push(_ful().receiptFulfilment(o.fulfilment));
-    else { out.blocks.push({ heading: 'FULFILMENT', lines: ['Not recorded'] }); out.warnings.push('no fulfilment recorded'); }
+    /* An ordinary counter sale has no fulfilment, and printing 'FULFILMENT / Not recorded'
+       on it stated something about delivery that the sale never had — on every receipt, on
+       thermal paper. The block now appears ONLY when the order genuinely carries a
+       fulfilment: a delivery prints its destination, a pickup prints that it was collected
+       at the shop, and a counter sale prints nothing at all.
+
+       The warning is kept for a delivery-shaped order whose fulfilment failed to build, so a
+       genuinely missing destination is still visible to the caller — just not to the
+       customer holding the paper. */
+    if (o.fulfilment && _ful()) {
+      var _f = _ful().receiptFulfilment(o.fulfilment);
+      /* receiptFulfilment ALSO returns a 'Not recorded' block for a typeless object, so the
+         second source of that line is suppressed here rather than only the first. */
+      var _empty = _f && _f.lines && _f.lines.length === 1 && _f.lines[0] === 'Not recorded';
+      if (_empty) out.warnings.push('fulfilment present but not recorded');
+      else out.blocks.push(_f);
+    }
 
     /* ── 8. THE CLOSE — and it brings the customer back INTO SOKONI ──────────── */
     out.blocks.push({

@@ -1470,6 +1470,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   /* One shape for the UI, so the renderer never reasons about field aliases. */
+  /* null / "" / boolean are ABSENT, not zero. Number(null) is 0, and a 0 here would
+     print a confident figure where the order carries none. */
+  function _num (v) {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+    var n = Number(v); return isFinite(n) ? n : null;
+  }
+
   function normaliseOrder (id, d) {
     var t = d.createdAt && typeof d.createdAt.toDate === 'function' ? d.createdAt.toDate()
           : (d.createdAt instanceof Date ? d.createdAt : (d.date ? new Date(d.date) : null));
@@ -1489,6 +1496,25 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       items: Array.isArray(d.items) ? d.items : [],
       ts: t ? t.getTime() : 0,
       when: t,
+
+      /* ── RECEIPT FIELDS ────────────────────────────────────────────────────
+         Carried so the Receipts adapter can build the canonical document. Every one is
+         ADDITIVE: Orders and Analytics read the fields above and are untouched.
+
+         They were stripped here, which is why every receipt rendered TOTAL as an em-dash
+         and PAYMENT as "Not recorded" — the shell never handed the renderer the figures.
+
+         RAW, not converted. Minor-unit conversion happens exactly ONCE, at the adapter
+         boundary; converting here would convert twice for any caller that also converts. */
+      receiptNumber: d.receiptNumber || null,
+      pricing: (d.pricing && typeof d.pricing === 'object') ? d.pricing : null,
+      subtotalRaw: _num(d.subtotal),
+      deliveryFeeTop: _num(d.deliveryFee),
+      paidAmount: _num(d.paidAmount),
+      mpesaCode: d.mpesaCode || null,
+      fulfillmentType: d.fulfillmentType || d.deliveryMethod || null,
+      deliveryAddress: d.deliveryAddress || d.address || null,
+      rider: d.riderName || d.assignedDriverName || null,
     };
   }
 
