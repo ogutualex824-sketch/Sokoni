@@ -132,6 +132,21 @@
       'font-family:inherit;font-size:13px;font-weight:800;background:transparent;color:inherit;',
       'border:1px dashed var(--line,rgba(255,255,255,.22))}',
     '.pr-unit{font-weight:700;color:var(--txt3,#8b8b8b);text-transform:none;letter-spacing:0}',
+    '.pr-vopts{display:flex;gap:8px;margin-bottom:10px}',
+    '.pr-vopts .pr-i{flex:1;min-width:0}',
+    '.pr-addopt{flex:0 0 44px;border-radius:12px;cursor:pointer;font-family:inherit;font-size:16px;',
+      'font-weight:800;background:transparent;color:inherit;',
+      'border:1px dashed var(--line,rgba(255,255,255,.22))}',
+    '.pr-vrow{display:flex;gap:8px;margin-bottom:6px}',
+    '.pr-vrow .pr-i{flex:1;min-width:0}',
+    '.pr-vqty{flex:0 0 84px !important;min-width:84px}',
+    '.pr-vrow2{display:flex;gap:8px;margin-bottom:12px;padding-bottom:12px;',
+      'border-bottom:1px solid var(--line,rgba(255,255,255,.07))}',
+    '.pr-vrow2 .pr-i{flex:1;min-width:0;font-size:12.5px}',
+    '.pr-vtot{margin-top:10px;padding:11px 13px;border-radius:12px;font-size:12.5px;font-weight:700;',
+      'background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.22)}',
+    '.pr-vtot b{font-weight:900}',
+
 
 
     '.pr-sk{aspect-ratio:1/1;border-radius:14px;background:var(--card,#0e0e0e);',
@@ -586,6 +601,47 @@
 
       if (nested.spec && Object.keys(nested.spec).length) out.specs = nested.spec;
       if (nested.stockUnit && nested.stockUnit.name) out.stockUnit = nested.stockUnit;
+
+      /* ── VARIANTS ──────────────────────────────────────────────────────────
+         The option NAMES are the merchant's own ("Colour", "Size"), so they cannot be
+         part of the input key. They are declared once for the product (vopt.0, vopt.1)
+         and each row supplies a VALUE per option (variant.0.v.0, variant.0.v.1). That is
+         also how a merchant thinks about it: choose what varies, then fill the grid.
+
+         A row is kept only if it has at least one option value — an unnamed combination
+         is not a variant, and the model refuses it anyway. Stock defaults to 0 rather
+         than being dropped: a variant that exists with none in stock is a real state,
+         unlike a blank weight. */
+      var optNames = [];
+      Object.keys(v).forEach(function (k) {
+        var m = /^vopt\.(\d+)$/.exec(k);
+        if (m && String(v[k]).trim()) optNames[Number(m[1])] = String(v[k]).trim();
+      });
+
+      var vrows = {};
+      Object.keys(v).forEach(function (k) {
+        var m = /^variant\.(\d+)\.(.+)$/.exec(k);
+        if (!m) return;
+        var idx = Number(m[1]);
+        vrows[idx] = vrows[idx] || { attrs: {} };
+        var rest = m[2];
+        var vm = /^v\.(\d+)$/.exec(rest);
+        if (vm) {
+          var name = optNames[Number(vm[1])];
+          var val = String(v[k] == null ? '' : v[k]).trim();
+          if (name && val) vrows[idx].attrs[name] = val;
+          return;
+        }
+        if (v[k] === '' || v[k] === null || v[k] === undefined) return;
+        vrows[idx][rest] = v[k];
+      });
+
+      var variants = Object.keys(vrows)
+        .sort(function (a, b) { return Number(a) - Number(b); })
+        .map(function (i) { return vrows[i]; })
+        .filter(function (r) { return Object.keys(r.attrs).length > 0; });
+      if (variants.length) out.variants = variants;
+
       return out;
     }
     /* Only what actually CHANGED is sent. Sending the whole form on every edit
@@ -968,6 +1024,88 @@
         '</div></div>';
     }
 
+
+    /* Option names declared once, then a row per combination. Reading the existing product
+       back out: its variants carry attrs keyed by the merchant's own names, so the option
+       columns are recovered from the union of those keys rather than stored separately —
+       one source, and no way for the columns and the rows to drift apart. */
+    function variantOptionNames (p) {
+      var typed = (S.editor && S.editor.values) || {};
+      var fromForm = [];
+      Object.keys(typed).forEach(function (k) {
+        var m = /^vopt\.(\d+)$/.exec(k);
+        if (m) fromForm[Number(m[1])] = typed[k];
+      });
+      if (fromForm.length) return fromForm;
+      var names = [];
+      (p.variants || []).forEach(function (v) {
+        Object.keys(v.attrs || {}).forEach(function (k) { if (names.indexOf(k) < 0) names.push(k); });
+      });
+      return names.length ? names : [''];
+    }
+
+    function variantsHTML (p) {
+      if (!specModel()) return '';
+      var names = variantOptionNames(p);
+      var rows = (p.variants || []);
+      var extra = (S.editor && S.editor.variantRows) || 0;
+      var n = rows.length + extra;
+
+      var head = '<div class="pr-sec">🔀 Variants</div>' +
+        '<div class="pr-note" style="margin:-4px 0 10px">' +
+          'Same product, different options — colour, size, capacity. Each keeps its own stock, ' +
+          'and the product total becomes their sum.' +
+        '</div>' +
+        '<div class="pr-vopts">' +
+          names.map(function (nm, i) {
+            return '<input class="pr-i" data-pf="vopt.' + i + '" type="text" maxlength="30" ' +
+              'placeholder="Option ' + (i + 1) + ' (e.g. Colour)" aria-label="Option name ' + (i + 1) + '" ' +
+              'value="' + esc(nm || '') + '">';
+          }).join('') +
+          (names.length < 3
+            ? '<button type="button" class="pr-addopt" data-pr="addopt" aria-label="Add option">＋</button>'
+            : '') +
+        '</div>';
+
+      var body = '';
+      for (var r = 0; r < n; r++) {
+        var row = rows[r] || { attrs: {}, stock: '' };
+        body += '<div class="pr-vrow">' +
+          names.map(function (nm, i) {
+            var val = nm ? (row.attrs || {})[nm] : '';
+            return '<input class="pr-i" data-pf="variant.' + r + '.v.' + i + '" type="text" maxlength="40" ' +
+              'placeholder="' + esc(nm || 'Value') + '" aria-label="' + esc(nm || 'Option value') + '" ' +
+              'value="' + esc(val == null ? '' : val) + '">';
+          }).join('') +
+          '<input class="pr-i pr-vqty" data-pf="variant.' + r + '.stock" type="number" inputmode="numeric" ' +
+            'min="0" step="1" placeholder="Qty" aria-label="Quantity" ' +
+            'value="' + esc(row.stock == null ? '' : row.stock) + '">' +
+        '</div>' +
+        '<div class="pr-vrow2">' +
+          '<input class="pr-i" data-pf="variant.' + r + '.sku" type="text" maxlength="64" ' +
+            'placeholder="SKU" aria-label="Variant SKU" value="' + esc(row.sku || '') + '">' +
+          '<input class="pr-i" data-pf="variant.' + r + '.barcode" type="text" maxlength="64" inputmode="numeric" ' +
+            'placeholder="Barcode" aria-label="Variant barcode" value="' + esc(row.barcode || '') + '">' +
+          '<input class="pr-i" data-pf="variant.' + r + '.price" type="number" inputmode="decimal" min="0" ' +
+            'step="any" placeholder="Price" aria-label="Variant price" ' +
+            'value="' + esc(row.price == null ? '' : row.price) + '">' +
+        '</div>';
+      }
+
+      /* The sum the till will read, shown while typing so the merchant is never surprised
+         by a product-level figure they did not set. Rendered from the SAME totalStock the
+         writer uses, not a second addition. */
+      var SP = specModel();
+      var typedRows = fieldsFromForm().variants || [];
+      var total = (SP && typedRows.length) ? SP.totalStock(typedRows, null) : null;
+
+      return head + body +
+        '<button type="button" class="pr-addspec" data-pr="addvariant">＋ Add variant</button>' +
+        (total !== null
+          ? '<div class="pr-vtot">Product stock becomes <b>' + esc(total) + '</b> — the sum of every variant.</div>'
+          : '');
+    }
+
     function specsHTML (p) {
       if (!specModel()) return '';
       var specs = p.specs || {};
@@ -978,7 +1116,8 @@
         dimensionField(specs.dimensions) +
         measureField('capacity', 'Capacity', 'volume', specs.capacity, 'l') +
         suggestedHTML(p.category, specs) +
-        customHTML(specs);
+        customHTML(specs) +
+        variantsHTML(p);
     }
 
     function editorHTML () {
@@ -1074,6 +1213,21 @@
       /* One more empty custom row. captureForm() first, so the rows the merchant has
          already typed survive the repaint — rebuilding the sheet without capturing would
          discard them, which is the kind of loss that makes people distrust a form. */
+      var addvar = ev.target.closest && ev.target.closest('[data-pr="addvariant"]');
+      if (addvar && addvar.getAttribute && addvar.getAttribute('data-pr') === 'addvariant') {
+        captureForm();
+        S.editor.variantRows = (S.editor.variantRows || 0) + 1;
+        paint();
+        return;
+      }
+      var addopt = ev.target.closest && ev.target.closest('[data-pr="addopt"]');
+      if (addopt && addopt.getAttribute && addopt.getAttribute('data-pr') === 'addopt') {
+        captureForm();
+        var names = variantOptionNames((S.editor && S.editor.values) || {});
+        S.editor.values['vopt.' + names.length] = '';
+        paint();
+        return;
+      }
       var addspec = ev.target.closest && ev.target.closest('[data-pr="addspec"]');
       if (addspec && addspec.getAttribute && addspec.getAttribute('data-pr') === 'addspec') {
         captureForm();
