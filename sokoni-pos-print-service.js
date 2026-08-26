@@ -1163,6 +1163,28 @@ class PosPrintService {
     }
   }
 
+  /* ── THE LOCAL-DRAIN GATE ────────────────────────────────────────────────────
+     drainQueue() is reachable from window focus, pointerdown, visibilitychange, the online
+     event, a printer reconnect and a bounded backoff timer. Every one of those fires on an
+     ORDINARY RELOAD, and none of them is a decision to print anything.
+
+     For a locally-enqueued job that is fine: the merchant pressed print, the printer was
+     away, and the bytes go out when it returns. For DURABLE work it is not. A print intent is
+     shared state — a second desktop may hold it — and localStorage cannot see that. If a
+     focus event drained an intent-backed job, a reload on two desktops would produce two
+     physical receipts from one sale, which is the exact failure the server claim exists to
+     prevent.
+
+     So: a job carrying intentId is never printed from this path without a claim the server
+     granted THIS host. No such job exists yet — the realtime bridge is a later slice — which
+     is precisely why the gate goes in now, before anything can start relying on the gap.
+     Returns a reason string to block, or null to allow. */
+  _gateLocalDrain (job) {
+    if (!job || !job.intentId) return null;            /* ordinary local job — unchanged */
+    if (job.claimToken && job.claimVerifiedAt) return null;  /* server granted this host */
+    return 'unclaimed print intent — the server decides which host prints this';
+  }
+
   /* ── Offline queue drain ───────────────────────────────────── */
   async drainQueue () {
     if (this._draining) return;
@@ -1173,6 +1195,10 @@ class PosPrintService {
     try {
       for (const job of pending) {
         if (!_eng()?.connected && !_pm()?.connected) break; /* printer went away */
+        /* Blocked, NOT failed: the job keeps its attempts and stays pending. It is not lost,
+           it simply cannot reach paper through this path. */
+        const _blocked = this._gateLocalDrain(job);
+        if (_blocked) { this._emit('queue:job_blocked', { jobId: job.jobId, reason: _blocked }); continue; }
         try {
           await _sendBytes(new Uint8Array(job.bytes || []));
           this.queue.markDone(job.jobId);

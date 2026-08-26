@@ -103,8 +103,10 @@ function makeFn (db) {
   const _isAdmin = (req) => !!(req.auth && req.auth.token && req.auth.token.admin);
   const _log = () => {};
   // eslint-disable-next-line no-new-func
-  return new Function('db', 'F', '_requireAuth', '_err', '_san', '_isAdmin', '_log', 'HttpsError',
-    'return async function (req) {' + body + '}')(db, F, _requireAuth, _err, _san, _isAdmin, _log, HttpsError);
+  /* The REAL shop-access module, not a stand-in — registerPrinterHost now delegates to it. */
+  const { assertShopAccess } = require(path.join(__dirname, '..', 'functions', 'shop-access'));
+  return new Function('db', 'F', '_requireAuth', '_err', '_san', '_isAdmin', '_log', 'HttpsError', 'assertShopAccess',
+    'return async function (req) {' + body + '}')(db, F, _requireAuth, _err, _san, _isAdmin, _log, HttpsError, assertShopAccess);
 }
 
 const SHOP_A = 'SHOP_A', SHOP_B = 'SHOP_B';

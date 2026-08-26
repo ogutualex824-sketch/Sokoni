@@ -30,6 +30,9 @@ const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
+/* One answer to 'who runs this shop', shared with print-intents. */
+const { assertShopAccess } = require('./shop-access');
+
 const db     = admin.firestore();
 const F      = admin.firestore.FieldValue;
 const REGION = 'us-central1';
@@ -713,31 +716,16 @@ exports.registerPrinterHost = onCall(OPT, async (req) => {
     _err('That device has no shop on its record, so it cannot host a printer.', 'failed-precondition');
   }
 
-  /* ── Authorisation: identical to registerDevice ─────────────────────────── */
-  const [bizSnap, merchantSnap, staffSnap] = await Promise.all([
-    db.collection('businesses').doc(merchantId).get(),
-    db.collection('merchants').doc(merchantId).get(),
-    branchId
-      ? db.collection('posStaff')
-          .where('branchId', '==', branchId)
-          .where('uid', '==', uid)
-          .where('status', '==', 'active')
-          .limit(1)
-          .get()
-      : Promise.resolve({ empty: true }),
-  ]);
-
-  if (!_isAdmin(req)) {
-    const isOwner =
-      (bizSnap.exists && bizSnap.data().ownerId === uid) ||
-      (merchantSnap.exists && (
-        merchantSnap.data().ownerId === uid ||
-        (Array.isArray(merchantSnap.data().adminUids) && merchantSnap.data().adminUids.includes(uid))
-      ));
-    if (!isOwner && staffSnap.empty) {
-      _err('You do not have permission to set a printer host for this shop.', 'permission-denied');
-    }
-  }
+  /* ── Authorisation ───────────────────────────────────────────────────────
+     Delegated to shop-access, the single answer to "who runs this shop". It was inlined here
+     as a copy of registerDevice s check; a third copy arrived with the print intents, and
+     copies of an authorisation rule drift. registerDevice still carries its own inline copy —
+     it is live, and converging it belongs in its own slice with its own proof. */
+  await assertShopAccess({
+    db, uid, shopId: merchantId, branchId,
+    isAdmin: _isAdmin(req), HttpsError,
+    message: 'You do not have permission to set a printer host for this shop.',
+  });
 
   const ident = printerIdentity || {};
   const printerDeviceKey = ident.deviceKey ? _san(String(ident.deviceKey), 200) : null;

@@ -1,3 +1,77 @@
+## [2026-08-26] - One sale cannot become two physical receipts.
+
+**Durable print lifecycle** — `PENDING → CLAIMED → PRINTING → PRINTED`, with `FAILED → PENDING`
+retry. The claim is a server transaction, so a reload, a duplicate realtime event, a focus event,
+a reconnect, a stale claim or two desktops racing cannot each produce a sheet of paper.
+
+**The collision that had to be avoided first.** `posPrintJobs` already holds LAN/TCP relay audit
+records (`functions/index.js:6190`), written with `status:'pending'` *after* the bytes are already
+on their way to the printer. A desktop listening for "pending jobs" would have reprinted every one
+of them — the exact failure this slice exists to prevent, arriving through the back door. Two
+independent discriminators keep them apart, either sufficient alone: intents carry
+`kind:'printIntent'` (legacy rows have no `kind`, and a Firestore equality filter excludes
+documents missing the field) and use UPPERCASE statuses (legacy uses lowercase). Legacy rows stay
+readable and are never migrated.
+
+- **Identity is the receipt.** Doc id is `{shopId}__{receiptId}`, not random — a duplicate phone
+  event, a retried callable and a realtime echo all resolve to the same document.
+- **The claim** atomically verifies: job is PENDING (or its lease expired) · the device exists and
+  is `printerHost: true` · that device's `merchantId` equals the job's `shopId` · the caller may
+  act for that shop. `claimToken` is a fencing token; a takeover mints a new one and permanently
+  fences out the previous holder.
+- **The lease is recovery, not a guarantee** — stated plainly rather than papered over. A merely
+  *slow* host can be taken over and print twice. Bounded three ways: 90s is far above a real P58E
+  print; takeover of a PRINTING job never re-prints silently (explicit FAILED then explicit retry);
+  and `mayPrint` is false for a PRINTING job even to its own claimant, because after a crash
+  mid-print we cannot know whether paper came out.
+- **Retry reuses the same document.** A second job would stop the receipt count matching the sale
+  count.
+- **No payload in Firestore.** The intent references `posReceipts/{receiptId}`; the desktop renders
+  through SokoniReceiptDoc. Embedding bytes would create a second receipt source.
+
+**The focus → drain path is now gated.** `drainQueue()` is reachable from focus, pointerdown,
+visibilitychange, `online`, a printer reconnect and a backoff timer — every one of which fires on an
+ordinary reload, and none of which is a decision to print. `_gateLocalDrain()` blocks any job
+carrying `intentId` without a server-granted claim, and blocks it rather than failing it, so the job
+keeps its attempts. No such job exists yet; the gate goes in before anything can rely on the gap.
+
+**`shop-access.js`** is new: one answer to "who runs this shop", now shared by `registerPrinterHost`
+and both intent paths. Its 39/0 suite passes unchanged against the shared helper, which is the
+equivalence proof. `registerDevice` still carries its own inline copy — live code, converged in its
+own slice, recorded rather than done quietly.
+
+**No rules change.** The suite asserts `firestore.rules` is byte-identical to HEAD. Reusing
+`posPrintJobs` spends none of the ~510 free compiled bytes. No Bluetooth or GATT code was touched.
+
+**Files:** `functions/print-intents.js` (new), `functions/shop-access.js` (new),
+`functions/device-manager.js` (auth delegated), `functions/index.js` (three re-exports by name),
+`sokoni-pos-print-service.js` (drain gate),
+`scripts/test-print-intent-lifecycle.js` + `scripts/sabotage-print-intents.js` (new),
+`docs/findings/PRINT_INTENT_LIFECYCLE.md` (new).
+
+**Proof:** 83/0 executing the callables against a Firestore stub that implements optimistic
+concurrency the way Firestore does — reads record a version, commit verifies it, a conflict retries
+the body. The race case holds BOTH claim transactions after their reads and releases them together,
+so neither saw the other's write when it decided; exactly one wins, the other gets `aborted`. A
+sequential stub would have passed while proving nothing, so the retry behaviour carries its own
+negative control. 11/11 sabotages caught by exit code.
+
+**Three of my own assertions were wrong and are fixed:** a fixed-character window swallowed the next
+method (twice — once extracting the gate, once bounding the statement that proves the gate is
+honoured, where the window reached the very `_sendBytes` call it asserted was unreachable); a
+`[^}]*` regex could not span the object literal in the emit; and a rules-unchanged check compared a
+value to itself. The last now diffs against `git show HEAD:firestore.rules`.
+
+**Not built:** the realtime bridge. Nothing creates an intent from a phone sale and nothing listens
+yet — by design, the lifecycle is proven before anything depends on it.
+
+**Database:** additive on `posPrintJobs` — `kind`, `receiptId`, `status` (uppercase), `attempts`,
+`claimedBy`, `claimedAt`, `claimToken`, `claimedByUid`, `leaseExpiresAt`, `printingAt`, `printedAt`,
+`printedBy`, `failedAt`, `lastError`, `takeovers`, `lastTakeoverFrom`, `retriedBy`, `retriedAt`.
+**Deployment:** a composite index on `posPrintJobs (kind, shopId, status)` is required before the
+desktop listener ships; there is currently no index on that collection. Not added here — an index
+for a query nothing runs is debt. **Breaking:** none.
+
 ## [2026-08-26] - A phone cannot name another shop and become its printer.
 
 **`registerPrinterHost`** — the desktop PWA holds the Bluetooth link to the P58E; a phone sale

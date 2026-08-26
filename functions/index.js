@@ -12122,6 +12122,16 @@ exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
 const deviceMgr = require('./device-manager');
 exports.registerDevice            = deviceMgr.registerDevice;
 exports.registerPrinterHost       = deviceMgr.registerPrinterHost;
+
+/* ── Durable print lifecycle ─────────────────────────────────────────────────
+   PENDING -> CLAIMED -> PRINTING -> PRINTED, with FAILED -> PENDING retry. The claim is a
+   server transaction so one sale cannot become two physical receipts across a reload, a
+   duplicate realtime event or a reconnect. A new Cloud Function that index.js does not
+   re-export by name is never deployed. */
+const printIntents = require('./print-intents');
+exports.createPrintIntent         = printIntents.createPrintIntent;
+exports.claimPrintJob             = printIntents.claimPrintJob;
+exports.advancePrintJob           = printIntents.advancePrintJob;
 exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
 exports.lockDevice                = deviceMgr.lockDevice;
 exports.unlockDevice              = deviceMgr.unlockDevice;
