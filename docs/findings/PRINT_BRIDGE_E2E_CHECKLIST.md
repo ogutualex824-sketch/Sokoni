@@ -29,11 +29,28 @@ Desktop                                     Phone
 
 ---
 
-## ⛔ Read this before deploying hosting
+## ✅ RESOLVED — the hosting rollback hazard is cleared
 
-**`feat/merchant-v2-canonical` @ `bfbea7c` is BEHIND LIVE. A hosting deploy from this worktree
-would roll production back.** Measured 2026-08-26 against `https://mysokoni.co.ke/version.json`
-(live = `fda3df8`, cache `v558`):
+Live's four commits were merged into the branch at **`d70a7c2`** (clean, no conflicts). Verified
+afterwards:
+
+- `git merge-base --is-ancestor fda3df8 HEAD` → **yes**; 0 commits live has that HEAD lacks
+- `scripts/deploy/guard-no-rollback.js` → **exit 0**, *"local d70a7c2 contains live fda3df8 —
+  allowing deploy"*
+- service-worker cache is now **`sokoni-20260826044422-v557`** — no longer a `-vNN` regression
+- the `sokoni_device_id` write in `pos-setup.html` is intact (it moved to line 3025 on live's
+  +339 lines); **nothing in the print stack was touched by the merge**
+- freeze checks re-run on the merged tree: **288 assertions / 0 failing, 32 sabotages / 0 missed,
+  `firestore.rules` 0 changes**
+
+The original finding is kept below, because the *reason* it happened outlives the fix: hosting
+publishes the working tree, so any worktree can silently be behind live.
+
+<details><summary>The hazard as originally measured</summary>
+
+**`feat/merchant-v2-canonical` @ `bfbea7c` was BEHIND LIVE. A hosting deploy from that worktree
+would have rolled production back.** Measured 2026-08-26 against
+`https://mysokoni.co.ke/version.json` (live = `fda3df8`, cache `v558`):
 
 | | |
 |---|---|
@@ -60,7 +77,9 @@ sides, so the print-host identity chain is not affected by the divergence. Live'
 `pos-setup.html` work (+339 lines) is what would be lost.
 
 **Remedy before step 3:** merge or rebase live's four commits into this branch, re-run the suites,
-and re-verify `version.json` after deploying.
+and re-verify `version.json` after deploying. — *done at `d70a7c2`.*
+
+</details>
 
 ## Deploy — in this order
 
@@ -71,8 +90,12 @@ and re-verify `version.json` after deploying.
 2. **Functions**, by name: `registerPrinterHost`, `getPrinterHostStatus`, `createPrintIntent`,
    `claimPrintJob`, `advancePrintJob`, `onPosSaleCompleted`.
    **Safe from this worktree** — live's four commits do not touch `functions/`.
-3. **Hosting** — **BLOCKED** until the divergence above is resolved. Hosting publishes the working
-   tree (`public: "."`), which is exactly why this matters. Verify `version.json` after.
+3. **Hosting** — unblocked as of `d70a7c2`; the rollback guard passes. Hosting publishes the
+   working tree (`public: "."`), so deploy only from a clean tree and verify `version.json`
+   afterwards with a cache-buster.
+
+   Its predeploy chain is 11 gates and includes `bump-sw-version.js` — **never hand-edit
+   `CACHE_VERSION`; the predeploy owns it.**
 
 **No rules deploy.** The ruleset is frozen at 255,490 / 256,000 and this work spends none of it.
 Re-verify `firestore.rules` is byte-identical to HEAD before deploying anything else.
@@ -81,6 +104,29 @@ Nothing in the print chain is reachable from the UI until step 3 lands, so steps
 now and change no behaviour on their own — the trigger is the one exception: once deployed it will
 begin writing intents for completed sales at shops that already have a registered host. There are
 none yet, so it writes nothing until a desktop is deliberately registered.
+
+### Registering the first host is an operational boundary
+
+```
+before any host exists   phone sale → (no print intent)
+after a host exists      phone sale → print intent → claim → paper
+```
+
+That transition is intentional, but it is a **one-way door for that shop**: from the moment a host
+is registered, every eligible completed POS sale there enters the printing pipeline. So register
+the first host **only** when that desktop is genuinely connected to the intended P58E — not to
+"try the button". The UI enforces the connect-before-register half of this; the judgement about
+*which* desktop and *when* is the operator's.
+
+To back out, register a different desktop with **Print here instead** (the old device's
+`printerHost` flips to `false` in the same transaction). There is deliberately no "unregister"
+action — a shop with no host silently stops printing, and that should be a visible choice rather
+than a button.
+
+### Predeploy gate timings, so a slow gate is not mistaken for a hang
+
+`scripts/predeploy-syntax-gate.js` spawns a fresh `node --check` **per file** across ~1650 files.
+On Windows that is minutes, with no progress output after its first line. It is slow, not stuck.
 
 ## Set up once
 
