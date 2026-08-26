@@ -41,6 +41,18 @@ Measured against the code, that invariant does not hold.
 Only **three** modules consume the primitive: `application-lifecycle.js`,
 `automation-engine.js`, `wap.js`.
 
+### A CLIENT-side authority also exists (found 2026-08-26)
+
+`sokoni-role-authority.js` is present in production and **absent from the branch**. This
+track originally recorded only the SERVER-side divergence; there is a second authority
+layer in the client, and `sokoni-admin-entry.js` routes denial decisions through its
+`RA.hubFor()`. See `docs/PRODUCTION_DENIAL_ROUTING_DEFECT.md`.
+
+**Consequence for item 1 (canonical representation):** the decision must cover the client
+layer as well as the server one. A canonical model that only reconciles
+`functions/role-authority.js` against the 16 `setCustomUserClaims` sites would leave the
+client authority unaccounted for.
+
 ### Two role representations, neither writer maintaining the other's
 
 | Writer | Claim | Firestore |
