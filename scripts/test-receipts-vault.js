@@ -176,6 +176,99 @@ ok(runVisible(sample, Object.assign({}, defaults, { pay: 'cash' })).length === 1
 ok(runVisible(sample, Object.assign({}, defaults, { range: 'yesterday' })).length === 0,
    'CONTROL: the date filter genuinely narrows (yesterday -> 0 of 2)');
 
+/* ── 9c. THE REST OF THE SURFACE ──────────────────────────────────────────── */
+console.log('\n9c. Tiles, percentages, card menu, Save and a custom range');
+
+/* Percentages need a denominator. 0% / 0% on a day with no takings would be a claim about
+   a day that has not happened — the same shape as an unknown total rendered as zero. */
+const sumBody = CODE.slice(CODE.indexOf('function summaryHTML'), CODE.indexOf('function visible'));
+ok(/if \(!takings\) return '';/.test(SRC),
+   'a payment share is omitted entirely when there are no takings to divide');
+ok(/Math\.round\(\(n \/ takings\) \* 100\)/.test(SRC), 'the share is a real percentage of takings');
+ok(/💰 Sales/.test(SRC) && /🧾 Receipts/.test(SRC), 'the Sales and Receipts tiles are present');
+
+/* The card overflow, with the same always-in-the-DOM rule Products had to learn. */
+ok(/data-rc="menu"/.test(CODE), 'the card carries an overflow control');
+ok(SRC.indexOf(`'<div class="rc-menu" role="menu"' + (S.menu === i ? '' : ' hidden')`) > -1,
+   'the menu is ALWAYS rendered and toggled with [hidden], not conditionally created');
+['quickprint', 'quickcopy', 'pin'].forEach((a) => {
+  ok(new RegExp('data-rc="' + a + '"').test(CODE), 'the menu offers ' + a);
+});
+ok(/S\.menu = \(S\.menu === mi\) \? null : mi;/.test(SRC), 'tapping the same control closes it');
+/* A menu left open across a re-filtered list points at a different receipt than was tapped. */
+ok((SRC.match(/S\.menu = null/g) || []).length >= 3,
+   'search, filters and menu actions all close it (' +
+   (SRC.match(/S\.menu = null/g) || []).length + ' sites)');
+/* Print from the card must OPEN options, not fire a job the merchant did not size. */
+ok(/S\.open = qo; S\.printErr = null; S\.printSheet = true;/.test(SRC),
+   'print-from-card opens the options sheet rather than printing immediately');
+
+/* ONE copy implementation — a second would be a dormant duplicate free to drift. */
+ok((SRC.match(/navigator\.clipboard\.writeText/g) || []).length === 1,
+   'there is exactly ONE clipboard implementation, shared by the sheet and the card menu');
+ok(!/__never_/.test(SRC), 'no unreachable leftover branch survives in the handler');
+
+/* Save reports honestly — a download the browser refused is not a saved file. */
+ok(/data-rc="save"/.test(CODE), 'the sheet offers Save');
+ok(/could not be saved on this device/.test(SRC),
+   'a refused download says so rather than claiming the receipt was saved');
+
+/* Custom range: an unset bound is OPEN, not zero. */
+ok(/sel\('custom', 'Custom…', S\.range\)/.test(SRC), 'a custom range is offered');
+ok(/S\.from \? new Date\(S\.from \+ 'T00:00:00'\)/.test(SRC), 'the from bound is read as a local day start');
+ok(/S\.to \? new Date\(S\.to \+ 'T23:59:59\.999'\)/.test(SRC), 'the to bound covers the whole day');
+ok(/if \(f !== null && isFinite\(f\) && t < f\) return false;/.test(SRC),
+   'an unset bound is OPEN — filling only "from" means "since then", not "nothing"');
+
+/* Executed: a custom range must actually select. */
+const NOWC = Date.now();
+const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+const rowsC = [
+  { ref: 'A', ts: NOWC - 86400000 * 3, total: 10, items: [] },
+  { ref: 'B', ts: NOWC, total: 20, items: [] },
+];
+const baseC = { q: '', pay: 'all', kind: 'all', cashier: 'all', pins: [] };
+ok(runVisible(rowsC, Object.assign({}, baseC, { range: 'custom', from: iso(NOWC), to: '' })).length === 1,
+   'CONTROL: from-only selects just the later receipt');
+ok(runVisible(rowsC, Object.assign({}, baseC, { range: 'custom', from: '', to: '' })).length === 2,
+   'CONTROL: an empty custom range excludes nothing');
+
+/* ── 9d. THE FILTER CONTROLS ARE WIRED ────────────────────────────────────
+   Rendering a select is not wiring it. onInput's guard was `!== 'q'` and returned early for
+   everything else, so every filter rendered and did NOTHING — a merchant switched Payment to
+   M-PESA and the list did not move. A control that looks live and is inert is worse than a
+   missing one, because it is trusted. Section 9b proved the filters FILTER; this proves the
+   controls reach them. */
+console.log('\n9d. Changing a filter actually changes the state');
+const inputFn = SRC.slice(SRC.indexOf('function onInput'), SRC.indexOf('function onClick'));
+ok(inputFn.length > 300, 'CONTROL: onInput located (' + inputFn.length + ' chars)');
+ok(!/getAttribute\('data-rc'\) !== 'q'\) return;/.test(inputFn),
+   'the early return no longer discards every non-search control');
+['range', 'pay', 'kind', 'cashier'].forEach((k) => {
+  ok(new RegExp("key === '" + k + "'").test(inputFn), 'onInput handles the ' + k + ' control');
+});
+ok(/key === 'from' \|\| key === 'to'/.test(inputFn), 'onInput handles the custom date bounds');
+ok(/key === 'qr'/.test(inputFn), 'onInput handles the include-QR checkbox');
+/* Executed: a change event must land on state. */
+const runInput = (function () {
+  const body = inputFn.replace(/^\s*function onInput \(ev\) \{/, '').replace(/\}\s*$/, '');
+  return (state, attr, value) => {
+    const S2 = state;
+    const el = { getAttribute: (n) => (n === 'data-rc' ? attr : null), value: value, checked: true };
+    new Function('S', 'ev', 'paint', 'clearTimeout', 'setTimeout', 'host', '_t', body)(
+      S2, { target: el }, function () {}, function () {}, function () {}, { querySelector: () => null }, null);
+    return S2;
+  };
+})();
+ok(runInput({ pay: 'all', menu: 3 }, 'pay', 'mpesa').pay === 'mpesa',
+   'changing Payment writes S.pay');
+ok(runInput({ range: 'today', menu: 2 }, 'range', 'custom').range === 'custom',
+   'changing the date range writes S.range');
+ok(runInput({ cashier: 'all', menu: null }, 'cashier', 'Alex').cashier === 'Alex',
+   'changing Cashier writes S.cashier');
+ok(runInput({ pay: 'all', menu: 4 }, 'pay', 'cash').menu === null,
+   'a filter change closes an open card menu — a stale index points at another receipt');
+
 /* ── 10. THE VIEWER ───────────────────────────────────────────────────────── */
 console.log('\n10. The receipt viewer');
 const sheetFn = CODE.slice(CODE.indexOf('function sheet ()'), CODE.indexOf('function sel ('));

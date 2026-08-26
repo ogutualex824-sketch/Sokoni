@@ -118,6 +118,21 @@
       'font-weight:900;background:transparent;color:inherit;border:1px solid var(--line,rgba(255,255,255,.18))}',
     '.rc-copies{min-width:26px;text-align:center;font-size:15px;font-weight:900}',
     '.rc-chk{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:13px;font-weight:700;cursor:pointer}',
+    '.rc-tile i{display:block;font-style:normal;font-size:11px;font-weight:800;',
+      'color:var(--txt3,#8b8b8b);margin-top:2px}',
+    '.rc-acts{display:flex;gap:8px;align-items:stretch}',
+    '.rc-acts .rc-btn{flex:1}',
+    '.rc-more{flex:0 0 44px;border-radius:12px;cursor:pointer;font:inherit;font-size:17px;',
+      'font-weight:900;background:transparent;color:inherit;',
+      'border:1px solid var(--line,rgba(255,255,255,.16))}',
+    '.rc-card{position:relative}',
+    '.rc-menu{position:absolute;right:12px;bottom:56px;z-index:6;min-width:190px;padding:6px;',
+      'border-radius:14px;background:var(--card,#141414);border:1px solid var(--line,rgba(255,255,255,.16));',
+      'box-shadow:0 18px 44px rgba(0,0,0,.5)}',
+    '.rc-menu button{display:block;width:100%;text-align:left;padding:11px 12px;border:0;',
+      'border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:13.5px;',
+      'font-weight:700;cursor:pointer}',
+
 
 
     '.rc-search{flex:1 1 180px;min-width:0;min-height:44px;border-radius:12px;padding:0 14px;font:inherit;font-size:16px;',
@@ -227,6 +242,8 @@
       printErr: null,
       copies: 1,
       withQr: true,
+      from: '', to: '',       /* custom range, ISO dates; empty until the merchant sets them */
+      menu: null,             /* index of the card whose overflow menu is open */
     };
 
     function skeleton () {
@@ -292,6 +309,15 @@
       if (S.range === 'yesterday') return t >= dayStart(1) && t < dayStart(0);
       if (S.range === '7d') return t >= dayStart(6);
       if (S.range === '30d') return t >= dayStart(29);
+      if (S.range === 'custom') {
+        /* An unset bound is OPEN, not zero: a merchant who fills only "from" means
+           "since then", and treating the empty "to" as epoch would show nothing. */
+        var f = S.from ? new Date(S.from + 'T00:00:00').getTime() : null;
+        var tt = S.to ? new Date(S.to + 'T23:59:59.999').getTime() : null;
+        if (f !== null && isFinite(f) && t < f) return false;
+        if (tt !== null && isFinite(tt) && t > tt) return false;
+        return true;
+      }
       return true;
     }
 
@@ -359,6 +385,19 @@
         if (saleKind(o) === 'cancelled') return;    /* cancelled money was never taken */
         byPay[payKind(o)] += Number(o.total) || 0;
       });
+      /* Percentages need a denominator. With no takings there is no split to state — 0% and
+         0% would be a claim about a day that has not happened yet, so the share is simply
+         omitted and the amount stands alone. */
+      var takings = byPay.cash + byPay.mpesa + byPay.mixed + byPay.other;
+      var share = function (n) {
+        if (!takings) return '';
+        return '<i>' + Math.round((n / takings) * 100) + '%</i>';
+      };
+      var tile = function (icon, name, amount, show) {
+        if (!show) return '';
+        return '<div class="rc-tile"><small>' + icon + ' ' + name + '</small>' +
+          '<b>' + esc(money(amount)) + '</b>' + share(amount) + '</div>';
+      };
       return '<div class="rc-sum">' +
           '<div class="rc-sum-l">' + esc(label) + '</div>' +
           '<div class="rc-sum-v">' + (a ? esc(money(a.revenue)) : dash) + '</div>' +
@@ -368,9 +407,15 @@
           deltaHTML() +
         '</div>' +
         '<div class="rc-tiles">' +
-          '<div class="rc-tile"><small>💳 M-PESA</small><b>' + esc(money(byPay.mpesa)) + '</b></div>' +
-          '<div class="rc-tile"><small>💵 Cash</small><b>' + esc(money(byPay.cash)) + '</b></div>' +
-          (byPay.mixed ? '<div class="rc-tile"><small>💰 Mixed</small><b>' + esc(money(byPay.mixed)) + '</b></div>' : '') +
+          '<div class="rc-tile"><small>💰 Sales</small><b>' +
+            (a ? esc(money(a.revenue)) : dash) + '</b></div>' +
+          '<div class="rc-tile"><small>🧾 Receipts</small><b>' + rows.length + '</b></div>' +
+        '</div>' +
+        '<div class="rc-tiles">' +
+          tile('💳', 'M-PESA', byPay.mpesa, true) +
+          tile('💵', 'Cash', byPay.cash, true) +
+          tile('💰', 'Mixed', byPay.mixed, byPay.mixed > 0) +
+          tile('🧾', 'Other', byPay.other, byPay.other > 0) +
         '</div>';
     }
 
@@ -485,6 +530,18 @@
         '</div>' +
         '<div class="rc-acts">' +
           '<button class="rc-btn" data-rc="open" data-i="' + i + '">View receipt</button>' +
+          '<button class="rc-more" data-rc="menu" data-i="' + i + '" aria-haspopup="true" ' +
+            'aria-expanded="' + (S.menu === i ? 'true' : 'false') + '" aria-label="More actions">⋮</button>' +
+        '</div>' +
+        /* ALWAYS in the DOM, toggled with [hidden]. Rendering it only when open removes every
+           action from the document for every closed card — the exact defect the Products
+           certification caught, where Delete existed only after a second tap. */
+        '<div class="rc-menu" role="menu"' + (S.menu === i ? '' : ' hidden') + '>' +
+          '<button role="menuitem" data-rc="open" data-i="' + i + '">🧾 View receipt</button>' +
+          '<button role="menuitem" data-rc="quickprint" data-i="' + i + '">🖨️ Print</button>' +
+          '<button role="menuitem" data-rc="pin" data-i="' + i + '">' +
+            (pinned ? '☆ Unpin' : '⭐ Pin') + '</button>' +
+          '<button role="menuitem" data-rc="quickcopy" data-i="' + i + '">📋 Copy reference</button>' +
         '</div>' +
       '</div>';
     }
@@ -493,6 +550,19 @@
        Rendered by the locked contract, never by markup written here. If the
        contract is not loaded the surface says so — it does not improvise a
        second receipt layout, which is how two receipt formats appear. */
+    /* ONE copy implementation, shared by the sheet action and the card menu. Reported
+       honestly: clipboard access is refused in plenty of contexts, and a "Copied" toast over
+       a failed write is a small lie the merchant then acts on. */
+    function copyRef (o) {
+      var ref = o && (o.ref || o.id);
+      if (!ref) return;
+      try {
+        navigator.clipboard.writeText(String(ref))
+          .then(function () { say('Reference copied.'); })
+          .catch(function () { say('Could not copy. The reference is ' + ref + '.'); });
+      } catch (e) { say('Could not copy. The reference is ' + ref + '.'); }
+    }
+
     function say (m) { if (typeof ctx.onToast === 'function') ctx.onToast(m); }
 
     function docFor (order) {
@@ -614,6 +684,7 @@
         '<div class="rc-vacts">' +
           '<button class="rc-btn" data-rc="openprint">🖨️ Print</button>' +
           '<button class="rc-btn" data-rc="share">📤 Share</button>' +
+          '<button class="rc-btn" data-rc="save">📥 Save</button>' +
           '<button class="rc-btn" data-rc="copyref">📋 Copy reference</button>' +
           (vurl ? '<button class="rc-btn" data-rc="verify">🔗 Verify receipt</button>' : '') +
         '</div>' +
@@ -681,6 +752,7 @@
             sel('today', 'Today', S.range) + sel('yesterday', 'Yesterday', S.range) +
             sel('7d', 'Last 7 days', S.range) + sel('30d', 'Last 30 days', S.range) +
             sel('all', 'All time', S.range) +
+            sel('custom', 'Custom…', S.range) +
           '</select>' +
           '<select class="rc-sel" aria-label="Payment method" data-rc="pay">' +
             sel('all', 'All payments', S.pay) + sel('mpesa', '💳 M-PESA', S.pay) +
@@ -697,6 +769,12 @@
             sel('delivery', '🚚 Delivery', S.kind) + sel('returned', '↩️ Returned', S.kind) +
             sel('cancelled', '❌ Cancelled', S.kind) +
           '</select>' +
+        (S.range === 'custom'
+          ? '<div class="rc-tools">' +
+              '<input class="rc-sel" type="date" aria-label="From" data-rc="from" value="' + esc(S.from) + '">' +
+              '<input class="rc-sel" type="date" aria-label="To" data-rc="to" value="' + esc(S.to) + '">' +
+            '</div>'
+          : '') +
         '</div>' + body +
         (S.open ? sheet() : '') +
         (S.open && S.printSheet ? printSheet() : '');
@@ -730,11 +808,28 @@
     var _t = null;
     function onInput (ev) {
       var el = ev.target;
-      if (!el || !el.getAttribute || el.getAttribute('data-rc') !== 'q') return;
+      if (!el || !el.getAttribute) return;
+      var key = el.getAttribute('data-rc');
+
+      /* THE FILTERS. This guard used to be `!== 'q'` and returned early for everything else,
+         so every select rendered and did nothing at all: the merchant changed Payment to
+         M-PESA and the list did not move. A control that looks live and is inert is worse
+         than a missing one, because it is trusted.
+
+         Applied immediately rather than debounced — a select is a decision already made,
+         unlike typing. Any change also closes an open card menu: its index addresses the
+         painted list, and a re-filtered list would point it at a different receipt. */
+      if (key === 'range' || key === 'pay' || key === 'kind' || key === 'cashier') {
+        S[key] = el.value; S.menu = null; paint(); return;
+      }
+      if (key === 'from' || key === 'to') { S[key] = el.value || ''; S.menu = null; paint(); return; }
+      if (key === 'qr') { S.withQr = !!el.checked; return; }
+
+      if (key !== 'q') return;
       clearTimeout(_t);
       var v = el.value;
       _t = setTimeout(function () {
-        S.q = v; paint();
+        S.q = v; S.menu = null; paint();
         var s = host.querySelector('[data-rc="q"]');
         if (s) { s.focus(); try { s.setSelectionRange(v.length, v.length); } catch (_) {} }
       }, 200);
@@ -768,6 +863,38 @@
         S.q = ''; S.range = 'today'; S.pay = 'all'; S.kind = 'all'; paint();
         return;
       }
+      if (k === 'menu') {
+        var mi = Number(el.getAttribute('data-i'));
+        S.menu = (S.menu === mi) ? null : mi;   /* tapping the same control closes it */
+        paint(); return;
+      }
+      if (k === 'quickprint' || k === 'quickcopy') {
+        var qi = Number(el.getAttribute('data-i'));
+        var qo = S.painted && S.painted[qi];
+        if (!qo) return;
+        S.menu = null;
+        if (k === 'quickcopy') { copyRef(qo); paint(); return; }
+        /* Print from the card opens the OPTIONS sheet on that receipt, rather than firing a
+           job the merchant did not size. */
+        S.open = qo; S.printErr = null; S.printSheet = true; paint();
+        return;
+      }
+      if (k === 'save') {
+        var sd2 = docFor(S.open);
+        if (!sd2) return;
+        /* A download the browser refused is not a saved file. Reported either way. */
+        try {
+          var blob = new Blob([sd2.text], { type: 'text/plain;charset=utf-8' });
+          var url = URL.createObjectURL(blob);
+          var a2 = document.createElement('a');
+          a2.href = url;
+          a2.download = 'receipt-' + String(S.open.ref || S.open.id || 'sokoni') + '.txt';
+          document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+          setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+          say('Receipt saved.');
+        } catch (e) { say('The receipt could not be saved on this device.'); }
+        return;
+      }
       if (k === 'openprint') { S.printSheet = true; S.printErr = null; paint(); return; }
       if (k === 'closeprint') { S.printSheet = false; paint(); return; }
       if (k === 'copies') {
@@ -782,18 +909,7 @@
         } else { say('Reconnect the printer from POS settings.'); }
         return;
       }
-      if (k === 'copyref') {
-        var ref = S.open && (S.open.ref || S.open.id);
-        if (!ref) return;
-        /* Reported honestly: clipboard access is refused in plenty of contexts, and a
-           "Copied" toast over a failed write is a small lie the merchant acts on. */
-        try {
-          navigator.clipboard.writeText(String(ref))
-            .then(function () { say('Reference copied.'); })
-            .catch(function () { say('Could not copy. The reference is ' + ref + '.'); });
-        } catch (e) { say('Could not copy. The reference is ' + ref + '.'); }
-        return;
-      }
+      if (k === 'copyref') { copyRef(S.open); return; }
       if (k === 'verify') {
         var vu = verifyUrl(S.open);
         if (!vu) return;
