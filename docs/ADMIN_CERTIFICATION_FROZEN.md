@@ -1,5 +1,28 @@
 # SOKONI Admin Certification — FROZEN EVIDENCE
 
+> ## ⛔ SUPERSEDED 2026-08-26 — do NOT cite these results for a production Admin release
+>
+> **The evidence below is preserved as history, not corrected in place.** It accurately records
+> what was measured against branch `fix/algolia-batch-poisoning`. It does **not** describe what a
+> production Admin release would deliver, for four independent reasons:
+>
+> 1. **Stale security assumptions.** Three BLOCKED entries were blocked by mechanisms that do not
+>    exist in production. `admin.html`'s 3026 passcode and `super-admin.html`'s `_promptSuperPass`
+>    were removed on the live lineage after measurement found the credential reached **0 Cloud
+>    Functions and 0 rules**, with a hardcoded master passcode bypassing the stored hash outright.
+>    Production replaced them with claims checks. The branch carries the weaker model.
+> 2. **Only one navigation surface was tested.** Every navigation and responsive run enumerated
+>    `#sk-adm-side`. **Page-local chrome was never exercised on any of the 50 surfaces** — 7 pages
+>    have their own nav, and on `admin-os.html` 9 links are unreachable beneath the shell.
+> 3. **Wrong base.** The programme was built on a lineage **320 commits behind live**, so 9 of its
+>    58 publishable files diverged from production.
+> 4. **The ledger cannot be ported.** Re-deriving it requires re-running against the production
+>    auth model, not re-classifying these rows.
+>
+> **Successor:** `docs/ADMIN_RECERTIFICATION_BASELINE.md`.
+> Nothing here is deleted — a superseded result that is still readable is worth more than a
+> corrected one whose history is gone.
+
 **Frozen:** 2026-08-26
 **Branch:** `fix/algolia-batch-poisoning`
 **Status:** admin programme complete. **Not deployed.** Production HOLD stands.
