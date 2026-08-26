@@ -1,3 +1,87 @@
+## [2026-08-26] - The phone sells, the desktop prints, and neither knows about the other.
+
+**Phone-sale bridge.** A completed sale on a phone now produces durable print work that only an
+authorised desktop host can execute:
+
+```
+PHONE sale commits → posRetailSales/{saleId} → (trigger) → posPrintJobs/{shopId}__{saleId} PENDING
+                  → (realtime) DESKTOP → atomic CLAIM → SokoniReceiptDoc → P58E → PRINTED
+```
+
+**Never before the sale commits — enforced structurally, not by convention.** The bridge is a
+Firestore trigger on `posRetailSales/{saleId}`. That document does not exist until
+`posCompleteCheckout` has written it, so there is no ordering in which a print job can precede its
+sale. An abandoned or failed checkout writes no sale and therefore produces no receipt job. It is
+also why this is a trigger rather than a line inside checkout: that function is off-limits to this
+workstream, and a print failure must never be able to fail a sale.
+
+**Realtime is notification, not authorization.** `onSnapshot` may say only "there is possibly new
+work"; it can never say "print this". The snapshot handler cannot reach a transport — it can only
+enqueue a job id. Every route to the printer passes through one gate: `claim → mayPrint === true →
+send`. Duplicate events, listener replays, reconnects, focus and manual reprint were each driven at
+the gate and the transport was reached exactly once.
+
+**The identity is the saleId, and that was a real catch.** `posCompleteCheckout` derives
+`receiptNo` as `saleId.slice(-8).toUpperCase()`. Uppercasing folds a–z onto A–Z, so eight
+characters of a 62-symbol Firestore auto-id collapse to 36 effective symbols — 36^8 ≈ 2.8e12.
+Within one shop that is a 0.18% chance of collision at 100k receipts and **16% at 1M**. The failure
+mode is the silent kind: the second sale's create-or-get would return the first sale's intent,
+already PRINTED, and that receipt would never print. `saleId` is the canonical untruncated
+identity; `receiptNo` rides along as display metadata only.
+
+- **No host, no intent.** A shop with no registered printer host gets nothing written. A backlog of
+  PENDING intents that prints en masse when a host registers months later is a trap, not durability.
+- **The intent is routing metadata, not a second receipt authority.** It references
+  `posRetailSales/{saleId}` and copies no totals, items or payments; the host renders through
+  `SokoniReceiptDoc` like every other surface. Asserted field by field.
+- **At-least-once trigger delivery is fine** — the id is derived from the saleId, so a re-fire
+  resolves to the same document.
+- **Serialised at the client**, because two snapshot events a millisecond apart would produce two
+  concurrent claims from the *same* device, which the server idempotently grants — it cannot tell
+  them apart, and only the client can.
+- **The existing focus→drain guard stays.** Realtime arriving is not a reason to remove the other
+  gate; the suite asserts both are still in place.
+
+**Composite index added:** `posPrintJobs (kind, shopId, status, createdAt)` — 401 → 402, with the
+suite asserting no existing index was dropped. It is needed only for the `orderBy`: production
+evidence settles the rest, since `registerDevice`'s live `posStaff` query uses **three** equality
+filters with no covering composite index, so Firestore serves multi-equality queries by merging
+single-field indexes.
+
+**Second finding, recorded not merged:** two localStorage keys look like a device id.
+`sokoni_device_id` (`crypto.randomUUID()`, written by `pos-setup.html`, passed to
+`bootstrapDevice`) **is** the `posDevices` document id. `pos_device_id` (`dev_<ts>_<rand>`, written
+by `pos-sync.js`) is never sent to any device Cloud Function and names nothing on the server.
+Choosing the wrong one would have produced `not-found` on every claim, presenting to a merchant as
+"my printer stopped working". `resolveDeviceId()` reads the first only, and returns `null` rather
+than minting one. Converging the two keys is deliberately NOT done here — `pos_device_id` feeds POS
+idempotency, which is financial-integrity territory.
+
+**Files:** `functions/print-intents.js` (trigger + saleId identity),
+`functions/index.js` (trigger re-exported by name), `firestore.indexes.json` (+1),
+`sokoni-print-host-listener.js` (new), `merchant-v2.html` (module loaded, deliberately not started),
+`scripts/test-print-sale-bridge.js` + `scripts/sabotage-print-bridge.js` (new),
+`docs/findings/POS_DEVICE_ID_TWO_KEYS.md` (new).
+
+**Proof:** 63/0 on the bridge, 83/0 on the lifecycle (unchanged by the identity switch), 39/0 on
+host registration, 23/0 on autoReconnect. Sabotages 10/10 and 11/11, judged by exit code. One
+sabotage probe silently stopped matching after a parameter rename and reported as a broken probe
+rather than a pass — which is the behaviour that rule exists for.
+
+**Not deployed, and deliberately not started.** `SokoniPrintHost` is inert until `start()` is
+called. Nothing calls it: the three callables and the trigger are undeployed, and no UI registers a
+printer host, so `sokoni_device_id` may name a device that is not this shop's host — every claim
+would be refused and the printer would look broken. A page load is not a decision to start printing.
+
+**Known gap unchanged:** `scripts/test-printjobs-rules.js` passes its 4 static assertions but its
+behavioural half needs the Firestore emulator and did not run here (`fetch failed`). Environmental —
+that file was not touched by this slice.
+
+**Database:** additive on `posPrintJobs` — `saleId`, `receiptNo`, `source{collection,id}`.
+**Deployment:** deploy `firestore.indexes.json` before the listener is started anywhere.
+CF exports 1695 → 1696 (the trigger); the export budget gate remains intentionally red as accepted
+capacity debt. **Breaking:** none.
+
 ## [2026-08-26] - One sale cannot become two physical receipts.
 
 **Durable print lifecycle** — `PENDING → CLAIMED → PRINTING → PRINTED`, with `FAILED → PENDING`

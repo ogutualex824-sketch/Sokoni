@@ -31,9 +31,20 @@
    Legacy records stay readable and untouched. Nothing here migrates or rewrites them.
 
    ── IDENTITY ────────────────────────────────────────────────────────────────────
-   The document id is derived from the receipt: {shopId}__{receiptId}. It is not random.
-   A duplicate phone event, a retried callable, or a realtime echo all resolve to the SAME
-   document, so a second intent for one sale cannot exist. The browser's localStorage
+   The document id is derived from the SALE: {shopId}__{saleId}. It is not random.
+   A duplicate phone event, a retried callable, a re-fired Firestore trigger or a realtime echo
+   all resolve to the SAME document, so a second intent for one sale cannot exist.
+
+   IT IS THE saleId, NOT THE RECEIPT NUMBER, AND THAT MATTERS. posCompleteCheckout derives
+   receiptNo as `saleId.slice(-8).toUpperCase()`. Uppercasing folds a-z onto A-Z, so an 8-char
+   window of a 62-symbol Firestore auto-id collapses to 36 effective symbols: 36^8 ≈ 2.8e12.
+   Within a single shop that is a 0.18% chance of a collision at 100k receipts and 16% at 1M.
+   The failure mode is the bad kind — the second sale's create-or-get would return the FIRST
+   sale's intent, already PRINTED, and that receipt would silently never print. saleId is the
+   canonical, untruncated identity; receiptNo rides along as display metadata only.
+
+   `receiptId` is still accepted for callers that genuinely only hold a receipt number, but
+   saleId wins whenever both are present. The browser's localStorage
    PrintQueue also dedupes on receiptId, but that is a convenience in one browser profile — it
    cannot see a second desktop, and it is wiped by clearing site data. Firestore is the
    authority; the queue is a cache.
@@ -74,6 +85,8 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+/* The sale document is the commit signal — see onPosSaleCompleted at the foot of this file. */
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
@@ -116,9 +129,9 @@ function _requireAuth (req) {
 function _isAdmin (req) { return !!(req && req.auth && req.auth.token && req.auth.token.admin); }
 
 /* Deterministic, shop-scoped, and safe as a Firestore document id (no '/'). */
-function intentDocId (shopId, receiptId) {
+function intentDocId (shopId, saleOrReceiptId) {
   const safe = (s) => _san(s, 120).replace(/[^A-Za-z0-9_.:-]/g, '-');
-  return safe(shopId) + '__' + safe(receiptId);
+  return safe(shopId) + '__' + safe(saleOrReceiptId);
 }
 
 function _leaseLive (job, nowMs) {
@@ -144,9 +157,12 @@ exports.createPrintIntent = onCall(OPT, async (req) => {
   const d = req.data || {};
 
   const shopId    = _san(d.shopId, 120);
+  const saleId    = _san(d.saleId, 120);
   const receiptId = _san(d.receiptId, 120);
-  if (!shopId)    throw new HttpsError('invalid-argument', 'shopId is required.');
-  if (!receiptId) throw new HttpsError('invalid-argument', 'receiptId is required.');
+  /* saleId wins. receiptNo is a lossy truncation of it — see the identity note above. */
+  const identity  = saleId || receiptId;
+  if (!shopId)   throw new HttpsError('invalid-argument', 'shopId is required.');
+  if (!identity) throw new HttpsError('invalid-argument', 'saleId (or receiptId) is required.');
 
   await assertShopAccess({
     db, uid, shopId, branchId: _san(d.branchId, 120) || null,
@@ -154,7 +170,7 @@ exports.createPrintIntent = onCall(OPT, async (req) => {
     message: 'You do not have permission to queue printing for this shop.',
   });
 
-  const id  = intentDocId(shopId, receiptId);
+  const id  = intentDocId(shopId, identity);
   const ref = db.collection(COL).doc(id);
 
   const out = await db.runTransaction(async (txn) => {
@@ -175,7 +191,13 @@ exports.createPrintIntent = onCall(OPT, async (req) => {
     txn.set(ref, {
       kind:        KIND,
       shopId,
-      receiptId,
+      /* THE IDENTITY. receiptNo is display metadata and must never be used as the key. */
+      saleId:      saleId || null,
+      receiptId:   receiptId || null,
+      receiptNo:   _san(d.receiptNo, 120) || receiptId || null,
+      /* WHERE THE RECEIPT IS RECONSTRUCTED FROM. The intent is routing metadata, not a second
+         receipt authority — the host reads the canonical sale and renders SokoniReceiptDoc. */
+      source:      { collection: _san(d.sourceCollection, 60) || 'posRetailSales', id: saleId || receiptId },
       /* uid feeds the EXISTING posPrintJobs read rule (resource.data.uid == auth.uid), so the
          cashier who made the sale can watch their own job without a rules change. */
       uid,
@@ -195,7 +217,7 @@ exports.createPrintIntent = onCall(OPT, async (req) => {
     return { jobId: id, status: STATUS.PENDING, created: true };
   });
 
-  return { ok: true, ...out, shopId, receiptId };
+  return { ok: true, ...out, shopId, saleId: saleId || null, receiptId: receiptId || null };
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -387,3 +409,85 @@ module.exports.intentDocId = intentDocId;
 module.exports.STATUS = STATUS;
 module.exports.TRANSITIONS = TRANSITIONS;
 module.exports.LEASE_MS = LEASE_MS;
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   onPosSaleCompleted — the sale→intent bridge
+   ═══════════════════════════════════════════════════════════════════════════════
+   NEVER CREATE A PRINT INTENT BEFORE THE SALE HAS COMMITTED. A Firestore trigger on the sale
+   document makes that STRUCTURAL rather than a convention: the document does not exist until
+   posCompleteCheckout has written it, so there is no ordering in which this can run first. An
+   abandoned or failed checkout writes no sale, and therefore produces no print job.
+
+   It is also why this is a trigger and not a line inside posCompleteCheckout: that function is
+   off-limits to this workstream, and a print concern does not belong inside a payment path
+   anyway. A print failure must never be able to fail a sale.
+
+   IT DOES NOT WRITE ANYTHING ON THE SALE. The sale is the authority; this reads it.
+
+   AT-LEAST-ONCE IS FINE. Firestore triggers can fire more than once for one write, and this is
+   idempotent by construction: the intent id is derived from the saleId, so a re-fire resolves
+   to the same document and takes the create-or-get path.
+
+   NO INTENT WITHOUT A HOST. If the shop has no registered printer host, nothing is written. A
+   backlog of PENDING intents that a shop cannot serve is not durability, it is a trap: register
+   a host months later and the queue would print every historical receipt at once. The phone
+   learns only "this shop has a printer host" — never anything about Bluetooth or the P58E.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+exports.onPosSaleCompleted = onDocumentCreated(
+  { document: 'posRetailSales/{saleId}', region: 'us-central1', memory: '256MiB', timeoutSeconds: 60 },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const sale = snap.data() || {};
+    const saleId = event.params.saleId;
+
+    /* Only a COMPLETED sale prints. */
+    if (sale.status !== 'completed') return;
+
+    const shopId = _san(sale.merchantId, 120);
+    if (!shopId) return;
+
+    /* Does this shop actually have somewhere to print? One equality-pair query; Firestore
+       serves it from single-field indexes, as the live posStaff query in registerDevice
+       already demonstrates. */
+    const hostSnap = await db.collection('posDevices')
+      .where('merchantId', '==', shopId)
+      .where('printerHost', '==', true)
+      .limit(1)
+      .get();
+    if (hostSnap.empty) return;
+
+    const id  = intentDocId(shopId, saleId);
+    const ref = db.collection(COL).doc(id);
+
+    await db.runTransaction(async (txn) => {
+      const cur = await txn.get(ref);
+      if (cur.exists) return;                     /* re-fired trigger, or an earlier callable */
+
+      txn.set(ref, {
+        kind:      KIND,
+        shopId,
+        saleId,
+        /* Display metadata only. posCompleteCheckout derives it as saleId.slice(-8) uppercased,
+           which is lossy — it must never be the key. */
+        receiptNo: String(saleId).slice(-8).toUpperCase(),
+        receiptId: null,
+        /* ROUTING METADATA, NOT A SECOND RECEIPT AUTHORITY. The host reads the canonical sale
+           and renders SokoniReceiptDoc; nothing here is a figure anyone could reconcile
+           against, and no line items or totals are copied. */
+        source:    { collection: 'posRetailSales', id: saleId },
+        /* `uid` feeds the existing read rule so the cashier can watch their own job. */
+        uid:       _san(sale.cashierId, 120) || null,
+        createdBy: 'onPosSaleCompleted',
+        branchId:  _san(sale.branchId, 120) || null,
+        deviceIdHint: null,
+        copies:    1,
+        status:    STATUS.PENDING,
+        attempts:  0,
+        claimedBy: null, claimedAt: null, claimToken: null, leaseExpiresAt: null,
+        createdAt: F.serverTimestamp(),
+        updatedAt: F.serverTimestamp(),
+      });
+    });
+  },
+);

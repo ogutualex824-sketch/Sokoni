@@ -12132,6 +12132,9 @@ const printIntents = require('./print-intents');
 exports.createPrintIntent         = printIntents.createPrintIntent;
 exports.claimPrintJob             = printIntents.claimPrintJob;
 exports.advancePrintJob           = printIntents.advancePrintJob;
+/* Firestore trigger: the sale document is the commit signal, so a print intent can never be
+   created before the sale itself has landed. */
+exports.onPosSaleCompleted        = printIntents.onPosSaleCompleted;
 exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
 exports.lockDevice                = deviceMgr.lockDevice;
 exports.unlockDevice              = deviceMgr.unlockDevice;

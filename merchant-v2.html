@@ -1319,6 +1319,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     await loadScript('sokoni-pos-print-service.js').catch(function () {});
     return window.PosPrintService || null;
   }
+
+  /* ── The phone→desktop print bridge ───────────────────────────────────────────
+     Loaded, DELIBERATELY NOT STARTED. The module is inert until SokoniPrintHost.start()
+     is called, and starting it is not this slice's decision to make:
+
+       · the three callables it needs are not deployed yet;
+       · nothing registers a printer host in the UI, so sokoni_device_id may name a device
+         that is not this shop's host — every claim would be refused and the merchant would
+         see a printer that looks broken;
+       · a page load is not a decision to start printing.
+
+     Loading it here means the end-to-end run has something to start, without a reload
+     quietly turning into automatic printing before any of that is true. */
+  async function printHostModule () {
+    if (window.SokoniPrintHost) return window.SokoniPrintHost;
+    await loadScript('sokoni-print-host-listener.js').catch(function () {});
+    return window.SokoniPrintHost || null;
+  }
   function loadScript (src) {
     return new Promise(function (res, rej) {
       if (document.querySelector('script[src="' + src + '"]')) return res();
