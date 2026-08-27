@@ -1817,18 +1817,33 @@
     "expectedLifespan": "permanent"
   },
   "auditLogs|action:ASCENDING,sellerUid:ASCENDING,createdAt:ASCENDING": {
-    "legacy": true,
-    "adoptedFromProduction": "2026-07-12",
-    "needsAttribution": true
+    "purpose": "UNKNOWN — no consumer found",
+    "feature": "Audit trail",
+    "query": "NONE FOUND",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-08-27",
+    "expectedLifespan": "review",
+    "consumerDeployed": false,
+    "note": "Attribution attempted 2026-08-27 and FAILED: no query in this repo combines action+sellerUid on auditLogs, on any branch in the last 150 commits (control search returned 3 hits, so the scan works). Writers use ts, not createdAt. RETAINED, not dropped. Needs an owner decision: identify the consumer or retire the index deliberately."
   },
   "commissionLedger|billingModel:ASCENDING,collectionStatus:ASCENDING": {
-    "legacy": true,
-    "adoptedFromProduction": "2026-07-12",
-    "needsAttribution": true
+    "purpose": "Platform-wide 48h commission sweep — find every unpaid PER_SALE_48H row",
+    "feature": "Commission Engine (48h receivable)",
+    "query": "commission-collection.js:114 sweep: where(billingModel=='PER_SALE_48H').where(collectionStatus in [DUE,REMINDED,OVERDUE]).limit(2000)",
+    "owner": "Payments",
+    "dateAdded": "2026-08-27",
+    "expectedLifespan": "permanent",
+    "consumerDeployed": false,
+    "note": "Consumer functions/commission-collection.js is NOT on the production lineage (live a9d8dec). The index was deployed ahead of the code. Attributed 2026-08-27 from the real query; do not drop — the sweep will need it."
   },
   "commissionLedger|sellerUid:ASCENDING,billingModel:ASCENDING,collectionStatus:ASCENDING": {
-    "legacy": true,
-    "adoptedFromProduction": "2026-07-12",
-    "needsAttribution": true
+    "purpose": "One seller's outstanding 48h commission — balance display and settlement apply",
+    "feature": "Commission Engine (48h receivable)",
+    "query": "commission-collection.js:225 (balance) and :319 (settle): where(sellerUid).where(billingModel=='PER_SALE_48H').where(collectionStatus in [DUE,REMINDED,OVERDUE]).limit(500)",
+    "owner": "Payments",
+    "dateAdded": "2026-08-27",
+    "expectedLifespan": "permanent",
+    "consumerDeployed": false,
+    "note": "Same lineage caveat as the sweep index above."
   }
 }
