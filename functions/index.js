@@ -3499,6 +3499,27 @@ exports.onNewOrderCreated = onDocumentCreated(
      7. POS listens real-time and auto-confirms the sale
 ============================================================ */
 
+/* ── Helper: canonical Kenyan MSISDN ───────────────────────────────────────────
+   Returns 254XXXXXXXXX, or NULL when the input is not a well-formed Kenyan mobile
+   number. Callers MUST refuse on null rather than send it onward.
+
+   Replaces `.replace(/^0/, "254")`, which rewrites only the FIRST zero — so an
+   international-prefixed 00254712345678 became 2540254712345678, sixteen digits,
+   and darajaSTKPush handed it to Daraja anyway. The same expression is copy-pasted
+   in 8 further modules (dispatch, finos, finos-utils, impact, payment-orchestrator,
+   pos-qr, sub-engine x2). Those are payout and dispatch paths and are deliberately
+   NOT touched by this change — converging them belongs in its own release. */
+function _normalizeMsisdn(raw) {
+  let d = String(raw === undefined || raw === null ? '' : raw).replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);              /* 00254… international */
+  if (!d.startsWith('254')) {
+    if (d.startsWith('0')) d = '254' + d.slice(1);     /* 07…, 01… national    */
+    else if (/^[17]\d{8}$/.test(d)) d = '254' + d;   /* bare 7…, 1…          */
+  }
+  /* Kenyan mobile ranges are 2547XXXXXXXX and 2541XXXXXXXX — exactly 12 digits. */
+  return /^254[17]\d{8}$/.test(d) ? d : null;
+}
+
 /* ── Helper: get Daraja OAuth access token ── */
 async function _darajaToken(consumerKey, consumerSecret, env) {
   const base = env === "production"
@@ -3781,8 +3802,12 @@ exports.darajaSTKPush = onCall(
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
 
     /* Normalise phone to 254XXXXXXXXX */
-    let normPhone = String(phone).replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (!normPhone.startsWith("254")) normPhone = "254" + normPhone;
+    /* Normalise, and REFUSE anything that is not a Kenyan mobile number. This
+       path previously prepended "254" to whatever arrived and sent it. */
+    const normPhone = _normalizeMsisdn(phone);
+    if (!normPhone) {
+      throw new HttpsError("invalid-argument", "A valid Kenyan phone number is required (07XXXXXXXX).");
+    }
 
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
 
@@ -4519,8 +4544,8 @@ exports.sendTestSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const uid   = request.auth.uid;
-    const phone = String(request.data?.phone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (!phone.startsWith("254") || phone.length !== 12) {
+    const phone = _normalizeMsisdn(request.data?.phone);
+    if (!phone) {
       throw new HttpsError("invalid-argument", "Valid Kenyan phone number required (07XXXXXXXX).");
     }
 
@@ -4540,8 +4565,16 @@ exports.sendTestSTKPush = onCall(
     const cfg = snap.data();
 
     /* Verify the phone matches the seller's registered phone or their shop settings phone */
-    const sellerPhone = String(cfg.phone || cfg.ownerPhone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (sellerPhone && sellerPhone.length === 12 && phone !== sellerPhone) {
+    /* FAIL CLOSED. This guard was gated on the stored phone normalising to 12
+       digits, so a seller with no phone — or an unparseable one — skipped it
+       entirely and could send a live KES 1 push to ANY handset. An ownership
+       check that cannot be evaluated must refuse. */
+    const sellerPhone = _normalizeMsisdn(cfg.phone || cfg.ownerPhone);
+    if (!sellerPhone) {
+      throw new HttpsError("failed-precondition",
+        "Add a valid phone number to your shop profile before sending a test push.");
+    }
+    if (phone !== sellerPhone) {
       throw new HttpsError("permission-denied", "Test pushes can only be sent to your own registered phone number.");
     }
 

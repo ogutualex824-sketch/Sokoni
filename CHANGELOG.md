@@ -717,6 +717,59 @@ until you take the release decision.
 `sokoni-role-authority.js`, `functions/legal-agreements.js`, `provider.html`, `provider-dashboard.html`,
 `rider-dashboard.html`, `onboarding-landlord.html`, `scripts/test-role-entry-convergence.js`,
 `scripts/test-convergence-server.js`.
+## [2026-08-28] — STK MSISDN safety: three fixes on the live lineage
+
+**Not deployed.** This is a **functions** deploy (`darajaSTKPush` is live and called from
+`pos.js`); deploying it is a separate, explicit decision.
+
+### Fixed — phone numbers are normalised once, and malformed ones are refused
+
+`darajaSTKPush` normalised with `.replace(/^0/, "254")` — which rewrites only the FIRST
+zero — then sent whatever resulted.
+
+- **D1** `00254712345678` became `2540254712345678` (16 digits) and was sent. Now
+  `254712345678`.
+- **D2** `darajaSTKPush` had no validation at all; any shape got `254` prepended and was
+  sent. Now refuses with `invalid-argument`. (`sendTestSTKPush` already validated length,
+  so this applied only to the customer-facing path.)
+- **D3 — security.** The seller-phone ownership check read
+  `if (sellerPhone && sellerPhone.length === 12 && ...)`, so a seller with no stored phone,
+  or one that did not normalise, **skipped the check entirely** and could send a live
+  KES 1 test push to ANY handset. Now fails closed with `failed-precondition`.
+
+One canonical `_normalizeMsisdn()` serves all three STK sites; it returns `254XXXXXXXXX`
+or null, and every caller refuses on null. Accepted values match `254[17]\d{8}` exactly.
+
+### Not changed — deliberately
+
+The same expression is copy-pasted in 8 further modules (dispatch, finos, finos-utils,
+impact, payment-orchestrator, pos-qr, sub-engine x2). Those are payout and dispatch paths;
+converging them belongs in its own release with its own tests.
+
+### Security
+
+`productionAuthorized` remains **false** and no authorisation document was created.
+Verified against production data: no seller anywhere carries `productionAuthorized === true`
+and none has a VERIFIED active destination. The production customer rail remains IntaSend.
+
+### Files affected
+
+- `functions/index.js` — canonical helper + three call sites
+- `scripts/test-stk-msisdn-safety.js` — new, 37/0, sends nothing
+- `scripts/verify-stk-production-authorization.js` — new, 9/0, read-only against production
+- `docs/STK_MSISDN_SAFETY.md` — new
+
+### Database / API / Breaking changes
+
+No schema change. `darajaSTKPush` and `sendTestSTKPush` now reject inputs they previously
+accepted and forwarded — that is the fix. A seller with no valid phone on their shop
+profile can no longer send a test push until they add one.
+
+### Verification
+
+`npm run predeploy` exit 0 · safety gate 37/0 · production-authorisation 9/0 ·
+guard-no-rollback 0. Every guard is executed rather than pattern-matched, and each was
+proved by targeted sabotage read on exit code.
 
 ---
 
