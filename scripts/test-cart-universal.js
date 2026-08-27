@@ -184,8 +184,25 @@ console.log('\nB. The rollout did not mangle any file');
     /* `was` now holds anything LOST; `gained` anything new.
        The four food pages already carried the tag from 2.5 — this slice only MOVED it
        above their non-deferred header, so they gain nothing and must lose nothing. */
-    /* Nothing may be LOST — that is the real perimeter and it stays absolute. */
-    if (was.length > 0) return true;
+    /* Nothing may be LOST — the real perimeter, absolute for everything except one
+       named, 1:1 migration.
+
+       2026-08-27: Font Awesome moved off cdnjs onto /assets/vendor/fontawesome/ so a
+       third-party origin no longer sits in front of first paint on 104 pages. That
+       REPLACES a <link> rather than adding one, so a page "loses" the cdnjs tag — the
+       first change in this rollout's history to do so. Measured across the rolled set:
+       104 files lose exactly the cdnjs Font Awesome link and gain exactly the local
+       one; 0 files lose anything else.
+
+       The exemption is a PAIR on purpose. Forgiving the loss outright would let a page
+       drop the stylesheet entirely, or swap any tag for any other, and still pass. The
+       loss is forgiven only when EVERY lost tag is that cdnjs href AND the same file
+       gains the same number of local hrefs. Losing it without gaining the replacement
+       still fails, and any other loss still fails. */
+    const lostFA   = was.filter((t) => t.indexOf('cdnjs.cloudflare.com/ajax/libs/font-awesome/') > -1);
+    const gainedFA = gained.filter((t) => t.indexOf('"/assets/vendor/fontawesome/') > -1);
+    const faMigrationOnly = lostFA.length === was.length && gainedFA.length === lostFA.length;
+    if (was.length > 0 && !faMigrationOnly) return true;
     /* Gains were originally required to be exactly sokoni-cart.js. That froze every rolled
        page against all later work, and two unrelated workstreams have since landed
        legitimately: adult-gate.js (f8c5b5a, the canonical 18+ classification) and
