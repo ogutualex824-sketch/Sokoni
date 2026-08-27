@@ -63,7 +63,15 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    whether anyone remembered to commit the bump — which is exactly what this
    constant was introduced for. Raise it again if production ever ships higher than
    this floor from an uncommitted tree. */
-const LAST_SHIPPED_V = 556;
+/* Raised 556 → 561 on 2026-08-27, following this comment's own instruction.
+   Production was serving `sokoni-20260826230128-v561` (commit 4771b1d, the
+   merchant-pipeline PIN hotfix) from a tree whose bump was never committed back —
+   exactly the situation described above. With the floor at 556 and the committed
+   file at v560, the next bump computed max(560,556)+1 = v561 and would have
+   RESHIPPED a counter already live under a different build.
+
+   Caught by the predeploy gate before deployment, not after. */
+const LAST_SHIPPED_V = 561;
 const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
 const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
 const newVer = `sokoni-${stamp}-v${nextN}`;
