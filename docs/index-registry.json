@@ -1807,5 +1807,28 @@
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
+  },
+  "posPrintJobs|kind:ASCENDING,shopId:ASCENDING,status:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Desktop print host polls its shop’s pending print intents in arrival order",
+    "feature": "PWA Printer Host",
+    "query": "sokoni-print-host-listener: where(kind==printIntent).where(shopId).where(status==PENDING).orderBy(createdAt asc)",
+    "owner": "SmartPOS",
+    "dateAdded": "2026-08-26",
+    "expectedLifespan": "permanent"
+  },
+  "auditLogs|action:ASCENDING,sellerUid:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "commissionLedger|billingModel:ASCENDING,collectionStatus:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "commissionLedger|sellerUid:ASCENDING,billingModel:ASCENDING,collectionStatus:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }

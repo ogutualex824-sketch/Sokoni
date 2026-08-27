@@ -1,3 +1,68 @@
+## [2026-08-27] — Font Awesome self-hosted; cdnjs removed from the rendering path
+
+**Not deployed.** Hosting deploy only — no functions, no rules, no index deploy.
+
+### Changed — icons are served by SOKONI, not by cdnjs
+
+Font Awesome 6.5.1 was loaded **render-blocking** from `cdnjs.cloudflare.com` in the `<head>`
+of **104 pages**, putting a third-party origin in front of first paint on nearly every page
+on the platform. Measured on 2026-08-27, cdnjs returned **HTTP 503** repeatedly under load
+while `mysokoni.co.ke` itself served normally at ~1.1 s.
+
+The stylesheet and all 8 font files are now vendored at
+`assets/vendor/fontawesome/6.5.1/`, referenced root-absolute so pages served under a path
+prefix (`/shop/{handle}`) resolve correctly. The CSS is **byte-identical** to the published
+6.5.1 build (sha256 `c22cfb65…`), pinned in the test suite.
+
+The stylesheet is **still render-blocking**, deliberately — deferring it would flash
+un-styled icon boxes on 104 pages. What changed is who the page waits on.
+
+No service worker change was required: fonts already route to Cache First in `STATIC_CACHE`.
+
+### Security — CSP narrowed
+
+`cdnjs.cloudflare.com` removed from **`style-src`** and **`font-src`** in `firebase.json`;
+nothing loads a stylesheet or font from cdnjs any more.
+
+It **remains in `script-src`** and must — `qrcodejs` and `pdf.js` still load from cdnjs
+(`pos-modules.js`, `sokoni-legal-certificate.js`, `sokoni-print-engine.js`, `pos-ai.js`).
+Narrowing it there would break POS QR printing and the AI PDF reader.
+
+### Fixed — two pre-existing index-governance failures that blocked the gate
+
+Neither was caused by this change; both were found by refusing to bypass the gate.
+
+- **Orphan index.** `posPrintJobs|kind,shopId,status,createdAt` was added by `b887010`
+  (phone-sale print bridge) and never registered in `docs/index-registry.json`. Registered
+  with metadata taken from the real query at `sokoni-print-host-listener.js:249-257`.
+- **Production drift.** Production held **3 indexes the repo did not declare**
+  (`commissionLedger` ×2, `auditLogs` ×1), so `firebase deploy --only firestore:indexes`
+  would have **DELETED** them. Adopted into source via the sanctioned
+  `scripts/reconcile-indexes.js --sync`. **Production was not modified.** The 3 adopted
+  registry entries are flagged `needsAttribution` — their metadata is still owed.
+
+### Files affected
+
+- 104 `*.html` — stylesheet href
+- `firebase.json` — CSP `style-src`, `font-src`
+- `assets/vendor/fontawesome/6.5.1/**` — new (1.1 MB, 9 files)
+- `firestore.indexes.json`, `docs/index-registry.json` — reconciliation
+- `scripts/test-fontawesome-selfhost.js` — new suite
+- `docs/FONT_AWESOME_SELFHOST.md` — new
+
+### Database / API / Breaking changes
+
+None. No schema change, no callable change, no behaviour change beyond asset origin.
+
+### Verification
+
+`scripts/test-fontawesome-selfhost.js` **16/0**, each invariant proved by targeted sabotage
+checked on exit code. `npm run predeploy` **exit 0** (1 warning: `CACHE_VERSION unchanged` —
+expected, the predeploy bump owns it). Browser-verified under the real CSP: 6 faces loaded,
+glyph width 88 px vs 65 px fallback, **zero CSP violations**.
+
+---
+
 ## [2026-08-27] — POS manual M-PESA Till payment (no Safaricom API dependency)
 
 **Not deployed.** Requires a functions deploy + hosting deploy.
