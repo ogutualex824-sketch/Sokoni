@@ -71,7 +71,7 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    RESHIPPED a counter already live under a different build.
 
    Caught by the predeploy gate before deployment, not after. */
-const LAST_SHIPPED_V = 561;
+const LAST_SHIPPED_V = 562;
 const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
 const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
 const newVer = `sokoni-${stamp}-v${nextN}`;
