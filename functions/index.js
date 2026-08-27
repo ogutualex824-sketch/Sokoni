@@ -4111,6 +4111,23 @@ const SAFARICOM_CALLBACK_IPS = new Set([
   "196.201.214.208","196.201.213.109","196.201.213.115","196.201.214.202",
 ]);
 
+/* ── Sandbox callback lane — INERT unless explicitly configured ────────────────
+   Empty set ⇒ the lane does not exist: the callback rejects an untrusted IP
+   without reading Firestore, exactly as it did before. That is the production
+   configuration. It is set only for the duration of a sandbox certification run
+   and removed afterwards.
+
+   TWO conditions, not one. `posPayments.env` is copied from
+   shopSettings/{sellerUid}.darajaEnv, and firestore.rules lets a seller write
+   their OWN shopSettings — so `env === "sandbox"` is a SELLER-FORGEABLE claim.
+   Trusting it alone would let any merchant mark their live payments sandbox and
+   make them forge-completable by anyone who learns the CheckoutRequestID.
+   Pinning to UIDs fixed at deploy time is what makes the claim safe to act on. */
+const _DARAJA_SANDBOX_SELLER_UIDS = new Set(
+  String(process.env.DARAJA_SANDBOX_SELLER_UIDS || "")
+    .split(",").map((s) => s.trim()).filter(Boolean)
+);
+
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
   { timeoutSeconds: 30, invoker: "public" },
@@ -4122,7 +4139,14 @@ exports.darajaSTKCallback = onRequest(
       /* Validate origin IP against Safaricom's published callback IP list.
          In development (non-prod) we allow bypass so ngrok tunnels work. */
       const callerIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
-      if (process.env.NODE_ENV !== "development" && !SAFARICOM_CALLBACK_IPS.has(callerIp)) {
+      const ipTrusted = process.env.NODE_ENV === "development"
+                     || SAFARICOM_CALLBACK_IPS.has(callerIp);
+
+      /* Untrusted IP and no sandbox lane configured — reject before touching
+         Firestore, exactly as before. Staying read-free on this branch also keeps
+         a public endpoint from being an amplifier for unauthenticated reads:
+         without it, anyone could force a document read per request. */
+      if (!ipTrusted && _DARAJA_SANDBOX_SELLER_UIDS.size === 0) {
         console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
         db.collection("auditLogs").add({
           type: "stk_callback_ip_rejected", ip: callerIp,
@@ -4134,7 +4158,12 @@ exports.darajaSTKCallback = onRequest(
       const body = req.body?.Body?.stkCallback;
       if (!body) return;
 
-      const checkoutId = body.CheckoutRequestID;
+      const checkoutId = String(body.CheckoutRequestID || "");
+      /* A caller-supplied document id containing "/" addresses a different
+         Firestore path entirely, and an empty one throws. Both become reachable
+         by an untrusted caller once the sandbox lane is open, so validate the id
+         before it is handed to .doc(). */
+      if (!checkoutId || checkoutId.length > 200 || checkoutId.includes("/")) return;
       const resultCode = body.ResultCode;
       const resultDesc = body.ResultDesc;
 
@@ -4146,6 +4175,32 @@ exports.darajaSTKCallback = onRequest(
         return;
       }
       const payData = paySnap.data();
+
+      /* Sandbox lane: an untrusted IP may settle ONLY a row that is explicitly
+         sandbox AND belongs to an explicitly enrolled sandbox seller. Anything
+         else is rejected on exactly the terms that applied before this lane
+         existed — same log line, same audit type. */
+      if (!ipTrusted) {
+        if (payData.env !== "sandbox"
+            || !_DARAJA_SANDBOX_SELLER_UIDS.has(payData.sellerUid)) {
+          console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
+          db.collection("auditLogs").add({
+            type: "stk_callback_ip_rejected", ip: callerIp, checkoutId,
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+          return;
+        }
+        console.warn(`[darajaSTKCallback] SANDBOX callback accepted from ${callerIp} for ${checkoutId}`);
+        db.collection("auditLogs").add({
+          type: "stk_callback_sandbox_accepted", ip: callerIp, checkoutId,
+          sellerUid: payData.sellerUid,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+      /* Sandbox money is not money. Read once here, used below to keep test
+         payments out of the seller-credit and financial-reporting paths. */
+      const _isSandbox = payData.env === "sandbox" || payData.isTest === true;
+
       if (payData.status === "completed" || payData.status === "failed") {
         console.log(`[darajaSTKCallback] Already processed: ${checkoutId} (${payData.status})`);
         return;
@@ -4225,6 +4280,11 @@ exports.darajaSTKCallback = onRequest(
           phone:       paidPhone          || payData.phone,
           mpesaCode:   mpesaCode          || null,
           sellerName:  payData.sellerName || null,
+          /* Carried across from the posPayments row. onSellerPaymentCreated already
+             has `if (!data || data.isTest) return;` but this record never copied the
+             flag, so that guard was unreachable from this path and a KES 1 test
+             booked a real commission. Propagating it is what arms the guard. */
+          isTest:      _isSandbox,
           description: payData.description || null,
           status:      "completed",
           createdAt:   ts,
@@ -4388,7 +4448,11 @@ exports.darajaSTKCallback = onRequest(
         }
       } catch (_tlErr) { /* observability must never fail a payment */ }
 
-      if (resultCode === 0) {
+      /* Sandbox money is not money. A sandbox row records a payment that never
+         moved, so booking paperwork against it would put fabricated figures into
+         production financial reporting — the UI Data Integrity rule, in the
+         ledger rather than on screen. */
+      if (resultCode === 0 && !_isSandbox) {
         try {
           const _fin = require("./financial-engine");
           await _fin.recordConfirmedPayment({
