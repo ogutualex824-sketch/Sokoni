@@ -89,9 +89,23 @@ function _delRef() {
   return 'DEL-' + Date.now().toString(36).toUpperCase().slice(-7);
 }
 
-function _generatePIN() {
-  return String(Math.floor(1000 + Math.random() * 9000));
-}
+/* _generatePIN() REMOVED with its only caller.
+
+   A possession PIN minted in the browser was never an authorisation: the client
+   that generates it also writes it, and the document it landed on is readable in
+   FULL by the assigned rider — verified against the served ruleset, where
+   packageRequests grants `resource.data.assignedDriverId == request.auth.uid` a
+   document read, and Firestore cannot project fields away.
+
+   It was also weak on its own terms: Math.random() is not a CSPRNG, and
+   1000..9999 is 9,000 possibilities. The server issues a 6-digit crypto.randomInt
+   PIN in deliveryPinOnAccept, keeps the HMAC hash on the delivery document and the
+   plaintext in deliveryPins/{orderId} — a collection with NO match block, and
+   therefore deny-by-default for every client. The buyer obtains it through
+   getMyDeliveryPin, which proves buyer identity first.
+
+   The helper is deleted rather than left unused, so the next writer cannot reach
+   for it. */
 
 /* Await first snapshot from a packageRequest document */
 async function _readDelivery(deliveryRef, timeoutMs) {
@@ -268,7 +282,11 @@ const SokoniDelivery = {
       /* Status */
       status:           'order_placed',
       notes,
-      proofPin:         _generatePIN(),
+      /* NO proofPin HERE — deliberately, and this absence is asserted by
+         scripts/test-delivery-pin-client-writer.js. Issuance belongs to
+         deliveryPinOnAccept, which fires when a rider is assigned. Writing one at
+         creation both duplicated the server and exposed it: a sweep of historical
+         records is pointless while this line keeps refilling them. */
       timeline:         [timelineEntry],
       _lastTimelineEntry: timelineEntry,
       createdAt:        now,
