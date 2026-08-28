@@ -55,6 +55,7 @@ const INTENDED = [
   'scripts/cert-pos-checkout-authority.js',
   'scripts/emulators.cert.json',
   'scripts/gate-rules-release-path.js',
+  'scripts/gate-served-rules-parity.js',
   'scripts/reconcile-rc-against-live.js',
   'scripts/test-merchant-authority.js',
   'scripts/test-shopemployees-authority.js',
