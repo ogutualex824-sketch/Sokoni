@@ -287,7 +287,7 @@
   }
 
   /* ── Show success screen ─────────────────────────────────── */
-  function _showSuccess(data) {
+  function _showSuccess(data, applicationId) {
     var planLabels = { free:'Free', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
     var planLabel = planLabels[data.plan] || 'Free';
     var pvLink = 'provider.html?cat=' + encodeURIComponent(data.category || 'other');
@@ -309,22 +309,46 @@
         '<br><button onclick="HubRegister.close()" style="margin-top:14px;background:none;border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);border-radius:10px;padding:8px 20px;cursor:pointer;font-family:inherit;font-size:12px;">Close</button>' +
       '</div>';
 
-    /* If paid plan, hand off to SokoniPay */
-    var prices = { starter: 500, pro: 2000, enterprise: 5000 };
-    if (data.plan !== 'free' && prices[data.plan] && window.SokoniPay) {
+    /* If paid plan, hand off to SokoniPay through a SERVER-MINTED intent.
+       The amount used to be a client table { starter:500, pro:2000, enterprise:5000 }
+       passed straight to the gateway — the browser set the price (and, because
+       showGateway reads depositAmount not `amount`, that figure was silently
+       ignored and a default deposit charged). createPaymentIntent now derives the
+       price server-side from the application's plan (payment-purposes
+       hub_registration: applications/{id}.plan → hubPlans, else the documented
+       default), and initiateSTKPush enforces that figure against the minted
+       intent — a tampered client cannot pay less. */
+    if (data.plan !== 'free' && applicationId && window.SokoniPay && typeof window.sokoniCallable === 'function') {
       setTimeout(function () {
-        SokoniPay.gateway({
-          title: 'SOKONI ' + planLabel + ' Plan — ' + data.name,
-          amount: prices[data.plan],
-          onSuccess: function () {
-            try {
-              localStorage.setItem('sokoniSubscription', JSON.stringify({
-                plan: data.plan, price: prices[data.plan],
-                startDate: new Date().toISOString()
-              }));
-            } catch (e) {}
+        (async function () {
+          var _warn = window._skToast || function (m) { if (window.SokoniLogger) window.SokoniLogger.warn(m); };
+          var _intent;
+          try {
+            var _r = await window.sokoniCallable('createPaymentIntent')({ purpose: 'hub_registration', applicationId: applicationId });
+            _intent = _r && _r.data;
+          } catch (e) {
+            _warn('Could not start payment: ' + ((e && e.message) || 'please try again.'));
+            return;
           }
-        });
+          if (!_intent || !_intent.ref) { _warn('Could not start payment. Please try again.'); return; }
+          SokoniPay.gateway({
+            title: 'SOKONI ' + planLabel + ' Plan — ' + data.name,
+            /* server figure + server reference — never a client price */
+            depositAmount:   _intent.amount,
+            paymentIntentId: _intent.ref,
+            ref:             _intent.ref,
+            onSuccess: function () {
+              /* Post-settlement cache only (gateway onSuccess fires after the
+                 webhook confirms payment). Not a grant and not a price source. */
+              try {
+                localStorage.setItem('sokoniSubscription', JSON.stringify({
+                  plan: data.plan, price: _intent.amount, ref: _intent.ref,
+                  startDate: new Date().toISOString()
+                }));
+              } catch (e) {}
+            }
+          });
+        })();
       }, 600);
     }
   }
@@ -442,8 +466,10 @@
        on SOKONI. It was on nothing: the localStorage copy above is visible only
        in that one browser and reaches no reviewer. Success is now reported only
        when the application actually exists server-side. */
-    _saveToFirestore(data).then(function () {
-      _showSuccess(data);
+    _saveToFirestore(data).then(function (appRef) {
+      /* addDoc returns the DocumentReference. Its id is the authoritative
+         applicationId the server prices the paid plan against — see _showSuccess. */
+      _showSuccess(data, appRef && appRef.id);
     }).catch(function (e) {
       console.error('[HubRegister] save failed', e);
       _err('We could not submit your registration: ' +

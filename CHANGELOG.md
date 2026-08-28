@@ -1,3 +1,39 @@
+## [2026-08-28] — Premium catalogue consolidation (Slice 6, Billing + grant) — CANDIDATE, not deployed
+
+**Not deployed.** Branch `fix/premium-catalogue-billing` off current live `61f468e`. Scope: **Billing + grant**
+only — retire the forgeable client premium grant and remove the one client-priced payment path. Explicitly
+OUT (deferred): feature-copy/per-hub-allowance reconciliation, and unifying the server tier tables
+(`sub-billing` / `subscription-os` / `sasos-core` / `universal-onboarding` / `ai-subscriptions`). No enforcement
+flip, no commission 3→5, no POS/settlement/Wallet-PIN change. A declared canonical already exists
+(`functions/subscription-catalog.js`) + a deploy guard (`verify-listing-limit-single-source.js`); this slice does
+not touch those tables.
+
+### What it fixes
+- **Forgeable premium grant (GRANT).** `seller.js activatePlan()` wrote `localStorage.sokoniPremiumPlan` and
+  toasted "All features unlocked (Beta FREE)" — a self-grant enforcement never honoured (limits resolve through
+  `subscription-catalog.js` server-side). Removed. The premium tab now reflects the SERVER entitlement
+  (`SokoniAuthority` → `entitlements/{uid}`), re-renders on `sokoni:entitlements-changed`, drops the "(currently
+  FREE)" / "Beta FREE" fabrication, and routes **Upgrade** to the real paid checkout (`subscriptions.html`).
+  `sokoni-sync.js` no longer propagates the retired flag across a user's devices.
+- **Client-priced payment (BILLING).** `hub-register.js` passed a client table `{starter:500, pro:2000,
+  enterprise:5000}` straight to the gateway (and, since `showGateway` reads `depositAmount` not `amount`, the
+  figure was silently ignored and a default deposit charged). The paid hub registration now mints a
+  **server** intent — `createPaymentIntent({purpose:'hub_registration', applicationId})` — so the price is
+  derived server-side from `applications/{id}.plan` and enforced by `initiateSTKPush`; the gateway receives the
+  server amount + server reference. The `addDoc` id is threaded through as the `applicationId`.
+
+### Files
+- `seller.js` — premium tab: server-resolved plan, no localStorage grant, Upgrade→paid checkout; `activatePlan` removed.
+- `sokoni-sync.js` — `sokoniPremiumPlan` removed from the synced-key list.
+- `hub-register.js` — paid path routed through the server `hub_registration` intent; client price table removed; `applicationId` threaded from `addDoc`.
+- `scripts/test-premium-catalogue-billing.js` — **20/20**: grant retired, server prices the paid path, client can't set the amount; subscription + Slice-5A boost intents intact (regression).
+
+### Not changed / preserved
+No fabricated metric, no enforcement change. Subscription charge (`createPaymentIntent` planId path) and the
+Slice-5A boost/marketing intents are untouched. Server tier tables and display copy left for a later slice.
+
+---
+
 ## [2026-08-28] — Boost money integrity (Slice 5 + 5A) · reconciled onto LIVE (12c6676) — DEPLOYMENT HOLD
 
 **Not deployed.** RC `rc/boost-integrity-live`: Slice 5 (`93c3376`) + Slice 5A (`794ab7e`) reconciled onto

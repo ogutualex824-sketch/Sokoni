@@ -26,7 +26,11 @@
     'sokoniOffers','sokoniStories','sokoniQA','sokoniPromoCodes','sokoniBoosts',
     'sokoniSubscriptions','sokoniWalletTx','sokoniWallet','sokoniExpenses',
     'sokoniInvoices','sokoniDisputes','sokoniReturns','sokoniSellerRatings',
-    'sokoniCampaigns','sokoniPremiumPlan','sokoniAds','sokoniStockAlerts',
+    /* 'sokoniPremiumPlan' removed 2026-08-28 — it was a forgeable client premium
+       grant (seller.js activatePlan), retired in favour of the server entitlement
+       (entitlements/{uid} via SokoniAuthority). Syncing a self-granted premium
+       flag across a user's devices only propagated the fabrication. */
+    'sokoniCampaigns','sokoniAds','sokoniStockAlerts',
     'sokoniOwnershipQueue','sokoniMiniStore','sokoniFeaturedShops',
     'sokoniSellerVerification','sokoniVerifiedSellers',
     /* Orders & Shopping */

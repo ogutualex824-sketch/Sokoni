@@ -4713,18 +4713,45 @@ const PREMIUM_PLANS = [
     },
 ];
 
+/* The premium tab reflects the SERVER entitlement, never a client grant. The old
+   activatePlan() wrote localStorage "sokoniPremiumPlan" and claimed "all features
+   unlocked (Beta FREE)" — a forgeable grant that enforcement never honoured (the
+   listing limit resolves through functions/subscription-catalog.js server-side),
+   so the banner asserted a premium the account did not have. Status now comes from
+   SokoniAuthority (entitlements/{uid}); upgrading routes to the real paid checkout
+   (subscriptions.html), where the server derives the price. */
+let _premiumEnt = null;   /* { plan, premium } resolved from the server, or null until asked */
+
 function renderPremiumPlans(){
     const el = document.getElementById("premiumPlansGrid");
     const bannerEl = document.getElementById("premiumStatusBanner");
     if(!el) return;
 
-    let currentPlan = "starter";
-    try { currentPlan = localStorage.getItem("sokoniPremiumPlan")||"starter"; } catch(e){}
+    /* Resolve the plan from the server once, then re-render when it lands or
+       changes. A client-held plan flag is never read — the device the limit
+       applies to must not be the party that declares the limit. */
+    if(_premiumEnt === null && window.SokoniAuthority && typeof SokoniAuthority.getMerchantEntitlements === "function"){
+        _premiumEnt = {};   /* mark "asked" so a re-render does not refetch */
+        SokoniAuthority.getMerchantEntitlements().then(function(ent){ _premiumEnt = ent || {}; renderPremiumPlans(); }).catch(function(){ _premiumEnt = {}; });
+        document.addEventListener("sokoni:entitlements-changed", function(e){ _premiumEnt = (e && e.detail) || {}; renderPremiumPlans(); });
+    }
 
-    if(bannerEl && currentPlan !== "starter"){
-        const plan = PREMIUM_PLANS.find(p=>p.id===currentPlan);
-        bannerEl.style.display = "block";
-        bannerEl.innerHTML = `<div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">✨ You are on <strong style="color:#ffc107;">${_esc(plan?.name||currentPlan)}</strong>. All premium features are active. (Beta: FREE)</div>`;
+    const isPremium  = !!(_premiumEnt && _premiumEnt.premium);
+    const serverPlan = (_premiumEnt && _premiumEnt.plan) ? String(_premiumEnt.plan).toLowerCase() : "free";
+    /* Map the canonical plan id onto this tab's cards. Free (or unknown) → the
+       "starter" card is current; a paid entitlement highlights the paid tier. */
+    const currentPlan = !isPremium ? "starter"
+        : (serverPlan.includes("enterprise") || serverPlan.includes("business")) ? "business" : "pro";
+
+    if(bannerEl){
+        if(isPremium){
+            const plan = PREMIUM_PLANS.find(p=>p.id===currentPlan);
+            bannerEl.style.display = "block";
+            bannerEl.innerHTML = `<div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">✨ You are on <strong style="color:#ffc107;">${_esc(plan?.name||serverPlan)}</strong>. Premium features are active.</div>`;
+        } else {
+            bannerEl.style.display = "none";
+            bannerEl.innerHTML = "";
+        }
     }
 
     el.innerHTML = PREMIUM_PLANS.map(plan=>`
@@ -4732,26 +4759,17 @@ function renderPremiumPlans(){
             ${plan.badge ? `<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ffc107,#e07000);color:black;font-size:10px;font-weight:900;padding:3px 12px;border-radius:999px;white-space:nowrap;">${plan.badge}</div>` : ""}
             <div style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">${plan.name}</div>
             <div style="font-size:22px;font-weight:900;color:#71ff00;margin-bottom:2px;">${plan.price}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:14px;">${plan.priceSub} (currently FREE)</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:14px;">${plan.priceSub}</div>
             <div style="margin-bottom:16px;">
                 ${plan.features.map(f=>`<div style="font-size:12px;color:rgba(255,255,255,0.6);padding:3px 0;display:flex;gap:7px;align-items:flex-start;"><span style="color:#71ff00;flex-shrink:0;">✓</span>${f}</div>`).join("")}
             </div>
             ${currentPlan===plan.id
                 ? `<button disabled style="width:100%;padding:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:800;border-radius:10px;font-size:13px;font-family:inherit;">✅ Current Plan</button>`
-                : `<button onclick="activatePlan('${plan.id}')" style="width:100%;padding:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:white;font-weight:800;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;">Activate (Beta FREE)</button>`
+                : `<button onclick="location.href='subscriptions.html'" style="width:100%;padding:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:white;font-weight:800;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;">Upgrade</button>`
             }
         </div>
     `).join("");
 }
-
-function activatePlan(planId){
-    localStorage.setItem("sokoniPremiumPlan", planId);
-    const plan = PREMIUM_PLANS.find(p=>p.id===planId);
-    showNotification(`✨ ${plan?.name||planId} activated! All features unlocked (Beta).`, "success");
-    renderPremiumPlans();
-}
-
-window.activatePlan = activatePlan;
 
 /* ══════════════════════════════════════════════════════════════
    PRODUCT VIDEO UPLOAD HANDLER
