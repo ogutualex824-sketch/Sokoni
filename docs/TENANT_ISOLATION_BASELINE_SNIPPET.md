@@ -26,17 +26,23 @@ so that is the meaningful victim id.
 (async () => {
   const u = window.firebaseAuth?.currentUser;
   if (!u) return console.error('NOT SIGNED IN');
-  const tok = await u.getIdToken();
+  await u.getIdToken();          /* session sanity check; the SDK attaches its own */
   console.log('signed in as', u.email || u.uid, '\nuid', u.uid);
 
+  /* TRANSPORT: the SDK, not raw fetch. All four callables declare
+     enforceAppCheck:true, so a request without an App Check token is rejected with
+     HTTP 401 {"status":"UNAUTHENTICATED"} — identical to a missing-auth response, and
+     reached before the tenant guard ever runs. A raw fetch carrying only an ID token
+     therefore 401s no matter who is signed in. httpsCallable attaches the App Check
+     token the page already holds (sokoni-appcheck.js activates it), which is why
+     posCompleteCheckout — same enforceAppCheck:true — works from pos-checkout.html. */
   const call = async (name, data) => {
-    const r = await fetch('https://us-central1-sokoni-aeb26.cloudfunctions.net/' + name, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-      body: JSON.stringify({ data }),
-    });
-    const j = await r.json().catch(() => ({}));
-    return { http: r.status, denied: !!j.error, err: j.error?.status || j.error?.message, result: j.result };
+    try {
+      const r = await firebase.functions().httpsCallable(name)(data);
+      return { denied: false, result: r.data };
+    } catch (e) {
+      return { denied: true, err: e.code + (e.message ? ' — ' + e.message : '') };
+    }
   };
 
   const KASS = 'D5Ql2EYr95bt79IpcGTmOMTK0P83';
