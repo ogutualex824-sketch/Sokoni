@@ -403,7 +403,10 @@
     var reason = _verified ? 'not-approved' : 'not-verified';
     if (typeof o.onDenied === 'function') { try { o.onDenied(reason); } catch (_) {} }
     if (reason === 'not-approved' && o.redirect !== false) {
-      try { window.location.replace(o.deniedUrl || '/profile'); } catch (_) {}
+      /* Send them to the role's application (where they can actually get approved),
+         not a generic page — falling back to /profile for a role with no intake. */
+      var dest = o.deniedUrl || APPLICATION_ROUTES[canonical] || '/profile';
+      try { window.location.replace(dest); } catch (_) {}
     }
     return { ok: false, reason: reason };
   }
@@ -478,6 +481,17 @@
     'driver.html':   'rider',
     'provider.html': 'provider',
     'landlord.html': 'landlord',
+    'provider-dashboard.html': 'provider',
+    'rider-dashboard.html':    'rider',
+  };
+  /* Where an AUTHENTICATED-but-not-approved user is sent per role: the role's own
+     application/authorization flow ("Buyer -> X -> X application"). Falls back to
+     /profile for any role without a dedicated intake. Canonical keys (driver -> rider). */
+  var APPLICATION_ROUTES = {
+    seller:   'onboarding-seller.html',
+    provider: 'provider-onboarding.html',
+    rider:    'onboarding-driver.html',
+    landlord: 'onboarding-landlord.html',
   };
 
   async function guardPage(opts) {

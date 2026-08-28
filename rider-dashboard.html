@@ -568,6 +568,9 @@
        through SokoniCart; without this tag the pip cannot render a count. -->
   <script src="sokoni-cart.js"></script>
   <script src="shared-header.js"></script>
+  <!-- Roles Phase 4: claim-verified workspace authority (rider-dashboard -> rider). Replaces the
+       old inline claims.role check below, which read a claim the canonical writer never mints. -->
+  <script src="sokoni-role-authority.js"></script>
 
   <!-- RD ENGINE -->
   <script>
@@ -928,8 +931,12 @@
             return;
           }
 
-          if (claims.role !== 'driver' && claims.role !== 'admin') {
-            location.href = 'login.html?error=not_driver';
+          /* FIX: role-authority mints claims.driver / claims.rider — NOT claims.role — so the old
+             check rejected genuinely-approved drivers. sokoni-role-authority.js guardPage() is now the
+             authoritative gate; this reads the canonical claims to stay consistent and routes an
+             unapproved user to the driver application rather than a dead-end login. */
+          if (!claims.driver && !claims.rider && !claims.admin && claims.role !== 'admin') {
+            location.href = 'onboarding-driver.html?next=' + encodeURIComponent(location.pathname + location.search);
             return;
           }
 

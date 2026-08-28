@@ -87,6 +87,7 @@ const ROLE_AGREEMENTS = {
   ],
 };
 ROLE_AGREEMENTS.rider = ROLE_AGREEMENTS.driver; // riders share the driver set
+ROLE_AGREEMENTS.landlord = ROLE_AGREEMENTS.property; // landlords accept the property set (was orphaned)
 
 const DEFAULT_VERSION = '1.0';
 

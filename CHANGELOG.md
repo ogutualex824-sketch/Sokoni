@@ -1,3 +1,59 @@
+## [2026-08-28] — Role Entry Authorization Convergence · RC candidate on LIVE (de20ba1) — NOT deployed
+
+**Not deployed. No enforcement flip. No POS/settlement/Wallet-PIN/rules changes.** Isolated candidate
+`rc/role-entry-convergence` off the LIVE lineage `de20ba1`.
+
+### The reconciliation (why this is small, not a 3-way merge)
+Auditing live first showed `de20ba1` had **already** built the role-entry system more completely than the
+three isolated candidates: `sokoni-role-authority.js` (`SokoniRoleAuthority`) is a claim-verified,
+forgery-rejecting authority with `guardPage`/`guardWorkspace`/`WORKSPACE_ROUTES`/`isApproved`, the Phase-2
+server already mints `claims.landlord` and projects `landlordProfiles`, and `SokoniMerchantEntry` already
+gates seller. Integrating `1bfaec5`/`dd2422d`/`f16a870` would have **regressed** live (re-adding a Phase-1
+`role-authority.js` live deleted, and parallel `SokoniRoleEntry`/`SokoniRoleRouter` modules). So the three
+candidates are **retired as superseded**; this RC fills only the genuine gaps, built ON the live authority.
+
+### The gaps closed
+- `provider.html`, `provider-dashboard.html`, `rider-dashboard.html` now load `sokoni-role-authority.js`
+  (they were auth-only; the authority auto-runs `guardPage()` via `WORKSPACE_ROUTES`, now extended with
+  the two dashboard variants).
+- **`rider-dashboard.html` wrong-claim bug fixed** — it gated on `claims.role` (never minted); now reads
+  the canonical `claims.driver`/`claims.rider` and routes an unapproved user to the driver application.
+- **`APPLICATION_ROUTES`** added + `guardWorkspace` now sends an authenticated-but-unapproved user to the
+  role's **application** (`onboarding-seller`/`provider-onboarding`/`onboarding-driver`/`onboarding-landlord`),
+  falling back to `/profile` — delivering "Buyer → X → X application" for every role.
+- **`legal-agreements.js`**: `ROLE_AGREEMENTS.landlord = ROLE_AGREEMENTS.property` (the orphaned property
+  agreement set is now the landlord set).
+- **`onboarding-landlord.html`** (NEW) — the missing landlord application: property agreements via
+  `SokoniLegalSign role:'landlord'`, fail-closed submit, writes `applications{requestedRole:'landlord', …}`
+  (no admin fields → passes `noAdminFields()`); live's `resolveRole` resolves it via `VOCAB`.
+
+### Full role-entry regression (the required matrix) — GREEN on the combined commit
+`scripts/test-role-entry-convergence.js` (Chromium, drives the REAL `SokoniRoleAuthority`) — **15/15**:
+Approved Seller/Provider/Driver-Rider/Landlord → approved; Buyer → denied for all; **Admin alone** and
+**Super-admin alone** → do NOT auto-become a workspace role; **forged `activeRole`** with no matching claim
+→ reset to buyer; valid `activeRole`+claim → kept; signed-out → not verified (auth-guard → login);
+`WORKSPACE_ROUTES` covers the newly-guarded pages; **Buyer → each role → its application**; approved
+landlord → stays.
+`scripts/test-convergence-server.js` (node) — **14/14**: `ROLE_AGREEMENTS.landlord === property`;
+`resolveRole({requestedRole:'landlord'}) → landlord`; all gap-fill wiring; the intake write has no admin
+fields; seller regression intact.
+
+### Security posture (fresh audit — the matrix above is the proof)
+No forgeable path grants a workspace: approval is decided by **signed claims only**; `activeRole`,
+localStorage `roles`, `registeredAs.*`, and a wrong/admin claim are all denied. The RC only ADDS enforcement
+and fixes one bug on live's proven authority — nothing is weakened.
+
+### STOP — deployment decision pending
+This is an RC candidate. Do not deploy, do not flip Legal enforcement, do not touch POS Gate 1 or settlement
+until you take the release decision.
+
+### Files
+`sokoni-role-authority.js`, `functions/legal-agreements.js`, `provider.html`, `provider-dashboard.html`,
+`rider-dashboard.html`, `onboarding-landlord.html`, `scripts/test-role-entry-convergence.js`,
+`scripts/test-convergence-server.js`.
+
+---
+
 ## [2026-08-27] — Font Awesome self-hosted; cdnjs removed from the rendering path
 
 **Not deployed.** Hosting deploy only — no functions, no rules, no index deploy.
