@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Reconcile this RC against the live lineage before any deployment decision.
  *
- *   node scripts/reconcile-rc-against-live.js [liveRef]     (default: 12c6676)
+ *   node scripts/reconcile-rc-against-live.js [liveRef]     (default: 61f468e — UPDATE THIS when live moves)
  *
  * WHY THIS EXISTS
  * This RC was CONSTRUCTED from live by cherry-picking onto it, and a cherry-pick can
@@ -17,7 +17,7 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
-const LIVE = process.argv[2] || '12c6676';
+const LIVE = process.argv[2] || '61f468e';
 
 let pass = 0, fail = 0;
 const ck = (l, ok, d) => {
