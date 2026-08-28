@@ -30,7 +30,7 @@
     #hdrOrder{font-size:11px;color:var(--muted);font-family:monospace}
     #shareBtn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--txt);font-size:12px;cursor:pointer;flex-shrink:0}
     /* ── Panel ── */
-    #panel{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,10,10,.97);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom))}
+    #panel{position:fixed;bottom:var(--sk-track-nav-h);left:0;right:0;z-index:100;background:rgba(10,10,10,.97);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom))}
     #panelHandle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 14px}
     /* ── ETA ── */
     #etaRow{display:flex;gap:10px;margin-bottom:14px}
@@ -68,12 +68,42 @@
     #liveBadge.active{display:flex}
     .live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pls 1.4s ease infinite}
     /* ── Loading ── */
-    #loadScreen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+    /* ── BOTTOM NAV CLEARANCE ─────────────────────────────────────────────
+       Track is a destination in the unified bottom bar, so it must carry the
+       bar. Three fixed layers make room for it: #panel, #loadScreen and
+       #doneOverlay all previously reached bottom:0 / inset:0.
+
+       The bar is z-index 999 on phones but 400 on desktop, and loadScreen sits
+       at 500 — so insetting the overlays above the bar is what makes this
+       correct at BOTH widths, rather than relying on which z-index wins. */
+    :root{--sk-track-nav-h:64px}
+    /* ── THE BAR'S OWN STYLING, SCOPED TO THIS PAGE ────────────────────────
+       track.html loads ONLY leaflet.min.css — never style.css — so `.bottom-nav`
+       arrived here completely unstyled: the runtime check found it rendered in
+       normal flow at the TOP of the page, 226 px tall on desktop with its items
+       stacked. Loading style.css to fix that would restyle this whole
+       self-contained page.
+
+       So the canonical rules are mirrored here, scoped to the bar and nothing
+       else. Kept deliberately minimal — position, layout, colour, active state —
+       rather than copying the full ruleset, which would then have two owners and
+       drift. --sk-track-nav-h above is what the panel and overlays clear. */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;
+      align-items:stretch;background:rgba(5,5,5,.98);
+      -webkit-backdrop-filter:blur(40px) saturate(160%);backdrop-filter:blur(40px) saturate(160%);
+      border-top:1px solid rgba(255,255,255,.06);box-shadow:0 -12px 40px rgba(0,0,0,.5);
+      padding-bottom:env(safe-area-inset-bottom,0px);height:auto;box-sizing:border-box}
+    .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:3px;color:rgba(255,255,255,.32);text-decoration:none;font-size:10px;font-weight:700;
+      padding:9px 0;min-height:56px;transition:color .18s}
+    .bnav-item:hover,.bnav-item.active{color:var(--accent)}
+    .bnav-emoji{font-size:22px;line-height:1;display:block}
+    #loadScreen{position:fixed;top:0;left:0;right:0;bottom:var(--sk-track-nav-h);background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
     .spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     #loadScreen p{color:var(--muted);font-size:14px}
     /* ── Delivered overlay ── */
-    #doneOverlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.9);align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:24px}
+    #doneOverlay{display:none;position:fixed;top:0;left:0;right:0;bottom:var(--sk-track-nav-h);z-index:200;background:rgba(0,0,0,.9);align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:24px}
     #doneOverlay.show{display:flex}
   </style>
 </head>
@@ -487,5 +517,12 @@ function _fatal(title,detail){
   _poll(); // single initial load; real-time takes over via _setupRealtime()
 })();
 </script>
+
+<!-- The unified customer bottom navigation. Deliberately OUTSIDE every script path
+     above: shared-header.js fills it on DOMContentLoaded, so the bar appears whether
+     or not navGetCustomerTracking answers, whether or not the order id is valid, and
+     whether or not Firebase ever initialises. A tracking page that cannot show a
+     delivery must still be a page you can leave. -->
+<nav class="bottom-nav" role="navigation" aria-label="Main navigation" data-sokoni-nav></nav>
 </body>
 </html>
