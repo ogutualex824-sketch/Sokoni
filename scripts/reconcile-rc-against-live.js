@@ -46,6 +46,7 @@ const INTENDED = [
   'docs/TENANT_AUTHORITY_PRIMITIVE.md',
   'docs/TENANT_ISOLATION_BASELINE_SNIPPET.md',
   'docs/index-registry.json',
+  'docs/findings/CERTIFICATION_ROLE_SEPARATION.md',
   'docs/findings/SHOPEMPLOYEES_ESCALATION.md',
   'docs/findings/STAFF_AWARE_ATTEMPT_1_REJECTED.md',
   'docs/findings/STAFF_AWARE_AUTHORITY_SPEC.md',

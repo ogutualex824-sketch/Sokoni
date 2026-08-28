@@ -146,3 +146,4 @@ scripts/*-output*
 #   gcloud auth print-access-token  ->  firebaserules.googleapis.com rulesets/<storage release>
 storage.rules.deployed
 _served.rules
+_served-after.rules
