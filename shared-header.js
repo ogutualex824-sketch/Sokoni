@@ -2244,7 +2244,7 @@
      though a surface opened when the authority just declined it. */
   window._skEnterAdmin = function (role) {
     var P = window.SokoniPermissions;
-    var dest = role === 'superAdmin' ? 'super-admin.html' : 'admin.html';
+    var dest = role === 'superAdmin' ? 'super-admin.html' : 'admin-os.html';  /* canonical admin console */
     var res = null;
     try { res = (P && P.enterAdminContext) ? P.enterAdminContext(role) : null; } catch (_) { res = null; }
     if (!res || res.ok !== true) {

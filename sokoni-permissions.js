@@ -392,7 +392,7 @@
      one and not the reverse. */
   function adminHomeFor() {
     if (hasRole('superAdmin')) return 'super-admin.html';
-    if (hasRole('admin'))      return 'admin.html';
+    if (hasRole('admin'))      return 'admin-os.html';   /* canonical admin console (was legacy admin.html) */
     return null;
   }
 

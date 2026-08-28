@@ -244,7 +244,7 @@
      the header defined it. Administrative pages set data-no-header, so the local
      path below is the one that actually runs there — but they are two callers of
      enterAdminContext(), never two definitions of what entering means. */
-  var DEST = { admin: 'admin.html', superAdmin: 'super-admin.html' };
+  var DEST = { admin: 'admin-os.html', superAdmin: 'super-admin.html' };  /* admin-os is the canonical admin console */
 
   function _enterAdmin(role) {
     if (typeof window._skEnterAdmin === 'function') return window._skEnterAdmin(role);
