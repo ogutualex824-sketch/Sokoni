@@ -103,8 +103,11 @@
     'onboarding-seller.html':  'profile.html',
     'onboarding-driver.html':  'profile.html',
     'onboarding-professional.html':'profile.html',
-    'track.html':              'profile.html',
-    'messages.html':           'profile.html',
+    /* Orders is no longer a TAB, so its pages highlight Profile — the entry that
+       now leads to them. Without a mapping the bar would show nothing active. */
+    'my-orders.html':          'profile.html',
+    'track.html':              'track.html',       /* now a bottom-nav tab in its own right */
+    'messages.html':           'messages.html',    /* now a bottom-nav tab in its own right */
     'notifications.html':      'profile.html',
     'reviews.html':            'profile.html',
     'referral.html':           'profile.html',

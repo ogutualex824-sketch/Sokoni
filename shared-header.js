@@ -8,6 +8,38 @@
 ================================================================ */
 (function () {
   'use strict';
+  var SOKONI_NAV = [
+    { href: '/',                     emoji: '🏠', label: 'Home' },
+    { href: 'category.html?cat=all', emoji: '🛍️', label: 'Shop' },
+    { href: 'services.html',         emoji: '🛠️', label: 'Services' },
+    { href: 'messages.html',         emoji: '💬', label: 'Messages', badgeId: 'sk-msg-badge' },
+    /* Opens the tracker that exists today. The contract is shaped so it can grow
+       into the unified surface (orders, deliveries, rider/vehicle, authorised
+       shared locations) WITHOUT the tab moving again — but it does not pretend
+       to be that yet, and it grants no location access of its own: the existing
+       authorisation rules stay the authority. */
+    { href: 'track.html',            emoji: '📍', label: 'Track' },
+  ];
+  try { window.SokoniBottomNav = { TABS: SOKONI_NAV }; } catch (_) {}
+
+  /* ONE renderer for the bar, callable from both places that need it: here, before
+     the EXCLUDED early-return, and again from _inject for ordinary pages. Idempotent
+     by the same guard, so running twice cannot double the items. */
+  function _fillBottomNavEarly() {
+    var hosts = document.querySelectorAll('nav[data-sokoni-nav]');
+    for (var i = 0; i < hosts.length; i++) {
+      if (hosts[i].querySelector('.bnav-item')) continue;
+      hosts[i].innerHTML = SOKONI_NAV.map(function (t) {
+        var badge = t.badgeId
+          ? '<span class="sk-badge" id="' + t.badgeId + '" role="status" aria-label="Unread messages"></span>'
+          : '';
+        return '<a href="' + t.href + '" class="bnav-item">' +
+               '<span class="bnav-emoji">' + t.emoji + '</span>' +
+               '<span>' + t.label + '</span>' + badge + '</a>';
+      }).join('');
+    }
+  }
+
 
   /* ── PREMIUM DARK THEME — enforce immediately, before first paint ─────
      Sets data-theme="dark" on <html> so every @media(prefers-color-scheme:dark)
@@ -615,6 +647,24 @@
      every future list to remember the two spellings. */
   const pageKey = page.replace(/\.html$/, '');
   const _match = (list) => list.some((e) => e.replace(/\.html$/, '') === pageKey);
+  /* THE BOTTOM BAR IS NOT THE HEADER, and it must be filled before this returns.
+
+     EXCLUDED governs the TOP-NAV chrome — pages that own their own header. Three
+     pages in it (profile.html, seller.html, success.html) nevertheless shipped the
+     standard customer bottom bar, so converting their markup to a placeholder and
+     leaving the fill inside _inject gave them an EMPTY bar: the old markup was gone
+     and nothing replaced it. Measured on the deployed preview, and it was hidden for
+     a while behind a service-worker theory that turned out to be wrong.
+
+     Safe here because injection is MARKER-gated: only a page carrying
+     data-sokoni-nav is touched, so pos/merchant/shell — which never had the customer
+     bar and have no marker — cannot pick one up by being reached earlier. */
+  try {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _fillBottomNavEarly, { once: true });
+    } else { _fillBottomNavEarly(); }
+  } catch (_) {}
+
   if (_match(EXCLUDED)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
   /* Inside the merchant shell, /merchant owns the header and the bottom nav; an
@@ -993,6 +1043,20 @@
     #sk-notif-badge { background: #ff4d6d; color: #fff; }
     #sk-msg-badge   { background: #71ff00; color: #000; }
     #sk-activity-badge { background: #fbbf24; color: #000; }
+
+    /* The unread badge followed Messages into the bottom bar. .sk-badge is
+       position:absolute, so its host must be positioned or it anchors to whatever
+       ancestor happens to be — pages define .bnav-item themselves and most do not
+       set it. Scoped to the bar so no header badge moves.
+
+       NO BACKTICKS IN THIS COMMENT. This whole CSS block is a template literal, so
+       a backtick here TERMINATES it: the stylesheet truncated, the header stopped
+       injecting on every standalone page, and node --check still passed because the
+       remaining JS was still valid. Silent, and only caught because
+       test-merchant-shell-boundary went from 0 failures to 3. */
+    .bnav-item { position: relative; }
+    .bnav-item .sk-badge { top: 2px; right: calc(50% - 18px); border-color: transparent; }
+
 
     /* Keep old dot for pages that still read it */
     .sk-notif-dot {
@@ -1419,11 +1483,19 @@
           '<span class="sk-badge" id="sk-activity-badge" role="status" aria-label="New activity"></span>' +
         '</a>' +
 
-        /* Messages */
-        '<a href="messages.html" class="sk-nav-icon-btn" aria-label="Messages" id="sk-msg-btn">' +
-          '<span aria-hidden="true">💬</span>' +
-          '<span class="sk-badge" id="sk-msg-badge" role="status" aria-label="Unread messages"></span>' +
-        '</a>' +
+        /* MESSAGES LEFT THE HEADER — there must be ONE destination for a
+           conversation. It lived here AND in the bottom bar, so a tap on either
+           reached the same wall by two routes, and any future divergence between
+           them would be invisible until someone noticed their messages differed.
+
+           The unread BADGE was not dropped with it: `sk-msg-badge` now lives on the
+           bottom-nav Messages tab, keeping the same id, so the two writers at
+           _setBadge('sk-msg-badge', …) below continue to work unchanged. No second
+           counter, no new authority, and no orphaned binding — which is what
+           deleting the element alone would have left.
+
+           The 🔔 bell stays exactly where it is: notifications are the ALERT
+           mechanism, Messages is the destination they open into. */
 
         /* Cart — except ON the cart page, where this slot carries Wishlist instead.
            A Cart button that navigates to the page you are already on is dead weight;
@@ -1612,6 +1684,12 @@
       { icon:'🔔', label:'Notifications',  href:'notifications.html' },
       { icon:'❤️', label:'Wishlist',       href:'wishlist.html' },
       { icon:'🛒', label:'Cart',           href:'cart.html' },
+      /* ORDERS LIVES HERE NOW, and it had to go somewhere. Removing it from the
+         bottom bar left it with NO entry point at all: profile.html carried not one
+         link to my-orders.html, so "restructuring, not removal" would have been
+         removal in practice. Measured before the tab was changed, not assumed. */
+      { icon:'📦', label:'My Orders',      href:'my-orders.html' },
+      { icon:'📍', label:'Track',          href:'track.html' },
       { icon:'👤', label:'Profile',        href:'profile.html' },
     ];
 
@@ -1932,14 +2010,41 @@
       switcherSection +
       rolePills +
       '<div class="sk-acct-links">' +
-        '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()"><i class="fas fa-user"></i> My Profile</a>' +
-        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Settings</a>' +
-        '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()"><i class="fas fa-briefcase"></i> My Workspaces</a>' +
-        '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
-        /* Wishlist moves here from the drawer's removed role-switcher slot. */
-        '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()"><i class="fas fa-heart"></i> Wishlist</a>' +
+        /* ONE ROUTE VOCABULARY. The five destinations are read from
+           SokoniBottomNav.TABS — the same array the bar renders — rather than
+           restated here. Restating them is how a dropdown ends up pointing at a
+           route the bar no longer has, and this menu previously used Font Awesome
+           glyphs while the bar used emoji, so the two did not even look related.
+           If the tabs are unavailable (header ordering, a page that skips the
+           injector) this section is simply omitted: a menu with no shortcuts is
+           better than one with dead ones. */
+        (function () {
+          try {
+            var tabs = (window.SokoniBottomNav && window.SokoniBottomNav.TABS) || [];
+            if (!tabs.length) return '';
+            return tabs.map(function (t) {
+              return '<a class="sk-acct-link" href="' + t.href + '" onclick="window._skCloseAcct()">' +
+                     t.emoji + ' ' + _hesc(t.label) + '</a>';
+            }).join('') + '<div class="sk-acct-separator"></div>';
+          } catch (_) { return ''; }
+        })() +
+        '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()">👤 My Profile</a>' +
+        /* Orders left the BAR, not the product — this and the header drawer are now
+           its entry points, because profile.html carried no link to it at all. */
+        '<a class="sk-acct-link" href="my-orders.html" onclick="window._skCloseAcct()">📦 My Orders</a>' +
+        '<a class="sk-acct-link" href="notifications.html" onclick="window._skCloseAcct()">🔔 Notifications</a>' +
+        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()">⚙️ Settings</a>' +
+        '<a class="sk-acct-link" href="account-centre.html#security" onclick="window._skCloseAcct()">🛡️ Account &amp; Security</a>' +
+        /* Role-aware entries kept exactly as they were: the emoji are presentation,
+           and role/capability authority is unchanged by this slice. */
+        '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()">💼 My Workspaces</a>' +
+        '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()">👛 Wallet</a>' +
+        '<a class="sk-acct-link" href="wishlist.html" onclick="window._skCloseAcct()">❤️ Wishlist</a>' +
+        '<a class="sk-acct-link" href="help.html" onclick="window._skCloseAcct()">❓ Help &amp; Support</a>' +
+        /* Sign Out stays visually separated — it is an account ACTION, not a
+           destination, and a mis-tap costs the merchant their session. */
         '<div class="sk-acct-separator"></div>' +
-        '<button class="sk-acct-link sk-acct-link-danger" onclick="window._skSignOutFromAcct()"><i class="fas fa-arrow-right-from-bracket"></i> Sign Out</button>' +
+        '<button class="sk-acct-link sk-acct-link-danger" onclick="window._skSignOutFromAcct()">🚪 Sign Out</button>' +
       '</div>';
 
     const wrap = document.getElementById('sk-acct-wrap');
@@ -2912,6 +3017,33 @@
     window.skNavRefresh = _refresh;
 
     /* ── Register with Layout Manager so it knows the header height ── */
+    /* ══════════════════════════════════════════════════════════════════════
+       THE CUSTOMER BOTTOM NAVIGATION — ONE DEFINITION
+
+       This markup used to be hand-copied into 80 HTML pages. Changing a tab meant
+       editing 80 files and hoping none drifted, which is the same mechanism that
+       produced 46 spellings of a fulfilment stage and five of "the assigned rider".
+       It is defined once here and injected into a placeholder.
+
+       INJECTED BY MARKER, NEVER BY CLASS. Nine other pages carry a
+       `<nav class="bottom-nav">` that is NOT this nav — seller dashboards,
+       analytics, admin. Filling every `.bottom-nav` would have replaced their
+       navigation with the customer's. Only `[data-sokoni-nav]` is filled, so a
+       surface opts in explicitly and the others cannot be caught by accident.
+
+       Home · Shop · Services · Messages · Track. Orders and Profile left the BAR,
+       not the product: Profile remains in the account entry above, and Orders
+       remains reachable from Profile and from every order link. */
+    /* SOKONI_NAV lives at MODULE scope (top of file) so it exists before any
+       consumer runs. The account popup builds from it and has call sites that
+       fire during init, not only on click. */
+
+    /* Delegates to the module-scope renderer so there is ONE definition of the bar
+       markup. This path covers ordinary pages; the early call above covers the three
+       EXCLUDED pages that still carry the bar. */
+    function _injectBottomNav() { _fillBottomNavEarly(); }
+    try { _injectBottomNav(); } catch (_) {}
+
     function _registerWithLayout() {
       if (window.SokoniLayout) {
         window.SokoniLayout.register('header', document.getElementById('sk-top-nav'));

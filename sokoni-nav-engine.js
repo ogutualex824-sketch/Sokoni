@@ -201,12 +201,27 @@
      the role-aware More drawer and desktop sidebar built from _SUBNAV below. The
      bottom bar is deliberately the same five customer tabs everywhere so the app
      never changes shape underneath the user when their role context shifts. */
+  /* ORDERS AND PROFILE LEFT THE BAR, NOT THE PRODUCT.
+     Profile remains in the header account entry (shared-header.js), and Orders
+     remains reachable from Profile and from every order link — this is navigation
+     restructuring, not feature removal.
+
+     Track opens the tracker that exists TODAY. The tab is shaped to grow into the
+     unified surface — orders, deliveries, rider/vehicle, authorised shared
+     locations — without moving again, but it claims nothing it does not do, and it
+     grants no location access of its own: the existing authorisation rules stay
+     the authority, and there is no proximity browsing.
+
+     MUST STAY IDENTICAL to SokoniBottomNav.TABS in shared-header.js, which paints
+     the same bar on the ~81 pages that do not load this engine. A drift would show
+     one bar on first paint and a different one after hydration. Asserted by
+     scripts/test-customer-nav.js. */
   var _CANONICAL_TABS = [
     { i:'🏠',  l:'Home',     h:'/' },
     { i:'🛍️', l:'Shop',     h:'category.html?cat=all' },
     { i:'🛠️', l:'Services', h:'services.html' },
-    { i:'📦',  l:'Orders',   h:'my-orders.html' },
-    { i:'👤',  l:'Profile',  h:'profile.html' }
+    { i:'💬',  l:'Messages', h:'messages.html' },
+    { i:'📍',  l:'Track',    h:'track.html' }
   ];
 
   var _TABS = {
@@ -804,5 +819,8 @@
     _init();
   }
 
-  window.SokoniNavEngine = { refresh: _init, workspace: _workspace, role: _role };
+  window.SokoniNavEngine = { refresh: _init, workspace: _workspace, role: _role,
+    /* Exposed so the static-paint copy in shared-header.js can be asserted identical
+       to what this engine hydrates. Two bars that disagree is a flicker the user sees. */
+    TABS: _CANONICAL_TABS };
 }());

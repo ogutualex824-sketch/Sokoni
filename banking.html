@@ -475,13 +475,7 @@
      Targets match index.html and sokoni-nav-engine.js so each tab means the same
      thing everywhere (Orders → profile.html#orders). Banking is reached from the
      hub link/top nav; it is not itself a bottom-nav destination. -->
-<nav class="bottom-nav">
-  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-</nav>
+<nav class="bottom-nav" data-sokoni-nav></nav>
 <script src="scroll-memory.js" defer></script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>
