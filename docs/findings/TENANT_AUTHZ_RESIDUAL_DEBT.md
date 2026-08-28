@@ -38,7 +38,19 @@ businesses/{merchantId}.ownerId === uid          // owner
   || posStaff where(merchantId, uid, status=='active')   // active staff
 ```
 
-### BLOCKER — one unestablished fact
+### BLOCKER — RESOLVED 2026-08-28: posStaff is server-only
+
+**Step 1 cleared.** Measured against served ruleset `f1c4e35b` with aborting controls: `posStaff`
+is absent from the rules with no wildcard reaching it (deny-by-default), `_createBusiness`
+server-generates `merchantId` so a caller cannot choose the merchant, and `_setStaffPin` cannot
+create a membership. **Not self-mintable** — unlike `shopEmployees`.
+
+Design spec for the staff-aware guard: `docs/findings/STAFF_AWARE_AUTHORITY_SPEC.md`. It records a
+constraint found while specifying it: membership must be **merchant-scoped**, because `posStaff`
+stores `branchId="${merchantId}-main"` while these callables pass `branchId="default"` or none — a
+branch-scoped guard would match zero rows and **deny every cashier**.
+
+### ORIGINAL BLOCKER TEXT (superseded, kept for provenance)
 
 **Is `posStaff` client-writable?** If it is self-mintable, adding that path **reopens the hole the
 primitive just closed**, because an attacker would mint their own active membership in the victim
