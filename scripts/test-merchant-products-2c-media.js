@@ -23,8 +23,23 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-let pass = 0, fail = 0, unproven = 0;
+let pass = 0, fail = 0, unproven = 0, blocked = 0;
+
+/* BLOCKED is not UNPROVEN. The un() calls in this suite are deliberate scope
+   notes — things it never intended to prove — and they correctly do not fail it.
+   A missing PREREQUISITE is different: a check that was MEANT to run and could
+   not. Those must not exit 0, or the gate goes green while a deployed-rule
+   assertion was silently skipped. */
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : '')); ok ? pass++ : fail++; };
+const bl = (l, d) => { console.log('  BLOCKED   ' + l + (d ? '   [' + d + ']' : '')); blocked++; };
+
+/* THE DEPLOYED Storage rules, read once and only if present. storage.rules.deployed
+   is gitignored, so no clean checkout has it and this suite aborted with ENOENT in
+   CI — a stack trace where a verdict should be. */
+const RULES_PATH = path.join(ROOT, 'storage.rules.deployed');
+const RULES = fs.existsSync(RULES_PATH) ? fs.readFileSync(RULES_PATH, 'utf8') : null;
+const NO_RULES = 'storage.rules.deployed absent — fetch the DEPLOYED Storage rules; a ' +
+                 'committed snapshot would verify a stale copy, not production';
 const un = (l, d) => { console.log('  UNPROVEN  ' + l + (d ? '   [' + d + ']' : '')); unproven++; };
 const head = (t) => console.log('\n' + t);
 
@@ -89,16 +104,17 @@ function rig(seed, opts = {}) {
      MEDIA.storagePath('u1', 'p1', 0) === 'product-images/u1/p1/0.jpg' &&
      sellerSrc.indexOf('`product-images/${sellerUid || \'anon\'}/${productId}/${i}.jpg`') > -1,
      MEDIA.storagePath('u1', 'p1', 0));
-  ck('the accepted types mirror the DEPLOYED storage rule', await (async () => {
-    const rules = fs.readFileSync(path.join(ROOT, 'storage.rules.deployed'), 'utf8');
+  if (!RULES) bl('the accepted types mirror the DEPLOYED storage rule', NO_RULES);
+  else ck('the accepted types mirror the DEPLOYED storage rule', await (async () => {
+    const rules = RULES;
     const fn = rules.match(/function safeImageOnly\(\)[\s\S]*?\n    \}/)[0];
     const inRule = (fn.match(/'image\/[a-z]+'/g) || []).map((s) => s.replace(/'/g, '')).sort();
     return JSON.stringify(inRule) === JSON.stringify(MEDIA.ACCEPTED.slice().sort());
   })(), MEDIA.ACCEPTED.join(' '));
-  ck('the size cap matches the deployed rule (15 MB, strictly less)',
+  if (!RULES) bl('the size cap matches the deployed rule (15 MB, strictly less)', NO_RULES);
+  else ck('the size cap matches the deployed rule (15 MB, strictly less)',
      MEDIA.MAX_BYTES === 15 * 1024 * 1024 &&
-     fs.readFileSync(path.join(ROOT, 'storage.rules.deployed'), 'utf8')
-       .indexOf('request.resource.size < 15 * 1024 * 1024') > -1);
+     RULES.indexOf('request.resource.size < 15 * 1024 * 1024') > -1);
   ck('a file of EXACTLY 15 MB is refused, as the rule refuses it',
      MEDIA.validate(file('big.jpg', 'image/jpeg', 15 * 1024 * 1024)).ok === false,
      'the rule is `<`, not `<=`');
@@ -240,9 +256,9 @@ function rig(seed, opts = {}) {
   ck('the uid segment comes from the resolved scope',
      Object.keys(r.bucket)[0].indexOf('product-images/' + UID + '/') === 0,
      Object.keys(r.bucket)[0]);
-  ck('the deployed rule pins that segment to request.auth.uid',
-     fs.readFileSync(path.join(ROOT, 'storage.rules.deployed'), 'utf8')
-       .indexOf('request.auth.uid == uid') > -1,
+  if (!RULES) bl('the deployed rule pins that segment to request.auth.uid', NO_RULES);
+  else ck('the deployed rule pins that segment to request.auth.uid',
+     RULES.indexOf('request.auth.uid == uid') > -1,
      'so a forged path cannot be written even if this module were bypassed');
 
   head('8 - NO media quota is invented');
@@ -298,7 +314,14 @@ function rig(seed, opts = {}) {
      'the Storage emulator is not running in this rig');
 
   console.log('\n' + '='.repeat(78));
-  console.log('  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' unproven');
+  console.log('  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' unproven' +
+              (blocked ? ', ' + blocked + ' BLOCKED' : ''));
+  if (blocked) {
+    console.log('');
+    console.log('  ' + blocked + ' assertion(s) could not run: ' + NO_RULES + '.');
+    console.log('  Reported as BLOCKED and exiting non-zero. A check that did not run is');
+    console.log('  not a check that passed.');
+  }
   console.log('='.repeat(78) + '\n');
-  process.exit(fail ? 1 : 0);
+  process.exit((fail || blocked) ? 1 : 0);
 })().catch((e) => { console.error('\n  aborted: ' + (e && e.stack) + '\n'); process.exit(1); });

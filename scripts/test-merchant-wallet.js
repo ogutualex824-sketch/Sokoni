@@ -451,11 +451,22 @@ head('9 - the entitlement gate');
   ck('an entitlement ERROR is unknown, not free', /Checking your plan/.test(host.innerHTML));
 }
 
-head('10 - it is lazy, and it is wired');
-ck('the module is in MODULE_SCRIPTS', /wallet:\s*\['sokoni-authority\.js', 'sokoni-merchant-wallet\.js'\]/.test(SHELL));
+head('10 - it is STATICALLY loaded, and it is wired');
+/* SHIPPED ARCHITECTURE: every module global arrives from a static <script>.
+   The source lineage had a MODULE_SCRIPTS lazy registry; this lineage does not,
+   and importing one as a side effect of adding a Wallet would have been a
+   redesign. The cost is recorded rather than hidden: the module downloads for
+   every merchant, not only those who open the Wallet — which is exactly how
+   every other module on this shell already behaves. */
+ck('the module is loaded by a static script tag',
+   /<script[^>]+src="sokoni-merchant-wallet\.js"/.test(SHELL),
+   'this shell has no lazy loader; a global that is never fetched is a dead surface');
 ck('the shell declares the module global', /wallet:\s*\{ global: 'SokoniMerchantWallet'/.test(SHELL));
-ck('it is NOT eagerly script-tagged', !/<script[^>]+sokoni-merchant-wallet\.js/.test(SHELL),
-   'a merchant who never opens the Wallet never downloads it');
+ck('the script tag sits with the other module tags, before the registry names it',
+   SHELL.indexOf('src="sokoni-merchant-wallet.js"') > -1 &&
+   SHELL.indexOf('src="sokoni-merchant-wallet.js"') <
+     SHELL.indexOf("wallet:     { global: 'SokoniMerchantWallet'"),
+   'renderModule reads window[def.global] synchronously — a tag after it would race');
 ck('Payments offers a Wallet view alongside its payments ledger',
    /\{ k: 'ledger', label: 'Payments in' \}, \{ k: 'wallet', label: 'Wallet' \}/.test(SHELL) &&
    /data-payview="/.test(SHELL));
@@ -463,10 +474,38 @@ ck('...and the ledger is still reachable, not replaced',
    /function renderPaymentsLedger/.test(SHELL) && /sellerPayments/.test(SHELL));
 ck('leaving the Wallet destroys it, so its polling stops',
    /_mounted\.wallet[\s\S]{0,220}destroy/.test(SHELL));
-ck('the abandonment guard watches the PAYMENTS route, not "wallet"',
-   /renderModule\('wallet', hostEl, 'payments'\)/.test(SHELL) &&
-   /if \(current !== route\)/.test(SHELL),
-   'guarding on the module id would clear the panel the instant it loaded');
+/* The source guarded against a merchant navigating away DURING an async module
+   fetch. Here renderModule is synchronous, so that window does not exist — and
+   the suite proves the property rather than trusting the claim. If module
+   loading ever becomes async, this fails and the guard must come back WITH it. */
+{
+  const rm = SHELL.slice(SHELL.indexOf('function renderModule ('));
+  let d = 0, end = 0;
+  for (let i = rm.indexOf('{'); i < rm.length; i++) {
+    if (rm[i] === '{') d++; else if (rm[i] === '}') { d--; if (d === 0) { end = i; break; } }
+  }
+  const body = rm.slice(0, end + 1);
+  ck('CONTROL the renderModule body was isolated', body.length > 200 && body.length < 4000,
+     body.length + ' chars');
+  ck('renderModule is SYNCHRONOUS, so no abandonment window exists',
+     !/\.then\(|await |new Promise|setTimeout|import\(/.test(body),
+     'the source lineage needed an abandonment guard only because its loader was async');
+  ck('...and the Wallet is therefore mounted without a route argument',
+     /renderModule\('wallet', hostEl\)/.test(SHELL),
+     'passing an argument this signature ignores would imply a guard that is not there');
+}
+
+head('10b - PROVENANCE: the lazy-loader assumption is retired, not forgotten');
+/* Kept deliberately. Until this commit the three assertions above expected a
+   MODULE_SCRIPTS registry and an async load. They were left FAILING rather than
+   deleted, so the divergence stayed visible. Now they are replaced — and this
+   control records WHY, and fires if the loader ever returns without the guard. */
+ck('no MODULE_SCRIPTS lazy registry exists on this lineage',
+   !/MODULE_SCRIPTS/.test(SHELL),
+   'if this fails, a lazy loader was reintroduced — restore the abandonment guard with it');
+ck('no module is fetched at mount time',
+   !/_loadModuleScripts/.test(SHELL),
+   'the shipped design resolves every global before mount');
 
 head('11 - the shell reads are owner-scoped in the QUERY');
 ck('walletTransactions is filtered by uid server-side',
