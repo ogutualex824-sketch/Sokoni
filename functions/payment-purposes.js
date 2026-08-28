@@ -232,6 +232,31 @@ const PURPOSES = {
       };
     },
   },
+
+  /* ── Marketing-hub boost (marketing.html) ─────────────────────────────
+     A distinct product from the listing boost above: a paid marketing-hub promotion
+     with its own plans (pro / vip). Same invariant — the client sends the PLAN key,
+     the server sets the price. (The 'basic' plan is free and carries no money, so it
+     is not a purpose here.) */
+  marketing_boost: {
+    resourceType: 'marketingBoost',
+    async price(uid, data) {
+      const MKT_KES = { pro: 500, vip: 1500 };
+      const key = String(data.plan || data.boostKey || '').trim().toLowerCase();
+      if (!Object.hasOwn(MKT_KES, key)) {
+        fail('invalid-argument', `Unknown marketing boost plan "${key}". Valid: ${Object.keys(MKT_KES).join(', ')}.`);
+      }
+      const cents = MKT_KES[key] * 100;
+      const resourceId = String(data.product || data.resourceId || '').trim() || null;
+      return {
+        amountCents: cents,
+        currency: 'KES',
+        resourceType: 'marketingBoost',
+        resourceId: resourceId,
+        metadata: { plan: key, category: 'marketing' },
+      };
+    },
+  },
 };
 
 /**

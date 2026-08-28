@@ -701,18 +701,32 @@ const BOOST_PRICES = {
   urgent:   { label:"Urgent Listing Badge",price:100,  duration:3,  description:"'Urgent' badge for 3 days" },
 };
 
-function boostListing(listingId, boostType, opts){
+async function boostListing(listingId, boostType, opts){
   const boost = BOOST_PRICES[boostType]; if(!boost) return;
   opts = opts || {};
+  /* Server-authoritative (Slice 5A): the amount is minted by createPaymentIntent (purpose:'boost')
+     from the SERVER price map, NOT this client BOOST_PRICES table; the STK enforces the server intent
+     amount, so a tampered client cannot set the price. No localStorage "boost active" grant — a client
+     must not establish that a boost was purchased or activated; the record is paymentIntents/{ref}. */
+  const call = (typeof window!=="undefined" && typeof window.sokoniCallable==="function") ? window.sokoniCallable : null;
+  if(!call){ (window._skToast||window.alert||function(){})("Payments are unavailable right now. Please try again shortly."); return; }
+  let _intent = null;
+  try {
+    const _r = await call('createPaymentIntent')({ purpose:'boost', boostKey:boostType, listingId:listingId });
+    _intent = _r && _r.data;
+  } catch(e){ (window._skToast||window.alert)("Could not start boost payment: "+((e&&e.message)||'please try again.')); return; }
+  if(!_intent || !_intent.ref){ (window._skToast||window.alert)("Could not start boost payment. Please try again."); return; }
   showGateway({
     providerName:  opts.listingName || "Your Listing",
     category:      "boost",
     serviceDesc:   boost.label+" — "+boost.description+" ("+boost.duration+" days)",
-    depositAmount: boost.price,
+    depositAmount: _intent.amount,
+    paymentIntentId: _intent.ref,
+    ref: _intent.ref,
     onSuccess: function(ref){
-      let boosts={}; try{boosts=JSON.parse(localStorage.getItem("sokoniListingBoosts")||"{}");}catch(e){}
-      boosts[listingId]={ type:boostType, expiresAt:Date.now()+boost.duration*86400000, ref, price:boost.price };
-      localStorage.setItem("sokoniListingBoosts",JSON.stringify(boosts));
+      /* Settled payment only. The purchase is recorded server-side (paymentIntents/{ref}); the boost's
+         ranking effect is a separate server-side entitlement slice, not established by this client. */
+      (window._skToast||window.alert)("✅ "+boost.label+" purchased — payment confirmed. Ref: "+ref);
     }
   });
 }

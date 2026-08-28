@@ -639,19 +639,35 @@ function submitBoost(){
     return;
   }
 
-  /* Paid plans — trigger M-Pesa via SokoniPay */
+  /* Paid plans — server-authoritative (Slice 5A). The amount is minted by createPaymentIntent
+     (purpose:'marketing_boost'), NOT the client planPrices table; the STK enforces the server intent
+     amount. Success is shown only after the settled payment; the record is paymentIntents/{ref} +
+     payments/{ref} + commissionLedger (server), never a client-minted boostId / localStorage grant. */
   closeBoostModal();
-  window.SokoniPay.gateway({
-    providerName:  "SOKONI Marketing Hub",
-    serviceDesc:   plan.title+" · "+days+" days featured placement",
-    category:      "marketing",
-    serviceTotal:  planPrices[currentBoostPlan],
-    providerPhone: "",
-    onSuccess: function(){
-      _saveBoostRecord(product, phone, cat, days, plan, boostId);
-      SokoniPay.saveCommission({ ref:boostId, category:"marketing", sokoniCut:planPrices[currentBoostPlan], providerNet:0, status:"auto_collected", createdAt:Date.now() });
-    }
-  });
+  (async function(){
+    const call = (typeof window.sokoniCallable==="function") ? window.sokoniCallable : null;
+    if(!call || typeof window.SokoniPay==="undefined"){ (window._skToast||alert)("Payments are unavailable right now. Please try again shortly."); return; }
+    let _intent = null;
+    try {
+      const _r = await call('createPaymentIntent')({ purpose:'marketing_boost', plan: currentBoostPlan, product: product });
+      _intent = _r && _r.data;
+    } catch(e){ (window._skToast||alert)("Could not start boost payment: "+((e&&e.message)||'please try again.')); return; }
+    if(!_intent || !_intent.ref){ (window._skToast||alert)("Could not start boost payment. Please try again."); return; }
+    window.SokoniPay.gateway({
+      providerName:  "SOKONI Marketing Hub",
+      serviceDesc:   plan.title+" · "+days+" days featured placement",
+      category:      "marketing",
+      depositAmount: _intent.amount,
+      paymentIntentId: _intent.ref,
+      ref: _intent.ref,
+      providerPhone: "",
+      onSuccess: function(ref){
+        /* Settled payment only. The purchase is recorded server-side; the featured placement is a
+           separate server-side entitlement, not established by this client. */
+        (window._skToast||alert)("✅ Marketing boost purchased — payment confirmed. Ref: "+ref);
+      }
+    });
+  })();
 }
 
 function loadActiveCampaigns(){
