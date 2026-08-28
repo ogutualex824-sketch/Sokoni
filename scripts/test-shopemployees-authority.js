@@ -102,6 +102,22 @@ const ATTACK  = 'attacker';      /* a principal who owns their own shop         
     setDoc(doc(as(ATTACK), E, 'victimUid'), { shopOwnerId: ATTACK, role: 'cashier', status: 'active' }),
     'grants nothing over the victim — it is my shop, not theirs');
 
+
+  console.log('\nE. Legitimate management must still work after the fix\n');
+  await seed();
+  await ok('the OWNER may change their employee role (anchor untouched)',
+    updateDoc(doc(as(OWNER_A), E, EMP_A), { role: 'manager' }),
+    'the fix must not break staff management');
+  await ok('the OWNER may deactivate their employee',
+    updateDoc(doc(as(OWNER_A), E, EMP_A), { status: 'inactive' }));
+  await ok('the OWNER may rewrite the anchor to ITSELF (no-op) explicitly',
+    updateDoc(doc(as(OWNER_A), E, EMP_A), { shopOwnerId: OWNER_A, role: 'cashier' }));
+  await deny('the OWNER may NOT hand their employee to another shop',
+    updateDoc(doc(as(OWNER_A), E, EMP_A), { shopOwnerId: ATTACK }),
+    'the anchor is immutable for everyone, not just attackers');
+  await ok('the OWNER may still DELETE their employee',
+    deleteDoc(doc(as(OWNER_A), E, EMP_A)));
+
   await env.cleanup();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

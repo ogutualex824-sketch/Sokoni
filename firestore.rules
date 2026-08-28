@@ -1448,8 +1448,15 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
       allow create: if isAdmin()
                     || (isAuthed() && request.resource.data.shopOwnerId == request.auth.uid);
+      /* The ownership anchor is IMMUTABLE on update. `create` already constrains the
+         NEW shopOwnerId, but update constrained only the OLD one — so a caller could
+         create a record naming themselves, then rewrite shopOwnerId to a victim and
+         become an active manager of a shop they have no relationship to. Demonstrated
+         against the served ruleset in scripts/test-shopemployees-authority.js: a
+         guarded create is worthless while update can move the anchor. */
       allow update: if isAdmin()
-                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid
+                        && request.resource.data.shopOwnerId == resource.data.shopOwnerId);
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
     }
