@@ -32,6 +32,7 @@ const gitQuiet = (...a) => { try { execFileSync('git', a, { cwd: ROOT, stdio: 'p
 
 /* The changes this release is ALLOWED to contain. Anything else is unintended. */
 const INTENDED = [
+  '.gitignore',
   'CHANGELOG.md',
   'firebase.json',
   'scripts/build-minimal-rules-release.js',
