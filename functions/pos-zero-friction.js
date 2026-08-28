@@ -910,6 +910,10 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { code, merchantId, subtotal = 0, customerId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!code) _e('code required');
 
   const cpSnap = await db.collection('coupons').doc(code.trim().toUpperCase()).get();
@@ -945,6 +949,10 @@ exports.posValidateCoupon = onCall(cfg, async ({ data, auth }) => {
 exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { query, method = 'auto', merchantId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!query) _e('query required');
 
   const q    = String(query).trim();
@@ -1053,7 +1061,7 @@ exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
    RESOLUTION IS AT CALL TIME, so a revoked employee is refused with no cached
    session involved. A THROW from model 1 falls through to model 2 rather than
    failing the sale open; if model 2 also fails, the sale is refused. */
-async function _assertSellAuthority(auth, merchantId) {
+async function _assertSellAuthority(auth, merchantId, what) {
   if (!auth || !auth.uid) _e('Authentication required', 'unauthenticated');
   const uidStr = String(auth.uid);
   if (auth.token && (auth.token.admin === true || auth.token.superAdmin === true)) return uidStr;
@@ -1078,7 +1086,7 @@ async function _assertSellAuthority(auth, merchantId) {
   if (bizSnap.exists && bizSnap.data().ownerId === uidStr) return uidStr;
   if (!staffSnap.empty) return uidStr;
 
-  _e('Not authorized to sell for this merchant', 'permission-denied');
+  _e('Not authorized to ' + (what || 'sell for this merchant'), 'permission-denied');
 }
 
 
@@ -1212,6 +1220,10 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
 exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { orderId, receiptType = 'sale', printerName = null, branchId = 'default', merchantId = null } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!orderId) _e('orderId required');
 
   const cntRef = db.collection('posReprintCounters').doc(String(orderId));
@@ -1340,6 +1352,10 @@ exports.posCleanupIdempotency = onSchedule({
 exports.posCheckPaymentStatus = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { ref, merchantId } = data || {};
+  /* THE MERCHANT BOUNDARY. merchantId is caller-supplied and _assertAuth only
+     proves a uid exists. Owner/admin, or an active employee with a selling
+     role — the same dual authority certified on posCompleteCheckout. */
+  await _assertSellAuthority(auth, merchantId, 'act for this merchant');
   if (!ref) _e('ref required');
 
   /* Check posPaymentStatus collection first — webhook writes here on IntaSend callback */
