@@ -1,3 +1,36 @@
+## [2026-08-28] — Boost money integrity (Slice 5 + 5A) · reconciled onto LIVE (12c6676) — DEPLOYMENT HOLD
+
+**Not deployed.** RC `rc/boost-integrity-live`: Slice 5 (`93c3376`) + Slice 5A (`794ab7e`) reconciled onto
+the current production tip `12c6676` (role-entry, live v567). Cherry-picked cleanly — only CHANGELOG needed
+resolution; live is an ancestor (no rollback), the delivery-PIN fix + role-entry system are preserved.
+
+### What it fixes — one server-authoritative boundary for ALL three boost purchase paths
+Every boost purchase now follows: **boost key → server-authoritative price → `createPaymentIntent` →
+STK-enforced amount → settled payment → server record**. The client can no longer establish the price,
+that payment occurred, that a boost was purchased, or that it was activated.
+- `functions/payment-purposes.js` — new `boost` (listing: basic 200 / premium 500 / homepage 2000 /
+  urgent 100) and `marketing_boost` (marketing: pro 500 / vip 1500) purposes; server derives the price,
+  client sends only the key/plan, unknown/missing key refused.
+- `subscriptions.html buyBoost()`, `sokoni-pay.js boostListing()`, `marketing.html submitBoost()` (paid) —
+  all route through the server intent (server ref+amount), and the localStorage/`_saveBoostRecord`/
+  fabricated-success grants are removed. Success reflects the settled payment only.
+
+### Reconcile evidence (on the combined commit)
+- Diff vs live `12c6676` = **only** the 5 boost files. `git merge-base --is-ancestor 12c6676 HEAD` = YES
+  (no rollback); PIN fix `57f2904` preserved.
+- `scripts/test-boost-integrity.js` — **18/18** (server price per key both purposes; **forged amount
+  ignored**; unknown/missing key rejected; all three clients routed through the intent; no localStorage
+  grant; no fabricated success).
+- Predeploy gates: commission single-source **PASS**, money-toast-safety **PASS**, full syntax gate **PASS**.
+
+### Deliberately excluded (unchanged boundary)
+Boost ranking entitlement, Premium catalogue consolidation, Legal enforcement flip (stays DARK),
+commission 3→5, POS Gate 1, settlement, Wallet PIN, and any role-entry change beyond preserving the
+already-live `12c6676`. The free marketing `basic` plan (no money) is out of scope, flagged with the
+ranking-entitlement follow-on.
+
+---
+
 ## [2026-08-28] — Role Entry Authorization Convergence · RC candidate on LIVE (de20ba1) — NOT deployed
 
 **Not deployed. No enforcement flip. No POS/settlement/Wallet-PIN/rules changes.** Isolated candidate
