@@ -163,12 +163,17 @@
            'and pointing a merchant button at them would be a privilege defect.' },
 
     { id:'payments', name:'Payments', icon:'💳', tier:'primary',
-      kind:'native', tabs:['payouts','methods'], defaultTab:'payouts',
+      kind:'native', tabs:['ledger','wallet'], defaultTab:'ledger',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'payments',
-      note:'Payouts tab: canonical payoutRequests + wallet balance (shillings) on the FROZEN wallet ' +
-           'engine. Methods tab: accepted collection methods for this shop. Never computes balances ' +
-           'client-side — unknown renders as — , never 0.' },
+      note:'ONE destination, two halves. "Payments in" is the sellerPayments ledger — the only ' +
+           'payment collection scoped to a seller. "Wallet" is a surface over the FROZEN wallet ' +
+           'backend: balance and pendingPayout from wallets/{uid}, walletTransactions, and ' +
+           'payoutRequests, with top-up and withdraw-to-mobile through the three callables a ' +
+           'browser can actually reach. Never computes balances client-side — unknown renders as ' +
+           '— , never 0 — and never describes a payout as sent: auto-B2C is off, so even ' +
+           '"approved" means agreed, not disbursed. Earlier tabs were ["payouts","methods"], ' +
+           'which described a design that was never built.' },
 
     { id:'deliveries', name:'Delivery Hub', icon:'🛵', tier:'primary',
       kind:'page', src:'seller-delivery.html?shell=merchant',
@@ -527,8 +532,11 @@
       { id:'today', label:'Today' }, { id:'week', label:'This Week' },
       { id:'month', label:'This Month' }, { id:'all', label:'All Time' } ] } ] },
 
-    payments: { owner:'native', bars:[ { key:'tab', status:'live', handler:'__payTab', chips:[
-      { id:'payouts', label:'Payouts' }, { id:'methods', label:'Methods' } ] } ] },
+    payments: { owner:'native', bars:[ { key:'view', status:'live', handler:'__payView', chips:[
+      { id:'ledger', label:'Payments in' }, { id:'wallet', label:'Wallet' } ] },
+      { key:'tab', status:'live', handler:'__payTab', chips:[
+      { id:'all', label:'All' }, { id:'paid', label:'Paid' }, { id:'pending', label:'Pending' },
+      { id:'failed', label:'Failed' }, { id:'refunded', label:'Refunded' } ] } ] },
 
     availability: { owner:'native', bars:[ { key:'shop', status:'live', handler:'__avToggleShop', chips:[
       { id:'shop', label:'Shop open' } ] } ] },

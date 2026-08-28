@@ -714,6 +714,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
 <script src="sokoni-merchant-products.js"></script>
+<script src="sokoni-merchant-wallet.js"></script>
 <!-- Receipts. Renders through the LOCKED receipt contract (SokoniReceiptDoc in
      sokoni-receipt.js, already loaded above) over the shell's one order reader — so the
      receipt a merchant reads is the document the till prints, not a second layout. -->
@@ -1817,6 +1818,33 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     };
   }
 
+
+  /* ── WALLET READS ───────────────────────────────────────────────────────
+     Ported from 82a9f3c. READ-ONLY on purpose: `wallets` is `allow update: if
+     isAdmin()` — Cloud Functions only — so this surface must never hold a path
+     that could appear to change a balance. Movement happens through callables. */
+  function _walletDoc () {
+    var u = S.uid;
+    if (!u) return Promise.resolve(null);
+    return sdk().then(function (m) {
+      if (!window.firebaseDB) throw new Error('Your wallet is not available just now.');
+      return m.fs.getDoc(m.fs.doc(window.firebaseDB, 'wallets', u));
+    }).then(function (s) {
+      return s.exists() ? Object.assign({ id: s.id }, s.data()) : null;
+    });
+  }
+  function _walletTx () {
+    var u = S.uid;
+    if (!u) return Promise.resolve([]);
+    return _q({ collection: 'walletTransactions', where: [['uid', '==', u]], limit: 50 },
+              'Wallet transactions are not available yet.');
+  }
+  function _payoutRequests () {
+    var u = S.uid;
+    if (!u) return Promise.resolve([]);
+    return _q({ collection: 'payoutRequests', where: [['sellerUid', '==', u]], limit: 20 },
+              'Withdrawals are not available yet.');
+  }
   var _mdb = {
     queryProducts: function (spec) { return _q(spec, 'The product catalogue is not available yet.'); },
     queryProfiles: function (spec) { return _q(spec, 'Customers are not available yet.'); },
@@ -2056,6 +2084,26 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     go: go,
                     onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
+    /* ── WALLET — native inside Payments (ported from 82a9f3c) ─────────────
+       No write adapter is handed over at all, deliberately. A free-form
+       "pay from wallet" control here would let a merchant destroy their own
+       balance against an arbitrary id; the real merchant spend is a
+       subscription payment, which has its own authority on the Plan surface. */
+    wallet:     { global: 'SokoniMerchantWallet',      ctx: function () { return {
+                    scope: _scope(), shopName: _shopName(),
+                    entitlement: function () {
+                      return window.SokoniAuthority
+                        ? window.SokoniAuthority.getMerchantEntitlements()
+                        : Promise.resolve(null);
+                    },
+                    readWallet: _walletDoc,
+                    readTransactions: _walletTx,
+                    readPayouts: _payoutRequests,
+                    callTopUp: _callable('initiateWalletTopUp'),
+                    callConfirmTopUp: _callable('confirmWalletTopUp'),
+                    callWithdraw: _callable('requestSellerPayout'),
+                    onGoPlan: function () { go('plan'); },
+                    onToast: toast }; } },
     /* Receipts — native as of this commit; it was kind:'seller' and framed the legacy shell.
        It is handed NEITHER a db adapter NOR a callable, and that is the design: it writes
        nothing. It renders through SokoniReceiptDoc (the locked receipt contract) over the
@@ -2765,7 +2813,52 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     { k: 'refunded', label: 'Refunded' },
   ];
 
+  var PAY_VIEW = 'ledger';   /* 'ledger' | 'wallet' */
+
+  function payViewBar () {
+    return '<div class="segs" style="margin-bottom:12px">' +
+      [{ k: 'ledger', label: 'Payments in' }, { k: 'wallet', label: 'Wallet' }].map(function (v) {
+        return '<button class="seg' + (PAY_VIEW === v.k ? ' on' : '') + '" data-payview="' + v.k + '">' +
+          esc(v.label) + '</button>';
+      }).join('') + '</div>';
+  }
+
+  /* The Payments panel is now a SHELL over two views. Its former body is
+     renderPaymentsLedger below, unchanged byte for byte. */
   function renderPayments (p) {
+    if (!p.dataset.shell) {
+      p.dataset.shell = '1';
+      p.innerHTML = '<div id="pay-view"></div><div id="pay-host"></div>';
+      p.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-payview]');
+        if (!b || b.dataset.payview === PAY_VIEW) return;
+        PAY_VIEW = b.dataset.payview;
+        renderPayments(p);
+      });
+    }
+    p.querySelector('#pay-view').innerHTML = payViewBar();
+    var hostEl = p.querySelector('#pay-host');
+
+    if (PAY_VIEW === 'wallet') {
+      /* renderModule here is SYNCHRONOUS — every module global arrives from a
+         static script tag, so there is no load window during which the merchant
+         could navigate away and have a late mount clobber the new panel. The
+         source lineage passed a third `route` argument for exactly that guard;
+         it belongs to its lazy loader and would be discarded here, so it is not
+         passed. If module loading ever becomes async, the guard comes back WITH
+         it — not before. */
+      return renderModule('wallet', hostEl);
+    }
+
+    /* Leaving the Wallet: tear it down so its listeners and polling stop rather
+       than continuing against a host that is no longer on screen. */
+    if (_mounted.wallet) {
+      try { _mounted.wallet.ui.destroy && _mounted.wallet.ui.destroy(); } catch (_) {}
+      _mounted.wallet = null;
+    }
+    return renderPaymentsLedger(hostEl);
+  }
+  function renderPaymentsLedger (p) {
     if (!p.dataset.built) {
       p.dataset.built = '1';
       p.innerHTML =
