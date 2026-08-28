@@ -71,11 +71,104 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    RESHIPPED a counter already live under a different build.
 
    Caught by the predeploy gate before deployment, not after. */
-const LAST_SHIPPED_V = 562;
-const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
-const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
-const newVer = `sokoni-${stamp}-v${nextN}`;
-const updated   = content.replace(versionRe, `const CACHE_VERSION = "${newVer}"`);
+/* Raised 562 → 564 on 2026-08-28, following this comment's own instruction — for
+   the THIRD time, which is why the mechanism changes below rather than only the
+   number.
 
-fs.writeFileSync(SW_FILE, updated, "utf8");
-console.log(`✅ SW version bumped: ${oldVer} → ${newVer}`);
+   The regression: production was serving v564 (commit 55d4b40) while this
+   lineage carried a floor of 562 and a committed version.json reading v560. The
+   bump computed max(560, 562) + 1 = v563 and SHIPPED IT — a counter LOWER than
+   the live one. The comment above claims this class of error is "caught by the
+   predeploy gate before deployment". It was not, because a hand-maintained
+   constant cannot know what is live.
+
+   Why the floor keeps going stale, measured rather than assumed: version.json is
+   written by generate-version.js AT DEPLOY TIME and never committed back. A scan
+   of all 272 commits touching version.json finds a maximum of v563 — while v564
+   had already shipped. Git structurally undercounts, so any floor derived from
+   git is a lagging indicator by construction.
+
+   The fix is to stop deriving the floor from memory and derive it from THE
+   DEPLOYED SITE. LAST_SHIPPED_V remains as a lower bound for when the network is
+   unavailable, but it is no longer the only guard. */
+const LAST_SHIPPED_V = 564;
+/* Overridable ONLY so the regression suite can drive the real code path against a
+   local server returning a chosen counter. A guard that is only ever tested by
+   reading its source is not a tested guard — this one has to be shown refusing. */
+const LIVE_VERSION_URL = process.env.SOKONI_LIVE_VERSION_URL || "https://mysokoni.co.ke/version.json";
+
+/* Read the counter production is actually serving. Returns null — never a guess —
+   when it cannot be established, so the caller can say the check did not run
+   rather than silently treating "unknown" as "fine". */
+function fetchLiveCounter() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    try {
+            /* http for the local test server, https for production — chosen by the URL
+         itself so the test drives the same code, not a parallel path. */
+      const https = LIVE_VERSION_URL.startsWith("http://") ? require("http") : require("https");
+      const req = https.get(
+        LIVE_VERSION_URL + "?cb=" + Date.now(),
+        { timeout: 8000, headers: { "cache-control": "no-cache" } },
+        (res) => {
+          if (res.statusCode !== 200) { res.resume(); return finish(null); }
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (d) => { body += d; if (body.length > 65536) req.destroy(); });
+          res.on("end", () => {
+            try {
+              const cv = JSON.parse(body).cacheVersion || "";
+              const m = /-v(\d+)\s*$/.exec(cv);
+              finish(m ? { n: Number(m[1]), cacheVersion: cv } : null);
+            } catch (_) { finish(null); }
+          });
+        }
+      );
+      req.on("error", () => finish(null));
+      req.on("timeout", () => { req.destroy(); finish(null); });
+    } catch (_) { finish(null); }
+  });
+}
+
+(async () => {
+  const prevN = Number((/-v(\d+)\s*$/.exec(oldVer) || [])[1]) || 0;
+  const live = await fetchLiveCounter();
+
+  if (live) {
+    console.log(`   live production counter: v${live.n}  (${live.cacheVersion})`);
+  } else {
+    console.log("");
+    console.log("   ⚠ LIVE COUNTER CHECK DID NOT RUN — production version.json was unreachable.");
+    console.log("     Falling back to LAST_SHIPPED_V alone, which is a LAGGING indicator: it is");
+    console.log("     exactly what let v563 ship after v564. If this deploy matters, re-run with");
+    console.log("     network access rather than trusting the floor.");
+    console.log("");
+  }
+
+  /* The deployed counter participates in the maximum, so a lower number cannot be
+     computed in the first place. The assertion below is then a belt-and-braces
+     check on that arithmetic, not the primary defence. */
+  const nextN = Math.max(prevN, LAST_SHIPPED_V, live ? live.n : 0) + 1;
+  const newVer = `sokoni-${stamp}-v${nextN}`;
+
+  if (live && nextN <= live.n) {
+    console.error("");
+    console.error("  ✖ [sw-version] REFUSING TO BUMP — computed counter is not ahead of live.");
+    console.error(`      computed : v${nextN}`);
+    console.error(`      live      : v${live.n}  (${live.cacheVersion})`);
+    console.error("      The counter is contractually MONOTONIC: a build that ships a counter at");
+    console.error("      or below the live one breaks the ordering every downstream check relies");
+    console.error("      on. Raise LAST_SHIPPED_V above the live counter and retry.");
+    console.error("");
+    process.exit(1);
+  }
+
+  const updated = content.replace(versionRe, `const CACHE_VERSION = "${newVer}"`);
+  fs.writeFileSync(SW_FILE, updated, "utf8");
+  console.log(`✅ SW version bumped: ${oldVer} → ${newVer}`);
+  if (live) console.log(`   strictly ahead of live v${live.n} ✓`);
+})().catch((e) => {
+  console.error("❌ sw-version bump failed: " + ((e && e.stack) || e));
+  process.exit(1);
+});
