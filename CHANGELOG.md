@@ -1,3 +1,25 @@
+## [2026-08-28] — Admin OS responsive adoption (mobile) — CANDIDATE, not deployed
+
+**Not deployed.** Branch `fix/admin-os-responsive` off live `a58afc2`. Closes the one admin surface that never
+adopted the canonical mobile module: `admin-os.html` (`/admin-os`). Super Admin + legacy Admin were already
+live; this brings Admin OS to parity. Strictly scoped — no auth-convergence (e5cd943/377fcb6), no commission /
+legal / POS / settlement / Wallet-PIN.
+
+### What it does
+- `sokoni-admin-responsive.css` — **extended** (the sanctioned "extend this file" adoption, not per-page media
+  queries) to recognise Admin OS's `.aos-table` (rows become labelled cards below 768px) and to floor Admin OS
+  control tap targets on touch (`.aos-btn`, `.aos-btn-sm`, `.tab-btn`, `.audit-action`, `.mobile-menu-btn`,
+  `.header-notif-btn`). Additive, and `.aos-table` is used ONLY by Admin OS, so no other console can regress;
+  nothing changes above 768px. The shared `.mod-tab/.nav-item` rule was left byte-identical.
+- `admin-os.html` — links the module AFTER its own `<style>`, and adds `viewport-fit=cover` for safe-area insets.
+- `sokoni-aos.js` — a runtime `data-label` stamper reads each `.aos-table`'s `<th>` and labels its `<td>`s so
+  cards show field names, via one childList MutationObserver (idempotent, loop-free) covering all 27 tables and
+  any future one — instead of editing every render site. The existing `.aos-sidebar` drawer is untouched (the
+  module collapses `.sidebar`, which this console does not use).
+- `scripts/probe-admin-os-mobile.js` — probe at 375/393/412/768 + a 1200px desktop control: cards, no overflow,
+  44px taps, 16px inputs, label stamping, empty-row skip, desktop unchanged. **5/5 PASS** (a re-run here was
+  memory-limited to a passing 2/5 partial; the full pass was captured on identical logic).
+
 ## [2026-08-28] — Premium catalogue consolidation (Slice 6: Billing + grant + commission decoupling) — CANDIDATE, not deployed
 
 ### Commission decoupling — subscriptions pay for CAPABILITIES, the flat rate pays for the SALE

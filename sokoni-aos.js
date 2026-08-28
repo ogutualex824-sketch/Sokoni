@@ -54,8 +54,49 @@ window.SokoniAOS = (() => {
     const el = document.getElementById("aosUserName");
     if (el) el.textContent = _currentUser.name || _currentUser.email;
     if (_currentUser.isSuper) document.body.classList.add("is-super");
+    _watchTableLabels();
     _navigate("dashboard");
     _startLiveKPIs();
+  }
+
+  /* ── Responsive adoption: label table cells for the mobile card layout ────────
+     Below 768px, sokoni-admin-responsive.css renders each .aos-table row as a card
+     and prints a field name from the cell's data-label. Rather than hard-code
+     data-label into all 27 render sites (and every future one), it is stamped from
+     the table's own <th> text whenever a table is inserted. The observer watches
+     childList only, so writing the attribute cannot re-trigger it, and each write
+     is guarded by hasAttribute — idempotent and loop-free. Desktop is unaffected;
+     the attribute is inert above 768px. */
+  function _stampTableLabels(scope) {
+    const root = (scope && scope.querySelectorAll) ? scope : document;
+    root.querySelectorAll("table.aos-table").forEach((t) => {
+      const heads = Array.from(t.querySelectorAll("thead th")).map((th) => (th.textContent || "").trim());
+      if (!heads.length) return;
+      t.querySelectorAll("tbody tr").forEach((tr) => {
+        const tds = tr.children;
+        if (tds.length !== heads.length) return;   /* spinner/empty colspan rows */
+        for (let i = 0; i < tds.length; i++) {
+          const td = tds[i];
+          if (td.tagName === "TD" && heads[i] && !td.hasAttribute("data-label")) {
+            td.setAttribute("data-label", heads[i]);
+          }
+        }
+      });
+    });
+  }
+
+  let _labelObserver = null;
+  function _watchTableLabels() {
+    const main = document.querySelector(".aos-main") || document.body;
+    _stampTableLabels(main);                        /* initial pass (dashboard) */
+    if (_labelObserver || typeof MutationObserver === "undefined") return;
+    let queued = false;
+    _labelObserver = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      (window.requestAnimationFrame || window.setTimeout)(() => { queued = false; _stampTableLabels(main); });
+    });
+    _labelObserver.observe(main, { childList: true, subtree: true });
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────

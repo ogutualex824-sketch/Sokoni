@@ -22,7 +22,7 @@
 <script src="sokoni-admin-entry.js"></script>
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Admin OS — SOKONI Mission Control</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="stylesheet" href="sokoni-tokens.css">
@@ -297,6 +297,13 @@
    claim; nothing was reading it. A control that cannot succeed is not offered. */
 body:not(.is-super) [data-requires-superadmin]{display:none !important;}
 </style>
+<!-- Responsive adoption (mobile): the ONE canonical admin responsive module, loaded
+     AFTER this page's <style> so its <=768px rules win. It transforms .aos-table rows
+     into labelled cards (data-label stamped at runtime — see sokoni-aos.js), floors tap
+     targets at 44px, sizes inputs to 16px, and applies safe-area insets. Additive only:
+     nothing above 768px changes, and the existing .aos-sidebar drawer is untouched (the
+     module collapses .sidebar, which this console does not use). -->
+<link rel="stylesheet" href="sokoni-admin-responsive.css">
 </head>
 <body>
   <aside class="aos-sidebar" id="aosSidebar">

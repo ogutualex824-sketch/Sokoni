@@ -45,7 +45,8 @@ body {
    pointers so a mouse-driven desktop keeps its compact, dense controls. */
 @media (pointer: coarse) {
   .mod-action-btn, .mod-filter-btn, .mod-bulk-btn, .mod-refresh-btn,
-  .abtn, .sa-btn, .btn, .access-btn, .adm-card-actions button {
+  .abtn, .sa-btn, .btn, .access-btn, .adm-card-actions button,
+  .aos-btn, .aos-btn-sm, .tab-btn, .audit-action {   /* Admin OS control classes */
     min-height: 44px;
     padding-top: 10px;
     padding-bottom: 10px;
@@ -53,6 +54,8 @@ body {
   }
   /* Icon-only controls need width as well as height. */
   .mod-tab, .nav-item, .ni { min-height: 44px; }
+  /* Admin OS icon controls (this console only) need width too. */
+  .mobile-menu-btn, .header-notif-btn { min-height: 44px; min-width: 44px; }
 
   /* ── Shared global widgets ────────────────────────────────────────────────
      Measured on real viewports, these two are injected on EVERY page (not just
@@ -103,14 +106,14 @@ body {
      and never breaks a page that has not been updated yet. */
   .mod-table-wrap, .table-wrap, .tbl-wrap { overflow-x: visible; border: none; }
 
-  .mod-table, .sa-table, .tbl, table.adm-table {
+  .mod-table, .sa-table, .tbl, table.adm-table, .aos-table {
     min-width: 0 !important;
     width: 100%;
     border-collapse: separate;
     border-spacing: 0 10px;
   }
 
-  .mod-table thead, .sa-table thead, .tbl thead, table.adm-table thead {
+  .mod-table thead, .sa-table thead, .tbl thead, table.adm-table thead, .aos-table thead {
     position: absolute;
     width: 1px; height: 1px;
     overflow: hidden;
@@ -118,7 +121,7 @@ body {
     white-space: nowrap;              /* screen-reader accessible, visually gone */
   }
 
-  .mod-table tbody tr, .sa-table tbody tr, .tbl tbody tr, table.adm-table tbody tr {
+  .mod-table tbody tr, .sa-table tbody tr, .tbl tbody tr, table.adm-table tbody tr, .aos-table tbody tr {
     display: block;
     background: #111;
     border: 1px solid rgba(255,255,255,0.08);
@@ -127,7 +130,7 @@ body {
     margin-bottom: 10px;
   }
 
-  .mod-table tbody td, .sa-table tbody td, .tbl tbody td, table.adm-table tbody td {
+  .mod-table tbody td, .sa-table tbody td, .tbl tbody td, table.adm-table tbody td, .aos-table tbody td {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -142,7 +145,8 @@ body {
   .mod-table tbody td::before,
   .sa-table tbody td::before,
   .tbl tbody td::before,
-  table.adm-table tbody td::before {
+  table.adm-table tbody td::before,
+  .aos-table tbody td::before {
     content: attr(data-label);
     flex: 0 0 38%;
     text-align: left;
@@ -156,11 +160,13 @@ body {
   .mod-table tbody td:not([data-label])::before,
   .sa-table tbody td:not([data-label])::before,
   .tbl tbody td:not([data-label])::before,
-  table.adm-table tbody td:not([data-label])::before { display: none; }
+  table.adm-table tbody td:not([data-label])::before,
+  .aos-table tbody td:not([data-label])::before { display: none; }
   .mod-table tbody td:not([data-label]),
   .sa-table tbody td:not([data-label]),
   .tbl tbody td:not([data-label]),
-  table.adm-table tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
+  table.adm-table tbody td:not([data-label]),
+  .aos-table tbody td:not([data-label]) { justify-content: flex-start; text-align: left; }
 
   /* Action cells: full-width buttons, comfortably apart. */
   .mod-table tbody td .mod-action-row,
