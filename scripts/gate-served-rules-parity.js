@@ -30,7 +30,8 @@ if (!fs.existsSync(SERVED)) {
   process.exit(2);
 }
 const servedTxt = fs.readFileSync(SERVED, 'utf8');
-const artTxt = fs.readFileSync('firestore.rules.build', 'utf8');
+const ARTIFACT = process.argv[3] || 'firestore.rules.build';
+const artTxt = fs.readFileSync(ARTIFACT, 'utf8');
 
 const S = stmts(servedTxt), A = stmts(artTxt);
 console.log('  served allow statements   : ' + S.length);

@@ -34,6 +34,9 @@ const gitQuiet = (...a) => { try { execFileSync('git', a, { cwd: ROOT, stdio: 'p
 const INTENDED = [
   'CHANGELOG.md',
   'firebase.json',
+  'scripts/build-minimal-rules-release.js',
+  'firestore.rules.release-minimal',
+  'firebase.rules-minimal.json',
   'firestore.indexes.json',
   'firestore.rules',
   'firestore.rules.build',

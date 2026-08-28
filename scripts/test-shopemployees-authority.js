@@ -47,7 +47,9 @@ const ATTACK  = 'attacker';      /* a principal who owns their own shop         
 
   const env = await initializeTestEnvironment({
     projectId: 'sokoni-shopemployees-authority-test',
-    firestore: { rules, host: '127.0.0.1', port: 8080 },
+    /* Port is configurable: this repo is worked by several agents and 8080 is often
+       already held. See scripts/emulators.cert.json. */
+    firestore: { rules, host: '127.0.0.1', port: Number(process.env.FIRESTORE_EMU_PORT || 8080) },
   });
 
   const { doc, setDoc, getDoc, updateDoc, deleteDoc } = require('firebase/firestore');
