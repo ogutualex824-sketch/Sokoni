@@ -1,3 +1,79 @@
+## [2026-08-28] — One merchant-authority primitive: the tenant boundary closed at 8 entry points
+
+**NOT DEPLOYED.** Functions change only — no hosting, no rules, no index deploy. The deployment
+hold stands until the isolation evidence is green.
+
+### Security — P1 tenant isolation
+
+Eight-plus callables across four modules took a caller-supplied `merchantId` and used it to select
+or mutate tenant data with **no ownership binding**. Two required only authentication — not even a
+seller role.
+
+* `pos-peripherals.js` (3) trusted `users/{uid}.merchantId` — **a field the user can write**. The
+  served ruleset guards `uid`, `role`, `registeredAs` and `provider` on that document; never
+  `merchantId`, and `profileEditWithinLimit` passes whenever the edit counter is unchanged, so the
+  write was not even rate-limited.
+* `pos-zero-friction.js` `posGetQueueMetrics` had **no binding** — `_assertAuth` only proves a uid
+  exists.
+* `business-health-score.js` (3) had **no binding**.
+* `crm.js` carried a latent **fail-open**: `data.adminUids && !data.adminUids.includes(uid)` —
+  with `adminUids` absent the middle conjunct is `undefined`, the condition is `false`, and a
+  **non-owner was granted**. Latent only because every existing merchant happens to carry the
+  field.
+
+**The defect was a missing primitive.** Three correct implementations already existed, each
+against a different authority — `shops.ownerUid`, `merchants.ownerId`, `businesses.ownerId`.
+
+### Added
+
+* `functions/merchant-authority.js` — canonical authority **`businesses/{merchantId}.ownerId`**.
+  Defaults to the caller, bypasses only on unforgeable token claims, verifies against the
+  authoritative document, **denies when it is missing**. Allows `merchantId === auth.uid` without a
+  lookup, because merchants operating under their own uid are real and in use.
+* `scripts/test-merchant-authority.js` — **26 passed, 0 failed**. Executes the primitive against
+  fixtures rather than matching source. Proved by sabotage: **7 applied, 7 caught, 0 broken
+  probes**.
+* `docs/TENANT_AUTHORITY_PRIMITIVE.md`.
+
+### Fixed
+
+* Bound the 7 vulnerable callables to the primitive; corrected the `crm.js` fail-open to an
+  explicit `Array.isArray(x) && x.includes(uid)` test.
+* Declared the `posCheckoutMetrics (branchId, merchantId, saleDate)` composite index. It was
+  **never declared and never existed**, so `posGetQueueMetrics` failed `9 FAILED_PRECONDITION` for
+  **every** caller while `pos-zero-friction.js:812` kept writing that collection. Unrelated to
+  authorization; found while attempting the isolation test.
+
+### Unchanged deliberately
+
+`sfos-engine.js` and `self-heal.js` are already safe. Cloud Run `run.invoker` for the health-score
+callables is **not** granted — opening `allUsers` on a function before its authorization lands is
+the wrong order.
+
+### Known limitations — the boundary is not fully closed
+
+* **`pos-zero-friction` financial callables remain unbound** (`posCompleteCheckout`,
+  `posValidateCoupon`, `posLookupCustomer`, `posLogReprint`, `posCheckPaymentStatus`). They run on
+  **cashier devices**, and a cashier is not an owner — an owner-only binding would deny every
+  legitimate checkout. They need the staff-aware shape `_assertRefundAuthority` already uses
+  (`businesses.ownerId` OR an active `posStaff` membership). **Blocked**: `posStaff` is absent from
+  `firestore.rules` and the served ruleset could not be fetched here, so whether it is
+  self-mintable is unestablished. If it is, that path would reopen this hole.
+* `posUpdatePeripheralStatus` and `posCreateCustomerDisplay` are the same defect class, found by a
+  post-fix sweep of every export. No client callers.
+* `procurement.js` — 8 sites behind a role claim with no merchant binding.
+
+### Files affected
+
+`functions/merchant-authority.js` (new) · `functions/pos-peripherals.js` ·
+`functions/pos-zero-friction.js` · `functions/business-health-score.js` · `functions/crm.js` ·
+`firestore.indexes.json` · `docs/index-registry.json` · `scripts/test-merchant-authority.js` (new) ·
+`docs/TENANT_AUTHORITY_PRIMITIVE.md` (new)
+
+**Database changes:** one composite index declared, not deployed.
+**API changes:** none — same signatures; unauthorized callers now receive `permission-denied`.
+**Breaking changes:** cross-tenant calls that previously succeeded now fail. That is the fix.
+
 ## [2026-08-29] — Release B: keyless OIDC/WIF authentication replaces FIREBASE_TOKEN
 
 **File:** `.github/workflows/deploy-hosting.yml` (one workflow file).
@@ -250,6 +326,7 @@ Slice-5A boost/marketing intents are untouched. Server tier tables and display c
 
 ---
 
+
 ## [2026-08-28] — Boost money integrity (Slice 5 + 5A) · reconciled onto LIVE (12c6676) — DEPLOYMENT HOLD
 
 **Not deployed.** RC `rc/boost-integrity-live`: Slice 5 (`93c3376`) + Slice 5A (`794ab7e`) reconciled onto
@@ -282,6 +359,7 @@ already-live `12c6676`. The free marketing `basic` plan (no money) is out of sco
 ranking-entitlement follow-on.
 
 ---
+
 
 ## [2026-08-28] — Role Entry Authorization Convergence · RC candidate on LIVE (de20ba1) — NOT deployed
 
@@ -338,6 +416,7 @@ until you take the release decision.
 `scripts/test-convergence-server.js`.
 
 ---
+
 
 ## [2026-08-27] — Font Awesome self-hosted; cdnjs removed from the rendering path
 
