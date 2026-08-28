@@ -566,7 +566,7 @@
   "firestore": [
     {
       "database": "(default)",
-      "rules": "firestore.rules",
+      "rules": "firestore.rules.build",
       "indexes": "firestore.indexes.json"
     },
     {

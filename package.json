@@ -4,7 +4,7 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/verify-receipt-naming.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/verify-receipt-naming.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify && node scripts/gate-rules-release-path.js",
     "verify:consent": "node scripts/verify-consent-gate.js",
     "test:signup:barrier": "node scripts/test-signup-txn-barrier.js",
     "test:product:authority": "node scripts/test-product-write-authority.js",
@@ -86,7 +86,8 @@
     "qa:delivery-isolation": "node scripts/qa/run-delivery-isolation.js",
     "qa:delivery-error-state": "node scripts/qa/run-delivery-error-state.js",
     "build:rules": "node scripts/build-firestore-rules.js",
-    "check:rules-size": "node scripts/build-firestore-rules.js --check"
+    "check:rules-size": "node scripts/build-firestore-rules.js --check",
+    "gate:rules-release": "node scripts/gate-rules-release-path.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.1",
