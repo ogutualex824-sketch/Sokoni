@@ -4,6 +4,7 @@
 // AI-powered multi-dimension scoring for merchant health analysis
 // ══════════════════════════════════════════════════════════════════════════════
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { assertMerchantAccess } = require('./merchant-authority');
 const { onSchedule }        = require('firebase-functions/v2/scheduler');
 const admin                 = require('firebase-admin');
 const { defineSecret }      = require('firebase-functions/params');
@@ -738,6 +739,9 @@ exports.getBusinessHealthScore = onCall(
     if (!merchantId || typeof merchantId !== 'string') {
       throw new HttpsError('invalid-argument', 'merchantId is required.');
     }
+    /* No tenant binding existed here: any authenticated user could read another
+       merchant's sales, profitability and health figures. */
+    await assertMerchantAccess(request.auth, merchantId);
 
     const now   = new Date();
     const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -823,6 +827,7 @@ exports.getHealthScoreHistory = onCall(OPT, async (request) => {
 
   const { merchantId, days = 30 } = request.data || {};
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required.');
+  await assertMerchantAccess(request.auth, merchantId);
 
   const limit = Math.min(Math.max(Number(days) || 30, 1), 90);
 
@@ -859,6 +864,7 @@ exports.getDimensionDrilldown = onCall(OPT, async (request) => {
   const { merchantId, dimension, period = 'month' } = request.data || {};
   if (!merchantId)          throw new HttpsError('invalid-argument', 'merchantId is required.');
   if (!DIMENSIONS[dimension]) throw new HttpsError('invalid-argument', `Unknown dimension: ${dimension}`);
+  await assertMerchantAccess(request.auth, merchantId);
 
   const now   = new Date();
   const since = new Date(now.getTime() - (period === 'week' ? 7 : period === 'day' ? 1 : 30) * 24 * 60 * 60 * 1000);

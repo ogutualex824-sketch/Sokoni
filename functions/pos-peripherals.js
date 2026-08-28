@@ -15,6 +15,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentWritten }  = require('firebase-functions/v2/firestore');
 const admin                  = require('firebase-admin');
+const { assertMerchantAccess } = require('./merchant-authority');
 const { checkRateLimit }     = require('./redis-rate-limiter');
 
 const db  = () => admin.firestore();
@@ -59,10 +60,12 @@ exports.posRegisterPeripheral = onCall({ region: 'us-central1' }, async (request
   if (!name)       throw new HttpsError('invalid-argument', 'name required');
 
   /* Verify caller belongs to this merchant */
-  const userSnap = await db().collection('users').doc(request.auth.uid).get();
-  const userData = userSnap.data() || {};
-  if (userData.merchantId !== merchantId && !['admin','superadmin'].includes(userData.role))
-    throw new HttpsError('permission-denied', 'Not authorised for this merchant');
+  /* Verify caller belongs to this merchant.
+     WAS: compared the caller-supplied merchantId against users/{uid}.merchantId —
+     a field the user CAN WRITE (Firestore rules guard uid/role/registeredAs/provider,
+     never merchantId). A seller could point it at another merchant and cross the
+     tenant boundary. Authority is now businesses/{merchantId}.ownerId. */
+  await assertMerchantAccess(request.auth, merchantId);
 
   /* Auto-generate ID or use provided */
   const deviceId = request.data.deviceId || db().collection('tmp').doc().id;
@@ -149,10 +152,12 @@ exports.posRemovePeripheral = onCall({ region: 'us-central1' }, async (request) 
   const devData = snap.data();
 
   /* Check ownership */
-  const userSnap = await db().collection('users').doc(request.auth.uid).get();
-  const userData = userSnap.data() || {};
-  if (userData.merchantId !== merchantId && !['admin','superadmin'].includes(userData.role))
-    throw new HttpsError('permission-denied', 'Not authorised for this merchant');
+  /* Verify caller belongs to this merchant.
+     WAS: compared the caller-supplied merchantId against users/{uid}.merchantId —
+     a field the user CAN WRITE (Firestore rules guard uid/role/registeredAs/provider,
+     never merchantId). A seller could point it at another merchant and cross the
+     tenant boundary. Authority is now businesses/{merchantId}.ownerId. */
+  await assertMerchantAccess(request.auth, merchantId);
 
   await db().doc(peripheralPath(merchantId, deviceId)).delete();
 
@@ -190,10 +195,12 @@ exports.posGetPeripherals = onCall({ region: 'us-central1' }, async (request) =>
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required');
 
   /* Verify access */
-  const userSnap = await db().collection('users').doc(request.auth.uid).get();
-  const userData = userSnap.data() || {};
-  if (userData.merchantId !== merchantId && !['admin','superadmin'].includes(userData.role))
-    throw new HttpsError('permission-denied', 'Not authorised for this merchant');
+  /* Verify caller belongs to this merchant.
+     WAS: compared the caller-supplied merchantId against users/{uid}.merchantId —
+     a field the user CAN WRITE (Firestore rules guard uid/role/registeredAs/provider,
+     never merchantId). A seller could point it at another merchant and cross the
+     tenant boundary. Authority is now businesses/{merchantId}.ownerId. */
+  await assertMerchantAccess(request.auth, merchantId);
 
   let query = db().collection(`merchants/${merchantId}/posPeripherals`);
   if (type) query = query.where('type', '==', type);

@@ -1845,5 +1845,14 @@
     "expectedLifespan": "permanent",
     "consumerDeployed": false,
     "note": "Same lineage caveat as the sweep index above."
+  },
+  "posCheckoutMetrics|branchId:ASCENDING,merchantId:ASCENDING,saleDate:ASCENDING": {
+    "purpose": "POS checkout queue metrics per merchant/branch over a date window",
+    "feature": "SmartPOS zero-friction checkout",
+    "query": "pos-zero-friction posGetQueueMetrics: where(merchantId).where(branchId).where(saleDate>=since).orderBy(saleDate)",
+    "owner": "SmartPOS",
+    "dateAdded": "2026-08-28",
+    "expectedLifespan": "permanent",
+    "note": "The index was NEVER declared and never existed in production, so posGetQueueMetrics failed 9 FAILED_PRECONDITION for EVERY caller while pos-zero-friction.js:812 kept writing the collection. Found while attempting a tenant-isolation test; unrelated to authorization."
   }
 }

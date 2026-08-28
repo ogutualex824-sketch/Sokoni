@@ -6,6 +6,7 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { assertMerchantAccess } = require('./merchant-authority');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { writeAudit } = require('./pos-audit');
@@ -1167,6 +1168,10 @@ exports.posGetQueueMetrics = onCall(cfg, async ({ data, auth }) => {
   await _assertAuth(auth);
   const { merchantId, branchId = 'default', days = 7 } = data || {};
   if (!merchantId) _e('merchantId required');
+  /* _assertAuth only proves a uid exists — it binds no tenant. Before this, ANY
+     authenticated user could read another merchant's checkout metrics by passing
+     their merchantId. */
+  await assertMerchantAccess(auth, merchantId);
 
   const since = new Date();
   since.setDate(since.getDate() - days);
