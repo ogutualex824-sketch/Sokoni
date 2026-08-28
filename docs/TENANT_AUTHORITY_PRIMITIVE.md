@@ -139,12 +139,60 @@ test; unrelated to authorization. Declared here, **not deployed**.
 
 ---
 
-## Deployment
+## Deployment — LOCKED PROCEDURE
 
-Nothing was deployed. Cloud Run `run.invoker` for the health-score callables is deliberately
-**not** changed — granting `allUsers` to a function *before* its authorization lands is the wrong
-order.
+Nothing has been deployed. Production holds at `2a70dfb` / v566. Cloud Run `run.invoker` is
+unchanged. **Authorization to fix is not authorization to deploy.**
 
-The before/after gate is `docs/TENANT_ISOLATION_BASELINE_SNIPPET.md`, unchanged: after this
-deploys, every OTHER-TENANT line must read `DENIED permission-denied` and every OWN line must stay
-`ALLOWED`.
+The step order below is not a suggestion. It was corrected once already: an earlier draft ran the
+isolation snippet *before* granting `run.invoker`, which cannot pass — see **Why 4 precedes 5**.
+
+1. **Resolve `posStaff` writability.** The P1 decision for the five cashier-facing callables. Use
+   an authenticated `gcloud` check against the **served** ruleset, with a fail-safe control that
+   ABORTS. A cached artifact already produced one false answer here: its control, `shopEmployees`,
+   read 0 while known present.
+2. **Complete any staff-aware authorization work** that step 1 permits. If `posStaff` is
+   client-writable, fix that authority FIRST — binding to a self-mintable membership would reopen
+   the hole this change closed.
+3. **Deploy the gated tenant-authority functions.**
+4. **Grant the required `run.invoker` binding.**
+5. **Run the unchanged isolation snippet from BOTH principals.**
+
+| caller | own | other tenant |
+|---|---|---|
+| KASS | `ALLOWED` | `DENIED permission-denied` |
+| WOODLANDS | `ALLOWED` | `DENIED permission-denied` |
+
+**Any `internal`, `failed-precondition`, unexpected HTTP error, or missing OWN success is NOT a
+pass.** It gets diagnosed, never interpreted as authorization evidence.
+
+### Why 4 precedes 5
+
+In the baseline, all three health-score callables and `posGetQueueMetrics` returned
+`functions/internal` — the IAM gap, not authorization. Deploying does not change that, so the OWN
+lines would still fail and the gate would fail for a reason unrelated to what is being certified.
+
+This does **not** expose an unprotected endpoint: by step 4 the application-level tenant
+authorization is already deployed. The unsafe order is granting invoker BEFORE the deploy. Running
+the snippet before the grant is merely unmeasurable.
+
+**The OWN lines succeeding is the CONTROL.** Without it, uniform failure is indistinguishable from
+a working denial — every call in the baseline failed, so "it errors after the fix" proves nothing
+on its own. What makes the result readable is requiring the exact code `permission-denied`, which
+is distinguishable from `internal` and `failed-precondition`.
+
+## Evidence wording — do not upgrade this retroactively
+
+> **Cross-tenant denial proven at the authenticated application boundary; prior runtime
+> exploitation not demonstrated for the IAM/index-blocked surfaces.**
+
+The baseline established useful **code-path** evidence — notably `posGetQueueMetrics` reaching its
+query with another tenant's id, passing authorization entirely — but it did **not** establish data
+exfiltration. IAM and the missing `posCheckoutMetrics` index masked it.
+
+For `pos-peripherals`, exploitation remains unproven because the required forged
+`users.merchantId` write was never authorized or performed.
+
+A green isolation run proves the thing release actually needs: **the repaired boundary rejects the
+other tenant while preserving legitimate access.** It does not claim the pre-fix production system
+successfully leaked data where platform defects prevented that demonstration.
