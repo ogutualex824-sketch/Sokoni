@@ -1,3 +1,90 @@
+## [2026-08-28] — DEPLOYED: tenant authority, POS merchant boundary, shopEmployees anchor
+
+**Deployed to production.** Rules ruleset `59af870d` · 24 Cloud Functions · 3 invoker
+bindings · 1 composite index. Isolation certification pending a browser run.
+
+### Rules — minimal artifact, riders excluded
+
+The repo artifact was a MIXED-WORKSTREAM release: against served `f1c4e35b` it also carried
+a `/messages/` tightening, a `/posPrintJobs/` **widening**, and three whole new collections
+(`userLocations`, `merchantStories`, `storyAllocations`) belonging to other workstreams.
+
+So the deployed artifact was built **from the served ruleset** plus exactly one change,
+rather than by editing repo source to match production — editing the repo would have erased
+other people's pending work and made the diff disappear without deciding anything.
+
+Verified against what production now serves: byte-identical to the certified artifact;
+immutability clause present (1); `posPrintJobs` widening (0); `userLocations` (0);
+`merchantStories` (0); `/messages/` `joinedAt` change (0).
+
+### Functions — 24, in two batches, each verified by timestamp against a control
+
+`posCompleteCheckout` · `posValidateCoupon` · `posLookupCustomer` · `posLogReprint` ·
+`posCheckPaymentStatus` · `posGetQueueMetrics` · `posRegisterPeripheral` ·
+`posRemovePeripheral` · `posGetPeripherals` · `getBusinessHealthScore` ·
+`getHealthScoreHistory` · `getDimensionDrilldown` · and 12 `crm` callables.
+
+`posProcessRefund` — deliberately not in either batch — still reads `2026-08-22`, which is
+what makes the deploy timestamps evidence rather than coincidence.
+
+### IAM — narrow by design
+
+`roles/run.invoker` for `allUsers` granted to **three** services only
+(`getbusinesshealthscore`, `gethealthscorehistory`, `getdimensiondrilldown`), each of which
+enforces App Check **and** `assertMerchantAccess` internally. 403 -> 401 confirmed;
+`getCRMDashboard` still 403, proving the grant was targeted. The 12 `crm` callables keep
+their PRE-EXISTING 403 — `docs/CALLABLE_INVOKER_GAPS.md` records 346 of 1192 functions in
+that state since 2026-07-24. Not caused here, and not widened here.
+
+### Index
+
+`posCheckoutMetrics (branchId, merchantId, saleDate)` created targeted via
+`gcloud firestore indexes composite create` — **additive**. `firebase deploy --only
+firestore:indexes` was deliberately avoided: it can delete indexes absent from the file.
+407 -> 408 composite indexes, state READY, nothing dropped.
+
+### One deploy failure worth recording
+
+Batch 2 first reported success and had deployed NOTHING. The exit code came from `tail` at
+the end of a pipeline, masking firebase's exit 1; the CLI showed
+`spawn scripts\predeploy-syntax-gate.js" ENOENT`, which is a synthesised message over a real
+hook failure. The hook's actual output:
+
+```
+DEPLOY BLOCKED — 1 file(s) do not parse:
+  functions\typesense-monitor.js
+    [low_level_alloc.cc : 554] RAW: Check new_pages != nullptr failed: VirtualAlloc failed
+```
+
+Host memory exhaustion (94% used, 0.33 GB free of 5.9 GB), not a syntax error —
+`node --check` on that file passes. The gate fail-closed correctly, because it cannot
+distinguish an allocation failure from a parse failure. The tell was the same gate exiting
+0 then 1 with no tree change. **The hook was not bypassed, disabled, or forced**; the retry
+succeeded once memory allowed, and was verified by update timestamps.
+
+### Certification status
+
+**Tenant denial proven at the live application boundary is NOT yet established** — it
+requires the browser run of `docs/TENANT_ISOLATION_BASELINE_SNIPPET.md` as KASS and
+WOODLANDS. Claude cannot run it: `createCustomToken` fails
+(`iam.serviceAccounts.signBlob` denied on all three service accounts).
+
+When it passes, the wording is fixed and deliberate:
+
+> Tenant denial proven at the live application boundary. Prior runtime exploitation remains
+> unproven for the surfaces previously masked by IAM/index failures.
+
+The pre-fix baseline could not demonstrate exfiltration — IAM returned `functions/internal`
+and the missing index returned `9 FAILED_PRECONDITION`. A green run proves the repaired
+boundary rejects the other tenant while preserving legitimate access. It does not claim the
+pre-fix system leaked.
+
+### Still open
+
+`pos-peripherals` exploitation unproven (needs a forged `users.merchantId` — never
+authorized, never performed) · branch isolation explicitly out of scope · the four-copy
+authority convergence remains separate follow-on debt.
+
 ## [2026-08-28] — One merchant-authority primitive: the tenant boundary closed at 8 entry points
 
 **NOT DEPLOYED.** Functions change only — no hosting, no rules, no index deploy. The deployment
