@@ -1,3 +1,14 @@
+## [2026-08-28] — Home logo 7-tap → Admin OS (/admin-os) · reconciled onto live b2c9cb4 — CANDIDATE, not deployed
+
+**Not deployed.** Branch `rc/logo-7tap-live` — the 7-tap candidate (`4642314`, originally off `a58afc2`)
+reconciled onto current live `b2c9cb4`. Only `index.html` changes; cherry-pick was clean (CHANGELOG only).
+The hidden home-logo gesture opens the **Admin OS console** on **7 taps** (was a client PIN overlay
+`_showAdminLock()`); **9 taps** still opens Super Admin. 7 is deferred ~900ms so an 8th/9th can still reach
+Super Admin. Discovery only — `admin-os.html` gates on the admin CLAIM via `sokoni-admin-entry.js`
+(server boundary = Firestore rules + admin callables); a non-admin is shown "Access denied" and redirected.
+`_showAdminLock` stays wired to the keyboard "sokoni" sequence (not orphaned). Tip label corrected
+(9 → "Opening Super Admin…").
+
 ## [2026-08-28] — Admin OS responsive adoption (mobile) — CANDIDATE, not deployed
 
 **Not deployed.** Branch `fix/admin-os-responsive` off live `a58afc2`. Closes the one admin surface that never

@@ -4171,7 +4171,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tip.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(0,0,0,.88);color:#71ff00;font:800 13px system-ui,sans-serif;padding:7px 16px;border-radius:20px;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 18px rgba(0,0,0,.4)';
         document.body.appendChild(tip);
       }
-      tip.textContent = n >= 9 ? '🔓 Opening admin…' : ('Admin unlock: ' + n + '/9');
+      tip.textContent = n >= 9 ? '🔓 Opening Super Admin…' : ('Admin unlock: ' + n + '/9');
       tip.style.opacity = '1';
       clearTimeout(tipT);
       tipT = setTimeout(function(){ if (tip) tip.style.opacity = '0'; }, 1100);
@@ -4187,26 +4187,28 @@ document.addEventListener('DOMContentLoaded', function() {
       last = now;
       showTip(taps);
 
-      /* ── SEVEN taps → ADMIN.  NINE → SUPER ADMIN. ─────────────────────────
-         Seven never worked. `window._secretTap` was defined to do it and was
-         then called from NOWHERE — no listener, no onclick, no reference
-         anywhere in the file. An orphaned function reads exactly like a working
-         feature, which is why nobody spotted it: the code was there, it simply
-         was never reachable.
+      /* ── SEVEN taps → ADMIN OS.  NINE → SUPER ADMIN. ──────────────────────
+         Seven opens the Admin OS console (/admin-os); nine opens Super Admin.
+         Neither tap is a security boundary — admin-os.html gates on the admin
+         CLAIM via sokoni-admin-entry.js, and the server enforces it through
+         Firestore rules + the admin callables. A non-admin who reaches the page
+         is shown "Access denied" and redirected, so the tap is discovery only.
 
-         Both unlocks now live in the ONE handler that already works, rather
-         than a second listener racing this one for the same taps.
+         Both unlocks live in the ONE handler that already works, rather than a
+         second listener racing this one for the same taps.
 
-         SEVEN IS DEFERRED, and it has to be. _showAdminLock() opens a PIN
-         overlay covering the logo, so firing it the instant the seventh tap
-         lands would make the ninth unreachable. Instead the admin gate waits to
-         see whether tapping CONTINUES: if an eighth arrives inside the same
-         1500ms window the timer is cancelled and the run carries on to nine. */
+         SEVEN IS DEFERRED, and it has to be: navigating to the page the instant
+         the seventh tap lands would leave index.html before a ninth could arrive,
+         making Super Admin unreachable. The admin gate waits ~900ms to see
+         whether tapping CONTINUES: if an eighth arrives inside the same 1500ms
+         window the timer is cancelled and the run carries on to nine. */
       clearTimeout(adminT);
       if (taps === 7) {
         adminT = setTimeout(function () {
-          if (taps === 7 && typeof window._showAdminLock === 'function') {
-            taps = 0; window._showAdminLock();
+          if (taps === 7) {
+            taps = 0;
+            if (tip) tip.textContent = '🔓 Opening Admin OS…';
+            location.href = '/admin-os';
           }
         }, 900);
       }
