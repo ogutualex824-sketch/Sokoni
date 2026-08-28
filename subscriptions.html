@@ -10,9 +10,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI Pricing & Subscriptions — List, Sell & Earn More</title>
-  <meta name="description" content="Choose a SOKONI plan that fits your business. Free to start, upgrade for more leads, lower commission and premium features.">
+  <meta name="description" content="Choose a SOKONI plan that fits your business. Free to start, upgrade for more leads, more listings and premium features.">
   <meta property="og:title" content="SOKONI Pricing & Subscriptions — List, Sell & Earn More">
-  <meta property="og:description" content="Choose a SOKONI plan — free to start, upgrade for premium features, lower commission and more leads.">
+  <meta property="og:description" content="Choose a SOKONI plan — free to start, upgrade for premium features, more listings and more leads.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
@@ -158,7 +158,7 @@
 <div class="sub-hero">
   <div class="sub-badge">💰 SOKONI Monetisation & Pricing</div>
   <h1>Earn More.<br><span>Pay Less Commission.</span></h1>
-  <p>List free, upgrade for higher visibility and lower platform commission. Every booking on SOKONI earns you more.</p>
+  <p>List free, upgrade for higher visibility, more leads and premium tools. Every booking on SOKONI earns you more.</p>
   <div class="sub-toggle-row">
     <span style="color:rgba(255,255,255,0.5);">Billing:</span>
     <div class="sub-toggle-pill">
@@ -182,7 +182,7 @@
     <div class="hiw-card"><div class="hiw-num">2</div><div class="hiw-title">Booking Reference</div><div class="hiw-desc">After deposit, the client receives a unique booking reference sent with their WhatsApp/enquiry message. The provider sees it and knows SOKONI is tracking.</div></div>
     <div class="hiw-card"><div class="hiw-num">3</div><div class="hiw-title">Service Completion</div><div class="hiw-desc">After the job is done, SOKONI auto-sends the provider a commission invoice via WhatsApp for their % of the total service fee.</div></div>
     <div class="hiw-card"><div class="hiw-num">4</div><div class="hiw-title">Commission Settlement</div><div class="hiw-desc">Provider pays commission via M-PESA Paybill <span data-sk-pay="commissionPaybill">522522</span>, Account: their booking ref. Outstanding unpaid commissions suspend the listing.</div></div>
-    <div class="hiw-card"><div class="hiw-num">5</div><div class="hiw-title">Subscription Benefits</div><div class="hiw-desc">Pro and Business subscribers pay lower commission %. The subscription fee pre-covers part of the platform's earnings.</div></div>
+    <div class="hiw-card"><div class="hiw-num">5</div><div class="hiw-title">Subscription Benefits</div><div class="hiw-desc">Pro and Business subscribers unlock more listings, unlimited leads, featured placement and premium tools. The platform commission on a sale is the same flat rate on every plan — a subscription buys capabilities, not a different commission.</div></div>
     <div class="hiw-card"><div class="hiw-num">6</div><div class="hiw-title">Boost & Promote</div><div class="hiw-desc">Sellers can boost listings to appear at the top of search results, as featured cards, or on the SOKONI homepage.</div></div>
   </div>
 
@@ -211,7 +211,7 @@
     <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:16px;padding:20px;">
       <div style="font-size:28px;margin-bottom:10px;">👑</div>
       <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 4 — Provider Subscriptions</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">Providers pay a monthly subscription for lower commission rates, more leads and premium features. Starter KES 499/mo → Business KES 4,999/mo.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">Providers pay a monthly subscription for more listings, more leads and premium features. Starter KES 499/mo → Business KES 4,999/mo.</div>
       <div style="font-size:11px;color:#f59e0b;font-weight:700;">Applies to: All providers across all hubs</div>
     </div>
     <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.18);border-radius:16px;padding:20px;">
@@ -262,17 +262,23 @@ function setBilling(b, btn){
   renderPlans();
 }
 
+/* Plans sell CAPABILITIES — listings, leads, visibility, tools. They do NOT
+   carry a per-tier sale commission: the marketplace commission is a single flat
+   rate resolved server-side by the Commission Engine (commission-config), the
+   same for every plan. A subscription never adds — or changes — the commission
+   on a sale. Advertising a per-tier commission rate as a plan feature implied a
+   second, tier-dependent charge the server never applied; it is removed. */
 const PLANS_DATA = [
-  { key:"free",     name:"Free",     monthly:0,    annual:0,    commission:15, listings:3,   leads:5,   badge:false, featured:false,
-    features:["3 active listings","5 booking leads/month","15% platform commission","Basic listing card","M-PESA payments"],
-    missing:["Verified badge","Featured placement","Priority support","Commission discount","Analytics dashboard"] },
-  { key:"starter",  name:"Starter",  monthly:499,  annual:399,  commission:10, listings:20,  leads:30,  badge:true,  featured:false,
-    features:["20 active listings","30 booking leads/month","10% platform commission","✅ Verified badge","M-PESA + card payments","Basic analytics"],
+  { key:"free",     name:"Free",     monthly:0,    annual:0,    listings:3,   leads:5,   badge:false, featured:false,
+    features:["3 active listings","5 booking leads/month","Basic listing card","M-PESA payments"],
+    missing:["Verified badge","Featured placement","Priority support","Analytics dashboard"] },
+  { key:"starter",  name:"Starter",  monthly:499,  annual:399,  listings:20,  leads:30,  badge:true,  featured:false,
+    features:["20 active listings","30 booking leads/month","✅ Verified badge","M-PESA + card payments","Basic analytics"],
     missing:["Homepage featured","Priority support","Bulk messaging"] },
-  { key:"pro",      name:"Pro",      monthly:1499, annual:1199, commission:7,  listings:999, leads:999, badge:true,  featured:true, popular:true,
-    features:["Unlimited listings","Unlimited leads","7% platform commission","✅ Verified badge","🌟 Featured in category","Priority support 24/7","Full analytics dashboard","Customer reviews module","Boost credits: KES 500/mo"] },
-  { key:"business", name:"Business", monthly:4999, annual:3999, commission:4,  listings:999, leads:999, badge:true,  featured:true,
-    features:["Everything in Pro","4% platform commission","🏠 Homepage feature slot","Dedicated account manager","Custom WhatsApp catalogue","Bulk broadcast to your clients","API access for integrations","Monthly performance report","Boost credits: KES 2,000/mo"] },
+  { key:"pro",      name:"Pro",      monthly:1499, annual:1199, listings:999, leads:999, badge:true,  featured:true, popular:true,
+    features:["Unlimited listings","Unlimited leads","✅ Verified badge","🌟 Featured in category","Priority support 24/7","Full analytics dashboard","Customer reviews module","Boost credits: KES 500/mo"] },
+  { key:"business", name:"Business", monthly:4999, annual:3999, listings:999, leads:999, badge:true,  featured:true,
+    features:["Everything in Pro","🏠 Homepage feature slot","Dedicated account manager","Custom WhatsApp catalogue","Bulk broadcast to your clients","API access for integrations","Monthly performance report","Boost credits: KES 2,000/mo"] },
 ];
 
 async function renderPlans(){
@@ -293,8 +299,6 @@ async function renderPlans(){
       <div class="plan-name">${p.name}</div>
       <div class="plan-price"><sup>KES</sup>${price===0?"0":(price).toLocaleString()}</div>
       <div class="plan-period">${price===0?"Free forever":_billing==="annual"?"/month (billed annually)":"/month"}</div>
-      <div class="plan-commission">${p.commission}%</div>
-      <div class="plan-commission-lbl">Platform commission on sales</div>
       <div class="plan-divider"></div>
       <ul class="plan-features">
         ${p.features.map(f=>`<li><span class="fi">&#10003;</span> ${f}</li>`).join("")}
@@ -354,7 +358,7 @@ async function subscribePlan(planKey, price){
     SokoniPay.gateway({
       providerName: "SOKONI "+PLANS_DATA.find(p=>p.key===planKey)?.name+" Plan",
       category: "subscription",
-      serviceDesc: "Monthly subscription — lower commission, more leads, premium features",
+      serviceDesc: "Monthly subscription — more listings, more leads, premium features",
       /* server figure and server reference — never the local table */
       depositAmount: _intent.amount,
       paymentIntentId: _intent.paymentIntentId,
@@ -427,7 +431,7 @@ const COMM_RATES = [
   ["🏠 Property Rental","KES 500","2%","Connection fee + % of 1st month rent"],
   ["🏡 BnB / Short-stay","KES 300","8%","Per confirmed stay"],
   /* ── PLATFORM FEES ── */
-  ["👑 Subscription Plans","—","Fixed monthly fee","Replaces per-transaction commission"],
+  ["👑 Subscription Plans","—","Fixed monthly fee","Access to capabilities & premium features"],
   ["🚀 Listing Boost","KES 100–2,000","—","One-time promotional fee"],
 ];
 
@@ -508,9 +512,9 @@ const FAQS = [
   ["What is the booking deposit and who pays it?","The client pays a small booking deposit directly to SOKONI via M-PESA before being connected to any provider. This covers SOKONI's platform fee for that transaction — whether payment for the actual service happens on-platform or directly between client and provider."],
   ["What if a client pays the provider directly without going through SOKONI?","Every booking starts with a SOKONI booking deposit that the client pays first. The provider also owes a completion commission on their final fee. If a provider bypasses SOKONI consistently, their listing can be suspended pending commission payment."],
   ["How is completion commission invoiced?","After the job is marked complete, SOKONI automatically sends a WhatsApp commission invoice to the provider for their % of the final service fee. They pay via M-PESA Paybill "+((window.SOKONI_PAY&&window.SOKONI_PAY.commissionPaybill)||"522522")+", Account: their booking reference number."],
-  ["Can I reduce my commission rate?","Yes — upgrade to a higher subscription plan. Pro plan reduces commission to 7%, Business to 4%. The subscription fee offsets the platform's earnings while giving you unlimited leads and premium features."],
+  ["Does my subscription change my commission rate?","No — the platform commission on a sale is a single flat rate, the same on every plan. A subscription buys capabilities — more listings, unlimited leads, featured placement and premium tools — it never adds to, or reduces, the commission on a sale."],
   ["What happens if I don't pay the commission?","Outstanding unpaid commissions will temporarily restrict your listing from receiving new booking leads. Once settled, your listing is reinstated immediately."],
-  ["Do I need a subscription to be listed?","No — the Free plan allows 3 listings and 5 leads per month with a 15% completion commission. Upgrade only when you need more listings or lower commission rates."],
+  ["Do I need a subscription to be listed?","No — the Free plan allows 3 listings and 5 booking leads per month. Upgrade only when you need more listings, more leads or premium features."],
   ["Is legal / healthcare commission the same?","No — legal and healthcare commissions are lower (5%) because service fees are typically higher. The booking deposit is also calibrated accordingly."],
   ["How do I track my bookings and commissions?","All bookings, deposits paid, and commission obligations are tracked in your Seller Dashboard on SOKONI. Admin can also view the full platform commission report."],
 ];

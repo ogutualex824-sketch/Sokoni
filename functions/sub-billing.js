@@ -49,13 +49,13 @@ const PLANS = {
 
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
-    features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  commission_discount_pct:0,  badge_verified:false }},
+    features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  badge_verified:false }},
   seller_basic:      { id:'seller_basic',      hubType:'seller',       tier:'basic',      name:'Seller Basic',      price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ listings_limit:100,  photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  commission_discount_pct:2,  badge_verified:true  }},
+    features:{ listings_limit:100,  photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  badge_verified:true  }},
   seller_pro:        { id:'seller_pro',        hubType:'seller',       tier:'pro',        name:'Seller Pro',        price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
-    features:{ listings_limit:500,  photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, commission_discount_pct:5,  badge_verified:true, api_access:true }},
+    features:{ listings_limit:500,  photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, badge_verified:true, api_access:true }},
   seller_enterprise: { id:'seller_enterprise', hubType:'seller',       tier:'enterprise', name:'Seller Enterprise', price:{monthly:749900,  annual:7499000  }, trial:{days:30}, grace:{days:7},  isActive:true,
-    features:{ listings_limit:-1,   photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,commission_discount_pct:10, badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
+    features:{ listings_limit:-1,   photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
 
   /* ── SERVICE PROVIDERS ── */
   provider_free:     { id:'provider_free',     hubType:'service_provider', tier:'free',  name:'Provider Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
@@ -68,11 +68,11 @@ const PLANS = {
      validate or activate them. Prices are the page's figures converted to
      cents; annual is the page's per-month annual rate x 12. */
   starter:           { id:'starter',           hubType:'service_provider', tier:'starter',  name:'Starter',   price:{monthly:49900,   annual:478800   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ services_limit:20,   leads_per_month:30,  commission_pct:10, calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
+    features:{ services_limit:20,   leads_per_month:30,  calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
   pro:               { id:'pro',               hubType:'service_provider', tier:'pro',      name:'Pro',       price:{monthly:149900,  annual:1438800  }, trial:{days:3}, grace:{days:5},  isActive:true,
-    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:7,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
+    features:{ services_limit:-1,   leads_per_month:-1,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
   business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:3}, grace:{days:7},  isActive:true,
-    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:4,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
+    features:{ services_limit:-1,   leads_per_month:-1,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
 
   provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ services_limit:-1,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:10,ai_assistant:true,  bulk_import:true }},
@@ -121,7 +121,7 @@ const PLANS = {
   freelancer_free:   { id:'freelancer_free',   hubType:'freelancer',   tier:'free',       name:'Freelancer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ services_limit:3,    portfolio_items:5,  featured_listing:false, analytics:false }},
   freelancer_pro:    { id:'freelancer_pro',    hubType:'freelancer',   tier:'pro',        name:'Freelancer Pro',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
-    features:{ services_limit:-1,   portfolio_items:-1, featured_listing:true,  analytics:true, commission_discount_pct:3, ai_assistant:true }},
+    features:{ services_limit:-1,   portfolio_items:-1, featured_listing:true,  analytics:true, ai_assistant:true }},
 
   /* ── RECRUITERS ── */
   recruiter_free:    { id:'recruiter_free',    hubType:'recruiter',    tier:'free',       name:'Recruiter Free',    price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
@@ -137,7 +137,7 @@ const PLANS = {
 
   /* ── ENTERPRISE ── */
   enterprise:        { id:'enterprise',        hubType:'enterprise',   tier:'enterprise', name:'Enterprise',        price:{monthly:999900,  annual:9999000  }, trial:{days:30}, grace:{days:14}, isActive:true,
-    features:{ listings_limit:-1, team_members:-1, storage_gb:500, api_access:true, custom_domain:true, sla:'99.9%', dedicated_account_manager:true, white_label:true, analytics:true, ai_assistant:true, priority_support:true, commission_discount_pct:15 }},
+    features:{ listings_limit:-1, team_members:-1, storage_gb:500, api_access:true, custom_domain:true, sla:'99.9%', dedicated_account_manager:true, white_label:true, analytics:true, ai_assistant:true, priority_support:true }},
 };
 
 /* ── helpers ── */

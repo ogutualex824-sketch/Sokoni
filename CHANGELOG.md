@@ -1,4 +1,24 @@
-## [2026-08-28] — Premium catalogue consolidation (Slice 6, Billing + grant) — CANDIDATE, not deployed
+## [2026-08-28] — Premium catalogue consolidation (Slice 6: Billing + grant + commission decoupling) — CANDIDATE, not deployed
+
+### Commission decoupling — subscriptions pay for CAPABILITIES, the flat rate pays for the SALE
+Commercial rule made explicit: **a subscription buys capabilities; the single marketplace commission pays for
+the transaction; a sale is never charged commission twice.** Audit finding: **no double charge existed** — the
+sale records the platform cut once (checkout → `previewCommission` → `commission-config`), the deploy gate
+`verify-commission-single-source` passes, and the only wired subscription↔commission coupling was a *discount*
+(`commission_discount_pct`) that lowered the rate and was already **off** (rollout `plan_adjustments.enabled=false`).
+Per owner decision (flat 5%, remove all coupling), the subscription tables no longer carry any commission field:
+- `functions/sub-billing.js` — removed `commission_discount_pct` (seller_*/freelancer/enterprise) and the dead
+  `commission_pct` (provider tiers). Capabilities/prices/trials unchanged.
+- `functions/subscription-os.js` — removed `commissionPct` from MKT_PLANS (dead for settlement).
+- `subscriptions.html` — removed the per-tier commission headline + `commission` field + "% platform commission"
+  feature bullets + FAQ/copy claiming a subscription lowers the sale commission. Capabilities preserved.
+- `earnings.html` — removed the inert "% commission off" plan-perk line.
+- **Untouched:** `commission-config` (the single 5%/canonical rate), settlement, ledger, payout, IntaSend, and the
+  separate services/booking completion-commission model. SASOS `rate_pct` (isolated subsystem) left for a follow-up.
+- Test now proves the invariant explicitly (see below): subscription ≠ sale commission; sale applies the one
+  server rate once; no second commission from a subscription; package billing still works.
+
+### Billing + grant
 
 **Not deployed.** Branch `fix/premium-catalogue-billing` off current live `61f468e`. Scope: **Billing + grant**
 only — retire the forgeable client premium grant and remove the one client-priced payment path. Explicitly

@@ -57,10 +57,10 @@ const AI_PLANS = {
   ai_enterprise: { price: 9999, annualPrice: 99990, storageGB: 500,  credits: 1000, quotas: { removeBackground: -1, enhanceProduct: -1, smartCrop: -1, generateBanner: -1, generatePoster: -1, createStory: -1, productTitles: -1, productDescriptions: -1, bulkUploadFiles: -1, seoOptimization: -1, marketingCopy: -1, apiCalls: 50000 } },
 };
 const MKT_PLANS = {
-  free:     { price: 0,    listings: 3,   commissionPct: 15, leads: 5   },
-  starter:  { price: 499,  listings: 20,  commissionPct: 10, leads: 30  },
-  pro:      { price: 1499, listings: 999, commissionPct: 7,  leads: 999 },
-  business: { price: 4999, listings: 999, commissionPct: 4,  leads: 999 },
+  free:     { price: 0,    listings: 3,   leads: 5   },
+  starter:  { price: 499,  listings: 20,  leads: 30  },
+  pro:      { price: 1499, listings: 999, leads: 999 },
+  business: { price: 4999, listings: 999, leads: 999 },
 };
 
 /* ── HMAC token sign / verify ────────────────────────────────── */

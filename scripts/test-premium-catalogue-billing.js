@@ -65,5 +65,35 @@ const hubPaid = (hub.match(/If paid plan[\s\S]*?\n {4}\}/) || [''])[0];
 (/purpose:\s*'boost'/.test(pay)) ? ok('sokoni-pay.js: Slice-5A boost intent preserved') : no('boost path regressed');
 (/purpose:\s*'marketing_boost'/.test(mkt)) ? ok('marketing.html: Slice-5A marketing_boost intent preserved') : no('marketing boost path regressed');
 
+/* ── 4. COMMISSION DECOUPLING — the invariant: subscriptions pay for CAPABILITIES;
+      the single flat marketplace commission pays for the SALE; never charged twice. ── */
+const subBilling = read('functions/sub-billing.js');
+const subOS      = read('functions/subscription-os.js');
+const checkout   = read('checkout.html');
+const cfg        = read('functions/commission-config.js');
+const plansData  = (subs.match(/const PLANS_DATA[\s\S]*?\n\];/) || [''])[0];
+
+/* (a) subscription purchase ≠ sale commission: NO subscription plan table carries a commission rate/discount. */
+(!/commission_discount_pct|commission_pct/.test(subBilling)) ? ok('INVARIANT: sub-billing plans carry NO commission field (no discount, no per-tier rate)') : no('sub-billing still carries a plan commission field');
+(!/commissionPct/.test(subOS)) ? ok('INVARIANT: subscription-os MKT_PLANS carries no commissionPct') : no('MKT_PLANS still carries commissionPct');
+(!/commission\s*:\s*[0-9]/.test(plansData)) ? ok('INVARIANT: subscriptions.html PLANS_DATA carries no per-tier commission') : no('PLANS_DATA still carries a commission field');
+(!/plan-commission">\$\{p\.commission\}/.test(subs)) ? ok('subscriptions.html: the per-tier commission headline is no longer rendered') : no('per-tier commission still rendered');
+(!/% platform commission/.test(subs)) ? ok('subscriptions.html: no "% platform commission" tier-feature copy') : no('tier commission feature copy remains');
+(!/reduces commission|lower commission rate|Replaces per-transaction commission|pay lower commission/i.test(subs)) ? ok('subscriptions.html: no copy implying a subscription changes the sale commission') : no('subscription-changes-commission copy remains');
+
+/* (b) marketplace sale still applies the SINGLE canonical commission ONCE, server-derived — untouched here.
+   Assert the ACTIVE read is the server rate. (checkout.html's comment references the OLD plan-commission
+   read historically; we match the live assignment, not the comment.) */
+(/_commPct\s*=\s*Number\(_platformFeeRate\)/.test(checkout)) ? ok('INVARIANT: the marketplace SALE reads the server commission rate ONCE (never a plan commission)') : no('checkout does not read the server rate');
+(/marketplace\s*:/.test(cfg)) ? ok('commission-config.js still defines the single canonical marketplace commission (engine untouched)') : no('canonical marketplace commission missing');
+
+/* (c) no SECOND commission generated because of a subscription — the only wired coupling (the discount) is gone. */
+(!/commission_discount_pct/.test(subBilling)) ? ok('INVARIANT: no subscription-based commission adjustment remains (flat rate regardless of plan)') : no('subscription commission adjustment still wired');
+
+/* (d) subscription/package BILLING still works — capability + price fields survive the commission removal. */
+(/seller_pro[\s\S]{0,220}monthly:\s*249900/.test(subBilling)) ? ok('subscription billing intact: sub-billing seller_pro price preserved') : no('plan price lost');
+(/pro:\s*\{\s*price:\s*1499/.test(subOS)) ? ok('subscription-os: capability/price fields preserved (only commission dropped)') : no('MKT_PLANS price/capability lost');
+(/listings:999/.test(plansData) && /Unlimited leads/.test(plansData)) ? ok('subscriptions.html: plan capabilities (listings/leads/features) preserved') : no('plan capabilities lost');
+
 console.log('\n' + (fail === 0 ? `premium-catalogue-billing: PASS ${pass}/${pass}` : `premium-catalogue-billing: ${fail} FAIL of ${pass + fail}`));
 process.exit(fail === 0 ? 0 : 1);
