@@ -470,17 +470,38 @@ function renderBoosts(){
     </div>`).join("");
 }
 
-function buyBoost(key, name){
-  const prices={basic:200,premium:500,homepage:2000,urgent:100};
-  if(typeof SokoniPay!=="undefined"){
-    SokoniPay.gateway({
-      providerName:"Boost — "+name,
-      category:"boost",
-      serviceDesc:name+" for 7 days on SOKONI",
-      depositAmount:prices[key]||200,
-      onSuccess:function(ref){(window._skToast||alert)("✅ "+name+" activated! Ref: "+ref+"\nYour listing will be boosted within 5 minutes.");}
-    });
+async function buyBoost(key, name){
+  /* Server-authoritative boost (Slice 5). The amount is minted by createPaymentIntent
+     (purpose:'boost') from the server price map — NOT a client-held table — so a tampered
+     client can no longer set the price; the STK enforces the server intent's amount. The
+     paymentIntents/{ref} doc is the server record of the purchase. Success is shown ONLY after
+     the settled payment (SokoniPay.gateway.onSuccess fires on webhook-confirmed COMPLETE),
+     never on an STK/handset acknowledgement. */
+  let _intent = null;
+  try {
+    const _cf = window.sokoniCallable('createPaymentIntent');
+    const _r  = await _cf({ purpose: 'boost', boostKey: key });
+    _intent = _r && _r.data;
+  } catch(e){
+    (window._skToast||alert)("Could not start boost payment: " + ((e && e.message) || 'please try again.'));
+    return;
   }
+  if(!_intent || !_intent.ref){ (window._skToast||alert)("Could not start boost payment. Please try again."); return; }
+  if(typeof SokoniPay==="undefined"){ (window._skToast||alert)("Payment is unavailable right now. Please try again shortly."); return; }
+  SokoniPay.gateway({
+    providerName: "Boost — " + name,
+    category: "boost",
+    serviceDesc: name + " for 7 days on SOKONI",
+    /* server figure and server reference — never a local price table */
+    depositAmount: _intent.amount,
+    paymentIntentId: _intent.ref,
+    ref: _intent.ref,
+    onSuccess: function(ref){
+      /* Fires only after the payment is server-confirmed COMPLETE. The boost purchase is
+         recorded server-side as paymentIntents/{ref}; we report the settled fact, not a claim. */
+      (window._skToast||alert)("✅ " + name + " purchased — payment confirmed. Ref: " + ref + "\nYour boost is recorded and will apply shortly.");
+    }
+  });
 }
 
 const FAQS = [

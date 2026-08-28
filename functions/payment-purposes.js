@@ -200,6 +200,38 @@ const PURPOSES = {
       };
     },
   },
+
+  /* ── Listing boost / featured placement ───────────────────────────────
+     A promotional boost on a listing. The price is fixed by the platform and lives
+     HERE, server-side — the client sends only the boost TYPE (a key), NEVER an
+     amount. buyBoost() previously passed a client-held depositAmount with no intent
+     behind it, so a tampered client could pay any 1–150000 figure for a boost. The
+     key selects one of a small fixed set; anything else is refused. resourceId
+     records the listing the boost was bought for. */
+  boost: {
+    resourceType: 'listingBoost',
+    async price(uid, data) {
+      /* Authoritative price per boost type — a server constant, never the request.
+         Seeded from the existing SokoniPay.BOOST_PRICES; a rate change is a reviewed
+         code change here, not a value a buyer can send. */
+      const BOOST_KES = { basic: 200, premium: 500, homepage: 2000, urgent: 100 };
+      const key = String(data.boostKey || data.key || '').trim().toLowerCase();
+      if (!Object.hasOwn(BOOST_KES, key)) {
+        fail('invalid-argument', `Unknown boost type "${key}". Valid: ${Object.keys(BOOST_KES).join(', ')}.`);
+      }
+      const cents = BOOST_KES[key] * 100;
+      /* The listing being boosted, if supplied — links the paid intent to what it
+         bought. Optional: a boost with no listing id is still a valid purchase record. */
+      const resourceId = String(data.listingId || data.productId || '').trim() || null;
+      return {
+        amountCents: cents,
+        currency: 'KES',
+        resourceType: 'listingBoost',
+        resourceId: resourceId,
+        metadata: { boostKey: key, durationDays: 7 },
+      };
+    },
+  },
 };
 
 /**
