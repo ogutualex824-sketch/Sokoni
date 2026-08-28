@@ -17,6 +17,14 @@ those that **write** to a money- or privilege-bearing collection (`wallets`, `po
 
 ## Result: **0 confirmed vulnerabilities**
 
+> **SCOPE LIMIT — read this before citing the 0.** This sweep kept only handlers that **write**
+> to a money- or privilege-bearing collection. On 2026-08-28 eight entry points were found taking a
+> caller-supplied `merchantId` with no ownership binding — they touch `posPeripherals`,
+> `posCheckoutMetrics`, `posCustomerDisplays` and health-score docs, so they were **never
+> candidates here**. The 0 below does not cover them. A cross-tenant *read* is a tenancy breach even
+> when no money is written; scope future sweeps on **caller-controlled resource identifiers**, not on
+> the destination collection. See `docs/findings/TENANT_AUTHZ_RESIDUAL_DEBT.md`.
+
 19 raw candidates → 5 after correcting the scanner → **0 real** after manual verification.
 
 ### Scanner corrections made before reporting
