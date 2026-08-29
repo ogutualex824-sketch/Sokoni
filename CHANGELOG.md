@@ -1,3 +1,41 @@
+## [2026-08-29] — Release B: repository-side deployment controls (Steps 1–4)
+
+Documentation-only entry. No workflow, scope, or gate change accompanies it.
+
+**Step 1 — environment `hosting-production` (verified 12/0).** Deployment-branch policy allowing
+**only** `release-b/live`; required reviewer `ogutualex824-sketch`; no wildcard ref; no environment
+secrets. `prevent_self_review: false` deliberately — the repo has ONE collaborator, who is also the
+dispatcher, so `true` would make approval impossible rather than stronger.
+
+**Step 2 — `main` branch protection (verified 13/0).** `enforce_admins: true`, pull request required,
+`dismiss_stale_reviews: true`, force-push and deletion blocked. `required_approving_review_count: 0`
+because a sole collaborator is always the PR author and GitHub forbids self-approval; `1` would make
+`main` permanently unmergeable. This is an enforced PR/audit boundary, **not** independent approval.
+Residual, irreducible with one admin: the owner can DISABLE protection — an audited settings change,
+so a deliberate speed bump rather than an impassable wall.
+
+**Step 3 — hosting workflow removed from the commission branch (verified 8/0).**
+`fix/commission-subsystem-converge` `4a12d88` -> `de5266f`; one file deleted; the 3%->5% snapshot,
+functions and `admin-os.html` all byte-identical. That branch carries the browser-delivered
+commission snapshot without the Functions release that makes it authoritative, and since it merged
+live in, the rollback guard no longer refused it.
+
+**Step 4 — the hosting job opts into the environment (verified 14/0).** `release-b/live` `5497537`
+-> `b138dca`, one file.
+
+**Why removal rather than an allowlist.** `workflow_dispatch` executes the workflow copy from the
+SELECTED ref, and environment rules bind only to jobs that DECLARE `environment:`. A copy omitting
+the key opts out of environment protection entirely, so no allowlist — in YAML or in the environment
+— could have constrained that branch. Eliminating the vehicle was the only measure that closed it at
+source. The workflow now exists on exactly one ref: `release-b/live`.
+
+**Process defect recorded:** the Step 4 commit message (`b138dca`) implied a CHANGELOG entry that a
+script path error prevented from landing. The commit was workflow-only. This entry is the correction;
+the commit message itself cannot be amended without rewriting a pushed commit, which was not done.
+
+**Not deployed. CI never dispatched — `actions/workflows/deploy-hosting.yml/runs` returns 404, so no
+run of this workflow has ever existed.** Production `f4a7f6a` / v578 · HOLD.
+
 ## [2026-08-29] — Release B: rollback guard closes the SECOND fail-open (local pointer)
 
 **Files:** `scripts/deploy/guard-no-rollback.js`, `scripts/test-deploy-rollback-guard.js`.
