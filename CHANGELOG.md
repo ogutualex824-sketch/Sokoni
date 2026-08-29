@@ -1,3 +1,28 @@
+## [2026-08-29] — A2: stop publishing `.github/**` through Firebase Hosting
+
+**File:** `firebase.json` — one entry added to `hosting.ignore`.
+
+`hosting.public` is `"."`, and the existing `**/.*` rule matches only a LAST path segment beginning
+with a dot — so root dotfiles were excluded but `.github/workflows/*.yml` were **published to the
+live site**. Confirmed on production before this change:
+`https://mysokoni.co.ke/.github/workflows/deploy.yml` returned **HTTP 200, 12571 bytes**, byte-
+identical to the repository blob, while a nonexistent sibling path 404'd (so the discriminator was
+real, not a catch-all rewrite).
+
+The repository is public, so nothing confidential was exposed — no secret VALUES appear in workflow
+files. But the CI topology and secret NAMES (`FIREBASE_TOKEN`, `GCP_SA_KEY`, `SLACK_WEBHOOK_URL`)
+were served from the product domain for no reason.
+
+**Publish-set delta, computed over all tracked files with a self-tested matcher: 840 -> 833.**
+Exactly 7 files removed, all under `.github/`; **0 added**; no `.html`, `.css` or root `.js` touched.
+Root dotfiles (`.firebaserc`, `.eslintrc.json`, …) were already excluded by `**/.*` and are
+unaffected.
+
+This is a real hosting release, not a settings tweak: the files are removed from the live site only
+when a deployment publishes the new tree.
+
+**Not deployed at time of commit.** Production `aa8a1cd` / v579.
+
 ## [2026-08-29] — Release B: keyless OIDC/WIF authentication replaces FIREBASE_TOKEN
 
 **File:** `.github/workflows/deploy-hosting.yml` (one workflow file).

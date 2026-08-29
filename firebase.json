@@ -21,6 +21,7 @@
     "ignore": [
       "firebase.json",
       "**/.*",
+      ".github/**",
       "**/node_modules/**",
       "skills-lock.json",
       "**/*.md",
