@@ -46,6 +46,7 @@ const INTENDED = [
   'docs/TENANT_AUTHORITY_PRIMITIVE.md',
   'docs/TENANT_ISOLATION_BASELINE_SNIPPET.md',
   'docs/index-registry.json',
+  'docs/findings/LIVE_MONEY_FLOW_TRACE.md',
   'docs/findings/LIVE_FINANCIAL_LEDGER_AUDIT.md',
   'docs/findings/COMMISSION_RAIL_SEPARATION_AUDIT.md',
   'docs/findings/CERTIFICATION_ROLE_SEPARATION.md',
