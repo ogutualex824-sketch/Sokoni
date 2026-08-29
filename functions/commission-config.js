@@ -42,7 +42,7 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%' },
+  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; base 3→5 2026-08-29 (seller commission policy)' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },

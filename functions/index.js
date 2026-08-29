@@ -6985,6 +6985,23 @@ exports.intasendWebhook = onRequest(
         console.error("[intasendWebhook] shadow comparison skipped",
           { ref: apiRef, err: shadowErr && shadowErr.message });
       }
+
+      /* Listing boost: the entitlement engine is AUTHORITATIVE here (unlike the
+         subscription shadow above). A settled boost features the paid listing
+         exactly once — engine.activate is idempotent (one entitlements/{ref}),
+         and the reconciler heals any miss. Wrapped so a boost hiccup can never
+         turn a settled payment into a webhook 500. */
+      try {
+        const bIntent = await db.collection("paymentIntents").doc(apiRef).get();
+        if (bIntent.exists && bIntent.data().purpose === "boost") {
+          const boostEngine = require("./entitlement-engine");
+          require("./entitlement-adapters");                 /* registers the boost purpose */
+          await boostEngine.activate(apiRef, { source: "webhook" });
+        }
+      } catch (boostErr) {
+        console.error("[intasendWebhook] boost activation failed",
+          { ref: apiRef, err: boostErr && boostErr.message });
+      }
     }
 
     res.status(200).send("OK");
@@ -8450,6 +8467,19 @@ exports.webhookIntasend = onRequest(
       } catch (shadowErr) {
         console.error("[webhookIntasend] shadow comparison skipped",
           { ref: apiRef, err: shadowErr && shadowErr.message });
+      }
+
+      /* Listing boost — authoritative activation (see intasendWebhook above). */
+      try {
+        const bIntent = await db.collection("paymentIntents").doc(apiRef).get();
+        if (bIntent.exists && bIntent.data().purpose === "boost") {
+          const boostEngine = require("./entitlement-engine");
+          require("./entitlement-adapters");                 /* registers the boost purpose */
+          await boostEngine.activate(apiRef, { source: "webhook" });
+        }
+      } catch (boostErr) {
+        console.error("[webhookIntasend] boost activation failed",
+          { ref: apiRef, err: boostErr && boostErr.message });
       }
     }
 

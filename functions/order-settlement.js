@@ -97,11 +97,76 @@ async function settleOrder(db, adminSdk, orderId) {
     const s = await t.get(orderRef);
     if (!s.exists) return { outcome: 'no-order' };
     const o = s.data();
-    const st = o.settlementStatus;
+    /* ── TERMINAL STATES, IN EITHER VOCABULARY ────────────────────────────────
+       TWO writers, two spellings. order-settlement writes 'SETTLED';
+       index.js:8173 and settlement-executor.js:114 write 'settled'. And
+       index.js:4000 states the intent outright — "passes
+       settlementStatus:'settled' so no settlement sweep double-credits" — but
+       this guard compared against the UPPERCASE constant, so it never recognised
+       that marker. An order another path had already paid out could therefore be
+       settled a SECOND time. The protection index.js believed it was applying
+       did not exist.
+
+       Found by auditing production: order SKN084IE2Z carries
+       settlementStatus:'settled' with no settlements/ record and no settledAt.
+
+       Normalised rather than renamed: rewriting the other writers' vocabulary
+       would be a migration across live money paths, while accepting both costs
+       nothing and closes the hole today. */
+    const st = String(o.settlementStatus || '').toUpperCase();
     if (st === STATES.SETTLED)  return { outcome: 'already-settled' };   /* replay no-op */
     if (st === STATES.REFUNDED) return { outcome: 'refunded-skip' };     /* refunded before settlement */
     /* Only a held/eligible, non-cancelled/refunded order settles. */
     if (['cancelled', 'refunded'].includes(o.status)) return { outcome: 'terminal-skip' };
+    /* ══ PROOF OF DELIVERY GATE ═══════════════════════════════════════════════
+       Money is released on PROOF, never on a status field.
+
+       Before this, settlement fired when an order reached `completed`, which is
+       reached from `delivered` — and `delivered` is a FIELD. Any path that set
+       it (a stale client write, an operational correction, the auto-confirm
+       sweep after the window) released real funds with nothing attesting that
+       anything was handed to a customer.
+
+       The proof already existed and was simply not consulted:
+       delivery-complete.js verifies the buyer's PIN against a keyed HMAC —
+       checking the assigned rider BEFORE the PIN so the endpoint cannot be used
+       as an oracle, limiting attempts, failing closed on a missing key — and
+       stamps `deliveryAuthorizedBy` on the order. delivery-pin.js says in its
+       own header that it "DOES NOT gate delivery completion or any payout".
+       This is the wire that was missing.
+
+       TWO ATTESTATIONS COUNT, because they are the same event differently
+       witnessed: the rider entering the buyer's PIN, and the buyer confirming
+       receipt themselves.
+
+       AN ORDER WITH NO DELIVERY IS NOT BLOCKED. A pickup order, a till sale or
+       an order predating the PIN system has no delivery to prove and never
+       will; stranding those would be a worse defect than the one being fixed.
+       They settle, and the settlement RECORDS that it carried no delivery
+       proof, so the exposure is measurable rather than assumed.
+
+       THE HOLD IS NOT TERMINAL. It sets HELD, not SETTLED, so the same order
+       settles normally the moment proof arrives — a late PIN, a buyer
+       confirming the next morning. A permanent block would strand real money. */
+    const _isDelivery = !!(o.assignedDriverUid || o.riderId || o.assignedRiderId ||
+      o.deliveryStatus ||
+      /^delivery$/i.test(String(o.fulfilmentType || o.fulfillmentType || '')));
+    const _proof = o.deliveryAuthorizedBy || null;
+    if (_isDelivery && !_proof) {
+      t.update(orderRef, {
+        settlementStatus: STATES.HELD,
+        settlementNote: 'awaiting_delivery_proof',
+        settlementHeldReason:
+          'This order is marked delivered but no delivery PIN was verified and the buyer has ' +
+          'not confirmed receipt, so no money has been released. It settles automatically once ' +
+          'either happens.',
+        settlementHeldAt: FV.serverTimestamp(),
+        updatedAt: FV.serverTimestamp(),
+      });
+      return { outcome: 'awaiting-delivery-proof', orderId };
+    }
+    const _deliveryProof = _isDelivery ? String(_proof) : 'not_required';
+
     if (!sellerId) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'no-seller', settledAt: FV.serverTimestamp() }); return { outcome: 'no-seller' }; }
     if (!breakdown || grossCents <= 0) { t.update(orderRef, { settlementStatus: STATES.SETTLED, settlementNote: 'zero-gross', settledAt: FV.serverTimestamp() }); return { outcome: 'zero-gross' }; }
 
@@ -137,6 +202,12 @@ async function settleOrder(db, adminSdk, orderId) {
       orderId, sellerId, grossCents, commissionCents, sellerNetCents: netCents,
       netShillingsCredited: netShillings, category: 'marketplace',
       ledgerPlan: breakdown.ledgerPlan || [],   /* immutable snapshot → post-settlement reversal swaps it */
+      /* WHAT AUTHORISED THIS RELEASE: 'rider_pin', 'buyer_confirmation', or
+         'not_required' for an order with no delivery. Recorded on the settlement
+         itself so an audit can answer "why was this paid out" from one document,
+         and so the volume settling without proof is a number rather than a
+         guess. */
+      deliveryProof: _deliveryProof,
       engineVersion: 'settlement-engine', status: 'settled', createdAt: FV.serverTimestamp(),
     });
     /* 4 — balanced double-entry ledger (from the engine's ledgerPlan), orderId-correlated. */
