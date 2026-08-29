@@ -133,10 +133,33 @@ async function fetchLiveVersion() {
   }
   const live = read.version;
 
+  /* THE LOCAL POINTER IS A POINTER TOO.
+     git() swallows the error and returns '', so this is reached when the tree is not a
+     git repository, git is unavailable, or the object store is unreadable — an exported
+     or copied tree deployed without its .git directory is the realistic case.
+
+     This used to print 'allowing deploy'. That is the same inference this guard exists
+     to forbid, applied to the other side of the comparison: with no HEAD, neither the
+     rollback test nor the divergence test below can run at all, and hosting publishes
+     the whole tree regardless. An unknown LOCAL commit disqualifies a deploy exactly as
+     an unknown LIVE one does. Also requires a real 40-hex sha, so a garbled answer
+     cannot be mistaken for a resolved pointer. */
   const head = git('rev-parse HEAD');
-  if (!head) {
-    console.log('  [rollback-guard] cannot resolve local HEAD — allowing deploy.');
-    return;
+  if (!/^[0-9a-f]{40}$/i.test(head)) {
+    console.error('');
+    console.error('  ✖ [rollback-guard] REFUSING TO DEPLOY — the local commit could not be established.');
+    console.error('      `git rev-parse HEAD` returned: ' + (head ? JSON.stringify(head) : '(nothing)'));
+    console.error('      Reached when this is not a git worktree, git is unavailable, or the object');
+    console.error('      store is unreadable — e.g. an exported tree deployed without its .git.');
+    console.error('');
+    console.error('      Without HEAD there is nothing to compare against live, so the rollback and');
+    console.error('      divergence checks below cannot run — yet hosting would still publish the');
+    console.error('      whole tree. Allowing the deploy here would turn an unanswered question into');
+    console.error('      permission. Production is currently ' + String(live.commit).slice(0, 7) + '.');
+    console.error('');
+    console.error('      Do: deploy from a real git worktree (`git status` must succeed), then retry.');
+    console.error('');
+    process.exit(1);
   }
 
   if (head === live.commit) {
@@ -145,8 +168,9 @@ async function fetchLiveVersion() {
   }
 
   /* `git merge-base --is-ancestor A B` exits 0 iff A is an ancestor of B.
-     If the live commit is not in this worktree's object store the command errors,
-     which we treat as "not behind" (fail-open) rather than blocking. */
+     If the live commit is not in this worktree's object store the command errors and we
+     record "not behind" — which is NOT a pass. It falls through to the DIVERGENCE check
+     below, where a live commit that is not contained in this tree is refused. */
   let headIsBehindLive = false;
   try {
     cp.execSync(`git merge-base --is-ancestor ${head} ${live.commit}`, { stdio: 'ignore' });

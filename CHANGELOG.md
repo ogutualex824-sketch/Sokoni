@@ -1,3 +1,34 @@
+## [2026-08-29] — Release B: rollback guard closes the SECOND fail-open (local pointer)
+
+**Files:** `scripts/deploy/guard-no-rollback.js`, `scripts/test-deploy-rollback-guard.js`.
+**Suite: 37 passed / 0 failed** (was 30/0). Neither file is published — `scripts/**` is in
+`firebase.json` `hosting.ignore` — but both execute as hosting predeploy hook #1.
+
+The earlier fix closed the unknown-LIVE-pointer hole. Adversarial review found the same
+inference surviving on the other side of the comparison:
+
+    const head = git("rev-parse HEAD");   // git() swallows errors, returns ""
+    if (!head) { console.log("cannot resolve local HEAD — allowing deploy."); return; }
+
+Reproduced by running the guard from a non-git directory: exit 0. Reachable whenever a
+deploy runs from an exported or copied tree with no `.git` — which still publishes every
+file, because hosting publishes the working tree. With no HEAD, neither the rollback test
+nor the divergence test can run at all, so allowing the deploy turned an unanswered
+question into permission.
+
+Now refuses with exit 1, names what could not be established, and reports the live pointer
+so the operator can act. It also requires a real 40-hex sha, so a garbled answer cannot be
+mistaken for a resolved one. Corrected a stale comment that labelled the uncontained-live
+case "fail-open" — that path already refuses downstream at the divergence check.
+
+**New suite section 3b** carries a PRECONDITION (proves the scratch dir is not a git
+worktree, else the case proves nothing) and a CONTROL (the identical server response in a
+real worktree is allowed, so the refusal is attributable to the missing HEAD rather than to
+the response). **Sabotage-verified:** restoring the old fail-open turns exactly those 4
+assertions red and the suite exits 1; the other 33 are unaffected.
+
+**No product, UI, commission, rules, or functions change. Not deployed.**
+
 ## [2026-08-29] — P0 deploy safety: rollback guard no longer fails open — CANDIDATE, not deployed
 
 Branch `fix/deploy-guard-fail-closed`, cut from current live `712fb34`. **Deployment infrastructure,

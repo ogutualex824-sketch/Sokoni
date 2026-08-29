@@ -173,6 +173,46 @@ const ok = (sha) => ({ status: 200, body: { commit: sha, commitShort: String(sha
        'the fail-open string must be gone from this path');
   }
 
+  head('3b - the LOCAL pointer is unknown -> refused (the second fail-open)');
+  {
+    /* Section 3 closed the unknown-LIVE-pointer hole. The unknown-LOCAL-pointer hole
+       survived it: git() swallows errors and returns '', and the guard answered
+       'cannot resolve local HEAD - allowing deploy' with exit 0. Reachable whenever
+       hosting deploys from an exported or copied tree with no .git directory - which
+       still publishes every file. Same inference, other side of the comparison. */
+    const fsx = require('fs'), os = require('os');
+    const nogit = fsx.mkdtempSync(path.join(os.tmpdir(), 'sok-nogit-'));
+    try {
+      /* PRECONDITION. If this directory turned out to be inside some repository the
+         case would test nothing, so prove the premise before trusting the result. */
+      let resolves = true;
+      try { cp.execSync('git rev-parse HEAD', { cwd: nogit, stdio: 'ignore' }); }
+      catch (_) { resolves = false; }
+      ck('PRECONDITION the scratch dir is not a git worktree', !resolves,
+         resolves ? 'it IS a repo - the case below proves nothing' : nogit);
+
+      const s1 = await serve([ok(HEADSHA)]);
+      const url = 'http://127.0.0.1:' + s1.port + '/version.json';
+      const r = await runGuard(url, nogit);
+      ck('an unresolvable local HEAD -> REFUSES', r.code === 1, 'exit=' + r.code);
+      ck('...and names the local commit as the thing it could not establish',
+         /local commit could not be established/.test(r.out),
+         (r.out.split(String.fromCharCode(10)).filter(function (l) { return l.indexOf('REFUSING') > -1; })[0] || '').trim().slice(0, 72));
+      ck('...and never says "allowing deploy" on this path', !/allowing deploy/.test(r.out));
+      ck('...and still reports what production is', r.out.indexOf(HEADSHA.slice(0, 7)) > -1,
+         'the operator needs the live pointer in the refusal');
+
+      /* CONTROL. Identical server plan, a real worktree: must NOT hit this refusal.
+         Without it, 'refused' could just mean the server plan refuses everything. */
+      const r2 = await runGuard(url, ROOT);
+      s1.srv.close();
+      ck('CONTROL the same response in a REAL worktree is allowed', r2.code === 0, 'exit=' + r2.code);
+      ck('...so the refusal above was caused by the missing HEAD, not the response',
+         !/local commit could not be established/.test(r2.out));
+    } finally {
+      try { fsx.rmSync(nogit, { recursive: true, force: true }); } catch (_) {}
+    }
+  }
   head('4 - a BLIP still does not block a release');
   {
     const s = await serve([{ status: 500, body: {} }, { status: 500, body: {} }, ok(HEADSHA)]);
