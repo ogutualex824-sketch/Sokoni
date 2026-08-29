@@ -291,17 +291,24 @@ window.SokoniAOS = (() => {
       /* Command center — canonical single entry + reused Finance + real health + pipeline. */
       _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {}, sysRes.value || {}, pipeRes.value || {});
 
-      _set("kpiActiveSellers",    _fmt(m.activeSellers    || 0));
-      _set("kpiActiveProviders",  _fmt(m.activeProviders  || 0));
-      _set("kpiActiveRiders",     _fmt(m.activeRiders     || 0));
-      _set("kpiNewRegistrations", _fmt(m.newRegistrations || d.newUsers || 0));
-      _set("kpiCommission",       "KES " + _fmt(m.commissionEarned || d.commissionEarned || 0));
-      _set("kpiFailedPayments",   _fmt(m.failedPayments   || 0));
-      _set("kpiRefundRequests",   _fmt(m.refundRequests   || 0));
-      _set("kpiActiveSubs",       _fmt(m.activeSubscriptions || 0));
-      _set("kpiInventoryAlerts",  _fmt(m.inventoryAlerts || 0));
-      _set("kpiMRR",              "KES " + _fmt(m.mrr || m.monthlyRevenue || 0));
-      _set("kpiPlatformUptime",   (m.uptimePct !== undefined ? m.uptimePct : 99.9).toFixed(1) + "%");
+      /* KPI tiles read the canonical Executive Dashboard payload (execRes). They
+         previously read `m` (adminGetPlatformOverview), whose minimal shape
+         returns none of these fields — which is why every tile showed 0. Tiles
+         with no canonical source ANYWHERE show a neutral "—", never a fabricated
+         0/99.9% (UI Data Integrity: unknown is not zero). */
+      const ex = execRes.value || {};
+      const NA = "—";   /* em dash — "no data yet", not zero */
+      _set("kpiActiveSellers",    ex.merchants           != null ? _fmt(ex.merchants)              : NA);  /* active businesses */
+      _set("kpiActiveProviders",  ex.activeProviders     != null ? _fmt(ex.activeProviders)        : NA);
+      _set("kpiActiveRiders",     NA);   /* no canonical rider count in any dashboard payload */
+      _set("kpiNewRegistrations", ex.newUsersToday       != null ? _fmt(ex.newUsersToday) : (d.newUsers != null ? _fmt(d.newUsers) : NA));
+      _set("kpiCommission",       ex.commissionToday     != null ? "KES " + _fmt(ex.commissionToday) : NA);
+      _set("kpiFailedPayments",   NA);   /* no canonical failed-payment count */
+      _set("kpiRefundRequests",   NA);   /* no canonical refund-request count */
+      _set("kpiActiveSubs",       ex.activeSubscriptions != null ? _fmt(ex.activeSubscriptions)    : NA);
+      _set("kpiInventoryAlerts",  NA);   /* no canonical inventory-alert count */
+      _set("kpiMRR",              NA);   /* revenueToday is daily, not MRR — no canonical MRR source */
+      _set("kpiPlatformUptime",   NA);   /* real 7-day uptime lives in health.scores dimensions; the old static default was fabricated */
 
       // Health scores
       if (h.scores) {
