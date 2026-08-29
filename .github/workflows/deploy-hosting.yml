@@ -40,6 +40,14 @@ jobs:
     timeout-minutes: 20
     # Refuse to run unless the operator explicitly confirmed.
     if: ${{ github.event.inputs.confirm == 'hosting' }}
+
+    # Required for GitHub OIDC. `id-token: write` is NEVER granted by default, so
+    # without this block google-github-actions/auth cannot mint a token at all.
+    # `contents: read` is all the checkout needs; nothing here can write to the repo.
+    permissions:
+      contents: read
+      id-token: write
+
     # Binds this job to the pre-configured `hosting-production` environment, whose
     # deployment-branch policy permits ONLY release-b/live and which requires an explicit
     # reviewer approval. Both rules are evaluated by GitHub server-side. Note this key is
@@ -82,10 +90,33 @@ jobs:
       - name: Install dependencies (root + functions)
         run: npm ci && cd functions && npm ci
 
+      # Keyless auth via Workload Identity Federation. NO long-lived Firebase
+      # credential is stored in this repository - there is no secret to leak or
+      # rotate. The service account is scoped to Hosting only, so this credential
+      # CANNOT deploy Functions, Firestore rules or Storage rules even if a future
+      # edit asked it to. That is a stronger guarantee than `--only hosting`, which
+      # is only a flag on a command line.
+      #
+      # Both values are ENVIRONMENT variables on hosting-production, not repository
+      # variables: deploy.yml and canary-deploy.yml declare different environments,
+      # so they cannot read them and stay structurally credential-less.
+      #
+      # Placed immediately before the deploy so the credential file exists for the
+      # shortest window; npm ci above needs no GCP access.
+      #
+      # Deliberately NO `if: vars.X != ''` guard, unlike auth-certification.yml:
+      # here a missing variable must FAIL the job, not skip a step and read green.
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
       # HOSTING ONLY. Runs the full firebase.json hosting predeploy chain first.
       # No `--only functions`, no `--only firestore`, no `--only storage` — this
       # cannot deploy Functions, rules, or indexes.
+      #
+      # firebase-tools picks up GOOGLE_APPLICATION_CREDENTIALS, which the auth step
+      # above exports - so this step needs no `env:` block at all.
       - name: Deploy hosting only (full predeploy chain runs automatically)
         run: npx -y firebase-tools deploy --only hosting --project sokoni-aeb26
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
