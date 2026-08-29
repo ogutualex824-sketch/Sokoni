@@ -1,3 +1,39 @@
+## [2026-08-29] — Release B: keyless OIDC/WIF authentication replaces FIREBASE_TOKEN
+
+**File:** `.github/workflows/deploy-hosting.yml` (one workflow file).
+
+Run #1 failed closed at `Error: Failed to authenticate, have you run firebase login?` — the
+repository has **zero** Actions secrets, so `FIREBASE_TOKEN` was empty and could never have worked.
+Rather than create that secret, Release B moves to Workload Identity Federation.
+
+* `permissions: { contents: read, id-token: write }` — `id-token: write` is never granted by
+  default, so without it no OIDC token can be minted at all.
+* `google-github-actions/auth@v2` reading `vars.GCP_WORKLOAD_IDENTITY_PROVIDER` and
+  `vars.GCP_SERVICE_ACCOUNT`, both **environment** variables on `hosting-production`.
+* `FIREBASE_TOKEN` removed. The file now references **no secrets at all**.
+
+**Why environment variables, not repository ones:** `deploy-hosting.yml`, `deploy.yml` and
+`canary-deploy.yml` all consumed the same `secrets.FIREBASE_TOKEN` name, so a repository-level
+credential would have armed the stale-`main` full-stack pipeline at the same time. Environment
+scoping means only a job declaring `environment: hosting-production` can read these values;
+`deploy.yml` and `canary-deploy.yml` declare different environments and stay credential-less.
+
+**Why no `if: vars.X != ''` guard** (unlike `auth-certification.yml`): a missing variable must FAIL
+this job, not skip a step and report green.
+
+Verified: real `js-yaml` parse, then **15 assertions against the parsed structure** — job
+permissions, environment binding, step order (auth at 5, deploy at 6), `@v2` pin, no
+`credentials_json`, no `env:` on the deploy step, `--only hosting` sole scope, `fetch-depth: 0`,
+`workflow_dispatch` sole trigger, and zero `secrets.` references. An earlier hand-rolled structural
+checker was DISCARDED as invalid — it reported sibling `with:` keys in different steps as duplicates,
+and its negative controls failed for the same spurious reason, so it discriminated nothing.
+
+**PREREQUISITE, NOT YET SATISFIED:** the WIF provider's attribute condition must be verified to
+restrict principals to this repository (ideally to `refs/heads/release-b/live`). Until confirmed, the
+security model is weaker than this file implies.
+
+**Not pushed. Not dispatched. Not deployed.** Production `f4a7f6a` / v578 · HOLD.
+
 ## [2026-08-29] — Release B: repository-side deployment controls (Steps 1–4)
 
 Documentation-only entry. No workflow, scope, or gate change accompanies it.
