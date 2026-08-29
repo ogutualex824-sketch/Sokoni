@@ -1,3 +1,53 @@
+## [2026-08-30] — B1.2: Functions deployment provenance (generator + readback + tests)
+
+**Files:** `scripts/generate-functions-build-info.js`, `scripts/deploy/functions-provenance.js`,
+`scripts/test-functions-provenance.js`, `.gitignore`. **No product code. Nothing deployed.**
+**PASS 42 · FAIL 0 · UNPROVEN 5 · HARNESS-INVALID 0.**
+
+Hosting has `version.json`; Functions had nothing. Nothing published stated which functions code was
+live, so `guard-no-rollback` could not exist on that side — there was no `<live>` to compare against.
+`functions.predeploy` has 4 real gates (syntax, commission-single-source, delivery-engine-sync,
+payout) but none is a lineage guard. This is the missing half.
+
+**Mechanism (B1.1, empirical).** Every Gen2 function carries
+`buildConfig.source.storageSource` -> `gs://gcf-v2-sources-<projnum>-<region>/<fn>/function-source.zip#<generation>`,
+and that archive is `functions/` verbatim. Same-release functions share a BYTE-IDENTICAL archive
+(md5 `bxVei14Ow/3pqVZq5QlU6g==` across a callable, a Firestore trigger, a dynamically-exported
+`Object.assign` trigger, and both regions); a later release differs. So per-function provenance is
+truthful and **partial deploys stay honest** — no need to pretend one commit describes all 1,708
+functions.
+
+**Rejected: Cloud Run labels.** All labels are Google/Firebase-managed and firebase-tools rewrites
+the set on every deploy, so a custom `commit=` label would be stripped SILENTLY — and a missing
+stamp is a hard REFUSE, so it would brick every later release. No fallback to `firebase-functions-hash`
+(a config hash, not a commit).
+
+**Lineage, never equality.** live contained in candidate -> ALLOW · identical -> NOOP · diverged,
+older, unknown, malformed, or unreadable -> REFUSE. Missing provenance is never read as "old" or
+"safe". Tested against real commits: the rollback case (candidate older than live) REFUSEs.
+
+**The GCS lookup is NOT mocked.** Sections 3 and 5 download real deployed archives. Today none
+carries a stamp, which makes production the ideal fixture for ABSENT -> REFUSE. A control proves a
+nonexistent function fails at DESCRIBE rather than as "absent stamp".
+
+**Two defects caught during the work.** `git cat-file -e <sha>^{commit}` runs through cmd.exe on
+Windows, where `^` is the escape character — the suffix was stripped, every existence check failed,
+and a legitimate ALLOW became REFUSE. Worse, the DIVERGED case beside it PASSED for the wrong reason
+("unknown commit", not divergence); that assertion now requires the reason string.
+
+**`functions/build-info.js` is gitignored** — unlike `version.json`, whose tracking is why every
+local deploy leaves the tree dirty. **UNSETTLED RISK:** if firebase-tools honours `.gitignore` when
+packaging `functions/`, the stamp would be EXCLUDED from the archive and every release would read
+"provenance absent" -> REFUSE. No archive entry is currently gitignored, so this cannot be settled
+without a deploy. **B1.3 must assert the stamp is present in the new archive before anything relies
+on it**; if absent, track the file instead and let the predeploy hook overwrite it.
+
+**UNPROVEN (5), deliberately not promoted:** stamp enters a deployed archive · deployed function
+reads back to its sha · same-release functions agree · different releases differ · a gitignored file
+is still packaged. All need a real functions deploy.
+
+Production `e52fdc5` / v584 · Functions untouched · no credential, IAM, or workflow change.
+
 ## [2026-08-29] — Release B: keyless OIDC/WIF authentication replaces FIREBASE_TOKEN
 
 **File:** `.github/workflows/deploy-hosting.yml` (one workflow file).
