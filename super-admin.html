@@ -270,9 +270,26 @@
 
     /* ── Responsive ── */
     @media(max-width:900px){.two-col{grid-template-columns:1fr}}
+    /* ── Sidebar collapse / close ─────────────────────────────────────── */
+    .sa-main{transition:margin-left .2s ease}
+    .logo-titles{min-width:0;overflow:hidden}
+    .sa-sidebar-toggle{margin-left:auto;flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:rgba(255,255,255,.45);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;transition:color .15s,border-color .15s,transform .25s}
+    .sa-sidebar-toggle:hover{color:var(--accent);border-color:var(--accent)}
+    .sa-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99}
+    @media(min-width:769px){
+      body.sa-collapsed .sa-sidebar{width:66px}
+      body.sa-collapsed .sa-main{margin-left:66px}
+      body.sa-collapsed .logo-titles,body.sa-collapsed .sa-user-info-text,body.sa-collapsed .nav-group-label,body.sa-collapsed .signout-btn{display:none}
+      body.sa-collapsed .sa-logo{justify-content:center}
+      body.sa-collapsed .sa-sidebar-toggle{transform:rotate(180deg);margin:0}
+      body.sa-collapsed .nav-item{font-size:0;justify-content:center;padding:10px 0;gap:0}
+      body.sa-collapsed .nav-item .nav-icon{font-size:18px}
+      body.sa-collapsed .nav-badge{display:none}
+    }
     @media(max-width:768px){
       .sa-sidebar{transform:translateX(-100%)}
       .sa-sidebar.open{transform:translateX(0)}
+      .sa-sidebar.open ~ .sa-scrim{display:block}
       .sa-main{margin-left:0}
       .mobile-menu-btn{display:flex!important}
       .kpi-grid{grid-template-columns:repeat(2,1fr)}
@@ -298,10 +315,11 @@
 <aside class="sa-sidebar" id="saSidebar">
   <div class="sa-logo">
     <div class="logo-icon"><img src="/assets/logosokoni.png" alt="Sokoni" loading="eager"></div>
-    <div>
+    <div class="logo-titles">
       <div class="logo-text" id="saShopName">SOKONI</div>
       <div class="logo-sub">SUPER ADMIN</div>
     </div>
+    <button class="sa-sidebar-toggle" onclick="_saSidebarToggle()" aria-label="Collapse or close menu" title="Collapse menu">&#x00AB;</button>
   </div>
 
   <a href="admin-os.html" class="nav-item" style="text-decoration:none;display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -368,6 +386,7 @@
     <button class="signout-btn" onclick="SA.signOut()">Sign Out</button>
   </div>
 </aside>
+<div class="sa-scrim" id="saScrim" onclick="_closeSidebar()"></div>
 
 <!-- Main -->
 <div class="sa-main">
@@ -893,6 +912,13 @@ function _fmtMoney(n){
 // ── Mobile sidebar ─────────────────────────────────────────
 function _toggleSidebar(){document.getElementById('saSidebar').classList.toggle('open')}
 function _closeSidebar(){if(window.innerWidth<=768)document.getElementById('saSidebar').classList.remove('open')}
+/* Toggle: on mobile dismisses the drawer; on desktop collapses to an icon rail, remembered per browser. */
+function _saSidebarToggle(){
+  if(window.innerWidth<=768){ document.getElementById('saSidebar').classList.remove('open'); return; }
+  var c=document.body.classList.toggle('sa-collapsed');
+  try{ localStorage.setItem('saSidebarCollapsed', c?'1':'0'); }catch(_){}
+}
+(function(){ try{ if(localStorage.getItem('saSidebarCollapsed')==='1' && window.innerWidth>768){ var _ap=function(){document.body.classList.add('sa-collapsed');}; document.body?_ap():document.addEventListener('DOMContentLoaded',_ap); } }catch(_){} })();
 
 // ── Toast ──────────────────────────────────────────────────
 function _toast(msg,type='info',dur=3500){
