@@ -156,6 +156,19 @@
 .ptrend-grid .product-card:hover .compare-icon-btn {
   opacity: 1 !important;
 }
+/* ── Compare works on ALL devices ──────────────────────────────────────────
+   Touch/coarse-pointer devices have no :hover, so the compare button never
+   appeared — and mobile.css hid it outright (display:none). These selectors are
+   more specific than that rule, so on phones and tablets the button is shown and
+   tappable. Desktop (hover-capable) keeps the reveal-on-hover behaviour above. */
+@media (hover: none), (pointer: coarse) {
+  .products-grid .product-card .compare-icon-btn,
+  .ptrend-grid .product-card .compare-icon-btn,
+  #productsContainer .product-card .compare-icon-btn {
+    opacity: 1 !important;
+    display: flex !important;
+  }
+}
 
 /* ════════════════════════════════════════════════════════
    CATEGORY / LOCATION BADGE — overlaid top-left on image
