@@ -40,6 +40,13 @@ jobs:
     timeout-minutes: 20
     # Refuse to run unless the operator explicitly confirmed.
     if: ${{ github.event.inputs.confirm == 'hosting' }}
+    # Binds this job to the pre-configured `hosting-production` environment, whose
+    # deployment-branch policy permits ONLY release-b/live and which requires an explicit
+    # reviewer approval. Both rules are evaluated by GitHub server-side. Note this key is
+    # what OPTS THE JOB IN: a workflow copy on another ref that omits it gets no environment
+    # protection at all, which is why the workflow was removed from the commission branch
+    # rather than merely allow-listed against.
+    environment: hosting-production
     steps:
       - uses: actions/checkout@v4
         with:
