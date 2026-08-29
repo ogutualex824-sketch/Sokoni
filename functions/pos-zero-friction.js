@@ -208,6 +208,12 @@ async function _postSaleFinancials(o) {
         sellerId: o.merchantId,
         category: 'pos',
         createdBy: 'posCompleteCheckout',
+        /* OUTSTANDING, not settled. The seller holds the customer's cash and OWES
+           this commission — nothing has been collected at the moment of sale. It
+           becomes 'settled' only when a payment is verified against it. Writing it
+           settled at creation (the previous behaviour) made every receivable look
+           paid, which would make any collection gate aggregate to zero. */
+        settlementState: 'outstanding',
         /* Derived from the SALE's idempotency key, so a retried posting for the
            same sale is recognised and cannot double-book commission. */
         idempotencyKey: 'poscomm_' + o.idempotencyKey,

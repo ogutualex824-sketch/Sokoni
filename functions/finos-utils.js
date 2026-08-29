@@ -71,11 +71,32 @@ async function markIdempotency(db, key, result) {
 /* ─────────────────────────────────────────────────────────────
    DOUBLE-ENTRY LEDGER
 ──────────────────────────────────────────────────────────────*/
+/* SETTLEMENT STATE IS EXPLICIT.
+   ═══════════════════════════════════════════════════════════════════════════════
+   `status` was hardcoded to 'settled' with `settledAt` stamped at creation, so an
+   entry claimed to be settled MERELY BECAUSE IT WAS CREATED. For a receivable that
+   is false: `pos_commission_receivable` records money the seller HOLDS and OWES —
+   the cash is in their drawer, and nothing has been collected. The live row proves
+   the contradiction: type `pos_commission_receivable`, status `settled`, settledAt
+   set, on a CASH_IN_DRAWER sale. The type said receivable; the lifecycle said paid.
+
+   THE INVARIANT: `settled` means the corresponding obligation has been VERIFIED as
+   settled. It is never a by-product of creation.
+
+   Callers that genuinely settle at creation — a wallet credit, a completed transfer,
+   a platform revenue booking against money already received — pass nothing and keep
+   the previous behaviour exactly. Only a caller that knows the money is still owed
+   passes `settlementState: 'outstanding'`, and that entry carries NO settledAt until
+   something verifies payment. */
 async function createLedgerEntry(db, {
   type, amountCents, currency = 'KES', debitAccount, creditAccount,
   description, orderId, sellerId, riderId, buyerId, category,
   metadata = {}, createdBy = 'system', idempotencyKey,
+  settlementState = 'settled',
 }) {
+  if (settlementState !== 'settled' && settlementState !== 'outstanding') {
+    throw new Error(`settlementState must be 'settled' or 'outstanding' (got ${settlementState})`);
+  }
   if (!idempotencyKey)                              throw new Error('idempotencyKey is required');
   if (!Number.isInteger(amountCents) || amountCents <= 0)
     throw new Error(`amountCents must be a positive integer (got ${amountCents})`);
@@ -99,12 +120,17 @@ async function createLedgerEntry(db, {
     buyerId:        buyerId     || null,
     category:       category    || null,
     metadata,
-    status:         'settled',
+    status:         settlementState,
     reversalRef:    null,
     createdBy,
     idempotencyKey,
     createdAt:      admin.firestore.FieldValue.serverTimestamp(),
-    settledAt:      admin.firestore.FieldValue.serverTimestamp(),
+    /* settledAt exists ONLY when the money is actually settled. An outstanding
+       receivable carries no settlement timestamp — status and settledAt must never
+       disagree, because a reconciliation reads them together. */
+    settledAt:      settlementState === 'settled'
+                      ? admin.firestore.FieldValue.serverTimestamp()
+                      : null,
   };
 
   await db.runTransaction(async (txn) => {
