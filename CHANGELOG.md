@@ -1,3 +1,61 @@
+## [2026-08-29] — P0 deploy safety: rollback guard no longer fails open — CANDIDATE, not deployed
+
+Branch `fix/deploy-guard-fail-closed`, cut from current live `712fb34`. **Deployment infrastructure,
+deliberately NOT folded into the P9 candidate** — the guard protects every deploy, not just that one.
+
+**The defect.** `guard-no-rollback.js` resolved any unreadable `version.json` to `null` and printed
+*"live version.json unavailable — allowing deploy (fail-open)"*. The stated reason was that a network
+blip must never block a legitimate release. But that converted **"I could not establish the production
+pointer"** into **"you may overwrite production"** — the one inference a deploy guard must never make.
+
+It is not theoretical. On 2026-08-29 `https://mysokoni.co.ke/version.json` answered **HTTP 500 while
+serving a correct body**, three consecutive requests, and 200 again minutes later. Inside that window
+the guard would have waved through exactly the stale-tree deploy it exists to stop — and it had just
+caught one (the P9 candidate, diverged by 3 commits). Hosting publishes the whole tree, so that
+revert would have been total.
+
+**Three outcomes now, not two:**
+
+```
+  live KNOWN and contained in this tree   -> allow   (same build, or ahead)
+  live KNOWN and not contained            -> REFUSE  (behind or diverged)
+  live NOT KNOWN                          -> REFUSE  (was: allow)
+```
+
+The blip argument is answered by **retries**, not by permission: three attempts with backoff, each
+reported, and only then a verdict. A read that succeeds on the third try still deploys.
+
+Refusals now name the condition rather than collapsing it: `HTTP 500`, `HTTP 503`, `body is not JSON`,
+`no usable commit field`, `commit is not a sha`, `request failed: ECONNRESET`, `timed out`. Those are
+different production conditions, and a deploy log that cannot tell them apart is not evidence.
+
+**Testability without a bypass.** The refusal paths cannot be exercised against real production, so the
+guard accepts `SOKONI_LIVE_VERSION_URL` — **confined to loopback** (`127.0.0.1` / `localhost`), ignored
+with a printed notice anywhere else, and announcing `*** TEST MODE ***` plus *"this run proves NOTHING
+about a real deploy"* whenever it is in effect. A guard that could be silently aimed at a fake pointer
+would be worse than the fail-open it replaces, so section 0 of the suite proves the confinement.
+
+**New `scripts/test-deploy-rollback-guard.js` — 27/0.** Covers allow-when-at-live, allow-when-ahead,
+refuse-when-diverged, all seven unknown-pointer conditions, a CONTROL that the string "allowing deploy"
+never appears on a refusal path, and a blip case (500, 500, 200) that still deploys after 3 requests.
+
+**A harness bug caught on the way.** The first run used `spawnSync`, which blocks this process's event
+loop — and this process is also the HTTP server the child must call. Every request timed out at 8000ms,
+and all seven refusal cases reported PASS **for the wrong reason**: they refused because nothing
+answered, not because of the response under test. Converted to async `spawn`; the reasons are now the
+real ones. A harness that cannot serve the request it is testing proves nothing.
+
+**Unchanged:** the lineage comparison, the divergence refusal, and behaviour against real production
+(verified: *"tree is at the live commit (712fb34) — allowing redeploy"*).
+
+**Known limitation, unchanged and still honest:** a worktree pinned to a commit from before this guard
+existed does not run it at all. The durable cure remains operational — deploy only from the latest
+branch.
+
+**Not deployed. Production `712fb34` · HOLD · deployment NONE.** This should land before the guard is
+relied on for a P9 production authorization, otherwise the mechanism that caught the stale candidate
+can vanish during a transient 500.
+
 ## [2026-08-28] — Home logo 7-tap → Admin OS (/admin-os) · reconciled onto live b2c9cb4 — CANDIDATE, not deployed
 
 **Not deployed.** Branch `rc/logo-7tap-live` — the 7-tap candidate (`4642314`, originally off `a58afc2`)
