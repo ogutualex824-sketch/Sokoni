@@ -12,12 +12,21 @@
  *
  * This guard runs as the FIRST hosting predeploy hook. It reads the version.json
  * already live in production and compares its commit to this worktree's HEAD:
- *   - HEAD == live commit          → redeploy of the same build, allowed.
- *   - HEAD is an ANCESTOR of live   → this tree is BEHIND live → ROLLBACK → abort.
- *   - otherwise (ahead / diverged / live commit unknown here) → allowed.
+ * THREE OUTCOMES, NOT TWO:
+ *   - live KNOWN and contained in this tree  → allowed (same build, or ahead).
+ *   - live KNOWN and not contained           → BEHIND or DIVERGED → refuse.
+ *   - live NOT KNOWN                         → refuse.
  *
- * Fail-open by design: if production is unreachable or version.json is missing,
- * the deploy proceeds — a network blip must never block a legitimate release.
+ * THE THIRD ONE USED TO BE "ALLOWED", AND THAT WAS THE BUG. Fail-open converted
+ * "I could not establish the production pointer" into "you may overwrite
+ * production" — the single inference a deploy guard must never make. Measured on
+ * 2026-08-29: version.json answered HTTP 500 while serving a CORRECT body, three
+ * consecutive requests, then 200 again minutes later. Inside that window this
+ * guard would have waved through exactly the stale-tree deploy it exists to stop.
+ *
+ * A blip must still not block a legitimate release, so the read is RETRIED before
+ * it is believed. What changed is the verdict after the retries are exhausted:
+ * unknown is now a refusal, not permission.
  *
  * LIMITATION (honest): a worktree pinned to a commit from BEFORE this guard was
  * added does not carry this hook and so cannot be stopped by it. The durable cure
@@ -28,39 +37,101 @@
 
 const cp    = require('child_process');
 const https = require('https');
+const http  = require('http');
 
-const LIVE_VERSION_URL = 'https://mysokoni.co.ke/version.json';
+const LIVE_VERSION_URL_DEFAULT = 'https://mysokoni.co.ke/version.json';
+
+/* TEST OVERRIDE, LOOPBACK ONLY. The refusal paths below are the whole point of this
+   guard and they cannot be exercised against real production, so the suite needs to
+   serve controlled responses. The override is confined to 127.0.0.1/localhost and
+   announces itself on every run: pointed anywhere else it is ignored, and when it IS
+   in effect the deploy log says so in capitals. A guard that could be silently aimed
+   at a fake pointer would be worse than the fail-open it replaces. */
+const _override = process.env.SOKONI_LIVE_VERSION_URL || '';
+const _loopback = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(_override);
+if (_override && !_loopback) {
+  console.error('  [rollback-guard] IGNORING SOKONI_LIVE_VERSION_URL — not a loopback address.');
+}
+const LIVE_VERSION_URL = _loopback ? _override : LIVE_VERSION_URL_DEFAULT;
+if (_loopback) {
+  console.error('  [rollback-guard] *** TEST MODE *** reading the live pointer from ' + LIVE_VERSION_URL);
+  console.error('  [rollback-guard] *** this run proves NOTHING about a real deploy ***');
+}
 const TIMEOUT_MS = 8000;
+const READ_ATTEMPTS = 3;      /* a blip must not block a release … */
+const RETRY_MS = 1200;        /* … but an unanswered pointer must not permit one */
 
 function git(args) {
   try { return cp.execSync('git ' + args, { encoding: 'utf8' }).trim(); }
   catch (e) { return ''; }
 }
 
-function fetchLiveVersion() {
+/* Returns { version } on success, or { why } naming precisely what could not be
+   established. "null" is deliberately no longer a return value: the caller must be
+   able to say WHY the pointer is unknown, because "unreachable", "500", "not JSON"
+   and "no commit field" are different production conditions and a deploy log that
+   cannot tell them apart is not evidence of anything. */
+function readLiveVersionOnce() {
   return new Promise((resolve) => {
-    const req = https.get(
+    const req = (LIVE_VERSION_URL.startsWith('http://') ? http : https).get(
       LIVE_VERSION_URL,
       { timeout: TIMEOUT_MS, headers: { 'Cache-Control': 'no-cache' } },
       (res) => {
-        if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+        const status = res.statusCode;
         let body = '';
         res.on('data', (c) => { body += c; });
-        res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { resolve(null); } });
+        res.on('end', () => {
+          if (status !== 200) return resolve({ why: 'HTTP ' + status });
+          let j;
+          try { j = JSON.parse(body); }
+          catch (e) { return resolve({ why: 'body is not JSON (' + body.slice(0, 40).replace(/\s+/g, ' ') + ')' }); }
+          if (!j || !j.commit || j.commit === 'unknown') return resolve({ why: 'no usable commit field' });
+          if (!/^[0-9a-f]{7,40}$/.test(String(j.commit))) return resolve({ why: 'commit is not a sha: ' + String(j.commit).slice(0, 24) });
+          return resolve({ version: j });
+        });
       }
     );
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', (e) => resolve({ why: 'request failed: ' + ((e && e.code) || e) }));
+    req.on('timeout', () => { req.destroy(); resolve({ why: 'timed out after ' + TIMEOUT_MS + 'ms' }); });
   });
 }
 
-(async () => {
-  const live = await fetchLiveVersion();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  if (!live || !live.commit || live.commit === 'unknown') {
-    console.log('  [rollback-guard] live version.json unavailable — allowing deploy (fail-open).');
-    return;
+/* Retry before believing a failure — a single blip must not block a release. */
+async function fetchLiveVersion() {
+  let last = null;
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt++) {
+    last = await readLiveVersionOnce();
+    if (last.version) return last;
+    if (attempt < READ_ATTEMPTS) {
+      console.log('  [rollback-guard] live version.json unreadable (' + last.why + ') — retry ' + attempt + '/' + (READ_ATTEMPTS - 1));
+      await sleep(RETRY_MS * attempt);
+    }
   }
+  return last;
+}
+
+(async () => {
+  const read = await fetchLiveVersion();
+
+  if (!read || !read.version) {
+    console.error('');
+    console.error('  ✖ [rollback-guard] REFUSING TO DEPLOY — the production pointer could not be established.');
+    console.error('      Reason after ' + READ_ATTEMPTS + ' attempts: ' + ((read && read.why) || 'unknown'));
+    console.error('      ' + LIVE_VERSION_URL);
+    console.error('');
+    console.error('      This is NOT "probably fine". Without the live commit this guard cannot tell a');
+    console.error('      legitimate release from a stale worktree overwriting production, and hosting');
+    console.error('      publishes the whole tree. It used to allow the deploy here; that turned an');
+    console.error('      unanswered question into permission.');
+    console.error('');
+    console.error('      Do: re-check ' + LIVE_VERSION_URL + ' returns HTTP 200 and try again.');
+    console.error('      A 500 there is a production condition to investigate, not a step to skip.');
+    console.error('');
+    process.exit(1);
+  }
+  const live = read.version;
 
   const head = git('rev-parse HEAD');
   if (!head) {
