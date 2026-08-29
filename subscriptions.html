@@ -474,7 +474,18 @@ function renderBoosts(){
     </div>`).join("");
 }
 
-async function buyBoost(key, name){
+async function buyBoost(key, name, listingId){
+  /* A boost must target a SPECIFIC listing — the server features THAT product on
+     settlement. Without a listingId a boost would take money and feature nothing
+     (the server already refuses to feature it: resource_missing), so we fail
+     explicitly BEFORE any payment rather than charging for a no-op. Boosting a
+     specific listing is done from the seller dashboard (its Boost control passes
+     the productId through SokoniPay.boostListing). */
+  const _listingId = String(listingId || '').trim();
+  if(!_listingId){
+    (window._skToast||alert)("Choose a listing to boost — open the item in your shop and tap Boost. A boost applies to one specific listing.");
+    return;
+  }
   /* Server-authoritative boost (Slice 5). The amount is minted by createPaymentIntent
      (purpose:'boost') from the server price map — NOT a client-held table — so a tampered
      client can no longer set the price; the STK enforces the server intent's amount. The
@@ -484,7 +495,7 @@ async function buyBoost(key, name){
   let _intent = null;
   try {
     const _cf = window.sokoniCallable('createPaymentIntent');
-    const _r  = await _cf({ purpose: 'boost', boostKey: key });
+    const _r  = await _cf({ purpose: 'boost', boostKey: key, listingId: _listingId });
     _intent = _r && _r.data;
   } catch(e){
     (window._skToast||alert)("Could not start boost payment: " + ((e && e.message) || 'please try again.'));
