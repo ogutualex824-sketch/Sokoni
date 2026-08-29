@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Release B — HOSTING-ONLY deployment.
+#
+# Deploys ONLY Firebase Hosting. It CANNOT deploy Cloud Functions, Firestore
+# rules, or indexes: the `--only hosting` scope makes that structurally
+# impossible, and there are deliberately NO functions/firestore/storage steps in
+# this workflow.
+#
+# The COMPLETE firebase.json hosting predeploy chain runs automatically as part
+# of `firebase deploy --only hosting` — nothing here skips, weakens, or bypasses
+# it:
+#   guard-no-rollback · guard-deploy-cooldown · bump-sw-version · generate-version
+#   · predeploy-syntax-gate · verify-commission-single-source · perf-guard
+#   · audit-base64-writes · gate-inventory · gate-inventory-writers
+#   · check-money-toast-safety
+#
+# Manual-dispatch only, guarded by an explicit confirmation input, so a hosting
+# release to production never happens without a human deliberately triggering it.
+# This workflow does NOT touch deploy.yml, gate.js, firebase.json, or any gate.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy Hosting Only — Release B
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "hosting" to confirm a HOSTING-ONLY production deploy'
+        required: true
+        default: ""
+
+# One hosting deploy at a time; never cancel an in-flight release mid-publish.
+concurrency:
+  group: firebase-hosting-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-hosting:
+    name: Deploy Hosting (production · --only hosting)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Refuse to run unless the operator explicitly confirmed.
+    if: ${{ github.event.inputs.confirm == 'hosting' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # The hosting predeploy chain's inventory gates (gate-inventory*) spin the
+      # Firestore emulator, which requires a JDK. Pinned so those gates can
+      # always run — the gates themselves are never modified.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Root deps (perf-guard, generate-version, gate-inventory, …) AND functions
+      # deps — both required by the existing hosting predeploy chain.
+      - name: Install dependencies (root + functions)
+        run: npm ci && cd functions && npm ci
+
+      # HOSTING ONLY. Runs the full firebase.json hosting predeploy chain first.
+      # No `--only functions`, no `--only firestore`, no `--only storage` — this
+      # cannot deploy Functions, rules, or indexes.
+      - name: Deploy hosting only (full predeploy chain runs automatically)
+        run: npx -y firebase-tools deploy --only hosting --project sokoni-aeb26
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
