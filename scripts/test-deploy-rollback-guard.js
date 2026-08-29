@@ -69,7 +69,13 @@ const ok = (sha) => ({ status: 200, body: { commit: sha, commitShort: String(sha
   {
     const r = await runGuard('https://evil.example/version.json');
     ck('a non-loopback override is ignored', /IGNORING SOKONI_LIVE_VERSION_URL/.test(r.out));
-    ck('...and the guard falls back to real production', /live commit|DIVERGED|REFUSING/.test(r.out), 'reached the real decision path');
+    /* Assert the SEMANTICS, not one message variant. This first read 'tree is at the
+       live commit' and broke the moment HEAD advanced past live and the wording became
+       'contains live'. What matters is that TEST MODE was never entered — so the real
+       endpoint was used — and that a verdict was actually reached. */
+    ck('...and the guard falls back to real production',
+       !/TEST MODE/.test(r.out) && /(allowing deploy|REFUSING TO DEPLOY)/.test(r.out),
+       (r.out.split('\n').filter(Boolean).pop() || '').trim().slice(0, 64));
 
     const s = await serve([ok(HEADSHA)]);
     const t = await runGuard('http://127.0.0.1:' + s.port + '/version.json');
@@ -106,6 +112,39 @@ const ok = (sha) => ({ status: 200, body: { commit: sha, commitShort: String(sha
       s.srv.close();
       ck('a DIVERGED live commit refuses', r.code === 1, 'exit=' + r.code);
       ck('...and says the live commit is not contained', /NOT contained in this tree/.test(r.out));
+    }
+  }
+
+  head('2b - live MOVED after the re-home -> refused at deploy time');
+  {
+    /* THE TWO-CHECK REQUIREMENT, stated as the scenario it protects:
+         12:00  re-home onto the then-live commit
+         12:07  production advances to something else
+         12:10  deploy requested
+       The re-home froze a pointer; this guard queries a FRESH one. The candidate
+       cannot contain a commit that appeared after it was built, so the deploy stops
+       instead of publishing an obsolete tree. A successful re-home is therefore
+       never, by itself, permission to deploy.
+
+       Modelled here by reporting a live commit this tree cannot contain: HEAD's own
+       child does not exist, so the P9 candidate stands in for "somewhere else". */
+    let moved = null;
+    try { moved = cp.execSync('git rev-parse candidate/p9-entry-reconciled', { cwd: ROOT, encoding: 'utf8' }).trim(); } catch (_) {}
+    if (!moved) { ck('SKIP — no branch available to model a moved pointer', true, 'not a pass for the case'); }
+    else {
+      const s = await serve([ok(moved)]);
+      const r = await runGuard('http://127.0.0.1:' + s.port + '/version.json');
+      s.srv.close();
+      ck('a live commit this tree cannot contain -> REFUSES', r.code === 1, 'exit=' + r.code);
+      ck('...and the refusal is about containment, not about being behind',
+         /NOT contained in this tree/.test(r.out));
+      ck('CONTROL the same tree deploys when live is what it was built on',
+         (await (async () => {
+           const s2 = await serve([ok(HEADSHA)]);
+           const r2 = await runGuard('http://127.0.0.1:' + s2.port + '/version.json');
+           s2.srv.close();
+           return r2.code === 0;
+         })()), 'so the refusal above is about the moved pointer, not a tree that never deploys');
     }
   }
 
