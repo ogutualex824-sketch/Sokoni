@@ -4684,6 +4684,34 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
   };
 }
 
+/* ── 48-hour receivable: which commissions it owns ──────────────────────────
+   Marketplace per-sale commission is collected as a 48-hour receivable, not a
+   monthly invoice. The primary signal is `categoryForHub`, the vocabulary
+   already used for pricing: the seller-sale default hub "marketplace" and its
+   aliases "pos", "shopping" and "b2b" resolve to "marketplace" there and here.
+
+   `product`/`products` are legitimate marketplace seller-sale vocabulary that the
+   rate ALIASES table deliberately does NOT carry — aliasing them would move their
+   RATE off the default, a commercial change this receivable work must not make.
+   They still belong to the seller 48-hour model, so the BILLING MODEL — and only
+   the model, never the rate — recognises them explicitly. This is intentionally a
+   model-only widening: `resolveRate("product")` is untouched (stays the default
+   rate). The hub is normalised exactly as resolveRate normalises a key, so
+   "Product" and " PRODUCTS " classify identically. */
+const COMMISSION_DUE_HOURS = 48;
+function _is48hCommission(hub) {
+  try {
+    if (require("./commission-config").categoryForHub(hub) === "marketplace") return true;
+    const hn = String(hub || "").trim().toLowerCase();
+    return hn === "product" || hn === "products";
+  } catch (_e) {
+    /* Config unreadable — fall back to MONTHLY, the pre-existing behaviour.
+       Failing closed here means "bill it the old way", never "start a 48-hour
+       clock nobody can see". */
+    return false;
+  }
+}
+
 /* ── Auto-record commission when a seller payment is confirmed ── */
 exports.onSellerPaymentCreated = onDocumentCreated(
   "sellerPayments/{paymentId}",
@@ -4757,6 +4785,36 @@ exports.onSellerPaymentCreated = onDocumentCreated(
 
         status: "pending",
         invoiceId: null,
+
+        /* ── BILLING MODEL — the migration cutoff, and the ONLY thing that
+              decides which collection system owns this row ──────────────────
+           Marketplace per-sale commission moved from MONTHLY invoicing to a
+           48-hour receivable. Both systems read commissionLedger, so a row that
+           did not say which model it belongs to would be billed twice: once by
+           generateMonthlyInvoices and once by the 48-hour sweep.
+
+           The cutoff is FIELD PRESENCE AT CREATION, deliberately not a date
+           comparison. Every row written before this change has no
+           `billingModel` and no `dueAt`:
+             • generateMonthlyInvoices skips only PER_SALE_48H, so historical
+               rows keep their monthly treatment untouched;
+             • the 48-hour sweep requires billingModel === PER_SALE_48H, so a
+               historical pending row can NEVER acquire a deadline or be judged
+               overdue retroactively.
+           A date cutoff would have done exactly that to every old pending row
+           the moment it shipped. */
+        billingModel: _is48hCommission(hub) ? "PER_SALE_48H" : "MONTHLY",
+        /* Absolute deadline, stamped once at creation and never recomputed —
+           a receivable whose due date can move is not a receivable. */
+        dueAt: _is48hCommission(hub)
+          ? admin.firestore.Timestamp.fromMillis(Date.now() + COMMISSION_DUE_HOURS * 3600000)
+          : null,
+        collectionStatus: _is48hCommission(hub) ? "DUE" : null,
+        penaltyKES: 0,
+        totalOutstanding: _is48hCommission(hub) ? totalOwed : null,
+        paidAt: null,
+        reminderSentAt: null,
+
         period,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -5199,13 +5257,31 @@ exports.generateMonthlyInvoices = onSchedule(
       .where("period", "==", period)
       .get();
 
-    /* Group by seller */
+    /* Group by seller.
+
+       ── DOUBLE-BILLING GUARD ────────────────────────────────────────────────
+       This query selects on status+period only — it has no hub or category
+       filter, so before this guard it swept up EVERY pending row including the
+       marketplace commissions now owned by the 48-hour receivable. A seller
+       would have been billed for the same sale twice: once here on the 1st of
+       the month, once by the 48-hour sweep.
+
+       Filtered in code rather than in the query on purpose. A Firestore
+       `where('billingModel','!=','PER_SALE_48H')` EXCLUDES documents where the
+       field is absent — which is every historical row — so the query form would
+       have silently stopped invoicing all pre-migration commission. Field
+       presence is the cutoff, and absent means MONTHLY. */
     const bySellerMap = {};
+    let _skipped48h = 0;
     snap.forEach(d => {
       const data = d.data();
+      if (data.billingModel === "PER_SALE_48H") { _skipped48h++; return; }
       if (!bySellerMap[data.sellerUid]) bySellerMap[data.sellerUid] = [];
       bySellerMap[data.sellerUid].push({ id: d.id, ...data });
     });
+    if (_skipped48h) {
+      console.log(`[revenue] ${_skipped48h} marketplace row(s) skipped — owned by the 48-hour receivable, not monthly invoicing.`);
+    }
 
     const batch  = db.batch();
     let invoiceCount = 0;
@@ -11129,6 +11205,20 @@ exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
    never gain its rider. */
 exports.onPackageRequestChanged       = _messagesMod.onPackageRequestChanged;
 exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
+
+/* ══════════════════════════════════════════════════════════════════
+   48-HOUR COMMISSION RECEIVABLE — lifecycle for marketplace per-sale
+   commission stamped by onSellerPaymentCreated (billingModel PER_SALE_48H).
+   Re-exported by name; a trigger not re-exported never deploys, so the
+   receivable would age in the ledger with nothing acting on it.
+   settleConfirmedPayment is NOT a Cloud Function — it is the internal
+   settlement primitive invoked by the server-authoritative collection rail
+   (mpesaC2BConfirmation), never called by a client.
+══════════════════════════════════════════════════════════════════ */
+const _commissionCollection = require("./commission-collection");
+exports.sweepCommissionDue   = _commissionCollection.sweepCommissionDue;
+exports.getCommissionBalance = _commissionCollection.getCommissionBalance;
+exports.getSellerRestriction = _commissionCollection.getSellerRestriction;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0

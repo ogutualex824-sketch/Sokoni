@@ -257,6 +257,31 @@ const PURPOSES = {
       };
     },
   },
+
+  /* ── Commission collection (48-hour marketplace receivable) ───────────
+     A seller settling their outstanding platform commission. The amount is the
+     seller's own current outstanding, computed server-side from the OPEN
+     48-hour commissionLedger rows — the client sends NO amount and cannot send
+     one that would be honoured. resourceId is the paying seller's uid, which is
+     also `ownerUid` on the minted intent, so the collection rail attributes the
+     confirmed payment back to the correct seller without trusting the callback.
+     A seller who owes nothing cannot mint an intent — there is nothing to pay. */
+  commission_collection: {
+    resourceType: 'commissionObligation',
+    async price(uid) {
+      const outstanding = await require('./commission-collection').computeOutstandingKES(uid);
+      if (!(outstanding > 0)) {
+        fail('failed-precondition', 'No outstanding commission to pay.');
+      }
+      return {
+        amountCents: Math.round(outstanding * 100),
+        currency: 'KES',
+        resourceType: 'commissionObligation',
+        resourceId: String(uid),
+        metadata: { kind: 'commission_48h' },
+      };
+    },
+  },
 };
 
 /**

@@ -293,6 +293,43 @@ exports.mpesaC2BConfirmation = onRequest(_OPTS, async (req, res) => {
       ref: p.billRef, ownerUid: intent.ownerUid || null,
     }, { merge: true }).catch(() => {});
 
+    /* ── COMMISSION COLLECTION — the server-authoritative settlement trigger ──
+       This is the ONLY thing that lets a 48-hour receivable be marked collected,
+       and it is reached from a place a client cannot forge: a Safaricom C2B
+       confirmation that has already been idempotency-claimed (c2bEvents/{transId})
+       and amount-verified against a server-minted intent above. A browser calling
+       settleConfirmedPayment directly is impossible — it is not a Cloud Function.
+
+       Guarded on `applied` so a redelivery (which leaves applied=false because the
+       intent was already terminal) never settles a second tranche, and on the
+       intent's own purpose so ONLY a commission-collection payment reaches the
+       receivable rail — an IntaSend or ordinary C2B payment cannot.
+
+       settleConfirmedPayment additionally claims commissionSettlements/{transId}
+       before touching a row, so even if this line ran twice the settlement is a
+       no-op the second time. paymentRef is the M-Pesa TransID (globally unique per
+       payment); the amount is the verified figure; the seller is the intent owner,
+       never a value from the callback. Failure here is logged, never bounced — the
+       money has already arrived and re-driving the callback would not help. */
+    if (applied && intent.purpose === 'commission_collection') {
+      try {
+        const r = await require('./commission-collection').settleConfirmedPayment({
+          sellerUid: intent.ownerUid,
+          amountKES: paid,
+          paymentRef: p.transId,
+          source: 'mpesa_c2b',
+        });
+        console.log('[c2bConfirmation] commission settled', {
+          transId: p.transId, uid: intent.ownerUid, settled: r && r.settled, stillOwed: r && r.stillOwed,
+        });
+      } catch (e) {
+        console.error('[c2bConfirmation] commission settlement failed (money received; will reconcile)', {
+          transId: p.transId, uid: intent.ownerUid, err: e && e.message,
+        });
+        await eventRef.set({ commissionSettleError: String((e && e.message) || e).slice(0, 300) }, { merge: true }).catch(() => {});
+      }
+    }
+
     /* Observability through the EXISTING timeline vocabulary, so a C2B payment
        reads the same way as an STK one on the same dashboards. Deliberately
        reuses payment-timeline's canonical STAGES rather than inventing C2B-only
