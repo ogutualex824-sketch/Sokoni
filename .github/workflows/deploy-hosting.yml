@@ -42,6 +42,20 @@ jobs:
     if: ${{ github.event.inputs.confirm == 'hosting' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # FULL history, not the default shallow clone.
+          #
+          # guard-no-rollback.js compares this tree against the commit currently live
+          # (git merge-base --is-ancestor <live> <HEAD>). With fetch-depth: 1 the live
+          # commit is simply absent from the object store, and the guard says so
+          # itself: "Also reached when the live commit is not in this object store.
+          # Fetching is the caller's job; an unknown live commit is treated as
+          # diverged" — so it REFUSES. The workflow could then only ever deploy the
+          # commit already live, and never ship a release.
+          #
+          # This supplies the history the guard requires. It does not weaken, skip or
+          # bypass any gate — it is what lets the gate run at all.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
