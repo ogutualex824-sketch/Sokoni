@@ -18,6 +18,8 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
     .af-wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
+    .af-back{display:inline-flex;align-items:center;gap:7px;color:var(--sub);text-decoration:none;font-size:.85rem;font-weight:500;margin-bottom:18px;transition:color .15s}
+    .af-back:hover{color:var(--g)}
     h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
     .af-sub{color:var(--sub);font-size:.875rem;margin-bottom:24px}
     .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
@@ -68,6 +70,7 @@
 </head>
 <body>
 <div class="af-wrap">
+  <a href="/admin-os.html" class="af-back" aria-label="Back to Admin Console">&#8592;&nbsp;Admin Console</a>
   <h1>Feedback Triage</h1>
   <div class="af-sub">Review and action user-submitted feedback</div>
 
