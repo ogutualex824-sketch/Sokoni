@@ -144,12 +144,28 @@ function runBump(url, scriptPath) {
       const changed = broken !== floorSrc;
       ck('CONTROL the sabotage actually altered the script', changed,
          'an unchanged copy would make the control vacuous');
-      const { server, url } = await serveVersion(564);
+      /* THE CONTROL ROTTED, and it rotted silently into uselessness.
+
+         It served live v564 and expected the sabotage to compute v563 — the exact pair
+         that shipped. But the sabotage computes max(prevN, 562) + 1, and prevN is the
+         COMMITTED counter, which was 560 when this was written and is now 598. So it
+         computed 599 against a hardcoded live of 564: no under-count, control fails, and
+         the suite could no longer show it detects anything.
+
+         The property has nothing to do with those specific numbers. It is: a bump that
+         IGNORES live under-counts whenever live is ahead of the committed value. So serve
+         a live counter above what the sabotage can produce, and derive the expectation
+         from the same expression the sabotage uses. Now it cannot rot as the tree
+         advances. */
+      const sabotageWouldCompute = Math.max(committed, 562) + 1;
+      const liveAhead = sabotageWouldCompute + 1;
+      const { server, url } = await serveVersion(liveAhead);
       try {
         const r = await runBump(url, sab);
-        ck('CONTROL the OLD behaviour reproduces the regression', r.computed === 563,
-           'sabotaged copy computed v' + r.computed + ' against live v564 — exactly what shipped');
-        ck('CONTROL section 1 would therefore have FAILED on the old code', !(r.computed > 564),
+        ck('CONTROL the OLD behaviour reproduces the regression', r.computed === sabotageWouldCompute,
+           'sabotaged copy computed v' + r.computed + ' against live v' + liveAhead +
+           ' — it ignored live, exactly as the code that shipped v563 did');
+        ck('CONTROL section 1 would therefore have FAILED on the old code', !(r.computed > liveAhead),
            'so the assertions above are load-bearing, not tautological');
       } finally { server.close(); }
     } finally { fs.existsSync(sab) && fs.unlinkSync(sab); }
