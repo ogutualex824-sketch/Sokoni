@@ -966,10 +966,17 @@ class BtAdapter {
       });
       return [{ id: d.id, name: d.name || 'Bluetooth Printer', type: 'bluetooth', _dev: d }];
     } catch(e) {
-      /* NotFoundError is thrown both when the user cancels the chooser AND when zero
-         devices matched. With acceptAllDevices the latter is effectively impossible, so a
-         throw here means the user dismissed the picker — return empty, no error surfaced. */
-      console.log('[BtAdapter] discover cancelled/empty:', e && e.name);
+      /* Only NotFoundError means the user dismissed the chooser. Everything else is a
+         REAL failure — SecurityError (permissions policy, or no user gesture),
+         NotSupportedError (no adapter), NetworkError — and flattening those to [] made
+         a blocked page indistinguishable from a cancelled one: the caller reported
+         'no printer chosen' for a chooser that never opened. Record it, then rethrow
+         anything that is not a dismissal. */
+      var _n = (e && e.name) || '';
+      _spTrace('discover:error', { name: _n, message: e && e.message });
+      try { root.__skLastBtError = { name: _n, message: (e && e.message) || '', at: Date.now() }; } catch (_) {}
+      console.log('[BtAdapter] discover failed:', _n, e && e.message);
+      if (_n && _n !== 'NotFoundError') throw e;
       return [];
     }
   }

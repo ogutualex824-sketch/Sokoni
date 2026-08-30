@@ -1978,6 +1978,24 @@
   /* Web Bluetooth presence is the difference between 'not paired yet' and 'this browser
      cannot do this at all'. Reporting them identically is what made the button look dead. */
   function _btSupported () { try { return !!(navigator && navigator.bluetooth); } catch (_) { return false; } }
+  /* Turn a DOMException into something a shopkeeper can act on. The NAME is the
+     reliable signal; messages vary by Chrome version. */
+  function _btReason (name, msg) {
+    var m = String(msg || '');
+    if (name === 'SecurityError' && /gesture/i.test(m))
+      return 'The tap was not registered as a direct action. Tap Connect Printer once, firmly, without holding.';
+    if (name === 'SecurityError')
+      return 'Bluetooth is blocked for this page. If you added the app to your home screen, fully close it and reopen, then try again.';
+    if (name === 'NotSupportedError')
+      return 'No Bluetooth adapter available to this browser.';
+    if (name === 'NotAllowedError')
+      return 'Bluetooth permission was denied. Allow Nearby devices for Chrome in Android settings, then retry.';
+    if (name === 'NetworkError')
+      return 'Bluetooth error. Switch the printer off and on, keep it close, then retry.';
+    if (name === 'InvalidStateError')
+      return 'Bluetooth is turned off. Switch it on, then tap Connect Printer.';
+    return 'Bluetooth could not start scanning (' + name + ').' + (m ? ' ' + m : '');
+  }
   if (_eng && _eng.on) {
     /* These run INSIDE the engine emit loop. An exception here could break the
        engine own state machine, so each is contained at the boundary. */
@@ -2021,7 +2039,8 @@
           reason: 'This browser cannot use Bluetooth printing. Open the site in Chrome on Android, or install the app.' });
         return false;
       }
-      _psSet({ supported: true, reason: 'Opening the Bluetooth chooser…' });
+      /* Deliberately NO _psSet here: it re-renders the Devices card via innerHTML and
+         destroys the button being tapped, immediately before requestDevice() runs. */
       try {
         var list = await _eng.discoverBy('bluetooth');
         if (list && list[0]) {
@@ -2030,18 +2049,19 @@
           _psSet({ connected: true, name: list[0].name || 'Printer', reason: '' });
           return true;
         }
-        /* discover() returns [] BOTH when the user dismisses the chooser and when nothing
-           matched. With acceptAllDevices the latter is effectively impossible, so this is a
-           dismissal — not an error, but it must not look like a dead button. */
-        _psSet({ connected: false, reason: 'No printer chosen. Tap Connect Printer and pick your P58E from the list.' });
+        /* The engine now rethrows real failures, so [] genuinely means dismissal — unless
+           it recorded an error, which happens when the chooser never opened at all. */
+        var le = null; try { le = window.__skLastBtError; } catch (_) {}
+        if (le && le.name && (Date.now() - (le.at || 0)) < 15000) {
+          _psSet({ connected: false, reason: _btReason(le.name, le.message) });
+        } else {
+          _psSet({ connected: false, reason: 'No printer chosen. Tap Connect Printer and pick your P58E from the list.' });
+        }
       } catch (e) {
-        var m = (e && (e.message || e.name)) || 'Unknown Bluetooth error';
-        if (/SecurityError|permissions policy|disallowed/i.test(m))
-          m = 'The browser blocked Bluetooth for this page. Fully close and reopen the app, then try again.';
-        else if (/User cancelled|NotFoundError/i.test(m))
-          m = 'No printer chosen. Tap Connect Printer and pick your P58E from the list.';
-        else if (/GATT|network|Connection/i.test(m))
-          m = 'Found the printer but could not connect. Switch it off and on, keep it close, then retry.';
+        /* Route through the SAME translator. The previous chain tested e.message for
+           'SecurityError', but for a DOMException that string lives in e.NAME - and m
+           preferred message, so the single most important case never matched. */
+        var m = _btReason((e && e.name) || '', (e && e.message) || '');
         _psSet({ connected: !!_eng.connected, reason: m });
       }
       return false;
