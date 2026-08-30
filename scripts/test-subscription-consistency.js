@@ -41,7 +41,21 @@ const ALLOWANCE = /\b(listings|listings_limit|maxListings|listingLimit|maxProduc
    verify-listing-limit-single-source declares the field names in its matcher and
    quotes real values in its classification evidence, so it read as the fourteenth
    catalogue and blocked a deploy on its own existence. */
-const SKIP = /node_modules|[\\/]\.claude[\\/]|[\\/]\.git[\\/]|[\\/]docs[\\/]|[\\/]archive[\\/]|cf-complete-audit|test-subscription-consistency|verify-listing-limit-single-source|perf-guard/;
+/* `[\\/]scripts[\\/]test-` generalises the three tooling files already named below
+   (test-subscription-consistency, verify-listing-limit-single-source, perf-guard). A test
+   that CHECKS a plan limit has to mention that limit, and counting the assertion as a
+   definition is a false positive: scripts/test-premium-catalogue-billing.js (a58afc2,
+   Slice 6) tripped this ratchet with the single line
+
+       (/listings:999/.test(plansData) && /Unlimited leads/.test(plansData)) ? ok(...)
+
+   which asserts that subscriptions.html PRESERVES a limit. It defines nothing, is loaded by
+   no page and required by no function, so it cannot grant an entitlement at runtime.
+
+   Deliberately NOT excluding all of scripts/: only test- harnesses. And deliberately not
+   raising the baseline, which would permanently license one more real catalogue. The
+   detector still counts every runtime definition, proved by control below. */
+const SKIP = /node_modules|[\\/]\.claude[\\/]|[\\/]\.git[\\/]|[\\/]docs[\\/]|[\\/]archive[\\/]|[\\/]scripts[\\/]test-|cf-complete-audit|test-subscription-consistency|verify-listing-limit-single-source|perf-guard/;
 
 function walk(dir, out = []) {
   let entries = [];
