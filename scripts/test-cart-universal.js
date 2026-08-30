@@ -175,10 +175,33 @@ console.log('\nB. The rollout did not mangle any file');
      that the page's tags are unchanged apart from gaining sokoni-cart.js. */
   const tagsOf = (src) => (src.match(/<(?:script|link)\b[^>]*(?:src|href)\s*=\s*"[^"]+"/g) || [])
     .map(t => t.replace(/\s+/g, ' ').trim()).sort();
+
+  /* A page created AFTER the migration baseline has no prior version, so it cannot have
+     LOST a tag. git exits 128 for that, and this suite CRASHED — not failed — the moment
+     such a page first gained the service tag (onboarding-landlord.html, created after
+     BASE). A crash is worse than a failure here: it kills the run before the remaining
+     assertions and the mutation controls execute.
+
+     Only "the path is absent at BASE" is tolerated, and it yields an EMPTY prior set, so
+     the loss check still runs and still holds vacuously-but-correctly: nothing existed to
+     lose. Any other git failure still throws, because a silently swallowed git error would
+     turn every page into "lost nothing" and the check would pass while measuring nothing. */
+  function showAtBase (f, enc) {
+    try {
+      return cp.execSync('git show ' + BASE + ':"' + f + '"',
+                         { cwd: ROOT, encoding: enc || 'utf8', maxBuffer: 1e8, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      /* stderr is a Buffer when encoding is 'buffer', so normalise before matching -
+         testing a Buffer against the regex would never match and would rethrow. */
+      const msg = String((e && e.stderr) || '') + String((e && e.message) || '');
+      if (/exists on disk, but not in|does not exist in|path .* does not exist/.test(msg)) return null;
+      throw e;
+    }
+  }
   const overreach = rolled.filter(f => {
     if (PRE.includes(f)) return false;
     const now = tagsOf(read(f));
-    const was = tagsOf(cp.execSync('git show ' + BASE + ':"' + f + '"', { cwd: ROOT, encoding: 'utf8', maxBuffer: 1e8 }));
+    const was = tagsOf(showAtBase(f) || '');
     const hadService = was.some(t => /sokoni-cart\.js/.test(t));
     const gained = now.filter(t => { const i = was.indexOf(t); if (i > -1) { was.splice(i, 1); return false; } return true; });
     /* `was` now holds anything LOST; `gained` anything new.
@@ -226,7 +249,8 @@ console.log('\nB. The rollout did not mangle any file');
   const tailChanged = rolled.filter(f => {
     if (PRE.includes(f)) return false;
     const now = fs.readFileSync(path.join(ROOT, f));
-    const was = cp.execSync('git show ' + BASE + ':"' + f + '"', { cwd: ROOT, encoding: 'buffer', maxBuffer: 1e8 });
+    const was = showAtBase(f, 'buffer');
+    if (was === null) return false;   /* created after BASE: no prior bytes to rewrite */
     return Buffer.compare(now.slice(-8), was.slice(-8)) !== 0;
   });
   ck('B', 'no file had its trailing bytes rewritten', tailChanged.length === 0,

@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Become a Landlord — SOKONI</title>
   <script type="module" src="sokoni-init.js"></script>
+  <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
+       through SokoniCart; without this tag the pip cannot render a count. This page was
+       the only one of the four onboarding-*.html siblings missing it.
+       BLOCKING, exactly as the three siblings do it: pos.html is the single page the
+       cart suite allows to defer this tag, and it is allowed only against a recorded
+       perf-guard baseline. Deferring here would satisfy the ordering rule and still be
+       wrong. -->
+  <script src="sokoni-cart.js"></script>
   <script src="shared-header.js" defer></script>
   <script src="auth-guard.js" defer></script>
   <style>
