@@ -135,14 +135,14 @@ const calcErr = async (opts, cfg) => {
   console.log('\nF. Marketplace is a separate authority and does not inherit POS\n');
   {
     const m = await calc({ orderAmountCents: 350000, category: 'marketplace', sellerId: 'S1' });
-    ck('marketplace RETAINS the deployed 5% policy', m.effectiveRate === 5, m.effectiveRate);
+    ck('marketplace uses its differentiated 3% base, not the POS 5%', m.effectiveRate === 3, m.effectiveRate);
     ck('  ...category marketplace, resolved explicitly', m.category === 'marketplace', m.category);
-    ck('marketplace and pos are the same NUMBER but different AUTHORITIES',
+    ck('marketplace and pos are different authorities',
        m.category === 'marketplace' && CC.resolveRate('pos').category === 'pos');
     const p = await calc({ orderAmountCents: 350000, category: 'product', sellerId: 'S1' });
     ck('live label "product" resolves to marketplace explicitly', p.category === 'marketplace', p.category);
     ck('  ...priced by the marketplace AUTHORITY, not the default arm',
-       p.effectiveRate === 5 && p.category === 'marketplace', p.category + '/' + p.effectiveRate);
+       p.effectiveRate === 3 && p.category === 'marketplace', p.category + '/' + p.effectiveRate);
     const sub = await calc({ orderAmountCents: 48402, category: 'subscription', sellerId: 'S1' });
     ck('live label "subscription" restored to the HISTORICAL 100% policy',
        sub.category === 'subscriptions' && sub.effectiveRate === 100, sub.category + '/' + sub.effectiveRate);
@@ -159,7 +159,7 @@ const calcErr = async (opts, cfg) => {
 
   console.log('\nF2. The DIFFERENTIATED SCHEDULE is intact — nothing flattened to 5%\n');
   {
-    const want = { marketplace: 5, pos: 5, food_delivery: 5, digital_products: 10,
+    const want = { marketplace: 3, pos: 5, food_delivery: 5, digital_products: 10,
                    services: 15, education: 15, jobs: 15, classifieds: 8,
                    hub: 12, subscriptions: 100 };
     for (const [k, v] of Object.entries(want)) {
@@ -171,9 +171,48 @@ const calcErr = async (opts, cfg) => {
        veh.pct === 0 && veh.fixedKES === 2000 && veh.matched, veh.pct + '/' + veh.fixedKES);
     ck('the schedule is genuinely differentiated — not one flat number',
        new Set(Object.values(want)).size >= 5, [...new Set(Object.values(want))].join(','));
-    ck('marketplace and pos are EQUAL but INDEPENDENT authorities',
-       CC.resolveRate('marketplace').pct === CC.resolveRate('pos').pct &&
+    ck('marketplace and pos are SEPARATE authorities with different rates',
+       CC.resolveRate('marketplace').pct !== CC.resolveRate('pos').pct &&
        CC.resolveRate('marketplace').category !== CC.resolveRate('pos').category);
+  }
+
+
+  console.log('\nF3. Marketplace = category base + PACKAGE adjustment; POS bypasses it\n');
+  {
+    const base = CC.resolveRate('marketplace').pct;
+    ck('marketplace base restored to the differentiated 3%', base === 3, base);
+    ck('  ...and is NOT flattened to the POS 5%', base !== CC.resolveRate('pos').pct);
+
+    /* Historical package semantics: a RELATIVE discount on the base, never an absolute rate.
+       Catalogue values from commission-config.js:218 — basic 2, pro 5, enterprise 10. */
+    const cfg = { enabled: true, maxDiscountPct: 50, minEffectivePct: 0.5, allowZero: false,
+                  plans: { basic: { enabled: true }, pro: { enabled: true },
+                           enterprise: { enabled: true }, free: { enabled: true } } };
+    const expect = { free: 3.0, basic: 2.94, pro: 2.85, enterprise: 2.70 };
+    const catalog = { free: 0, basic: 2, pro: 5, enterprise: 10 };
+    for (const [tier, disc] of Object.entries(catalog)) {
+      const a = CC.applyPlanAdjustment(tier, cfg, disc, base);
+      ck('package ' + tier.padEnd(11) + ' -> ' + expect[tier] + '%',
+         Math.abs(a.rate - expect[tier]) < 0.001, a.rate.toFixed(3));
+    }
+    ck('a better package means a LOWER marketplace commission',
+       CC.applyPlanAdjustment('enterprise', cfg, 10, base).rate <
+       CC.applyPlanAdjustment('basic', cfg, 2, base).rate);
+    ck('the adjustment is RELATIVE to the base, not an absolute plan rate',
+       Math.abs(CC.applyPlanAdjustment('enterprise', cfg, 10, base).rate - base * 0.9) < 0.001);
+    ck('the legacy ABSOLUTE schedule (free 15 / business 4) was NOT restored',
+       CC.applyPlanAdjustment('free', cfg, 0, base).rate !== 15 &&
+       CC.applyPlanAdjustment('business', cfg, 0, base).rate !== 4);
+
+    /* POS must be untouched by any of it. */
+    const posAdj = await calc({ orderAmountCents: 350000, category: 'pos', sellerId: 'S1' },
+                              { planCfg: cfg });
+    ck('POS with the rollout ENABLED is still exactly 5%', posAdj.effectiveRate === 5, posAdj.effectiveRate);
+    ck('  ...and records that it was excluded from the package layer',
+       posAdj.planSkipped === 'pos_excluded_from_package_adjustment' || posAdj.planApplied === false,
+       posAdj.planSkipped);
+    ck('  ...so a seller package can never discount in-shop takings',
+       posAdj.effectiveRate === CC.resolveRate('pos').pct);
   }
 
 
@@ -192,7 +231,7 @@ const calcErr = async (opts, cfg) => {
     const c = await calc({ orderAmountCents: 100000, category: 'marketplace', sellerId: 'S1' });
     ck('a marketplace charge records which authority priced it',
        typeof c.pricingSource === 'string' && c.pricingSource.length > 0, c.pricingSource);
-    ck('  ...and its base rate before any plan adjustment', c.baseRate === 5, c.baseRate);
+    ck('  ...and its base rate before any plan adjustment', c.baseRate === 3, c.baseRate);
     ck('no invented package percentages were added to the config',
        !/free:\s*\{\s*pct:\s*15|business:\s*\{\s*pct:\s*4/.test(
          fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8')));

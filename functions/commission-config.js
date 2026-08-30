@@ -42,16 +42,15 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  /* 5% — the DEPLOYED commercial policy, retained deliberately.
-     History: 3% at the consolidation (9eb6a0f), raised 3→5 by 33fa804 (2026-08-28, "match
-     the advertised rate and the other 5% hubs") and 960ac72 (2026-08-29, "seller commission
-     policy"), and verified live by reading commission-config.js out of the deployed
-     function's own source archive.
-     A 3% restoration was prepared and REJECTED by the owner on 2026-08-30: the objective is
-     to restore DIFFERENTIATED pricing, not to undo the marketplace decision. Marketplace and
-     POS are both 5% and must stay INDEPENDENT — equal numbers, separate authorities, so a
-     future change to one cannot move the other. */
-  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3→5 (33fa804 2026-08-28, 960ac72 2026-08-29); retained at 5 on 2026-08-30' },
+  /* 3% — the historical differentiated BASE, restored by owner decision 2026-08-30.
+     This is the base a seller's subscription package then DISCOUNTS; it is not a flat
+     charge. Marketplace money comes from category rate + package economics, which is why
+     flattening it to 5% removed the package layer's whole purpose.
+     History: 3% at the consolidation (9eb6a0f); raised 3→5 by 33fa804 (2026-08-28) and
+     960ac72 (2026-08-29); RESTORED to 3 here. The 5% is live today, so this is a deliberate
+     rate cut on the marketplace base and must be approved as one. POS is unaffected — it has
+     its own 5% and does not read this value. */
+  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3→5 (33fa804, 960ac72); RESTORED to 3 on 2026-08-30 as the package-discountable base' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },

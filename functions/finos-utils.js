@@ -554,7 +554,20 @@ async function calculateCommission(db, opts) {
      Phase 1 costs one cached config read and nothing else. */
   const planCfg = await _planAdjustmentOverrides(db);
 
-  if (!CC.planRolloutEnabled(planCfg)) {
+  /* ── POS BYPASSES THE PACKAGE LAYER ENTIRELY ──────────────────────────────────────────
+   * A POS sale is a merchant shop sale at a flat 5%. It is NOT marketplace demand, so a
+   * seller's subscription package must not discount it: the package buys better MARKETPLACE
+   * economics, and letting it reach in-shop takings would make the POS rate depend on a
+   * plan the till knows nothing about. Marketplace money = category rate + package
+   * adjustment; POS money = 5%, full stop.
+   *
+   * Checked on the RESOLVED category rather than the caller's label, so an alias cannot
+   * smuggle a POS sale into the discounted path. */
+  const isPos = base.category === 'pos';
+
+  if (isPos) {
+    planSkipped = 'pos_excluded_from_package_adjustment';
+  } else if (!CC.planRolloutEnabled(planCfg)) {
     planSkipped = 'rollout_disabled';
   } else if (sellerId && !(rule && rule.type === 'fixed')) {
     const sub = await _resolveSellerPlan(sellerId);
