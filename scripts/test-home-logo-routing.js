@@ -77,7 +77,28 @@ ck('adminHomeFor resolves superAdmin BEFORE admin',
    fnBody.indexOf("'superAdmin'") > -1 && fnBody.indexOf("'admin'") > -1 &&
    fnBody.indexOf("'superAdmin'") < fnBody.indexOf("'admin'"));
 ck('superAdmin resolves to super-admin.html', /super-admin\.html/.test(fnBody));
-ck('admin resolves to admin.html', /return 'admin\.html'/.test(fnBody));
+/* Pinned to the LEGACY destination. e7dd99e moved the admin home to admin-os.html - the
+   comment in sokoni-permissions.js reads "canonical admin console (was legacy admin.html)"
+   - and two other routers say the same independently: shared-header.js ("canonical admin
+   console") and sokoni-admin-entry.js DEST. The product is consistent; this assertion was
+   the outlier.
+
+   This does NOT touch the three-way admin.html lineage divergence: nothing here decides
+   which console is canonical, deletes a surface, or reconciles the lineages. It records the
+   destination the product already resolves, and pins the LEGACY one as excluded so a silent
+   revert is caught.
+
+   Upgraded from one string check into a CONVERGENCE check across all three routers, because
+   a destination that only one of them agrees with is the exact defect shape this codebase
+   keeps producing - a sender and a receiver nobody checks agree. */
+ck('admin resolves to the canonical admin console', /return 'admin-os\.html'/.test(fnBody));
+ck('...and NOT the legacy admin.html', !/return 'admin\.html'/.test(fnBody));
+ck('...and the destination is a real page', fs.existsSync(path.join(ROOT, 'admin-os.html')));
+ck('all three admin routers agree on the canonical console',
+   /return 'admin-os\.html'/.test(perms) &&
+   /'super-admin\.html'\s*:\s*'admin-os\.html'/.test(read('shared-header.js')) &&
+   /admin:\s*'admin-os\.html'/.test(read('sokoni-admin-entry.js')),
+   'sokoni-permissions.js, shared-header.js, sokoni-admin-entry.js');
 ck('it returns null when neither claim is held', /return null/.test(fnBody));
 ck('it routes through hasRole() — never a raw role list',
    /hasRole\('superAdmin'\)/.test(fnBody) && /hasRole\('admin'\)/.test(fnBody));
