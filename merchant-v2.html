@@ -627,12 +627,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      type="module" so it is deferred: the shell renders its chrome without waiting for
      the SDK, and the data layer awaits it only when a surface actually needs data. -->
 <script type="module" src="firebase.js"></script>
-<!-- Printer stack, loaded UP FRONT on purpose. printerEngine() used to fetch
-     sokoni-pos-print-service.js inside the Connect click; a network load between
-     the tap and navigator.bluetooth.requestDevice() ends the transient user
-     activation and the browser refuses the chooser. The hub owns the chooser, the
-     device registry and GATT, so it must be present before the first tap too. -->
-<script defer src="sokoni-device-hub.js"></script>
+<!-- Printer stack, loaded UP FRONT on purpose.
+     WHY THESE TWO AND NOT THE DEVICE HUB: _print() gates on SokoniPrinter.connected
+     and _sendBytes() writes through SokoniPrinter.printRaw. The hub owns a SEPARATE
+     GATT link with no reference to SokoniPrinter, so a hub-paired printer pairs and
+     then silently QUEUES every job instead of printing. One stack owns the chooser,
+     the connection, printRaw, testPrint and the receipt renderer.
+     Loaded up front because printerEngine() used to fetch the service inside the
+     Connect click, and a network load between the tap and requestDevice() ends the
+     transient user activation the chooser depends on. -->
+<script defer src="sokoni-universal-printer.js"></script>
 <script defer src="sokoni-pos-print-service.js"></script>
 <script src="sokoni-merchant-routes.js"></script>
 

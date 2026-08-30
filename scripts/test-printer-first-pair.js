@@ -143,16 +143,25 @@ function loadHub () {
   ck('...and is NOT reported as a cancellation', sec !== null && sec !== 'no-throw',
      'flattening this is what produced "No printer connected" for a blocked page');
 
-  head('6 - PosPrintService.connect exists and is wired to the hub');
+  head('6 - PosPrintService.connect exists and is wired to the PRINTING stack');
   const pps = fs.readFileSync(path.join(ROOT, 'sokoni-pos-print-service.js'), 'utf8');
   const code = pps.replace(/\/\*[\s\S]*?\*\//g, '');
   ck('window.PosPrintService.connect is defined',
      code.indexOf('window.PosPrintService.connect') > -1,
      'its absence WAS the bug: the if-branch was skipped silently');
-  ck('it calls the hub chooser', code.indexOf("hub.requestDevice('bluetooth', 'printer')") > -1);
+  ck('it calls the ENGINE chooser', code.indexOf("eng.discoverBy('bluetooth')") > -1);
   ck('CONTROL it adds no second Bluetooth implementation',
      code.indexOf('navigator.bluetooth.requestDevice') === -1,
      'comments stripped first, so a mention in prose cannot pass this');
+  /* THE REASON THIS CHANGED. _print() gates on SokoniPrinter.connected and _sendBytes
+     writes via SokoniPrinter.printRaw. Pairing through the device hub left the printer
+     connected on a DIFFERENT GATT link, so every job silently queued instead of
+     printing. Success must be verified on the object that prints. */
+  ck('success is verified on the object _print gates on',
+     code.indexOf('const ok = !!eng.connected;') > -1,
+     'a hub-paired printer would report connected and still never print');
+  ck('connect no longer pairs through the device hub',
+     code.indexOf('hub.requestDevice') === -1);
 
   head('7 - GESTURE CONTRACT: nothing awaited before the chooser');
   const body = (code.split('window.PosPrintService.connect')[1] || '').split('window.PosPrintService.autoReconnect')[0];
@@ -160,13 +169,13 @@ function loadHub () {
      `hub.requestDevice` is the guard `typeof hub.requestDevice !== 'function'`, so
      splitting there truncated the region before the code under test and this
      assertion passed against an await deliberately inserted ahead of the chooser. */
-  const beforeChooser = body.split('await hub.requestDevice')[0];
-  ck('PRECONDITION the chooser call was located', body.indexOf('await hub.requestDevice') > -1,
+  const beforeChooser = body.split('await eng.discoverBy')[0];
+  ck('PRECONDITION the chooser call was located', body.indexOf('await eng.discoverBy') > -1,
      'if this fails the assertion below is vacuous');
   ck('no await precedes the chooser call inside connect()',
      beforeChooser.indexOf('await') === -1,
      'an await here ends the transient activation and the browser refuses the chooser');
-  ck('the hub is read synchronously', /const\s+hub\s*=\s*window\.SokoniDeviceHub/.test(beforeChooser));
+  ck('the engine is read synchronously', /const\s+eng\s*=\s*_eng\(\)/.test(beforeChooser));
 
   const v2 = fs.readFileSync(path.join(ROOT, 'merchant-v2.html'), 'utf8');
   const cpn = (v2.split('async function connectPrinterNow')[1] || '').slice(0, 1400);
@@ -180,11 +189,78 @@ function loadHub () {
      'awaiting it with nothing saved spent the gesture for no benefit');
 
   head('8 - the stack is preloaded, not fetched inside the click');
-  ck('sokoni-device-hub.js is loaded by merchant-v2',
-     v2.indexOf('src="sokoni-device-hub.js"') > -1,
-     'it owns the chooser; without it connect() cannot pair at all');
+  ck('sokoni-universal-printer.js is loaded by merchant-v2',
+     v2.indexOf('src="sokoni-universal-printer.js"') > -1,
+     'it owns the chooser, printRaw, testPrint AND the receipt renderer');
   ck('sokoni-pos-print-service.js is loaded by merchant-v2',
      v2.indexOf('src="sokoni-pos-print-service.js"') > -1);
+
+  head('9 - TEST PRINT: the interface the Devices page actually calls');
+  ck('merchant-v2 Devices calls eng.testPrint()', v2.indexOf('eng.testPrint') > -1,
+     'this is the call that fell through to "exposes no test-print method"');
+  ck('PosPrintService.testPrint is defined', code.indexOf('window.PosPrintService.testPrint') > -1);
+  ck('it DELEGATES to the engine primitive', code.indexOf('return eng.testPrint();') > -1,
+     'no second print protocol - same transport as every receipt');
+  ck('it refuses when nothing is connected', code.indexOf('No printer connected. Tap Connect a printer first.') > -1,
+     '_print() ENQUEUES when disconnected, which would look like a successful test');
+  const tpBody = (code.split('window.PosPrintService.testPrint')[1] || '').split('window.PosPrintService.autoReconnect')[0];
+  ck('CONTROL testPrint builds no ESC/POS itself',
+     tpBody.indexOf('0x1B') === -1 && tpBody.indexOf('printRaw') === -1,
+     'it must adapt an interface, not reimplement printing');
+
+  head('10 - silent reconnect must restore the stack that PRINTS');
+  ck('autoReconnect tries the engine first', code.indexOf('const up = await eng.autoReconnect();') > -1,
+     'hub-only reconnect left the printer "connected" while every job queued');
+  ck('the hub path is retained as a fallback', code.indexOf('const hub = window.SokoniDeviceHub;') > -1,
+     'pos.html still loads the hub - do not strand it');
+
+  head('11 - CHOOSER REACHED on the stack merchant-v2 ACTUALLY uses');
+  /* Sections 1-5 exercise SokoniDeviceHub, which now only pos.html uses. merchant-v2
+     pairs through SokoniPrinter, so the load-bearing claim must be proven THERE too —
+     otherwise "chooser reached" would be true of a stack this page never touches.
+     AWAITED: the assertions live in a promise, so without this they would print AFTER
+     the summary line and never affect the exit code. */
+  await (async function () {
+    const calls = { requestDevice: 0, args: null };
+    const fake = { id: 'e1', name: 'P58E-Engine', gatt: { connect: async () => ({}) } };
+    const sb = {
+      console, setTimeout, clearTimeout, setInterval, clearInterval, Date, Math, JSON,
+      document: {
+        addEventListener: () => {}, removeEventListener: () => {},
+        createElement: () => ({ style: {}, setAttribute: () => {}, appendChild: () => {}, click: () => {} }),
+        getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+        body: { appendChild: () => {} }, hidden: false,
+      },
+      CustomEvent: function (t, o) { this.type = t; this.detail = (o || {}).detail; },
+      addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => true,
+      location: { origin: 'https://mysokoni.co.ke', href: 'https://mysokoni.co.ke/merchant-v2' },
+      navigator: {
+        bluetooth: {
+          requestDevice: async (o) => { calls.requestDevice++; calls.args = o; return fake; },
+          getDevices: async () => [], addEventListener: () => {}, removeEventListener: () => {},
+        },
+      },
+      localStorage: (function () { const m = new Map();
+        return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })(),
+      window: null,
+    };
+    sb.window = sb; sb.globalThis = sb; sb.self = sb;
+    vm.createContext(sb);
+    try { vm.runInContext(fs.readFileSync(path.join(ROOT, 'sokoni-universal-printer.js'), 'utf8'), sb, { filename: 'engine' }); }
+    catch (e) { iv('SokoniPrinter loads in the sandbox', e.message); return; }
+    const eng = sb.SokoniPrinter;
+    if (!eng) { iv('SokoniPrinter is exported', 'cannot verify the merchant-v2 chooser path'); return; }
+    ok('SokoniPrinter loads and exports');
+    ck('CONTROL loading it opens no chooser', calls.requestDevice === 0);
+    ck('the engine exposes testPrint', typeof eng.testPrint === 'function',
+       'PosPrintService.testPrint delegates to this - it must exist');
+    return eng.discoverBy('bluetooth').then(function (list) {
+      ck('CHOOSER REACHED via SokoniPrinter.discoverBy', calls.requestDevice === 1,
+         'calls=' + calls.requestDevice + ' - this is the path merchant-v2 now takes');
+      ck('...unfiltered, so a P58E is listed', (calls.args || {}).acceptAllDevices === true);
+      ck('...and it returns a connectable device', !!(list && list[0] && list[0]._dev));
+    }, function (e) { no('SokoniPrinter.discoverBy runs', e.message); });
+  })();
 
   head('what this suite does NOT prove');
   console.log('  UNPROVEN   real GATT pairing with physical hardware   [needs the handset]');

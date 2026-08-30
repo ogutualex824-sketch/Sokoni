@@ -1914,27 +1914,61 @@ window.PosPrintService = new PosPrintService();
    synchronously; the first suspension happens inside requestDevice() itself. Do not
    introduce an await above it. */
 window.PosPrintService.connect = async function connect () {
-  const hub = window.SokoniDeviceHub;                    /* sync: no await before the chooser */
-  if (!hub || typeof hub.requestDevice !== 'function') {
-    throw new Error('Device hub unavailable — sokoni-device-hub.js is not loaded on this page.');
+  const eng = _eng();                                    /* sync: no await before the chooser */
+  if (!eng || typeof eng.discoverBy !== 'function') {
+    throw new Error('Printer engine unavailable — sokoni-universal-printer.js is not loaded on this page.');
   }
 
-  /* Opens the browser chooser. Returns null when the user CANCELS (the hub maps
-     NotFoundError to null); any other failure throws and must reach the caller so it
-     can be shown, never flattened into a generic 'no printer'. */
-  const profile = await hub.requestDevice('bluetooth', 'printer');
-  if (!profile) return false;                            /* cancelled — a normal outcome */
+  /* Opens the browser chooser. discoverBy returns [] when the user DISMISSES it; every
+     real failure (SecurityError, adapter off, GATT) throws and must reach the caller,
+     never be flattened into a generic 'no printer'. */
+  const list = await eng.discoverBy('bluetooth');
+  if (!list || !list[0]) return false;                   /* cancelled — a normal outcome */
 
-  await hub.connect(profile.id);
+  await eng.connect(list[0]);
 
-  /* Ask the hub; do not infer success from the absence of a throw. */
-  const live = (typeof hub.getPrinter === 'function') ? hub.getPrinter() : null;
-  const ok = !!live;
-  try { _printerState.set(ok ? 'connected' : 'disconnected', { name: (live || profile).name || null }); } catch (_) {}
+  /* Ask the engine; do not infer success from the absence of a throw. This is also the
+     object _print() gates on, so a true here means printing will actually work. */
+  const ok = !!eng.connected;
+  try { _printerState.set(ok ? 'connected' : 'disconnected', { name: (list[0] || {}).name || null }); } catch (_) {}
   return ok;
 };
 
+/* ══ TEST PRINT ════════════════════════════════════════════════════════════════
+   merchant-v2 Devices calls eng.testPrint() (then eng.printTest()) and fell through
+   to 'This printer service exposes no test-print method.' — the same missing-adapter
+   defect as connect(), one method later.
+
+   NO NEW PRINT PROTOCOL. SokoniPrinter.testPrint() is the established primitive and
+   writes over the same transport as every receipt. This only adapts the interface. */
+window.PosPrintService.testPrint = async function testPrint () {
+  const eng = _eng();
+  if (!eng || typeof eng.testPrint !== 'function') {
+    throw new Error('Printer engine unavailable — cannot test print.');
+  }
+  /* Report the honest reason rather than emitting a job that silently queues: _print()
+     enqueues when nothing is connected, which would look like a successful test. */
+  if (!eng.connected && !(_pm() && _pm().connected)) {
+    throw new Error('No printer connected. Tap Connect a printer first.');
+  }
+  return eng.testPrint();
+};
+
 window.PosPrintService.autoReconnect = async function autoReconnect () {
+  /* PREFER the engine that _print() gates on. Re-linking only the device hub left the
+     printer 'reconnected' while every job still queued, because _sendBytes writes via
+     SokoniPrinter.printRaw. Silent reconnect must restore the stack that prints. */
+  const eng = _eng();
+  if (eng && typeof eng.autoReconnect === 'function') {
+    try {
+      const up = await eng.autoReconnect();
+      if (up || eng.connected) {
+        try { _printerState.set('connected', {}); } catch (_) {}
+        return true;
+      }
+    } catch (_) { /* fall through to the hub path below */ }
+  }
+
   const hub = window.SokoniDeviceHub;
   if (!hub || typeof hub.discover !== 'function') return false;
 
