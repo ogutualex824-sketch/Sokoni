@@ -50,6 +50,13 @@ const KEEP = {
   'sokoniTheme':           'UI preference',
   'admLight':              'UI preference — light/dark toggle',
   'sokoniSidebarCollapsed':'UI preference',
+  /* super-admin.html:919/921 — stores '1'/'0' and only toggles the `sa-collapsed`
+     CSS class above 768px. Losing it, or another device holding a different value,
+     changes no business outcome, which is this allowlist's stated test. Arrived with
+     live's fix/admin-collapse-on-live (e52fdc5) and made that release fail this audit
+     on its own tree; classified here rather than by relaxing the default, so an
+     unknown key stays business-authority-until-proven-otherwise. */
+  'saSidebarCollapsed':    'UI preference — super-admin sidebar collapse',
   'sokoniGaId':            'analytics measurement id, mirrored for the admin form',
   'sokoniPrivacyAccepted': 'consent decision — must be per-device; see the consent gate',
   'sokoniPrivacyRejected': 'consent decision — must be per-device',
