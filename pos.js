@@ -40,10 +40,40 @@ const SPos = (function () {
        guarded so a single failure (e.g. an old/partial POS cache) can NEVER blank the shell or
        block Inventory/Cashier. In degraded mode the app still launches and renders from canonical
        Firestore; a small non-blocking status says the local cache is unavailable. */
-    await PosDB.init().catch(() => {});
+    /* LAST RESORT, armed before the first await so it survives a stall ANYWHERE below,
+       including in a step added later. A merchant staring at a black screen cannot act
+       on it; a degraded till still takes cash.
+
+       It reveals whatever the SAME authority the normal decision uses says is right -
+       the app for a signed-in or embedded operator, otherwise the first-run wizard. It
+       never reveals the app to someone the normal path would not have, so no gate moves. */
+    try {
+      setTimeout(function () {
+        try {
+          var app = document.getElementById('pos-app');
+          var wiz = document.getElementById('pos-wizard');
+          var appHidden = !app || app.classList.contains('hidden');
+          var wizShown  = !!wiz && wiz.style.display !== 'none' && wiz.style.display !== '';
+          if (!appHidden || wizShown) return;   /* something is on screen: not the dead state */
+          _stage('watchdog:dead-state');
+          try { window._posDbDegraded = true; } catch (_) {}
+          if (_launchAuthority()) {
+            if (wiz) { wiz.style.pointerEvents = 'none'; wiz.style.display = 'none'; }
+            if (app) app.classList.remove('hidden');
+            _activate();
+            _stage('watchdog:revealed-app');
+          } else if (wiz) {
+            wiz.style.display = 'flex';
+            _stage('watchdog:revealed-wizard');
+          }
+        } catch (_) {}
+      }, 15000);
+    } catch (_) {}
+
+    await _bounded(PosDB.init(), 8000, undefined, 'db-init');
     try { if (PosDB.isDegraded && PosDB.isDegraded()) window._posDbDegraded = true; } catch (_) {}
-    try { state.settings = await PosDB.settings.getAll(); } catch (_) { state.settings = state.settings || {}; }
-    try { await PosDB.categories.seedDefaults(); } catch (_) {}
+    state.settings = (await _bounded(PosDB.settings.getAll(), 5000, state.settings || {}, 'db-settings')) || {};
+    await _bounded(PosDB.categories.seedDefaults(), 5000, undefined, 'db-seed');
 
     const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
     /* The first-run setup wizard must NOT block the app when the POS is embedded in the merchant
@@ -74,9 +104,9 @@ const SPos = (function () {
           || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
       } catch (_) { _known = false; }
 
-      if (isSetup || embedded || _known) {
+      if (isSetup || _launchAuthority()) {
         await launchApp();
-        if (!isSetup && (embedded || _known)) { try { window._posNeedsSetup = true; } catch (_) {} }
+        if (!isSetup && _launchAuthority()) { try { window._posNeedsSetup = true; } catch (_) {} }
       } else {
         var _wz = document.getElementById('pos-wizard'); if (_wz) _wz.style.display = 'flex';
       }
@@ -86,6 +116,8 @@ const SPos = (function () {
       console.warn('[SmartPOS] launch degraded:', e && e.message);
       try { document.getElementById('pos-app').classList.remove('hidden'); } catch (_) {}
       try { var _wz2 = document.getElementById('pos-wizard'); if (_wz2) _wz2.style.display = 'none'; } catch (_) {}
+      /* Revealing without wiring navigation is how a 'graceful' degrade became a dead screen. */
+      _activate();
     }
 
     if (window._posDbDegraded) _showPosDbDegradedStatus();
@@ -123,9 +155,70 @@ const SPos = (function () {
      Never throws, never changes behaviour. */
   function _stage(n) { try { if (window.sokoniStage) window.sokoniStage('launch:' + n); } catch (_) {} }
 
+  /* A HANG IS NOT AN EXCEPTION. try/catch cannot see a promise that never settles,
+     so an IndexedDB read that blocks stops every step after it - and each step below
+     is what reveals the till. Bound them: the POS opens DEGRADED (canonical Firestore,
+     local cache marked unavailable) rather than not opening at all. The timeout records
+     a stage, so ?diag=crash NAMES the stall instead of reporting a blank page with no
+     last stage. */
+  /* THE TILL MUST END UP INTERACTIVE, by whichever route it got on screen.
+     nav.init() sat at the very end of launchApp, behind eight awaits, so a stall or a
+     throw anywhere among them produced a fully rendered POS that answered no taps - and
+     the degrade catch, which reveals the app, never wired navigation either. Idempotent
+     via state.ready (checked nowhere else), so calling it from several places is safe. */
+  function _activate () {
+    try { if (state.ready) return; } catch (_) { return; }
+    try { nav.init(); } catch (e) { console.warn('[SmartPOS] nav degraded:', e && e.message); }
+    try { state.ready = true; } catch (_) {}
+    _stage('interactive');
+    try { if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings }); } catch (_) {}
+  }
+
+  function _bounded (p, ms, fallback, label) {
+    _stage(label + ':start');
+    /* Latched, NOT Promise.race: race does not cancel the loser, so the timer would
+       still fire on a healthy boot and falsely mark the session degraded. */
+    var done = false, timer = null;
+    return new Promise(function (resolve) {
+      timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        try { window._posDbDegraded = true; } catch (_) {}
+        _stage(label + ':TIMEOUT');
+        resolve(fallback);
+      }, ms);
+      Promise.resolve(p).then(function (v) {
+        if (done) return;
+        done = true; try { clearTimeout(timer); } catch (_) {}
+        _stage(label + ':ok');
+        resolve(v);
+      }, function (e) {
+        if (done) return;
+        done = true; try { clearTimeout(timer); } catch (_) {}
+        _stage(label + ':error');
+        resolve(fallback);
+      });
+    });
+  }
+
+  /* ONE predicate, read by the launch decision AND by the watchdog below. Two copies of
+     this rule would be free to disagree, which is the exact defect shape that has bitten
+     this shell repeatedly (a sender and a receiver nobody checks agree). Deliberately
+     does NOT consult state.settings: the watchdog may run at a point where the settings
+     read never returned, and this must stay answerable. */
+  function _launchAuthority () {
+    var embedded = true;
+    try { embedded = !!(window.parent && window.parent !== window); } catch (_) { embedded = true; }
+    if (embedded) return true;
+    try {
+      return localStorage.getItem('loggedIn') === 'true'
+        || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    } catch (_) { return false; }
+  }
+
   async function launchApp() {
     _stage('begin');
-    state.settings = await PosDB.settings.getAll();
+    state.settings = (await _bounded(PosDB.settings.getAll(), 5000, state.settings || {}, 'launch-settings')) || {};
     _stage('settings');
     /* Null-guarded: launchApp dereferenced this with no check, so removing the
        wizard markup — which is the direction this is heading — would throw here
@@ -140,12 +233,18 @@ const SPos = (function () {
     document.getElementById('pos-app').classList.remove('hidden');
     _stage('app-visible');
 
+    /* Backstop. Everything below this line is catalogue/branding/plugin loading - useful,
+       never a precondition for taking a sale. If any of it stalls past this window the
+       till still becomes navigable; _activate is idempotent, so the normal path simply
+       finds the work already done. */
+    try { setTimeout(_activate, 8000); } catch (_) {}
+
     /* Populate header */
     _setVal('hdr-biz-name', state.settings.bizName || 'SOKONI SmartPOS');
 
     /* Load products */
     _stage('products:start');
-    await products.reload();
+    await _bounded(products.reload(), 8000, undefined, 'products');
     _stage('products:done');
 
     /* Sync the merchant's CANONICAL products into the POS. The POS store was fed only by the
@@ -189,7 +288,7 @@ const SPos = (function () {
 
     /* Load category chips */
     _stage('categories:start');
-    await ui.loadCategories();
+    await _bounded(ui.loadCategories(), 5000, undefined, 'categories');
     _stage('categories:done');
 
     /* Init BOS modules */
@@ -214,10 +313,10 @@ const SPos = (function () {
     /* Boot new modules */
     if (window.PosPlugins) {
       PosPlugins.installBuiltins();
-      await PosPlugins.restoreEnabled();
+      await _bounded(PosPlugins.restoreEnabled(), 5000, undefined, 'plugins');
     }
     if (window.PosNotify) {
-      await PosNotify.requestPermission().catch(() => {});
+      await _bounded(PosNotify.requestPermission(), 3000, undefined, 'notify-permission');
     }
     if (window.PosOmni && state.settings.bizPin) {
       PosOmni.startSync(state.settings.bizPin);
@@ -228,7 +327,7 @@ const SPos = (function () {
        load reset it). The PIN still gates the FIRST login and switching cashiers; the
        separate manager-PIN still gates refunds/voids/discounts. Only prompt if nothing valid
        was restored. */
-    const cashiers = await PosDB.cashiers.getAll();
+    const cashiers = (await _bounded(PosDB.cashiers.getAll(), 5000, [], 'cashiers')) || [];
     if (cashiers.length > 0) {
       const restored = await cashier.restoreSession(cashiers);
       if (!restored) cashier.showSwitchDialog();
@@ -263,13 +362,10 @@ const SPos = (function () {
     if (window.PosMobile) PosMobile.init();
 
     /* Boot terminal management */
-    if (window.PosTerminals) await PosTerminals.init();
+    if (window.PosTerminals) await _bounded(PosTerminals.init(), 5000, undefined, 'terminals');
 
     /* Wire the navigation service: URL-hash deep-linking + Back/Forward. */
-    nav.init();
-
-    state.ready = true;
-    if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings });
+    _activate();
   }
 
   /* ═══════════════════════════════════════════════════════════

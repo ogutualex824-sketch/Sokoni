@@ -69,8 +69,13 @@ ck('A6 pos.js does not drive a business wizard',
     : 'absent');
 
 /* ── the boot decision must rest on the server, not the device ──────────── */
+/* The decision was inlined as `isSetup || embedded || _known`. It now reads the shared
+   _launchAuthority(), because the boot watchdog must apply the SAME rule and two copies of
+   it would have been free to diverge. Equivalent by construction, so this assertion follows
+   the property to the new site, and also pins what the predicate is allowed to consult. */
 ck('A7 the launch decision admits a known signed-in account',
-  /isSetup \|\| embedded \|\| _known/.test(posJsCode),
+  /isSetup \|\| _launchAuthority\(\)/.test(posJsCode) &&
+  /function _launchAuthority[\s\S]{0,500}?loggedIn[\s\S]{0,240}?sokoniUser/.test(posJsCode),
   'device-cache flags alone must not decide who is a new business');
 
 ck('A8 the server-resolved context is loaded by /pos',

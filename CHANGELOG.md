@@ -1,3 +1,78 @@
+## [2026-08-30] — POS boot: a stalled initialisation can no longer produce a dead till
+
+**Files:** `pos.js`, `scripts/test-pos-boot-degradation.js` (new suite).
+**No** database, API, rules, Functions or payment change. Client boot control flow only.
+
+### The defect
+
+pos.js wrapped every boot step in `try/catch` and its comment promised a failure "can NEVER
+blank the shell". That holds for a THROW. It does nothing for a promise that **never settles**,
+which is the failure merchants actually hit: an IndexedDB open blocked by another tab, a storage
+eviction mid-transaction, or `PosNotify.requestPermission()` waiting on a browser prompt nobody
+answers. A catch cannot see any of those, and every statement that reveals or wires the till sat
+BELOW them:
+
+| stall site | what the merchant saw |
+|---|---|
+| `PosDB.init()`, `settings.getAll()`, `categories.seedDefaults()` — all BEFORE the wizard/launch decision | neither wizard nor app: a **black page** |
+| `products.reload()`, `ui.loadCategories()`, `PosPlugins.restoreEnabled()`, `PosNotify.requestPermission()`, `PosDB.cashiers.getAll()`, `PosTerminals.init()` — all AFTER the reveal | a till that **renders and responds to nothing** |
+
+`nav.init()` was the LAST statement of `launchApp()`, behind eight awaits. The second column is
+the reported "POS interaction failure", and it needs no crash at all — the worst offender is a
+notification permission prompt the merchant ignores.
+
+The existing degrade `catch` made this worse than it looked: it revealed the app but never wired
+navigation, so the documented "never a blank page" fallback produced a VISIBLE DEAD one.
+
+### The repair — three layers, because each defeats a different failure
+
+1. **`_bounded(p, ms, fallback, label)`** on every boot await. A stall degrades (canonical
+   Firestore, cache flagged unavailable) instead of stopping the sequence, and records a stage.
+2. **`_activate()`** — the interaction-critical tail (`nav.init()` + `state.ready`), idempotent and
+   reached from all three routes: the normal path, the degrade catch, and the watchdog. Plus a
+   backstop timer armed at the reveal, since everything below it is catalogue/branding loading,
+   never a precondition for taking a sale.
+3. **A dead-state watchdog** armed before the first await. If neither wizard nor app is on screen
+   it reveals whichever the *same* authority the normal decision uses says is right — so it can
+   never show the app to someone the normal path would not have. **No gate is weakened.**
+
+`embedded || _known` became one shared `_launchAuthority()` read by both the decision and the
+watchdog; two copies of that rule would have been free to diverge, which is the defect shape that
+has bitten this shell repeatedly.
+
+### A defect the controls caught in the fix itself
+
+The first `_bounded` used `Promise.race`, which does not cancel the loser. Every bound step still
+fired its timeout branch seconds later on a **perfectly healthy** boot — setting `_posDbDegraded`,
+raising "POS local storage unavailable" over storage that was fine, and leaving a TIMEOUT
+breadcrumb that would have sent the next investigation somewhere false. A guard that lies about
+the thing it guards is worse than no guard. Now latched, with the timer cleared.
+
+### Verification — `node scripts/test-pos-boot-degradation.js` — **31 passed, 0 failed**
+
+String assertions cannot express "never settles", so the suite extracts the real
+`boot()`/`launchApp()` source verbatim and runs it against a `PosDB` that hangs. Seven scenarios
+(healthy + five stalls + a throw); each must end REVEALED, INTERACTIVE and uncovered.
+
+Run first against the **pre-repair** source, five scenarios reproduced the live symptoms exactly:
+black page for the three pre-decision stalls, `revealed=true interactive=false` for the cashier
+read and the notification prompt — while the healthy control passed, proving the harness
+discriminates rather than failing everything.
+
+**Four mutations, four killed, no survivors.** The guards are layered, so a green run proves
+little alone — the watchdog can mask a broken bound and vice versa. Each mutation disables one
+layer and names the failure that must return. Two lessons are recorded in the suite: the 6-space
+`_activate();` is a SUBSTRING of the watchdog's 12-space one (a bare anchor mutates the wrong
+site and the mutant survives for the wrong reason), and `clearTimeout` *or* the latch is
+independently sufficient, so removing just one correctly survives and tests nothing.
+
+### Not proven here
+
+Bounds and watchdogs are proven; **which** stall the handset actually hits is not. That is what
+the new breadcrumbs answer: `/pos?diag=crash` now names the stalled stage
+(`db-settings:TIMEOUT`, `notify-permission:TIMEOUT`, `watchdog:dead-state`) where pos.js
+previously reported no boot stage at all. **Not deployed.** Live remains `0a3beb7` / v602.
+
 ## [2026-08-29] — Release B: keyless OIDC/WIF authentication replaces FIREBASE_TOKEN
 
 **File:** `.github/workflows/deploy-hosting.yml` (one workflow file).
