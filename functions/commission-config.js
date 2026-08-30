@@ -42,12 +42,13 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  /* 5%, matching the PRODUCTION DEPLOYMENT. The repo lineage still carried 3% while the
-     deployed functions have run 5% since 2026-08-29 ("base 3→5, seller commission policy"),
-     verified by reading commission-config.js out of the deployed function's own source
-     archive. Shipping the repo's 3% would have silently REVERTED that commercial decision.
-     Source of truth for this value is the deployment, not the branch. */
-  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; base 3→5 2026-08-29 (seller commission policy)' },
+  /* RESTORED to the differentiated pre-5% rate by owner decision 2026-08-30.
+     History: 3% from the consolidation (9eb6a0f), raised 3→5 twice — 33fa804 (2026-08-28,
+     "match the advertised rate and the other 5% hubs") and 960ac72 (2026-08-29, "seller
+     commission policy"). The 5% is LIVE today, verified in the deployed function's source
+     archive. Rolling back is therefore a deliberate rate CUT, not a correction, and it is
+     the only category whose deployed value differs from the differentiated schedule. */
+  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3→5 (33fa804, 960ac72); RESTORED to 3 on 2026-08-30 (owner: differentiated schedule)' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
@@ -117,10 +118,19 @@ const ALIASES = {
    * platform money to the provider.
    * Mapped here rather than left to `default`, because with the fail-closed check below
    * an unmapped label now REFUSES to price instead of guessing. */
-  product: 'marketplace',        /* a product order is a marketplace sale — 5%, identical to
-                                    what the deployed default arm already charges it, so this
-                                    mapping changes NO rate. It only makes the authority
-                                    explicit instead of accidental. */
+  product: 'marketplace',        /* a product order IS a marketplace sale. Live callers emit
+                                    this label and it matched nothing, so every marketplace
+                                    order was priced by the default arm instead of by the
+                                    marketplace rate — which is why the differentiated
+                                    schedule never reached a transaction. */
+
+  /* HISTORICAL SUBSCRIPTION POLICY, restored — not invented. `subscriptions` (plural) has
+     been 100% since the consolidation (9eb6a0f): "category only — full amount is platform
+     revenue". Live callers emit the SINGULAR label, which matched nothing, so a merchant's
+     KES 484.02 "SOKONI Starter Plan" payment was priced at ~5% and 95% of SOKONI's OWN
+     subscription revenue was booked as owed to a "provider" that is SOKONI. The
+     singular/plural gap is the defect; the policy itself was never in doubt. */
+  subscription: 'subscriptions',
 
   /* DELIBERATELY NOT MAPPED — each needs a commercial decision, and guessing would move money:
    *

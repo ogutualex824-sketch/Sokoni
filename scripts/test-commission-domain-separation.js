@@ -135,23 +135,26 @@ const calcErr = async (opts, cfg) => {
   console.log('\nF. Marketplace is a separate authority and does not inherit POS\n');
   {
     const m = await calc({ orderAmountCents: 350000, category: 'marketplace', sellerId: 'S1' });
-    ck('marketplace matches the DEPLOYED 5% baseline, not the repo 3%', m.effectiveRate === 5, m.effectiveRate);
+    ck('marketplace RESTORED to its differentiated 3%, not flattened to 5%', m.effectiveRate === 3, m.effectiveRate);
     ck('  ...category marketplace, resolved explicitly', m.category === 'marketplace', m.category);
     ck('marketplace and pos are the same NUMBER but different AUTHORITIES',
        m.category === 'marketplace' && CC.resolveRate('pos').category === 'pos');
     const p = await calc({ orderAmountCents: 350000, category: 'product', sellerId: 'S1' });
     ck('live label "product" resolves to marketplace explicitly', p.category === 'marketplace', p.category);
-    ck('  ...at the SAME rate the default arm already charged it — no rate change',
-       p.effectiveRate === 5, p.effectiveRate);
-    const sErr = await calcErr({ orderAmountCents: 100000, category: 'subscription', sellerId: 'S1' });
-    ck('live label "subscription" is NOT mapped — awaits a commercial decision',
-       sErr && sErr.code === 'COMMISSION_CATEGORY_UNRESOLVED');
+    ck('  ...priced by the marketplace rate (3%), not the 5% default arm',
+       p.effectiveRate === 3, p.effectiveRate);
+    const sub = await calc({ orderAmountCents: 48402, category: 'subscription', sellerId: 'S1' });
+    ck('live label "subscription" restored to the HISTORICAL 100% policy',
+       sub.category === 'subscriptions' && sub.effectiveRate === 100, sub.category + '/' + sub.effectiveRate);
+    ck('  ...so a SOKONI plan payment books 100% platform revenue, not 5%',
+       sub.sellerNetCents === 0, sub.sellerNetCents);
     const hErr = await calcErr({ orderAmountCents: 19400, category: 'hair-beauty', sellerId: 'S1' });
     ck('live label "hair-beauty" is NOT mapped — awaits a commercial decision',
        hErr && hErr.code === 'COMMISSION_CATEGORY_UNRESOLVED');
-    ck('neither was guessed into services/subscriptions to make a gate green',
-       !/subscription:s*'subscriptions'/.test(fs.readFileSync(path.join(ROOT,'functions','commission-config.js'),'utf8'))
-       && !/'hair-beauty':s*'services'/.test(fs.readFileSync(path.join(ROOT,'functions','commission-config.js'),'utf8')));
+    const cfgNoComments = fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    ck('hair-beauty was NOT guessed into services — no historical rate exists for it',
+       !/'hair-beauty':/.test(cfgNoComments));
   }
 
   console.log('\nG. The package / subscription mechanism is the marketplace authority\n');
@@ -169,7 +172,7 @@ const calcErr = async (opts, cfg) => {
     const c = await calc({ orderAmountCents: 100000, category: 'marketplace', sellerId: 'S1' });
     ck('a marketplace charge records which authority priced it',
        typeof c.pricingSource === 'string' && c.pricingSource.length > 0, c.pricingSource);
-    ck('  ...and its base rate before any plan adjustment', c.baseRate === 5, c.baseRate);
+    ck('  ...and its base rate before any plan adjustment', c.baseRate === 3, c.baseRate);
     ck('no invented package percentages were added to the config',
        !/free:\s*\{\s*pct:\s*15|business:\s*\{\s*pct:\s*4/.test(
          fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8')));
