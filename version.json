@@ -1,17 +1,14 @@
 {
-  "commit": "1433304d75223be13eb48206f6c4599c56697171",
-  "commitShort": "1433304",
+  "commit": "e85442348f6076a23578a516c6d3ad0738b8483c",
+  "commitShort": "e854423",
   "branch": "fix/printer-connect-autoconnect",
-  "buildTime": "2026-08-30T15:39:02.223Z",
+  "buildTime": "2026-08-30T15:39:55.325Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260830153900-v593",
+  "cacheVersion": "sokoni-20260830153954-v594",
   "environment": "production",
-  "dirtyWorkingTree": true,
+  "dirtyWorkingTree": false,
   "pipelineArtifacts": [
-    "service-worker.js",
-    "version.json"
+    "service-worker.js"
   ],
-  "dirtyPaths": [
-    "docs/release-gates/1433304.json"
-  ]
+  "dirtyPaths": []
 }
