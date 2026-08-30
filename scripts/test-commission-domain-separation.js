@@ -246,6 +246,57 @@ const calcErr = async (opts, cfg) => {
   }
 
 
+  console.log('\nF5. THE FINAL COMMERCIAL STATE — locked 2026-08-30\n');
+  {
+    const state = (k) => { const r = CC.resolveRate(k); return { pct: r.pct, cat: r.category, matched: r.matched, pkg: CC.isPackageCategory(r.category) }; };
+
+    /* Selling commissions — package-governed */
+    for (const k of ['marketplace', 'services']) {
+      const s = state(k);
+      ck(k.padEnd(13) + ' is PACKAGE-GOVERNED', s.matched && s.pkg, s.cat + '/pkg=' + s.pkg);
+    }
+
+    /* POS — flat, never package-governed */
+    const pos = state('pos');
+    ck('pos is 5% and NOT package-governed', pos.pct === 5 && pos.matched && !pos.pkg, pos.pct + '/pkg=' + pos.pkg);
+
+    /* Subscription revenue — 100%, and a package must NOT discount SOKONI's own income */
+    for (const k of ['subscription', 'subscriptions']) {
+      const s = state(k);
+      ck(k.padEnd(13) + ' -> subscriptions @ 100%', s.pct === 100 && s.cat === 'subscriptions' && s.matched, s.pct + '/' + s.cat);
+      ck('  ...and is NOT package-governed', !s.pkg,
+         'a seller package must never discount platform subscription revenue');
+    }
+
+    /* Unclassified — fail closed, not defaulted */
+    for (const k of ['hair-beauty', 'totally-unknown']) {
+      const s = state(k);
+      ck(k.padEnd(15) + ' does NOT resolve to a real category', !s.matched, s.cat);
+      const e = await calcErr({ orderAmountCents: 19400, category: k, sellerId: 'S1' });
+      ck('  ...and fails closed rather than pricing at ' + s.pct + '%',
+         e && e.code === 'COMMISSION_CATEGORY_UNRESOLVED');
+    }
+
+    /* Differentiated categories untouched by the package decision.
+       The expected percentages are read FROM the authority rather than restated here: a
+       second copy of the rate table in a test is the very drift verify-commission-single-source
+       exists to stop, and it would rot the moment a rate legitimately changed. What is asserted
+       is the PROPERTY that matters — each resolves to itself and is NOT package-governed. */
+    for (const k of ['food_delivery', 'digital_products', 'education', 'jobs', 'classifieds', 'hub']) {
+      const s = state(k);
+      ck(k.padEnd(17) + ' resolves to itself, not package-governed',
+         s.matched && s.cat === k && !s.pkg && s.pct > 0, s.pct + '%/pkg=' + s.pkg);
+    }
+    ck('those categories are genuinely differentiated — more than one distinct rate',
+       new Set(['food_delivery', 'digital_products', 'education', 'jobs', 'classifieds', 'hub']
+         .map((k) => CC.resolveRate(k).pct)).size >= 4);
+    const veh = CC.resolveRate('vehicles');
+    ck('vehicles still a FLAT KES 2000', veh.pct === 0 && veh.fixedKES === 2000 && veh.matched);
+
+    ck('MIN_COMMISSION_KES still 10 — a separate rule', CC.MIN_COMMISSION_KES === 10);
+  }
+
+
   console.log('\nG. The package / subscription mechanism is the marketplace authority\n');
   {
     const fu = fs.readFileSync(path.join(ROOT, 'functions', 'finos-utils.js'), 'utf8');
