@@ -187,8 +187,23 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      Both belong to the checkpointed v2 entry workstream and encode OPPOSITE sides of
      a cutover that is deliberately half-done, so no value of MERCHANT_URL makes both
      pass. They leave quarantine together, when the cutover is real. */
-  ok('DECLARED still holds exactly its seven entries', Object.keys(DECLARED).length === 7,
+  /* Eight since 2026-08-30: test-stories-rules, declared ENV. Unlike the two v2-cutover
+     quarantines, this one is not "ahead of its implementation" — the ruleset is PROVEN,
+     24/0 under `emulators:exec --only firestore`, negative control included. It needs the
+     Firestore emulator, which this machine's bare gate does not provide, and its fourth
+     assertion correctly refuses to give a rules verdict without one. No assertion was
+     edited to obtain the declaration.
+
+     This guard did its job again: it refused the addition until it was written down here,
+     which is the entire point. Raising this number remains the ONLY sanctioned way to add
+     an entry — and it must stay a conscious, reviewed act, never a bump to get a run green. */
+  ok('DECLARED still holds exactly its eight entries', Object.keys(DECLARED).length === 8,
      Object.keys(DECLARED).join(', '));
+  ok('the emulator-dependent suite is ENV, records its EVIDENCE, and says how to remove it',
+     DECLARED['test-stories-rules'].verdict === 'ENV' &&
+     /24\/0/.test(DECLARED['test-stories-rules'].reason) &&
+     /emulator/i.test(DECLARED['test-stories-rules'].reason) &&
+     /Remove by/.test(DECLARED['test-stories-rules'].reason));
   ok('the quarantined suite names WHY and HOW it is removed',
      /deliberately unmerged/.test(DECLARED['test-auth-post-login-routing'].reason) &&
      /Remove by merging/.test(DECLARED['test-auth-post-login-routing'].reason));
