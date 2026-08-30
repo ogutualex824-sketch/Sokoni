@@ -1802,10 +1802,15 @@ class SPEngine {
     await this.printNow('custom', {
       build: (enc, W) => {
         const sep = '='.repeat(W), dash = '-'.repeat(W);
-        const center = (s) => {
-          const t = String(s).slice(0, W);
-          return ' '.repeat(Math.max(0, Math.floor((W - t.length) / 2))) + t;
-        };
+        /* NO MANUAL PADDING. Every call site below sits inside an .ac() region, so
+           the PRINTER centres the line. Prepending spaces as well centred an
+           already-padded string and pushed the header and footer visibly RIGHT —
+           the reported defect.
+           Truncation is KEPT: it is what stops a 34-character legal name overrunning
+           a 32-character line. Hardware centring is also the only correct option
+           under sz('tall'), where the character cell is no longer W-relative and any
+           manual arithmetic is wrong by construction. */
+        const center = (s) => String(s).slice(0, W);
         const label = (l, v) => enc.text(String(l).padEnd(13).slice(0, 13) + String(v).slice(0, W - 13)).lf();
         enc.al().text(sep).lf().ac()
            .bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal').bold(false).lf()
