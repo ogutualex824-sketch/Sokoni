@@ -2161,12 +2161,27 @@ function onStepEnter(step) {
 /* ═══════════════════════════════════════════════════════════════
    STEP 1 — WELCOME
 ════════════════════════════════════════════════════════════════ */
+/* WHERE DOES POS LIVE FOR THIS MERCHANT? If the shell sent us here it passed
+   ?return=<shell path>, and the shell opens a module from its hash — so POS belongs
+   INSIDE it. Jumping to a bare pos.html is what severed POS from the merchant app.
+   Same-origin PATHS only (single leading '/'), so this cannot become an open redirect.
+   No ?return= means we were opened directly: keep the standalone behaviour. */
+function _posTarget () {
+  try {
+    var r = new URLSearchParams(location.search).get('return');
+    if (r && r.charAt(0) === '/' && r.charAt(1) !== '/') {
+      return r.split('#')[0] + '#pos';
+    }
+  } catch (_) {}
+  return 'pos.html';
+}
+
 document.getElementById('btn-welcome-start').addEventListener('click', () => {
   goToStep(2);
 });
 
 document.getElementById('btn-already-setup').addEventListener('click', () => {
-  window.location.href = 'pos.html';
+  window.location.href = _posTarget();
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3797,7 +3812,7 @@ document.getElementById('btn-open-pos').addEventListener('click', () => {
     if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  window.location.href = 'pos.html';
+  window.location.href = _posTarget();
 });
 
 document.getElementById('btn-configure-hw').addEventListener('click', () => {
@@ -3808,7 +3823,7 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
    BOOT — check if setup already done
 ════════════════════════════════════════════════════════════════ */
 (function boot() {
-  const goLive = () => window.location.replace('pos.html');
+  const goLive = () => window.location.replace(_posTarget());
 
   // Fast path: previously-completed setup + already signed in.
   if (localStorage.getItem('sokoni_setup_complete') === '1' && _auth.currentUser) { goLive(); return; }

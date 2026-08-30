@@ -45,6 +45,17 @@
   // standalone pos-setup flow — so an embedded merchant who never ran the wizard was hard-
   // redirected to pos-setup.html on EVERY POS/Inventory entry (the splash). POS Setup stays
   // reachable as the explicit sidebar module. Standalone first-run still redirects.
+  /* Mark the document when it is hosted by the shell, so CSS can hide the chrome the
+     shell already provides. Independent of the redirect guard below: one flag read by
+     styles rather than per-element JavaScript. */
+  (function () {
+    try {
+      if (window.parent && window.parent !== window) {
+        document.documentElement.classList.add('in-merchant-shell');
+      }
+    } catch (_) {}
+  })();
+
   (function() {
     try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
     /* A diagnostic URL must never redirect itself away. ?diag=crash exists to read
@@ -2509,6 +2520,15 @@ window.SPosQR = (function() {
 </script>
 
 <!-- ════ SMARTPOS 4.0 QUICK-NAV STRIP ════ -->
+<!-- Hidden inside the merchant shell: the shell already provides navigation, and a
+     second nav bar inside the panel is what made POS feel like a separate app rather
+     than a section of one. Standalone POS still needs it, so this is display-only and
+     driven by the framing check below — nothing is removed. -->
+<style>
+/* Display only. Removing the element would break standalone POS, which genuinely
+   needs its own navigation. */
+html.in-merchant-shell .pos-quick-nav { display: none !important; }
+</style>
 <nav class="pos-quick-nav" role="navigation" aria-label="SmartPOS quick navigation">
   <a href="pos.html" class="pos-quick-nav-item active" aria-current="page" title="POS Checkout">
     <span class="pqn-icon" aria-hidden="true">🏠</span>
