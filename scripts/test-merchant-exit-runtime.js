@@ -102,6 +102,11 @@ const NOISE = /Access-Control-Allow-Origin|Failed to load resource|appcheck|App 
   check('signout composes /login?next=/merchant-v2', !!so && so.target === '/login?next=/merchant-v2',
         so ? so.target : 'MISSING');
   check('...and terminates the session', !!so && so.term === true);
+  /* The other half of the return-path contract, and the reason it is conditional: a
+     session-terminating exit must carry NO return, or signing out bounces the merchant
+     straight back into a shell whose session has just ended - the login loop. */
+  check('...and carries NO return path, because that would be the login loop',
+        !!so && !/[?&]return=/.test(so.target), so ? so.target : 'MISSING');
   check('no exit target contains .html', (composed || []).every(e => !/\.html/.test(e.target)),
         (composed || []).map(e => e.target).join(' '));
 
@@ -117,8 +122,23 @@ const NOISE = /Access-Control-Allow-Origin|Failed to load resource|appcheck|App 
   navAttempts.length = 0;
   await page.evaluate(() => window.__mgo('home'));
   await page.waitForTimeout(1200);
+  /* Required an EXACT '/'. exitTarget() now appends a return path to every exit that does
+     not end the session - "so an exit is not a dead end": a merchant sent to pos-setup to
+     provision could otherwise only come back with the browser Back button. The destination
+     is unchanged; it gained a query string, and an exact-match assertion could not see the
+     difference between that and navigating somewhere else entirely.
+
+     So assert the PATH, then assert the return path separately - which makes this stronger
+     than before, because the contract's two halves are now both pinned: a normal exit
+     CARRIES a return into the shell, and a session-terminating exit must NOT (bouncing back
+     into a shell whose session just ended is the login loop the contract exists to
+     prevent). That negative half is asserted at the signout check above. */
+  const homeNav = navAttempts.find(u => String(u).split('?')[0] === '/');
   check('navigating to the "home" exit route leaves the shell to /',
-        navAttempts.includes('/'), navAttempts.join(',') || 'no navigation attempted');
+        !!homeNav, navAttempts.join(',') || 'no navigation attempted');
+  const ret = homeNav && decodeURIComponent((String(homeNav).match(/[?&]return=([^&]+)/) || [])[1] || '');
+  check('...carrying a return path back into the shell, so the exit is not a dead end',
+        !!ret && ret.indexOf('/merchant-v2') === 0, ret || 'no return= on a non-terminating exit');
 
   navAttempts.length = 0;
   errors.length = 0;
