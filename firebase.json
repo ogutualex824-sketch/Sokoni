@@ -524,7 +524,7 @@
           },
           {
             "key": "Permissions-Policy",
-            "value": "geolocation=(self), camera=(self), microphone=(self), notifications=(self), payment=(self), fullscreen=(self), autoplay=(self), clipboard-write=(self), gyroscope=(), magnetometer=(), accelerometer=()"
+            "value": "geolocation=(self), camera=(self), microphone=(self), notifications=(self), payment=(self), fullscreen=(self), autoplay=(self), clipboard-write=(self), bluetooth=(self), usb=(self), serial=(self), hid=(self), gyroscope=(), magnetometer=(), accelerometer=()"
           },
           {
             "key": "Cross-Origin-Opener-Policy",

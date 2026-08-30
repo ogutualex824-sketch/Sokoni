@@ -1788,6 +1788,9 @@
               ? '<button class="dbtn" id="dv-test">🧪 Test Print</button><button class="dbtn ghost" id="dv-forget">Forget</button><button class="dbtn ghost" id="dv-done">Done ↩</button>'
               : '<button class="dbtn" id="dv-connect">🔗 Connect Printer</button><button class="dbtn ghost" id="dv-reconnect">↻ Reconnect</button>') +
           '</div>' +
+          (PrinterState.reason
+            ? '<div class="dev-note" style="color:#f0b429;font-weight:600">' + String(PrinterState.reason).replace(/[<>]/g, '') + '</div>'
+            : '') +
           '<div class="dev-note">The printer is a shell-level device: connect once and it stays connected as you move between modules. If your browser drops it, it reconnects silently; only if it can\'t will you need to tap Reconnect.</div>' +
         '</div>' +
         '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">📷</div><div class="dev-meta"><div class="dev-name">Barcode Scanner</div><div class="dev-sub">Camera / USB — available in Cashier</div></div></div></div>' +
@@ -1943,7 +1946,7 @@
      The shell's own SokoniPrinter holds the connection; this single state object is the only
      source of truth. Every UI element (chip, Devices page, and any subscriber) reacts to it —
      nobody keeps their own "connected" boolean. */
-  var PrinterState = { connected: false, name: null, deviceId: null, transport: null, lastSeen: 0, printing: false };
+  var PrinterState = { connected: false, name: null, deviceId: null, transport: null, lastSeen: 0, printing: false, reason: '', supported: null };
   var _psSubs = [];
   function _broadcastPrinter () {
     /* Push the shell's printer state DOWN into every hosted iframe so their status surfaces
@@ -1958,12 +1961,26 @@
   window.SokoniPrinterState = { get: function () { return PrinterState; }, subscribe: function (fn) { _psSubs.push(fn); try { fn(PrinterState); } catch (_) {} } };
 
   var _eng = window.SokoniPrinter || null;
-  function _engName (d) { try { var s = _eng && _eng.getStatus && _eng.getStatus(); return (d && d.name) || (s && s.name) || 'Printer'; } catch (_) { return 'Printer'; } }
+  /* getStatus() is ASYNC — the previous code read .name off the returned PROMISE, which is
+     always undefined, so every connected printer displayed as the generic 'Printer'. The
+     device name we actually have is the one the engine hands us on the event. */
+  function _engName (d) {
+    try { return (d && (d.name || d.deviceName)) || PrinterState.name || 'Printer'; }
+    catch (_) { return 'Printer'; }
+  }
+  /* Web Bluetooth presence is the difference between 'not paired yet' and 'this browser
+     cannot do this at all'. Reporting them identically is what made the button look dead. */
+  function _btSupported () { try { return !!(navigator && navigator.bluetooth); } catch (_) { return false; } }
   if (_eng && _eng.on) {
     _eng.on('connected',    function (d) { _psSet({ connected: true,  name: _engName(d) }); });
     _eng.on('disconnected', function ()  { _psSet({ connected: false }); });
     _eng.on('forgotten',    function ()  { _psSet({ connected: false, name: null }); });
   }
+  /* On every page load / PWA resume, adopt the engine's ACTUAL state before any timer runs.
+     Without this the chip starts red even when the link is live, which is what made a working
+     printer look disconnected after a refresh. */
+  if (_eng) { try { if (_eng.connected) _psSet({ connected: true, reason: '' }); } catch (_) {} }
+
   function _remembered () { try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; } }
 
   window.SokoniShell = window.SokoniShell || {};
@@ -1973,16 +1990,48 @@
     /* Connect happens IN THE SHELL — the Bluetooth chooser opens here from a real user gesture
        (Devices button / chip). No separate wizard page, so the connection is never destroyed. */
     connect: async function () {
-      if (!_eng) return false;
+      if (!_eng) { _psSet({ connected: false, reason: 'Printer engine did not load. Reload the page.' }); return false; }
+      if (!_btSupported()) {
+        /* iOS has no Web Bluetooth at all, and some in-app browsers strip it. Say so plainly
+           instead of returning false into silence. */
+        _psSet({ connected: false, supported: false,
+          reason: 'This browser cannot use Bluetooth printing. Open the site in Chrome on Android, or install the app.' });
+        return false;
+      }
+      _psSet({ supported: true, reason: 'Opening the Bluetooth chooser…' });
       try {
         var list = await _eng.discoverBy('bluetooth');
-        if (list && list[0]) { await _eng.connect(list[0]); _psSet({ connected: true, name: list[0].name || 'Printer' }); return true; }
-      } catch (e) { _psSet({ connected: !!_eng.connected }); }
+        if (list && list[0]) {
+          _psSet({ reason: 'Pairing with ' + (list[0].name || 'printer') + '…' });
+          await _eng.connect(list[0]);
+          _psSet({ connected: true, name: list[0].name || 'Printer', reason: '' });
+          return true;
+        }
+        /* discover() returns [] BOTH when the user dismisses the chooser and when nothing
+           matched. With acceptAllDevices the latter is effectively impossible, so this is a
+           dismissal — not an error, but it must not look like a dead button. */
+        _psSet({ connected: false, reason: 'No printer chosen. Tap Connect Printer and pick your P58E from the list.' });
+      } catch (e) {
+        var m = (e && (e.message || e.name)) || 'Unknown Bluetooth error';
+        if (/SecurityError|permissions policy|disallowed/i.test(m))
+          m = 'The browser blocked Bluetooth for this page. Fully close and reopen the app, then try again.';
+        else if (/User cancelled|NotFoundError/i.test(m))
+          m = 'No printer chosen. Tap Connect Printer and pick your P58E from the list.';
+        else if (/GATT|network|Connection/i.test(m))
+          m = 'Found the printer but could not connect. Switch it off and on, keep it close, then retry.';
+        _psSet({ connected: !!_eng.connected, reason: m });
+      }
       return false;
     },
     reconnect: async function () {
       if (!_eng) return false;
-      try { var ok = await _eng.autoReconnect(); if (ok || _eng.connected) { _psSet({ connected: true }); return true; } } catch (_) {}
+      if (!_btSupported()) { return this.connect(); }   /* connect() reports the real reason */
+      _psSet({ reason: 'Reconnecting…' });
+      try {
+        var ok = await _eng.autoReconnect();
+        if (ok || _eng.connected) { _psSet({ connected: true, reason: '' }); return true; }
+      } catch (_) {}
+      /* Silent reconnect failed — fall back to the chooser, which NEEDS this user gesture. */
       return this.connect();
     },
     forget: async function () {
@@ -2014,7 +2063,20 @@
       if (!_remembered()) return;
       _arBusy = true;
       Promise.resolve(_eng.autoReconnect())
-        .then(function (ok) { if (ok || _eng.connected) { _arCancelStartup(); _wakeTried = false; _psSet({ connected: true }); } })
+        .then(function (ok) {
+          if (ok || _eng.connected) { _arCancelStartup(); _wakeTried = false; _psSet({ connected: true, reason: '' }); return; }
+          /* Silent reconnect is only possible via navigator.bluetooth.getDevices(). When the
+             browser did not retain the pairing grant (common in an installed PWA) that returns
+             nothing, and no amount of retrying will help — a user gesture is required. Say so
+             once, instead of leaving a red chip with no explanation. */
+          if (_startupDone) return;
+          var why = !_btSupported()
+            ? 'This browser cannot use Bluetooth printing.'
+            : (!(navigator.bluetooth && navigator.bluetooth.getDevices)
+                ? 'This browser cannot reconnect silently. Tap Reconnect once after opening.'
+                : 'Could not reconnect automatically. Tap Reconnect, then pick your printer.');
+          _psSet({ connected: false, reason: why });
+        })
         .catch(function () {})
         .then(function () { _arBusy = false; });
     }
