@@ -1293,12 +1293,30 @@ const DOC_TYPES = [
 /* ── Printer state ── */
 let _connectedDevice = null;
 
+/* THE SHELL OWNS THE CONNECTION. This page runs in an iframe, so its PrinterManager
+   reads a SokoniPrinter that is NOT the object holding the GATT link — it reported
+   'No printer connected' while Devices showed the printer connected. merchant-v2
+   broadcasts __sokoniPrinterState; this page had NO message listener at all, so the
+   state never arrived. Standalone use is unaffected: nothing sends the message, so
+   _shellPrinter stays null and PrinterManager.connected decides as before. */
+var _shellPrinter = null;
+window.addEventListener('message', function (ev) {
+  if (ev.origin !== location.origin) return;
+  var d = ev.data || {};
+  if (!d.__sokoniPrinterState) return;
+  _shellPrinter = d.state || null;
+  /* Feed the print service's own state machine too, so every surface on this page
+     agrees rather than each computing its own answer. */
+  try { if (window.__sokoniApplyShellPrinter) window.__sokoniApplyShellPrinter(_shellPrinter || { connected: false }); } catch (_) {}
+  try { updateStatusBar(); } catch (_) {}
+});
+
 function updateStatusBar () {
   const dot    = document.getElementById('statusDot');
   const text   = document.getElementById('statusText');
   const badge  = document.getElementById('transportBadge');
   const discBtn= document.getElementById('btnDisconnect');
-  const ok = PrinterManager.connected;
+  const ok = PrinterManager.connected || !!(_shellPrinter && _shellPrinter.connected);
   /* Auto-return: if we arrived with ?return= and a connection JUST succeeded here,
      replace back to the caller (POS/seller) — no manual Back needed. Only on the
      transition to connected, so arriving already-connected (to do advanced work)
@@ -2874,6 +2892,24 @@ Promise.race([
       renderStatus(st);
       if (!r[0]) $('cc-state').textContent = 'Could not read your setup status. Reload to try again.';
     });
+
+    /* PROVISIONING HAPPENS ELSEWHERE. 'Device' reflects a SERVER fact
+       (getSetupStatus().checklist.deviceRegistered) written by pos-setup.html via the
+       pos-provision route — this page has no provisioning code at all. Read once on
+       load it stays grey even after a successful provision, so re-read when the
+       merchant comes back. Deliberately NOT tied to the printer: a Bluetooth
+       connection is not a provisioned device, and this item gates Open Till. */
+    var _lastStatusRead = Date.now();
+    var _refreshStatus = function () {
+      if (document.hidden) return;
+      if (Date.now() - _lastStatusRead < 3000) return;   /* not on every flicker */
+      _lastStatusRead = Date.now();
+      op('getSetupStatus', {}).then(function (st2) {
+        if (st2) renderStatus(st2);
+      }).catch(function () {});
+    };
+    window.addEventListener('focus', _refreshStatus);
+    document.addEventListener('visibilitychange', _refreshStatus);
   });
 })();
 </script>

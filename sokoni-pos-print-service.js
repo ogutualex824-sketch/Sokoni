@@ -470,6 +470,41 @@ const PRINTER_STATES = {
    every POS status surface mirrors the ONE shell-owned connection. */
 let _shellPrinterState = null;
 if (typeof window !== 'undefined') {
+  /* ONE CONNECTION, NOT THREE. A framed module runs in its own JS context, so the
+     shell's GATT link is unreachable here: _print() sees no connected engine and
+     QUEUES the job, which reports success and produces no paper. When the shell has
+     told us it holds a connected printer, send the rendered ESC/POS bytes up and let
+     the shell write them through the one real connection.
+     Standalone POS never takes this path — _framed() is false there. */
+  var _shellJobs = {};
+  function _framed () { try { return !!(window.parent && window.parent !== window); } catch (_) { return false; } }
+  function _shellCanPrint () { return _framed() && !!(_shellPrinterState && _shellPrinterState.connected); }
+  function _printViaShell (bytes) {
+    return new Promise(function (resolve) {
+      var jobId = 'sj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      var done = false;
+      var finish = function (ok, err) {
+        if (done) return; done = true; delete _shellJobs[jobId];
+        resolve({ ok: !!ok, error: err || null });
+      };
+      _shellJobs[jobId] = finish;
+      try {
+        window.parent.postMessage({ __sokoniPos: true, type: 'printBytes',
+          jobId: jobId, bytes: Array.from(bytes) }, location.origin);
+      } catch (e) { finish(false, 'Could not reach the shell printer.'); return; }
+      /* A silent shell is a FAILURE, not a success. Without this the promise would
+         never settle and the sale would hang mid-print. */
+      setTimeout(function () { finish(false, 'The shell printer did not respond.'); }, 15000);
+    });
+  }
+  window.addEventListener('message', function (ev) {
+    if (ev.origin !== location.origin) return;
+    var m = ev.data || {};
+    if (m.__sokoniShell && m.type === 'printResult' && _shellJobs[m.jobId]) {
+      _shellJobs[m.jobId](!!m.ok, m.error || null);
+    }
+  });
+
   window.__sokoniApplyShellPrinter = function (st) {
     _shellPrinterState = st || null;
     try { _printerState.reconcile(); } catch (_) {}
@@ -1107,6 +1142,22 @@ class PosPrintService {
     const eng = _eng();
 
     if (!eng?.connected && !pm?.connected) {
+      /* THE SHELL MAY HOLD THE CONNECTION. Try the real printer before deciding this
+         job is offline — queueing here is exactly what produced a green UI and no
+         paper for every sale rung inside the merchant shell. */
+      if (_shellCanPrint()) {
+        const viaShell = await _printViaShell(bytes);
+        if (viaShell.ok) {
+          const ms = Date.now() - t0;
+          this.metrics.record({ ...jobMeta, printDoneMs: ms, totalMs: ms });
+          this.health.markPrinted(jobMeta.receiptId || _uuid());
+          this._emit('printed', { ...jobMeta, durationMs: ms, viaShell: true });
+          return { success: true, viaShell: true, durationMs: ms };
+        }
+        /* The shell tried and FAILED. Report the real reason; do not pretend the job
+           merely needs queueing, and never report success. */
+        this._emit('error', { ...jobMeta, error: new Error(viaShell.error || 'Shell print failed') });
+      }
       /* Printer offline — queue the job */
       const queued = this.queue.enqueue({ bytes: Array.from(bytes), ...jobMeta });
       this._emit('queued', { ...jobMeta, queued });

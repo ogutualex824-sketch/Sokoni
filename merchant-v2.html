@@ -896,13 +896,45 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var d = e.data || {};
     if (!d.__sokoniPos) return;
     /* A module reports the printer it just connected — the shell RECORDS it, so the
-       next module (and the next session) gets it without pairing again. */
+       next module (and the next session) gets it without pairing again.
+
+       A MODULE MAY NOT DOWNGRADE THE SHELL. A framed module runs in its own JS context,
+       so its SokoniPrinter is NOT the object holding the GATT link — pos.html reports
+       connected:false on a tick while the shell is genuinely connected. Acting on that
+       flipped the Devices card from 'connected' to 'saved' the moment POS was opened,
+       and the shell's own engine events are the only authority for a disconnect. */
     if (d.type === 'printerStatus') {
-      DEV.printer.state = d.connected ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
-      DEV.printer.name = d.name || DEV.printer.name;
-      if (d.connected && d.deviceId) {
-        saveDevice({ type: 'printer', id: d.deviceId, name: d.name || 'Printer', at: Date.now() });
-      } else { emit('devices'); paintStatus(); }
+      if (d.connected) {
+        DEV.printer.state = 'connected';
+        DEV.printer.name = d.name || DEV.printer.name;
+        DEV.printer.reason = '';
+        if (d.deviceId) saveDevice({ type: 'printer', id: d.deviceId, name: d.name || 'Printer', at: Date.now() });
+        else { emit('devices'); paintStatus(); broadcastDevices(); }
+      } else if (DEV.printer.state !== 'connected') {
+        /* Only accept a negative when the shell does not already know better. */
+        DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown';
+        emit('devices'); paintStatus();
+      }
+    }
+
+    /* PRINT ON BEHALF OF A FRAMED MODULE. The GATT link lives here, so a module that
+       renders a receipt in its own context cannot write it — _print() there sees no
+       connected engine and QUEUES the job, which looks like success and produces no
+       paper. The module sends the rendered ESC/POS bytes up; the shell writes them
+       through the one connected engine and reports the real outcome back. */
+    if (d.type === 'printBytes' && Array.isArray(d.bytes)) {
+      (function (jobId, bytes, src) {
+        var reply = function (ok, err) {
+          try { src.postMessage({ __sokoniShell: true, type: 'printResult', jobId: jobId,
+                                  ok: !!ok, error: err || null }, location.origin); } catch (_) {}
+        };
+        var eng = window.SokoniPrinter;
+        if (!eng || !eng.printRaw) { reply(false, 'No printer engine in the shell.'); return; }
+        if (!eng.connected) { reply(false, 'The shell printer is not connected.'); return; }
+        Promise.resolve(eng.printRaw(new Uint8Array(bytes)))
+          .then(function () { reply(true); })
+          .catch(function (err) { reply(false, (err && err.message) || 'Print failed.'); });
+      })(d.jobId, d.bytes, e.source);
     }
     /* A module asking what the shell already knows, instead of rediscovering. */
     if (d.type === 'requestShellState') { broadcastSession(); broadcastDevices(); }
@@ -1432,8 +1464,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var msg = { __sokoniShell: true, type: 'devices',
                 printer: { state: DEV.printer.state, name: DEV.printer.name, saved: !!DEV.printer.saved },
                 devices: DEV.list };
+    /* SECOND SHAPE, deliberately. sokoni-pos-print-service.js already consumes
+       __sokoniPrinterState via window.__sokoniApplyShellPrinter — that receiver was
+       built for the OLD shell and merchant-v2 never sent it, so every framed module
+       showed a disconnected printer while the shell was connected. Sending both
+       shapes wires the existing receiver instead of inventing a third protocol. */
+    var pmsg = { __sokoniPrinterState: true,
+                 state: { connected: DEV.printer.state === 'connected', name: DEV.printer.name } };
     [].forEach.call(document.querySelectorAll('.panel iframe'), function (f) {
       try { f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+      try { f.contentWindow.postMessage(pmsg, location.origin); } catch (_) {}
     });
   }
   function broadcastSession () {
