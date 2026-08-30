@@ -358,8 +358,15 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
 
   /* ══ 14 · page guard ══ */
   head('14 · workspace page guard');
+  /* Was pinned to the original four. The table has since gained the two dashboard
+     workspaces, which are real gated pages - routing MORE workspace pages is stricter, not
+     weaker, so the assertion follows the contract rather than holding it back. Still exact
+     equality, so a page that is not a workspace still fails the moment it is added. */
   ck('only true workspaces are routed', Object.keys(RA.WORKSPACE_ROUTES).sort().join(',') ===
-     'driver.html,landlord.html,provider.html,seller.html', Object.keys(RA.WORKSPACE_ROUTES).join(','));
+     'driver.html,landlord.html,provider-dashboard.html,provider.html,rider-dashboard.html,seller.html',
+     Object.keys(RA.WORKSPACE_ROUTES).join(','));
+  ck('provider-dashboard.html gates on provider', RA.WORKSPACE_ROUTES['provider-dashboard.html'] === 'provider');
+  ck('rider-dashboard.html gates on the CANONICAL rider',  RA.WORKSPACE_ROUTES['rider-dashboard.html'] === 'rider');
   ck('driver.html maps to the CANONICAL rider, not legacy driver',
      RA.WORKSPACE_ROUTES['driver.html'] === 'rider');
   ck('landlord.html maps to landlord, NOT collapsed to business',
@@ -377,7 +384,21 @@ const setToken = (claims) => { TOKEN = { claims: claims || {} }; };
 
   const g2 = await RA.guardWorkspace('landlord');
   ck('an unapproved role is denied', !g2.ok && g2.reason === 'not-approved', g2.reason);
-  ck('...and IS redirected somewhere useful', global.window.__replaced === '/profile', global.window.__replaced);
+  /* Was pinned to the generic '/profile'. The guard now sends an authenticated-but-not-
+     approved user to that ROLE'S OWN application flow (APPLICATION_ROUTES), falling back to
+     /profile only for a role with no dedicated intake. That is strictly more useful, which
+     is what this assertion is named for.
+
+     Checking one destination could not tell a per-role lookup from a hardcoded constant, so
+     a second role is exercised below: same mechanism, different destination. */
+  ck('...and IS redirected to that role\'s own application flow',
+     global.window.__replaced === 'onboarding-landlord.html', global.window.__replaced);
+
+  global.window.__replaced = null;
+  const gProv = await RA.guardWorkspace('provider');
+  ck('a different unapproved role is denied too', !gProv.ok && gProv.reason === 'not-approved', gProv.reason);
+  ck('...and lands on ITS application flow, so the destination is derived per role',
+     global.window.__replaced === 'provider-onboarding.html', global.window.__replaced);
 
   /* THE REDIRECT-LOOP GUARD: "cannot verify" must never bounce. */
   global.window.__replaced = null;
