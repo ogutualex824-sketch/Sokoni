@@ -52,6 +52,21 @@ const RATES = {
   hotel:            { pct: 5,   fixedKES: 0,    _was: 'hub bnb 5%' },
   digital_products: { pct: 10,  fixedKES: 0,    _was: 'hub digital 10% / category 20%' },
 
+  /* ── POS / merchant shop sales — its OWN authority, not marketplace's ──────────────
+   * STRICTLY 5% of every COMPLETED POS sale, whatever the tender. Cash, M-PESA via the
+   * seller's Daraja till, card — all 5%. The RAIL does not determine the rate: Daraja is
+   * how M-PESA POS money is collected, not what makes a sale a POS sale.
+   *
+   * Until now `pos` was an ALIAS of `marketplace`, so POS silently charged the marketplace
+   * rate — live evidence: a KES 3,500 till sale booked KES 105, i.e. 3%. Changing the
+   * marketplace rate moved POS with it, and deleting the alias would have dropped POS into
+   * the 5% `default` arm, which is a different rule that merely shares a number.
+   *
+   * POS must never inherit marketplace, and must never reach 5% via `default`. A recorded
+   * rate of 5% with category `default` is a FAILURE, not a pass — which is why the ledger
+   * records the resolved category alongside the percentage. */
+  pos:              { pct: 5,   fixedKES: 0,    _was: 'ALIASED to marketplace (3%) until 2026-08-30 — POS had no rate of its own' },
+
   /* ── rates that were buried inside hub Cloud Functions as bare literals ──
    * These were never in any table. They were `const platformFeeRate = 0.03;` sitting in the
    * middle of a purchase handler, which is why no audit of the "commission tables" ever found
@@ -85,7 +100,20 @@ const RATES = {
  * used different vocabularies for the same hubs. Both vocabularies resolve here, so no caller
  * has to know which one it holds. */
 const ALIASES = {
-  shopping: 'marketplace', pos: 'marketplace', b2b: 'marketplace',
+  /* `pos` is NO LONGER an alias — it has its own RATES entry at 5%. Re-adding it here
+     would silently reprice every POS sale to the marketplace rate. */
+  shopping: 'marketplace', b2b: 'marketplace',
+
+  /* ── live category vocabulary, mapped explicitly ───────────────────────────────────
+   * These are the labels production callers actually emit. Until now none of them
+   * matched a key, so every live transaction fell through to `default` 5% — the
+   * marketplace 3% rate had never priced anything. `subscription` (singular) was the
+   * costliest: `subscriptions` is 100% platform revenue, so a 5% charge paid out 95% of
+   * platform money to the provider.
+   * Mapped here rather than left to `default`, because with the fail-closed check below
+   * an unmapped label now REFUSES to price instead of guessing. */
+  product: 'marketplace',        /* a product order is a marketplace sale */
+  subscription: 'subscriptions', /* singular label, plural category — 100% platform revenue */
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',
   pharmacy: 'healthcare',

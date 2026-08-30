@@ -493,6 +493,34 @@ async function calculateCommission(db, opts) {
   }
 
   const base = CC.resolveRate(category);
+
+  /* ── FAIL CLOSED ON AN UNRESOLVED CATEGORY ────────────────────────────────────────────
+   * `resolveRate` returns `matched: false` for a label that is in neither RATES nor
+   * ALIASES, and silently hands back RATES.default. That silence is how the marketplace
+   * 3% rate went its whole life without ever pricing a transaction: live callers emit
+   * `product`, which matched nothing, so every sale was charged the 5% default while the
+   * table looked authoritative. `subscription` (singular) took the same path and paid out
+   * 95% of what policy says is platform revenue.
+   *
+   * A rate nobody chose must not move money. This throws instead, and the name is
+   * deliberate so a caller cannot swallow it as a generic error.
+   *
+   * It fires ONLY when the category table is the actual pricing authority. A
+   * commissionRule, a revenueConfig override or a subscription plan rate all price the
+   * transaction without consulting the table, so an unrecognised label alongside one of
+   * those is not ambiguous and is left alone. */
+  if (!base.matched && !rule && rcPct === null && subRatePct === null) {
+    const e = new Error(
+      'COMMISSION_CATEGORY_UNRESOLVED: "' + String(category) + '" is not a known commission ' +
+      'category and no rule, revenueConfig override or subscription plan rate applies. ' +
+      'Refusing to price this transaction from the default arm — add the category to ' +
+      'RATES or ALIASES in functions/commission-config.js, or pass an explicit rate.'
+    );
+    e.code = 'COMMISSION_CATEGORY_UNRESOLVED';
+    e.category = String(category);
+    throw e;
+  }
+
   let commissionCents;
   let effectiveRate = rule ? rule.rate
                     : (rcPct !== null ? rcPct

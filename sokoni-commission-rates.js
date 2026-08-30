@@ -55,6 +55,10 @@
       "pct": 10,
       "fixedKES": 0
     },
+    "pos": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "event_tickets": {
       "pct": 3,
       "fixedKES": 0
@@ -103,8 +107,9 @@
 
   var ALIASES = {
     "shopping": "marketplace",
-    "pos": "marketplace",
     "b2b": "marketplace",
+    "product": "marketplace",
+    "subscription": "subscriptions",
     "restaurant": "food_delivery",
     "food": "food_delivery",
     "home_services": "services",

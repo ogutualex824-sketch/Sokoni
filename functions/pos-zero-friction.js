@@ -159,6 +159,7 @@ async function _postSaleFinancials(o) {
 
     /* ── COMMISSION — the canonical rate, never a local table ──────────────── */
     let pct = null, commissionCents = 0, sellerNetCents = null;
+    let rateCategory = null, pricingSource = null;
     try {
       const FU = require('./finos-utils');
       /* Cents in, cents out — calculateCommission speaks orderAmountCents and
@@ -171,6 +172,13 @@ async function _postSaleFinancials(o) {
       pct = (c && typeof c.effectiveRate === 'number') ? c.effectiveRate : null;
       commissionCents = (c && Number.isInteger(c.commissionCents)) ? c.commissionCents : 0;
       sellerNetCents  = (c && Number.isInteger(c.sellerNetCents)) ? c.sellerNetCents : null;
+      /* PROVENANCE. `5` alone is not evidence that the POS rule priced this sale — the
+         `default` arm is ALSO 5, and that arm is what has been pricing live traffic. The
+         resolved category is what separates them, so it is recorded on the ledger entry:
+         category `pos` means the POS authority applied; category `default` on a POS sale
+         is a FAILURE even though the number looks correct. */
+      rateCategory  = (c && c.category) || null;
+      pricingSource = (c && c.pricingSource) || null;
     } catch (e) {
       out.status = 'failed';
       out.error = 'commission rate unavailable: ' + ((e && e.message) || e);
@@ -217,7 +225,15 @@ async function _postSaleFinancials(o) {
         /* Derived from the SALE's idempotency key, so a retried posting for the
            same sale is recognised and cannot double-book commission. */
         idempotencyKey: 'poscomm_' + o.idempotencyKey,
-        metadata: { collectionRoute: out.collectionRoute, commissionPct: pct },
+        /* rateCategory is the evidence, not commissionPct. Both the POS rule and the
+           `default` arm yield 5, so only the resolved category proves which authority
+           priced this sale. A reconciliation reads this field, never the number alone. */
+        metadata: {
+          collectionRoute: out.collectionRoute,
+          commissionPct:   pct,
+          rateCategory:    rateCategory,
+          pricingSource:   pricingSource,
+        },
       });
     }
 
