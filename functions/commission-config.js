@@ -50,7 +50,7 @@ const RATES = {
      960ac72 (2026-08-29); RESTORED to 3 here. The 5% is live today, so this is a deliberate
      rate cut on the marketplace base and must be approved as one. POS is unaffected — it has
      its own 5% and does not read this value. */
-  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%; raised 3→5 (33fa804, 960ac72); RESTORED to 3 on 2026-08-30 as the package-discountable base' },
+  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; PACKAGE-GOVERNED from 2026-08-30 — this value is the FREE-tier equivalent and is overridden per seller by PACKAGE_RATES' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
@@ -85,7 +85,7 @@ const RATES = {
   ppv:              { pct: 15,  fixedKES: 0,    _was: 'entertainment-hub.js:215 `listing.price * 0.15`' },
 
   /* ── no hub counterpart, so no conflict: the existing category rate stands ── */
-  services:         { pct: 15,  fixedKES: 0,    _was: 'category only' },
+  services:         { pct: 5,   fixedKES: 0,    _was: 'category only 15%; PACKAGE-GOVERNED from 2026-08-30 — FREE-tier equivalent, overridden per seller by PACKAGE_RATES' },
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },
   jobs:             { pct: 15,  fixedKES: 0,    _was: 'category only' },
   classifieds:      { pct: 8,   fixedKES: 0,    _was: 'category only' },
@@ -165,6 +165,58 @@ const ALIASES = {
 /* Minimum commission on any non-zero-rated transaction, so a KES 20 sale does not cost more
  * to process than it earns. Was hardcoded as `const minKES = 10` inside index.js. */
 const MIN_COMMISSION_KES = 10;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   SELLER PACKAGE COMMISSION — ABSOLUTE TAKE RATES (locked 2026-08-30)
+   ══════════════════════════════════════════════════════════════════════════════════════════
+   These are the rates SOKONI CHARGES, not discounts applied to a base. A Pro seller pays 3%,
+   full stop — not "3% off something". The distinction is load-bearing and has been got wrong
+   in both directions before:
+
+     - the ANCIENT model held absolute rates (free 15% / business 4%) from an era when the
+       base was ~15%; re-applying those against a small base would RAISE commission, so the
+       "discount" became a penalty;
+     - the INTERIM model made them relative discounts on a 3% base, producing 2.94 / 2.85 /
+       2.70 — nobody's intended commercial rates.
+
+   The seller pays their package rate. A seller with no package, or whose subscription is not
+   active, pays the FREE rate — never zero, never the raw category rate.
+
+   POS IS NOT HERE, BY DESIGN. A POS sale is an in-shop merchant sale at a flat 5%; a package
+   buys better MARKETPLACE economics and must not reach the till. finos-utils excludes `pos`
+   from this layer on the RESOLVED category, so no alias can route around it. */
+const PACKAGE_RATES = {
+  free:       5,
+  basic:      4,
+  pro:        3,
+  enterprise: 2,
+};
+
+/* Tier names the Subscription Engine may return, normalised onto the four package rates.
+   sub-billing.js ships seller_free / seller_basic / seller_pro / seller_enterprise as well as
+   the bare names, and an unrecognised tier must fall to FREE rather than to nothing. */
+const PACKAGE_TIER_ALIASES = {
+  seller_free: 'free', seller_basic: 'basic', seller_pro: 'pro', seller_enterprise: 'enterprise',
+  starter: 'basic', business: 'pro', none: 'free', trial: 'free',
+};
+
+/* Categories whose commission is set by the seller's package rather than by a flat category
+   rate. Everything else keeps its own differentiated rate (food_delivery, digital_products,
+   education, jobs, classifieds, vehicles, hub, subscriptions...). */
+const PACKAGE_CATEGORIES = ['marketplace', 'services'];
+
+/** The absolute take rate for a package tier. Unknown/absent/inactive => the FREE rate. */
+function packageRate(tier) {
+  const t = String(tier || '').trim().toLowerCase();
+  const key = PACKAGE_RATES[t] !== undefined ? t : (PACKAGE_TIER_ALIASES[t] || 'free');
+  const pct = PACKAGE_RATES[key];
+  return { pct: pct !== undefined ? pct : PACKAGE_RATES.free, tier: key };
+}
+
+/** Is this category priced by the seller's package? */
+function isPackageCategory(category) {
+  return PACKAGE_CATEGORIES.indexOf(String(category || '').trim().toLowerCase()) !== -1;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
@@ -349,6 +401,7 @@ function categoryForHub(hub) {
 }
 
 module.exports = {
+  PACKAGE_RATES, PACKAGE_CATEGORIES, packageRate, isPackageCategory,
   resolveRate,
   listCategories,
   categoryForHub,

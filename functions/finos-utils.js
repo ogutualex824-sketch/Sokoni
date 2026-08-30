@@ -545,6 +545,29 @@ async function calculateCommission(db, opts) {
    * expired Business plan must not keep discounting.
    *
    * A `fixed` rule has no percentage to discount, so the plan does not apply to it. */
+  /* ── SELLER PACKAGE TAKE RATE (marketplace / services) ────────────────────────────────
+   * For package-governed categories the seller's package IS the commission: Free 5, Basic 4,
+   * Pro 3, Enterprise 2 — absolute rates SOKONI charges, NOT discounts off a base. A seller
+   * with no package, or an inactive one, pays the FREE rate; never zero, never the raw
+   * category number.
+   *
+   * Runs BEFORE `baseRate` is captured so the audit records the rate the seller was actually
+   * charged, and so the relative plan-adjustment layer below cannot discount it a second
+   * time — that would turn Pro's 3% into 2.85% and reintroduce exactly the interim model
+   * this replaces.
+   *
+   * It sits BELOW commissionRules and revenueConfig, so platform governance still overrides
+   * it, and it touches no other category — POS least of all. */
+  let packageTier = null, packageRateApplied = false;
+  if (!rule && rcPct === null && subRatePct === null && CC.isPackageCategory(base.category)) {
+    const sub = sellerId ? await _resolveSellerPlan(sellerId) : null;
+    const tier = (sub && sub.active) ? sub.tier : 'free';
+    const pr = CC.packageRate(tier);
+    effectiveRate = pr.pct;
+    packageTier = pr.tier;
+    packageRateApplied = true;
+  }
+
   const baseRate = effectiveRate;
   let planId = null, planStatus = null, planDeltaPct = 0, planLabel = null;
   let planApplied = false, planSource = 'none', planType = null, planSkipped = null;
@@ -567,6 +590,11 @@ async function calculateCommission(db, opts) {
 
   if (isPos) {
     planSkipped = 'pos_excluded_from_package_adjustment';
+  } else if (packageRateApplied) {
+    /* The package schedule already SET the rate. Applying the relative discount layer on top
+       would charge Pro 2.85% instead of 3% — a second discount on an already-discounted
+       rate, and precisely the interim model that was rejected. */
+    planSkipped = 'package_rate_is_authoritative';
   } else if (!CC.planRolloutEnabled(planCfg)) {
     planSkipped = 'rollout_disabled';
   } else if (sellerId && !(rule && rule.type === 'fixed')) {
@@ -680,7 +708,11 @@ async function calculateCommission(db, opts) {
      * baseRate + planAdjustment == effectiveRate, except where a floor or a holiday clamped
      * it — which is precisely why the clamp is recorded rather than implied. */
     baseRate,                                   /* before the plan touched it */
-    planId,                                     /* the tier, or null if the seller has none */
+    /* Which seller package set the rate, and whether it did. Written to the ledger so a
+       marketplace settlement can be explained years later: "3% because Pro", not just "3%". */
+    packageTier,
+    packageRateApplied,
+    planId,                                     /* the tier, or null if the sellerhas none */
     planName: planLabel || planId || null,      /* the human name of the plan */
     planStatus,                                 /* active / trialing / grace / expired ... */
     planAdjustment: planApplied ? planDeltaPct : 0,
