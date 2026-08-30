@@ -1895,6 +1895,45 @@ window.PosPrintService = new PosPrintService();
      · never print, enqueue or drain anything — a reload is not a print trigger
 
    Returns true ONLY when a printer is genuinely connected afterwards. */
+/* ══ FIRST-TIME PAIRING ════════════════════════════════════════════════════════
+   merchant-v2 has always called `eng.connect()` and NOTHING implemented it — the
+   exact defect this file already documents for autoReconnect, one method later:
+
+       if (!ok && eng.connect) ok = await eng.connect();
+
+   `eng.connect` was undefined, so the branch was skipped, ok stayed false and the
+   Devices panel reported 'No printer connected.' WITHOUT EVER OPENING A CHOOSER.
+
+   THIS ADDS NO BLUETOOTH CODE. SokoniDeviceHub owns the chooser (requestDevice ->
+   adapter.requestNew -> navigator.bluetooth.requestDevice), the registry and GATT.
+   Pairing through the hub means the device lands in the SAME registry autoReconnect
+   reads, so one pairing is enough forever.
+
+   GESTURE CONTRACT: this must be reachable from a click with NO await in front of
+   the chooser. The hub is read synchronously and hub.requestDevice() is CALLED
+   synchronously; the first suspension happens inside requestDevice() itself. Do not
+   introduce an await above it. */
+window.PosPrintService.connect = async function connect () {
+  const hub = window.SokoniDeviceHub;                    /* sync: no await before the chooser */
+  if (!hub || typeof hub.requestDevice !== 'function') {
+    throw new Error('Device hub unavailable — sokoni-device-hub.js is not loaded on this page.');
+  }
+
+  /* Opens the browser chooser. Returns null when the user CANCELS (the hub maps
+     NotFoundError to null); any other failure throws and must reach the caller so it
+     can be shown, never flattened into a generic 'no printer'. */
+  const profile = await hub.requestDevice('bluetooth', 'printer');
+  if (!profile) return false;                            /* cancelled — a normal outcome */
+
+  await hub.connect(profile.id);
+
+  /* Ask the hub; do not infer success from the absence of a throw. */
+  const live = (typeof hub.getPrinter === 'function') ? hub.getPrinter() : null;
+  const ok = !!live;
+  try { _printerState.set(ok ? 'connected' : 'disconnected', { name: (live || profile).name || null }); } catch (_) {}
+  return ok;
+};
+
 window.PosPrintService.autoReconnect = async function autoReconnect () {
   const hub = window.SokoniDeviceHub;
   if (!hub || typeof hub.discover !== 'function') return false;

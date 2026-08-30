@@ -627,6 +627,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      type="module" so it is deferred: the shell renders its chrome without waiting for
      the SDK, and the data layer awaits it only when a surface actually needs data. -->
 <script type="module" src="firebase.js"></script>
+<!-- Printer stack, loaded UP FRONT on purpose. printerEngine() used to fetch
+     sokoni-pos-print-service.js inside the Connect click; a network load between
+     the tap and navigator.bluetooth.requestDevice() ends the transient user
+     activation and the browser refuses the chooser. The hub owns the chooser, the
+     device registry and GATT, so it must be present before the first tap too. -->
+<script defer src="sokoni-device-hub.js"></script>
+<script defer src="sokoni-pos-print-service.js"></script>
 <script src="sokoni-merchant-routes.js"></script>
 
 <!-- The NINE native surfaces v1 already implements, as modules. Nothing here is
@@ -3152,12 +3159,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      Must be called from inside a user gesture the first time — eng.connect() opens the browser
      chooser, and a chooser without a gesture is refused. */
   async function connectPrinterNow () {
-    var eng = await printerEngine();
-    if (!eng) return { ok: false, reason: 'engine-unavailable' };
-    /* A SAVED device reconnects silently — no chooser. Only a first-time pairing
-       opens the browser prompt, and that needs the user gesture we are inside. */
-    var ok = DEV.printer.saved && eng.autoReconnect ? await eng.autoReconnect() : false;
-    if (!ok && eng.connect) ok = await eng.connect();
+    /* SYNCHRONOUS on purpose. The service is preloaded, so this resolves without
+       awaiting anything; the old `await printerEngine()` performed a loadScript()
+       fetch here and spent the user activation the chooser depends on. */
+    var eng = window.PosPrintService || null;
+    if (!eng) {
+      /* Only reachable if the preload failed. Recover, but the gesture is gone, so
+         this attempt can only reconnect silently - the merchant taps once more. */
+      eng = await printerEngine();
+      if (!eng) return { ok: false, reason: 'engine-unavailable' };
+    }
+    var ok = false;
+    /* ONLY a saved printer can reconnect silently. With nothing saved there is nothing
+       to reconnect, and awaiting it would spend the gesture the chooser needs - which
+       is exactly why first-time pairing never opened a chooser. */
+    if (DEV.printer.saved && eng.autoReconnect) {
+      try { ok = await eng.autoReconnect(); } catch (_) { ok = false; }
+    }
+    if (!ok) {
+      if (typeof eng.connect !== 'function') return { ok: false, reason: 'connect-unavailable' };
+      /* Errors PROPAGATE to deviceConnect, which shows them. A silent catch here is what
+         turned every real Bluetooth failure into a generic 'No printer connected.' */
+      ok = await eng.connect();
+    }
     if (ok) {
       DEV.printer.name = DEV.printer.name || 'Printer';
       saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
@@ -3172,6 +3196,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     try {
       var r = await connectPrinterNow();
       if (r.reason === 'engine-unavailable') toast('The printer service could not be loaded.');
+      else if (r.reason === 'connect-unavailable') toast('Printer pairing is unavailable on this page. Reload and try again.');
       else if (!r.ok) toast('No printer connected.');
     } catch (e) { DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown'; toast('Could not connect: ' + (e.message || e)); }
     done(btn); paintStatus(); broadcastDevices(); renderDevices(nativePanel('devices'));

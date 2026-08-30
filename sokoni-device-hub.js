@@ -220,22 +220,38 @@
     async requestNew(deviceType) {
       if (!this.available()) throw new Error('Web Bluetooth not supported');
       const filters = [];
-      /* Narrow the BT scan based on intended device type */
-      if (deviceType === TYPE.PRINTER)  filters.push({ services: [0x18F0] });
+      /* Narrow the BT scan based on intended device type.
+         PRINTERS ARE THE EXCEPTION and deliberately stay unfiltered. A device only
+         appears in the chooser if its ADVERTISEMENT carries the filtered service UUID,
+         and many P58E units (and the clones) advertise none — a filtered request shows
+         an EMPTY chooser and the merchant concludes the printer cannot be found.
+         requestDevice() can only run once per gesture, so filter-then-fallback is not
+         possible in one tap. optionalServices still grants access after the pick. */
       if (deviceType === TYPE.SCANNER)  filters.push({ services: [0x1124] });
       if (deviceType === TYPE.PAYMENT_TERMINAL) filters.push({ services: [0x1101] });
       const device = await navigator.bluetooth.requestDevice({
         filters:   filters.length ? filters : undefined,
         acceptAllDevices: !filters.length,
         optionalServices: ['0000fff0-0000-1000-8000-00805f9b34fb',
-                           '00001101-0000-1000-8000-00805f9b34fb'],
+                           '00001101-0000-1000-8000-00805f9b34fb',
+                           /* thermal-printer services: without these getPrimaryService()
+                              fails AFTER the user has already picked the device. */
+                           '0000ff00-0000-1000-8000-00805f9b34fb',
+                           '000018f0-0000-1000-8000-00805f9b34fb',
+                           '0000ffe0-0000-1000-8000-00805f9b34fb',
+                           '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+                           'e7810a71-73ae-499d-8c15-faa9aef0c3f2'],
       });
-      return this._toProfile(device);
+      return this._toProfile(device, deviceType);
     },
 
-    _toProfile(d) {
+    /* The requested type MUST be carried onto the profile. Hardcoding UNKNOWN meant a
+       device paired as a printer was registered as UNKNOWN, so getDevicesByType('printer')
+       never found it and silent reconnect could never work — the pairing succeeded and
+       then appeared to be forgotten on the next load. */
+    _toProfile(d, deviceType) {
       return new DeviceProfile({
-        type:      TYPE.UNKNOWN,
+        type:      deviceType || TYPE.UNKNOWN,
         transport: TRANSPORT.BLUETOOTH,
         name:      d.name || 'Bluetooth Device',
         vendor:    '',
