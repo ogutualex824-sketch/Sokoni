@@ -1854,5 +1854,14 @@
     "dateAdded": "2026-08-28",
     "expectedLifespan": "permanent",
     "note": "The index was NEVER declared and never existed in production, so posGetQueueMetrics failed 9 FAILED_PRECONDITION for EVERY caller while pos-zero-friction.js:812 kept writing the collection. Found while attempting a tenant-isolation test; unrelated to authorization."
+  },
+  "entitlements|purpose:ASCENDING,status:ASCENDING,expiresAt:ASCENDING": {
+    "purpose": "Boost ranking entitlement — resolve active paid boosts for a listing",
+    "feature": "Boost ranking entitlement (Approach A)",
+    "query": "entitlements where purpose == <boost purpose> and status == 'active' and expiresAt >= now",
+    "owner": "Growth / Boost",
+    "dateAdded": "2026-08-28",
+    "expectedLifespan": "permanent",
+    "note": "ADOPTED, NOT CREATED. The index already existed in production (CICAgOiP45kK, READY) while its source declaration lived only on fix/boost-ranking-entitlement (5485527) — the index reached production ahead of its lineage. Source is made authoritative here; nothing was created or deleted in production. It currently indexes ZERO documents because no live entitlements doc carries purpose/status yet — the feature that populates them has not shipped. That is why it must NOT be deleted: removal would break the branch query with 9 FAILED_PRECONDITION the moment it lands. See docs/findings/ENTITLEMENTS_INDEX_DRIFT.md."
   }
 }
