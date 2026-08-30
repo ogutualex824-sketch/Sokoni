@@ -135,14 +135,14 @@ const calcErr = async (opts, cfg) => {
   console.log('\nF. Marketplace is a separate authority and does not inherit POS\n');
   {
     const m = await calc({ orderAmountCents: 350000, category: 'marketplace', sellerId: 'S1' });
-    ck('marketplace RESTORED to its differentiated 3%, not flattened to 5%', m.effectiveRate === 3, m.effectiveRate);
+    ck('marketplace RETAINS the deployed 5% policy', m.effectiveRate === 5, m.effectiveRate);
     ck('  ...category marketplace, resolved explicitly', m.category === 'marketplace', m.category);
     ck('marketplace and pos are the same NUMBER but different AUTHORITIES',
        m.category === 'marketplace' && CC.resolveRate('pos').category === 'pos');
     const p = await calc({ orderAmountCents: 350000, category: 'product', sellerId: 'S1' });
     ck('live label "product" resolves to marketplace explicitly', p.category === 'marketplace', p.category);
-    ck('  ...priced by the marketplace rate (3%), not the 5% default arm',
-       p.effectiveRate === 3, p.effectiveRate);
+    ck('  ...priced by the marketplace AUTHORITY, not the default arm',
+       p.effectiveRate === 5 && p.category === 'marketplace', p.category + '/' + p.effectiveRate);
     const sub = await calc({ orderAmountCents: 48402, category: 'subscription', sellerId: 'S1' });
     ck('live label "subscription" restored to the HISTORICAL 100% policy',
        sub.category === 'subscriptions' && sub.effectiveRate === 100, sub.category + '/' + sub.effectiveRate);
@@ -156,6 +156,26 @@ const calcErr = async (opts, cfg) => {
     ck('hair-beauty was NOT guessed into services — no historical rate exists for it',
        !/'hair-beauty':/.test(cfgNoComments));
   }
+
+  console.log('\nF2. The DIFFERENTIATED SCHEDULE is intact — nothing flattened to 5%\n');
+  {
+    const want = { marketplace: 5, pos: 5, food_delivery: 5, digital_products: 10,
+                   services: 15, education: 15, jobs: 15, classifieds: 8,
+                   hub: 12, subscriptions: 100 };
+    for (const [k, v] of Object.entries(want)) {
+      const r = CC.resolveRate(k);
+      ck(k.padEnd(17) + ' = ' + v + '%', r.pct === v && r.matched && r.category === k, r.pct + '/' + r.category);
+    }
+    const veh = CC.resolveRate('vehicles');
+    ck('vehicles is a FLAT KES 2000, not a percentage',
+       veh.pct === 0 && veh.fixedKES === 2000 && veh.matched, veh.pct + '/' + veh.fixedKES);
+    ck('the schedule is genuinely differentiated — not one flat number',
+       new Set(Object.values(want)).size >= 5, [...new Set(Object.values(want))].join(','));
+    ck('marketplace and pos are EQUAL but INDEPENDENT authorities',
+       CC.resolveRate('marketplace').pct === CC.resolveRate('pos').pct &&
+       CC.resolveRate('marketplace').category !== CC.resolveRate('pos').category);
+  }
+
 
   console.log('\nG. The package / subscription mechanism is the marketplace authority\n');
   {
@@ -172,7 +192,7 @@ const calcErr = async (opts, cfg) => {
     const c = await calc({ orderAmountCents: 100000, category: 'marketplace', sellerId: 'S1' });
     ck('a marketplace charge records which authority priced it',
        typeof c.pricingSource === 'string' && c.pricingSource.length > 0, c.pricingSource);
-    ck('  ...and its base rate before any plan adjustment', c.baseRate === 3, c.baseRate);
+    ck('  ...and its base rate before any plan adjustment', c.baseRate === 5, c.baseRate);
     ck('no invented package percentages were added to the config',
        !/free:\s*\{\s*pct:\s*15|business:\s*\{\s*pct:\s*4/.test(
          fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8')));
