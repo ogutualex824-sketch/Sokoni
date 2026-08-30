@@ -1855,5 +1855,13 @@
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
+  },
+  "crmCustomerProfiles|merchantId:ASCENDING,clv:DESCENDING": {
+    "purpose": "Merchant Customers list — highest-value customers first",
+    "feature": "Merchant CRM / Customers",
+    "query": "sokoni-merchant-customers.js profileQuery(): where(merchantId ==).orderBy(clv, desc).limit(500)",
+    "owner": "Merchant OS",
+    "dateAdded": "2026-08-31",
+    "expectedLifespan": "permanent"
   }
 }

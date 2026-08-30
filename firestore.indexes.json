@@ -839,6 +839,20 @@
       ]
     },
     {
+      "collectionGroup": "crmCustomerProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "merchantId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "clv",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "crmLeadActivities",
       "queryScope": "COLLECTION",
       "fields": [
@@ -3477,6 +3491,38 @@
       ]
     },
     {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "paymentSessions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -3504,38 +3550,6 @@
         },
         {
           "fieldPath": "currentState",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "payments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "payments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
@@ -5797,6 +5811,10 @@
         {
           "fieldPath": "nextAttemptAt",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priority",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -5810,10 +5828,6 @@
         },
         {
           "fieldPath": "nextAttemptAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "priority",
           "order": "ASCENDING"
         }
       ]
