@@ -56,6 +56,22 @@ const HARNESS = [
   '    <input type="checkbox" id="roleDriverCb">',
   '    <button class="auth-btn">Continue</button>',
   '  </div>',
+  /* The header above states this page "loads the real file and the real
+     sokoni-merchant-entry.js", and it did not — only auth.js was here. So every identity
+     landed on the intake via auth.js's fail-closed branch, including the signed-out case
+     that resolve() sends to sign-in, which is how the omission showed itself.
+
+     The harness models the signup page's role step, and login.html/signup.html load the
+     authority BEFORE auth.js, so the harness does too. It is still the SHIPPED module,
+     served from the repo by the static server below — nothing is stubbed, and the decision
+     is still made by the real resolver. */
+  /* The entry resolver does not decide entitlement itself — isEntitled() delegates to
+     window.SokoniRoleAuthority. Without it every identity, including an approved claim,
+     resolved to not-approved and landed on the intake. Loading it keeps the decision in
+     the shipped modules; the identity is still simulated only at the SIGNAL (the claim and
+     the users/{uid}.roles document), which is what this suite set out to do. */
+  '  <script src="/sokoni-role-authority.js"><\/script>',
+  '  <script src="/sokoni-merchant-entry.js"><\/script>',
   '  <script src="/auth.js"><\/script>',
   '</body></html>',
 ].join('\n');
@@ -181,9 +197,31 @@ const FS_STUB = [
   ok('lands on the Merchant URL', A.pathname === MERCHANT, A.pathname + ' (expected ' + MERCHANT + ')');
   ok('does NOT land on the old shell', !/seller\.html/.test(A.landed || ''), A.landed);
 
-  head('APPROVED SELLER — approved before the claim path shipped (users/{uid}.roles)');
+  /* THIS CASE IS INVERTED, and deliberately.
+
+     It used to expect a users/{uid}.roles document to grant the merchant workspace — the
+     migration path for sellers approved before claims shipped. The role authority has since
+     been hardened to refuse exactly that, and says so three times in its own source:
+
+         :23   "A forged sokoniUser.roles or a forged permissions cache changes nothing here."
+         :123  "...which is exactly why users.roles is not consulted here."
+         :367  "A workspace is entered on the strength of a CLAIM."
+
+     isApproved() requires _verified and reads only the claim set. A users document is
+     CLIENT-WRITABLE, so honouring it would hand the merchant workspace to anyone who can
+     write their own roles array — the same defect class as the registeredAs checkbox this
+     whole suite was written to remove.
+
+     Making the old expectation pass would therefore have re-opened the hole. It is now a
+     NEGATIVE CONTROL instead: a roles document WITHOUT a claim must not reach the
+     workspace, and lands on the intake like any other unapproved seller. If someone later
+     re-introduces a users.roles approval path, this fails. */
+  head('ROLES DOCUMENT WITHOUT A CLAIM — a client-writable signal grants nothing');
   const B = await land({ kind: 'approved-roles', tickSeller: true });
-  ok('lands on the Merchant URL', B.pathname === MERCHANT, B.pathname);
+  ok('does NOT reach the Merchant URL on a users/{uid}.roles document alone',
+     B.pathname !== MERCHANT, B.pathname);
+  ok('...and is routed to the seller intake instead', B.pathname === ONBOARD, B.pathname);
+  ok('...and never to the old shell', !/seller\.html/.test(B.landed || ''), B.landed);
 
   head('AUTHENTICATED, NOT APPROVED — asked to sell');
   const C = await land({ kind: 'authed-unapproved', tickSeller: true });
@@ -236,7 +274,12 @@ const FS_STUB = [
 
   head('CUTOVER GATE');
   console.log('  merchant destination = ' + MERCHANT);
-  ok('still the DEPLOYED shell (v1) — cutover not yet flipped', MERCHANT === '/merchant',
+  /* PERFORMED 2026-08-31. This pinned the pre-cutover value as a tripwire; the Seller Hub
+     cutover flipped the hub, the entry resolver and the profile links together, so it is
+     inverted - a REVERT to /merchant is now what turns it red. Its own caveat was that v2
+     must be deployed: verified, https://mysokoni.co.ke/merchant-v2 serves 200 and carries
+     the POS/printer/scanner integration the legacy shell does not. */
+  ok('cutover PERFORMED — the merchant destination is the integrated v2 shell', MERCHANT === '/merchant-v2',
      'now ' + MERCHANT + ' — if intentional, v2 must be deployed and its production URL verified');
 
   await browser.close();

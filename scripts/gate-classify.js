@@ -109,38 +109,7 @@ const DECLARED = {
 
      EXPIRES: before the Merchant v2 cutover / next release certification.
      Quarantined 2026-08-19 for the subscription release. */
-  /* HALF of this quarantine's premise is now GONE, and the surviving half is the real one.
-
-     The Seller Hub cutover (2026-08-31) flipped MERCHANT_URL to /merchant-v2, and its
-     partner suite test-merchant-entry now passes 59/0 UNCHANGED — its removal condition
-     was exactly that. This one does NOT follow, because MERCHANT_URL was never why it
-     failed. It fails 12/11 on:
-
-         lands on the Merchant URL   -> /seller.html (expected /merchant-v2)
-
-     auth.js:1019 sets dest = "seller.html" post-login, and auth.js carries ZERO references
-     to the entry authority. So POST-LOGIN is a THIRD seller rail that consults neither the
-     role authority nor the entry resolver — the cutover corrected the other two and cannot
-     reach this one. The implementation lives on fix/auth-post-login-routing, checkpointed
-     and deliberately unmerged.
-
-     Not forced green: editing the assertions would destroy the only record of what
-     post-login must do, and rewriting auth.js's redirect here would perform a checkpointed
-     workstream by accident — in a file where overriding location has broken signup before.
-
-     TO REMOVE: merge or implement the checkpointed auth post-login routing so a seller
-     lands on the merchant shell through the entry authority, then run this suite UNCHANGED.
-     Do not edit the eleven assertions to fit whatever ships.
-
-     EXPIRES: at the next release certification. Re-stated 2026-08-31. */
-  'test-auth-post-login-routing': {
-    verdict: 'QUARANTINE',
-    reason: 'Post-login is a THIRD seller rail: auth.js:1019 sends a seller to seller.html ' +
-            'and auth.js has zero references to the entry authority, so the 2026-08-31 Seller ' +
-            'Hub cutover could not reach it. Implementation is deliberately unmerged on ' +
-            'fix/auth-post-login-routing. Remove by merging that work, then running this suite ' +
-            'unchanged - never by editing its assertions.',
-  },  'test-offline-detection': {
+  'test-offline-detection': {
     verdict: 'ENV',
     reason: 'Drives a browser against http://localhost:3000 — needs a dev server, not a defect.',
   },

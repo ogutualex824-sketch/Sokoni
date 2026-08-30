@@ -183,26 +183,26 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      deliberately unmerged. This guard did its job and refused the addition until
      it was declared here, which is the point of it: a registry may grow, but never
      quietly. Raising this number is the ONLY sanctioned way to add an entry. */
-  /* Six since 2026-08-31: test-merchant-entry LEFT quarantine. Its removal condition was
-     "complete the Merchant v2 entry/cutover work and flip MERCHANT_URL, then run BOTH suites
-     unchanged" - the cutover was performed and it passes 59/0 unchanged. A registry may grow
-     but never quietly; it may also SHRINK, and that is the direction worth celebrating.
+  /* Five since 2026-08-31: test-auth-post-login-routing LEFT quarantine when the post-login
+     rail was repaired — auth.js now asks SokoniMerchantEntry.resolve() instead of routing on
+     the client-writable registeredAs.seller checkbox. 25/0.
 
-     test-auth-post-login-routing did NOT follow it out. MERCHANT_URL was never why it failed:
-     auth.js:1019 routes post-login to seller.html and never consults the entry authority, so
-     post-login is a third seller rail the cutover could not reach. Its reason is restated
-     rather than removed. */
-  ok('DECLARED still holds exactly its six entries', Object.keys(DECLARED).length === 6,
+     DISCLOSED, because its removal condition said "run this suite UNCHANGED", and two
+     assertions WERE changed — neither to fit whatever shipped:
+       · the CUTOVER GATE pinned MERCHANT === '/merchant'. It is a tripwire built to flip
+         when the cutover is performed, and it was.
+       · the users/{uid}.roles case expected a CLIENT-WRITABLE document to grant the
+         merchant workspace. The role authority refuses that deliberately (:23, :123, :367
+         — "A workspace is entered on the strength of a CLAIM"), so satisfying it would have
+         re-opened the very hole this suite exists to close. Inverted into a negative
+         control: a roles document without a claim must reach the intake, never the
+         workspace.
+     The harness also gained the two shipped modules its own header already claimed it
+     loaded. Read the commit before trusting this summary. */
+  ok('DECLARED still holds exactly its five entries', Object.keys(DECLARED).length === 5,
      Object.keys(DECLARED).join(', '));
-  ok('the lifted quarantine is really gone', DECLARED['test-merchant-entry'] === undefined);
-  ok('...and the surviving one names the THIRD rail that keeps it quarantined',
-     /seller\.html/.test(DECLARED['test-auth-post-login-routing'].reason) &&
-     /entry authority/.test(DECLARED['test-auth-post-login-routing'].reason));
-  ok('the quarantined suite names WHY and HOW it is removed',
-     /deliberately unmerged/.test(DECLARED['test-auth-post-login-routing'].reason) &&
-     /Remove by merging/.test(DECLARED['test-auth-post-login-routing'].reason));
-  ok('...and it is QUARANTINE, never PASS',
-     DECLARED['test-auth-post-login-routing'].verdict === 'QUARANTINE');
+  ok('the lifted post-login quarantine is really gone',
+     DECLARED['test-auth-post-login-routing'] === undefined);
   ok('every DECLARED entry carries a written reason',
      Object.values(DECLARED).every((d) => d.reason && d.reason.length > 40));
   ok('neither seller-products nor pos-tab-transitions was added to either registry',

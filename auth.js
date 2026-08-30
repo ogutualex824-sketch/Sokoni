@@ -1016,8 +1016,42 @@ async function completeRoleSelection(){
     let dest = "index.html";
     let label = "Taking you to the marketplace…";
     if(user.registeredAs.seller){
-        dest  = "seller.html";
-        label = "Opening your Seller Dashboard…";
+        /* THE AUTHORITY DECIDES, NOT THE CHECKBOX.
+
+           registeredAs.seller is written by the client, so routing on it granted the
+           merchant shell to anyone who could set a localStorage field — and it bypassed
+           the routing contract entirely, because signing up had already placed the seller
+           in the old shell without them ever pressing "My Store".
+
+           resolve() is the same authority the workspace hub and the profile links use. We
+           take ITS destination verbatim: restating one here would be a second copy, and a
+           second copy keeps passing after someone flips the real one.
+
+           FAIL-CLOSED: if the module is absent or throws we route to the seller INTAKE,
+           never to a merchant workspace and never back to the legacy shell. An
+           unverifiable seller is exactly the case the resolver itself sends to intake. */
+        var _entry = null;
+        try { _entry = window.SokoniMerchantEntry || null; } catch(_) { _entry = null; }
+        var _r = null;
+        if (_entry && typeof _entry.resolve === "function") {
+            try { _r = await _entry.resolve(); } catch(_) { _r = null; }
+        }
+        if (_r && _r.destination) {
+            dest  = _r.destination;
+            label = (_r.state === "not-approved")  ? "Opening seller registration…"
+                  : (_r.state === "signed-out")    ? "Please sign in…"
+                  : (_r.state === "approved-no-shop" || _r.state === "approved-shop-unknown")
+                                                   ? "Setting up your shop…"
+                                                   : "Opening your Merchant workspace…";
+        } else {
+            /* No authority to ask, so assume NOTHING: not approval, and not even that the
+               seller journey is wanted. The marketplace presumes neither, where the intake
+               would presume a seller who has not been verified. Never the legacy shell and
+               never the workspace - a broken router must not hand out either. */
+            dest  = "index.html";
+            label = "Taking you to the marketplace…";
+            try { console.warn("[auth] merchant entry authority unavailable — marketplace, granting nothing"); } catch(_) {}
+        }
     } else if(user.registeredAs.driver){
         dest  = "driver.html";
         label = "Opening Driver Dashboard…";
