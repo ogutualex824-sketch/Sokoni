@@ -77,7 +77,7 @@
      v2 still owes its own browser certification: role switching, the Sell
      journey, online orders, Messages, receipts, employee/owner attribution and
      a phone-viewport pass. Flip this in the v2 release, not this one. */
-  var MERCHANT_URL = '/merchant';
+  var MERCHANT_URL = '/merchant-v2';
   var ONBOARD_URL  = '/offer';        /* not approved — seller intake             */
   var SIGNIN_URL   = '/login';
 

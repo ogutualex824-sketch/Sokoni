@@ -38,28 +38,43 @@ ck('WORKSPACE_HUBS contains no superAdmin entry', !!hubs && !/superAdmin\s*:/.te
 ck('WORKSPACE_HUBS still routes the workspace roles', !!hubs &&
    /buyer:\s*'index\.html'/.test(hubs[1]) && /rider:\s*'driver\.html'/.test(hubs[1]));
 
-/* THE SELLER HUB IS A STAGED CUTOVER, asserted as staged rather than as finished.
+/* THE SELLER HUB CUTOVER — PERFORMED 2026-08-31, as its own deliberate slice.
 
-   This previously required seller:'merchant-v2.html'. merchant-v2 IS the canonical
-   merchant destination — but pointing the workspace hub at it is THE WORKSPACE CUTOVER,
-   and sokoni-merchant-entry.js gates that deliberately: its MERCHANT_URL is '/merchant'
-   under the banner "THE CUTOVER IS A SEPARATE RELEASE", because Hosting publishes the
-   TREE, so flipping it ships an uncertified cutover as a side effect of whatever release
-   happens to go out. That module states the boundary in terms of this very constant:
-   "My Store, Business and the workspace cutover do NOT resolve through this module ...
-   they remain on /merchant under their own gate."
+   This assertion spent its life pinned to 'merchant.html' as a TRIPWIRE, not an
+   endorsement: Hosting publishes the TREE, so flipping the hub would otherwise have
+   shipped an uncertified cutover as a side effect of whatever release went out next. It
+   held the line until the flip could be a reviewed moment. That is what happened.
 
-   So the assertion below pins the SHIPPED value. It is a tripwire, not an endorsement:
-   when the workspace cutover is performed it turns red, forcing that flip to be a
-   deliberate, reviewed moment instead of a silent side effect. Update it THEN — together
-   with sokoni-merchant-entry.js MERCHANT_URL, which must not diverge from it. */
+   Measured on production before flipping, not assumed: /merchant (188 KB, "Merchant OS")
+   and /merchant-v2 (203 KB, "Merchant") are DIFFERENT applications, and the POS/printer/
+   scanner integration exists only in v2 — MODULE_ALLOW 0 vs 2, printBytes 0 vs 1,
+   goModule 0 vs 1. Both seller rails pointed at the shell WITHOUT it, so a seller reached
+   a merchant shell with no shell-owned printer, no print bridge and no camera delegation.
+
+   The whole seller-entry surface moved together, because a partial flip is worse than
+   none — the same seller would reach different applications depending on which control
+   they touched:
+
+       sokoni-role-authority.js   seller hub          -> merchant-v2.html
+       sokoni-merchant-entry.js   MERCHANT_URL        -> /merchant-v2  (workspace AND #shop)
+       profile.html x4            hardcoded <a href>  -> now data-sk-merchant-entry, so they
+                                                        route through resolve() instead of
+                                                        bypassing both authorities
+
+   BUYER -> index.html is correct and was NOT touched. The legacy shell still exists; this
+   is a routing change, not a deletion. The assertion is now inverted: a REVERT to
+   merchant.html is what turns it red. */
 const sellerHub = (hubs && (hubs[1].match(/seller:\s*'([^']+)'/) || [])[1]) || null;
 ck('seller hub is a real merchant shell',
    sellerHub === 'merchant.html' || sellerHub === 'merchant-v2.html', sellerHub);
-ck('workspace cutover is still STAGED (flip this WITH sokoni-merchant-entry.js, not before)',
-   sellerHub === 'merchant.html', sellerHub + (sellerHub === 'merchant-v2.html'
-     ? '  <- cutover performed: certify v2 + update MERCHANT_URL'
-     : '  (cutover pending its own release)'));
+/* PERFORMED 2026-08-31. The tripwire did its job: it stayed red until the flip was a
+   deliberate, reviewed moment, and it is now inverted so a REVERT to the legacy shell is
+   what turns it red. The assertion below it - hub and entry resolver must agree - is
+   unchanged and is what stops the two from drifting apart again. */
+ck('workspace cutover PERFORMED (seller hub is the integrated v2 shell)',
+   sellerHub === 'merchant-v2.html', sellerHub + (sellerHub === 'merchant.html'
+     ? '  <- REVERTED to the legacy shell, which has no POS/printer/scanner integration'
+     : '  (v2: the shell POS, the printer bridge and the scanner live here)'));
 /* The two must never disagree — a hub sending sellers one way while the entry resolver
    sends them the other is exactly the split this constant exists to prevent. */
 const entrySrc = read('sokoni-merchant-entry.js');

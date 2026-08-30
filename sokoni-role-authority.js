@@ -457,7 +457,7 @@
      admin authority. */
   var WORKSPACE_HUBS = {
     buyer:    'index.html',
-    seller:   'merchant.html',
+    seller:   'merchant-v2.html',
     provider: 'providers.html',
     rider:    'driver.html',
     mechanic: 'car-hub.html',

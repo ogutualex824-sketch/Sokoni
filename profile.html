@@ -2084,7 +2084,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
       <!-- Seller / Business Owner actions (shown after auth) -->
       <div class="pi-qa-grid" id="piQaRoleActions" style="display:none;margin-top:8px;">
-        <a class="pi-qa-item" href="merchant.html">
+        <a class="pi-qa-item" href="merchant-v2.html" data-sk-merchant-entry>
           <span class="pi-qa-icon">&#43;</span><span class="pi-qa-lbl">Add Product</span>
         </a>
         <a class="pi-qa-item" href="pos.html">
@@ -2153,7 +2153,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="up-card-title">My Hubs <a href="/" class="up-card-link">Browse All</a></div>
       <div class="up-quick-links" id="upQuickLinks">
         <a class="up-ql" href="/"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
-        <a class="up-ql" href="merchant.html"><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
+        <a class="up-ql" href="merchant-v2.html" data-sk-merchant-entry><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
         <a class="up-ql" href="services.html"><span class="up-ql-emoji">&#128295;</span><span class="up-ql-label">Services</span></a>
         <a class="up-ql" href="delivery.html"><span class="up-ql-emoji">&#128666;</span><span class="up-ql-label">Delivery</span></a>
         <a class="up-ql" href="property-hub.html"><span class="up-ql-emoji">&#127968;</span><span class="up-ql-label">Property</span></a>
@@ -2195,7 +2195,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <div id="upAnalyticsCard" class="up-card" style="margin-top:12px;display:none;">
       <div class="up-card-title">Your SOKONI identities</div>
       <div id="upIdentityLinks" style="display:flex;flex-direction:column;gap:8px;">
-        <a href="merchant.html" id="upIdBusiness" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+        <a href="merchant-v2.html" id="upIdBusiness" data-sk-merchant-entry style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
           <span style="font-size:20px;">&#127978;</span>
           <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Business</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your shop &amp; products</span></span>
           <span style="color:#71ff00;font-size:16px;">&#8250;</span>
@@ -3154,7 +3154,7 @@ function renderSellerApplicationCard(){
               '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-top:2px;">Manage your shop, products and orders.</div>' +
             '</div>' +
           '</div>' +
-          '<a href="merchant.html" style="display:block;text-align:center;width:100%;margin-top:12px;padding:12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-weight:900;font-size:14px;border-radius:12px;text-decoration:none;">Open Seller Hub</a>';
+          '<a href="merchant-v2.html" data-sk-merchant-entry style="display:block;text-align:center;width:100%;margin-top:12px;padding:12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-weight:900;font-size:14px;border-radius:12px;text-decoration:none;">Open Seller Hub</a>';
         break;
 
       case 'suspended':
@@ -8117,6 +8117,7 @@ window.logoutUser = logoutUser;
      statement outside a module" on every profile load and never ran at all, so
      the Firestore-backed orders list was silently dead. module implies defer. -->
 <script type="module" src="sokoni-orders.js"></script>
+<script src="sokoni-merchant-entry.js" defer></script>
 <script src="sokoni-merchant-diag.js" defer></script>
 </body>
 </html>

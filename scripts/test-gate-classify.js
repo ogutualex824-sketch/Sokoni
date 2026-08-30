@@ -183,24 +183,21 @@ const MODULE_MISSING_OUT = "Error: Cannot find module 'firebase-admin'\n";
      deliberately unmerged. This guard did its job and refused the addition until
      it was declared here, which is the point of it: a registry may grow, but never
      quietly. Raising this number is the ONLY sanctioned way to add an entry. */
-  /* Seven since 2026-08-19: test-merchant-entry joined test-auth-post-login-routing.
-     Both belong to the checkpointed v2 entry workstream and encode OPPOSITE sides of
-     a cutover that is deliberately half-done, so no value of MERCHANT_URL makes both
-     pass. They leave quarantine together, when the cutover is real. */
-  /* Seven since 2026-08-19: test-merchant-entry joined test-auth-post-login-routing.
-     Both belong to the checkpointed v2 entry workstream and encode OPPOSITE sides of
-     a cutover that is deliberately half-done, so no value of MERCHANT_URL makes both
-     pass. They leave quarantine together, when the cutover is real.
+  /* Six since 2026-08-31: test-merchant-entry LEFT quarantine. Its removal condition was
+     "complete the Merchant v2 entry/cutover work and flip MERCHANT_URL, then run BOTH suites
+     unchanged" - the cutover was performed and it passes 59/0 unchanged. A registry may grow
+     but never quietly; it may also SHRINK, and that is the direction worth celebrating.
 
-     A test-stories-rules ENV declaration was added and REVERTED on 2026-08-30: it was
-     justified by a `fetch failed` seen while running scripts/test-inventory.js --gate
-     directly, which starts no emulator. The DEPLOY gate is scripts/gate-inventory.js,
-     which does start one, and the suite passes there. The declaration exempted a suite
-     that gates correctly on its own. Recorded here because the ratchet is the place
-     someone will look before adding the next one: check WHICH gate entry point produced
-     the failure before declaring anything emulator-shaped. */
-  ok('DECLARED still holds exactly its seven entries', Object.keys(DECLARED).length === 7,
+     test-auth-post-login-routing did NOT follow it out. MERCHANT_URL was never why it failed:
+     auth.js:1019 routes post-login to seller.html and never consults the entry authority, so
+     post-login is a third seller rail the cutover could not reach. Its reason is restated
+     rather than removed. */
+  ok('DECLARED still holds exactly its six entries', Object.keys(DECLARED).length === 6,
      Object.keys(DECLARED).join(', '));
+  ok('the lifted quarantine is really gone', DECLARED['test-merchant-entry'] === undefined);
+  ok('...and the surviving one names the THIRD rail that keeps it quarantined',
+     /seller\.html/.test(DECLARED['test-auth-post-login-routing'].reason) &&
+     /entry authority/.test(DECLARED['test-auth-post-login-routing'].reason));
   ok('the quarantined suite names WHY and HOW it is removed',
      /deliberately unmerged/.test(DECLARED['test-auth-post-login-routing'].reason) &&
      /Remove by merging/.test(DECLARED['test-auth-post-login-routing'].reason));

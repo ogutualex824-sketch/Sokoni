@@ -109,45 +109,38 @@ const DECLARED = {
 
      EXPIRES: before the Merchant v2 cutover / next release certification.
      Quarantined 2026-08-19 for the subscription release. */
-  /* ── THE OTHER HALF OF THE SAME CHECKPOINT ────────────────────────────────
-     Provenance, established before classifying: this suite predates the cutover
-     (created at 8ce4ef8, expecting `merchant.html`). Commit ecb2d1e then did
-     three things in one change —
+  /* HALF of this quarantine's premise is now GONE, and the surviving half is the real one.
 
-       · introduced MERCHANT_URL = '/merchant-v2' (the constant did not exist)
-       · rewrote these expectations merchant.html -> /merchant-v2
-       · ADDED test-auth-post-login-routing, which asserts MERCHANT === '/merchant'
+     The Seller Hub cutover (2026-08-31) flipped MERCHANT_URL to /merchant-v2, and its
+     partner suite test-merchant-entry now passes 59/0 UNCHANGED — its removal condition
+     was exactly that. This one does NOT follow, because MERCHANT_URL was never why it
+     failed. It fails 12/11 on:
 
-     — so that single commit both performed the cutover and shipped a suite
-     asserting it had not happened. The two suites encode opposite product
-     decisions and cannot both pass at any value of MERCHANT_URL.
+         lands on the Merchant URL   -> /seller.html (expected /merchant-v2)
 
-     Its /merchant-v2 expectations describe the POST-CUTOVER contract, which is
-     the deliberately deferred v2 release. The assertions are kept exactly as
-     they are: editing them to expect /merchant would destroy the only record of
-     what v2 must do, and changing the code to satisfy them would perform the
-     cutover by accident. Quarantined instead.
+     auth.js:1019 sets dest = "seller.html" post-login, and auth.js carries ZERO references
+     to the entry authority. So POST-LOGIN is a THIRD seller rail that consults neither the
+     role authority nor the entry resolver — the cutover corrected the other two and cannot
+     reach this one. The implementation lives on fix/auth-post-login-routing, checkpointed
+     and deliberately unmerged.
 
-     TO REMOVE: complete the Merchant v2 entry/cutover work and flip
-     MERCHANT_URL, then run BOTH suites unchanged — they become consistent only
-     when the cutover is real.
+     Not forced green: editing the assertions would destroy the only record of what
+     post-login must do, and rewriting auth.js's redirect here would perform a checkpointed
+     workstream by accident — in a file where overriding location has broken signup before.
 
-     EXPIRES: with test-auth-post-login-routing, before the v2 cutover.
-     Quarantined 2026-08-19 for the subscription release. */
-  'test-merchant-entry': {
-    verdict: 'QUARANTINE',
-    reason: 'Its /merchant-v2 expectations were written by ecb2d1e, the same commit that ' +
-            'prematurely set MERCHANT_URL and added the contradicting auth suite. Describes ' +
-            'the deferred v2 cutover contract, not a defect in what ships. Remove by ' +
-            'completing the v2 cutover and running both suites unchanged.',
-  },
+     TO REMOVE: merge or implement the checkpointed auth post-login routing so a seller
+     lands on the merchant shell through the entry authority, then run this suite UNCHANGED.
+     Do not edit the eleven assertions to fit whatever ships.
+
+     EXPIRES: at the next release certification. Re-stated 2026-08-31. */
   'test-auth-post-login-routing': {
     verdict: 'QUARANTINE',
-    reason: 'Tests fix/auth-post-login-routing, deliberately unmerged. 13/23 pass; ' +
-            'auth.js has 0 references to the entry authority. Remove by merging that ' +
-            'work and re-running unchanged. Expires before the v2 cutover.',
-  },
-  'test-offline-detection': {
+    reason: 'Post-login is a THIRD seller rail: auth.js:1019 sends a seller to seller.html ' +
+            'and auth.js has zero references to the entry authority, so the 2026-08-31 Seller ' +
+            'Hub cutover could not reach it. Implementation is deliberately unmerged on ' +
+            'fix/auth-post-login-routing. Remove by merging that work, then running this suite ' +
+            'unchanged - never by editing its assertions.',
+  },  'test-offline-detection': {
     verdict: 'ENV',
     reason: 'Drives a browser against http://localhost:3000 — needs a dev server, not a defect.',
   },
