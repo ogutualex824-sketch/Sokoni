@@ -184,9 +184,16 @@ function loadHub () {
   ck('connectPrinterNow does not lazy-load the service before connecting',
      beforeConnect.indexOf('await printerEngine()') === -1 || beforeConnect.indexOf('window.PosPrintService ||') > -1,
      'a loadScript() fetch between tap and chooser spends the activation');
+  /* The gate is STRICTER than it was: a silent reconnect is attempted only when a
+     printer is saved AND getDevices() exists. Without getDevices the attempt cannot
+     succeed, and awaiting it only burns the transient activation the chooser needs —
+     so skipping it goes straight to the chooser with the gesture intact. */
   ck('autoReconnect is gated on an actually-saved printer',
-     /if\s*\(\s*DEV\.printer\.saved\s*&&\s*eng\.autoReconnect\s*\)/.test(uncommented),
+     /DEV\.printer\.saved\s*&&\s*canSilent\s*&&\s*eng\.autoReconnect/.test(uncommented),
      'awaiting it with nothing saved spent the gesture for no benefit');
+  ck('...AND on getDevices() actually existing',
+     /var canSilent = !!\(navigator\.bluetooth && navigator\.bluetooth\.getDevices\)/.test(uncommented),
+     'a reconnect that cannot work must not consume the gesture');
 
   head('8 - the stack is preloaded, not fetched inside the click');
   ck('sokoni-universal-printer.js is loaded by merchant-v2',

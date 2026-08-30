@@ -866,6 +866,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     setDot('st-print', pc); setDot('top-print', pc);
     text('st-print-t', pt);
     text('top-print-t', p.state === 'connected' ? (p.name || 'Ready') : 'Printer');
+    /* ONE TAP FROM ANYWHERE. Without this the only route to Reconnect was to navigate
+       to Devices, which is a long way from the till mid-sale. Connected -> open Devices;
+       disconnected -> reconnect straight away. The handler is SYNCHRONOUS into
+       connectPrinterNow so the chooser still sees the user gesture. */
+    _wirePrinterChip();
 
     /* Identity — the third chip now reports the REAL session, not a fixed label. */
     if (S.state === 'in') {
@@ -1402,6 +1407,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     emit('devices'); paintStatus(); broadcastDevices();
   }
+
+  /* ── One silent reconnect attempt on wake ────────────────────────────────────
+     A PWA resume or the first tap is the natural moment to re-link. This NEVER opens
+     a chooser: it calls autoReconnect(), which uses getDevices() only, so where that
+     API is missing it returns false immediately and the merchant is not ambushed by a
+     Bluetooth prompt they did not ask for.
+     Fires at most ONCE per disconnected period — no repeated Bluetooth hammering. */
+  var _wakeTried = false;
+  function _onWake () {
+    if (_wakeTried) return;
+    if (!DEV.printer.saved || DEV.printer.state === 'connected') return;
+    if (!(navigator.bluetooth && navigator.bluetooth.getDevices)) return;   /* cannot work here */
+    _wakeTried = true;
+    autoConnectPrinter();
+  }
+  window.addEventListener('pointerdown', _onWake, { passive: true });
+  window.addEventListener('focus', _onWake);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) _onWake(); });
 
   /* Tell every hosted module what the shell already knows, so POS does not repeat
      discovery. Sent on device change and whenever an iframe finishes loading. */
@@ -3208,10 +3231,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       if (!eng) return { ok: false, reason: 'engine-unavailable' };
     }
     var ok = false;
-    /* ONLY a saved printer can reconnect silently. With nothing saved there is nothing
-       to reconnect, and awaiting it would spend the gesture the chooser needs - which
-       is exactly why first-time pairing never opened a chooser. */
-    if (DEV.printer.saved && eng.autoReconnect) {
+    /* ONLY a saved printer can reconnect silently, AND only where getDevices() exists.
+       With nothing saved there is nothing to reconnect; with no getDevices() the attempt
+       cannot succeed and awaiting it only burns the transient user activation the chooser
+       needs. Either way, skipping it goes straight to the chooser with the gesture intact. */
+    var canSilent = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+    if (DEV.printer.saved && canSilent && eng.autoReconnect) {
       try { ok = await eng.autoReconnect(); } catch (_) { ok = false; }
     }
     if (!ok) {
@@ -3257,6 +3282,37 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     } catch (e) { toast('Test print failed: ' + (e.message || e)); }
     done(btn);
   }
+  var _chipWired = false;
+  function _wirePrinterChip () {
+    if (_chipWired) return;
+    var dot = document.getElementById('top-print');
+    var chip = dot && dot.parentNode;
+    if (!chip) return;                       /* header not painted yet; paintStatus retries */
+    _chipWired = true;
+    chip.style.cursor = 'pointer';
+    chip.title = 'Printer - connect or manage';
+    chip.addEventListener('click', function () {
+      if (DEV.printer.state === 'connected') { go('devices'); return; }
+      /* Synchronous into the connect path: an await here would spend the activation
+         and the browser would refuse the chooser. */
+      deviceConnectFromChip();
+    });
+  }
+  function deviceConnectFromChip () {
+    DEV.printer.state = 'connecting'; DEV.printer.reason = ''; paintStatus();
+    connectPrinterNow().then(function (r) {
+      if (r && r.reason === 'engine-unavailable') toast('The printer service could not be loaded.');
+      else if (r && r.reason === 'connect-unavailable') toast('Printer pairing is unavailable on this page. Reload and try again.');
+      else if (!r || !r.ok) toast('No printer connected.');
+    }).catch(function (e) {
+      DEV.printer.state = DEV.printer.saved ? 'saved' : 'unknown';
+      toast('Could not connect: ' + ((e && e.message) || e));
+    }).then(function () {
+      paintStatus(); broadcastDevices();
+      try { renderDevices(nativePanel('devices')); } catch (_) {}
+    });
+  }
+
   function toast (msg) {
     var t = document.getElementById('sk-toast');
     if (!t) { t = document.createElement('div'); t.id = 'sk-toast'; t.className = 'toast'; document.body.appendChild(t); }
