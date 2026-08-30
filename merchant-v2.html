@@ -1313,7 +1313,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      The printer ENGINE (PosPrintService + its stack) is ~130KB and is therefore
      loaded LAZILY — only when a saved device actually needs reconnecting, or when a
      module asks. A merchant with no printer never pays for it. */
-  var DEV = { printer: { state: 'unknown', name: null, saved: null }, list: [] };
+  var DEV = { printer: { state: 'unknown', name: null, saved: null, reason: '' }, list: [] };
   function devKey () { return 'sk_devices_' + (S.uid || 'anon'); }
   function loadDevices () {
     /* Keyed BY UID so a shared till never shows the previous merchant's devices. */
@@ -1366,17 +1366,40 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      it (Chromium). Everywhere else the honest answer is "saved, not connected", never
      a hopeful "connected". */
   async function autoConnectPrinter () {
-    if (!DEV.printer.saved) return;
-    var supported = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
-    if (!supported) { DEV.printer.state = 'unsupported'; emit('devices'); paintStatus(); return; }
-    DEV.printer.state = 'connecting'; emit('devices'); paintStatus();
-    var eng = await printerEngine();
-    if (!eng) { DEV.printer.state = 'saved'; emit('devices'); paintStatus(); return; }
+    if (!DEV.printer.saved) return;                 /* nothing saved: not a failure */
+    var silent = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+    DEV.printer.state = 'connecting'; DEV.printer.reason = ''; emit('devices'); paintStatus();
+    var eng = window.PosPrintService || await printerEngine();
+    if (!eng) {
+      DEV.printer.state = 'reconnect-failed';
+      DEV.printer.reason = 'The printer service did not load. Reload the page.';
+      emit('devices'); paintStatus(); return;
+    }
     try {
+      /* ATTEMPT REGARDLESS of getDevices support. autoReconnect also covers USB,
+         serial and network printers, which need no chooser at all — skipping the
+         attempt because BLUETOOTH cannot re-link silently would strand those. */
       var ok = await (eng.autoReconnect ? eng.autoReconnect() : Promise.resolve(false));
-      DEV.printer.state = ok ? 'connected' : 'saved';
-      if (ok) DEV.printer.name = DEV.printer.saved.name || 'Printer';
-    } catch (e) { DEV.printer.state = 'saved'; }
+      if (ok) {
+        DEV.printer.state = 'connected';
+        DEV.printer.name = DEV.printer.saved.name || 'Printer';
+        DEV.printer.reason = '';
+      } else if (!silent) {
+        /* A BROWSER LIMITATION, not a lost pairing. The device is still saved and one
+           tap restores it; saying anything that reads like 'forgotten' is a lie. */
+        DEV.printer.state = 'needs-tap';
+        DEV.printer.reason = 'This browser cannot re-open a saved Bluetooth printer on its own. '
+                           + 'Your printer is still saved — tap Reconnect once.';
+      } else {
+        /* getDevices() IS available and still did not return the saved printer. */
+        DEV.printer.state = 'reconnect-failed';
+        DEV.printer.reason = 'The browser no longer holds permission for the saved printer, '
+                           + 'or it is switched off or out of range. Tap Reconnect.';
+      }
+    } catch (e) {
+      DEV.printer.state = 'reconnect-failed';
+      DEV.printer.reason = 'Reconnect failed: ' + ((e && (e.message || e.name)) || 'unknown error');
+    }
     emit('devices'); paintStatus(); broadcastDevices();
   }
 
@@ -3087,9 +3110,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var silent = !!(navigator.bluetooth && navigator.bluetooth.getDevices);
     var saved = d.saved;
 
-    var stateLabel = { connected: 'Connected', connecting: 'Connecting…', saved: 'Saved · not connected',
-                       unsupported: 'Not supported by this browser', unknown: 'No printer saved' }[d.state] || d.state;
-    var dotCls = d.state === 'connected' ? 'ok' : d.state === 'connecting' ? 'warn' : '';
+    /* Four DIFFERENT situations, four different labels. 'saved' used to absorb all of
+       them, so a browser that simply cannot re-open a granted device read identically
+       to a printer that had genuinely gone away. */
+    var stateLabel = { connected: 'Connected', connecting: 'Reconnecting…',
+                       saved: 'Saved · not connected',
+                       'needs-tap': 'Saved · tap Reconnect',
+                       'reconnect-failed': 'Saved · reconnect failed',
+                       unsupported: 'Bluetooth unavailable in this browser',
+                       unknown: 'No printer saved' }[d.state] || d.state;
+    var dotCls = d.state === 'connected' ? 'ok'
+               : (d.state === 'connecting' || d.state === 'needs-tap') ? 'warn' : '';
 
     p.innerHTML =
       /* The printer-host surface sits ABOVE the device controls: whether this desktop prints
@@ -3106,6 +3137,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         '<dl class="kv" style="margin:14px 0 0">' +
           row('Type', saved ? (saved.type || 'printer') : '—') +
           row('Last saved', saved && saved.at ? new Date(saved.at).toLocaleString('en-KE') : '—') +
+          (d.reason
+            ? '<dt style="grid-column:1/-1;color:#f0b429;font-weight:600;margin-top:6px">' + esc(d.reason) + '</dt>'
+            : '') +
           row('Silent reconnect', silent ? 'Supported — no pairing prompt needed'
                                          : 'Not supported by this browser') +
           row('Bluetooth', bt ? 'Available' : 'Unavailable in this browser') +
@@ -3191,6 +3225,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       saveDevice({ type: 'printer', id: DEV.printer.name, name: DEV.printer.name, at: Date.now() });
     }
     DEV.printer.state = ok ? 'connected' : (DEV.printer.saved ? 'saved' : 'unknown');
+    if (ok) DEV.printer.reason = '';           /* a success must not leave a stale warning */
     return { ok: !!ok, identity: ok ? { name: DEV.printer.name, transport: 'bluetooth' } : null };
   }
 
