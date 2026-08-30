@@ -894,6 +894,29 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
+
+    /* A MODULE ASKING THE SHELL TO PRINT. sokoni-pos-print-service.js has always routed
+       a framed module's receipt up with __sokoniModulePrint and returned
+       status:'routed_to_shell' — a CLAIMED SUCCESS. merchant.html handled that message;
+       merchant-v2 never did, so the receipt went into the void while the caller was told
+       it had been routed. Handled BEFORE the __sokoniPos gate because it does not carry
+       that flag. */
+    if (d.__sokoniModulePrint && d.receipt) {
+      (function (rcpt) {
+        var svc = window.PosPrintService;
+        if (!svc || !svc.printReceipt) { toast('No printer service is loaded.'); return; }
+        /* __fromShell stops printReceipt bouncing it straight back up. */
+        Promise.resolve(svc.printReceipt(rcpt, { __fromShell: true }))
+          .then(function (r) {
+            var st = (r && (r.status || (r.queued ? 'queued_offline' : ''))) || '';
+            if (st === 'failed')             toast('The receipt did not print.');
+            else if (st === 'queued_offline') toast('No printer connected — receipt queued.');
+          })
+          .catch(function (err) { toast('Could not print: ' + ((err && err.message) || err)); });
+      })(d.receipt);
+      return;
+    }
+
     if (!d.__sokoniPos) return;
     /* A module reports the printer it just connected — the shell RECORDS it, so the
        next module (and the next session) gets it without pairing again.
@@ -938,6 +961,14 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     /* A module asking what the shell already knows, instead of rediscovering. */
     if (d.type === 'requestShellState') { broadcastSession(); broadcastDevices(); }
+
+    /* A module asking the SHELL to navigate. go() resolves through the route contract
+       and REFUSES anything undeclared, so this cannot become an arbitrary redirect: a
+       module postMessage escalating to /login once threw a merchant out mid-session,
+       which is why every navigation goes through the contract rather than
+       location.assign(). POS Setup needs this to reach pos-provision — the only page
+       that can write a device record — because it has no provisioning code itself. */
+    if (d.type === 'goModule' && typeof d.id === 'string') { go(d.id); }
   });
 
   /* ── PANELS ───────────────────────────────────────────────────────────────

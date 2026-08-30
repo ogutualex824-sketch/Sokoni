@@ -131,6 +131,34 @@ ck('failure is reported', V2.indexOf('The receipt did not print.') > -1);
 ck('queued is NOT reported as success', V2.indexOf('the receipt is queued.') > -1);
 ck('a thrown error is caught', v2c.indexOf("toast('Could not print: '") > -1);
 
+head('5c - POS Setup: ONE predicate, and a route for the step it cannot satisfy');
+const PS = fs.readFileSync(path.join(ROOT, 'pos-printer-setup.html'), 'utf8');
+const psc = code(PS);
+/* ~13 independent reads of PrinterManager.connected (the LOCAL iframe engine) meant
+   fixing only the status bar was cosmetic: every functional guard still refused, so
+   Test Print said "not connected" beside a connected Devices card. */
+ck('one shared predicate exists', psc.indexOf('function _printerConnected ()') > -1);
+ck('functional guards use it',
+   (psc.match(/_printerConnected\(\)/g) || []).length >= 10,
+   'found ' + (psc.match(/_printerConnected\(\)/g) || []).length + ' uses');
+ck('only the DEFINITION still names PrinterManager.connected',
+   (psc.match(/PrinterManager\.connected/g) || []).length === 1,
+   'any other read would be a surface disagreeing with the rest');
+ck('the shell honours __sokoniModulePrint',
+   v2c.indexOf('d.__sokoniModulePrint && d.receipt') > -1,
+   'printReceipt returns status routed_to_shell — a CLAIMED success — if nobody handles it');
+ck('...marked __fromShell so it cannot bounce back up', v2c.indexOf('{ __fromShell: true }') > -1);
+ck('Device step offers the provisioning route',
+   psc.indexOf("type: 'goModule', id: 'pos-provision'") > -1,
+   'the step is unsatisfiable on this page; it must point at the one that can');
+ck('the shell validates that request through the CONTRACT',
+   v2c.indexOf("if (d.type === 'goModule' && typeof d.id === 'string') { go(d.id); }") > -1,
+   'go() refuses undeclared routes; a raw location.assign would not');
+ck('CONTROL Device remains provisioning-only',
+   psc.indexOf("['Device', !!(st.checklist && (st.checklist.deviceRegistered || st.checklist.device))]") > -1 &&
+   psc.indexOf("['Device', !!(_printerConnected") === -1,
+   'a Bluetooth connection must never mark a device registered');
+
 head('6 - boundaries held');
 ck('PrinterManager NOT removed from the service',
    PPS.indexOf('function _pm  () { return window.PrinterManager; }') > -1);

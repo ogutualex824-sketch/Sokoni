@@ -234,6 +234,7 @@ input:checked+.slider:before{transform:translateX(18px)}
     <h2>Setup</h2>
     <div class="cc-prog"><i id="cc-bar"></i></div>
     <div id="cc-checklist"></div>
+    <div id="cc-provision"></div>
     <button class="cc-btn primary" id="cc-open" disabled>Open Till</button>
   </div>
 
@@ -1298,8 +1299,18 @@ let _connectedDevice = null;
    'No printer connected' while Devices showed the printer connected. merchant-v2
    broadcasts __sokoniPrinterState; this page had NO message listener at all, so the
    state never arrived. Standalone use is unaffected: nothing sends the message, so
-   _shellPrinter stays null and PrinterManager.connected decides as before. */
+   _shellPrinter stays null and _printerConnected() decides as before. */
 var _shellPrinter = null;
+/* THE ONE PREDICATE. This page had ~13 independent reads of PrinterManager.connected,
+   which resolves to the LOCAL iframe engine — not the object holding the GATT link
+   when the page runs inside the merchant shell. Fixing only the status bar left every
+   functional guard refusing, so Test Print reported 'Printer not connected' beside a
+   connected Devices card. Standalone is unchanged: _shellPrinter stays null and
+   PrinterManager.connected decides exactly as before. */
+function _printerConnected () {
+  try { if (PrinterManager && PrinterManager.connected) return true; } catch (_) {}
+  return !!(_shellPrinter && _shellPrinter.connected);
+}
 /* ASK, do not only listen. The handshake is posted on iframe load; if this listener
    were registered even slightly later the state would be gone and the page would show
    a disconnected printer forever. The shell answers requestShellState by broadcasting
@@ -1325,7 +1336,7 @@ function updateStatusBar () {
   const text   = document.getElementById('statusText');
   const badge  = document.getElementById('transportBadge');
   const discBtn= document.getElementById('btnDisconnect');
-  const ok = PrinterManager.connected || !!(_shellPrinter && _shellPrinter.connected);
+  const ok = _printerConnected();
   /* Auto-return: if we arrived with ?return= and a connection JUST succeeded here,
      replace back to the caller (POS/seller) — no manual Back needed. Only on the
      transition to connected, so arriving already-connected (to do advanced work)
@@ -1600,7 +1611,7 @@ renderNetPrinters();
 
 /* ── Capabilities ── */
 async function detectCaps () {
-  if (!PrinterManager.connected) { toast('Connect a printer first'); return; }
+  if (!_printerConnected()) { toast('Connect a printer first'); return; }
   toast('Detecting capabilities…');
   try {
     await PrinterManager.detectCapabilities();
@@ -1657,7 +1668,7 @@ function saveThreshold (v) {
 
 /* ── Test print ── */
 async function runTestPrint () {
-  if (!PrinterManager.connected) { toast('No printer connected — showing preview'); testDoc('sale'); return; }
+  if (!_printerConnected()) { toast('No printer connected — showing preview'); testDoc('sale'); return; }
   try { await PrinterManager.testPrint(); toast('Test print sent'); } catch (e) { toast('Error: ' + e.message, 4000); }
 }
 
@@ -1670,7 +1681,7 @@ async function testDoc (docType) {
   /* Scroll to preview */
   document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
   /* Print if connected */
-  if (PrinterManager.connected) {
+  if (_printerConnected()) {
     try {
       await PrinterManager.printNow(docType, data);
       toast('Printed: ' + docType);
@@ -1878,7 +1889,7 @@ function renderP58EPanel () {
 
   /* Pair / forget buttons — reflect the UNIFIED engine (PrinterManager → SokoniPrinter), not
      the separate P58E engine, so this panel agrees with the chip / Devices / Cashier. */
-  const connected = PrinterManager.connected;
+  const connected = _printerConnected();
   let paired = connected;
   try {
     paired = paired
@@ -1961,7 +1972,7 @@ async function pairP58E () {
     ]);
     if (!settled) _dbg('autoReconnect timed out after 3s — falling through to picker');
 
-    if (restored || PrinterManager.connected) {
+    if (restored || _printerConnected()) {
       toast('Printer reconnected — no pairing needed');
       _connectedDevice = { name: 'Printer', type: 'bluetooth' };
       updateStatusBar();
@@ -2114,7 +2125,7 @@ function hwTestFeed       () { hwRun('Paper Feed',   () => PrinterManager.p58e.p
 
 async function hwTestBarcode () {
   await hwRun('Barcode Print', async () => {
-    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    if (!_printerConnected()) throw new Error('Printer not connected');
     await PrinterManager.print('custom', {
       build (enc, W) {
         enc.ac().bold(true).text('BARCODE TEST').lf().bold(false);
@@ -2128,7 +2139,7 @@ async function hwTestBarcode () {
 
 async function hwTestQR () {
   await hwRun('QR Code Print', async () => {
-    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    if (!_printerConnected()) throw new Error('Printer not connected');
     await PrinterManager.printQR('https://sokoni.co.ke/', { label: 'sokoni.co.ke', size: 5 });
     PrinterManager.p58e.markChecklistItem('qrcode', true);
   });
@@ -2136,7 +2147,7 @@ async function hwTestQR () {
 
 async function hwTestConsecutive () {
   await hwRun('Consecutive ×3', async () => {
-    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    if (!_printerConnected()) throw new Error('Printer not connected');
     for (let i = 1; i <= 3; i++) {
       await PrinterManager.print('custom', {
         build (enc, W) {
@@ -2154,7 +2165,7 @@ async function hwTestConsecutive () {
 
 async function hwTestLarge () {
   await hwRun('Large Receipt (12 items)', async () => {
-    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    if (!_printerConnected()) throw new Error('Printer not connected');
     const items = Array.from({ length: 12 }, (_, i) => ({
       name: 'Test Product ' + (i + 1).toString().padStart(2, '0'),
       quantity: Math.ceil(Math.random() * 5),
@@ -2232,7 +2243,7 @@ async function renderDiagnostics () {
     _diagRow('Bluetooth usable',        PLATFORM.supportsBT     ? 'Yes' : 'No — unsupported on this platform/browser', PLATFORM.supportsBT) +
     _diagRow('Serial/COM usable',       PLATFORM.supportsSerial ? 'Yes' : 'No — Chrome/Edge on desktop only',          PLATFORM.supportsSerial) +
     _diagRow('USB usable',              PLATFORM.supportsUSB    ? 'Yes' : 'No — Chrome/Edge required',                 PLATFORM.supportsUSB) +
-    _diagRow('Current connection',      PrinterManager.connected ? ('Connected — ' + (_connectedDevice?.name || _connectedDevice?.type || '?')) : 'Not connected', PrinterManager.connected) +
+    _diagRow('Current connection',      _printerConnected() ? ('Connected — ' + (_connectedDevice?.name || _connectedDevice?.type || '?')) : 'Not connected', _printerConnected()) +
     _diagRow('Last successful print',   lpStr, lp ? true : null) +
     _diagRow('Last used transport',     _loadTransport() || 'None', null) +
     _diagRow('Hosting',                 location.protocol === 'https:' ? 'HTTPS ✓' : location.protocol + ' (Web BT/Serial require HTTPS)', location.protocol === 'https:') +
@@ -2319,7 +2330,7 @@ async function _copyDiag () {
     'WebUSB:        ' + (PLATFORM.hasUSB ? 'Available' : 'Not available'),
     'BT usable:     ' + (PLATFORM.supportsBT ? 'Yes' : 'No'),
     'Serial usable: ' + (PLATFORM.supportsSerial ? 'Yes' : 'No'),
-    'Connected:     ' + (PrinterManager.connected ? (_connectedDevice?.name || _connectedDevice?.type || 'Yes') : 'No'),
+    'Connected:     ' + (_printerConnected() ? (_connectedDevice?.name || _connectedDevice?.type || 'Yes') : 'No'),
     'Last transport:' + (_loadTransport() || 'None'),
     'Last print:    ' + (lp ? new Date(lp.at).toLocaleString('en-KE') + ' / ' + lp.docType : 'None'),
     'HTTPS:         ' + (location.protocol === 'https:' ? 'Yes' : 'No'),
@@ -2436,7 +2447,7 @@ function _saveAutoSettings () {
 }
 
 function _testDrawer () {
-  if (!PrinterManager.connected) { toast('Connect a printer first', 2500); return; }
+  if (!_printerConnected()) { toast('Connect a printer first', 2500); return; }
   PrinterManager.openDrawer('test', 'Setup Page').then(() => {
     toast('Cash drawer command sent'); renderAutoSettings();
   }).catch(e => toast(e.message || 'Drawer command failed'));
@@ -2621,7 +2632,7 @@ showPanel = function (el) {
   if (!PLATFORM.supportsSerial) return;
   try {
     const ports = await navigator.serial.getPorts();
-    if (ports.length && !PrinterManager.connected) {
+    if (ports.length && !_printerConnected()) {
       const notice = document.createElement('div');
       notice.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(109,92,255,.08);border:1px solid rgba(109,92,255,.3);border-radius:6px;font-size:11px;color:var(--sub);margin-bottom:4px;cursor:pointer';
       notice.innerHTML = `&#9654; Found ${ports.length} permitted COM port(s). <b style="color:var(--txt)">Click here to connect P58E automatically.</b>`;
@@ -2721,6 +2732,29 @@ Promise.race([
         esc(x[0]) + (x[1] ? '' : '</span>'));
     }).join('');
 
+    /* AN UNSATISFIABLE STEP IS A DEAD END. 'Device' is provisioning, which happens on
+       pos-setup.html via the pos-provision route; THIS page has no provisioning code,
+       so the step could never turn green here and nothing pointed anywhere. Offer the
+       route instead of leaving the merchant staring at a grey tick that gates Open
+       Till. Framed: ask the shell (contract-validated). Standalone: navigate. */
+    var deviceDone = !!(st.checklist && (st.checklist.deviceRegistered || st.checklist.device));
+    var provHost = $('cc-provision');
+    if (provHost) {
+      provHost.innerHTML = deviceDone ? '' :
+        '<button class="act" id="cc-provision-btn" style="margin-top:10px">— Set up this device</button>' +
+        '<div class="cc-muted" style="margin-top:6px;font-size:12px">This browser is not registered as a till yet. ' +
+        'Registering is separate from connecting a printer.</div>';
+      var pb = $('cc-provision-btn');
+      if (pb) pb.onclick = function () {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ __sokoniPos: true, type: 'goModule', id: 'pos-provision' }, location.origin);
+            return;
+          }
+        } catch (_) {}
+        location.href = '/pos-setup';
+      };
+    }
     var ready = done === items.length;
     $('cc-state').textContent = ready ? 'POS ready' : (done + ' of ' + items.length + ' complete');
     var btn = $('cc-open');
