@@ -91,7 +91,22 @@ const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
    The fix is to stop deriving the floor from memory and derive it from THE
    DEPLOYED SITE. LAST_SHIPPED_V remains as a lower bound for when the network is
    unavailable, but it is no longer the only guard. */
-const LAST_SHIPPED_V = 564;
+/* 2026-08-30: raised 564 -> 602, measured against the deployed site, because the offline
+   fallback had silently become capable of the very regression described above.
+
+   Live was v602 while this floor still said 564 and the committed service-worker counter
+   read v598. With the network unreachable the bump therefore computed
+   max(598, 564, 0) + 1 = v599 — THREE BELOW LIVE. An offline deploy would have shipped a
+   lower counter than production was already serving, which is precisely the v563-under-v564
+   failure this constant exists to prevent. The suite passed throughout, because a floor that
+   lags cannot detect that it lags.
+
+   Raising it is monotonic and strictly stricter; it never permits a lower counter. It is
+   also still a lagging indicator by construction, for the reason given above — the real fix
+   is to record the shipped counter into a COMMITTED file at deploy time so the floor stops
+   being hand-maintained. Until then this needs re-measuring against live whenever it is
+   touched. */
+const LAST_SHIPPED_V = 602;
 /* Overridable ONLY so the regression suite can drive the real code path against a
    local server returning a chosen counter. A guard that is only ever tested by
    reading its source is not a tested guard — this one has to be shown refusing. */
