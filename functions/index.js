@@ -3475,6 +3475,27 @@ function _darajaTimestamp(now) {
     .toISOString().replace(/\D/g, "").slice(0, 14);
 }
 
+/* ── Helper: canonical Kenyan MSISDN ───────────────────────────────────────────
+   Returns 254XXXXXXXXX, or NULL when the input is not a well-formed Kenyan mobile
+   number. Callers MUST refuse on null rather than send it onward.
+
+   Replaces `.replace(/^0/, "254")`, which rewrites only the FIRST zero and so
+   turned an international-prefixed 00254712345678 into 2540254712345678 — a
+   16-digit value that darajaSTKPush still handed to Daraja. The same expression
+   is copy-pasted in 8 further modules (dispatch, finos, finos-utils, impact,
+   payment-orchestrator, pos-qr, sub-engine). Those are payout and dispatch paths
+   and are deliberately NOT changed here — see docs/STK_VERIFICATION_NO_MONEY.md. */
+function _normalizeMsisdn(raw) {
+  let d = String(raw === undefined || raw === null ? '' : raw).replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);              /* 00254… international */
+  if (!d.startsWith('254')) {
+    if (d.startsWith('0')) d = '254' + d.slice(1);     /* 07…, 01… national    */
+    else if (/^[17]\d{8}$/.test(d)) d = '254' + d;   /* bare 7…, 1…          */
+  }
+  /* Kenyan mobile ranges are 2547XXXXXXXX and 2541XXXXXXXX — exactly 12 digits. */
+  return /^254[17]\d{8}$/.test(d) ? d : null;
+}
+
 /* ── Helper: get Daraja OAuth access token ── */
 async function _darajaToken(consumerKey, consumerSecret, env) {
   const base = env === "production"
@@ -3750,8 +3771,10 @@ exports.darajaSTKPush = onCall(
     const password  = Buffer.from(`${darajaShortCode}${darajaPassKey}${timestamp}`).toString("base64");
 
     /* Normalise phone to 254XXXXXXXXX */
-    let normPhone = String(phone).replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (!normPhone.startsWith("254")) normPhone = "254" + normPhone;
+    const normPhone = _normalizeMsisdn(phone);
+    if (!normPhone) {
+      throw new HttpsError("invalid-argument", "A valid Kenyan phone number is required (07XXXXXXXX).");
+    }
 
     const callbackUrl = "https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback";
 
@@ -3927,6 +3950,32 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         ? items
         : (exists && Array.isArray(o.items) ? o.items : []);
 
+      /* ── SINGLE-SHOP CHECKOUT INVARIANT — defence in depth ────────────────
+         createPaymentIntent already rejects a cart spanning sellers, and it
+         does so before any money moves. This assertion is NOT redundant: this
+         function is the boundary that actually WRITES the order, and an
+         invariant enforced only upstream of the writer is one refactor away
+         from being unenforced. Legacy callers, replays and future paths all
+         arrive here.
+
+         Lines carrying no sellerUid are not treated as a violation — the
+         darajaSTKPush/POS path legitimately supplies operator-keyed items with
+         no catalogue linkage, and failing those would take working tills
+         offline. Only a genuine DISAGREEMENT between two known sellers is
+         refused. See docs/CHECKOUT_CONTRACT.md. */
+      const _lineSellers = [...new Set(
+        lines.map((l) => l && (l.sellerUid || l.sellerId)).filter(Boolean)
+      )];
+      if (_lineSellers.length > 1) {
+        console.error('[_finalizeMarketplacePayment] REFUSED: order lines span sellers', {
+          orderId, sellers: _lineSellers,
+        });
+        throw new Error(
+          'Order lines span multiple sellers (' + _lineSellers.join(', ') +
+          ') — refusing to write a multi-shop order.'
+        );
+      }
+
       /* All reads before any write. */
       const stockReads = [];
       for (const line of lines) {
@@ -3939,6 +3988,21 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
       }
 
       const paidFields = {
+        /* ── ORDER CHANNEL — server-authored, never inferred ─────────────────
+           Marks this as an ONLINE order (shop/checkout), as opposed to a POS
+           till sale, which lives in posRetailSales.
+
+           Written HERE because this is the Admin-SDK path that owns the order
+           once money is confirmed — the client createOrder() in
+           sokoni-orders.js is documented as not called by checkout, so a
+           client-set channel would be both unreliable and forgeable.
+
+           It exists so downstream automation can DECIDE rather than ASSUME.
+           "Everything in `orders` is online" happens to be true today; an
+           automation that prints receipts on that assumption would start
+           printing the first time another order type lands in the collection.
+           An explicit discriminator makes that impossible. */
+        channel:          "online",
         status:           "paid",
         paymentStatus:    "paid",
         paymentVerified:  true,
@@ -4587,8 +4651,8 @@ exports.sendTestSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const uid   = request.auth.uid;
-    const phone = String(request.data?.phone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (!phone.startsWith("254") || phone.length !== 12) {
+    const phone = _normalizeMsisdn(request.data?.phone);
+    if (!phone) {
       throw new HttpsError("invalid-argument", "Valid Kenyan phone number required (07XXXXXXXX).");
     }
 
@@ -4608,8 +4672,16 @@ exports.sendTestSTKPush = onCall(
     const cfg = snap.data();
 
     /* Verify the phone matches the seller's registered phone or their shop settings phone */
-    const sellerPhone = String(cfg.phone || cfg.ownerPhone || "").replace(/\D/g, "").replace(/^0/, "254").replace(/^\+/, "");
-    if (sellerPhone && sellerPhone.length === 12 && phone !== sellerPhone) {
+    /* FAIL CLOSED. This was `if (sellerPhone && sellerPhone.length === 12 && …)`,
+       so a seller with no stored phone — or one that did not normalise to 12
+       digits — skipped the check entirely and could send a live KES 1 push to
+       ANY handset. An ownership check that cannot be evaluated must refuse. */
+    const sellerPhone = _normalizeMsisdn(cfg.phone || cfg.ownerPhone);
+    if (!sellerPhone) {
+      throw new HttpsError("failed-precondition",
+        "Add a valid phone number to your shop profile before sending a test push.");
+    }
+    if (phone !== sellerPhone) {
       throw new HttpsError("permission-denied", "Test pushes can only be sent to your own registered phone number.");
     }
 
@@ -4638,8 +4710,20 @@ exports.sendTestSTKPush = onCall(
         PartyB: darajaShortCode,
         PhoneNumber: phone,
         CallBackURL: callbackUrl,
+        /* Daraja caps TransactionDesc at ~13 characters and rejects non-ASCII.
+           The previous value was 27 characters and carried an em dash, so this
+           call could be refused on FORMAT while the real darajaSTKPush (which
+           slices to 13) went through.
+
+           This function is the KES 1 live test a merchant runs to prove their
+           own shortcode and passkey are bound to each other -- the one check
+           validateDarajaCredentials cannot make, because it only requests an
+           OAuth token and never sends the password anywhere. A format refusal
+           here reads to the merchant as "bad credentials" and would send them
+           hunting a problem that does not exist. Keep both fields short and
+           ASCII so a failure means what it says. */
         AccountReference: "SOKONI-TEST",
-        TransactionDesc: "SOKONI Payment Test — 1 KES",
+        TransactionDesc: "SOKONI Test",
       }),
     });
     const stkData = await stkRes.json();
@@ -11316,6 +11400,7 @@ exports.onMessageCreated              = _messagesMod.onMessageCreated;
 exports.moderateMessage               = _messagesMod.moderateMessage;
 exports.archiveCompletedConversations = _messagesMod.archiveCompletedConversations;
 exports.cleanupChatStorage            = _messagesMod.cleanupChatStorage;
+exports.expireOldChatMessages         = _messagesMod.expireOldChatMessages;
 exports.onOrderStatusChanged          = _messagesMod.onOrderStatusChanged;
 exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
 exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
@@ -11512,6 +11597,35 @@ exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
+
+/* ── Shop checkout mode (projection of resolveActiveDestination) ───── */
+const checkoutMode = require('./checkout-mode');
+exports.getShopCheckoutMode = checkoutMode.getShopCheckoutMode;
+
+/* ── Multi-shop checkout quote (server-authoritative; Rail B) ──────────
+   Coupled pair: this forwarding line + functions/multishop-checkout-quote.js
+   must ship together, or the functions load fails. Reuses the canonical
+   product_order validator + the shared delivery engine; no new money authority. */
+exports.createMultiShopCheckoutQuote = require('./multishop-checkout-quote').createMultiShopCheckoutQuote;
+
+/* ── Atomic order claim (multi-employee POS distribution) ──────────── */
+const orderClaim = require('./order-claim');
+exports.claimOrder         = orderClaim.claimOrder;
+exports.releaseOrderClaim  = orderClaim.releaseOrderClaim;
+
+/* ── Manual-Till order lifecycle (fail-closed on §4.1-4.3 policy) ───── */
+const manualTill = require('./manual-till-orders');
+exports.createManualTillOrder    = manualTill.createManualTillOrder;
+exports.attestManualTillPayment  = manualTill.attestManualTillPayment;
+
+/* ── 48-hour commission invoice (fail-closed on VAT policy) ─────────── */
+const commissionInvoice = require('./commission-invoice');
+exports.issueCommissionInvoice = commissionInvoice.issueCommissionInvoice;
+
+/* ── Manual M-PESA Till reference claims ────────────────────────────── */
+const posMpesaRefs = require('./pos-mpesa-refs');
+exports.claimPosMpesaReference   = posMpesaRefs.claimPosMpesaReference;
+exports.onPosTransactionMpesaRef = posMpesaRefs.onPosTransactionMpesaRef;
 
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');

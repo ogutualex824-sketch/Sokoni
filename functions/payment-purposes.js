@@ -33,6 +33,80 @@ const MAX_KES = 150000;
 
 const fail = (code, msg) => { throw new HttpsError(code, msg); };
 
+/* ── Canonical marketplace line validation ──────────────────────────────────
+   The SINGLE source of item-price / availability / stock truth, shared by
+   product_order (single-shop payment) and the multi-shop checkout quote so the
+   two cannot fork. Returns SERVER-authoritative lines + subtotal read from the
+   product documents — NEVER a client price — and applies NO settlement policy:
+   the caller decides that (product_order enforces one seller; the multi-shop
+   quote partitions). Extracted verbatim from product_order.price. */
+async function validateOrderLines(uid, items) {
+  items = Array.isArray(items) ? items : [];
+  if (!items.length) fail('invalid-argument', 'Cart is empty.');
+  if (items.length > 100) fail('invalid-argument', 'Too many line items.');
+
+  const ids = [...new Set(items
+    .map((i) => String((i && (i.productId || i.id)) || '').trim())
+    .filter(Boolean))];
+  if (!ids.length) fail('invalid-argument', 'No valid products in cart.');
+
+  /* Catalogue read. Firestore caps documentId() `in` queries, so chunk. */
+  const prods = {};
+  for (let i = 0; i < ids.length; i += 10) {
+    const chunk = ids.slice(i, i + 10);
+    const snap = await db().collection('products')
+      .where(FieldPath.documentId(), 'in', chunk).get();
+    snap.forEach((d) => { prods[d.id] = d.data() || {}; });
+  }
+
+  /* Shop state for availability — fail OPEN on read error, matching
+     createCheckoutSession: availability is a merchant convenience, not a
+     security control, and the PRICE is what this function protects. */
+  const sellerUids = [...new Set(Object.values(prods)
+    .map((p) => p.sellerUid).filter(Boolean))];
+  const shopState = {};
+  try {
+    for (let i = 0; i < sellerUids.length; i += 10) {
+      const chunk = sellerUids.slice(i, i + 10);
+      const snap = await db().collection('shopState')
+        .where(FieldPath.documentId(), 'in', chunk).get();
+      snap.forEach((d) => { shopState[d.id] = d.data() || {}; });
+    }
+  } catch (_) { /* default open */ }
+
+  const avail = require('./availability-enforce');
+  const lines = [];
+  let subtotal = 0;
+
+  for (const raw of items) {
+    const pid = String((raw && (raw.productId || raw.id)) || '').trim();
+    const prod = prods[pid];
+    /* An item missing from the catalogue is REJECTED, not skipped: the buyer is
+       about to be charged, so silently dropping a line would charge a total for a
+       different cart than the one they saw. */
+    if (!prod) fail('failed-precondition', `Product ${pid} is no longer available.`);
+    if (!avail.itemAvailability(prod, shopState[prod.sellerUid]).available)
+      fail('failed-precondition', `${prod.name || pid} is not currently available.`);
+
+    const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
+    if (prod.outOfStock === true || (stockQty !== null && stockQty <= 0))
+      fail('failed-precondition', `${prod.name || pid} is out of stock.`);
+
+    const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
+    if (stockQty !== null && qty > stockQty)
+      fail('failed-precondition',
+        `Only ${stockQty} of ${prod.name || pid} remain. Please update your cart.`);
+
+    const unitPrice = Number(prod.salePrice || prod.price || 0);
+    if (!(unitPrice > 0)) fail('failed-precondition', `${prod.name || pid} has no price.`);
+
+    subtotal += unitPrice * qty;
+    lines.push({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null });
+  }
+
+  return { lines, subtotal };
+}
+
 /**
  * Each pricer: async (uid, data) → {
  *   amountCents, currency, resourceType, resourceId, metadata
@@ -180,82 +254,43 @@ const PURPOSES = {
 
      `data.amount` / `orderTotal` are IGNORED. Nothing here reads a price from
      the request; that is the registry's contract. */
+  /* product_order is the INDEPENDENT final charging authority (Rail B, Option A).
+     It re-derives product identity, server price, availability/stock, seller and
+     delivery on every charge via the shared validateOrderLines + delivery-engine,
+     so it deliberately takes NO quoteId: createMultiShopCheckoutQuote is the
+     checkout DISPLAY/confirmation snapshot, this function is the money. The absence
+     of quoteId here is intentional — coupling the quote lifecycle into the charge
+     would weaken this independence. See docs/MULTISHOP_STACK_PROVENANCE_MANIFEST.md. */
   product_order: {
     resourceType: 'order',
     async price(uid, data) {
       const orderId = String(data.orderId || '').trim();
       if (!orderId) fail('invalid-argument', 'orderId required.');
 
-      const items = Array.isArray(data.items) ? data.items : [];
-      if (!items.length) fail('invalid-argument', 'Cart is empty.');
-      if (items.length > 100) fail('invalid-argument', 'Too many line items.');
-
-      const ids = [...new Set(items
-        .map((i) => String((i && (i.productId || i.id)) || '').trim())
-        .filter(Boolean))];
-      if (!ids.length) fail('invalid-argument', 'No valid products in cart.');
-
-      /* Catalogue read. Firestore caps documentId() `in` queries, so chunk. */
-      const prods = {};
-      for (let i = 0; i < ids.length; i += 10) {
-        const chunk = ids.slice(i, i + 10);
-        const snap = await db().collection('products')
-          .where(FieldPath.documentId(), 'in', chunk).get();
-        snap.forEach((d) => { prods[d.id] = d.data() || {}; });
-      }
-
-      /* Shop state for availability — fail OPEN on read error, matching
-         createCheckoutSession: availability is a merchant convenience, not a
-         security control, and the PRICE is what this function protects. */
-      const sellerUids = [...new Set(Object.values(prods)
-        .map((p) => p.sellerUid).filter(Boolean))];
-      const shopState = {};
-      try {
-        for (let i = 0; i < sellerUids.length; i += 10) {
-          const chunk = sellerUids.slice(i, i + 10);
-          const snap = await db().collection('shopState')
-            .where(FieldPath.documentId(), 'in', chunk).get();
-          snap.forEach((d) => { shopState[d.id] = d.data() || {}; });
-        }
-      } catch (_) { /* default open */ }
-
-      const avail = require('./availability-enforce');
-      const lines = [];
-      let subtotal = 0;
-
-      for (const raw of items) {
-        const pid = String((raw && (raw.productId || raw.id)) || '').trim();
-        const prod = prods[pid];
-        /* An item missing from the catalogue is REJECTED, not skipped.
-           createCheckoutSession skips (it is building a session the buyer will
-           still confirm); here the buyer is about to be charged, so silently
-           dropping a line would charge a total for a different cart than the one
-           they saw. */
-        if (!prod) fail('failed-precondition', `Product ${pid} is no longer available.`);
-        if (!avail.itemAvailability(prod, shopState[prod.sellerUid]).available)
-          fail('failed-precondition', `${prod.name || pid} is not currently available.`);
-
-        const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
-        if (prod.outOfStock === true || (stockQty !== null && stockQty <= 0))
-          fail('failed-precondition', `${prod.name || pid} is out of stock.`);
-
-        const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
-        if (stockQty !== null && qty > stockQty)
-          fail('failed-precondition',
-            `Only ${stockQty} of ${prod.name || pid} remain. Please update your cart.`);
-
-        const unitPrice = Number(prod.salePrice || prod.price || 0);
-        if (!(unitPrice > 0)) fail('failed-precondition', `${prod.name || pid} has no price.`);
-
-        subtotal += unitPrice * qty;
-        lines.push({ productId: pid, qty, unitPrice, sellerUid: prod.sellerUid || null });
-      }
+      /* Item price / availability / stock validated by the CANONICAL validator,
+         shared with the multi-shop checkout quote so the two cannot fork. It
+         returns server-authoritative lines + subtotal; the single-seller
+         settlement policy immediately below is product_order's own. */
+      const { lines, subtotal } = await validateOrderLines(uid, data.items);
 
       /* One seller per order — the webhook credits a single seller wallet. */
       const orderSellers = [...new Set(lines.map((l) => l.sellerUid).filter(Boolean))];
       if (orderSellers.length > 1)
         fail('failed-precondition', 'Cart spans multiple sellers; check out one shop at a time.');
-      const sellerUid = orderSellers[0] || String(data.sellerUid || '') || null;
+      /* NO CLIENT FALLBACK. This previously read
+             orderSellers[0] || String(data.sellerUid || '') || null
+         so a cart whose products carried no sellerUid deferred to a
+         browser-supplied value — trusting the client for exactly the products
+         where the SERVER could not establish an owner. That is the worst case
+         to trust it: the money is routed, the order is attributed and the
+         fulfilment is assigned on that identity.
+
+         A product whose seller cannot be derived from its own document is not
+         checkout-able. Reject, never fill the gap.
+         See docs/CHECKOUT_CONTRACT.md — Single-Shop Checkout Invariant. */
+      if (!orderSellers.length)
+        fail('failed-precondition', 'These products have no seller on record and cannot be checked out.');
+      const sellerUid = orderSellers[0];
 
       /* DELIVERY — server-recomputed from the merchant's own config through the
          same engine the client uses, so the two cannot drift. Where a merchant
@@ -364,4 +399,4 @@ async function priceFor(purpose, uid, data) {
 const isRegistered = (p) => Object.hasOwn(PURPOSES, String(p || ''));
 const registered   = () => Object.keys(PURPOSES);
 
-module.exports = { PURPOSES, priceFor, isRegistered, registered, MIN_KES, MAX_KES };
+module.exports = { PURPOSES, priceFor, isRegistered, registered, MIN_KES, MAX_KES, validateOrderLines };

@@ -138,42 +138,120 @@ function renderFoodSection(foodItems){
         </div>`;
 }
 
-/* ── Products section ── */
+/* ── Products section: grouped by shop (premium multi-shop cart) ──
+   Products are partitioned by their owning shop (sellerUid || sellerId), mirroring how
+   the food section groups by restaurant and how checkout partitions payment per shop.
+   A multi-shop basket then reads "My Cart → Shop 1 → Shop 2 → …", each shop a
+   self-contained premium card with its identity, item count and items.
+
+   The per-shop subtotal shown here is a PRESENTATION figure computed locally, exactly
+   like the food group's `subtotal`. The shared cart service deliberately exposes no
+   money helper, and the server remains the pricing/settlement authority
+   (verifyIntasendPayment) — this number is never payable and must not be treated as
+   authoritative. Rows keep the SAME handlers (productQty/moveToWishlist/removeFromCart),
+   resolved against the live projection index `cart.indexOf(p)`. */
+function _shopKeyOf(p){ return String((p && (p.sellerUid || p.sellerId)) || ''); }
+
 function renderProductSection(productItems){
     if(!productItems.length) return '';
     const productTotal = calcProductTotal();
-    const rows = productItems.map((p, i) => {
-        const idx = cart.indexOf(p);
-        const catRaw = String(p.category||'');
-        const catDisplay = catRaw ? _esc(catRaw.charAt(0).toUpperCase() + catRaw.slice(1)) : 'Product';
-        const price = Number(p.price||0);
-        const qty = p.qty||1;
-        return `
-        <div class="cart-page-card" id="cart-item-${idx}">
-            <img src="${_safeImgSrc(window.pickProductImage ? pickProductImage(p) : p.image)}" alt="${_esc(p.name)}" class="cart-card-img" onerror="this.onerror=null;this.src='assets/default-product.png'">
-            <div class="cart-card-info">
-                <h3>${_esc(p.name)}</h3>
-                <p class="cart-card-cat">${catDisplay}</p>
-                <p class="cart-card-price">KES ${(price*qty).toLocaleString()}</p>
-            </div>
-            <div class="cart-card-actions">
-                <div class="cart-food-qty">
-                    <button class="cart-qty-btn" onclick="productQty(${idx},${qty-1})">−</button>
-                    <span class="cart-qty-num">${qty}</span>
-                    <button class="cart-qty-btn" onclick="productQty(${idx},${qty+1})">+</button>
+
+    /* Partition by shop, preserving first-appearance order so the basket reads the way
+       the shopper built it rather than being re-sorted. Unidentified/legacy rows collect
+       under '' → "Other items" and stay visible: never hide a line the shopper added. */
+    const order = [];
+    const shops = {};
+    productItems.forEach(p => {
+        const sid = _shopKeyOf(p);
+        if(!shops[sid]){
+            shops[sid] = {
+                sid,
+                name: sid ? (p.shopName || p.sellerName || 'Shop') : 'Other items',
+                logo: p.shopLogo || p.sellerLogo || p.storeLogo || '',
+                items: [],
+                subtotal: 0,
+            };
+            order.push(sid);
+        }
+        shops[sid].items.push(p);
+        shops[sid].subtotal += Number(p.price||0) * (p.qty||1);
+    });
+
+    const cards = order.map(sid => {
+        const g = shops[sid];
+        const count = g.items.reduce((n,it) => n + (it.qty||1), 0);
+        /* Avatar: real shop logo when the item carries one, else a letter badge derived
+           from the shop name — a premium fallback that never leaves an empty circle. */
+        const initial = _esc((String(g.name).trim().charAt(0) || '🛍️').toUpperCase());
+        const avatar = g.logo
+            ? `<img src="${_safeImgSrc(g.logo)}" alt="" class="cart-shop-avatar" onerror="this.onerror=null;this.style.display='none'">`
+            : `<span class="cart-shop-avatar cart-shop-avatar--letter" aria-hidden="true">${initial}</span>`;
+
+        const rows = g.items.map(p => {
+            const idx = cart.indexOf(p);
+            const catRaw = String(p.category||'');
+            const catDisplay = catRaw ? _esc(catRaw.charAt(0).toUpperCase() + catRaw.slice(1)) : 'Product';
+            const price = Number(p.price||0);
+            const qty = p.qty||1;
+            return `
+            <div class="cart-page-card cart-shop-item" id="cart-item-${idx}">
+                <img src="${_safeImgSrc(window.pickProductImage ? pickProductImage(p) : p.image)}" alt="${_esc(p.name)}" class="cart-card-img" onerror="this.onerror=null;this.src='assets/default-product.png'">
+                <div class="cart-card-info">
+                    <h3>${_esc(p.name)}</h3>
+                    <p class="cart-card-cat">${catDisplay}</p>
+                    <p class="cart-card-price">KES ${(price*qty).toLocaleString()}</p>
                 </div>
-                <button class="cart-move-wish" onclick="moveToWishlist(${idx})" title="Save for later">❤️</button>
-                <button class="cart-remove-btn" onclick="removeFromCart(${idx})"><i class="fas fa-trash"></i> Remove</button>
+                <div class="cart-card-actions">
+                    <div class="cart-food-qty">
+                        <button class="cart-qty-btn" aria-label="Decrease quantity" onclick="productQty(${idx},${qty-1})">−</button>
+                        <span class="cart-qty-num">${qty}</span>
+                        <button class="cart-qty-btn" aria-label="Increase quantity" onclick="productQty(${idx},${qty+1})">+</button>
+                    </div>
+                    <button class="cart-move-wish" onclick="moveToWishlist(${idx})" title="Save for later" aria-label="Save for later">❤️</button>
+                    <button class="cart-remove-btn" onclick="removeFromCart(${idx})" aria-label="Remove item"><i class="fas fa-trash"></i> Remove</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        /* Per-shop CTA only navigates to the existing checkout — it does NOT pre-select
+           this shop. checkout.html reads no shop param and partitions the whole basket on
+           load; single-shop scoping happens there via its own per-shop pay control. The
+           label therefore stays honest ("Go to checkout →") and must not imply the shop is
+           already selected. "Other items" has no single shop, so it gets no CTA; the section
+           CTA below keeps those rows reachable. */
+        const shopCta = g.sid ? `
+          <div class="cart-shop-cta">
+            <a href="checkout.html" class="cart-shop-checkout" aria-label="Go to checkout">Go to checkout →</a>
+          </div>` : '';
+
+        return `
+        <div class="cart-shop-group" data-shop="${_esc(g.sid)}">
+          <div class="cart-shop-header">
+            ${avatar}
+            <div class="cart-shop-id">
+              <span class="cart-shop-name">${_esc(g.name)}</span>
+              <span class="cart-shop-count">${count} item${count!==1?'s':''}</span>
             </div>
+            <span class="cart-shop-sub">KES ${g.subtotal.toLocaleString()}</span>
+          </div>
+          <div class="cart-shop-items">${rows}</div>
+          ${shopCta}
         </div>`;
     }).join('');
+
+    const shopCount = order.filter(s => s).length;
+    const multiHint = shopCount > 1 ? `
+        <div class="cart-multishop-hint" role="note">
+          🛍️ Your basket has <strong>${shopCount} shops</strong>. Each shop is checked out and paid separately.
+        </div>` : '';
 
     return `
         <div class="cart-section-header">
           <span>🛒 Products</span>
           <span>KES ${productTotal.toLocaleString()}</span>
         </div>
-        ${rows}
+        ${multiHint}
+        ${cards}
         <div class="cart-section-cta">
           <a href="checkout.html" class="cart-checkout-products">
             🛒 Checkout Products — KES ${productTotal.toLocaleString()}

@@ -1273,6 +1273,29 @@
     </div>
 
     <!-- RIGHT: Order Summary -->
+    <!-- ── MULTI-SHOP BASKET PANEL ─────────────────────────────────────────
+         Shown ONLY when the basket holds more than one shop. A single-shop
+         basket renders exactly as before, so the existing flow carries no
+         regression risk from this addition.
+
+         The message is deliberately "one shop at a time", never "your cart
+         contains multiple shops, so checkout is unavailable". Carrying many
+         shops in one basket is the feature; settling them together is what
+         cannot happen. -->
+    <div id="multiShopPanel" style="display:none;margin-bottom:16px;">
+      <div style="background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.28);
+                  border-radius:12px;padding:13px 15px;margin-bottom:12px;">
+        <div style="font-weight:800;font-size:14px;color:#71ff00;margin-bottom:4px;">
+          🛍️ Your basket has <span id="msShopCount">0</span> shops
+        </div>
+        <div style="font-size:12.5px;line-height:1.55;color:rgba(255,255,255,.72);">
+          Each shop is paid separately, because each shop receives its own money.
+          Pay one now — the rest stay in your basket.
+        </div>
+      </div>
+      <div id="multiShopList"></div>
+    </div>
+
     <div class="order-summary-box">
       <div class="os-title">Order Summary</div>
       <div class="os-items" id="checkoutItems"></div>
@@ -1618,6 +1641,280 @@ function _setImpact(btn, amt) {
 const _ckCart = window.SokoniCart || null;
 const cart = _ckCart ? _ckCart.list() : null;
 
+/* ── ONE cart-clearing rule, used by every settlement path ─────────────────
+   A basket may hold several shops and only ONE settles at a time. Clearing the
+   whole cart would destroy items the shopper has not paid for and did not ask to
+   lose — worse than the lingering-item bug the clear() call was written for,
+   because it silently discards a basket instead of keeping one too long.
+
+   There are three settlement sites on this page. Three copies of this rule would
+   drift the moment one is edited, which is the divergence pattern this codebase
+   already carries elsewhere — so it lives here once.
+
+   Falls back to clear() when the shop cannot be identified or was the only one in
+   the basket: there the old whole-cart behaviour is still correct, because there
+   is nothing else to protect. */
+/* ── MULTI-SHOP RENDERING ───────────────────────────────────────────────────
+   One payable section per shop. The route for each is decided by
+   getShopCheckoutMode() — a projection of resolveActiveDestination() — and NEVER
+   by the customer. A shop with an authorised STK rail gets STK; offering it
+   manual payment alongside would let a merchant steer customers off an observable
+   rail onto a self-attested one.
+
+   Activates ONLY for a basket with more than one shop, so the single-shop path is
+   byte-for-byte what it was.
+
+   For manual payment the customer is shown where to pay and told plainly that
+   SOKONI did not see the payment and the shop must confirm it. That wording is a
+   control, not decoration: a customer who believes SOKONI verified the payment
+   will not chase the shop when it goes unconfirmed. */
+window._ckRenderMultiShop = async function () {
+  var panel = document.getElementById('multiShopPanel');
+  var list  = document.getElementById('multiShopList');
+  var C     = window.SokoniCart;
+  if (!panel || !list || !C || typeof C.groupBySeller !== 'function') return;
+
+  var groups = C.groupBySeller().filter(function (g) { return g.sellerUid; });
+  if (groups.length < 2) { panel.style.display = 'none'; return; }
+
+  panel.style.display = '';
+  var cnt = document.getElementById('msShopCount');
+  if (cnt) cnt.textContent = String(groups.length);
+
+  /* Loading state while the server prices each shop's delivery and total. */
+  list.innerHTML = '<div style="padding:18px;text-align:center;color:rgba(255,255,255,.5);font-size:13px">' +
+                   'Calculating each shop’s delivery and total…</div>';
+
+  /* Fulfilment context for the quote — read defensively, never assume scope. */
+  var _ft = 'delivery';
+  try { if (typeof fulfillmentType !== 'undefined' && fulfillmentType) _ft = fulfillmentType; } catch (_) {}
+  var _zone = null;
+  try { var _zEl = document.getElementById('deliveryZone'); _zone = _zEl ? (_zEl.value || null) : null; } catch (_) {}
+
+  /* AUTHORITATIVE server quote (per-shop items + delivery + consolidated total)
+     and per-shop payment mode, in one parallel round trip. The quote is the
+     payable display authority; createPaymentIntent(product_order) independently
+     revalidates product/price/availability/stock/seller/delivery at charge time
+     (Option A — no quoteId coupling, by design). The UI NEVER computes the final
+     payable itself: when the quote is unavailable it shows an "at payment" state,
+     never a fabricated amount. */
+  var quote = null, modes = {};
+  try {
+    var fn   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns  = fn.getFunctions(window.firebaseApp);
+    var out  = await Promise.all([
+      fn.httpsCallable(fns, 'createMultiShopCheckoutQuote')({ items: C.list(), fulfillmentType: _ft, deliveryZone: _zone })
+        .then(function (r) { return r.data; }).catch(function () { return null; }),
+      fn.httpsCallable(fns, 'getShopCheckoutMode')({ sellerUids: groups.map(function (g) { return g.sellerUid; }) })
+        .then(function (r) { return (r.data && r.data.modes) || []; }).catch(function () { return []; }),
+    ]);
+    quote = out[0];
+    (out[1] || []).forEach(function (m) { modes[m.sellerUid] = m; });
+  } catch (e) {
+    /* A failed lookup must NOT present a payable route or a guessed total. */
+    console.warn('[checkout] multishop quote/mode lookup failed:', e && e.message);
+  }
+
+  var qShops = {};
+  if (quote && Array.isArray(quote.shops)) quote.shops.forEach(function (s) { qShops[s.sellerUid] = s; });
+  var haveQuote = !!(quote && quote.authoritative === true);
+
+  list.innerHTML = groups.map(function (g) {
+    var m    = modes[g.sellerUid] || { mode: 'unavailable', reason: 'lookup_failed' };
+    var qs   = qShops[g.sellerUid] || null;
+    var name = (qs && qs.shopName) || (g.items[0] && (g.items[0].shopName || g.items[0].sellerName)) || 'Shop';
+
+    /* AUTHORITATIVE amounts come from the server quote. With no quote we show an
+       "at payment" state — never a client-computed payable. */
+    var itemsLabel = qs ? ('KES ' + Number(qs.itemTotal || 0).toLocaleString()) : 'Calculating…';
+    var deliveryLabel, deliveryColour = 'rgba(255,255,255,.75)';
+    if (!qs)                         { deliveryLabel = 'Confirmed at payment'; }
+    else if (_ft !== 'delivery')     { deliveryLabel = 'Pickup'; }
+    else if (qs.delivery && qs.delivery.available === true) {
+      if (qs.delivery.free) { deliveryLabel = 'FREE DELIVERY'; deliveryColour = '#71ff00'; }
+      else deliveryLabel = 'KES ' + Number(qs.delivery.fee || 0).toLocaleString();
+    } else { deliveryLabel = 'Delivery not available'; deliveryColour = '#ff9f9f'; }
+    var shopTotalLabel = qs ? ('KES ' + Number(qs.shopTotal || 0).toLocaleString()) : '—';
+
+    var body, action;
+
+    if (m.mode === 'daraja_stk') {
+      body = '<div style="font-size:12.5px;color:rgba(255,255,255,.7)">Pay by M-PESA prompt on your phone.</div>';
+      action = '<button class="ms-pay" onclick="window._ckPayShop(\'' + g.sellerUid + '\')" ' +
+               'style="width:100%;margin-top:10px;background:#00a84e;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">' +
+               (qs ? ('Pay ' + shopTotalLabel) : 'Pay this shop') + '</button>';
+    } else if (m.mode === 'manual_payment') {
+      var d = m.destination || {};
+      var isPb = String(d.type || '').toUpperCase() === 'PAYBILL';
+      body =
+        '<div style="background:rgba(0,0,0,.28);border-radius:9px;padding:11px 12px;font-size:13px;line-height:1.7">' +
+          '<div style="font-weight:800;margin-bottom:5px">Pay ' + _ckEsc(d.accountName || name) + ' directly</div>' +
+          (isPb
+            ? '<div>PayBill: <strong style="font-family:monospace;font-size:15px">' + _ckEsc(d.number) + '</strong></div>' +
+              '<div>Account: <strong style="font-family:monospace;font-size:15px">' + _ckEsc(d.accountReference || '—') + '</strong></div>'
+            : '<div>Till: <strong style="font-family:monospace;font-size:15px">' + _ckEsc(d.number) + '</strong></div>') +
+          '<div style="margin-top:7px;font-size:12px;color:rgba(255,255,255,.62)">' +
+            'Then enter the M-PESA confirmation code below.</div>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:#ffb020;margin-top:8px;line-height:1.5">' +
+          '⚠️ SOKONI does not receive this payment. The shop confirms it from their own ' +
+          'M-PESA records before your order proceeds.</div>' +
+        '<input id="ms-ref-' + g.sellerUid + '" maxlength="10" placeholder="e.g. QK72ABC123" ' +
+          'style="width:100%;margin-top:9px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.18);' +
+          'background:rgba(0,0,0,.3);color:#fff;font-family:monospace;font-size:15px;letter-spacing:2px;text-transform:uppercase">';
+      action = '<button class="ms-pay" onclick="window._ckSubmitManual(\'' + g.sellerUid + '\')" ' +
+               'style="width:100%;margin-top:9px;background:#00a84e;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">' +
+               'I have paid — submit code</button>';
+    } else {
+      /* Never invent a route. The shop simply cannot be checked out. */
+      body = '<div style="font-size:12.5px;color:#ff9f9f">This shop cannot take online payment right now. ' +
+             'Its items stay in your basket.</div>';
+      action = '';
+    }
+
+    return '<div style="background:var(--card,#141414);border:1px solid rgba(255,255,255,.1);' +
+           'border-radius:12px;padding:14px 15px;margin-bottom:11px">' +
+             '<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:4px">' +
+               '<strong style="font-size:14.5px">' + _ckEsc(name) + '</strong>' +
+               '<strong style="color:#71ff00">' + shopTotalLabel + '</strong>' +
+             '</div>' +
+             '<div style="font-size:11.5px;color:rgba(255,255,255,.5);margin-bottom:8px">' +
+               g.items.length + ' item' + (g.items.length === 1 ? '' : 's') + ' · items ' + itemsLabel + '</div>' +
+             '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:9px">' +
+               '<span style="color:rgba(255,255,255,.6)">🚚 Delivery</span>' +
+               '<strong style="color:' + deliveryColour + '">' + _ckEsc(deliveryLabel) + '</strong>' +
+             '</div>' +
+             body + action +
+             '<div id="ms-msg-' + g.sellerUid + '" style="font-size:12px;margin-top:8px"></div>' +
+           '</div>';
+  }).join('') + _ckMultiShopSummary(quote, haveQuote);
+};
+
+/* Consolidated checkout summary — items + delivery + grand total, ALL from the
+   AUTHORITATIVE server quote. When the quote is unavailable it shows an "at
+   payment" state, never a client-computed total (per the checkout guard). */
+function _ckMultiShopSummary(quote, haveQuote) {
+  if (!haveQuote) {
+    return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);' +
+           'border-radius:12px;padding:13px 15px;margin-top:2px;font-size:12.5px;color:rgba(255,255,255,.6)">' +
+             'Each shop’s total is confirmed at payment.</div>';
+  }
+  var row = function (label, val, strong) {
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:' + (strong ? '15px' : '13px') + ';' +
+           (strong
+             ? 'font-weight:900;color:#fff;border-top:1px solid rgba(255,255,255,.12);margin-top:5px;padding-top:9px'
+             : 'color:rgba(255,255,255,.7)') + '">' +
+             '<span>' + label + '</span>' +
+             '<span' + (strong ? ' style="color:#71ff00"' : '') + '>' + val + '</span></div>';
+  };
+  return '<div style="background:rgba(113,255,0,.05);border:1px solid rgba(113,255,0,.22);' +
+         'border-radius:12px;padding:13px 15px;margin-top:2px">' +
+           '<div style="font-weight:800;font-size:13px;margin-bottom:6px">Order summary · ' +
+             (quote.shopCount || (quote.shops || []).length) + ' shops</div>' +
+           row('Items', 'KES ' + Number(quote.itemsTotal || 0).toLocaleString()) +
+           row('Delivery', Number(quote.deliveryTotal || 0) > 0
+             ? ('KES ' + Number(quote.deliveryTotal).toLocaleString()) : 'FREE') +
+           row('Total', 'KES ' + Number(quote.grandTotal || 0).toLocaleString(), true) +
+           '<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:8px;line-height:1.5">' +
+             'One basket — but each shop is paid and delivered separately. Pay each shop above.</div>' +
+         '</div>';
+}
+
+function _ckEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _ckMsMsg(sellerUid, text, colour) {
+  var el = document.getElementById('ms-msg-' + sellerUid);
+  if (el) { el.textContent = text || ''; el.style.color = colour || 'rgba(255,255,255,.6)'; }
+}
+
+/* STK shop: narrow the basket to that shop, then hand off to the page's existing
+   single-shop payment flow. Reusing it rather than writing a second payment path
+   is the whole point — the STK experience is untouched. */
+window._ckPayShop = function (sellerUid) {
+  try {
+    /* Record the chosen shop. The charge path (mpesa branch) re-derives THIS shop's
+       lines FRESH from _ckPendingShop at send time and scopes the payment to one
+       seller — one shop → one payment → one order (Rail B). No stale snapshot is
+       kept: the previous _ckShopScope array was set here but never read, so the
+       whole cart was charged and the single-seller guard rejected multi-shop. */
+    window._ckPendingShop = sellerUid;
+    _ckMsMsg(sellerUid, 'Continue in the payment section below.', '#71ff00');
+    var el = document.querySelector('.order-summary-box');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    _ckMsMsg(sellerUid, 'Could not start payment: ' + (e && e.message), '#ff6b6b');
+  }
+};
+
+/* Manual shop: the customer has already paid the shop directly and is handing us
+   the reference. This creates an order in awaiting_payment_attestation — it does
+   NOT mark anything paid, and it never will: only the merchant's POS attestation
+   advances that state. */
+window._ckSubmitManual = async function (sellerUid) {
+  var input = document.getElementById('ms-ref-' + sellerUid);
+  var ref   = String((input && input.value) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z0-9]{10}$/.test(ref)) {
+    _ckMsMsg(sellerUid, 'Enter the 10-character M-PESA code from your payment.', '#ffb020');
+    return;
+  }
+  if (window._ckManualBusy && window._ckManualBusy[sellerUid]) return;
+  window._ckManualBusy = window._ckManualBusy || {};
+  window._ckManualBusy[sellerUid] = true;
+  _ckMsMsg(sellerUid, 'Recording your payment…');
+
+  try {
+    var C = window.SokoniCart;
+    var items = C.list()
+      .filter(function (i) { return (i.sellerUid || i.sellerId) === sellerUid; })
+      .map(function (i) { return { productId: i.id || i.productId, qty: i.qty || 1 }; });
+
+    var fn   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var call = fn.httpsCallable(fn.getFunctions(window.firebaseApp), 'createManualTillOrder');
+    var res  = (await call({
+      sellerUid: sellerUid,
+      items: items,
+      reference: ref,
+      buyerName:  (document.getElementById('fullName')  || {}).value || null,
+      buyerPhone: (document.getElementById('phone')     || {}).value || null,
+      address:    (document.getElementById('address')   || {}).value || null,
+    })).data || {};
+
+    if (res.orderId) {
+      _ckMsMsg(sellerUid, 'Sent to the shop. They will confirm your payment.', '#71ff00');
+      /* ONLY this shop leaves the basket. */
+      window._ckClearSettledShop(sellerUid);
+      await window._ckRenderMultiShop();
+    } else {
+      _ckMsMsg(sellerUid, 'Could not record: ' + (res.reason || 'unknown'), '#ff6b6b');
+    }
+  } catch (e) {
+    /* The policy gate is the expected refusal until §4.1-4.3 are ratified — say so
+       plainly rather than showing a raw precondition error. */
+    var msg = (e && e.message) || 'error';
+    _ckMsMsg(sellerUid,
+      /not configured|precondition/i.test(msg)
+        ? 'This shop cannot take manual payment yet.'
+        : 'Could not record: ' + msg,
+      '#ff6b6b');
+  } finally {
+    window._ckManualBusy[sellerUid] = false;
+  }
+};
+
+window._ckClearSettledShop = function (sellerUid) {
+  try {
+    var C = window.SokoniCart;
+    if (!C) return;
+    if (typeof C.removeBySeller === 'function' && typeof C.groupBySeller === 'function' && sellerUid) {
+      if (C.groupBySeller().length > 1) { C.removeBySeller(sellerUid); return; }
+    }
+    C.clear();
+  } catch (_) { try { window.SokoniCart && window.SokoniCart.clear(); } catch (__) {} }
+};
+
 /* UNKNOWN IS NOT EMPTY — and on a money path that distinction is the whole guard.
    Without the service there is no cart to read, and the empty-cart branch below would
    tell a shopper holding a full cart that it was empty and send them back to browse.
@@ -1652,6 +1949,11 @@ const itemsEl = document.getElementById("checkoutItems");
 const totalEl = document.getElementById("checkoutTotal");
 const subtotalEl = document.getElementById("summarySubtotal");
 const btnTotalEl = document.getElementById("btnTotal");
+
+/* Multi-shop panel. Fire-and-forget and fully guarded: it is additive, and a
+   failure inside it must never stop the page rendering the basket the shopper
+   already has. Self-hides when the basket holds one shop. */
+try { if (window._ckRenderMultiShop) window._ckRenderMultiShop().catch(function () {}); } catch (_) {}
 
 let subtotal = 0;
 
@@ -2069,8 +2371,16 @@ async function _placeOrderCore(){
      webhook credits the seller's wallet + finalises the order. */
   if (selectedPayment === 'mpesa') {
     /* Read fresh at send time, as before — the seller identity must reflect the cart as
-       it stands when the STK push goes out, not the parse-time snapshot. */
-    const currentCart2 = (window.SokoniCart ? window.SokoniCart.list() : []);
+       it stands when the STK push goes out, not the parse-time snapshot. When the shopper
+       chose ONE shop from a multi-shop basket via _ckPayShop, scope to that shop's lines,
+       re-derived FRESH from _ckPendingShop (never a stale snapshot), so Rail B charges
+       one seller → one payment → one order and the single-seller guard passes. A
+       single-shop basket has no pending shop and uses the whole cart unchanged. */
+    const _ckScopeSeller = window._ckPendingShop || null;
+    const _ckFullCart2   = (window.SokoniCart ? window.SokoniCart.list() : []);
+    const currentCart2   = _ckScopeSeller
+      ? _ckFullCart2.filter(i => (i.sellerUid || i.sellerId) === _ckScopeSeller)
+      : _ckFullCart2;
     const _sUid = currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerUid
                  || currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerId
                  || null;
@@ -2168,13 +2478,28 @@ async function _placeOrderCore(){
            saveAndRedirect, which the page redirect can interrupt before it runs.
            This is why the item lingered in the cart after a successful order. */
         try {
-        /* SokoniCart.clear(), not localStorage.removeItem("cart") — removeItem is invisible
+        /* SokoniCart, not localStorage.removeItem("cart") — removeItem is invisible
            to provider-wiring.js's setItem bridge, so the sokoniCart mirror kept the ordered
            items and the next page load pushed them back into the cart via _mergeCarts().
-           Reproduced directly. clear() writes through setItem, so the mirror clears too.
-           This is the other half of "the item lingered in the cart after a successful
-           order". */
-          window.SokoniCart && window.SokoniCart.clear();
+           Reproduced directly. Both clear() and removeBySeller() write through setItem, so
+           the mirror stays in step. This is the other half of "the item lingered in the cart
+           after a successful order".
+
+           ── PARTIAL CLEARING (2026-08-27) ───────────────────────────────────
+           A basket may now hold several shops, and only ONE has just settled.
+           Clearing everything would destroy items the shopper has not paid for and
+           did not ask to lose — a worse failure than the lingering item this
+           comment was originally written about, because it silently discards a
+           basket instead of keeping one too long.
+
+           removeBySeller() takes only the settled shop's lines. clear() is kept for
+           the case where that shop WAS the whole basket, and as the fallback when
+           the seller cannot be identified — there the old whole-cart behaviour is
+           still correct, because there is nothing else in there to protect. */
+          window._ckClearSettledShop(typeof _sUid !== 'undefined' ? _sUid : null);
+          /* The per-shop selection is consumed — clear it so the next shop's payment
+             re-derives its own scope from a fresh _ckPayShop click, never a stale one. */
+          window._ckPendingShop = null;
           localStorage.removeItem('sokoniAppliedPromo');
           if (typeof cart !== 'undefined' && Array.isArray(cart)) cart.length = 0;
           window.dispatchEvent(new Event('sokoni-cart-updated'));
@@ -3040,7 +3365,9 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     unread:1,spam:false,createdAt:Date.now()
   });
   localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
-  window.SokoniCart && window.SokoniCart.clear();
+  /* Only the shop that just settled — see _ckClearSettledShop. */
+  window._ckClearSettledShop((typeof currentCart !== "undefined" && currentCart[0]
+    && (currentCart[0].sellerUid || currentCart[0].sellerId)) || null);
   localStorage.removeItem("sokoniAppliedPromo");
 
   /* Affiliate: record conversion so referrer earns their commission */
@@ -3222,8 +3549,9 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
       }
     } catch (_) {}
 
-    /* Clear cart */
-    window.SokoniCart && window.SokoniCart.clear();
+    /* Clear ONLY the shop that just settled — see _ckClearSettledShop. */
+    window._ckClearSettledShop((currentCart[0]
+      && (currentCart[0].sellerUid || currentCart[0].sellerId)) || null);
 
     /* ── Loyalty: award points for this purchase ── */
     try {

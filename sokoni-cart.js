@@ -105,6 +105,70 @@
   function idOf(item)     { return String((item && (item.id || item.productId)) || ''); }
   function cartIdOf(item) { return String((item && item.cartId) || ''); }
 
+  /* ── seller identity (Single-Shop Checkout Invariant) ──────────────────────
+     `sellerUid || sellerId` matches how checkout and payment-purposes resolve a
+     line's owner, so the cart and the server agree on which shop an item is from.
+     An item with NEITHER is treated as UNKNOWN, not as a violation: legacy rows
+     and operator-keyed POS lines have no catalogue linkage, and refusing them
+     here would empty working carts. The server rejects what it cannot attribute;
+     the cart only prevents a KNOWN disagreement. */
+  function sellerOf(item) {
+    return String((item && (item.sellerUid || item.sellerId)) || '');
+  }
+  /* The cart's shop = the first line that declares one. */
+  function cartSeller(arr) {
+    for (var i = 0; i < (arr || []).length; i++) {
+      var s = sellerOf(arr[i]);
+      if (s) return s;
+    }
+    return '';
+  }
+  /* Retained for callers still reading it. Nothing sets it any more: add() no
+     longer refuses a cross-shop item (see the note in add()). Kept rather than
+     deleted so an existing listener degrades to "no rejection" instead of
+     throwing. */
+  var _lastReject = null;
+  function lastReject() { return _lastReject; }
+
+  /* ── Grouping: what checkout partitions on ────────────────────────────────
+     Returns [{ sellerUid, items }], one entry per shop, in the order each shop
+     first appears — so the basket reads the way the shopper built it rather than
+     being re-sorted underneath them.
+
+     NO money helper: a per-shop subtotal is deliberately NOT returned. A money
+     total on a SHARED cart service invites a call site to render it as the
+     authoritative amount; the server re-prices every line and decides the payable
+     figure (getShopCheckoutMode / createPaymentIntent). Pages that need a displayed
+     per-shop subtotal compute it where they show it, with the server-decides caveat.
+
+     Lines with NO seller are grouped under '' and kept visible. They are legacy
+     and operator-keyed rows; the server refuses what it cannot attribute, and
+     hiding them here would lose items from a shopper's basket without telling
+     anyone. */
+  function groupBySeller(arr) {
+    var src = Array.isArray(arr) ? arr : _read();
+    var order = [], byId = {};
+    for (var i = 0; i < src.length; i++) {
+      var it = src[i], sid = sellerOf(it);
+      if (!byId[sid]) { byId[sid] = { sellerUid: sid, items: [] }; order.push(sid); }
+      byId[sid].items.push(it);
+    }
+    return order.map(function (sid) { return byId[sid]; });
+  }
+
+  /* ── Per-shop removal: what a settled checkout clears ─────────────────────
+     ONE shop's lines leave; every other shop's basket survives. Clearing the
+     whole cart after settling one shop would destroy items the shopper has not
+     paid for and did not ask to lose. */
+  function removeBySeller(sellerUid) {
+    var want = String(sellerUid || '');
+    var arr  = _read();
+    var kept = arr.filter(function (it) { return sellerOf(it) !== want; });
+    if (kept.length === arr.length) return 0;      /* nothing matched — no write */
+    _write(kept);
+    return arr.length - kept.length;
+  }
+
   function qtyOf(item) {
     var q = Number(item && (item.qty != null ? item.qty : item.quantity));
     if (!isFinite(q) || q < 1) return 1;
@@ -146,6 +210,26 @@
     opts = opts || {};
     var times = Math.max(1, Math.round(Number(opts.times) || 1));
     var arr = _read();
+
+    /* ── MULTI-SHOP CART, SINGLE-SHOP SETTLEMENT ──────────────────────────
+       The cart MAY hold products from many shops. A payment MAY NOT.
+
+       Until 2026-08-27 this layer REFUSED a cross-shop add, which made a
+       multi-shop basket unreachable rather than merely unsettleable. That was a
+       stronger guarantee than the rule requires, and it cost the shopper: someone
+       browsing a marketplace could not fill one basket across shops the way they
+       would in a shopping centre.
+
+       WHAT DID NOT CHANGE — the settlement invariant is untouched. Three server
+       layers still enforce "one payment, one shop":
+         • payment-purposes.js re-derives every seller from the products
+           collection and REFUSES a payment spanning shops
+         • _finalizeMarketplacePayment re-derives again before writing an order
+         • manual-till-orders.js refuses items that span shops
+
+       The burden therefore rests wholly on those server assertions. That is a
+       deliberate trade, made once, and recorded here so nobody later reads the
+       absent guard as an oversight. See docs/MULTISHOP_CHECKOUT_AUDIT.md. */
 
     /* merge keys on cartId when the item has one, and NEVER lets a product merge land on
        a food row. Two food lines can legitimately share an id and differ only by note
@@ -280,6 +364,8 @@
     clear: clear,
     /* helpers a migrated call site needs to keep behaving identically */
     idOf: idOf, cartIdOf: cartIdOf, qtyOf: qtyOf,
+    sellerOf: sellerOf, cartSeller: cartSeller, lastReject: lastReject,
+    groupBySeller: groupBySeller, removeBySeller: removeBySeller,
     subscribe: subscribe,
     STORAGE_KEY: KEY,
   };
