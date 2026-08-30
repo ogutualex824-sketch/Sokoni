@@ -1845,5 +1845,15 @@
     "expectedLifespan": "permanent",
     "consumerDeployed": false,
     "note": "Same lineage caveat as the sweep index above."
+  },
+  "entitlements|purpose:ASCENDING,status:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCheckoutMetrics|branchId:ASCENDING,merchantId:ASCENDING,saleDate:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }
