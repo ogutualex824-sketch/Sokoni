@@ -42,7 +42,12 @@
  * where the platform charges a flat listing/transaction fee instead of a percentage. */
 const RATES = {
   /* ── conflicts resolved to the HUB rate (the rate actually charged, and advertised) ── */
-  marketplace:      { pct: 3,   fixedKES: 0,    _was: 'hub 3% / category 10%' },
+  /* 5%, matching the PRODUCTION DEPLOYMENT. The repo lineage still carried 3% while the
+     deployed functions have run 5% since 2026-08-29 ("base 3→5, seller commission policy"),
+     verified by reading commission-config.js out of the deployed function's own source
+     archive. Shipping the repo's 3% would have silently REVERTED that commercial decision.
+     Source of truth for this value is the deployment, not the branch. */
+  marketplace:      { pct: 5,   fixedKES: 0,    _was: 'hub 3% / category 10%; base 3→5 2026-08-29 (seller commission policy)' },
   food_delivery:    { pct: 5,   fixedKES: 0,    _was: 'hub restaurant 5% / category 8%' },
   property:         { pct: 2,   fixedKES: 0,    _was: 'hub 2% / category 3%' },
   vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
@@ -112,8 +117,27 @@ const ALIASES = {
    * platform money to the provider.
    * Mapped here rather than left to `default`, because with the fail-closed check below
    * an unmapped label now REFUSES to price instead of guessing. */
-  product: 'marketplace',        /* a product order is a marketplace sale */
-  subscription: 'subscriptions', /* singular label, plural category — 100% platform revenue */
+  product: 'marketplace',        /* a product order is a marketplace sale — 5%, identical to
+                                    what the deployed default arm already charges it, so this
+                                    mapping changes NO rate. It only makes the authority
+                                    explicit instead of accidental. */
+
+  /* DELIBERATELY NOT MAPPED — each needs a commercial decision, and guessing would move money:
+   *
+   *   'subscription'  live: providerName "SOKONI Starter Plan", KES 484.02, cut 24 (~5%).
+   *                   This is a merchant paying SOKONI, so 95% is currently booked as owed to
+   *                   a "provider" that IS SOKONI. The authority `subscriptions` is 100%
+   *                   ("full amount is platform revenue") and fits definitionally — but that
+   *                   is 5% -> 100%, so it is confirmed, not assumed.
+   *
+   *   'hair-beauty'   live: providerName "Shave 'n' Trims", KES 194, cut 10 (the KES 10 floor).
+   *                   provider.html:753 classifies it "Barber / Salon" under hub services.html,
+   *                   so `services` is the categorically correct home — but `services` is 15%,
+   *                   tripling the charge. A category decision and a price decision are not the
+   *                   same decision.
+   *
+   * Until each is decided they resolve to nothing and FAIL CLOSED, which is the point: a
+   * transaction nobody can authoritatively price must not be priced by accident. */
   restaurant: 'food_delivery', food: 'food_delivery',
   home_services: 'services', insurance: 'services', fitness: 'services',
   pharmacy: 'healthcare',

@@ -135,15 +135,23 @@ const calcErr = async (opts, cfg) => {
   console.log('\nF. Marketplace is a separate authority and does not inherit POS\n');
   {
     const m = await calc({ orderAmountCents: 350000, category: 'marketplace', sellerId: 'S1' });
-    ck('marketplace is 3%, not 5%', m.effectiveRate === 3, m.effectiveRate);
-    ck('  ...category marketplace', m.category === 'marketplace', m.category);
-    ck('marketplace does not inherit the POS rate', m.effectiveRate !== 5);
+    ck('marketplace matches the DEPLOYED 5% baseline, not the repo 3%', m.effectiveRate === 5, m.effectiveRate);
+    ck('  ...category marketplace, resolved explicitly', m.category === 'marketplace', m.category);
+    ck('marketplace and pos are the same NUMBER but different AUTHORITIES',
+       m.category === 'marketplace' && CC.resolveRate('pos').category === 'pos');
     const p = await calc({ orderAmountCents: 350000, category: 'product', sellerId: 'S1' });
-    ck('live label "product" now resolves to marketplace (was default 5%)',
-       p.category === 'marketplace' && p.effectiveRate === 3, p.category + '/' + p.effectiveRate);
-    const s = await calc({ orderAmountCents: 100000, category: 'subscription', sellerId: 'S1' });
-    ck('live label "subscription" resolves to subscriptions = 100% platform revenue',
-       s.category === 'subscriptions' && s.effectiveRate === 100, s.category + '/' + s.effectiveRate);
+    ck('live label "product" resolves to marketplace explicitly', p.category === 'marketplace', p.category);
+    ck('  ...at the SAME rate the default arm already charged it — no rate change',
+       p.effectiveRate === 5, p.effectiveRate);
+    const sErr = await calcErr({ orderAmountCents: 100000, category: 'subscription', sellerId: 'S1' });
+    ck('live label "subscription" is NOT mapped — awaits a commercial decision',
+       sErr && sErr.code === 'COMMISSION_CATEGORY_UNRESOLVED');
+    const hErr = await calcErr({ orderAmountCents: 19400, category: 'hair-beauty', sellerId: 'S1' });
+    ck('live label "hair-beauty" is NOT mapped — awaits a commercial decision',
+       hErr && hErr.code === 'COMMISSION_CATEGORY_UNRESOLVED');
+    ck('neither was guessed into services/subscriptions to make a gate green',
+       !/subscription:s*'subscriptions'/.test(fs.readFileSync(path.join(ROOT,'functions','commission-config.js'),'utf8'))
+       && !/'hair-beauty':s*'services'/.test(fs.readFileSync(path.join(ROOT,'functions','commission-config.js'),'utf8')));
   }
 
   console.log('\nG. The package / subscription mechanism is the marketplace authority\n');
@@ -161,7 +169,7 @@ const calcErr = async (opts, cfg) => {
     const c = await calc({ orderAmountCents: 100000, category: 'marketplace', sellerId: 'S1' });
     ck('a marketplace charge records which authority priced it',
        typeof c.pricingSource === 'string' && c.pricingSource.length > 0, c.pricingSource);
-    ck('  ...and its base rate before any plan adjustment', c.baseRate === 3, c.baseRate);
+    ck('  ...and its base rate before any plan adjustment', c.baseRate === 5, c.baseRate);
     ck('no invented package percentages were added to the config',
        !/free:\s*\{\s*pct:\s*15|business:\s*\{\s*pct:\s*4/.test(
          fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8')));
@@ -171,7 +179,7 @@ const calcErr = async (opts, cfg) => {
   {
     const posR = CC.resolveRate('pos'), mktR = CC.resolveRate('marketplace');
     ck('pos and marketplace are distinct RATES entries', posR.category !== mktR.category);
-    ck('  ...with different rates', posR.pct !== mktR.pct, posR.pct + ' vs ' + mktR.pct);
+    ck('  ...that are INDEPENDENT even while numerically equal', posR.category !== mktR.category, posR.pct + '/' + mktR.pct);
     ck('changing one cannot move the other — no shared alias',
        CC.resolveRate('pos').category === 'pos' && CC.resolveRate('marketplace').category === 'marketplace');
     const cfg = fs.readFileSync(path.join(ROOT, 'functions', 'commission-config.js'), 'utf8');
