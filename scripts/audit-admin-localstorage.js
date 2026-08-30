@@ -50,6 +50,7 @@ const KEEP = {
   'sokoniTheme':           'UI preference',
   'admLight':              'UI preference — light/dark toggle',
   'sokoniSidebarCollapsed':'UI preference',
+  'saSidebarCollapsed':    'UI preference — super-admin twin of sokoniSidebarCollapsed',
   'sokoniGaId':            'analytics measurement id, mirrored for the admin form',
   'sokoniPrivacyAccepted': 'consent decision — must be per-device; see the consent gate',
   'sokoniPrivacyRejected': 'consent decision — must be per-device',
