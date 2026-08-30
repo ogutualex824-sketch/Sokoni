@@ -971,6 +971,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     if (d.type === 'goModule' && typeof d.id === 'string') { go(d.id); }
   });
 
+  /* What a hosted module is allowed to use. Declared once so the set is auditable in
+     one place rather than spelled out at each iframe. */
+  var MODULE_ALLOW = 'camera; clipboard-write; payment';
+
   /* ── PANELS ───────────────────────────────────────────────────────────────
      Cached by key and reused, so returning to a route never mounts it twice. */
   function nativePanel (id) {
@@ -996,6 +1000,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       var f = document.createElement('iframe');
       f.setAttribute('title', label);
       f.setAttribute('loading', 'lazy');
+      /* CAMERA, DELIBERATELY NOT BLUETOOTH.
+
+         POS ships a working scanner (PosScanner.open -> getUserMedia) and the button is
+         already in its body, but getUserMedia inside an iframe needs the feature
+         DELEGATED with allow=. merchant-v2 set no allow attribute at all, so scanning
+         was permission-blocked and reported as unavailable — the same shape as the
+         Permissions-Policy gap that blocked Bluetooth.
+
+         bluetooth/usb/serial are WITHHELD on purpose. merchant.html delegated them, but
+         the shell now owns the ONE printer connection and framed modules route prints up
+         through it. Delegating Bluetooth would let a module open a COMPETING GATT link
+         and undo that. The shell owns the printer; the module owns the camera. */
+      f.setAttribute('allow', MODULE_ALLOW);
       /* Hand the module everything the shell already knows the moment it boots, so it
          never repeats auth resolution or device discovery. */
       f.addEventListener('load', function () {
