@@ -122,7 +122,14 @@ function fetchDeployedStamp (fnName, region, project) {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fnprov-'));
   const zip = path.join(dir, 'src.zip');
-  const dl = gcloud('storage cp "' + archiveUrl(loc) + '" "' + zip + '" --project=' + project, 180000);
+  /* GCS downloads flake. One transient failure previously turned five section-3b
+     assertions red on a stamp that was demonstrably present. Retry once before
+     concluding anything — and note the caller still distinguishes a FAILED READ
+     from an ABSENT stamp, because only the second is a real provenance failure. */
+  let dl = gcloud('storage cp "' + archiveUrl(loc) + '" "' + zip + '" --project=' + project, 180000);
+  if (!fs.existsSync(zip)) {
+    dl = gcloud('storage cp "' + archiveUrl(loc) + '" "' + zip + '" --project=' + project, 180000);
+  }
   if (!fs.existsSync(zip)) {
     cleanup(dir);
     return { ok: false, why: 'could not download ' + archiveUrl(loc) + (dl.why ? ' — ' + dl.why : '') };

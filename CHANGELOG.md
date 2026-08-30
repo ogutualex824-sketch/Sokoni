@@ -1,3 +1,65 @@
+## [2026-08-30] — B1.3 + B1.4: Functions provenance proven on production, then automated
+
+**Files:** `firebase.json` (one predeploy entry), `scripts/deploy/functions-provenance.js`,
+`scripts/test-functions-provenance.js`. **PASS 57 · FAIL 0 · UNPROVEN 2 · HARNESS-INVALID 0.**
+
+### B1.3 — the packaging assumption, proven against a real deployment
+
+Probe: **`obsDistributedTrace`** (us-central1, Gen2, `observability-engine.js`: zero payment/payout/
+wallet/settle references, no external watcher). Deliberately NOT a payment, payout, order, POS or
+externally-monitored function — this proves packaging, not a financial release.
+
+`firebase deploy --only functions:obsDistributedTrace --project sokoni-aeb26 --non-interactive`.
+All **four existing predeploy gates ran and passed**; exactly 1 of 1,708 functions updated; exit 0.
+
+| | before | after |
+|---|---|---|
+| archive generation | `1787385682247808` | `1788041163229965` |
+| `build-info.js` entries | **0** | **1** (711 bytes) |
+
+Deployed stamp = `62a35efd543825412b244fccc53bd2df34cf1fee` = the candidate, EXACT. Verified twice:
+by ad-hoc unzip of the pinned archive, and through the production readback `fetchDeployedStamp()`.
+
+**The `.gitignore` risk recorded in the previous entry is RESOLVED: firebase-tools does NOT honour
+`.gitignore` when packaging `functions/`.** `functions/build-info.js` is 404 on the remote yet
+present in the deployed archive. Generated-and-untracked is safe; do not track the file.
+
+### B1.4 — the generator now runs automatically, FIRST
+
+`functions.predeploy` gains `generate-functions-build-info.js` ahead of the four existing gates. A
+failure then costs nothing, and the stamp reflects HEAD before any other hook can touch the tree.
+`hosting.predeploy` (11) and `functions.source` are untouched.
+
+Without this, provenance depended on someone remembering to run the generator, and any worktree
+could deploy Functions with no stamp at all — which the guard reads as ABSENT and refuses forever.
+
+### Two defects found and fixed during certification
+
+**The suite violated its own contract.** "Archive cannot be read" was classified FAIL rather than
+UNPROVEN, so one transient GCS download turned five assertions red about a stamp that was
+demonstrably present. It now branches on the library `absent` flag: absent/wrong stamp -> FAIL,
+unreadable archive -> UNPROVEN. A retry was added to the download, because a guard that flakes
+produces spurious REFUSEs exactly when someone is under pressure to ship — which is when a spurious
+refusal gets worked around instead of investigated.
+
+**`git cat-file -e <sha>^{commit}` is broken on Windows** — execSync runs through cmd.exe where `^`
+is the escape character, so the suffix was stripped and every existence check failed, turning a
+legitimate ALLOW into REFUSE. Worse, the DIVERGED case beside it PASSED for the wrong reason; that
+assertion now requires the reason string, not just the verdict.
+
+### Still UNPROVEN, deliberately not promoted by inference
+
+Multiple functions in ONE release all reporting the same sha, and a SECOND release producing a
+different sha. Both need further deploys. B1.1 showed same-release archives are byte-identical
+(md5 `bxVei14Ow/3pqVZq5QlU6g==` across 4 functions and 2 regions), which makes them likely — not
+proven.
+
+**Production Functions are MIXED PROVENANCE**: `obsDistributedTrace` stamped `62a35ef`, the other
+1,707 unstamped. That is the expected bootstrap state, not a failure — but "provenance is enabled"
+must not be read as "all production Functions are protected".
+
+**Hosting untouched — production `e52fdc5` / v584. No credential, IAM, workflow, or POS change.**
+
 ## [2026-08-30] — B1.2: Functions deployment provenance (generator + readback + tests)
 
 **Files:** `scripts/generate-functions-build-info.js`, `scripts/deploy/functions-provenance.js`,

@@ -112,6 +112,33 @@ const DIVERGED = git('rev-parse release-b/live');   /* merge carrying A2; forked
       !bogus.ok && !bogus.absent, (bogus.why || '').slice(0, 70));
   }
 
+  head('3b - the B1.3 bootstrap function CARRIES provenance (live assertion)');
+  {
+    /* obsDistributedTrace was deployed on 2026-08-30 carrying build-info.js. This
+       asserts the end-to-end chain against the real deployment rather than
+       restating it in prose. If someone redeploys it from an unstamped tree, this
+       goes red — which is the point. */
+    const B13_SHA = '62a35efd543825412b244fccc53bd2df34cf1fee';
+    const r = P.fetchDeployedStamp('obsDistributedTrace', 'us-central1', PROJECT);
+    /* CONTRACT: 'archive cannot be resolved or read' is UNPROVEN, not FAIL. Only an
+       ABSENT or WRONG stamp is a real failure. Conflating them once turned a network
+       blip into five red assertions about a stamp that was actually present. */
+    if (!r.ok && !r.absent) {
+      un('obsDistributedTrace archive could not be READ', (r.why || '').slice(0, 80));
+    } else {
+    ck('the deployed archive CONTAINS a stamp', r.ok, r.ok ? r.stamp.commitShort : (r.why || '').slice(0, 70));
+    ck('...readable through the production code path', r.ok && !!r.archive, r.ok ? r.archive.split('/').slice(-1)[0] : '-');
+    ck('...carrying the exact B1.3 candidate sha', r.ok && r.stamp.commit === B13_SHA, r.ok ? r.stamp.commit.slice(0, 12) : '-');
+    ck('...with schemaVersion 1', r.ok && r.stamp.schemaVersion === P.SCHEMA_VERSION);
+    ck('PROVES a gitignored file IS packaged by firebase-tools', r.ok,
+      'build-info.js is 404 on the remote yet present in the archive');
+    if (r.ok) {
+      const v = P.classify(r.stamp.commit, B13_SHA, ROOT);
+      ck('...and the guard reads it as NOOP against the same commit', v.verdict === 'NOOP', v.verdict);
+    }
+    }
+  }
+
   head('4 - lineage, not equality (real commits from this repo)');
   {
     const a = P.classify(PARENT_SHA, HEAD_SHA, ROOT);
@@ -162,13 +189,56 @@ const DIVERGED = git('rev-parse release-b/live');   /* merge carrying A2; forked
       'tracking it is why every local deploy dirties the tree');
   }
 
+  head('7 - the generator is WIRED into the functions predeploy chain (B1.4)');
+  {
+    /* Without this the stamp depends on someone remembering to run the generator,
+       and another worktree could deploy Functions with no provenance at all —
+       which the guard would then read as ABSENT and refuse forever. */
+    const fb = JSON.parse(fs.readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
+    const fn = Array.isArray(fb.functions) ? fb.functions[0] : fb.functions;
+    const ho = Array.isArray(fb.hosting) ? fb.hosting[0] : fb.hosting;
+    ck('generator is in functions.predeploy', fn.predeploy.some((h) => /generate-functions-build-info/.test(h)));
+    ck('...and runs FIRST', /generate-functions-build-info/.test(fn.predeploy[0]),
+      'a failure then costs nothing, and the stamp reflects HEAD before any other hook runs');
+    ck('...the original four gates all survive', ['predeploy-syntax-gate','verify-commission-single-source',
+      'verify-delivery-engine-sync','predeploy-payout-gate'].every((h) => fn.predeploy.some((x) => x.indexOf(h) > -1)),
+      fn.predeploy.length + ' hooks');
+    ck('CONTROL hosting.predeploy is untouched', ho.predeploy.length === 11, String(ho.predeploy.length));
+    ck('CONTROL functions.source unchanged', fn.source === 'functions', fn.source);
+  }
+
+  head('8 - the generator FAILS CLOSED when git cannot be resolved');
+  {
+    /* Run the real generator against a tree that is NOT a git repository. It must
+       exit non-zero and write NO stamp — never emit a placeholder that the guard
+       would later believe. Uses the real script, not a re-implementation. */
+    const os = require('os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-gen-'));
+    try {
+      fs.mkdirSync(path.join(tmp, 'scripts'));
+      fs.mkdirSync(path.join(tmp, 'functions'));
+      fs.copyFileSync(path.join(ROOT, 'scripts', 'generate-functions-build-info.js'),
+        path.join(tmp, 'scripts', 'generate-functions-build-info.js'));
+      let notRepo = true;
+      try { cp.execSync('git rev-parse HEAD', { cwd: tmp, stdio: 'ignore' }); notRepo = false; } catch (e) {}
+      ck('PRECONDITION the scratch tree is not a git repo', notRepo, tmp);
+      let code = 0;
+      try { cp.execSync('node "' + path.join(tmp, 'scripts', 'generate-functions-build-info.js') + '"', { cwd: tmp, stdio: 'pipe' }); }
+      catch (e) { code = e.status || 1; }
+      ck('generator exits NON-ZERO', code !== 0, 'exit=' + code);
+      ck('...and writes NO stamp', !fs.existsSync(path.join(tmp, 'functions', 'build-info.js')),
+        'a placeholder here would be believed by the guard later');
+      /* CONTROL: the same script in a real repo DOES produce one — otherwise the
+         above would pass even if the generator were simply broken. */
+      ck('CONTROL the same generator succeeds in a real repo', fs.existsSync(STAMP), 'proves the refusal is conditional');
+    } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} }
+  }
+
   head('what this suite does NOT prove');
-  un('the stamp is carried INTO a deployed archive', 'needs a functions deploy — not authorized');
-  un('a deployed function maps back to its stamped sha', 'same');
-  un('same-release functions report the SAME sha', 'same');
-  un('different-release functions report their respective shas', 'needs two deploys');
-  un('a GITIGNORED file is still packaged into the functions archive',
-     'if firebase-tools honours .gitignore, the stamp would be EXCLUDED and every release would REFUSE');
+  un('same-release functions report the SAME sha', 'B1.3 deployed ONE function; needs a multi-function deploy');
+  un('a second release produces a DIFFERENT sha', 'needs another deploy');
+  console.log('  SETTLED by B1.3 (see section 3b): the stamp reaches the deployed archive,');
+  console.log('            reads back to the exact candidate sha, and a GITIGNORED file IS packaged.');
   console.log('  NOTE      B1.1 already proved same-release archives are byte-identical');
   console.log('            (md5 bxVei14Ow/3pqVZq5QlU6g== across 4 functions, 2 regions),');
   console.log('            so the stamp inside one is the stamp inside all of them.');

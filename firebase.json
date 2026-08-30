@@ -2,6 +2,7 @@
   "functions": {
     "source": "functions",
     "predeploy": [
+      "node \"$RESOURCE_DIR/../scripts/generate-functions-build-info.js\"",
       "node \"$RESOURCE_DIR/../scripts/predeploy-syntax-gate.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-delivery-engine-sync.js\"",
