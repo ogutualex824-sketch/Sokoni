@@ -1300,6 +1300,15 @@ let _connectedDevice = null;
    state never arrived. Standalone use is unaffected: nothing sends the message, so
    _shellPrinter stays null and PrinterManager.connected decides as before. */
 var _shellPrinter = null;
+/* ASK, do not only listen. The handshake is posted on iframe load; if this listener
+   were registered even slightly later the state would be gone and the page would show
+   a disconnected printer forever. The shell answers requestShellState by broadcasting
+   both shapes, so asking is idempotent and costs one message. */
+try {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ __sokoniPos: true, type: 'requestShellState' }, location.origin);
+  }
+} catch (_) {}
 window.addEventListener('message', function (ev) {
   if (ev.origin !== location.origin) return;
   var d = ev.data || {};

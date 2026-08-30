@@ -975,6 +975,13 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           f.contentWindow.postMessage({ __sokoniShell: true, type: 'devices',
             printer: { state: DEV.printer.state, name: DEV.printer.name, saved: !!DEV.printer.saved },
             devices: DEV.list }, location.origin);
+          /* AND the shape modules actually consume. broadcastDevices() sends this, but
+             only fires on a device CHANGE — a panel opened while nothing changed got
+             the old shapes only and showed a disconnected printer beside a connected
+             Devices card. */
+          f.contentWindow.postMessage({ __sokoniPrinterState: true,
+            state: { connected: DEV.printer.state === 'connected', name: DEV.printer.name } },
+            location.origin);
         } catch (_) {}
       });
       f.src = src;

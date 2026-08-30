@@ -62,6 +62,20 @@ ck('CONTROL the receiver already exists and was never wired',
    'this suite would be vacuous if nothing consumed the message');
 ck('CONTROL pos.html consumes it', POS.indexOf('__sokoniApplyShellPrinter') > -1);
 ck('the original devices broadcast is retained', v2c.indexOf("type: 'devices'") > -1);
+/* A BROADCAST ON CHANGE IS NOT ENOUGH. broadcastDevices() only runs when a device
+   changes, so a panel opened while nothing changed received the old shapes only and
+   showed a disconnected printer beside a connected Devices card. The load handshake
+   must carry it too, and the module must ASK so a late-registered listener cannot
+   lose it. Either alone leaves a race. */
+ck('the LOAD HANDSHAKE also sends it',
+   (v2c.split('__sokoniPrinterState: true').length - 1) === 2,
+   'one in broadcastDevices, one in the iframe load handshake');
+const PSU = fs.readFileSync(path.join(ROOT, 'pos-printer-setup.html'), 'utf8');
+ck('the module ASKS on boot', PSU.indexOf("type: 'requestShellState'") > -1);
+ck('...only when framed', PSU.indexOf('window.parent && window.parent !== window') > -1);
+ck('CONTROL the shell answers that request',
+   v2c.indexOf("if (d.type === 'requestShellState') { broadcastSession(); broadcastDevices(); }") > -1,
+   'asking would be pointless if the shell did not answer');
 
 head('3 - a framed print must reach the SHELL engine, not the local queue');
 const ppc = code(PPS);
