@@ -76,6 +76,20 @@ function makeEl (id, hidden) {
 }
 const NEVER = () => new Promise(() => {});   /* the failure mode under test */
 
+/* The guards wait 3-15 REAL seconds, and seven scenarios plus four mutations must each
+   outlive the longest of them. Sleeping for that took ~110s and the release gate kills a
+   suite at 60s — a suite that dies at the budget is lost coverage, not evidence. So the
+   extracted copy has its timer DURATIONS divided; the control flow under test is untouched.
+   Acceleration could hide a duration regression, so the real values are asserted separately
+   against the unaccelerated source below. */
+const DIVISOR = 20;
+function accelerate (code) {
+  return code
+    .replace('      }, ms);', '      }, Math.max(15, Math.round(ms / ' + DIVISOR + ')));')
+    .replace('      }, 15000);', '      }, ' + Math.round(15000 / DIVISOR) + ');')
+    .replace('setTimeout(_activate, 8000);', 'setTimeout(_activate, ' + Math.round(8000 / DIVISOR) + ');');
+}
+
 function run (code, scenario, ms) {
   return new Promise((resolve) => {
     const app = makeEl('pos-app', true);
@@ -141,14 +155,17 @@ function run (code, scenario, ms) {
 }
 
 /* Waits exceed the longest guard they must outlive (watchdog 15s). */
+/* Comfortably outlives every accelerated guard (longest chain: a 750ms watchdog then a
+   400ms backstop), with margin for a loaded machine. */
+const W = 2500;
 const SCENARIOS = [
-  ['healthy',                             'none',          9000],
-  ['IndexedDB init hangs',                'hang-init',    19000],
-  ['settings read hangs',                 'hang-settings',19000],
-  ['category seed hangs',                 'hang-seed',    19000],
-  ['cashier read hangs (after reveal)',   'hang-cashiers',14000],
-  ['notification prompt never answered',  'hang-notify',  14000],
-  ['catalogue load throws',               'throw-products',14000],
+  ['healthy',                             'none',          W],
+  ['IndexedDB init hangs',                'hang-init',     W],
+  ['settings read hangs',                 'hang-settings', W],
+  ['category seed hangs',                 'hang-seed',     W],
+  ['cashier read hangs (after reveal)',   'hang-cashiers', W],
+  ['notification prompt never answered',  'hang-notify',   W],
+  ['catalogue load throws',               'throw-products',W],
 ];
 
 let pass = 0, fail = 0;
@@ -161,11 +178,23 @@ const ck = (l, c, why) => { c ? pass++ : fail++;
   console.log('\n=== every stall must still leave a usable till ===');
   const res = {};
   for (const [name, sc, ms] of SCENARIOS) {
-    const r = res[sc] = await run(CODE, sc, ms);
+    const r = res[sc] = await run(accelerate(CODE), sc, ms);
     ck(name + ' -> REVEALED',    r.revealed);
     ck(name + ' -> INTERACTIVE', r.interactive, 'a till that renders and answers nothing is not a working till');
     ck(name + ' -> not covered', !r.covered);
   }
+
+  console.log('\n=== the REAL durations (the accelerated copy must not hide a change) ===');
+  const RAW = fs.readFileSync(POS, 'utf8');
+  [['db-init 8s',             '_bounded(PosDB.init(), 8000'],
+   ['db-settings 5s',         "_bounded(PosDB.settings.getAll(), 5000, state.settings || {}, 'db-settings')"],
+   ['db-seed 5s',             '_bounded(PosDB.categories.seedDefaults(), 5000'],
+   ['launch-settings 5s',     "5000, state.settings || {}, 'launch-settings'"],
+   ['notify-permission 3s',   '_bounded(PosNotify.requestPermission(), 3000'],
+   ['watchdog 15s',           '      }, 15000);'],
+   ['activation backstop 8s', 'setTimeout(_activate, 8000);'],
+  ].forEach(([label, needle]) => ck('duration unchanged: ' + label, RAW.indexOf(needle) > -1,
+    'the accelerated runs would still pass against a shortened guard'));
 
   console.log('\n=== breadcrumbs: ?diag=crash must NAME the stall ===');
   ck('a stalled settings read is named',
@@ -184,12 +213,12 @@ const ck = (l, c, why) => { c ? pass++ : fail++;
   /* ── MUTATIONS ─────────────────────────────────────────────────────────── */
   console.log('\n=== mutations: each removes ONE layer and must bring its failure back ===');
   const MUTATIONS = [
-    { name: 'boot bounds + watchdog disabled', scenario: 'hang-settings', wait: 19000,
+    { name: 'boot bounds + watchdog disabled', scenario: 'hang-settings', wait: W,
       edits: [['      }, ms);', '      }, 9000000);'], ['      }, 15000);', '      }, 9000000);']],
       expect: r => !r.revealed,
       says:   'without both, a stalled settings read is a BLACK page' },
 
-    { name: 'post-reveal bound + activation backstop disabled', scenario: 'hang-notify', wait: 14000,
+    { name: 'post-reveal bound + activation backstop disabled', scenario: 'hang-notify', wait: W,
       edits: [["await _bounded(PosNotify.requestPermission(), 3000, undefined, 'notify-permission');",
                'await PosNotify.requestPermission();'],
               ['setTimeout(_activate, 8000);', 'setTimeout(_activate, 9000000);']],
@@ -199,7 +228,7 @@ const ck = (l, c, why) => { c ? pass++ : fail++;
     /* The 6-space `_activate();` is a SUBSTRING of the watchdog's 12-space one, so a bare
        anchor mutates the wrong site and the mutant survives for the wrong reason. Anchor
        on the comment that is unique to the degrade path. */
-    { name: 'degrade-path activation + backstop disabled', scenario: 'throw-products', wait: 14000,
+    { name: 'degrade-path activation + backstop disabled', scenario: 'throw-products', wait: W,
       edits: [["dead screen. */\n      _activate();", 'dead screen. */\n      '],
               ['setTimeout(_activate, 8000);', 'setTimeout(_activate, 9000000);']],
       expect: r => r.revealed && !r.interactive,
@@ -209,7 +238,7 @@ const ck = (l, c, why) => { c ? pass++ : fail++;
        cancels the timer, and the latch ignores it if it fires anyway. EITHER alone is
        sufficient, so a mutation removing just one correctly survives — remove both, or
        this layer is only apparently tested. */
-    { name: 'timer cancellation AND latch removed', scenario: 'none', wait: 9000,
+    { name: 'timer cancellation AND latch removed', scenario: 'none', wait: W,
       edits: [['        done = true; try { clearTimeout(timer); } catch (_) {}', '        done = true;', 2],
               ['        if (done) return;\n        done = true;\n        try { window._posDbDegraded = true; }',
                '        done = true;\n        try { window._posDbDegraded = true; }']],
@@ -233,7 +262,9 @@ const ck = (l, c, why) => { c ? pass++ : fail++;
     }
     if (applied !== m.edits.length) continue;                 /* a no-op mutation proves nothing */
     if (mutated === CODE) { ck('mutation "' + m.name + '" changed the source', false, 'no-op mutation'); continue; }
-    const r = await run(mutated, m.scenario, m.wait);
+    /* Order matters: mutations anchor on the REAL duration literals, which acceleration
+       rewrites. Mutate first, then accelerate what survives. */
+    const r = await run(accelerate(mutated), m.scenario, m.wait);
     const killed = m.expect(r);
     if (!killed) survivors++;
     ck('KILLED: ' + m.name, killed,

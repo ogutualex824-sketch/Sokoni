@@ -77,8 +77,9 @@ const SPos = (function () {
 
     const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
     /* The first-run setup wizard must NOT block the app when the POS is embedded in the merchant
-       shell — embedded → launch straight to the requested panel; setup stays an explicit module. */
-    const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
+       shell — embedded → launch straight to the requested panel; setup stays an explicit module.
+       Both that rule and the signed-in rule now live in _launchAuthority(), which the boot
+       watchdog reads too; a second copy here would have been free to diverge from it. */
     try {
       /* ── A SIGNED-IN MERCHANT NEVER MEETS THE BUSINESS WIZARD ────────────
          `isSetup` reads state.settings.setupComplete, which comes from
@@ -98,12 +99,6 @@ const SPos = (function () {
          SokoniPosContext then renders the real answer in place — open the till,
          or offer POS Setup for DEVICE pairing. Business registration belongs to
          the application-and-approval flow, never to opening a till. */
-      var _known = false;
-      try {
-        _known = localStorage.getItem('loggedIn') === 'true'
-          || !!JSON.parse(localStorage.getItem('sokoniUser') || 'null');
-      } catch (_) { _known = false; }
-
       if (isSetup || _launchAuthority()) {
         await launchApp();
         if (!isSetup && _launchAuthority()) { try { window._posNeedsSetup = true; } catch (_) {} }

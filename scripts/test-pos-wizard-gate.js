@@ -34,13 +34,18 @@ const raw = fs.readFileSync(path.join(ROOT, 'pos.js'), 'utf8');
 const code = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1 ');
 
 /* ── the branch under test ──────────────────────────────────────────────── */
-const branch = /if \(isSetup \|\| embedded \|\| _known\)/.test(code);
+/* The branch was inlined as `isSetup || embedded || _known`. It now reads the shared
+   _launchAuthority(), because the boot watchdog must apply the SAME rule. */
+const branch = /if \(isSetup \|\| _launchAuthority\(\)\)/.test(code);
 ck('W1  the launch branch admits a KNOWN signed-in account',
-  branch, 'isSetup || embedded || _known');
+  branch, 'isSetup || _launchAuthority()');
 
+/* Was matched against the inline `_known`. That binding is gone; matching it now would
+   pass against DEAD CODE the decision does not consult - which is exactly what happened
+   when the declaration was left behind. Anchor on the predicate that is actually read. */
 ck('W2  "known" is derived from the SESSION markers, not the device cache',
-  /_known[\s\S]{0,220}localStorage\.getItem\('loggedIn'\)/.test(code) &&
-  /_known[\s\S]{0,260}sokoniUser/.test(code),
+  /function _launchAuthority[\s\S]{0,400}localStorage\.getItem\('loggedIn'\)/.test(code) &&
+  /function _launchAuthority[\s\S]{0,460}sokoniUser/.test(code),
   'loggedIn / sokoniUser — the same markers auth-guard.js and pos.html use');
 
 ck('W3  it does NOT derive "known" from setupComplete or merchantId',
@@ -62,10 +67,12 @@ ck('W5  CONTROL the embedded path is unchanged',
    the exact fault this suite exists to prevent elsewhere. Replaced with a claim
    that can fail: a degraded PosDB must not throw on settings, and the launch
    decision must not be gated on those settings alone. */
-ck('W6  empty settings from a degraded PosDB cannot throw the boot',
-  /state\.settings = await PosDB\.settings\.getAll\(\);\s*\}\s*catch/.test(code.replace(/\s+/g, ' ')) ||
-  /try \{ state\.settings = await PosDB\.settings\.getAll\(\); \} catch/.test(code.replace(/\s+/g, ' ')),
-  'the getAll() call is inside a try/catch that substitutes an empty object');
+/* The try/catch it used to require only ever protected against a THROW. The read is now
+   BOUNDED, which additionally survives a read that never settles - the failure that
+   produced a black till. Assert the stronger property: bounded AND an object fallback. */
+ck('W6  empty settings from a degraded PosDB cannot throw OR HANG the boot',
+  /state\.settings = \(await _bounded\(PosDB\.settings\.getAll\(\), \d+, state\.settings \|\| \{\}, 'db-settings'\)\) \|\| \{\}/.test(code),
+  'the getAll() call is bounded and substitutes an empty object on stall or failure');
 
 /* ── scope ──────────────────────────────────────────────────────────────── */
 ck('W7  SCOPE no payment, checkout or settlement code was touched',
