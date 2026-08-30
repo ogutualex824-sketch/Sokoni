@@ -1423,7 +1423,13 @@ class PosPrintService {
 
     /* If neither the enterprise transport service nor the iOS HTML path is present,
        there is no drain path for the offline queue — go straight to the legacy chain. */
-    const enterpriseAvailable = !!pm || !!window.SokoniIOSPrint;
+    /* THE ENGINE COUNTS. This asked only about PrinterManager and the iOS bridge, but
+       the object that actually performs a print is the universal engine: printAfterSale
+       -> _print -> _sendBytes -> _eng().printRaw. merchant-v2 loads the ENGINE and not
+       PrinterManager, so every shell-side print (Orders, Sell) was diverted to
+       _legacyFallback, which tries window.SokoniPrint then window.PosPrinter — neither
+       of which merchant-v2 loads. It returned false and the print silently failed. */
+    const enterpriseAvailable = !!pm || !!_eng() || !!window.SokoniIOSPrint;
     if (!enterpriseAvailable) {
       emit('fallback', { reason: 'no PrinterManager/iOS path' });
       const ok = await this._legacyFallback(order);

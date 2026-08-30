@@ -2600,9 +2600,23 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     if (pr) {
       var po = (ORD.rows || []).filter(function (x) { return x.id === pr.dataset.printOrder; })[0];
       if (!po) return;
+      /* READ THE RESULT. printReceipt RESOLVES on failure — status 'failed', or
+         'queued_offline' when nothing is connected — so discarding it turned every
+         failed print into silence. A receipt that did not come out must say so.
+         sokoni-merchant-receipts.js already learned this; Orders had not. */
       printerEngine().then(function (eng) {
-        if (eng && eng.printReceipt) return eng.printReceipt({ order: po, ref: po.ref, total: po.total, currency: po.currency, items: po.items });
-        toast('No printer service is loaded.');
+        if (!eng || !eng.printReceipt) { toast('No printer service is loaded.'); return; }
+        return eng.printReceipt({ order: po, ref: po.ref, total: po.total,
+                                  currency: po.currency, items: po.items })
+          .then(function (r) {
+            var st = (r && (r.status || (r.queued ? 'queued_offline' : ''))) || '';
+            if (st === 'failed')          toast('The receipt did not print. Check the printer and try again.');
+            else if (st === 'queued_offline') toast('No printer connected — the receipt is queued.');
+            else if (st === 'skipped')    toast('Printing is switched off for this till.');
+            else                          toast('Receipt sent to the printer.');
+          });
+      }).catch(function (err) {
+        toast('Could not print: ' + ((err && err.message) || err));
       });
       return;
     }

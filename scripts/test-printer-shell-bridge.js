@@ -104,7 +104,34 @@ ck('...REFUSES when its own engine is not connected',
 ck('...and reports the real outcome back', v2c.indexOf("type: 'printResult'") > -1);
 ck('...writing through the ONE engine', /eng\.printRaw\(new Uint8Array\(bytes\)\)/.test(v2c));
 
-head('5 - boundaries held');
+head('5 - the print path must recognise the engine that can actually print');
+/* printReceipt() chose between the working path and a legacy chain by asking about
+   PrinterManager and the iOS bridge only. The universal engine — the object that
+   performs the print — was not counted, so merchant-v2 (engine, no PrinterManager)
+   was diverted to _legacyFallback, which tries SokoniPrint then PosPrinter. It loads
+   neither, so every shell print failed and the caller discarded the result. */
+ck('the gate counts the engine',
+   ppc.indexOf('const enterpriseAvailable = !!pm || !!_eng() || !!window.SokoniIOSPrint;') > -1);
+ck('...and the OLD gate is gone',
+   ppc.indexOf('const enterpriseAvailable = !!pm || !!window.SokoniIOSPrint;') === -1,
+   'this single expression sent every shell print to a chain merchant-v2 cannot run');
+ck('CONTROL PrinterManager is still consulted FIRST',
+   /enterpriseAvailable = !!pm \|\|/.test(ppc),
+   'the engine is added, not substituted');
+ck('CONTROL the legacy chain is retained as a fallback', ppc.indexOf('_legacyFallback') > -1);
+ck('CONTROL merchant-v2 really lacks the legacy globals',
+   V2.indexOf('src="sokoni-print-engine.js"') === -1 && V2.indexOf('src="pos-printer.js"') === -1,
+   'if it loaded them the legacy chain would have worked and this gate would be untested');
+
+head('5b - a failed print must SAY so');
+ck('Orders reads the result',
+   v2c.indexOf("var st = (r && (r.status || (r.queued ? 'queued_offline' : ''))) || '';") > -1,
+   'printReceipt RESOLVES on failure; discarding it turned failure into silence');
+ck('failure is reported', V2.indexOf('The receipt did not print.') > -1);
+ck('queued is NOT reported as success', V2.indexOf('the receipt is queued.') > -1);
+ck('a thrown error is caught', v2c.indexOf("toast('Could not print: '") > -1);
+
+head('6 - boundaries held');
 ck('PrinterManager NOT removed from the service',
    PPS.indexOf('function _pm  () { return window.PrinterManager; }') > -1);
 ck('cash-drawer audit path untouched',
