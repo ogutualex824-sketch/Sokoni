@@ -103,7 +103,43 @@ const server = http.createServer((req, res) => {
      · The 'frame-ancestors ignored in report-only' warning comes from the injected
        reCAPTCHA / gapi frames, NOT from SOKONI — security.js's injectCSP() is a
        deliberate no-op and firebase.json serves an ENFORCED (not report-only) CSP. */
-const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon|net::ERR|Failed to load resource|frame-ancestors|report-only/i;
+/* `report-only` (HYPHENATED) was written for the "frame-ancestors ignored in report-only"
+   WARNING. Chromium prefixes a report-only VIOLATION differently — "[Report Only] Refused
+   to load ..." — space, no hyphen — so the existing alternative never matched it and the
+   gate counted a non-enforcing report as a route error. Observed:
+
+     [Report Only] Refused to load https://www.gstatic.com/recaptcha/.../recaptcha__en.js
+
+   A Report-Only policy blocks NOTHING by specification; it is how a stricter candidate CSP
+   is trialled before enforcement. The ENFORCED policy in firebase.json does allow
+   gstatic/recaptcha, so nothing was broken and nothing here is being excused.
+
+   Deliberately matching only the BRACKETED PREFIX, not the words "report only" anywhere: an
+   ENFORCED violation carries no such prefix ("Refused to load ... because it violates the
+   following Content Security Policy directive"), so it still counts as a route error. That
+   distinction is asserted below — widening this to /report.only/i would silence enforced
+   violations too, which is the failure mode worth guarding against. */
+const ENV_NOISE = /App Check|appCheck|status of 40[0-9]|firebaseappcheck|favicon|net::ERR|Failed to load resource|frame-ancestors|report-only|\[Report Only\]/i;
+
+/* Static controls for the filter above, run before any browser starts. A noise filter is
+   one regex away from hiding the defects the suite exists to catch, so it is asserted in
+   both directions rather than trusted. */
+const CSP_REPORT_ONLY_SAMPLE =
+  '[Report Only] Refused to load https://www.gstatic.com/recaptcha/releases/ox8/recaptcha__en.js ' +
+  'because it does not appear in the script-src directive of the Content Security Policy.';
+const CSP_ENFORCED_SAMPLE =
+  'Refused to load the script https://evil.example/x.js because it violates the following ' +
+  'Content Security Policy directive: "script-src \'self\'".';
+const ROUTE_ERROR_SAMPLE = 'TypeError: SPos.render is not a function';
+
+console.log('\n  ── console-noise filter ──');
+check('a Report-Only CSP violation is NOT a route error',
+      ENV_NOISE.test(CSP_REPORT_ONLY_SAMPLE), 'report-only enforces nothing');
+check('CONTROL an ENFORCED CSP violation still IS a route error',
+      !ENV_NOISE.test(CSP_ENFORCED_SAMPLE),
+      'a filter that also hides enforced violations would defeat the check it protects');
+check('CONTROL an ordinary route error is still an error',
+      !ENV_NOISE.test(ROUTE_ERROR_SAMPLE), ROUTE_ERROR_SAMPLE);
 
 /* SHORTER THAN THE RUNNER'S BUDGET (150s for this suite, see SUITE_BUDGET_MS in
    gate-classify.js) ON PURPOSE. At 300s it could never fire — the runner killed this suite
