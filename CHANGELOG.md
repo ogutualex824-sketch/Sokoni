@@ -1,3 +1,87 @@
+## [2026-08-30] — CERTIFIED, NOT DEPLOYED: Daraja STK sell-authority binding
+
+**Not deployed.** Step 1 of 2 in the payment-rail separation. Full write-up:
+`docs/findings/DARAJA_SELL_AUTHORITY_BINDING.md`.
+
+### Security — the defect
+
+`darajaSTKPush` checked `if (!request.auth)` and nothing else, then spent the **client-supplied**
+`request.data.sellerUid` as if it named the caller's own merchant: it priced that merchant's
+catalogue, wrote `auditLogs` rows stamped `merchantId: sellerUid`, read
+`shopSettings/{sellerUid}` for that merchant's live Daraja consumer key, secret, passkey and
+shortcode, and sent an M-Pesa STK prompt to a caller-chosen phone collecting into that
+merchant's shortcode. Authentication is not authorization: any signed-in user could drive **any**
+merchant's collection rail. Confirmed before the fix — `assertMerchantAccess|_assertSellAuthority|
+authorizeActor|assertMerchantOperator` matched 0 times in the handler.
+
+There is **no separation between the two rails today — not even by convention.**
+`sokoni-mpesa.js` is a shared `SokoniMpesa.pay()` helper, not a POS file: `bnb`, `car-rental`,
+`car-hub`, `delivery`, `digital` (×2), `healthcare`, `landlord` and `legal-hub` all reach this
+callable, with a **buyer** paying a **different** seller. Only `pos.js`, `merchant-v2.html` and
+`till.html` send `hub: 'pos'`. Worse, every record the handler persists defaults to
+`hub: hub || "marketplace"`, so the Daraja rail currently labels itself marketplace.
+
+### Fix
+
+One guard, after argument validation and **before the rate-limit read**, so an outsider is refused
+before any read or write is attributed to the merchant they named. It reuses
+`_assertSellAuthority` — the same authority `posCompleteCheckout` already enforces — rather than a
+second copy: admin/superAdmin, or `shops`/`shopEmployees` with the `sell` capability, or
+`businesses/{id}.ownerId`, or an active `posStaff` row. Requiring `sellerUid === auth.uid` would
+have locked out every employee-operated till; a `posStaff`-only guard was already rejected by test
+in this workstream for that reason.
+
+**Blast radius — UNVERIFIED, and it gates deployment.** The guard refuses the eight consumer
+surfaces above, because a buyer legitimately has no sell authority over the seller they are paying.
+Whether that regresses anything live depends on a claim recorded only as a code comment: the
+2026-07-22 audit found `shopSettings` with 0 documents and `posPayments` with 0 rows, which would
+mean those buyers already fail with "credentials not configured" and this changes only the message.
+**It was not re-verified** — this session has no gcloud identity and no
+`GOOGLE_APPLICATION_CREDENTIALS`. Count both collections in production before deploying.
+
+**Step 1 pre-empts part of Step 2.** Refusing buyers on the Daraja rail *is* the intended rail
+separation, arriving as a side effect rather than as a decision, so the two steps are coupled and
+must ship with the consumer surfaces migrated to IntaSend. That migration is the user's call.
+
+### Files affected
+
+- `functions/index.js` — the guard in `darajaSTKPush` (+39 lines, 0 deletions)
+- `functions/pos-zero-friction.js` — `_assertSellAuthority` / `_assertRefundAuthority` exported as
+  `_internal`, mirroring `merchant-identity.js`. **Not a callable**: `index.js` re-exports the eight
+  `posZF` callables by name and never this object, so no new function is deployed.
+- `scripts/cert-daraja-sell-authority.js` — new
+- `scripts/sabotage-daraja-authority.js` — new
+- `docs/findings/DARAJA_SELL_AUTHORITY_BINDING.md` — new
+
+### Testing
+
+`cert-daraja-sell-authority.js` **45 passed, 0 failed, 0 inconclusive**, invoking the real
+`darajaSTKPush.run({ data, auth })` against a Firestore emulator — not a re-implementation. An
+authorized caller is asserted to fail *at the credential stage with a non-authorization-shaped
+message*, which is the negative control that stops a wholly broken handler scoring 100%. Every
+denial also asserts zero mutation across `auditLogs`, `posPayments`, `shopSettings`, `products`.
+
+Sabotage **4 / 4 caught** (guard deleted; guard bound to the caller instead of the named merchant;
+a second local always-allow authority; guard moved after the pricing work), with distinct failure
+counts (12 / 7 / 12 / 3), a green baseline asserted first, and `functions/index.js` restored and
+verified by hash.
+
+Regressions unchanged: `cert-pos-checkout-authority` 24/0 · `cert-pos-cashier-callables` 49/0 ·
+`test-commission-domain-separation` 103/0 · `test-ledger-settlement-state` 32/0 ·
+`npm run predeploy` exit 0.
+
+### Database / API / breaking changes
+
+None. No schema change, no callable signature change, no new function. `enforceAppCheck`, the
+server pricing authority, delivery recompute, oversell and cross-seller cart guards, order dedup,
+rate limiting and collection-route stamping are all asserted intact.
+
+### Noted, not changed
+
+`sendTestSTKPush` has no equivalent hole — it derives the merchant from `request.auth.uid`, never
+from the payload — but it lacks `enforceAppCheck`.
+
+
 ## [2026-08-28] — DEPLOYED: tenant authority, POS merchant boundary, shopEmployees anchor
 
 **Deployed to production.** Rules ruleset `59af870d` · 24 Cloud Functions · 3 invoker
