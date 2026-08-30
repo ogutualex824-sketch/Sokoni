@@ -137,8 +137,20 @@ check('...and the shell composes no .html exit target (cleanUrls 301s it)',
    feature. A shell that DOES reach the route gets no such latitude. */
 const termExits = C.ROUTES.filter(r => r.kind === 'exit' && r.terminatesSession);
 const offered = termExits.filter(r => new RegExp("['\"]" + r.id + "['\"]").test(stripped));
+/* This asked only whether the IDENTIFIER `terminatesSession` appeared anywhere in the
+   shell. merchant-v2.html mentions it three times — a comment, `if (m.terminatesSession)
+   return base;` inside exitTarget, and the actual guard — so deleting the guard outright
+   left two occurrences behind and this still passed. test-merchant-exit-contract's M3
+   mutation does exactly that deletion and caught NOTHING (`0 failure(s)`); the probe was
+   right and this assertion was the defect.
+
+   A presence test on an identifier cannot express "the navigation is guarded". Assert the
+   guard's SHAPE instead: terminatesSession conjoined with a not-yet-ended session flag,
+   and a `return` before control reaches the navigation — i.e. it REFUSES rather than
+   merely noticing. Removing the block now removes the conjunction, so M3 bites. */
+const TERM_GUARD = /\bterminatesSession\s*&&\s*!\s*[A-Za-z_$][\w$]*\s*\)\s*\{[\s\S]{0,400}?\breturn\b/;
 check('session-terminating exits are guarded until the sign-out completes',
-      offered.length === 0 || /terminatesSession/.test(stripped),
+      offered.length === 0 || TERM_GUARD.test(stripped),
       offered.length ? 'offers ' + offered.map(r => r.id).join(',')
                      : 'shell offers no session-terminating exit (' +
                        (termExits.map(r => r.id).join(',') || 'none declared') + ' declared)');
