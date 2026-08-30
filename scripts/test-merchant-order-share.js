@@ -125,8 +125,39 @@ ck('Share does not use window.open', !/window\.open\s*\(/.test(stripped));
 ck('Share does not use target="_blank"', !/target\s*=\s*["']_blank/.test(stripped));
 ck('Print and Share are adjacent in the action bar, not under More',
    /data-print-order[\s\S]{0,80}waButton\(o\)/.test(SRC));
-ck('Print routes through the shell device layer (no second printer authority)',
-   /data-print-order[\s\S]{0,400}printerEngine\(\)/.test(SRC));
+/* THIS ASSERTED PROXIMITY, NOT ROUTING, and it failed on a comment.
+
+   It searched raw SRC for printerEngine() within 400 characters of data-print-order. The
+   product was never wrong: merchant-v2.html routes Print through printerEngine().then(eng =>
+   eng.printReceipt(...)) and reads the result. What moved was an explanatory COMMENT added
+   between the two - that a failed print must not be silent - which pushed the distance from
+   171 to 488 characters. Measured, not guessed.
+
+   Two things were wrong with the old form. It read SRC while every neighbouring containment
+   check reads `stripped`, which has comments removed for exactly this reason. And proximity
+   is not the contract: `data-print-order` and `printerEngine()` merely COEXISTING within a
+   window would also have satisfied it, even if the print path called something else
+   entirely.
+
+   So judge the HANDLER. Slice out the print path and require two things of it: that it uses
+   the shell engine, and that no SECOND printer authority appears in it. That is the real
+   rule - one printer connection, owned by the shell:
+
+       POS / module -> shell printerEngine() -> shell-owned connection -> P58E
+
+   A module opening its own GATT link is the failure this exists to prevent. */
+const hIdx = stripped.indexOf("closest('[data-print-order]')");
+const printHandler = hIdx > -1 ? stripped.slice(hIdx, hIdx + 900) : '';
+const RIVAL_PRINTER = /(PrinterManager|SokoniPrinter|PosPrintService|navigator\s*\.\s*bluetooth)\s*[.(]/;
+ck('the print handler was located at all', hIdx > -1, hIdx > -1 ? 'ok' : 'ANCHOR MISSING — the check below would be vacuous');
+ck('Print routes through the shell device layer', /printerEngine\(\)/.test(printHandler));
+ck('...and no SECOND printer authority appears in that path',
+   !RIVAL_PRINTER.test(printHandler), (printHandler.match(RIVAL_PRINTER) || [''])[0]);
+/* The control the old form could not have: prove the check FAILS when the path is rewired
+   to a module-owned printer, rather than merely when a string disappears. */
+const rogueHandler = printHandler.replace('printerEngine()', 'PrinterManager.getEngine()');
+ck('NC rewiring the print path to a module printer FAILS both checks',
+   !/printerEngine\(\)/.test(rogueHandler) && RIVAL_PRINTER.test(rogueHandler));
 
 /* ── 7. Negative controls ─────────────────────────────────────────────────── */
 console.log('\n7. Negative controls');
