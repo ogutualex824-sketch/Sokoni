@@ -134,46 +134,6 @@ const DECLARED = {
 
      EXPIRES: with test-auth-post-login-routing, before the v2 cutover.
      Quarantined 2026-08-19 for the subscription release. */
-  /* ── EMULATOR-DEPENDENT, AND POSITIVELY VERIFIED ──────────────────────────
-     Not a quarantine and not a suite that is "ahead of its implementation": the
-     Stories rules are PROVEN. Run under the rig its own header documents —
-
-         npx firebase-tools emulators:exec --only firestore \
-           "node scripts/test-stories-rules.js"
-
-     — it reports 24 passed, 0 failed (2026-08-30), and it carries its own
-     negative control: "NC a permitted write DOES succeed here", which proves the
-     refusals above it come from the RULES and not from a rig that denies
-     everything.
-
-     Bare, it still executes and passes its three static assertions
-     (merchantStories declared, storyAllocations declared, ruleset within the
-     256,000-byte ceiling — 510 bytes free) and then fails a fourth, "the rules
-     suite ran", on `fetch failed`. That fourth assertion is CORRECT and must not
-     be touched: a rules verdict without an emulator would be a check that did not
-     run being reported as a pass.
-
-     It is declared rather than left red because the failure describes this
-     machine, not the ruleset. It is NOT reclassified by editing the suite, by
-     making it abort early to trip ENV_SIGNALS, or by relaxing an assertion —
-     every assertion is retained and still runs.
-
-     THE COST, stated plainly: the bare gate no longer blocks on the Stories
-     rules, so a future rules regression is caught only where an emulator runs.
-
-     TO REMOVE: run this suite under emulators:exec in CI (or teach the gate to
-     do so for emulator-dependent suites) and drop this entry. Do not remove it by
-     deleting the fourth assertion.
-
-     EXPIRES: at the next release certification, or when the gate gains emulator
-     execution — whichever is first. Declared 2026-08-30. */
-  'test-stories-rules': {
-    verdict: 'ENV',
-    reason: 'Needs the Firestore emulator. Verified 24/0 under ' +
-            '`emulators:exec --only firestore` on 2026-08-30, negative control included, so ' +
-            'the ruleset is proven; bare it correctly refuses to give a rules verdict. All ' +
-            'assertions retained. Remove by running it under the emulator in CI.',
-  },
   'test-merchant-entry': {
     verdict: 'QUARANTINE',
     reason: 'Its /merchant-v2 expectations were written by ecb2d1e, the same commit that ' +
