@@ -198,10 +198,36 @@ report.totals = {
   printerDriverGlobals: countGlobalAssigners('SokoniPrinterDrivers'),
   posBlockingScripts:  (countBlockingScripts(path.join(ROOT, 'pos.html')) || {}).blocking,
   posStartupScripts:   (countBlockingScripts(path.join(ROOT, 'pos.html')) || {}).total,
-  /* ADR-0001: printerEnginesPerPage baselines at 6. A behavioural audit proved
-     those six are a layered stack — transport, document library, fleet manager,
-     orchestrator, encoder library, adapter — with zero true duplicates. The
-     metric blocks a SEVENTH; it is not driving the count to one. */
+  /* ADR-0001 (amended 2026-08-30): printerEnginesPerPage baselines at 7.
+
+     ORIGINALLY 6. A behavioural audit proved those six are a layered stack -
+     transport, document library, fleet manager, orchestrator, encoder library,
+     adapter - with zero true duplicates. That finding STILL HOLDS: a 22-reference
+     audit of sokoni-pos-print-service.js re-confirmed every one is load-bearing.
+
+     WHY 7 IS CORRECT, AND WHY THIS IS NOT A WEAKENING:
+     the 6 were measured on pos.html, whose set included sokoni-printer-manager.js
+     - a WRAPPER whose PROVIDER, sokoni-universal-printer.js, was never loaded.
+     PrinterManager reads window.SokoniPrinter?.connected and its _eng() THROWS when
+     the engine is absent, so the till reported 'not connected' permanently, Test
+     Print did nothing and Connect never reached a chooser. Only
+     sokoni-universal-printer.js defines window.SokoniPrinter anywhere in the repo.
+
+     So the baseline of 6 encoded a NON-FUNCTIONAL configuration as the reference:
+     the till satisfied the metric precisely BECAUSE it was broken. The seventh file
+     is not a seventh implementation - it is the provider the other six delegate to.
+
+     SWAP WAS CONSIDERED AND REJECTED ON EVIDENCE. Replacing PrinterManager with
+     SokoniPrinter would keep the count at 6 but lose four capabilities the engine
+     does not have: openDrawer(reason,user) -> drawer.record() (a CASH-DRAWER AUDIT
+     control), till.remember() device memory, _activeTransport identity, and
+     profile.model identity. Three sites degrade SILENTLY rather than throwing.
+     See project_pos_printer_stack_audit in the engineering memory.
+
+     THE RATCHET IS INTACT: an EIGHTH still fails. The known architectural defect -
+     POS declares itself the single printer host (pos.html:3175) while merchant-v2
+     runs an independent connection - is tracked separately and is NOT resolved by
+     this amendment. */
   printerEnginesPerPage: printerPages.max,
   filesScanned:  files.length,
 };
@@ -248,7 +274,7 @@ if (!AS_JSON) {
   console.log('  SokoniPrinterDrivers owners : ' + report.totals.printerDriverGlobals + (baseline && baseline.printerDriverGlobals != null ? '   (baseline ' + baseline.printerDriverGlobals + ', distinct shapes — see ADR-0001)' : ''));
   console.log('  pos.html blocking scripts   : ' + report.totals.posBlockingScripts + (baseline && baseline.posBlockingScripts != null ? '   (baseline ' + baseline.posBlockingScripts + ')' : ''));
   console.log('  pos.html total scripts      : ' + report.totals.posStartupScripts + (baseline && baseline.posStartupScripts != null ? '   (baseline ' + baseline.posStartupScripts + ', warn-only)' : ''));
-  console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', layered — blocks a 7th)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
+  console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', layered — the 7th is the PROVIDER the others delegate to; blocks an 8th)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
   console.log('  forEach(async …) fan-out    : ' + report.totals.fanOut + (baseline ? '   (baseline ' + baseline.fanOut + ')' : ''));
   console.log('  unbounded feed listeners    : ' + report.totals.unboundedCollectionListeners + (baseline && baseline.unboundedCollectionListeners != null ? '   (baseline ' + baseline.unboundedCollectionListeners + ', whole-collection onSnapshot — blocks a NEW one)' : ''));
   console.log('  precached but not fresh     : ' + report.totals.staleDelivery + (baseline ? '   (baseline ' + baseline.staleDelivery + ')' : ''));
