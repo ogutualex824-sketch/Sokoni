@@ -126,7 +126,7 @@ const FS_STUB = [
   /**
    * Run completeRoleSelection() for one identity and report where the browser LANDED.
    * @param {{kind:string, tickSeller?:boolean, seed?:object, query?:string,
-   *          forge?:boolean, breakRouter?:boolean}} o
+   *          forge?:boolean, breakRouter?:boolean, hangRouter?:boolean}} o
    */
   async function land (o) {
     const ctx = await browser.newContext();
@@ -135,6 +135,16 @@ const FS_STUB = [
     /* Mutation control: prove what happens when the router cannot load. */
     if (o.breakRouter) {
       await ctx.route('**/sokoni-merchant-entry.js', (r) => r.fulfill({ status: 404, body: 'gone' }));
+    }
+    /* LIVENESS injection: the module loads perfectly and resolve() NEVER SETTLES. This is
+       the shape a real stall takes — the role authority waiting on an auth state that does
+       not arrive — and it is invisible to try/catch, because nothing throws. */
+    if (o.hangRouter) {
+      await ctx.route('**/sokoni-merchant-entry.js', (r) => r.fulfill({
+        status: 200, contentType: 'text/javascript',
+        body: 'window.SokoniMerchantEntry = { resolve: function () { return new Promise(function () {}); },' +
+              ' go: function () {}, DESTINATIONS: { intake: "/offer" } };',
+      }));
     }
     /* Every destination is a stub, so the assertion is the URL and not whatever a
        real page happens to do on load. */
@@ -271,6 +281,18 @@ const FS_STUB = [
   ok('falls back to the marketplace', /\/index\.html$/.test(I.pathname || ''), I.pathname);
   ok('does NOT fall back to seller.html', !/seller\.html/.test(I.landed || ''), I.landed);
   ok('does NOT assume approved and open Merchant', I.pathname !== MERCHANT, I.pathname);
+
+  head('LIVENESS CONTROL — a router that HANGS must not strand the merchant');
+  /* The control above covers a router that is ABSENT. This covers one that LOADS and never
+     settles, which is what actually shipped for a few minutes: auth.js awaited resolve()
+     with no bound, so a stalled authority left the merchant on "Redirecting…" indefinitely.
+     A promise that never settles is not an exception; the try/catch around it could not see
+     it. land() waits 20s and the bound is 4s, so removing the bound fails this. */
+  const J = await land({ kind: 'approved-claim', tickSeller: true, hangRouter: true });
+  ok('navigates even though resolve() never settles', J.navigated === true, JSON.stringify(J));
+  ok('...to the marketplace, granting nothing', /\/index\.html$/.test(J.pathname || ''), J.pathname);
+  ok('...never the Merchant workspace on an unanswered authority', J.pathname !== MERCHANT, J.pathname);
+  ok('...and never the old shell', !/seller\.html/.test(J.landed || ''), J.landed);
 
   head('CUTOVER GATE');
   console.log('  merchant destination = ' + MERCHANT);
