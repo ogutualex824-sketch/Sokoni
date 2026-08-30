@@ -1055,7 +1055,15 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      '/merchant-v2.html' that used to be baked in here — a .html target cleanUrls
      301-redirects, naming a file rather than a route — cannot come back. */
   function exitTarget (m) {
-    return m.href + (m.next ? '?next=' + m.next : '');
+    /* A RETURN PATH, so an exit is not a dead end. pos-setup.html had no reference to
+       the shell at all, so a merchant sent there to provision could only use the
+       browser Back button. Session-terminating exits (sign-out) deliberately get NO
+       return: bouncing back into a shell whose session just ended is the login loop
+       the route contract exists to prevent. */
+    var base = m.href + (m.next ? '?next=' + m.next : '');
+    if (m.terminatesSession) return base;
+    var here = location.pathname + (location.hash || '');
+    return base + (base.indexOf('?') > -1 ? '&' : '?') + 'return=' + encodeURIComponent(here);
   }
   function leaveShell (rid, sessionEnded) {
     var m = byId[rid];

@@ -74,6 +74,46 @@ else {
      'header and footer both rely on this');
 }
 
+head('2b - THE SAME DEFECT IN THE SALE RECEIPT (second template)');
+/* RawReceiptBuilder pushes CMD.ALIGN_CENTER and _center() also padded, so order and
+   sale receipts were double-centred exactly like the test receipt. Different file,
+   different builder, same mistake — which is why this is asserted per template. */
+const PPS = fs.readFileSync(path.join(ROOT, 'sokoni-pos-print-service.js'), 'utf8');
+ck('sale builder _center does NOT pad',
+   PPS.indexOf('const pad = Math.max(0, Math.floor((w - s.length) / 2));') === -1);
+ck('...and still truncates', PPS.indexOf('return this._ln(String(txt).slice(0, w));') > -1);
+ck('CONTROL it really does use hardware centring', PPS.indexOf('CMD.ALIGN_CENTER') > -1,
+   'if it did not, removing the padding would be the defect');
+ck('CONTROL _col2 still pads (left-aligned columns need it)',
+   PPS.indexOf("return this._ln(gap > 0 ? l + ' '.repeat(gap) + r") > -1);
+/* Walk the builder: every _center must sit inside an ALIGN_CENTER region. */
+(function () {
+  const src = PPS.split('\n');
+  const start = src.findIndex((l) => l.indexOf('class RawReceiptBuilder') > -1);
+  let end = src.findIndex((l, i) => i > start && /^class /.test(l));
+  if (end < 0) end = start + 400;
+  let align = 'left', centred = 0, mis = 0;
+  for (let i = start; i < end; i++) {
+    const l = src[i];
+    if (l.indexOf('CMD.ALIGN_CENTER') > -1) align = 'centre';
+    else if (l.indexOf('CMD.ALIGN_LEFT') > -1) align = 'left';
+    if (/this\._center\(/.test(l)) { if (align === 'centre') centred++; else mis++; }
+  }
+  ck('every _center call is inside ALIGN_CENTER', mis === 0, centred + ' centred, ' + mis + ' not');
+  ck('...and there are several', centred >= 5);
+})();
+
+head('2c - every receipt carries its ORDER NUMBER');
+ck('Order No row exists', PPS.indexOf("this._col2('Order No:', String(_orderNo));") > -1);
+ck('accepts ref, which is what the Orders list sends',
+   PPS.indexOf('r.orderNo || r.orderNumber || r.orderId || r.ref') > -1);
+ck('the sale builder forwards it',
+   PPS.indexOf('orderNo:      receipt.orderNo || receipt.orderNumber') > -1,
+   'receiptMeta is called with a CONSTRUCTED object, so an unlisted field is invisible');
+ck('CONTROL nothing is printed when there is no order',
+   PPS.indexOf('if (_orderNo) this._col2') > -1,
+   'an absent order must not render an empty or invented row');
+
 head('3 - CONTROL: the manual-padding expression is gone from the file');
 ck('no residual pad arithmetic in center()',
    SRC.indexOf("' '.repeat(Math.max(0, Math.floor((W - t.length) / 2))) + t") === -1);

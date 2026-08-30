@@ -1422,7 +1422,29 @@
 
         <span class="welcome-badge" aria-label="Enterprise edition">Enterprise POS</span>
 
-        <h1 class="wiz-title">The Complete Retail<br>Operating System</h1>
+        <!-- BACK TO THE SHELL. This page is reached as a contract exit (kind:'exit'), which is
+     a full-page navigation; without this the merchant had no route back and said so.
+     Rendered only when the caller supplied ?return=, and only for a SAME-ORIGIN path,
+     so this cannot become an open redirect. -->
+<div id="sk-return-host"></div>
+<script>
+(function () {
+  try {
+    var p = new URLSearchParams(location.search).get('return');
+    if (!p) return;
+    /* Same-origin PATHS only: must start with a single '/' and not '//' (protocol-relative). */
+    if (p.charAt(0) !== '/' || p.charAt(1) === '/') return;
+    var host = document.getElementById('sk-return-host');
+    if (!host) return;
+    host.innerHTML =
+      '<a href="' + p.replace(/"/g, '') + '" ' +
+      'style="position:sticky;top:0;z-index:9999;display:block;padding:12px 16px;' +
+      'background:#111;color:#fff;text-decoration:none;font:600 14px system-ui">' +
+      '&#8592; Back to Merchant</a>';
+  } catch (_) {}
+})();
+</script>
+<h1 class="wiz-title">The Complete Retail<br>Operating System</h1>
         <p class="wiz-sub">Accept payments, manage inventory, track loyalty,<br>and grow your business — all in one place.</p>
 
         <p class="welcome-tagline">Designed for Kenyan merchants. Built for scale.</p>

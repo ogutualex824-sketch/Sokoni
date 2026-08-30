@@ -108,10 +108,13 @@ class RawReceiptBuilder {
   _eq  ()          { return this._ln('='.repeat(this._w)); }
   _blank (n = 1)   { for (let i = 0; i < n; i++) this._push(LF); return this; }
 
+  /* NO MANUAL PADDING. Every _center call site sits inside a CMD.ALIGN_CENTER region
+     (all 7 verified), so the PRINTER centres the line. Padding as well centred an
+     already-padded string and pushed the receipt header right of centre — the same
+     defect fixed in the engine's test receipt, in a second template.
+     Truncation is KEPT: it is what stops a long business name overrunning the line. */
   _center (txt, w = this._w) {
-    const s = String(txt).slice(0, w);
-    const pad = Math.max(0, Math.floor((w - s.length) / 2));
-    return this._ln(' '.repeat(pad) + s);
+    return this._ln(String(txt).slice(0, w));
   }
 
   _left  (txt) { return this._ln(String(txt).slice(0, this._w)); }
@@ -144,6 +147,14 @@ class RawReceiptBuilder {
 
   receiptMeta (r = {}) {
     this._col2('Receipt No:', receiptIdOf(r)  || '—');
+    /* ORDER NUMBER ON EVERY RECEIPT. receiptIdOf() reads only receiptNumber/receiptNo,
+       so an order printed from the Orders list — which carries its number in `ref`,
+       built as (orderNumber || orderId || ref || id) — printed 'Receipt No: —' and no
+       order number at all. Accept every spelling the callers actually use rather than
+       forcing one, and render nothing when there genuinely is no order. */
+    const _orderNo = r.orderNo || r.orderNumber || r.orderId || r.ref ||
+                     (r.order && (r.order.orderNumber || r.order.orderId || r.order.ref || r.order.id)) || '';
+    if (_orderNo) this._col2('Order No:', String(_orderNo));
     if (r.etimsNo)    this._col2('eTIMS Inv:', r.etimsNo);
     const d = r.timestamp ? new Date(r.timestamp) : new Date();
     this._col2('Date:', d.toLocaleDateString('en-KE', { day:'2-digit', month:'short', year:'numeric' }));
@@ -1308,6 +1319,11 @@ class PosPrintService {
       cashierName:  receipt.cashierName   || context.cashierName || receipt.cashier || '—',
       registerName: receipt.registerName  || context.registerName || receipt.tillNumber || 'Default',
       customer:     receipt.customer      || null,
+      /* Forwarded explicitly: receiptMeta is called with a CONSTRUCTED object, so any
+         field not listed here is invisible to it no matter what the caller sent. */
+      orderNo:      receipt.orderNo || receipt.orderNumber || receipt.orderId ||
+                    receipt.ref || (receipt.order && (receipt.order.orderNumber ||
+                    receipt.order.orderId || receipt.order.ref || receipt.order.id)) || '',
     });
 
     const items = receipt.items || context.items || [];
