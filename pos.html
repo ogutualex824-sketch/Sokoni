@@ -1730,6 +1730,13 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="sokoni-receipt-engine.js" defer></script>
 <script src="sokoni-label-engine.js" defer></script>
 <script src="sokoni-pos-print.js" defer></script>
+<!-- The universal engine MUST load before the manager and the print service.
+     sokoni-printer-manager.js is a thin WRAPPER: its `connected` getter reads
+     window.SokoniPrinter?.connected and its _eng() THROWS when the engine is absent.
+     Without this tag PrinterManager reported "not connected" permanently, Test Print
+     did nothing and Connect could never reach a chooser - the till had no printer
+     stack at all, only a wrapper around a missing one. -->
+<script src="sokoni-universal-printer.js" defer></script>
 <script src="sokoni-bluetooth-printer.js" defer></script>
 <script src="sokoni-printer-manager.js" defer></script>
 <script src="sokoni-receipt-id.js" defer></script><script src="sokoni-pos-print-service.js" defer></script>
