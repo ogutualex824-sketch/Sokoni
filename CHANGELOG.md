@@ -1,3 +1,66 @@
+## [2026-08-30] — B2.5 + B2.6: guard certified, then wired into functions.predeploy
+
+**Files:** `scripts/test-functions-lineage-guard.js` (new), `firebase.json` (one hook).
+**B2.5: PASS 38 / FAIL 0 / UNPROVEN 2.** Provenance regression after wiring: **57 / 0 / 2.**
+Nothing deployed. No money-path file touched.
+
+### B2.5 — what the suite certifies
+
+It certifies the GUARD, not `classify()` (already covered 23 ways). The point is release-set
+semantics: `declared A,B` -> resolves exactly A and B -> evaluates both -> **one refusal REFUSES THE
+ENTIRE RELEASE**. The load-bearing assertion is the CONTROL — the same set minus the bad member
+ALLOWs — without which "REFUSE" could merely mean the guard refuses multi-function sets. Order
+independence checked too.
+
+Ancestry outcomes are driven from scratch trees built INSIDE the repo (so git resolves commits),
+each carrying a REAL sha from this history: the stamped commit (NOOP), its parent (REFUSE, older),
+`release-b/live` (REFUSE, diverged), no stamp at all (REFUSE), and a non-hex sha as a CONTROL
+proving a fabricated stamp cannot pass validation. Every case asserts BOTH exit code and printed
+verdict — exit code alone cannot separate REFUSE-diverged from REFUSE-unreadable.
+
+**A FAIL that was the test, not the guard:** the suite expected ALLOW and got NOOP, because
+`functions/build-info.js` still read `62a35ef` while HEAD had moved three commits on. The stamp
+tracks the LAST GENERATOR RUN, not HEAD — and the guard is right to trust it, because the stamp is
+exactly what gets packaged into the archive. Fixed by reproducing the real order: the generator is
+predeploy hook #1, so the suite now regenerates first, with a precondition asserting the stamp
+tracks HEAD.
+
+### B2.6 — the wiring
+
+```
+functions.predeploy
+  1  generate-functions-build-info.js      stamp from candidate HEAD
+  2  deploy/guard-functions-lineage.js     NEW - refuses undeclared / regressive releases
+  3  predeploy-syntax-gate.js
+  4  verify-commission-single-source.js
+  5  verify-delivery-engine-sync.js
+  6  predeploy-payout-gate.js
+```
+
+Guard at #2: it needs the fresh stamp, and it should refuse before the remaining gates spend time.
+`hosting.predeploy` (11) and `functions.source` untouched.
+
+**A defect caught by reading the diff:** the hook was first written as
+`scripts/guard-functions-lineage.js`, copying the generator's path shape — but the guard lives in
+`scripts/deploy/`. That would have failed at deploy time with MODULE_NOT_FOUND, which is precisely
+how `scripts/deploy/gate.js` has been silently red for months (101 consecutive `deploy.yml` runs).
+Fixed, and now **every one of the six hooks is asserted to resolve to a file that exists** — a
+mistyped hook path is indistinguishable from a refusing gate.
+
+### Operational consequence
+
+Any Functions deploy from a tree carrying this commit now REQUIRES an explicit release declaration:
+
+```
+SOKONI_FN_RELEASE=obsDistributedTrace  firebase deploy --only functions:obsDistributedTrace
+```
+
+`FULL` is permanently refused — production runs ~25 divergent source trees, so no single branch can
+reconcile the estate. Missing or malformed declaration: REFUSE. UNPROVEN stays in the diagnostics;
+the release decision is binary.
+
+Production `e52fdc5` / v584 · not pushed · no credential, IAM, workflow, or money-path change.
+
 ## [2026-08-30] — B2: Functions lineage guard (declared release set, fail-closed)
 
 **File:** `scripts/deploy/guard-functions-lineage.js`. **Not wired into `functions.predeploy`** —
