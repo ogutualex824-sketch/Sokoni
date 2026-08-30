@@ -32,6 +32,25 @@
 <html lang="en" data-require-auth="true">
 <head>
 <meta charset="utf-8">
+<!-- CRASH SENTINEL — FIRST, and deliberately not deferred.
+
+     merchant-v2 is the shell the merchant actually uses and the host for POS, and it
+     carried NO crash instrumentation at all: index.html and login.html had the sentinel,
+     this did not. So an "Aw, Snap!" renderer crash here - on budget Android almost always
+     OOM - recorded nothing, and /android-doctor had nothing to report. Every handset
+     report of a POS crash has therefore been undiagnosable by construction.
+
+     A renderer crash kills the WHOLE TAB, shell and POS iframe together, so instrumenting
+     the shell captures a crash that begins in either. pos.html keeps its own stage
+     breadcrumbs for boot stalls (?diag=crash) and deliberately does NOT get this: adding a
+     blocking script there would breach the posBlockingScripts ratchet, which exists because
+     parser-blocking scripts were cut 41 -> 3 during an earlier iPhone crash. perf-guard
+     counts that metric for pos.html ONLY, so the shell is both the correct place and the
+     one that costs no gate.
+
+     Must run before anything it is meant to observe; a deferred sentinel cannot record a
+     death during load. Read the result off the phone at /android-doctor. -->
+<script src="sokoni-crash-sentinel.js"></script>
 <!-- viewport-fit=cover so the safe-area insets below actually resolve on a notched
      iPhone; without it env(safe-area-inset-*) is always 0. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

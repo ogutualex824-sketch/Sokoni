@@ -159,6 +159,43 @@ check('session-terminating exits are guarded until the sign-out completes',
 check('shell never navigates the tab to login/auth (module word cannot end a session)',
       !/location\.(href|assign|replace)\s*[=(]\s*['"`][^'"`]*(login|signin|sign-in|auth)/i.test(stripped));
 /* An exit must exist and be declared, or the dead-end is back and nobody notices. */
+/* CRASH INSTRUMENTATION — the shell must be able to report its own death.
+
+   merchant-v2 is the shell the merchant uses and the host for POS, and it carried NO crash
+   instrumentation: index.html and login.html had the sentinel, this did not. An "Aw, Snap!"
+   renderer crash — on budget Android almost always OOM — therefore recorded nothing, and
+   /android-doctor had nothing to show. Every handset report of a POS crash was
+   undiagnosable by construction, which is why they have all been "it crashes" with no cause.
+
+   Pinned in THREE parts, because each can be defeated separately:
+     · present at all
+     · not DEFERRED — a deferred sentinel cannot record a death during load
+     · FIRST, so it observes everything after it
+
+   pos.html deliberately does NOT carry it: a blocking script there would breach the
+   posBlockingScripts ratchet (4), which exists because parser-blocking scripts were cut
+   41 -> 3 during an earlier iPhone crash. A renderer crash kills the whole tab anyway, so
+   the shell captures a crash originating in either. pos.html keeps its stage breadcrumbs.
+
+   CONDITIONAL ON THE CANONICAL SHELL, following this file's own precedent that a contract
+   must not break a shell which does not implement a capability. This suite runs the SHARED
+   route contract against both shells; crash instrumentation is not part of that contract,
+   and demanding it of the legacy merchant.html would be requiring work on a surface sellers
+   no longer route to after the 2026-08-31 cutover. Required for v2, reported for the other. */
+const isCanonicalShell = /merchant-v2\.html$/.test(SHELL_FILE);
+if (isCanonicalShell) {
+  check('the shell carries the crash sentinel', /sokoni-crash-sentinel\.js/.test(shell),
+        'without it an OOM crash records nothing and /android-doctor is blank');
+  check('...and it is NOT deferred',
+        !/<script[^>]*\bdefer\b[^>]*sokoni-crash-sentinel|<script[^>]*sokoni-crash-sentinel[^>]*\bdefer\b/.test(shell));
+  check('...and nothing loads before it',
+        (shell.slice(0, shell.indexOf('sokoni-crash-sentinel.js')).match(/<script/g) || []).length === 1,
+        'it can only observe what comes after it');
+} else {
+  console.log('  ....  crash sentinel not required of ' + SHELL_FILE +
+              ' (legacy shell; the canonical v2 shell is asserted separately)');
+}
+
 const exitRoutes = C.ROUTES.filter(r => r.kind === 'exit');
 check('the contract declares a way out of the shell', exitRoutes.length > 0,
       exitRoutes.map(r => r.id + '->' + r.href).join(',') || 'NONE — /merchant is a dead-end');
