@@ -1797,9 +1797,11 @@
         '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">💵</div><div class="dev-meta"><div class="dev-name">Cash Drawer</div><div class="dev-sub">Opens via the printer after a cash sale</div></div></div></div>' +
       '</div>';
     var q = function (i) { return document.getElementById(i); };
-    if (q('dv-connect'))   q('dv-connect').onclick   = function () { window.SokoniShell.Printer.connect(); };
-    if (q('dv-reconnect')) q('dv-reconnect').onclick = function () { window.SokoniShell.Printer.reconnect(); setTimeout(renderDevices, 1500); };
-    if (q('dv-test'))      q('dv-test').onclick      = function () { window.SokoniShell.Printer.test(); };
+    /* connect/reconnect/test are ASYNC. Called bare, any throw became an unhandled
+       Promise rejection; _pGuard consumes it and turns it into visible state. */
+    if (q('dv-connect'))   q('dv-connect').onclick   = function () { _pGuard(window.SokoniShell.Printer.connect(), 'connect'); };
+    if (q('dv-reconnect')) q('dv-reconnect').onclick = function () { _pGuard(window.SokoniShell.Printer.reconnect(), 'reconnect'); setTimeout(renderDevices, 1500); };
+    if (q('dv-test'))      q('dv-test').onclick      = function () { _pGuard(window.SokoniShell.Printer.test(), 'test'); };
     if (q('dv-forget'))    q('dv-forget').onclick    = function () { window.SokoniShell.Printer.forget(); setTimeout(renderDevices, 800); };
     if (q('dv-done'))      q('dv-done').onclick      = function () { go(_lastModule || 'dashboard'); };  /* return to previous module, no reload */
   }
@@ -1913,14 +1915,19 @@
     if (!online)            { syncCls = 'bad';  syncTxt = _syncPending ? 'Offline · ' + _syncPending + ' queued' : 'Offline'; }
     else if (_syncPending)  { syncCls = 'warn'; syncTxt = 'Syncing ' + _syncPending + (_syncPending === 1 ? ' change' : ' changes'); }
     else                    { syncCls = 'ok';   syncTxt = 'Synced'; }
-    document.getElementById('st-sync').className   = 'mdot ' + syncCls;
-    document.getElementById('st-sync-t').textContent = syncTxt;
+    /* Null-safe: this runs from Bluetooth ENGINE EVENTS, so a missing chip element
+       must never turn a printer event into a shell crash. */
+    var _el  = function (id) { try { return document.getElementById(id); } catch (_) { return null; } };
+    var _cls = function (id, v) { var n = _el(id); if (n) n.className = v; };
+    var _txt = function (id, v) { var n = _el(id); if (n) n.textContent = v; };
+    _cls('st-sync', 'mdot ' + syncCls);
+    _txt('st-sync-t', syncTxt);
     var pc = shellPrinterUp ? 'mdot ok' : 'mdot';
-    document.getElementById('st-print').className = pc;
-    document.getElementById('top-print').className = pc;
+    _cls('st-print', pc);
+    _cls('top-print', pc);
     var pt = shellPrinterUp ? 'Printer connected' : 'Printer';
-    document.getElementById('st-print-t').textContent = pt;
-    document.getElementById('top-print-t').textContent = shellPrinterUp ? 'P58E' : 'Printer';
+    _txt('st-print-t', pt);
+    _txt('top-print-t', shellPrinterUp ? (PrinterState.name || 'Printer') : 'Printer');
     if (current === 'dashboard') refreshDashboardLive();
     else if (current === 'devices') { try { renderDevices(); } catch (_) {} }
   }
@@ -1956,7 +1963,7 @@
       try { var f = panels[k].querySelector && panels[k].querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
     });
   }
-  function _psNotify () { paintStatus(); if (current === 'devices') { try { renderDevices(); } catch (_) {} } _broadcastPrinter(); _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
+  function _psNotify () { try { paintStatus(); } catch (_) {} if (current === 'devices') { try { renderDevices(); } catch (_) {} } _broadcastPrinter(); _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
   function _psSet (patch) { for (var k in patch) PrinterState[k] = patch[k]; if (patch.connected) PrinterState.lastSeen = Date.now(); shellPrinterUp = PrinterState.connected; _psNotify(); }
   window.SokoniPrinterState = { get: function () { return PrinterState; }, subscribe: function (fn) { _psSubs.push(fn); try { fn(PrinterState); } catch (_) {} } };
 
@@ -1972,9 +1979,11 @@
      cannot do this at all'. Reporting them identically is what made the button look dead. */
   function _btSupported () { try { return !!(navigator && navigator.bluetooth); } catch (_) { return false; } }
   if (_eng && _eng.on) {
-    _eng.on('connected',    function (d) { _psSet({ connected: true,  name: _engName(d) }); });
-    _eng.on('disconnected', function ()  { _psSet({ connected: false }); });
-    _eng.on('forgotten',    function ()  { _psSet({ connected: false, name: null }); });
+    /* These run INSIDE the engine emit loop. An exception here could break the
+       engine own state machine, so each is contained at the boundary. */
+    _eng.on('connected',    function (d) { try { _psSet({ connected: true, name: _engName(d), reason: '' }); } catch (_) {} });
+    _eng.on('disconnected', function ()  { try { _psSet({ connected: false }); } catch (_) {} });
+    _eng.on('forgotten',    function ()  { try { _psSet({ connected: false, name: null, reason: '' }); } catch (_) {} });
   }
   /* On every page load / PWA resume, adopt the engine's ACTUAL state before any timer runs.
      Without this the chip starts red even when the link is live, which is what made a working
@@ -1982,6 +1991,20 @@
   if (_eng) { try { if (_eng.connected) _psSet({ connected: true, reason: '' }); } catch (_) {} }
 
   function _remembered () { try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; } }
+
+  /* CONTAINMENT, NOT MASKING. The failure still becomes UI state and still reaches
+     the console and the engine trace. It simply cannot escape as an uncaught error. */
+  function _pGuard (p, what) {
+    try {
+      if (!p || typeof p.then !== 'function') return Promise.resolve(p);
+      return p.catch(function (e) {
+        var m = (e && (e.message || e.name)) || 'unknown error';
+        try { console.warn('[shell:printer] ' + what + ' failed:', m); } catch (_) {}
+        try { _psSet({ reason: 'Printer ' + what + ' failed: ' + m }); } catch (_) {}
+        return false;
+      });
+    } catch (_) { return Promise.resolve(false); }
+  }
 
   window.SokoniShell = window.SokoniShell || {};
   window.SokoniShell.Printer = {
@@ -2039,13 +2062,24 @@
       ['spp_profile','pps_store_profile','sokoni_printer_last_print','p58e_paired_device','pps_remember'].forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
       _psSet({ connected: false, name: null });
     },
-    test:  function () { try { if (_eng && _eng.testPrint) _eng.testPrint(); } catch (_) {} },
-    print: function (receipt) { try { if (_eng && _eng.print) _eng.print('receipt', receipt); } catch (_) {} },
+    /* testPrint/print RETURN PROMISES. The old try/catch caught only a SYNCHRONOUS
+       throw, so a rejected print left an unhandled rejection. Guard it, and return
+       the promise so callers can await a real outcome. */
+    test:  function () {
+      try { if (_eng && _eng.testPrint) return _pGuard(_eng.testPrint(), 'test print'); }
+      catch (e) { try { _psSet({ reason: 'Test print failed: ' + ((e && e.message) || 'unknown') }); } catch (_) {} }
+      return Promise.resolve(false);
+    },
+    print: function (receipt) {
+      try { if (_eng && _eng.print) return _pGuard(_eng.print('receipt', receipt), 'print'); }
+      catch (e) { try { _psSet({ reason: 'Print failed: ' + ((e && e.message) || 'unknown') }); } catch (_) {} }
+      return Promise.resolve(false);
+    },
   };
   /* Top-bar printer chip → connect if disconnected, else open the Devices page. */
   (function () { var c = document.getElementById('top-print'); var w = c && c.closest('.tchip');
     if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
-      w.onclick = function () { if (PrinterState.connected) go('devices'); else window.SokoniShell.Printer.connect(); }; } })();
+      w.onclick = function () { if (PrinterState.connected) go('devices'); else _pGuard(window.SokoniShell.Printer.connect(), 'connect'); }; } })();
 
   /* ── Startup auto-connect — ONE controlled reconnect scheduler ──────────────
      On app open the shell restores the remembered P58E and tries getDevices()→GATT on a fixed
