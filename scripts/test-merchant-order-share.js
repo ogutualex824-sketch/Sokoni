@@ -159,6 +159,32 @@ const rogueHandler = printHandler.replace('printerEngine()', 'PrinterManager.get
 ck('NC rewiring the print path to a module printer FAILS both checks',
    !/printerEngine\(\)/.test(rogueHandler) && RIVAL_PRINTER.test(rogueHandler));
 
+/* THE SINGLE-CONNECTION MODEL RESTS ON ONE STRING, AND NOTHING ASSERTED IT.
+
+   pos.html loads sokoni-universal-printer.js too — the embedded POS carries its own printer
+   engine with 7 navigator.bluetooth call sites. It cannot open a competing GATT link only
+   because merchant-v2 WITHHOLDS bluetooth when it delegates features to the module iframe:
+
+       var MODULE_ALLOW = 'camera; clipboard-write; payment';
+
+   The document grants bluetooth=(self), so the capability exists to delegate; the shell
+   simply does not hand it over. Add `bluetooth` to that string and the iframe engine
+   immediately becomes a second printer authority able to open its own connection — the
+   exact failure the shell-owned model prevents, and it would be a one-word change with no
+   test to stop it.
+
+   camera IS delegated on purpose: the POS scanner needs getUserMedia, and the module owns
+   the camera while the shell owns the printer. */
+const ALLOW = (SRC.match(/var MODULE_ALLOW\s*=\s*'([^']*)'/) || [])[1];
+ck('the module delegation set was found', ALLOW !== undefined, ALLOW);
+ck('bluetooth is WITHHELD from hosted modules', ALLOW !== undefined && !/bluetooth/i.test(ALLOW), ALLOW);
+ck('...as are usb and serial', ALLOW !== undefined && !/\b(usb|serial)\b/i.test(ALLOW), ALLOW);
+ck('...while camera IS delegated, because the module owns the scanner',
+   ALLOW !== undefined && /camera/.test(ALLOW), ALLOW);
+ck('NC delegating bluetooth would FAIL this',
+   /bluetooth/i.test('camera; clipboard-write; payment; bluetooth'),
+   'the check is a negative test, so prove the predicate fires on the bad value');
+
 /* ── 7. Negative controls ─────────────────────────────────────────────────── */
 console.log('\n7. Negative controls');
 ck('NC a bad number would be caught', F.waPhone('0812345678') !== '254812345678');
