@@ -68,7 +68,9 @@ function loadHub(approved, mutate) {
   head('1 - an approved role routes to its workspace');
   const multi = loadHub(['buyer', 'seller', 'rider']);
   ck('buyer  -> index.html', multi.hubFor('buyer') === 'index.html', multi.hubFor('buyer'));
-  ck('seller -> merchant.html', multi.hubFor('seller') === 'merchant.html', multi.hubFor('seller'));
+  /* Seller Hub cutover 2026-08-31: the workspace hub is merchant-v2.html, the shell that
+     carries the POS/printer/scanner integration. */
+  ck('seller -> merchant-v2.html', multi.hubFor('seller') === 'merchant-v2.html', multi.hubFor('seller'));
   ck('rider  -> driver.html', multi.hubFor('rider') === 'driver.html', multi.hubFor('rider'));
   ck('every approved role resolves a destination', ['buyer', 'seller', 'rider'].every((r) => !!multi.hubFor(r)));
 
@@ -126,7 +128,7 @@ function loadHub(approved, mutate) {
 
   head('7 - NEGATIVE CONTROL: without the entitlement check, routing grants');
   const neutered = loadHub(['buyer'], (s) => s.replace('if (!r || !isApproved(r)) return null;', 'if (!r) return null;'));
-  ck('control: buyer-only now WRONGLY routes to merchant.html', neutered.hubFor('seller') === 'merchant.html');
+  ck('control: buyer-only now WRONGLY routes to merchant-v2.html', neutered.hubFor('seller') === 'merchant-v2.html');
   ck('control: buyer-only now WRONGLY routes to driver.html', neutered.hubFor('rider') === 'driver.html');
   ck('control: admin still has no destination (map, not the check)', neutered.hubFor('admin') === null);
 

@@ -1034,7 +1034,18 @@ async function completeRoleSelection(){
         try { _entry = window.SokoniMerchantEntry || null; } catch(_) { _entry = null; }
         var _r = null;
         if (_entry && typeof _entry.resolve === "function") {
-            try { _r = await _entry.resolve(); } catch(_) { _r = null; }
+            /* BOUNDED. resolve() awaits the role authority, which awaits an auth state -
+               none of which is guaranteed to settle. An unbounded await here would leave a
+               merchant on "Redirecting…" forever, which is the same never-settles defect
+               this codebase just finished removing from the POS boot path. A stall is not
+               an exception, so try/catch cannot see it; race a timer instead and take the
+               fail-closed branch below, which grants nothing. */
+            try {
+                _r = await Promise.race([
+                    _entry.resolve(),
+                    new Promise(function(res){ setTimeout(function(){ res(null); }, 4000); })
+                ]);
+            } catch(_) { _r = null; }
         }
         if (_r && _r.destination) {
             dest  = _r.destination;
