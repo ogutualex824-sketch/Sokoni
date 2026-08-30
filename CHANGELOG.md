@@ -1,3 +1,57 @@
+## [2026-08-30] — B2: Functions lineage guard (declared release set, fail-closed)
+
+**File:** `scripts/deploy/guard-functions-lineage.js`. **Not wired into `functions.predeploy`** —
+wiring it would block every Functions deploy from this tree until a release is declared, which is a
+separate decision. Nothing deployed.
+
+### Why the release set must be DECLARED
+
+`firebase-tools/lib/deploy/lifecycleHooks.js` `getChildEnvironment()` passes a predeploy hook exactly
+`GCLOUD_PROJECT`, `PROJECT_DIR`, `RESOURCE_DIR` (plus `process.env`). **The `--only` filter is not
+among them.** A hook cannot tell a one-function deploy from a 1,708-function reconcile. Guessing
+would be sampling, and a sample is telemetry, not an authorization. So `SOKONI_FN_RELEASE` is
+mandatory, and an undeclared set is refused on the same principle as absent provenance.
+
+```
+SOKONI_FN_RELEASE=obsDistributedTrace  firebase deploy --only functions:obsDistributedTrace
+SOKONI_FN_RELEASE=FULL                 firebase deploy --only functions
+```
+
+**PAIRED OPERATIONAL REQUIREMENT the guard cannot enforce:** `FULL` alongside `--only functions:one`
+is not a full release, and the hook cannot see the discrepancy. Machine enforcement needs a wrapper
+that is itself the caller (design B, deferred).
+
+### Verified against production — six cases
+
+| case | result |
+|---|---|
+| no `SOKONI_FN_RELEASE` | REFUSE, exit 1 |
+| malformed names | REFUSE (`rejected: bad name!`) |
+| PARTIAL, stamped `obsDistributedTrace` | **NOOP**, exit 0 |
+| PARTIAL, unstamped `submitReview` | REFUSE — `live: ABSENT` |
+| unknown function | REFUSE — UNPROVEN collapses to REFUSE |
+| **FULL** (resolved 1,708 real functions) | REFUSE — baseline not provenance-certified |
+
+`UNPROVEN` survives in the DIAGNOSTICS ("could not read" and "read, and it is wrong" are different
+production conditions) but not in the exit code: a deployment gate has two outcomes.
+
+### FULL fails fast, and that is not sampling
+
+One refusing member refuses the release, so reading the remaining 1,707 archives changes nothing and
+costs about an hour. The stop is a real finding about a real member, never an inference about the
+ones unread — and the report states `examined N of 1708` rather than implying more.
+
+### Bootstrap is deliberately blocked
+
+1,707 of 1,708 deployed functions carry no stamp, so FULL refuses. That is the intended result and
+the evidence that the provenance rollout is incomplete. The way out is stamping the baseline, never
+relaxing the guard.
+
+**GAP: no automated regression suite yet.** The six cases above were run by hand against production;
+they are not yet a suite that would catch a later regression.
+
+Production `e52fdc5` / v584 · no deployment, credential, or IAM change.
+
 ## [2026-08-30] — B1.3 + B1.4: Functions provenance proven on production, then automated
 
 **Files:** `firebase.json` (one predeploy entry), `scripts/deploy/functions-provenance.js`,
