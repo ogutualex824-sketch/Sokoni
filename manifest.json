@@ -69,7 +69,7 @@
     {
       "name": "Sell on Sokoni",
       "short_name": "Sell",
-      "url": "/seller?source=shortcut",
+      "url": "/merchant-v2?source=shortcut",
       "description": "Seller dashboard",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
