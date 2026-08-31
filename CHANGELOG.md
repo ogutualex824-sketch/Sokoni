@@ -1,3 +1,43 @@
+## [2026-08-31] — Shell: two ways a native panel rendered as a blank black surface
+
+**Files:** `merchant-v2.html`; `scripts/test-merchant-v2-panels.js` (new, 17/0).
+**Database changes:** none. **API changes:** none. **Breaking changes:** none.
+
+A blank panel is the one thing a surface must never be — it is indistinguishable from an
+empty account, so a merchant cannot tell a crash from "no data".
+
+### 1. One renderer, three panels — this is **Revenue**
+
+`analytics | revenue | reports` deliberately share `renderAnalytics`; two engines would be
+two sets of numbers. But each has its OWN panel, and each panel builds nodes with the SAME
+ids (`an-body`, `an-segs`, `an-custom`). The paint functions resolved them with
+`document.getElementById`, which returns the FIRST in document order.
+
+So once Analytics had been opened, painting Revenue wrote into the **hidden Analytics
+panel** and left Revenue's own panel empty. Reports shared the fault. Every `an-*` lookup
+is now scoped to the panel being rendered via `anEl()`; the document lookup survives only
+as a fallback. `renderAnalytics` is the only renderer serving more than one panel, so this
+closes the class rather than one instance.
+
+### 2. Clear-then-mount — any ported module, e.g. **Store**
+
+`renderModule` set `p.innerHTML=''` and then called `G.mount(p, def.ctx())` unguarded. An
+exception in either left a permanently empty panel with no message and no way back except a
+full reload — while a module whose *script* never loaded was already handled with a clear
+message. Both failures now behave alike: the surface names the route the merchant clicked,
+reports the real error instead of inventing one, and offers a retry.
+
+That retry needed its own branch in the delegate: the existing `[data-retry]` handler falls
+through to ORDERS for anything that is not `payments`, so a module retry would have
+re-rendered a different surface.
+
+### Not changed
+
+`kra-tax` still renders its honest "not yet ported" note. It was never native in v1 either,
+and the real surface (`etims-seller.html`) sits behind eTIMS certification — wiring a tax
+surface in as a rendering fix would be the wrong call.
+
+---
 ## [2026-08-31] — Shell: embedded modules did not recognise merchant-v2
 
 **Files:** `auth-guard.js`, `plans.html`, `returns.html`, `seller-delivery.html`, `seller.html`,
@@ -26,7 +66,7 @@ Reported on **Plan, Delivery Hub, Returns and Stories**.
 
 ### Security
 
-`auth-guard.js` carried the same blindness as `/(^|/)merchant(.html)?$/`, so when the global
+`auth-guard.js` carried the same blindness as the same path regex, which knew only `merchant` and `merchant.html`,, so when the global
 lost the race it concluded it was top-level and navigated the PANEL to the full login page —
 why Stories showed a whole login gate where other modules show a modest "not signed in".
 
