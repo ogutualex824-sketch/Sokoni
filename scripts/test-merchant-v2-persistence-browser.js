@@ -26,6 +26,19 @@
  * remains handset acceptance.
  */
 'use strict';
+/* TEARDOWN MUST NOT SWALLOW THE VERDICT.
+   Observed: this suite ran every assertion, printed the last PASS, and then produced NO
+   tally at all — the required-suite runner correctly refused it as NO-TALLY. The work had
+   finished; browser.close() hung on a stuck context and the process died before reporting.
+   A suite that cannot report is indistinguishable from one that failed, so closing is now
+   bounded and can never outlive the verdict. */
+function _bounded (p, ms) {
+  return Promise.race([
+    Promise.resolve(p).catch(function () {}),
+    new Promise(function (r) { setTimeout(r, ms); }),
+  ]);
+}
+
 const http = require('http'), fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const NL = String.fromCharCode(10);
@@ -92,7 +105,7 @@ const STATE = `(function () {
   try { br = await webkit.launch(); }
   catch (e) {
     console.log(NL + '  ENV  browser could not launch: ' + String(e && e.message || e).slice(0, 66));
-    server.close();
+    try { server.close(); } catch (_) {}
     console.log(NL + '  ' + pass + ' passed, ' + fail + ' failed, 1 env');
     process.exit(0);
   }
@@ -173,8 +186,8 @@ const STATE = `(function () {
 
     await ctx.close();
   } finally {
-    try { await br.close(); } catch (_) {}
-    server.close();
+    await _bounded(br.close(), 5000);
+    try { server.close(); } catch (_) {}
   }
 
   console.log(NL + '  ' + pass + ' passed, ' + fail + ' failed, ' + unproven + ' unproven');

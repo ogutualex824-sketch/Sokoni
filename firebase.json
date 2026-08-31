@@ -556,6 +556,7 @@
       "node scripts/deploy/bump-sw-version.js",
       "node scripts/generate-version.js",
       "node scripts/predeploy-syntax-gate.js",
+      "node \"$RESOURCE_DIR/../scripts/predeploy-browser-suites.js\"",
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
       "node scripts/audit-base64-writes.js",

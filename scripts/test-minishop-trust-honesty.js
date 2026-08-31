@@ -20,6 +20,19 @@
  * badge would therefore have nothing behind it, so it is not built and not asserted.
  */
 'use strict';
+/* TEARDOWN MUST NOT SWALLOW THE VERDICT.
+   Observed: this suite ran every assertion, printed the last PASS, and then produced NO
+   tally at all — the required-suite runner correctly refused it as NO-TALLY. The work had
+   finished; browser.close() hung on a stuck context and the process died before reporting.
+   A suite that cannot report is indistinguishable from one that failed, so closing is now
+   bounded and can never outlive the verdict. */
+function _bounded (p, ms) {
+  return Promise.race([
+    Promise.resolve(p).catch(function () {}),
+    new Promise(function (r) { setTimeout(r, ms); }),
+  ]);
+}
+
 const http = require('http'), fs = require('fs'), path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const NL = String.fromCharCode(10);
@@ -105,13 +118,18 @@ const SNAPSHOT = `(function () {
   try { br = await webkit.launch(); }
   catch (e) {
     console.log(NL + '  ENV  browser could not launch: ' + String(e && e.message || e).slice(0, 64));
-    server.close();
+    try { server.close(); } catch (_) {}
     console.log(NL + '  ' + pass + ' passed, ' + fail + ' failed, 1 env');
     process.exit(0);
   }
 
   async function render (payload, viewport) {
     const ctx = await br.newContext({ viewport });
+    await ctx.addInitScript(() => {
+      /* sw-register checks this before BUILDING the prompt, so it is never created.
+         Removing it afterwards raced its own re-creation. Suppress, do not fight. */
+      try { localStorage.setItem('sokoniNotifDismissed', 'permanent'); } catch (_) {}
+    });
     const page = await ctx.newPage();
     await page.route('**/getMinishopPublic**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json',
@@ -174,8 +192,8 @@ const SNAPSHOT = `(function () {
     await suite('mobile', { width: 390, height: 844 });
     await suite('desktop', { width: 1280, height: 900 });
   } finally {
-    try { await br.close(); } catch (_) {}
-    server.close();
+    await _bounded(br.close(), 5000);
+    try { server.close(); } catch (_) {}
   }
 
   /* ── the source of each claim ─────────────────────────────────────────────── */
