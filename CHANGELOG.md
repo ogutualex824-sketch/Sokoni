@@ -1,3 +1,34 @@
+## [2026-08-31] — Customers: premium native surface
+
+**Files:** `sokoni-merchant-customers-ui.js`, `scripts/test-merchant-customers-premium.js` (new, 27/0).
+**Unchanged:** every data path, phase and guard; `sokoni-merchant-customers.js` is untouched.
+
+Presentation only. The summary still shows solely what `getCRMDashboard` returned — a total
+over a 500-row page is not a total — and no figure is derived from the list.
+
+### What is new, and why each earns its place
+
+* **Segment grouping** with sticky headers, VIP first. A merchant looks for "my best
+  customers", not row 47. Rows keep their arrival order inside a group: this regroups, it
+  does not re-rank.
+* **Segment filter chips**, built from the segments actually PRESENT. A shop with no VIPs is
+  never offered a VIP filter that can only return nothing, and a single-segment list gets no
+  chips at all.
+* **A spend ladder** — bar width relative to the largest spend on screen. A rendering of real
+  values, so it carries no number and no label, is `aria-hidden`, and is OMITTED entirely when
+  there is nothing to compare (one row, or every row zero) rather than drawn full or empty.
+* **Last-order recency** on the row, through the existing `MC.dateLabel`.
+* **A condensing, blurred sticky header** so search stays reachable while scrolling.
+
+### Verification — 27 passed, 0 failed
+
+The module is MOUNTED against a fake DOM and fixture data; the assertions read the HTML it
+actually produced, not the stylesheet. Ladder widths measured `[100, 25, 4, 4]`. Every prior
+state still proven: sign-in, a rules refusal REPORTED rather than shown as "no customers",
+retry, and empty. House style checked: shell tokens, reduced motion, 44px targets.
+
+**Not deployed.** Production still serves the v1 shell, so this is not yet visible.
+
 ## [2026-08-31] — POS commission receivable collection (engine, scheduler, reconciliation)
 
 **Files:** `functions/pos-commission-collection.js` (new), `functions/index.js` (re-exports),
