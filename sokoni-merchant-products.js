@@ -78,7 +78,8 @@
     '.pr-img{width:100%;aspect-ratio:1/1;object-fit:cover;background:rgba(255,255,255,.04);display:block}',
     '.pr-ph{width:100%;aspect-ratio:1/1;background:rgba(255,255,255,.04);display:flex;align-items:center;',
     'justify-content:center;font-size:24px;color:var(--txt2,rgba(255,255,255,.3))}',
-    '.pr-b{padding:10px 11px 12px;min-width:0}',
+    '.pr-b{padding:10px 11px 4px;min-width:0}',
+    '.pr-card>.pr-acts{padding:0 11px 12px;margin-top:5px}',
     '.pr-n{font-size:13px;font-weight:700;line-height:1.35;overflow:hidden;display:-webkit-box;',
     '-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}',
     '.pr-p{font-size:14px;font-weight:800;margin-top:5px}',
@@ -117,14 +118,48 @@
     '.pr-tag.low{background:rgba(255,176,32,.14);color:#ffb020}',
     '.pr-tag.unk{background:rgba(255,255,255,.07);color:var(--txt3,#8b8b8b)}',
     '.pr-empty-i{font-size:40px;margin-bottom:10px}',
+    /* THE PHOTO BUTTON. The native file widget rendered "Choose Files | No file chosen"
+       next to a thumbnail the merchant had already picked — the control contradicted the
+       screen, because a repaint rebuilds the input and a FileList cannot be restored to
+       it. The state lives in _picked, so the label reads from THAT. The input stays in the
+       DOM, clipped rather than display:none, so it is still reachable by keyboard. */
+    '.pr-file{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;',
+      'clip:rect(0 0 0 0);white-space:nowrap;border:0}',
+    '.pr-pickbtn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:50px;',
+      'border-radius:13px;border:1px dashed var(--line,rgba(255,255,255,.22));cursor:pointer;',
+      'background:rgba(255,255,255,.03);color:inherit;font-weight:800;font-size:13.5px}',
+    '.pr-file:focus-visible + .pr-pickbtn{outline:2px solid var(--acc,#71ff00);outline-offset:2px}',
+    '@media (hover:hover){.pr-pickbtn:hover{background:rgba(255,255,255,.06);',
+      'border-color:var(--acc,#71ff00)}}',
     /* Mobile: a card/list hybrid, not desktop cards shrunk. The image becomes a thumbnail
        beside the text so a one-handed merchant reads a real row. */
     '@media (max-width:520px){',
       '.pr-grid{grid-template-columns:1fr;gap:10px}',
-      '.pr-card{display:flex;gap:12px;align-items:stretch}',
+            /* flex-direction MUST be restated: the base rule sets column, and `display:flex`
+         alone does not override it — so the thumbnail sat ABOVE the text with a dead
+         104px-tall gap beside it, which is not the row this comment promises. */
+      '.pr-card{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px 12px;padding:10px;align-items:start}',
+      '.pr-card>.pr-img,.pr-card>.pr-ph{grid-column:1;grid-row:1}',
+      '.pr-card>.pr-b{grid-column:2;grid-row:1;padding:0}',
+      /* .pr-b is a column flex, so its items STRETCH: the stock pill became a full-width
+         bar that read as a progress meter rather than a tag. */
+      '.pr-b>.pr-tag{align-self:flex-start}',
+      '.pr-card>.pr-acts{grid-column:1 / -1;grid-row:2;padding:0;margin-top:0}',
+      /* The info column is ~200px on a 390px screen, which is not enough for three
+         side-by-side buttons: "+ Photo" wrapped onto two lines and the row grew taller
+         than the thumbnail beside it. The labels stay on one line and the overflow menu
+         takes a fixed square instead of an equal third. */
+      '.pr-acts{gap:5px;margin-top:8px;flex-wrap:nowrap}',
+      '.pr-act{min-width:0;padding:0 8px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.pr-acts>.pr-act:last-child{flex:0 0 34px;padding:0}',
       '.pr-img,.pr-ph{width:104px;height:104px;aspect-ratio:auto;flex:0 0 104px;border-radius:12px}',
       '.pr-b{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}',
       '.pr-ovn{font-size:26px}',
+    '}',
+    /* Below ~380px the 104px thumbnail leaves too little for the price and actions. */
+    '@media (max-width:380px){',
+      '.pr-img,.pr-ph{width:88px;height:88px;flex:0 0 88px}',
+      '.pr-act{font-size:11px;padding:0 6px}',
     '}',
     '.pr-sec{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;',
       'color:var(--txt3,#8b8b8b);margin:18px 0 8px;padding-top:14px;',
@@ -442,7 +477,13 @@
           (p.category ? '<div class="pr-cat">' + esc(p.category) + '</div>' : '') +
           statusPill(p) +
           (draft ? '<span class="pr-tag draft">' + esc(p.status) + '</span>' : '') +
-          /* Indices, never interpolated ids: an id spliced into an inline handler
+        '</div>' +
+          /* The actions are a child of the CARD, not of the text column: in the mobile row
+             layout that column is ~200px, too narrow for three buttons — "+ Photo" wrapped,
+             then ellipsised to "+ …". As a card-level row they span its full width.
+             .pr-menu is position:absolute against .pr-card, so moving it changes nothing
+             about where it opens.
+             Indices, never interpolated ids: an id spliced into an inline handler
              is the inline-handler XSS this codebase has already been bitten by. */
           '<div class="pr-acts">' +
             '<button class="pr-act" data-pr="edit" data-i="' + i + '">✏️ Edit</button>' +
@@ -463,7 +504,6 @@
             '<button role="menuitem" data-pr="open" data-i="' + i + '">👁️ View details</button>' +
             '<button role="menuitem" class="danger" data-pr="del" data-i="' + i + '">🗑️ Remove</button>' +
           '</div>' +
-        '</div>' +
       '</div>';
     }
 
@@ -756,15 +796,67 @@
        product that reached the catalogue but not the till is not a plain
        success, and saying so is the difference between a merchant who knows to
        retry and one who wonders why the till cannot find their product. */
-    function reportCreate (res) {
-      if (res.replayed) return say('Already saved — no duplicate was created.');
-      if (res.complete) return say('Product added, and it is ready at the till.');
+    /* The product outcome as TEXT, so a photo result can be appended to it. Two toasts in
+       a row overwrite one another, and the sync caveat must not be the one that is lost. */
+    function createText (res) {
+      if (res.replayed) return 'Already saved — no duplicate was created.';
+      if (res.complete) return 'Product added, and it is ready at the till.';
       var missing = Object.keys(res.mirrors || {}).filter(function (k) {
         return res.mirrors[k].state !== 'written';
       });
-      say('Product added to your catalogue. Not yet available at ' +
-          (missing.indexOf('pos') > -1 ? 'the till' : 'Inventory') +
-          ' — open Products again to finish syncing.');
+      return 'Product added to your catalogue. Not yet available at ' +
+        (missing.indexOf('pos') > -1 ? 'the till' : 'Inventory') +
+        ' — open Products again to finish syncing.';
+    }
+
+    function reportCreate (res) { say(createText(res)); }
+
+    /* The product is WRITTEN by the time this runs, so its existence is never in doubt —
+       only the photos are. Every branch therefore reports the product outcome first and
+       the photo outcome second, in ONE message, because two toasts overwrite each other
+       and the sync caveat must not be the one that is lost. A failure here leaves a real
+       product with no pictures, which the merchant can fix from its Photos action. */
+    function attachAfterCreate (res) {
+      var E = S.editor;
+      var n = _picked.length;
+      var finish = function (extra) {
+        _picked = []; _originals = []; S.editor = null;
+        say(createText(res) + (extra ? ' ' + extra : ''));
+        S.rows = null; load();
+      };
+      if (!E) return finish('');
+
+      var M;
+      try { M = md(); mediaModule(); }
+      catch (e) {
+        return finish('The photos were not uploaded (' + ((e && e.message) || 'unavailable') +
+                      ') — open Photos on the product to add them.');
+      }
+
+      E.busy = true; E.phase = 'photos'; E.err = null;
+      E.progress = { done: 0, total: n };
+      paint();
+
+      M.attachProductImages({
+        scope: ctx.scope, db: ctx.db, media: mediaModule(), storage: ctx.storage,
+        id: res.id, files: _picked,
+        onProgress: function (d, t) {
+          if (S.destroyed || !S.editor) return;
+          S.editor.progress = { done: d, total: t };
+          paint();
+        },
+      }).then(function (r) {
+        if (S.destroyed) return;
+        var count = (r && r.urls && r.urls.length) || n;
+        finish(r && r.complete === false
+          ? (count === 1 ? 'The photo is on your product but has not reached the till yet.'
+                         : 'The photos are on your product but have not reached the till yet.')
+          : (count === 1 ? 'Photo added.' : count + ' photos added.'));
+      }).catch(function (e) {
+        if (S.destroyed) return;
+        finish('The photos could not be uploaded (' + ((e && e.message) || 'upload failed') +
+               ') — open Photos on the product to try again.');
+      });
     }
 
     function submit () {
@@ -814,6 +906,9 @@
 
       run.then(done(function (res) {
         var mode = E.mode;
+        /* Photos chosen in the wizard upload against the id the writer just returned. The
+           sheet stays open so the merchant watches progress instead of meeting a pause. */
+        if (mode === 'create' && _picked.length && res && res.id) return attachAfterCreate(res);
         S.editor = null;
         if (mode === 'create') reportCreate(res || {});
         else if (mode === 'edit') say('Changes saved.');
@@ -873,9 +968,15 @@
     var _originals = [];
     var _previewUrls = [];
 
+    /* Photos are chosen in TWO places now: the per-product sheet, and the create wizard.
+       In the wizard nothing is uploaded while choosing — the Storage path needs a product
+       id that does not exist yet — so the files are held and sent once the product is
+       written. Everything else (validation, AI editing, undo) is the same code. */
+    function picksPhotos (E) { return !!E && (E.mode === 'photos' || E.mode === 'create'); }
+
     function onFiles (fileList) {
       var E = S.editor;
-      if (!E || E.mode !== 'photos') return;
+      if (!picksPhotos(E)) return;
       var M;
       try { M = mediaModule(); } catch (e) { E.err = e.message; return paint(); }
 
@@ -993,7 +1094,7 @@
 
     async function applyAiTool (index, toolId) {
       var E = S.editor;
-      if (!E || E.mode !== 'photos') return;
+      if (!picksPhotos(E)) return;
       var tool = null;
       AI_TOOLS.forEach(function (t) { if (t.id === toolId) tool = t; });
       var file = _picked[index];
@@ -1102,8 +1203,12 @@
              no `capture` attribute — on iOS `capture` forces the camera and takes
              away the merchant's photo library, which is where their product
              pictures already are. */
-          '<input class="pr-i" type="file" id="pf-photos" data-pf="photos" ' +
+          '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
             'accept="' + esc(accept) + '" multiple>' +
+          '<label class="pr-pickbtn" for="pf-photos">📷 ' +
+            (_picked.length
+              ? esc('Choose different photo' + (_picked.length === 1 ? '' : 's'))
+              : 'Choose photos') + '</label>' +
           '<div class="pr-note">JPEG, PNG, WebP, GIF or AVIF, up to 15 MB each. ' +
           'Large photos are shrunk before upload.</div></div>' +
         chosen + progress +
@@ -1115,6 +1220,46 @@
           '<button class="pr-save" data-pr="submit-photos"' + (E.busy ? ' disabled' : '') + '>' +
             (E.busy ? 'Uploading…' : 'Upload') + '</button>' +
         '</div></div></div>';
+    }
+
+    /* THE WIZARD'S PHOTO STEP. Identical machinery to the per-product sheet — the same
+       validation, the same AI tools, the same undo — but no upload happens here: the
+       Storage path is product-images/{sellerUid}/{productId}/{i}.jpg and there is no id
+       until the product is written. The files are held and sent immediately afterwards,
+       so the merchant adds a product WITH its photos in one pass.
+
+       Nothing here claims a photo is saved. The only success message comes after Storage
+       has actually returned addresses. */
+    function createPhotosHTML () {
+      var E = S.editor;
+      var M = (typeof window !== 'undefined') && window.SokoniMerchantMedia;
+      var accept = (M && M.accept) || 'image/*';
+      var rejected = (E.rejected && E.rejected.length)
+        ? '<div class="pr-block">' + E.rejected.map(function (r) {
+            return esc((r.name ? r.name + ': ' : '') + r.reason);
+          }).join('<br>') + '</div>'
+        : '';
+      var prog = (E.phase === 'photos' && E.progress)
+        ? '<div class="pr-note">Uploading photo ' + E.progress.done + ' of ' + E.progress.total + '…</div>'
+        : '';
+      return '<div class="pr-sec">Photos</div>' +
+        '<div class="pr-f"><label class="pr-l" for="pf-photos">Add photos</label>' +
+          /* No `capture` attribute: on iOS it forces the camera and takes away the photo
+             library, which is where a merchant's product pictures already are. */
+          '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
+            'accept="' + esc(accept) + '" multiple>' +
+          '<label class="pr-pickbtn" for="pf-photos">📷 ' +
+            (_picked.length
+              ? esc('Choose different photo' + (_picked.length === 1 ? '' : 's'))
+              : 'Choose photos') + '</label>' +
+          '<div class="pr-note">Optional — a product sells without one. JPEG, PNG, WebP, GIF ' +
+          'or AVIF, up to 15 MB each; large photos are shrunk. They upload as soon as the ' +
+          'product is saved.</div></div>' +
+        rejected + pickedHTML() +
+        (_picked.length ? '<div class="pr-note">' + _picked.length +
+          (_picked.length === 1 ? ' photo will be uploaded' : ' photos will be uploaded') +
+          ' when you tap Add product.</div>' : '') +
+        prog;
     }
 
     function fld (key, label, attrs, val, note) {
@@ -1521,7 +1666,9 @@
             opt('active', 'Active — on sale', p.status || 'active') +
             opt('draft', 'Draft — hidden', p.status || 'active') +
           '</select>' +
-          '<div class="pr-note">Photos are added separately. A product sells without one.</div></div>' +
+          (creating ? '' : '<div class="pr-note">Photos are added separately. A product sells without one.</div>') +
+          '</div>' +
+        (creating ? createPhotosHTML() : '') +
         (E.err ? '<div class="pr-err">' + esc(E.err) + '</div>' : '') +
         '<div class="pr-foot">' +
           '<button class="pr-cancel" data-pr="close">Cancel</button>' +

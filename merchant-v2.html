@@ -258,10 +258,19 @@ a{color:inherit;text-decoration:none}
    untouched. */
 .panel.show.panel-scroll{
   display:flex; flex-direction:column;
+  /* The module is mounted INTO this element, so everything it renders is a flex item —
+     and a flex item shrinks. With a definite height and content taller than it, the short
+     rows were crushed: the Products filter chips measured 4px tall while the chip inside
+     them was 20px, so they spilled out under the next row and read as one control
+     overlapping another. Rows keep their natural height; the panel scrolls instead.
+     A module that fills the panel (height:100%, or flex:1 with a 0 basis) still fills it:
+     this removes SHRINK, not GROW. */
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
   height:calc(100vh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
   height:calc(100dvh - var(--header-h) - var(--safe-top) - var(--bnav-h) - var(--safe-bot));
   min-height:0;
 }
+.panel.show.panel-scroll > *{ flex-shrink:0; }
 /* An iframe module fills the viewport minus the chrome. It is the ONLY thing that
    gets a fixed height, because it hosts its own scrolling document. */
 .frame-wrap{
