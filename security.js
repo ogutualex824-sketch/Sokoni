@@ -785,15 +785,25 @@ const SokoniSecurity = (() => {
              Same content, same controls — only the footprint changes. */
           "<div style='width:100%;max-width:400px;box-sizing:border-box;pointer-events:auto;",
             "background:#0d0d0d;border:1px solid rgba(113,255,0,0.22);border-radius:18px;",
-            (_nonBlocking
-              ? "padding:14px 16px;max-height:32vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
-              : "padding:22px 20px;"),
+            /* THE MERCHANT CONSOLE IS NOT A LOGIN FORM. The auth-page sheet is 32vh, which
+               is fine over a short form and is a SLAB over a working console: measured at
+               390x844 it painted #0d0d0d across 366x270 — 35% of the screen, anchored to the
+               bottom, with the page still scrolling above it. Reported repeatedly as "a black
+               layer covering the page from the bottom upwards", and it was.
+
+               Consent is still required and still one tap away; it just does not take a third
+               of the merchant's screen to ask. Compact padding and a hard cap keep it a BAR. */
+            (_isMerchantShell
+              ? "padding:10px 12px;max-height:19vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
+              : _nonBlocking
+                ? "padding:14px 16px;max-height:32vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
+                : "padding:22px 20px;"),
             "box-shadow:0 20px 60px rgba(0,0,0,0.7);'>",
 
-            "<div id='_sokoniPrivacyTitle' style='font-size:16px;font-weight:800;color:white;margin-bottom:8px;'>",
+            "<div id='_sokoniPrivacyTitle' style='font-size:" + (_isMerchantShell ? '14' : '16') + "px;font-weight:800;color:white;margin-bottom:" + (_isMerchantShell ? '4' : '8') + "px;'>",
               "🍪 Privacy &amp; Cookies</div>",
 
-            "<div style='font-size:13px;line-height:1.6;color:rgba(255,255,255,0.6);margin-bottom:18px;'>",
+            "<div style='font-size:" + (_isMerchantShell ? '11.5' : '13') + "px;line-height:" + (_isMerchantShell ? '1.45' : '1.6') + ";color:rgba(255,255,255,0.6);margin-bottom:" + (_isMerchantShell ? '10' : '18') + "px;'>",
               /* "By continuing you accept" was implied consent — it claimed an
                  answer the user had not given, and it is now simply untrue: there
                  is a Reject button and continuing is not an answer. */
