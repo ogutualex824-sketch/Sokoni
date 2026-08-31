@@ -35,6 +35,23 @@
     /* ── Delivery cards ── */
     .sd-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; margin-bottom: 12px; }
     .sd-card:hover { border-color: rgba(113,255,0,0.22); }
+
+    /* ── RIDER ROSTER, IN TWO GROUPS ───────────────────────────────────────────
+       Your team and the wider network are different relationships: you dispatch one
+       and merely request the other, so they are not one undifferentiated list. */
+    .sd-rgroup { margin-bottom: 20px; }
+    .sd-rhead { display: flex; align-items: baseline; gap: 9px; padding: 2px 0 3px; }
+    .sd-rtitle { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .09em; }
+    .sd-rhead.store .sd-rtitle { color: #71ff00; }
+    .sd-rhead.net   .sd-rtitle { color: #64b4ff; }
+    .sd-rcount { font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.45);
+                 border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 1px 8px; }
+    .sd-rsub { font-size: 11.5px; color: rgba(255,255,255,0.38); margin: 0 0 10px; line-height: 1.5; }
+    .sd-rgroup .sd-card { margin-bottom: 8px; }
+    .sd-rhead.store + .sd-rsub + .sd-card,
+    .sd-rgroup:first-child .sd-card { border-color: rgba(113,255,0,0.16); }
+    .sd-rnote { font-size: 12px; color: rgba(255,255,255,0.45); padding: 11px 13px;
+                border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); line-height: 1.55; }
     .sd-card-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .sd-card-id { font-weight: 800; color: white; font-size: 14px; }
     .sd-card-time { font-size: 11px; color: rgba(255,255,255,0.35); }
@@ -196,7 +213,7 @@
         ['active','riders','pending','history','failed','analytics'].forEach(function (t) {
           document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
         });
-        if (tab === 'riders'    && !_unsubRiders)   _loadRiders();
+        if (tab === 'riders'    && !_unsubRiders)   { _loadRiders(); _loadStoreRiders(); }
         if (tab === 'pending'   && !_unsubPending)  _loadPending();
         if (tab === 'history'   && !_unsubHistory)  _loadHistory();
         if (tab === 'failed'    && !_unsubFailed)   _loadFailed();
@@ -223,6 +240,50 @@
      which belongs to another shop. */
   var _unsubRiders = null;
   var _riders = [];
+
+  /* ══ WHOSE RIDER IS THIS? ═══════════════════════════════════════════════════
+     A rider is a STORE rider when this shop has classified them in shopEmployees, and
+     a SOKONI rider otherwise. That is the same rule the server applies —
+     delivery-marketplace derives riderType as shopIds.has(riderId) ? shop : sokoni — so
+     the two agree by construction rather than by coincidence.
+
+     THIS IS PRESENTATION ONLY. It grants nothing. Network eligibility lives in
+     drivers/{uid}, which is CF-only (allow write: if false), and a shop owner cannot
+     manufacture a network rider by classifying someone here. The roster below still
+     shows only riders the pool already contains.
+
+     The lookup FAILS CLOSED: on error the set stays empty and everyone is shown under
+     SOKONI. A rider mislabelled as network is cosmetic; inventing a store rider would
+     imply a relationship that does not exist. */
+  var _storeRiderIds = null;      /* null = not answered yet */
+  var _storeRidersFailed = false;
+
+  function _loadStoreRiders () {
+    if (!_sellerUid || _storeRiderIds) return;
+    firebase.firestore()
+      .collection('shopEmployees')
+      .where('shopOwnerId', '==', _sellerUid)
+      .limit(200).get()
+      .then(function (snap) {
+        var set = {};
+        snap.docs.forEach(function (d) {
+          var e = d.data() || {};
+          var st = String(e.status || '').toLowerCase();
+          /* An absent status predates the field and counts as active; anything
+             explicitly not active does not. Mirrors the server predicate. */
+          var live = st ? ['active','approved','enabled'].indexOf(st) > -1 : e.active !== false;
+          if (live) set[d.id] = 1;
+        });
+        _storeRiderIds = set;
+        if (_riders.length) _renderRiders();   /* regroup what is already on screen */
+      })
+      .catch(function (err) {
+        console.warn('[delivery-hub] store roster unavailable:', err && (err.code || err.message));
+        _storeRiderIds = {};
+        _storeRidersFailed = true;
+        if (_riders.length) _renderRiders();
+      });
+  }
 
   function _loadRiders() {
     if (_unsubRiders) _unsubRiders();
@@ -269,7 +330,33 @@
       if (rid) mine[rid] = d;
     });
 
-    el.innerHTML = _riders.map(function (r) {
+    /* Grouped before rendering. While the classifier is still answering, everyone sits
+       under SOKONI rather than flickering between sections. */
+    var known = _storeRiderIds || {};
+    var store = [], network = [];
+    _riders.forEach(function (r) { (known[r.uid] ? store : network).push(r); });
+
+    function section (title, note, rows, tone) {
+      if (!rows.length) return '';
+      return '<div class="sd-rgroup">' +
+        '<div class="sd-rhead ' + tone + '">' +
+          '<span class="sd-rtitle">' + title + '</span>' +
+          '<span class="sd-rcount">' + rows.length + '</span>' +
+        '</div>' +
+        '<div class="sd-rsub">' + note + '</div>' +
+        rows.map(riderCard).join('') +
+      '</div>';
+    }
+
+    el.innerHTML =
+      section('Your store riders', 'On your team. You dispatch them directly.', store, 'store') +
+      section('SOKONI riders', 'The wider network. Availability is theirs to set.', network, 'net') +
+      (_storeRidersFailed
+        ? '<div class="sd-rnote">We could not check which riders are on your team, so ' +
+          'everyone is listed under SOKONI. Your deliveries are unaffected.</div>'
+        : '');
+
+    function riderCard (r) {
       var job = mine[r.uid];
       var busyElsewhere = !job && (r.currentDeliveryId || r.onTrip === true);
       var state = job ? 'On your delivery' : (busyElsewhere ? 'On another delivery' : 'Available');
@@ -294,7 +381,7 @@
         (job ? '<a class="btn-track" style="flex:0 0 auto;padding:8px 14px;" target="_blank" rel="noopener" ' +
                'href="delivery-tracking.html?ref=' + encodeURIComponent(job.id) + '">Track</a>' : '') +
       '</div>';
-    }).join('');
+    }
   }
 
   /* ══ THREE STATES, NOT TWO ═══════════════════════════════════════════════════
