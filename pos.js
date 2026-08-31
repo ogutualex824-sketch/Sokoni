@@ -1567,6 +1567,22 @@ const SPos = (function () {
       if (state.settings.autoPrint || payInfo.method === 'card') {
         if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
           PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
+            .then((r) => {
+              /* THE SALE IS DONE EITHER WAY — settlement is decoupled and must never be held
+                 up by a printer. But a receipt that did not come out has to be SAID, or the
+                 cashier hands the customer nothing and believes the till printed.
+                 The promise RESOLVING is not success: it resolves with the outcome. */
+              const st = (r && r.status) || '';
+              if (st === 'failed') {
+                toast('Sale completed — but the receipt did NOT print. Reprint from Orders.', 'error');
+              } else if (st === 'queued_offline') {
+                toast('Sale completed — no printer connected, receipt queued.', 'warn');
+              } else if (st === 'unknown') {
+                /* NEVER auto-reprint here: the job may already be on paper, and a duplicate
+                   receipt for one sale is its own defect. The cashier decides. */
+                toast('Sale completed — the printer did not confirm. Check the paper before reprinting.', 'warn');
+              }
+            })
             .catch(() => { /* service already falls back internally; last-ditch guard below */
               if (window.SokoniPrint) SokoniPrint.print('receipt', receiptData).catch(() => window.PosPrinter && PosPrinter.printBrowser(receiptData));
             });

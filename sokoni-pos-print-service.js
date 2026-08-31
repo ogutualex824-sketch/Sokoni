@@ -1418,12 +1418,51 @@ class PosPrintService {
      is proven. It never throws — a failed receipt must never interrupt order completion.
      The Job ID is derived from the receipt number, so a retry can never duplicate a
      sale (printing is already decoupled from settlement, which happened before this). */
+  /* ══ DELEGATE TO THE SHELL, AND WAIT FOR THE ANSWER ═══════════════════════════
+     This used to post the message and return status:'routed_to_shell' immediately —
+     a claimed success. postMessage() returning proves only that the browser accepted
+     the message; it says nothing about whether a printer existed, accepted the job, or
+     produced paper. A queued receipt and a printed one were indistinguishable to the
+     cashier.
+
+     Now the shell replies with the real outcome, keyed by jobId, and this waits for it.
+
+     A TIMEOUT IS NOT A FAILURE AND NOT A SUCCESS. It resolves 'unknown' and is NEVER
+     retried automatically: the job may well be on paper already, and reprinting a
+     receipt for a completed sale is its own defect. The cashier is told, and decides. */
+  _printViaShell (order) {
+    const jobId = 'shell:' + (receiptIdOf(order) || Date.now()) + ':' + Math.random().toString(36).slice(2, 8);
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (r) => {
+        if (settled) return;
+        settled = true;
+        try { window.removeEventListener('message', onMsg); } catch (_) {}
+        try { clearTimeout(timer); } catch (_) {}
+        resolve(r);
+      };
+      const onMsg = (e) => {
+        const d = (e && e.data) || {};
+        if (!d.__sokoniModulePrintResult || d.jobId !== jobId) return;
+        done({ jobId, status: d.status || 'unknown', error: d.error || null });
+      };
+      try { window.addEventListener('message', onMsg); } catch (_) {}
+      const timer = setTimeout(() => {
+        done({ jobId, status: 'unknown', error: 'The printer did not answer in time.' });
+      }, 20000);
+      try {
+        window.parent.postMessage({ __sokoniModulePrint: true, jobId, receipt: order }, location.origin);
+      } catch (err) {
+        done({ jobId, status: 'failed', error: (err && err.message) || 'Could not reach the printer.' });
+      }
+    });
+  }
+
   async printReceipt (order = {}, context = {}) {
     /* Inside the Merchant Shell, route the receipt UP to the shell-owned printer (single host)
        instead of printing from this hosted module. */
     if (typeof window !== 'undefined' && window.parent !== window && !context.__fromShell) {
-      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
-      return { jobId: 'shell:' + (receiptIdOf(order) || Date.now()), status: 'routed_to_shell' };
+      return this._printViaShell(order);
     }
     const jobId = 'rcpt_' + String(receiptIdOf(order) || order.id || order.transactionId || Date.now());
     const _now  = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -1512,8 +1551,7 @@ class PosPrintService {
   async smartPrint (order = {}, context = {}) {
     /* In the shell, hand off to the shell-owned printer immediately — no local connect. */
     if (typeof window !== 'undefined' && window.parent !== window) {
-      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
-      return { status: 'routed_to_shell' };
+      return this._printViaShell(order);
     }
     const eng = window.SokoniPrinter || window.PrinterManager;
     const isUp = () => !!(eng && eng.connected);

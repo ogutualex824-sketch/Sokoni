@@ -946,18 +946,41 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        it had been routed. Handled BEFORE the __sokoniPos gate because it does not carry
        that flag. */
     if (d.__sokoniModulePrint && d.receipt) {
-      (function (rcpt) {
+      /* THE MODULE IS WAITING FOR AN ANSWER. It used to get none: the framed POS posted
+         this message and immediately returned status:'routed_to_shell' to the cashier — a
+         CLAIMED success. A receipt that never printed, or queued because no printer was
+         connected, looked identical to one that came out on paper.
+
+         The outcome is now sent BACK to the frame that asked, keyed by its jobId, so the
+         cashier is told what actually happened. The shell's own toast stays: the merchant
+         may be looking at either surface. */
+      (function (rcpt, jobId, src) {
+        var reply = function (status, error) {
+          if (!src || !jobId) return;
+          try {
+            src.postMessage({ __sokoniModulePrintResult: true, jobId: jobId,
+                              status: status, error: error || null }, location.origin);
+          } catch (_) {}
+        };
         var svc = window.PosPrintService;
-        if (!svc || !svc.printReceipt) { toast('No printer service is loaded.'); return; }
+        if (!svc || !svc.printReceipt) {
+          toast('No printer service is loaded.');
+          return reply('failed', 'No printer service is loaded.');
+        }
         /* __fromShell stops printReceipt bouncing it straight back up. */
         Promise.resolve(svc.printReceipt(rcpt, { __fromShell: true }))
           .then(function (r) {
             var st = (r && (r.status || (r.queued ? 'queued_offline' : ''))) || '';
             if (st === 'failed')             toast('The receipt did not print.');
             else if (st === 'queued_offline') toast('No printer connected — receipt queued.');
+            reply(st || 'printed', null);
           })
-          .catch(function (err) { toast('Could not print: ' + ((err && err.message) || err)); });
-      })(d.receipt);
+          .catch(function (err) {
+            var m = (err && err.message) || String(err);
+            toast('Could not print: ' + m);
+            reply('failed', m);
+          });
+      })(d.receipt, d.jobId, e.source);
       return;
     }
 

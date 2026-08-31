@@ -3693,6 +3693,28 @@ const SETUP_TASKS = [
 ];
 
 /* Render the setup guide from authoritative backend state. */
+/* ══ THE PRINTER THE SHELL OWNS ═══════════════════════════════════════════════
+   Till Setup was the only POS surface that did not listen for this. pos.html and
+   pos-printer-setup.html both do — so a merchant could connect the P58E, see it
+   reported as connected everywhere else, and still be sent back to "Set up hardware"
+   by the checklist, because Setup had no idea a printer existed.
+
+   This is the SHELL's state, not a local pairing flag: the shell refuses to be
+   downgraded by a framed module and its own engine events are the only authority for
+   a disconnect. So it is an application-level connection, which is what may mark the
+   hardware step — Bluetooth pairing alone must not. */
+var _shellPrinter = { connected: false, name: null };
+try {
+  window.addEventListener('message', function (e) {
+    var d = (e && e.data) || {};
+    if (!d.__sokoniPrinterState || !d.state) return;
+    var was = _shellPrinter.connected;
+    _shellPrinter = { connected: !!d.state.connected, name: d.state.name || null };
+    /* Repaint only on a real change, so the checklist does not churn on every tick. */
+    if (was !== _shellPrinter.connected && _setupStatus) _paintSetupGuide(_setupStatus);
+  });
+} catch (_) {}
+
 async function renderSetupChecklist() {
   const wrap  = document.getElementById('setup-checklist-wrap');
   const list  = document.getElementById('setup-checklist');
@@ -3736,7 +3758,15 @@ function _paintSetupGuide(s) {
     let actions = '';
     if (!done && !t.fixed) {
       const btns = [];
-      if (t.primary) {
+      /* A CONNECTED PRINTER IS NOT A REASON TO OPEN THE PRINTER WIZARD. When the shell
+         reports a live connection, the hardware step offers to record THAT instead of
+         sending the merchant back to configure a printer they have already connected.
+         Still an explicit tap: the merchant confirms this is the till's printer. */
+      if (t.key === 'hardwareConnected' && _shellPrinter.connected) {
+        btns.push(`<button class="setup-act setup-act-primary" data-mark="hardwareConnected">` +
+          esc(_shellPrinter.name ? ('Use ' + _shellPrinter.name) : 'Printer connected — use it') +
+          `</button>`);
+      } else if (t.primary) {
         const attr = t.primary.mark ? `data-mark="${t.primary.mark}"` : `data-href="${t.primary.href}"`;
         btns.push(`<button class="setup-act setup-act-primary" ${attr}>${esc(t.primary.text)}</button>`);
       }
