@@ -332,6 +332,10 @@ window.SokoniMiniShop = (() => {
     <div class="ms-product-name">${_esc(p.name)}</div>
     <div class="ms-product-price">KES ${price.toLocaleString()}${orig > price ? '<span class="ms-product-original-price"> KES ' + orig.toLocaleString() + '</span>' : ''}</div>
     ${p.rating ? '<div class="ms-prod-rating">' + _stars(p.rating) + ' <span class="ms-prod-rating-count">(' + (p.reviewCount || 0) + ')</span></div>' : ''}
+    <button type="button" class="ms-add-btn"
+            aria-label="Add ${_esc(p.name)} to cart"
+            onclick="event.stopPropagation();SokoniMiniShop.addToCart('${_esc(p.id)}')">
+      &#128722; Add to cart</button>
   </div>
 </div>`;
   }
@@ -1415,6 +1419,44 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
   }
 
   // ─── Cart Stub ────────────────────────────────────────────────────────────────
+  /* ══ THE STOREFRONT'S OWN CART INDICATOR ═══════════════════════════════════
+     minishop.html sets data-no-header, so it carries none of the marketplace chrome
+     — deliberately: a seller's shop should not wear SOKONI's nav. The consequence was
+     that adding to cart produced a toast and nothing else: no count, and no way to
+     reach checkout from the shop page.
+
+     So the MiniShop gets its OWN indicator over the SAME cart. It reads
+     SokoniCart.units() and re-reads on sokoni:cart-changed — the event the cart already
+     dispatches after persisting — so there is no polling and no second source of truth
+     about what is in the cart.
+
+     Hidden at zero rather than showing 0: an empty cart needs no control. */
+  function _cartPill() {
+    var el = document.getElementById('msCartPill');
+    if (!el) {
+      el = document.createElement('button');
+      el.id = 'msCartPill';
+      el.type = 'button';
+      el.className = 'ms-cart-pill';
+      el.setAttribute('aria-label', 'Open cart');
+      el.addEventListener('click', openCart);
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function _refreshCartPill() {
+    var c = (typeof window !== 'undefined') && window.SokoniCart;
+    var el = _cartPill();
+    var n = (c && typeof c.units === 'function') ? c.units() : 0;
+    el.innerHTML = '&#128722; <span class="ms-cart-pill-n">' + n + '</span>';
+    el.hidden = !(n > 0);
+  }
+  try {
+    window.addEventListener('sokoni:cart-changed', _refreshCartPill);
+    document.addEventListener('DOMContentLoaded', _refreshCartPill);
+    if (document.readyState !== 'loading') setTimeout(_refreshCartPill, 0);
+  } catch (_) {}
+
   function openCart() {
     if (typeof SokoniCart !== 'undefined' && SokoniCart.open) { SokoniCart.open(); return; }
     location.href = 'checkout.html?shopId=' + (_state.shopId || '');
@@ -1529,6 +1571,57 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
   }
 
   // ─── v3.0: Wishlist ──────────────────────────────────────────────────────────
+  /* ══ ADD TO CART ═══════════════════════════════════════════════════════════
+     Routed through the SAME SokoniCart every other surface uses. The MiniShop does
+     not get a cart of its own: one contract, one badge, one checkout.
+
+     The product object carries a price because the CART displays one, but nothing
+     here asserts an amount to the server — checkout sends productId and qty only,
+     and createCheckoutSession recomputes from the catalogue. That boundary is
+     certified elsewhere and this must not weaken it.
+
+     Seller attribution comes from the product record itself (getMinishopPublic
+     returns the canonical products document), so a MiniShop line is attributed to
+     its own shop even when the cart already holds another sellers goods.
+
+     A second tap is a NO-OP, matching the marketplace card: double taps used to
+     produce duplicate rows. */
+  function addToCart(productId) {
+    const p = _state.productsById && _state.productsById[productId];
+    if (!p) { _toast("That product is still loading — try again in a moment.", "error"); return; }
+
+    const cart = (typeof window !== "undefined") && window.SokoniCart;
+    /* Fails closed. A button that appears to work while storing nothing is worse
+       than one that admits it cannot. */
+    if (!cart || typeof cart.add !== "function") {
+      _toast("Cart is still loading — try again in a moment.", "error");
+      return;
+    }
+
+    if (cart.has(String(p.id))) { _toast("Already in cart", "info"); return; }
+
+    const line = {
+      id:        String(p.id),
+      name:      p.name || "Product",
+      price:     Number(p.price) || 0,
+      image:     p.imageUrl || (p.images && p.images[0]) || null,
+      qty:       1,
+      /* Whose goods these are. Carried from the canonical product record, never
+         inferred from which shop page happened to be open. */
+      sellerId:  p.sellerUid || p.sellerId || null,
+      sellerUid: p.sellerUid || p.sellerId || null,
+      shopId:    p.shopId || _state.shopId || null,
+      shopName:  (_state.shop && _state.shop.name) || null,
+      category:  p.category || null,
+    };
+
+    /* The return value is CHECKED. Reporting success regardless is how a full quota
+       tells a shopper their item was saved when nothing was written. */
+    if (!cart.add(line)) { _toast("Couldn't add to cart — please try again", "error"); return; }
+    _toast("Added to cart", "success");
+    try { _refreshCartPill(); } catch (_) {}
+  }
+
   async function toggleWishlist(productId) {
     const user = firebase.auth().currentUser;
     if (!user) { _toast('Sign in to save items', 'info'); return; }
@@ -1638,6 +1731,7 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     _ctaAction,
     _bindAdminDom,
     loadPromotions,
+    addToCart,
     toggleWishlist,
     shareProduct,
     loadAnnouncements,

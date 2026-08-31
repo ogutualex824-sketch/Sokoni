@@ -129,17 +129,28 @@ const PROBE = `(function () {
     });
 
     head('2 · every route, mounted');
+    /* THE CONTRACT IS "MUST NOT STRAND", NOT "MUST BE INSTANT". .frame-load legitimately
+       covers the panel WHILE a module loads; the defect was that it never came off. The
+       bounded reveal fires at 8s, so probing at 1.8s failed a slow frame that was behaving
+       correctly — which it did, intermittently, on stories. Poll past the reveal window
+       and fail only if the cover SURVIVES it. */
+    const REVEAL_MS = 8000, GRACE = 2500;
     for (const r of ROUTES) {
       await page.evaluate((id) => { location.hash = id; }, r);
-      await page.waitForTimeout(1800);
-      const shell = await page.evaluate(PROBE);
-      let frame = [];
-      const frames = page.frames().filter((f) => f !== page.mainFrame());
-      if (frames.length) {
-        try { frame = await frames[frames.length - 1].evaluate(PROBE); } catch (_) { frame = []; }
+      let found = [], waited = 0;
+      while (waited <= REVEAL_MS + GRACE) {
+        await page.waitForTimeout(700); waited += 700;
+        const shell = await page.evaluate(PROBE);
+        let frame = [];
+        const frames = page.frames().filter((f) => f !== page.mainFrame());
+        if (frames.length) {
+          try { frame = await frames[frames.length - 1].evaluate(PROBE); } catch (_) { frame = []; }
+        }
+        found = shell.concat(frame);
+        if (found.length === 0) break;          /* revealed — done */
       }
-      const found = shell.concat(frame);
-      ck(r + ': no full-viewport blocker after init', found.length === 0, found.join(' | ') || 'clear');
+      ck(r + ': no full-viewport blocker survives the reveal window',
+         found.length === 0, found.join(' | ') || 'clear in ' + waited + 'ms');
     }
   } finally {
     try { await br.close(); } catch (_) {}
