@@ -2343,6 +2343,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     onToast: toast }; } },
     messages:   { global: 'SokoniMerchantMessagesUI',  ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
+                    /* EVERY message operation goes through one callable: the module sends
+                       { op, ...payload } and messagesDispatch routes it. Without this the
+                       module refused at its own guard — "merchant messages: dispatch is
+                       required" — so the inbox never loaded at all. */
+                    dispatch: _callable('messagesDispatch'),
                     db: _mdb, onToast: toast }; } },
     customers:  { global: 'SokoniMerchantCustomersUI', ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin, db: _mdb,

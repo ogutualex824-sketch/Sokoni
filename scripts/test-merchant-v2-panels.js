@@ -107,6 +107,19 @@ ck('no an-* lookup is document-wide any more',
    SRC.indexOf("document.getElementById('an-") === -1,
    'a single missed call reintroduces the defect for that one surface');
 
+head('2b · all THREE routes sharing the renderer were affected');
+/* Reports was reported blank alongside Revenue, and for the same reason: nativePanel()
+   caches a DISTINCT element per route, so analytics | revenue | reports each build their
+   own an-body with the same id, and only the first was ever found. */
+ck('nativePanel keys by route, so the three panels are distinct',
+   SRC.indexOf("var k = 'native:' + id;") > -1,
+   'if they shared one element there would have been no duplicate id and no defect');
+ck('all three routes go through the one renderer',
+   /id === 'analytics' || id === 'revenue' || id === 'reports'/.test(SRC));
+ck('CONTROL the shared renderer is still SHARED, not forked per route',
+   (SRC.match(/function renderAnalytics/g) || []).length === 1,
+   'two implementations would be two sets of numbers');
+
 head('3 · a module that throws must SAY so, never leave an empty panel');
 const rm = grab('renderModule');
 ck('renderModule was extracted', !!rm, rm ? rm.length + ' chars' : 'NOT FOUND');

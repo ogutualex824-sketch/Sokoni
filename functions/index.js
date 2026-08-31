@@ -5902,6 +5902,138 @@ exports.revokeShopInvite = onCall({}, async (request) => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════
+   SHOP TEAM — the three reads/writes the Staff surface needs.
+
+   The merchant shell called listShopEmployees, listShopInvites and
+   removeShopEmployee. NONE of the three existed, so Staff 404'd on the first
+   call and the client SDK reported it as the opaque code "internal" — which
+   told neither the merchant nor the log anything at all.
+
+   OWNERSHIP IS THE CALLER'S TOKEN, NEVER THE PAYLOAD. The client sends a
+   shopId for its own bookkeeping and it is deliberately ignored here: every
+   query binds shopOwnerId to request.auth.uid, so a forged shopId can only
+   ever return the caller's own team.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* merchant-identity.js decides employment from `status`, treating an ABSENT
+   status as active for records that predate the field. Revocation must therefore
+   write status, not only `active` — setting active:false alone would leave the
+   authorisation path untouched while the UI showed the person as removed. */
+const _SHOP_EMP_REVOKED = "revoked";
+function _shopEmpActive(e) {
+  const st = String((e && e.status) || "").toLowerCase();
+  if (!st) return e && e.active !== false;
+  return ["active", "approved", "enabled"].indexOf(st) > -1;
+}
+function _ms(v) {
+  try {
+    if (!v) return null;
+    if (typeof v.toMillis === "function") return v.toMillis();
+    if (v instanceof Date) return v.getTime();
+    if (typeof v === "number") return v;
+  } catch (_) {}
+  return null;
+}
+
+exports.listShopEmployees = onCall({}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const owner = request.auth.uid;
+
+  const snap = await db.collection("shopEmployees")
+    .where("shopOwnerId", "==", owner)
+    .limit(200).get();
+
+  const employees = snap.docs.map((d) => {
+    const e = d.data() || {};
+    return {
+      uid:      d.id,
+      name:     e.name  || "",
+      email:    e.email || "",
+      role:     e.role  || null,
+      shopName: e.shopName || null,
+      active:   _shopEmpActive(e),
+      status:   e.status || null,
+      joinedAt: _ms(e.joinedAt),
+    };
+  }).filter((e) => e.active);   /* a revoked record is not a team member */
+
+  return { shopId: owner, employees, count: employees.length };
+});
+
+exports.listShopInvites = onCall({}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const owner = request.auth.uid;
+
+  const snap = await db.collection("shopInvites")
+    .where("shopOwnerId", "==", owner)
+    .where("status", "==", "pending")
+    .limit(100).get();
+
+  const now = Date.now();
+  let staleCount = 0;
+  const invites = snap.docs.map((d) => {
+    const v = d.data() || {};
+    const expiresAt = _ms(v.expiresAt);
+    /* An expired invite is still PENDING in the record — acceptShopInvite is what
+       refuses it. Reporting the count separately lets the surface say so instead of
+       showing a live-looking link that cannot be accepted. */
+    const expired = expiresAt !== null && expiresAt < now;
+    if (expired) staleCount++;
+    return {
+      token:     d.id,
+      email:     v.email || "",
+      role:      v.role  || null,
+      status:    v.status || "pending",
+      expired:   expired,
+      createdAt: _ms(v.createdAt),
+      expiresAt: expiresAt,
+    };
+  });
+
+  return { shopId: owner, invites, count: invites.length, staleCount };
+});
+
+exports.removeShopEmployee = onCall({}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const owner = request.auth.uid;
+  const uid = String((request.data && request.data.uid) || "").trim();
+  if (!uid) throw new HttpsError("invalid-argument", "uid is required.");
+
+  const ref  = db.collection("shopEmployees").doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "That person is not on your team.");
+  if ((snap.data() || {}).shopOwnerId !== owner) {
+    throw new HttpsError("permission-denied", "You can only remove your own team members.");
+  }
+
+  /* status is what merchant-identity.js reads, so it is what actually revokes the
+     authorisation. active:false is kept in step for anything reading that instead. */
+  await ref.update({
+    status:    _SHOP_EMP_REVOKED,
+    active:    false,
+    removedAt: admin.firestore.FieldValue.serverTimestamp(),
+    removedBy: owner,
+  });
+
+  /* The employment POINTERS on the user are cleared, so nothing still reads as
+     "works at this shop". `role` is deliberately NOT touched: demoting an account
+     is a role decision owned by the role authority, and a shop owner removing a
+     cashier must not be able to change what that person is on the platform.
+     Best-effort — the revocation above is the authoritative half. */
+  try {
+    await db.collection("users").doc(uid).set({
+      employeeRole: admin.firestore.FieldValue.delete(),
+      shopOwnerId:  admin.firestore.FieldValue.delete(),
+      shopName:     admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+  } catch (e) {
+    logger.warn("[removeShopEmployee] pointer cleanup failed", { uid, err: e.message });
+  }
+
+  return { success: true, uid };
+});
+
+/* ══════════════════════════════════════════════════════════════════════
    PDQ TERMINAL PAYMENT CLOUD ADAPTER
    Called by pos-terminals.js CloudAdapter when a Cloud-connected
    terminal (e.g. Yoco, SumUp, iKhokha) is used for card payments.
