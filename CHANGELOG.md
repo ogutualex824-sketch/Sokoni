@@ -1,3 +1,58 @@
+## [2026-08-31] — Products: photos + AI editor in the Add Product wizard; card and panel layout
+
+**Files:** `sokoni-merchant-products.js`, `merchant-v2.html`;
+`scripts/test-merchant-products-wizard-photos.js` (new, 34/0).
+**Database changes:** none. **API changes:** none. **Breaking changes:** none.
+**Re-run unchanged:** product writer 37/0, 2c media 56/0, products native 23/0.
+
+### The wizard
+
+Adding a product and photographing it were two errands: the create form ended with
+*"Photos are added separately"*, because the Storage path is
+`product-images/{sellerUid}/{productId}/{i}.jpg` and there is no id to write to until the
+product exists.
+
+The wizard now chooses and edits photos — same validation, same AI tools (Remove
+background / Enhance / Square crop), same undo as the per-product sheet, behind one shared
+`picksPhotos()` gate rather than a second implementation — holds the files, and uploads
+them the moment the writer returns an id.
+
+**Nothing claims a photo is saved before Storage returns an address.** The product is
+genuinely written by then, so every outcome reports the product FIRST and the photos
+second, in ONE message — two toasts overwrite each other and the mirror-sync caveat must
+not be the one that is lost. A failed upload leaves a real product with no pictures and
+says so, pointing at its Photos action; casting doubt on the product would be the lie.
+
+The native file widget is replaced by a real button: it printed "Choose Files | No file
+chosen" beside a thumbnail already picked, because a repaint rebuilds the input and a
+`FileList` cannot be restored to it. The label reads from `_picked`. The input is clipped,
+not `display:none`, so it stays keyboard reachable.
+
+### The overlap was a SHELL defect, not a Products one
+
+`renderModule` mounts a module INTO the panel, and `.panel.show.panel-scroll` is a
+fixed-height flex **column** — so everything a module renders is a flex item, and a flex
+item shrinks. Measured in a browser: the Products filter chips were **4px** tall while the
+chip inside them was **20px**, so they spilled under the next row and read as the
+"+ Add product" button overlapping them.
+
+Rows now keep their natural height and the panel scrolls. This removes SHRINK, not GROW,
+so a module that fills the panel still fills it, and the definite height stays — without
+it, anything pinned to a module's bottom edge falls below the fold. **This affected every
+module mounted this way, not only Products.**
+
+### The card
+
+The mobile rule promised a thumbnail beside the text but set `display:flex` without
+restating `flex-direction`, and the base rule is `column` — so the thumbnail sat above the
+text with a dead 104px gap beside it. It is now a two-column grid, and the actions moved
+out of the ~200px text column to become a card-level row ("+ Photo" had wrapped, then
+ellipsised to "+ …"). The stock pill no longer stretches: flex items stretch by default,
+which made a tag look like a progress bar.
+
+Measured in a real browser at 390x844 before and after, not asserted from CSS.
+
+---
 ## [2026-08-31] — Shell: two ways a native panel rendered as a blank black surface
 
 **Files:** `merchant-v2.html`; `scripts/test-merchant-v2-panels.js` (new, 17/0).
