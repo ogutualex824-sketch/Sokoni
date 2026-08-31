@@ -537,45 +537,49 @@ exports.autoOnRefundRequest = onDocumentCreated(
     const amount = Number(refund.amount || 0);
 
     if (amount <= (rule.autoApproveBelow || 2000)) {
-      await _db().runTransaction(async tx => {
-        const refSnap = await tx.get(event.data.ref);
-        if (refSnap.data()?.status !== 'pending') return; /* idempotency guard */
+      /* F9 refund-safety (DISARMED): this branch formerly AUTO-CREDITED the buyer's
+         `users.walletBalance` (a display-only field the withdrawal engine does NOT
+         spend — payout reads `wallets.balance`) with a single-sided `ledger` row and
+         NO seller debit, i.e. a second, uncoordinated refund authority that moved
+         money outside the canonical settlement-reversal path. It is disarmed: a small
+         auto-resolved refund now moves NO money here and is routed to the SAME
+         operator queue as a high-value refund, so it is honestly surfaced for
+         authorized execution rather than marked paid. Do NOT re-add a wallet credit
+         here — the canonical seller-debit refund is `order-settlement.handleOrderRefund`
+         (separate, lineage-gated). */
+      await event.data.ref.update({ status: 'under_review' });
 
-        tx.update(event.data.ref, {
-          status: 'approved',
-          processedAt: _ts(),
-          processedBy: 'automation',
-        });
-        if (refund.buyerUid) {
-          const userRef = _db().collection('users').doc(refund.buyerUid);
-          tx.update(userRef, { walletBalance: _inc(amount) });
-          const ledgerRef = _db().collection('ledger').doc();
-          tx.set(ledgerRef, {
-            type: 'refund',
-            credit: amount,
-            debit: 0,
-            userId: refund.buyerUid,
-            refundId: refId,
-            orderId: refund.orderId || null,
-            description: 'Auto-approved refund',
-            createdAt: _ts(),
-          });
-        }
+      const queueId = await _queueException({
+        type: 'auto_refund_pending_execution',
+        priority: 'normal',
+        entityId: refId,
+        entityType: 'refund',
+        title: `Refund pending execution — KES ${amount.toLocaleString()}`,
+        description: `Auto-resolved small refund (KES ${amount.toLocaleString()}) awaiting authorized execution. No funds have been moved.`,
+        recommendation: {
+          action: 'execute_refund',
+          confidence: 0.60,
+          reasoning: 'Auto-resolved below the manual threshold. Execute via the canonical refund path (seller debit + settlement reversal). No wallet credit has been applied.',
+          suggestedAction: `Execute the refund for order ${refund.orderId || 'N/A'} via the canonical refund flow.`,
+        },
+        evidence: [
+          { type: 'refund_request', label: 'Refund', data: { amount, reason: refund.reason, orderId: refund.orderId } },
+        ],
       });
 
       await _logAction({
-        action: 'auto_approve_refund',
+        action: 'queue_auto_refund',
         trigger: 'refund_requested',
         ruleApplied: 'refunds',
         entityId: refId,
         entityType: 'refund',
-        outcome: 'approved',
-        metadata: { amount, buyerUid: refund.buyerUid, reason: refund.reason },
+        outcome: 'queued_for_execution',
+        metadata: { amount, buyerUid: refund.buyerUid, reason: refund.reason, queueId },
       });
 
-      await _notify(refund.buyerUid, 'Refund Approved',
-        `Your refund of KES ${amount.toLocaleString()} has been credited to your SOKONI wallet.`,
-        { refundId: refId, type: 'refund_approved' });
+      await _notify(refund.buyerUid, 'Refund Request Received',
+        `Your refund request of KES ${amount.toLocaleString()} has been received and is being processed. We'll notify you once it is completed.`,
+        { refundId: refId, type: 'refund_pending' });
 
     } else if (amount >= (rule.requireManualAbove || 20000)) {
       await event.data.ref.update({ status: 'under_review' });
