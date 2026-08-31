@@ -126,6 +126,57 @@
       'border-top-color:var(--acc);animation:mcuSpin .7s linear infinite}',
     '@keyframes mcuSpin{to{transform:rotate(360deg)}}',
     '@media (min-width:821px){.mcu-sheet{left:50%;transform:translateX(-50%);width:min(560px,100%)}}',
+
+    /* ── PREMIUM LAYER ────────────────────────────────────────────────────────
+       Appended, so every rule above remains the base and this refines it. Uses only
+       the shell's own tokens, so it inherits the merchant's theme rather than
+       hard-coding a palette beside it. */
+    '.mcu-top{position:sticky;top:0;z-index:5;backdrop-filter:saturate(140%) blur(12px);',
+      '-webkit-backdrop-filter:saturate(140%) blur(12px);background:color-mix(in srgb,var(--panel) 86%,transparent)}',
+    '.mcu-top.is-stuck{box-shadow:0 6px 22px -14px rgba(0,0,0,.85)}',
+    '.mcu-find{transition:border-color .18s ease,background .18s ease}',
+    '.mcu-find:focus-within{border-color:var(--acc-line,rgba(113,255,0,.4));background:rgba(255,255,255,.08)}',
+
+    /* Segment filters, built from what is actually present. */
+    '.mcu-filters{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:2px}',
+    '.mcu-filters::-webkit-scrollbar{display:none}',
+    '.mcu-f{flex:0 0 auto;min-height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);',
+      'background:rgba(255,255,255,.04);color:var(--txt2);font:inherit;font-size:11.5px;font-weight:800;',
+      'letter-spacing:.02em;cursor:pointer;white-space:nowrap;transition:transform .12s ease}',
+    '.mcu-f:active{transform:scale(.96)}',
+    '.mcu-f[aria-pressed="true"]{background:rgba(113,255,0,.13);border-color:rgba(113,255,0,.34);color:var(--acc)}',
+
+    /* Group headers — a merchant scans for a tier, not a row number. */
+    '.mcu-grp{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:8px;',
+      'padding:14px 0 7px;background:linear-gradient(var(--panel) 68%,transparent);',
+      'font-size:10.5px;font-weight:900;text-transform:uppercase;letter-spacing:.10em;color:var(--txt3)}',
+    '.mcu-grp .n{font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--txt3);opacity:.72}',
+    '.mcu-grp.gold{color:#fbbf24}', '.mcu-grp.good{color:var(--acc)}', '.mcu-grp.new{color:#64b4ff}',
+
+    /* Row: a ring instead of a filled tile, and a press state with weight. */
+    '.mcu-row{border-radius:14px;padding:12px 10px;margin:0 -10px;transition:background .14s ease,transform .12s ease}',
+    '.mcu-row:active{transform:scale(.988);background:rgba(255,255,255,.045)}',
+    '@media (hover:hover){.mcu-row:hover{background:rgba(255,255,255,.035)}}',
+    '.mcu-av{position:relative;border-radius:50%;box-shadow:inset 0 0 0 1.5px currentColor}',
+    '.mcu-av.plain{color:var(--txt3)}',
+
+    /* The spend ladder. Width is relative to the largest spend ON SCREEN — a
+       rendering of real values, never a claimed statistic, so it carries no label
+       and disappears when there is nothing to compare against. */
+    '.mcu-ladder{height:3px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:7px;overflow:hidden}',
+    '.mcu-ladder i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,',
+      'color-mix(in srgb,var(--acc) 55%,transparent),var(--acc));transition:width .3s cubic-bezier(.2,.7,.3,1)}',
+    '.mcu-row.gold .mcu-ladder i{background:linear-gradient(90deg,rgba(251,191,36,.45),#fbbf24)}',
+
+    '.mcu-when{font-size:10.5px;color:var(--txt3);margin-top:3px;font-weight:600}',
+
+    /* Summary tiles: one accent hairline, larger numerals, calmer labels. */
+    '.mcu-kpi{position:relative;overflow:hidden}',
+    '.mcu-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;',
+      'background:linear-gradient(90deg,var(--acc),transparent)}',
+    '.mcu-kpi .v{font-size:21px;letter-spacing:-.01em}',
+
+    '@media (prefers-reduced-motion:reduce){.mcu-row,.mcu-f,.mcu-ladder i{transition:none}}',
   ].join('');
 
   function injectCSS(doc) {
@@ -156,6 +207,7 @@
     }
 
     var S = {
+        segment: null,   /* active segment filter, or null for all */
       phase: 'loading',        /* loading | not_signed_in | error | ready */
       error: null,
       customers: [],
@@ -194,9 +246,22 @@
       }).catch(function () {});
     }
 
-    function visible() { return MC.searchCustomers(S.customers, S.query); }
+    /* Search first, then segment — so the count in the header ('n of N') still
+       describes the search, and a filter narrows what the merchant already asked for
+       rather than silently competing with it. */
+    function visible() {
+      var rows = MC.searchCustomers(S.customers, S.query);
+      if (!S.segment) return rows;
+      return rows.filter(function (c) { return String(c.segment || 'customer') === S.segment; });
+    }
 
     /* ── Render ───────────────────────────────────────────────────────────── */
+      /* VIP first, then value, then newcomers — the order a merchant scans in. */
+      var SEG_ORDER = ['vip', 'high_value', 'regular', 'first_time', 'customer'];
+      function segRank(k) {
+        var i = SEG_ORDER.indexOf(String(k)); return i === -1 ? SEG_ORDER.length : i;
+      }
+
     function paint() {
       host.innerHTML = '<div class="mcu">' + topHTML() + bodyHTML() + '</div>' + sheetHTML();
     }
@@ -211,6 +276,29 @@
               ? n + ' of ' + S.customers.length + ' customers'
               : S.customers.length + ' customer' + (S.customers.length === 1 ? '' : 's')) + '</div>'
           : '') +
+        (S.phase === 'ready' ? filtersHTML() : '') +
+      '</div>';
+    }
+
+      /* Built from the segments PRESENT, never a fixed list — a shop with no VIPs is
+         not offered a filter that can only ever return nothing. */
+      function filtersHTML() {
+        var seen = [], counts = {};
+        S.customers.forEach(function (c) {
+          var k = String(c.segment || 'customer');
+          if (counts[k] === undefined) { counts[k] = 0; seen.push(k); }
+          counts[k]++;
+        });
+        if (seen.length < 2) return '';
+        seen.sort(function (a, b) { return segRank(a) - segRank(b); });
+        return '<div class="mcu-filters" role="group" aria-label="Filter by segment">' +
+          '<button class="mcu-f" data-act="seg" data-seg="" aria-pressed="' + (!S.segment) + '">All ' +
+            S.customers.length + '</button>' +
+          seen.map(function (k) {
+            var info = MC.segmentInfo(k);
+            return '<button class="mcu-f" data-act="seg" data-seg="' + esc(k) + '" aria-pressed="' +
+              (S.segment === k) + '">' + esc(info.label) + ' ' + counts[k] + '</button>';
+          }).join('') +
       '</div>';
     }
 
@@ -244,19 +332,56 @@
           '</div></div>';
       }
 
-      return '<div class="mcu-body">' + head + rows.map(function (c, i) {
+      /* THE LADDER'S SCALE. Relative to the largest spend ON SCREEN, so it shows
+         standing among what the merchant is looking at. It claims no figure and
+         carries no label; where every row is 0 (or one row) there is nothing to
+         compare and the bar is omitted rather than drawn full or empty. */
+      var top = 0;
+      rows.forEach(function (c) { var v = Number(c.totalSpend) || 0; if (v > top) top = v; });
+      var ladderOK = rows.length > 1 && top > 0;
+
+      /* Grouped by segment, in the order a merchant scans: best first. The rows
+         inside a group keep the order the data arrived in — this regroups, it does
+         not re-rank. */
+      var order = [], bag = {};
+      rows.forEach(function (c, i) {
+        var k = String(c.segment || 'customer');
+        if (!bag[k]) { bag[k] = []; order.push(k); }
+        bag[k].push({ c: c, i: i });
+      });
+      order.sort(function (a, b) { return segRank(a) - segRank(b); });
+      /* One group and no filter is not a grouping — it is a heading over the whole
+         list, which only costs a row of space. */
+      var showGroups = order.length > 1;
+
+      function rowHTML(c, i) {
         var seg = MC.segmentInfo(c.segment);
-        return '<button class="mcu-row" data-act="open" data-i="' + i + '">' +
+        var spend = Number(c.totalSpend) || 0;
+        var pct = ladderOK ? Math.max(4, Math.round(spend / top * 100)) : 0;
+        var when = c.lastOrderAt ? MC.dateLabel(c.lastOrderAt) : '';
+        return '<button class="mcu-row ' + esc(seg.tone) + '" data-act="open" data-i="' + i + '">' +
           '<div class="mcu-av ' + esc(seg.tone) + '">' + esc(MC.initials(c.name, c.email)) + '</div>' +
           '<div class="mcu-info">' +
             '<div class="mcu-nm">' + esc(c.name || c.email || c.phone || 'Customer') + '</div>' +
             '<div class="mcu-sub">' + esc(c.phone || c.email || '') +
               (c.orderCount != null ? ' · ' + MC.formatCount(c.orderCount) + ' order' + (c.orderCount === 1 ? '' : 's') : '') +
             '</div>' +
+            (when ? '<div class="mcu-when">Last order ' + esc(when) + '</div>' : '') +
+            (ladderOK ? '<div class="mcu-ladder" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' : '') +
           '</div>' +
           '<div class="mcu-val"><div class="v">' + esc(MC.formatKES(c.totalSpend)) + '</div>' +
             '<div class="k">spent</div></div>' +
         '</button>';
+      }
+
+      return '<div class="mcu-body">' + head + order.map(function (k) {
+        var info = MC.segmentInfo(k);
+        var group = bag[k];
+        return (showGroups
+          ? '<div class="mcu-grp ' + esc(info.tone) + '">' + esc(info.label) +
+              '<span class="n">' + group.length + '</span></div>'
+          : '') +
+          group.map(function (r) { return rowHTML(r.c, r.i); }).join('');
       }).join('') + '</div>';
     }
 
@@ -372,6 +497,12 @@
       if (act === 'open')   { openCustomer(parseInt(el.getAttribute('data-i'), 10)); return; }
       if (act === 'close')  { S.sheet = null; S.current = null; S.profile = null; paint(); return; }
       if (act === 'reload') { load(); return; }
+      if (act === 'seg') {
+        var k = el.getAttribute('data-seg') || '';
+        S.segment = (k && k !== S.segment) ? k : null;   /* tapping the active chip clears it */
+        paint();
+        return;
+      }
     }
 
     function onInput(ev) {
