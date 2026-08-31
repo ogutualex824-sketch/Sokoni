@@ -110,14 +110,48 @@ head('5 - the print path must recognise the engine that can actually print');
    performs the print — was not counted, so merchant-v2 (engine, no PrinterManager)
    was diverted to _legacyFallback, which tries SokoniPrint then PosPrinter. It loads
    neither, so every shell print failed and the caller discarded the result. */
-ck('the gate counts the engine',
-   ppc.indexOf('const enterpriseAvailable = !!pm || !!_eng() || !!window.SokoniIOSPrint;') > -1);
-ck('...and the OLD gate is gone',
-   ppc.indexOf('const enterpriseAvailable = !!pm || !!window.SokoniIOSPrint;') === -1,
-   'this single expression sent every shell print to a chain merchant-v2 cannot run');
-ck('CONTROL PrinterManager is still consulted FIRST',
-   /enterpriseAvailable = !!pm \|\|/.test(ppc),
-   'the engine is added, not substituted');
+/* This pinned the WHOLE literal expression, so adding a term broke it while the property
+   it guards was intact. The property is "every object that can actually perform a print is
+   counted, added and never substituted" - so assert the TERMS, and then EVALUATE the gate
+   under each configuration rather than matching its text.
+
+   The new term is _shellCanPrint(): a framed POS prints by posting the job UP to the shell,
+   a path that never touches _eng(). Without it, a framed POS with no local engine would
+   fail this gate and divert to _legacyFallback - which returns FALSE with no error, the
+   silent non-print described above. It is STRICTER than its neighbours: it requires the
+   shell to have a CONNECTED printer, not merely to have loaded an engine object. */
+const gateExpr = (ppc.match(/const enterpriseAvailable = ([^;]+);/) || [])[1] || '';
+ck('the availability gate was located', !!gateExpr, gateExpr || 'NOT FOUND');
+ck('...counts PrinterManager FIRST', /^!!pm \|\|/.test(gateExpr.trim()), gateExpr);
+ck('...counts the local engine', /!!_eng\(\)/.test(gateExpr));
+ck('...counts the SHELL TRANSPORT', /!!_shellCanPrint\(\)/.test(gateExpr),
+   'a framed POS prints through the shell, not through its own engine');
+ck('...counts the iOS bridge', /!!window\.SokoniIOSPrint/.test(gateExpr));
+ck('...and every term is ADDED, never substituted', (gateExpr.match(/\|\|/g) || []).length === 3, gateExpr);
+
+/* Evaluate it, rather than trust the shape. Four configurations, each a real deployment. */
+function evalGate (o) {
+  const pm = o.pm, _eng = () => o.eng, _shellCanPrint = () => o.shell;
+  const window = { SokoniIOSPrint: o.ios };
+  return eval('!!pm || !!_eng() || !!_shellCanPrint() || !!window.SokoniIOSPrint');
+}
+ck('EVAL framed POS, shell printer connected, NO local engine -> available',
+   evalGate({ pm: null, eng: null, shell: true, ios: null }) === true,
+   'this is the configuration step 2 creates; without it the print silently fails');
+ck('EVAL standalone POS with a local engine -> available (unchanged)',
+   evalGate({ pm: null, eng: {}, shell: false, ios: null }) === true);
+ck('EVAL merchant-v2 shell: engine, no PrinterManager -> available (the original fix)',
+   evalGate({ pm: null, eng: {}, shell: false, ios: null }) === true);
+ck('CONTROL nothing available at all -> NOT available',
+   evalGate({ pm: null, eng: null, shell: false, ios: null }) === false,
+   'the gate must still be able to say no, or the legacy fallback is unreachable');
+ck('CONTROL removing the shell term strands a framed POS with no engine',
+   (function () {
+     const pm = null, _eng = () => null;
+     const window = { SokoniIOSPrint: null };
+     return eval('!!pm || !!_eng() || !!window.SokoniIOSPrint') === false;
+   })(),
+   'proves _shellCanPrint() is what carries that case, not something else');
 ck('CONTROL the legacy chain is retained as a fallback', ppc.indexOf('_legacyFallback') > -1);
 ck('CONTROL merchant-v2 really lacks the legacy globals',
    V2.indexOf('src="sokoni-print-engine.js"') === -1 && V2.indexOf('src="pos-printer.js"') === -1,

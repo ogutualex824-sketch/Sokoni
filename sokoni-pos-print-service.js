@@ -1445,7 +1445,28 @@ class PosPrintService {
        PrinterManager, so every shell-side print (Orders, Sell) was diverted to
        _legacyFallback, which tries window.SokoniPrint then window.PosPrinter — neither
        of which merchant-v2 loads. It returned false and the print silently failed. */
-    const enterpriseAvailable = !!pm || !!_eng() || !!window.SokoniIOSPrint;
+    /* THE SHELL TRANSPORT COUNTS TOO — step 1 of the framed-POS memory work.
+
+       A framed POS does not print through its own engine: it posts the job UP to the shell
+       (printBytes / __sokoniModulePrint) and the shell prints with the ONE connection it
+       owns. That path never touches _eng(). Yet this gate asked only about PrinterManager,
+       the local engine and the iOS bridge, so availability was decided by objects the
+       framed path does not use.
+
+       Consequence, and it is silent: with no local engine the gate goes false, the job
+       diverts to _legacyFallback, which tries window.SokoniPrint then window.PosPrinter,
+       finds neither, and returns FALSE — a print that never happened and never errored.
+       The comment above records that exact failure occurring in the mirror configuration,
+       where merchant-v2 loaded the engine and not PrinterManager.
+
+       _shellCanPrint() is STRICTER than the terms beside it: it requires the shell to
+       actually have a connected printer, not merely to have loaded an engine object.
+       Standalone POS is unaffected — _framed() is false there, so the term contributes
+       nothing and pm/_eng() still decide, exactly as before.
+
+       This is deliberately step 1 of two. The engine STAYS loaded in the framed POS until
+       this gate is proven; removing it first would be the silent regression above. */
+    const enterpriseAvailable = !!pm || !!_eng() || !!_shellCanPrint() || !!window.SokoniIOSPrint;
     if (!enterpriseAvailable) {
       emit('fallback', { reason: 'no PrinterManager/iOS path' });
       const ok = await this._legacyFallback(order);
