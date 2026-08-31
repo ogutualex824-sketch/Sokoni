@@ -1082,8 +1082,36 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       f.setAttribute('allow', MODULE_ALLOW);
       /* Hand the module everything the shell already knows the moment it boots, so it
          never repeats auth resolution or device discovery. */
-      f.addEventListener('load', function () {
+      /* ══ THE LOADING LAYER MUST NOT OUTLIVE THE LOAD ═══════════════════════════
+         .frame-load is position:absolute inset:0 painted in var(--bg) — an OPAQUE
+         full-panel cover — and it was removed by exactly one thing: this load event.
+
+         An iframe's load event waits for EVERY subresource. One request that never
+         settles — an App Check retry, reCAPTCHA, a slow CDN — and the event never
+         fires, so the cover stayed for ever: the module underneath was visible at the
+         edges, the panel was dark, and nothing could be tapped. Measured on
+         verification, pos-setup, stories and pos — the four heaviest frames — while
+         light modules were fine, which is why it looked like a shell-wide overlay.
+
+         Three ways out now, because the load event is only the happiest one:
+           · load fires            — the normal path
+           · the frame ERRORS      — reveal, and say so
+           · nothing after 8s      — reveal anyway; a module that is slow still owns
+                                     its own surface, and its own loading state is
+                                     honest where a shell cover pretending to load is
+                                     not. This is a REVEAL, never a claim of success. */
+      var _revealed = false;
+      var reveal = function (why) {
+        if (_revealed) return;
+        _revealed = true;
+        try { clearTimeout(_revealTimer); } catch (_) {}
         w.classList.add('loaded');
+        if (why) { try { console.warn('[merchant-v2] frame revealed by ' + why + ': ' + key); } catch (_) {} }
+      };
+      var _revealTimer = setTimeout(function () { reveal('timeout'); }, 8000);
+      f.addEventListener('error', function () { reveal('error'); });
+      f.addEventListener('load', function () {
+        reveal(null);
         try {
           f.contentWindow.postMessage({ __sokoniShell: true, type: 'session', state: S.state,
             uid: S.uid, sellerUid: S.sellerUid, activeShopId: S.activeShopId }, location.origin);
