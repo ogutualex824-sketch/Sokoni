@@ -283,18 +283,22 @@ exports.fosReconcile = onCall(
 
     const db = _db();
 
-    // Our records
-    const snap = await db.collection('finosTransactions')
+    /* Our records — the AUTHORITATIVE fos transaction collection is `fosTransactions`
+       (written by the fos payment path), keyed by `payRef`, with UPPERCASE statuses.
+       This read previously targeted `finosTransactions` (a phantom collection nothing
+       writes) keyed on `paymentRef` with lowercase statuses, so the map was always empty
+       and reconciliation was dead. (F8; read-only — no writes anywhere in this function.) */
+    const snap = await db.collection('fosTransactions')
       .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(from))
       .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(to))
-      .where('status', 'in', ['completed', 'failed'])
+      .where('status', 'in', ['COMPLETED', 'INITIATION_FAILED'])
       .limit(500)
       .get();
 
     const finosMap = {};
     snap.docs.forEach(d => {
       const data = d.data();
-      if (data.paymentRef) finosMap[data.paymentRef] = { ...data, _id: d.id };
+      if (data.payRef) finosMap[data.payRef] = { ...data, _id: d.id };
     });
 
     // Provider records (IntaSend)
@@ -330,8 +334,8 @@ exports.fosReconcile = onCall(
       } else {
         const localKes  = (local.amountCents ?? 0) / 100;
         const pKes      = parseFloat(pt.value ?? 0);
-        const statusOk  = (pt.state === 'COMPLETE' && local.status === 'completed') ||
-                          (pt.state === 'FAILED'   && local.status === 'failed');
+        const statusOk  = (pt.state === 'COMPLETE' && local.status === 'COMPLETED') ||
+                          (pt.state === 'FAILED'   && local.status === 'INITIATION_FAILED');
         if (Math.abs(localKes - pKes) > 0.5 || !statusOk) {
           mismatch.push({
             ref,

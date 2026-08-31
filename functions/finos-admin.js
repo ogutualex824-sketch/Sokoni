@@ -311,23 +311,33 @@ exports.fosAdminSettleEscrow = onCall({ region: REGION }, async (req) => {
   }
 
   const escrowRef = db().collection('escrows').doc(escrowId);
-  const escrowDoc = await escrowRef.get();
-  if (!escrowDoc.exists) throw new HttpsError('not-found', 'Escrow not found');
+  const ledgerRef = db().collection('ledgerEntries').doc();
 
-  const escrow = escrowDoc.data();
-  if (!['held', 'disputed'].includes(escrow.status)) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Escrow status '${escrow.status}' cannot be settled. Must be 'held' or 'disputed'.`
-    );
-  }
+  // F2 fix (TOCTOU double-credit): the held->released transition must be read and
+  // re-checked INSIDE the transaction so the escrow is in the read set. Reading it
+  // outside (as before) left the txn read set = { wallet } only, so a concurrent
+  // releaser (finosProcessSettlements, fosAutoSettlement, finosReleaseEscrow, or another
+  // admin call) could release the same escrow and credit the same wallet between the
+  // outside read and the blind status write, double-crediting the seller. The fresh
+  // in-txn status guard is the exactly-once idempotency boundary, and reading the escrow
+  // makes Firestore conflict-retry against concurrent escrow writes.
+  const result = await db().runTransaction(async (tx) => {
+    // ── ALL READS FIRST (Firestore requires reads before writes) ──
+    const escrowDoc = await tx.get(escrowRef);
+    if (!escrowDoc.exists) throw new HttpsError('not-found', 'Escrow not found');
 
-  const walletRef  = db().collection('wallets').doc(escrow.sellerId);
-  const ledgerRef  = db().collection('ledgerEntries').doc();
+    const escrow = escrowDoc.data();
+    if (!['held', 'disputed'].includes(escrow.status)) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Escrow status '${escrow.status}' cannot be settled. Must be 'held' or 'disputed'.`
+      );
+    }
 
-  await db().runTransaction(async (tx) => {
+    const walletRef  = db().collection('wallets').doc(escrow.sellerId);
     const walletSnap = await tx.get(walletRef);
 
+    // ── THEN ALL WRITES ──
     tx.update(escrowRef, {
       status:       'released',
       settledBy:    req.auth.uid,
@@ -363,18 +373,20 @@ exports.fosAdminSettleEscrow = onCall({ region: REGION }, async (req) => {
       forceRelease,
       createdAt:   now(),
     });
+
+    return { sellerId: escrow.sellerId, amountCents: escrow.amountCents };
   });
 
   await audit('escrow_admin_settled', {
     escrowId,
-    sellerId:    escrow.sellerId,
-    amountCents: escrow.amountCents,
+    sellerId:    result.sellerId,
+    amountCents: result.amountCents,
     who:         req.auth.uid,
     reason,
   });
 
   logger.info('Admin settled escrow', {
-    escrowId, uid: req.auth.uid, amountCents: escrow.amountCents,
+    escrowId, uid: req.auth.uid, amountCents: result.amountCents,
   });
-  return { success: true, escrowId, amountCents: escrow.amountCents };
+  return { success: true, escrowId, amountCents: result.amountCents };
 });
