@@ -711,8 +711,20 @@ const SokoniSecurity = (() => {
            thing the user is trying to do. */
         var _p = (location.pathname || "").replace(/\.html$/, "");
         var _isAuthPage = /^\/(login|signup|register|forgot-password|reset-password)$/i.test(_p);
+        /* THE MERCHANT SHELL is the same situation as an auth page, for the same reason.
+           A merchant who enters through the PWA shortcut lands on /merchant-v2 and nowhere
+           else, so if consent is never OFFERED here it is never RECORDED — and then every
+           page they later open standalone (POS, a direct link) meets the full-screen
+           blocking modal, permanently, because the answer was never captured.
 
-        if (_isAuthPage) {
+           Blocking a merchant's whole console behind a scrim is also the wrong shape: the
+           banner's own copy says "by continuing you accept", which a hard block contradicts.
+           So the shell gets the same bottom sheet the auth pages get — consent is still
+           required and still one tap away; it simply does not take the console hostage. */
+        var _isMerchantShell = /^\/merchant(-v2)?$/i.test(_p);
+        var _nonBlocking = _isAuthPage || _isMerchantShell;
+
+        if (_nonBlocking) {
           b.style.cssText = [
             "position:fixed","left:0","right:0","bottom:0",
             "z-index:99997",
@@ -773,7 +785,7 @@ const SokoniSecurity = (() => {
              Same content, same controls — only the footprint changes. */
           "<div style='width:100%;max-width:400px;box-sizing:border-box;pointer-events:auto;",
             "background:#0d0d0d;border:1px solid rgba(113,255,0,0.22);border-radius:18px;",
-            (_isAuthPage
+            (_nonBlocking
               ? "padding:14px 16px;max-height:32vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
               : "padding:22px 20px;"),
             "box-shadow:0 20px 60px rgba(0,0,0,0.7);'>",
@@ -847,7 +859,7 @@ const SokoniSecurity = (() => {
            NOT on auth pages: the sheet does not trap the page there, and pulling focus out
            of the signup form the moment it renders would fight the user for the caret —
            a subtler version of the bug being fixed. Accept stays reachable by Tab. */
-        if (!_isAuthPage) {
+        if (!_nonBlocking) {
           /* Focus the DIALOG, not Accept. Landing focus on one of two answers
              makes that answer one keystroke cheaper than the other; from the
              dialog, Tab reaches Reject then Accept in order. */
@@ -859,7 +871,7 @@ const SokoniSecurity = (() => {
 
         /* Reserve the sheet's height so it cannot sit over the submit button at the foot
            of the form. The modal branch deliberately reserves nothing (see below). */
-        if (_isAuthPage) {
+        if (_nonBlocking) {
           try {
             /* Measure on the next frame: read before layout settles and the height comes
                back short, which is exactly how a "reserved" strip ends up too small to
@@ -958,7 +970,7 @@ const SokoniSecurity = (() => {
              The sheet deliberately does not block the page (background:transparent,
              pointer-events:none), so it needs neither the lock nor the zeroed variable.
              Keep only the FAB tidy-up. */
-          if (_isAuthPage) { _liftFabs(0); return; }
+          if (_nonBlocking) { _liftFabs(0); return; }
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
           /* NO SCROLL LOCK. This used to set body{position:fixed; top:-scrollY} and it was
              the single worst functional bug on the home page.

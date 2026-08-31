@@ -755,6 +755,16 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      ctx entitlement() resolved null. null means UNKNOWN, and the Wallet correctly refuses
      to draw a balance against an unknown plan — so it sat on "Checking your plan" forever.
      Loaded BEFORE the modules that read it. -->
+<!-- CONSENT. The shell had no consent surface at all, so a merchant entering through the
+     PWA shortcut — which lands here and nowhere else — was never ASKED, and therefore never
+     RECORDED. Every page they later opened standalone then met the full-screen blocking
+     consent modal, permanently, because the answer had never been captured. That is the
+     black layer, and it is the consent dialog doing exactly what it is built to do.
+
+     security.js renders a NON-BLOCKING bottom sheet here (same treatment as the auth
+     pages): consent is still required and one tap away, but it does not take the console
+     hostage. Once accepted, the standalone pages stop blocking. -->
+<script src="security.js"></script>
 <script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
