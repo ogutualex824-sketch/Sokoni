@@ -1,3 +1,61 @@
+## [2026-08-31] — Shell: embedded modules did not recognise merchant-v2
+
+**Files:** `auth-guard.js`, `plans.html`, `returns.html`, `seller-delivery.html`, `seller.html`,
+`seller-fulfilment.html`, `verification.html`, `dispatch.html`, `minishop-admin.html`, `pos.html`,
+`pos-printer-setup.html`; `scripts/test-inshell-chrome.js` (+5, 17/0),
+`scripts/test-plans-hub-scope.js` (new, 14/0).
+**Database changes:** none. **API changes:** none. **Breaking changes:** none.
+
+### The defect
+
+Every hosted module decides it is in the shell with an inline detector matching the PARENT
+PATH: `merchant` / `merchant.html`, or the `window.parent.SokoniShell` global. After the
+Seller Hub cutover the parent became **merchant-v2**, which matches NEITHER string — so the
+`.sk-in-shell` class landed only when the shell had already defined that global. **A race.**
+
+When it lost, nothing was scoped, and no symptom named its cause:
+
+* the consent scrim (`#_sokoniPrivacyBanner`, `rgba(0,0,0,.66)`, z-index 300001) painted over
+  the panel — reported as a black layer covering the page *"from the bottom upwards, leaving a
+  part at the top"*. It is 100% of the IFRAME, which begins below the shell header; the visible
+  strip is the shell itself.
+* the shared bottom nav stacked under the shell's own.
+* the pages looked *"rolled back"*. They were not — they were unscoped.
+
+Reported on **Plan, Delivery Hub, Returns and Stories**.
+
+### Security
+
+`auth-guard.js` carried the same blindness as `/(^|/)merchant(.html)?$/`, so when the global
+lost the race it concluded it was top-level and navigated the PANEL to the full login page —
+why Stories showed a whole login gate where other modules show a modest "not signed in".
+
+**The authentication decision is unchanged.** Only the escalation path moves: an unauthenticated
+module now postMessages the shell instead of painting a competing full-screen gate inside a
+panel. A signed-out user is still gated. The anchor still rejects `/merchant-analytics`,
+`/evilmerchant` and `/merchant-v3`.
+
+### Plan page
+
+`subGetPlans({})` is called with no `hubType`, so it returns the whole platform catalogue —
+production returns **31 plans across 12 hubs** — and the page draws a tab per hub. The
+merchant's Plan screen was therefore offering Pharmacy, Hotel, Driver, Property Agent,
+Recruiter and Buyer plans. Embedded, that is now scoped to **Seller + Enterprise (12 tabs -> 2)**;
+the public price list is untouched. If scoping removes the selected hub it is reset to one that
+remains, and a lone tab hides the bar.
+
+**No price changed, and none was introduced into the page.** The live catalogue was read from
+production and matches the repo exactly (seller 0 / 999 / 2499 / 7499 KES per month), so there
+is no stale-deploy gap behind the plans themselves.
+
+### Known limitation (pre-existing, now reachable)
+
+Neither shell loads `security.js`, so a merchant entering ONLY through the PWA shortcut — now
+`/merchant-v2` — is never shown the consent banner. Consent persists in `localStorage`, so any
+merchant who has visited the marketplace is unaffected. Not fixed here: presenting it would put
+a full-viewport scrim on the shell, which is the very symptom above. Tracked with ODPC must-fix #2.
+
+---
 ## [2026-08-31] — Customers: premium native surface
 
 **Files:** `sokoni-merchant-customers-ui.js`, `scripts/test-merchant-customers-premium.js` (new, 27/0).
