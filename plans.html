@@ -232,6 +232,12 @@ const FEATURE_LABELS = {
   white_label:'White label', sla:'SLA guarantee',
 };
 
+/* Inside the merchant shell this page is the SELLER's Plan screen, not the platform's
+   public price list. The class is stamped before first paint by the inline detector. */
+const IN_SHELL = (function () {
+  try { return document.documentElement.classList.contains('sk-in-shell'); } catch (e) { return false; }
+})();
+
 let allPlans = [], currentHub = 'seller', billingCycle = 'monthly', currentUser = null, currentSubs = {};
 /* Promotional-trial eligibility, reported by subGetStatus. Defaults to FALSE so
    an unresolved answer hides the free-trial offer rather than showing a button
@@ -266,8 +272,20 @@ async function loadPlans() {
 }
 
 function buildHubTabs() {
-  const hubTypes = [...new Set(allPlans.map(p => p.hubType).filter(Boolean))];
+  let hubTypes = [...new Set(allPlans.map(p => p.hubType).filter(Boolean))];
+  /* subGetPlans is called without a hubType, so it returns the WHOLE platform
+     catalogue — 31 plans across 12 hubs. On the public page that is the point. Inside
+     the merchant shell it offered a shopkeeper Pharmacy, Hotel, Driver and Recruiter
+     plans they cannot hold. Enterprise stays: it is the tier above Seller Enterprise,
+     and the callable already returns it alongside every hub. */
+  if (IN_SHELL) hubTypes = hubTypes.filter(h => h === 'seller' || h === 'enterprise');
+  /* Keep the selected hub inside what is actually offered, or renderPlans would filter
+     to nothing and show 'No plans available for this hub' over a full catalogue. */
+  if (hubTypes.length && hubTypes.indexOf(currentHub) === -1) currentHub = hubTypes[0];
   const tabs = document.getElementById('hub-tabs');
+  /* A single tab is a label, not a choice. */
+  if (hubTypes.length < 2) { tabs.innerHTML = ''; tabs.style.display = 'none'; return; }
+  tabs.style.display = '';
   tabs.innerHTML = hubTypes.map(h => `
     <div class="hub-tab${h===currentHub?' active':''}" onclick="switchHub('${esc(h)}')">${esc(HUB_LABELS[h]||h)}</div>
   `).join('');
