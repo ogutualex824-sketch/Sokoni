@@ -87,6 +87,55 @@ embedded.forEach((e) => {
 ck('every embedded page has the boundary', missing.length === 0, missing.join(', ') || 'all covered');
 ck('...and the CLASS lands before first paint', late.length === 0, late.join(', ') || 'all early');
 
+/* ── 2b. the detector must know the shell it is actually embedded in ────────── */
+head('2b · the detector recognises the CURRENT shell, not the one it was written for');
+/* THE DEFECT: the inline detector matched the parent path against "merchant" /
+   "merchant.html" only. After the Seller Hub cutover the parent became merchant-v2,
+   which matches NEITHER — so the class landed only via the window.parent.SokoniShell
+   fallback, i.e. only if the shell had already executed the line that defines it.
+   A race. When it lost, NOTHING was hidden: the consent scrim covered the panel from
+   the bottom up, the shared bottom nav stacked under the shell's own, and the page
+   looked "rolled back". Reported on plans, the delivery hub and returns.
+
+   Asserted against the shell filename taken from the ROUTES CONTRACT, so renaming the
+   shell again fails this check instead of silently resurrecting the race. */
+const SHELL = (function () {
+  const src = read('sokoni-merchant-entry.js');
+  const k = "MERCHANT_URL = '/";
+  const i = src.indexOf(k);
+  if (i === -1) return null;
+  const j = src.indexOf("'", i + k.length);
+  return j === -1 ? null : src.slice(i + k.length, j);
+})();
+ck('the shell name is derived, not hard-coded here', !!SHELL, SHELL);
+
+const blind = [];
+Object.keys(seen).forEach((f) => {
+  let src; try { src = read(f); } catch (_) { return; }
+  const i = src.indexOf('window.parent===window');
+  if (i === -1) return;                       /* already reported above */
+  const det = src.slice(i, i + 900);
+  if (det.indexOf('"' + SHELL + '"') === -1) blind.push(f);
+});
+ck('every embedded page recognises "' + SHELL + '" by PATH', blind.length === 0,
+   blind.join(', ') || Object.keys(seen).length + ' pages');
+ck('...so the boundary does not depend on the SokoniShell global winning a race',
+   blind.length === 0,
+   'the global stays as a fallback; it must not be the only way the class lands');
+
+ck('CONTROL the check would have caught the shipped defect',
+   (function () {
+     const pre = 'if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){';
+     return pre.indexOf('"' + SHELL + '"') === -1;
+   })(),
+   'the pre-fix condition must fail this assertion, or it proves nothing');
+ck('CONTROL it is not satisfied by the word appearing anywhere in the file',
+   (function () {
+     const fake = 'window.parent===window' + ' ... nothing here ...';
+     return fake.indexOf('"' + SHELL + '"') === -1;
+   })(),
+   'the assertion reads the detector window, not the whole document');
+
 /* ── 3. the pages that DO paint a bar are the ones that need it ─────────────── */
 head('3 · the pages needing it are the ones that inject a bar');
 const injectors = Object.keys(seen).filter((f) => {

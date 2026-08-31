@@ -68,7 +68,7 @@
           if (!window.parent || window.parent === window) return false;
           /* Same-origin read; throws for a cross-origin parent, which is NOT our shell. */
           var pp = (window.parent.location.pathname || '').toLowerCase();
-          return /(^|\/)merchant(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
+          return /(^|\/)merchant(-v2)?(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
       } catch (e) { return false; }
   }
 
