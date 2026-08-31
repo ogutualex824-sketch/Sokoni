@@ -80,6 +80,87 @@ ck('CONTROL a known-good callable does resolve',
    !!EXPORTED['inviteShopEmployee'],
    'proves the export scan reads the real files rather than matching nothing');
 
+head('1b · every global the shell reaches for must actually be LOADED');
+/* THE DEFECT: the Wallet and Products ctx both do
+       window.SokoniAuthority ? window.SokoniAuthority.getMerchantEntitlements() : null
+   and sokoni-authority.js was never in the page. window.SokoniAuthority was undefined, so
+   entitlement() resolved null — which means UNKNOWN, and the Wallet correctly refuses to
+   draw a balance against an unknown plan. It sat on "Checking your plan" forever.
+
+   The guard was written correctly and the script was simply absent: nothing in either file
+   could reveal that on its own. */
+(function () {
+  /* what the shell loads */
+  const srcs = [];
+  SHELL.split('<script src="').slice(1).forEach((p) => {
+    const q = p.indexOf('"');
+      var v = p.slice(0, q).split('?')[0];
+      if (v.charAt(0) === '/') v = v.slice(1);
+      srcs.push(v);
+  });
+  ck('the shell loads module scripts', srcs.length > 3, srcs.length + ' scripts');
+
+  /* which globals those scripts (plus the shell's own inline code) define */
+  function leadingIdent (t) {
+    let n = 0;
+    const ok = (c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c === '_' || c === '$';
+    while (n < t.length && ok(t[n])) n++;
+    return n ? t.slice(0, n) : null;
+  }
+  const provided = {};
+  const scan = (txt, where) => {
+    ['window.', 'root.', 'globalThis.', 'global.'].forEach((pre) => {
+      txt.split(pre).slice(1).forEach((p) => {
+        const name = leadingIdent(p);
+        if (!name) return;
+        let k = name.length;
+        while (p[k] === ' ') k++;
+        if (p[k] !== '=' || p[k + 1] === '=') return;
+        provided[name] = where;
+      });
+    });
+  };
+  scan(SHELL, 'merchant-v2.html');
+  srcs.forEach((f) => {
+    try { scan(fs.readFileSync(path.join(ROOT, f), 'utf8'), f); } catch (_) {}
+  });
+
+  /* which globals the shell READS */
+  const read = [];
+  SHELL.split('window.').slice(1).forEach((p) => {
+    const m = p.match(/^(Sokoni[A-Za-z0-9_$]*)/);
+    if (m && read.indexOf(m[1]) === -1) read.push(m[1]);
+  });
+  ck('the shell reads Sokoni globals', read.length > 0, read.join(', '));
+
+  /* REPORTED, not asserted. Most of these reads are guarded and degrade on purpose —
+     `window.X ? X.thing() : fallback` — so a missing script is only a DEFECT when the
+     fallback changes what the surface means. Failing on all of them would cry wolf and
+     the check would stop being read. */
+  const orphan = read.filter((g) => !provided[g]);
+  console.log('  note  globals read but not loaded (guarded reads may be intentional): ' +
+    (orphan.join(', ') || 'none'));
+
+  /* ASSERTED: the ones whose absence silently changes meaning. */
+  const MUST_LOAD = [
+    { g: 'SokoniAuthority',
+      why: 'Wallet and Products read the plan through it. Absent, entitlement() resolves ' +
+           'null = UNKNOWN, and Wallet correctly refuses to draw a balance — so it sat on ' +
+           '"Checking your plan" forever with no error anywhere.' },
+  ];
+  MUST_LOAD.forEach((m) => {
+    ck('REQUIRED global ' + m.g + ' is loaded by the shell', !!provided[m.g],
+       provided[m.g] || m.why);
+  });
+
+  ck('CONTROL SokoniAuthority specifically resolves — this is the Wallet gate',
+     !!provided['SokoniAuthority'], provided['SokoniAuthority'] || 'MISSING');
+  ck('CONTROL a global nobody defines would be caught',
+     !provided['SokoniDefinitelyNotReal'],
+     'the provider scan must not match everything');
+})();
+
 head('2 · every module gets what it requires');
 /* module global -> a ctx key it refuses to run without, and the message it refuses with */
 const REQUIRED = [

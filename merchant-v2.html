@@ -750,6 +750,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      enhanceProduct and smartCrop; sokoni-ai-subscriptions.js owns the per-plan quota and
      shows its own upgrade prompt. Products connects them to the photo being uploaded — it
      adds no second image pipeline and no entitlement logic of its own. -->
+<!-- THE ENTITLEMENT AUTHORITY. Wallet and Products both ask it what the merchant's plan
+     allows, and it was never loaded here: window.SokoniAuthority was undefined, so the
+     ctx entitlement() resolved null. null means UNKNOWN, and the Wallet correctly refuses
+     to draw a balance against an unknown plan — so it sat on "Checking your plan" forever.
+     Loaded BEFORE the modules that read it. -->
+<script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
 <script src="sokoni-merchant-products.js"></script>
