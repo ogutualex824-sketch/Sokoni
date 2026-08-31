@@ -1,3 +1,57 @@
+## [2026-08-31] — Shell: Messages had no dispatch; Staff called functions that did not exist
+
+**Files:** `merchant-v2.html`, `functions/index.js`;
+`scripts/test-merchant-shell-callables.js` (new, 10/0), `scripts/test-merchant-v2-panels.js` (20/0).
+**Database changes:** none — reads existing `shopEmployees` / `shopInvites`.
+**API changes:** THREE new callables — `listShopEmployees`, `listShopInvites`, `removeShopEmployee`.
+**Deployment:** Messages and Reports ship with HOSTING. **Staff additionally needs a FUNCTIONS deploy**
+and stays broken until then.
+
+### Messages
+
+*"Your messages could not be loaded — merchant messages: dispatch is required"*
+
+Every message operation goes through one callable: the module sends `{ op, ...payload }` and
+`messagesDispatch` routes it. The shell's ctx passed `scope`, `shopName`, `origin`, `db` and
+`onToast` — and no `dispatch` — so the module refused at its own guard before any request was
+made. Now wired. All five ops the client sends are registered server-side; that is asserted,
+not assumed.
+
+### Staff — "internal"
+
+The shell named five callables and **three were never implemented**: `listShopEmployees`
+(called first, so Staff died on open), `listShopInvites`, `removeShopEmployee`. A call to a
+function that does not exist 404s, and the client SDK reports that as the opaque code
+`internal` — which is why the page said nothing useful.
+
+All three are implemented. **Ownership is the caller's token, never the payload:** the client
+sends a `shopId` for its own bookkeeping and it is deliberately ignored, because every query
+binds `shopOwnerId` to `request.auth.uid`. A forged shopId can only return the caller's own team.
+
+#### Security — the removal is a real revocation
+
+`merchant-identity.js` decides employment from **`status`**, treating an ABSENT status as active
+for records predating the field. Writing `active:false` alone would have shown the person as
+removed in the UI **while leaving their authorisation intact**. Removal writes
+`status:'revoked'`, and keeps `active:false` in step for anything reading that instead.
+
+`users.role` is deliberately NOT touched — only the employment pointers are cleared. Demoting an
+account is the role authority's decision; a shop owner removing a cashier must not be able to
+change what that person is on the platform.
+
+### Reports
+
+Blank for the same reason as Revenue, fixed by the panel scoping: `nativePanel()` caches a
+distinct element per route, so `analytics | revenue | reports` each built their own `an-body`
+with the same id and only the first was ever found. Now asserted explicitly.
+
+### The class, not the instance
+
+A new contract suite checks that **every** callable the shell names exists in `functions/`, and
+that every module is handed what it refuses to run without. It FAILED on the three missing
+names before they were written; 45 callables now resolve.
+
+---
 ## [2026-08-31] — Products: photos + AI editor in the Add Product wizard; card and panel layout
 
 **Files:** `sokoni-merchant-products.js`, `merchant-v2.html`;
