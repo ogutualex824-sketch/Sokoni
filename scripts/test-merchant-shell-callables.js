@@ -122,6 +122,15 @@ head('1b · every global the shell reaches for must actually be LOADED');
     });
   };
   scan(SHELL, 'merchant-v2.html');
+  /* Some modules are LAZY on purpose. sokoni-print-host-listener.js and
+     sokoni-printer-host-ui.js are pulled in by loadScript() on demand, because a static
+     tag would start the print listener on page load — and a page load is not a decision
+     to start printing. Counting only static tags reported them as missing, which is a
+     checker that cries wolf. */
+  SHELL.split("loadScript('").slice(1).forEach((p) => {
+    const q = p.indexOf("'");
+    if (q > 0) srcs.push(p.slice(0, q));
+  });
   srcs.forEach((f) => {
     try { scan(fs.readFileSync(path.join(ROOT, f), 'utf8'), f); } catch (_) {}
   });
@@ -160,6 +169,28 @@ head('1b · every global the shell reaches for must actually be LOADED');
      !provided['SokoniDefinitelyNotReal'],
      'the provider scan must not match everything');
 })();
+
+head('1c · the printer boundary the shell owns');
+/* Classified rather than assumed (each was reported as "not loaded" by the static scan):
+     SokoniPrinter        statically loaded
+     SokoniPrintHost      lazy on purpose — loadScript()
+     SokoniPrinterHostUI  lazy on purpose — loadScript()
+     SokoniBranch         intentionally NOT wired; warns rather than silently no-opping */
+ck('the branch switcher fails loudly rather than silently',
+   SHELL.indexOf('branch switcher not loaded in this shell yet') > -1,
+   'a control that silently no-ops is the defect this project keeps finding');
+/* Assert the ALLOW-LIST, not the file: the shell mentions Bluetooth 21 times in comments
+   explaining why it is withheld, and a whole-file search called that a violation. */
+(function () {
+  const m = SHELL.match(/MODULE_ALLOW = '([^']*)'/);
+  const allow = m ? m[1] : null;
+  ck('the module allow-list exists', !!allow, allow);
+  ck('the framed POS is NOT granted bluetooth / usb / serial',
+     !!allow && !/bluetooth|usb|serial/i.test(allow), allow);
+  ck('CONTROL it still grants what modules DO need',
+     !!allow && allow.indexOf('camera') > -1, allow);
+})();
+
 
 head('2 · every module gets what it requires');
 /* module global -> a ctx key it refuses to run without, and the message it refuses with */
