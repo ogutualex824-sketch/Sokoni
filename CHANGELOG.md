@@ -1,3 +1,71 @@
+## [2026-08-31] — POS commission receivable collection (engine, scheduler, reconciliation)
+
+**Files:** `functions/pos-commission-collection.js` (new), `functions/index.js` (re-exports),
+`scripts/test-pos-commission-collection.js` (new suite, 45/0).
+**Unchanged:** `calculateCommission`, `_postSaleFinancials`, and the marketplace settlement path.
+
+### The gap
+
+`pos_commission_receivable` was written by `pos-zero-friction.js` and read by **nothing** — no
+consumer, no scheduled job. SOKONI accrued 5% on every till sale and never asked for it.
+
+### Two rails, deliberately separate
+
+**Marketplace:** SOKONI holds the buyer money, so commission is DEDUCTED before the seller and
+rider wallets are credited, after buyer confirmation. Untouched by this slice.
+
+**POS/till:** the seller already holds the cash. SOKONI holds nothing, so commission is a
+RECEIVABLE the seller owes — never a deduction from money we do not have. The two share only
+the 5% authority, never a settlement path.
+
+### The rail is NOT invented, and it fails closed
+
+No rail today can debit a seller: `mpesa-c2b.js` is inbound only (validation/confirmation
+webhooks), and **IntaSend B2C is a PAYOUT rail** — building on it would pay every seller 5% of
+their till sales daily instead of collecting it. So the registry ships EMPTY, and an
+unconfigured platform records `blocked_no_rail` and moves NO money. Engine, idempotency, state
+machine and reconciliation are all provable today; only the money movement waits on a
+commercial decision.
+
+### Double entry, and the direction matters
+
+    accrual     DEBIT seller:{id}     CREDIT platform:revenue    (seller owes)
+    collection  DEBIT external:mpesa  CREDIT seller:{id}         (paid; debt down)
+
+Ledger entries are immutable, so marking a receivable collected is a SETTLING ENTRY, never an
+edit of the accrual. A seller account nets to zero when fully collected.
+
+### Idempotency is on the COLLECTION, not the sale
+
+The accrual key (`poscomm_<saleKey>`) stops one SALE being booked twice. It cannot stop a retried
+collection charging a seller twice, because a collection spans many sales. Collections carry
+`poscollect_<sellerId>_<period>` and one attempt document per seller per period — and the guard
+is the DOCUMENT, not a flag inside it, because a flag can be read stale and a create cannot.
+
+### Unknown is not failure
+
+An outcome we do not know is never blind-retried and never marked collected — that is exactly
+how a seller gets charged twice. A THROWN error is also `unknown`, not `failed`: the request may
+have reached the gateway. Same hazard as the STK confirmation race.
+
+### Reconciliation reports, and never repairs
+
+Detects over-collection, duplicate attempts, stale unknowns, amount mismatches and
+collected-without-ledger. It writes one report and alters no financial record — a reconciliation
+that repairs can hide the very drift it exists to surface.
+
+### Verification — 45 passed, 0 failed
+
+No rail ⇒ zero ledger entries and the debt still outstanding. A confirmed collection credits the
+SELLER and debits the cash rail, leaving the accrual unmutated. The rail is called exactly ONCE
+across two runs in a period. An unknown outcome does not re-charge. Reconciliation catches
+over-collection, stale unknowns and collected-without-ledger, and leaves the accrual untouched.
+Boundary assertions: no B2C anywhere, an empty registry, no marketplace-settlement writes, and
+no recomputation of commission.
+
+**Not deployed.** The scheduled function exists; no functions deploy is performed here, and
+with no rail configured it would move no money if it ran.
+
 ## [2026-08-30] — POS boot: a stalled initialisation can no longer produce a dead till
 
 **Files:** `pos.js`, `scripts/test-pos-boot-degradation.js` (new suite).
