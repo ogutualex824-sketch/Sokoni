@@ -50,15 +50,25 @@ ck('the create form renders it', SRC.indexOf("(creating ? createPhotosHTML() : '
 ck('the old "added separately" note no longer shows when creating',
    SRC.indexOf("(creating ? '' : '<div class=\"pr-note\">Photos are added separately") > -1,
    'it is still correct on the EDIT form, where photos really are a separate action');
-ck('both photo surfaces use a real BUTTON, not the native file widget',
-   (SRC.match(/pr-pickbtn/g) || []).length >= 3 &&
-   (SRC.match(/class="pr-file"/g) || []).length === 2,
-   'the native widget printed "No file chosen" beside a picked thumbnail');
+ck('both photo surfaces use real BUTTONS, not the native file widget',
+   SRC.split('pr-pickbtn').length - 1 >= 6 &&
+   SRC.split('class="pr-file"').length - 1 === 4,
+   'two surfaces x two controls; the native widget printed "No file chosen" beside a thumbnail');
+ck('each surface offers a LIBRARY control and a CAMERA control',
+   SRC.split('id="pf-photos"').length - 1 === 2 &&
+   SRC.split('id="pf-shoot"').length - 1 === 2);
+ck('only the camera asks for capture — the library must not',
+   SRC.indexOf('capture="environment"') > -1 &&
+   SRC.split('capture=').length - 1 === 2,
+   'capture on the library input forces the camera on iOS and removes the photo library');
+ck('a camera shot ADDS to the selection rather than replacing it',
+   SRC.indexOf('_picked = _picked.concat(check.accepted)') > -1,
+   'a merchant shooting three angles must not lose the first two');
 ck('the input is clipped, NOT display:none — it must stay keyboard reachable',
    SRC.indexOf(".pr-file{position:absolute;width:1px") > -1 &&
    SRC.indexOf(".pr-file{display:none") === -1);
 ck('the button label is driven by _picked, not by the input',
-   /_picked\.length[\s\S]{0,160}Choose different photo/.test(SRC),
+   SRC.indexOf("(_picked.length ? 'Change photos' : 'Choose photos')") > -1,
    'a repaint cannot restore a FileList, so the input can never be the source of truth');
 
 /* ── 2 · picking and AI editing are shared, not forked ────────────────────── */

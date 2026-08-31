@@ -410,16 +410,6 @@
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
       mobile:true, desktop:true, activeKey:'fulfilment' },
 
-    { id:'riders', name:'Riders', icon:'🏍️', tier:'more',
-      kind:'page', src:'seller-delivery.html?shell=merchant#riders',
-      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
-      mobile:true, desktop:true, activeKey:'riders',
-      note:'Was driver.html — the RIDER-FACING app. A seller tapping "Riders" in their own ' +
-           'dashboard was handed a personal rider account: the wrong context entirely, and the ' +
-           'previous note here already flagged it as REVIEW. Now a deep link into the seller\'s ' +
-           'Delivery Hub rider roster. Three contexts stay distinct: driver.html = MY rider ' +
-           'account, this = the seller\'s delivery operation, track.html = a buyer\'s own order.' },
-
     { id:'verification', name:'Verification', icon:'✅', tier:'more',
       kind:'page', src:'verification.html?shell=merchant',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID],
@@ -463,7 +453,7 @@
      the sidebar renders exactly the same 13 routes it did before, under headings. */
   var MORE_GROUPS = [
     { key:'main',       label:'Main',
-      ids:['reports','availability','shop','fulfilment','riders','verification'] },
+      ids:['reports','availability','shop','fulfilment','verification'] },
     { key:'growth',     label:'Growth',
       ids:['marketing','flash-sale','stories','customers'] },
     /* KRA Tax groups with Operations rather than Main: it is back-office compliance

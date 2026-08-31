@@ -74,7 +74,15 @@
     'background:var(--card,#0e0e0e);border:1px solid var(--line,rgba(255,255,255,.12));color:inherit}',
     '.pr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:10px}',
     '.pr-card{background:var(--card,#0e0e0e);border:1px solid var(--line,rgba(255,255,255,.12));',
-    'border-radius:14px;overflow:hidden;min-width:0;display:flex;flex-direction:column}',
+    /* overflow was HIDDEN, which clipped the card's own overflow menu: measured at 390px
+       the menu's top sat 37px ABOVE the card edge and was simply cut off, so Edit and
+       Adjust stock were unreachable. The image keeps its rounded corners on its own
+       instead of borrowing the card's clip. */
+    'border-radius:14px;overflow:visible;min-width:0;display:flex;flex-direction:column}',
+    '.pr-img,.pr-ph{border-radius:13px 13px 0 0}',
+    /* A popup must out-rank the cards that come AFTER it in the grid, or the next card
+       paints over it. Only the card whose menu is open is raised. */
+    '.pr-card.menu-open{z-index:20}',
     '.pr-img{width:100%;aspect-ratio:1/1;object-fit:cover;background:rgba(255,255,255,.04);display:block}',
     '.pr-ph{width:100%;aspect-ratio:1/1;background:rgba(255,255,255,.04);display:flex;align-items:center;',
     'justify-content:center;font-size:24px;color:var(--txt2,rgba(255,255,255,.3))}',
@@ -125,6 +133,9 @@
        DOM, clipped rather than display:none, so it is still reachable by keyboard. */
     '.pr-file{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;',
       'clip:rect(0 0 0 0);white-space:nowrap;border:0}',
+    '.pr-pickrow{display:flex;gap:8px}',
+    '.pr-pickrow>.pr-pickbtn{flex:1 1 0;min-width:0}',
+    '.pr-pickbtn.shoot{border-style:solid;background:rgba(113,255,0,.07);border-color:rgba(113,255,0,.3)}',
     '.pr-pickbtn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:50px;',
       'border-radius:13px;border:1px dashed var(--line,rgba(255,255,255,.22));cursor:pointer;',
       'background:rgba(255,255,255,.03);color:inherit;font-weight:800;font-size:13.5px}',
@@ -191,7 +202,9 @@
       'background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.22)}',
     '.pr-vtot b{font-weight:900}',
     '.pr-card{cursor:pointer;position:relative}',
-    '.pr-menu{position:absolute;right:10px;bottom:52px;z-index:6;min-width:186px;padding:6px;',
+    /* Opens DOWNWARD from the action row it belongs to. Anchored at the card's bottom
+       edge rather than 52px above it, so it never covers the product whose menu it is. */
+    '.pr-menu{position:absolute;right:10px;top:calc(100% - 6px);bottom:auto;z-index:6;min-width:186px;padding:6px;',
       'border-radius:14px;background:var(--card,#141414);border:1px solid var(--line,rgba(255,255,255,.16));',
       'box-shadow:0 18px 44px rgba(0,0,0,.5)}',
     '.pr-menu button{display:block;width:100%;text-align:left;padding:11px 12px;border:0;border-radius:10px;',
@@ -465,7 +478,7 @@
       var img = p.image || (Array.isArray(p.images) && p.images[0]) || null;
       var price = money(p.price);
       var draft = p.status && p.status !== 'active';
-      return '<div class="pr-card" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
+      return '<div class="pr-card' + (S.menu === i ? ' menu-open' : '') + '" data-pr="open" data-i="' + i + '" role="button" tabindex="0" ' +
         'aria-label="' + esc(p.name || 'Product') + ' — open details">' +
         (img ? '<img class="pr-img" loading="lazy" alt="" src="' + esc(img) + '">'
              : '<div class="pr-ph" aria-hidden="true">📦</div>') +
@@ -959,15 +972,22 @@
        written. Everything else (validation, AI editing, undo) is the same code. */
     function picksPhotos (E) { return !!E && (E.mode === 'photos' || E.mode === 'create'); }
 
-    function onFiles (fileList) {
+    function onFiles (fileList, append) {
       var E = S.editor;
       if (!picksPhotos(E)) return;
       var M;
       try { M = mediaModule(); } catch (e) { E.err = e.message; return paint(); }
 
       var check = M.validateAll(fileList);
-      _picked = check.accepted;
-      _originals = [];                 /* a new selection has nothing to undo back to */
+      if (append) {
+        /* A camera shot ADDS. Replacing would throw away the angles already taken, and a
+           merchant cannot re-take a photo of goods they have already packed away.
+           _originals stays index-aligned: the new entries simply have nothing to undo to. */
+        _picked = _picked.concat(check.accepted);
+      } else {
+        _picked = check.accepted;
+        _originals = [];               /* a new selection has nothing to undo back to */
+      }
       E.rejected = check.rejected;
       E.err = null;
       /* Every refusal is shown, and the acceptable files are still offered —
@@ -1203,12 +1223,21 @@
              no `capture` attribute — on iOS `capture` forces the camera and takes
              away the merchant's photo library, which is where their product
              pictures already are. */
-          '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
-            'accept="' + esc(accept) + '" multiple>' +
-          '<label class="pr-pickbtn" for="pf-photos">📷 ' +
-            (_picked.length
-              ? esc('Choose different photo' + (_picked.length === 1 ? '' : 's'))
-              : 'Choose photos') + '</label>' +
+          '<div class="pr-pickrow">' +
+            /* THE LIBRARY. No `capture` attribute: on iOS it forces the camera and takes
+               away the photo library, which is where a merchant's product pictures already
+               are. Taking a photo is offered SEPARATELY, below, so neither costs the other. */
+            '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
+              'accept="' + esc(accept) + '" multiple>' +
+            '<label class="pr-pickbtn" for="pf-photos">🖼️ ' +
+              (_picked.length ? 'Change photos' : 'Choose photos') + '</label>' +
+            /* THE CAMERA. `capture` asks for the rear lens, which is the one pointed at
+               the goods. It ADDS to the selection rather than replacing it, so a merchant
+               photographing three angles does not lose the first two. */
+            '<input class="pr-file" type="file" id="pf-shoot" data-pf="photo-capture" ' +
+              'accept="image/*" capture="environment">' +
+            '<label class="pr-pickbtn shoot" for="pf-shoot">📸 Take photo</label>' +
+          '</div>' +
           '<div class="pr-note">JPEG, PNG, WebP, GIF or AVIF, up to 15 MB each. ' +
           'Large photos are shrunk before upload.</div></div>' +
         chosen + progress +
@@ -1246,12 +1275,21 @@
         '<div class="pr-f"><label class="pr-l" for="pf-photos">Add photos</label>' +
           /* No `capture` attribute: on iOS it forces the camera and takes away the photo
              library, which is where a merchant's product pictures already are. */
-          '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
-            'accept="' + esc(accept) + '" multiple>' +
-          '<label class="pr-pickbtn" for="pf-photos">📷 ' +
-            (_picked.length
-              ? esc('Choose different photo' + (_picked.length === 1 ? '' : 's'))
-              : 'Choose photos') + '</label>' +
+          '<div class="pr-pickrow">' +
+            /* THE LIBRARY. No `capture` attribute: on iOS it forces the camera and takes
+               away the photo library, which is where a merchant's product pictures already
+               are. Taking a photo is offered SEPARATELY, below, so neither costs the other. */
+            '<input class="pr-file" type="file" id="pf-photos" data-pf="photos" ' +
+              'accept="' + esc(accept) + '" multiple>' +
+            '<label class="pr-pickbtn" for="pf-photos">🖼️ ' +
+              (_picked.length ? 'Change photos' : 'Choose photos') + '</label>' +
+            /* THE CAMERA. `capture` asks for the rear lens, which is the one pointed at
+               the goods. It ADDS to the selection rather than replacing it, so a merchant
+               photographing three angles does not lose the first two. */
+            '<input class="pr-file" type="file" id="pf-shoot" data-pf="photo-capture" ' +
+              'accept="image/*" capture="environment">' +
+            '<label class="pr-pickbtn shoot" for="pf-shoot">📸 Take photo</label>' +
+          '</div>' +
           '<div class="pr-note">Optional — a product sells without one. JPEG, PNG, WebP, GIF ' +
           'or AVIF, up to 15 MB each; large photos are shrunk. They upload as soon as the ' +
           'product is saved.</div></div>' +
@@ -1703,6 +1741,7 @@
       var el = ev.target;
       if (!el || !el.getAttribute) return;
       if (S.editor && el.getAttribute('data-pf') === 'photos') return onFiles(el.files);
+      if (S.editor && el.getAttribute('data-pf') === 'photo-capture') return onFiles(el.files, true);
       if (S.editor && el.getAttribute('data-pf')) {
         S.editor.values[el.getAttribute('data-pf')] = el.value;
         return;
