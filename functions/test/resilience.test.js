@@ -521,7 +521,7 @@ describe('Inventory Fraud composite scoring', () => {
   });
 
   test('Theft alone scores 50', () => {
-    const m = { type: 'theft', qty: 5, reason: 'Theft reported', ts: Date.now() };
+    const m = { type: 'theft', qty: 5, reason: 'Theft reported', ts: new Date().setHours(10, 0, 0, 0) };
     const { total, triggered } = computeRulesScore(m, {});
     expect(triggered).toContain('theft_pattern');
     expect(total).toBe(50);
@@ -548,7 +548,7 @@ describe('Inventory Fraud composite scoring', () => {
   });
 
   test('supervisor_bypass alone scores 15', () => {
-    const m   = { type: 'adjustment', qty: 1, supervisorOverride: true, reason: 'OK reason here', ts: Date.now() };
+    const m   = { type: 'adjustment', qty: 1, supervisorOverride: true, reason: 'OK reason here', ts: new Date().setHours(10, 0, 0, 0) };
     const ctx = { avgAdj: 5, stockAfter: 5, sameUserSameProduct: 1, recentMovements: 1 };
     const { total, triggered } = computeRulesScore(m, ctx);
     expect(triggered).toContain('supervisor_bypass');
