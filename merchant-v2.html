@@ -2354,6 +2354,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   };
   var _mounted = {};   /* id -> { ui, shopKey } */
 
+  /* The route's own label, so an error names what the merchant clicked. */
+  function r_name (id) { return (byId[id] || {}).name || id; }
+
   function renderModule (id, p) {
     var def = MODULES[id];
     var G = window[def.global];
@@ -2374,8 +2377,24 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     var cur = _mounted[id];
     if (cur && cur.shopKey === key) { try { cur.ui.refresh && cur.ui.refresh(); } catch (_) {} return; }
     if (cur) { try { cur.ui.destroy && cur.ui.destroy(); } catch (_) {} _mounted[id] = null; }
+    /* The panel is CLEARED before mounting, so an exception here left a permanently
+       EMPTY black surface with no message — the merchant could not tell a crash from an
+       empty account, and no retry was possible without a full reload. A module that
+       fails must SAY so, exactly as a module whose script never loaded does above. */
     p.innerHTML = '';
-    var ui = G.mount(p, def.ctx());
+    var ui = null;
+    try {
+      ui = G.mount(p, def.ctx());
+    } catch (e) {
+      console.error('[merchant-v2] ' + id + ' mount failed:', e);
+      p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(r_name(id)) +
+        ' could not open</b><small>This surface failed while loading (<code>' +
+        esc((e && e.message) || 'error') + '</code>). Nothing was changed, and no figure is ' +
+        'shown rather than a guessed one.</small>' +
+        '<button class="act ghost" data-retry="module" data-module="' + esc(id) + '">↻ Try again</button></div>';
+      _mounted[id] = null;
+      return;
+    }
     _mounted[id] = ui ? { ui: ui, shopKey: key } : null;
   }
 
@@ -2697,6 +2716,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
     var r = e.target.closest('[data-retry]');
     if (r) {
+      if (r.dataset.retry === 'module') {
+        /* Without this branch the else below would re-render ORDERS for a module retry. */
+        var mid = r.dataset.module;
+        if (mid && MODULES[mid]) { _mounted[mid] = null; renderModule(mid, nativePanel(mid)); }
+        return;
+      }
       if (r.dataset.retry === 'payments') { PAY.rows = null; CACHE.payments = null; renderPayments(nativePanel('payments')); }
       else { ORD.rows = null; CACHE.orders = null; renderOrders(nativePanel('orders')); }
     }
@@ -2804,8 +2829,19 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   /* ── ANALYTICS + REVENUE — one renderer, two views ────────────────────────*/
+  /* analytics | revenue | reports are THREE separate panels, and each builds nodes with
+     the SAME ids (an-body, an-segs, an-custom). document.getElementById returns the FIRST
+     in document order, so once Analytics had been opened, painting Revenue wrote into the
+     HIDDEN Analytics panel and left Revenue's own panel empty — the blank black surface.
+     Every lookup below is scoped to the panel actually being rendered. */
+  function anEl (id) {
+    var p = AN.panel;
+    return p ? p.querySelector('#' + id) : document.getElementById(id);
+  }
+
   function renderAnalytics (p, view) {
     AN.view = view;
+    AN.panel = p;
     if (!p.dataset.built) {
       p.dataset.built = '1';
       p.innerHTML =
@@ -2847,7 +2883,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   function paintRangeSegs () {
-    var el = document.getElementById('an-segs'); if (!el) return;
+    var el = anEl('an-segs'); if (!el) return;
     el.innerHTML = RANGES.map(function (r) {
       return '<button class="seg' + (AN.range === r.k ? ' on' : '') + '" data-range="' + r.k + '">' +
              esc(r.label) + '</button>';
@@ -2855,7 +2891,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   function paintAnError (code) {
-    var host = document.getElementById('an-body'); if (!host) return;
+    var host = anEl('an-body'); if (!host) return;
     host.innerHTML = '<div class="state"><span class="ico">🔒</span>' +
       '<b>' + (code === 'signed-out' ? 'Not signed in on this device' : 'Could not load the data') + '</b>' +
       '<small>' + (code === 'signed-out'
@@ -2865,7 +2901,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   }
 
   function paintAnalytics () {
-    var host = document.getElementById('an-body'); if (!host) return;
+    var host = anEl('an-body'); if (!host) return;
     paintRangeSegs();
     var rows = inRange(ORD.rows);
     var a = metricsFor(rows);
