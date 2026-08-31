@@ -177,6 +177,20 @@ const SUITE_BUDGET_MS = {
      and the gate now also runs gate-inventory's emulator, so the box carries more than
      when that default was set. Same reasoning as merchant-deep-switch above. */
   'test-merchant-home-back': 300000,
+  /* measured 30s standalone (16/0). The ceiling is not about the measurement: this suite
+     POLLS each route for up to 10.5s waiting out the bounded .frame-load reveal, so a
+     worst case where every frame is slow is 14 x 10.5s = 147s — brushing the browser
+     default, where it would be killed as TIMEOUT and lose coverage silently rather than
+     fail loudly. Budgeted for the worst case, not the measured one. */
+  'test-merchant-route-overlays': 240000,
+  /* measured 22s standalone (28/0); opens two browser contexts per viewport and drives
+     real clicks through the storefront's own fetch. */
+  'test-minishop-cart-browser': 180000,
+  /* measured 20s standalone (29/0); renders the storefront FOUR times — attested and
+     bare, at two viewports — because the negative controls are the point. */
+  'test-minishop-trust-honesty': 180000,
+  /* measured 52s standalone (52/0); two viewports, real card clicks, a reload. */
+  'test-cart-browser-certification': 240000,
 };
 
 /* Untriaged genuine failures. Visible every run, blocking none, until each is
