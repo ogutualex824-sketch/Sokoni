@@ -10,7 +10,7 @@
  * delta / frozen wallet.js zero-diff / F3-F8 untouched) are asserted outside this suite.
  *
  * Run: firebase emulators:exec --only firestore --project sokoni-test \
- *        "node functions/test/f5-fos-settlement.test.js"
+ *        "node functions/emulator-tests/f5-fos-settlement.emul.js"
  */
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-test';
 const admin = require('firebase-admin');

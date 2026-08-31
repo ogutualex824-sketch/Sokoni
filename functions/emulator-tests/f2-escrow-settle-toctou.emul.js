@@ -12,7 +12,7 @@
  *        interleave → DOUBLE credit — proving the test detects the TOCTOU the fix removes
  *
  * Run:  firebase emulators:exec --only firestore --project sokoni-test \
- *         "node functions/test/f2-escrow-settle-toctou.test.js"
+ *         "node functions/emulator-tests/f2-escrow-settle-toctou.emul.js"
  */
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-test';
 const admin = require('firebase-admin');

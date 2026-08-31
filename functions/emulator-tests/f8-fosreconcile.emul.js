@@ -10,7 +10,7 @@
  * faithful and verifies the actual deployed generation.
  *
  * Run: firebase emulators:exec --only firestore --project sokoni-test \
- *        "node functions/test/f8-fosreconcile.test.js"
+ *        "node functions/emulator-tests/f8-fosreconcile.emul.js"
  */
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-test';
 const admin = require('firebase-admin');
