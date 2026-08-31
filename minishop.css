@@ -900,6 +900,11 @@ ul, ol {
    card's own click-through, so a tap adds rather than navigates. */
 /* The storefront's own cart indicator — the page carries no marketplace header, so
    without this an add produced a toast and nothing else. */
+/* "Closes at 18:00" / "Opens Tuesday at 08:00" — what a shopper wants the moment
+   they see a shop is shut. Silent when there is no schedule to derive it from. */
+.ms-open-detail { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 4px; }
+.ms-open-detail[hidden] { display: none !important; }
+
 .ms-cart-pill {
   position: fixed; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   z-index: 60; min-height: 48px; padding: 0 18px;

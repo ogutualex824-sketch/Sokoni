@@ -1350,8 +1350,20 @@ async function saveCustomHoliday() {
   }
 
   try {
+    /* THE SUBCOLLECTION IS INVISIBLE TO THE STOREFRONT.
+       functions/kasshop.js effectiveForShop() reads `d.overrides` — a MAP FIELD on
+       providerAvailability/{uid}. This page only ever wrote the overrides/{date}
+       SUBCOLLECTION, so every custom closure a seller saved here was ignored when the
+       shop's open/closed was decided: a shop marked closed for a holiday still showed
+       Open to shoppers.
+
+       Both are written now — the map so the decision is right, the subcollection so
+       this page's own listing and its label keep working. */
     await db.collection("providerAvailability").doc(_uid)
       .collection("overrides").doc(date).set(overrideData);
+    await db.collection("providerAvailability").doc(_uid).set({
+      overrides: { [date]: { closed: overrideData.closed !== false } },
+    }, { merge: true });
     _holidays.push(overrideData);
     _holidays.sort((a,b) => a.date.localeCompare(b.date));
     _renderCustomHolidays();
@@ -1369,6 +1381,11 @@ async function deleteHoliday(date) {
   try {
     await db.collection("providerAvailability").doc(_uid)
       .collection("overrides").doc(date).delete();
+    /* and out of the map, or the storefront would keep honouring a closure the
+       seller has just removed. */
+    await db.collection("providerAvailability").doc(_uid).set({
+      overrides: { [date]: firebase.firestore.FieldValue.delete() },
+    }, { merge: true });
     _holidays = _holidays.filter(h => h.date !== date);
     _renderCustomHolidays();
     showToast("Date removed.");

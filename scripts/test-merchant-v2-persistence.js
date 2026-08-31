@@ -67,11 +67,28 @@ ck('the shell READS the shop document at start',
    /doc\(m\.db, 'shops', S\.uid\)/.test(SHELL));
 ck('and WRITES settings back to that same document',
    /updateDoc\(f\.m\.doc\(f\.db, 'shops', S\.uid\)/.test(SHELL));
+/* Assert the write SHAPE, not a comment or a variable name. The old surface wrote
+   openingHours/hours/updatedAt from a textarea; the availability editor writes the same
+   three keys derived from the saved schedule. Pinning the prose failed a correct rewrite. */
 ck('only allowlisted keys are sent',
-   /Only allowlisted keys are sent/.test(SHELL),
+   (function () {
+     var K = "updateDoc(f.m.doc(f.db, 'shops', S.uid), {";
+     var at = SHELL.indexOf(K);
+     if (at === -1) return false;
+     var body = SHELL.slice(at + K.length, SHELL.indexOf('}', at + K.length));
+     var m = [null, body];
+     if (!m) return false;
+     var keys = m[1].split(',').map(function (x) { return x.split(':')[0].trim(); })
+       .filter(Boolean).sort();
+     return JSON.stringify(keys) === JSON.stringify(['hours', 'openingHours', 'updatedAt']);
+   })(),
    'the rule uses hasOnly(), so one stray field fails the entire write');
 ck('local state is updated only AFTER the write resolves',
-   /await f\.m\.updateDoc[\s\S]{0,220}S\.shop\.openingHours = ta\.value/.test(SHELL),
+   (function () {
+     var w = SHELL.indexOf("await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid),");
+     var a = SHELL.indexOf('S.shop.openingHours =');
+     return w > -1 && a > w;
+   })(),
    'updating first would show a saved value the server had refused');
 ck('a refusal is reported as a refusal',
    /permission-denied[\s\S]{0,80}The server refused that change/.test(SHELL));

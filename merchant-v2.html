@@ -286,6 +286,28 @@ a{color:inherit;text-decoration:none}
 }
 .frame-wrap.loaded .frame-load{display:none}
 
+/* ── AVAILABILITY EDITOR ─────────────────────────────────────────────────────*/
+.av-day{padding:12px 0;border-bottom:1px solid var(--line)}
+.av-day:last-child{border-bottom:0}
+.av-day-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.av-day-n{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;cursor:pointer}
+.av-day-n input{width:18px;height:18px;accent-color:var(--acc);cursor:pointer}
+.av-closed{font-size:11.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em}
+.av-p{display:flex;align-items:center;gap:8px;margin-top:9px;padding-left:27px}
+.av-t{min-height:40px;padding:7px 10px;border-radius:10px;font:inherit;font-size:14px;
+      background:rgba(255,255,255,.05);border:1px solid var(--line);color:inherit;color-scheme:dark}
+.av-to{font-size:12px;color:var(--txt3)}
+.av-add{min-height:34px;padding:0 12px;border-radius:9px;cursor:pointer;font:inherit;font-size:12px;
+        font-weight:800;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3);color:var(--acc)}
+.av-rm{width:34px;height:34px;flex:0 0 34px;border-radius:9px;cursor:pointer;font:inherit;
+       background:transparent;border:1px solid var(--line);color:var(--txt3)}
+.av-ov{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.av-ov:last-of-type{border-bottom:0}
+.av-ov b{font-size:13.5px}
+.av-ovs{flex:1;font-size:11.5px;color:var(--txt3)}
+.av-addov{display:flex;gap:8px;align-items:center;margin-top:12px}
+@media (max-width:520px){.av-p{padding-left:0;flex-wrap:wrap}.av-t{flex:1 1 40%}}
+
 /* ── DASHBOARD ───────────────────────────────────────────────────────────────*/
 .greet{margin:2px 2px 18px}
 .greet b{display:block;font-size:21px;font-weight:900;letter-spacing:-.015em}
@@ -765,6 +787,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      pages): consent is still required and one tap away, but it does not take the console
      hostage. Once accepted, the standalone pages stop blocking. -->
 <script src="security.js"></script>
+<!-- ONE availability rule. sokoni-availability-model.js mirrors
+     functions/kasshop.js effectiveForShop exactly, and both the merchant editor and
+     the MiniShop storefront use it — so a schedule cannot mean one thing to a seller
+     and another to a shopper. Where the SERVER sends a verdict it wins; this fills
+     only what the payload does not carry (unsaved preview, next opening). -->
+<script src="sokoni-availability-model.js"></script>
 <script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
@@ -3591,68 +3619,276 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      A switch here would therefore fail every time. It is not built. What IS writable
      is `hours`/`openingHours`, which the allowlist does permit, so the schedule is a
      real editor. */
+  /* ══ PREMIUM AVAILABILITY ══════════════════════════════════════════════════
+     Writes providerAvailability/{uid} — the document functions/kasshop.js already
+     reads for the storefront's open/closed decision. There is no second collection
+     and no MiniShop-specific copy: the merchant edits the canonical timetable, and
+     the storefront reflects it because the server resolves from the same place.
+
+     `overrides` is written as a MAP FIELD, because that is what effectiveForShop
+     reads. availability-manager.html wrote an overrides/{date} SUBCOLLECTION which
+     the resolver never read — so every holiday a seller set was silently ignored by
+     the storefront. Writing the subcollection here would repeat that defect.
+
+     The TEMPORARY open/closed toggle is deliberately NOT offered. It lives on the
+     shop document as state.online / acceptingOrders, the rules do not let an owner
+     write it, and setLiveStatus is not deployed. A switch that silently fails is
+     worse than an explained absence. */
+  var AV = { hours: null, overrides: {}, loaded: false, err: null, saving: false, dirty: false };
+
+  function avModel () {
+    return (typeof window !== 'undefined') && window.SokoniAvailabilityModel;
+  }
+
+  async function avLoad () {
+    var M = avModel();
+    if (!M) { AV.err = 'The availability model did not load.'; AV.loaded = true; return; }
+    try {
+      var f = await firestore();
+      var snap = await f.m.getDoc(f.m.doc(f.db, 'providerAvailability', S.uid));
+      var d = snap.exists() ? (snap.data() || {}) : {};
+      /* hours OR openingHours — the resolver accepts either, so read both. */
+      AV.hours = d.hours || d.openingHours || null;
+      AV.overrides = d.overrides || {};
+      AV.err = null;
+    } catch (e) {
+      /* A refusal is REPORTED. Rendering an empty week would invite a merchant to
+         overwrite a timetable we simply could not read. */
+      AV.err = (e && e.code === 'permission-denied')
+        ? 'The server refused to show your availability.'
+        : 'Could not load your availability (' + ((e && e.code) || 'unknown') + ').';
+    }
+    AV.loaded = true;
+  }
+
+  function avStatusCard () {
+    var M = avModel();
+    /* THE SERVER'S VERDICT WINS where we have one. S.shop carries what the shell
+       already resolved; only when that is absent do we derive, and we say so. */
+    var serverSaid = (S.shop && S.shop.availability) || null;
+    var derived = (M && AV.hours) ? M.computeEffective(AV.hours, AV.overrides, Date.now()) : null;
+    var eff = serverSaid || derived;
+
+    if (!eff) {
+      return '<div class="dev"><div class="dev-head"><span class="dev-ico">–</span>' +
+        '<span class="dev-id"><b>Availability not set</b><small>Set your opening hours below ' +
+        'and customers will see when you are open.</small></span></div></div>';
+    }
+
+    var closes = (M && AV.hours && eff.open) ? M.closesAt(AV.hours, AV.overrides, Date.now()) : null;
+    var next   = (M && AV.hours && !eff.open) ? M.nextOpening(AV.hours, AV.overrides, Date.now()) : null;
+    var soon   = M ? M.upcomingClosure(AV.overrides, Date.now()) : null;
+
+    return '<div class="dev"><div class="dev-head">' +
+      '<span class="dev-ico">' + (eff.open ? '🟢' : '🔴') + '</span>' +
+      '<span class="dev-id"><b>' + (eff.open ? 'Open now' : 'Closed now') + '</b><small>' +
+        esc(avReason(eff)) +
+        (closes ? ' · closes ' + esc(closes) : '') +
+        (next ? ' · opens ' + esc(next.dayLabel) + ' ' + esc(next.time) : '') +
+      '</small></span></div>' +
+      (serverSaid ? '' : '<div class="note" style="margin-top:10px">Previewed from the schedule ' +
+        'below. The storefront uses the server\'s own decision.</div>') +
+      (soon ? '<div class="note" style="margin-top:10px">⚠️ Closed on <b>' + esc(soon.date) + '</b>' +
+        (soon.inDays === 0 ? ' (today)' : soon.inDays === 1 ? ' (tomorrow)' : ' (in ' + soon.inDays + ' days)') +
+        '</div>' : '') +
+    '</div>';
+  }
+
+  function avReason (eff) {
+    var r = eff && eff.reason;
+    if (r === 'closed_today')  return 'Closed for the day by a date override';
+    if (r === 'special_hours') return 'Open by a date override';
+    if (r === 'within_hours')  return 'Within your opening hours';
+    if (r === 'outside_hours') return 'Outside your opening hours';
+    if (r === 'no_schedule')   return 'No schedule set, so the shop is treated as open';
+    if (r === 'offline')       return 'Your shop is switched off';
+    return 'Current status';
+  }
+
+  function avDayRow (k) {
+    var M = avModel();
+    var cfg = (AV.hours && AV.hours[k]) || { closed: true, periods: [] };
+    var ps = Array.isArray(cfg.periods) ? cfg.periods : [];
+    return '<div class="av-day">' +
+      '<div class="av-day-h">' +
+        '<label class="av-day-n"><input type="checkbox" data-av="open" data-d="' + k + '"' +
+          (cfg.closed ? '' : ' checked') + '> ' + esc(M.LABEL[k]) + '</label>' +
+        (cfg.closed ? '<span class="av-closed">Closed</span>' :
+          '<button class="av-add" data-av="addp" data-d="' + k + '">＋ hours</button>') +
+      '</div>' +
+      (cfg.closed ? '' : ps.map(function (p, i) {
+        return '<div class="av-p">' +
+          '<input class="av-t" type="time" value="' + esc(p.open || '') + '" data-av="t" data-d="' + k + '" data-i="' + i + '" data-w="open">' +
+          '<span class="av-to">to</span>' +
+          '<input class="av-t" type="time" value="' + esc(p.close || '') + '" data-av="t" data-d="' + k + '" data-i="' + i + '" data-w="close">' +
+          '<button class="av-rm" data-av="delp" data-d="' + k + '" data-i="' + i + '" aria-label="Remove">✕</button>' +
+        '</div>';
+      }).join('')) +
+    '</div>';
+  }
+
+  function avOverrideRows () {
+    var keys = Object.keys(AV.overrides || {}).sort();
+    if (!keys.length) return '<div class="note">No closed dates yet. Add one for a holiday or a day off.</div>';
+    return keys.map(function (d) {
+      var o = AV.overrides[d] || {};
+      return '<div class="av-ov">' +
+        '<b>' + esc(d) + '</b>' +
+        '<span class="av-ovs">' + (o.closed === true ? 'Closed all day' : 'Open (overrides the weekly schedule)') + '</span>' +
+        '<button class="av-rm" data-av="delov" data-d="' + esc(d) + '" aria-label="Remove">✕</button>' +
+      '</div>';
+    }).join('');
+  }
+
   function renderAvailability (p) {
     if (S.state !== 'in') {
       p.innerHTML = '<div class="state"><span class="ico">🔒</span><b>Not signed in on this device</b>' +
-        '<small>Your shop’s availability loads once you are signed in.</small></div>';
+        '<small>Your shop\'s availability loads once you are signed in.</small></div>';
       return;
     }
-    var shop = S.shop || {};
-    var accepting = shop.acceptingOrders !== false;   /* absent = open, per the enforcer */
+    if (!AV.loaded) {
+      p.innerHTML = '<div class="state"><b>Loading your availability…</b></div>';
+      avLoad().then(function () { if (!S.destroyed) renderAvailability(p); });
+      return;
+    }
+    var M = avModel();
+    if (AV.err) {
+      p.innerHTML = '<div class="state"><span class="ico">⚠️</span><b>' + esc(AV.err) + '</b>' +
+        '<small>Nothing has been changed.</small>' +
+        '<button class="act ghost" data-av="reload">↻ Try again</button></div>';
+      return;
+    }
+
     p.innerHTML =
-      '<div class="sec-t">Current status</div>' +
-      '<div class="dev"><div class="dev-head">' +
-        '<span class="dev-ico">' + (accepting ? '🟢' : '🔴') + '</span>' +
-        '<span class="dev-id"><b>' + (accepting ? 'Accepting orders' : 'Not accepting orders') + '</b>' +
-        '<small>' + (accepting
-          ? 'Customers can place orders with your shop.'
-          : 'Checkout refuses new orders with “shop-closed”.') + '</small></span>' +
-      '</div>' +
-      '<dl class="kv" style="margin:14px 0 0">' +
-        row('Accepting orders', accepting ? 'Yes' : 'No') +
-        row('Online', shop.online === false ? 'Off' : 'On') +
-        row('Delivery', shop.delivery === false ? 'Off' : 'On') +
-        row('Pickup', shop.pickup === false ? 'Off' : 'On') +
-      '</dl></div>' +
-      '<div class="note" style="margin-top:14px"><b>This status is read-only from here, and that is a platform ' +
-      'limitation rather than a design choice.</b> The open/closed flag lives on your shop record, but the ' +
-      'security rules do not let a shop owner change that particular field from the app, and the server function ' +
-      'that would change it (<code>setLiveStatus</code>) is not currently deployed. Rather than show a switch ' +
-      'that silently fails, the state is shown as it is. This is on the release list to fix.</div>' +
+      '<div class="sec-t">Current status</div>' + avStatusCard() +
       '<div class="sec-t" style="margin-top:22px">Opening hours</div>' +
-      '<div class="note" style="margin:0 0 12px">Hours <b>are</b> editable — they are on the permitted list for a ' +
-      'shop owner. They describe your shop to customers; they do not open or close checkout by themselves.</div>' +
-      '<div class="dev">' +
-        '<textarea id="av-hours" class="ta" rows="6" placeholder="e.g. Mon–Sat 8:00–18:00, Sun closed">' +
-        esc(shop.openingHours || shop.hours || '') + '</textarea>' +
-        '<div class="sheet-actions" style="margin-top:12px">' +
-          '<button class="act" data-av="save">💾 Save hours</button>' +
+      '<div class="note" style="margin:0 0 12px">Customers see these on your shop page. ' +
+        'A day can have more than one period — for a lunch break, set two.</div>' +
+      '<div class="dev">' + (AV.hours
+        ? M.DAYS.map(avDayRow).join('')
+        : '<div class="note">No schedule yet.</div>' +
+          '<button class="act" data-av="seed" style="margin-top:12px">Start from a standard week</button>') +
+      '</div>' +
+
+      '<div class="sec-t" style="margin-top:22px">Closed dates</div>' +
+      '<div class="note" style="margin:0 0 12px">A closed date overrides the weekly schedule for that day.</div>' +
+      '<div class="dev">' + avOverrideRows() +
+        '<div class="av-addov">' +
+          '<input class="av-t" type="date" id="av-ovdate">' +
+          '<button class="av-add" data-av="addov">＋ Closed date</button>' +
         '</div>' +
-      '</div>';
+      '</div>' +
+
+      '<div class="note" style="margin-top:18px"><b>Temporarily closing is not available here yet.</b> ' +
+        'The on/off switch lives on your shop record, the security rules do not let a shop owner ' +
+        'change it from the app, and the server function that would (<code>setLiveStatus</code>) ' +
+        'is not deployed. Rather than show a switch that silently fails, it is left out. ' +
+        'Use a closed date for a day off.</div>' +
+
+      (AV.hours ? '<div class="sheet-actions" style="margin-top:16px">' +
+        '<button class="act" data-av="save"' + (AV.saving ? ' disabled' : '') + '>' +
+          (AV.saving ? 'Saving…' : '💾 Save availability') + '</button>' +
+        (AV.dirty ? '<span class="note" style="margin-left:10px">Unsaved changes</span>' : '') +
+      '</div>' : '');
   }
 
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-av]'); if (!b) return;
-    saveHours(b);
+    var act = b.getAttribute('data-av');
+    var M = avModel();
+    var p = nativePanel('availability');
+    var k = b.getAttribute('data-d');
+    var i = parseInt(b.getAttribute('data-i'), 10);
+
+    if (act === 'reload') { AV.loaded = false; AV.err = null; return renderAvailability(p); }
+    if (act === 'seed')   { AV.hours = M.emptyWeek(); AV.dirty = true; return renderAvailability(p); }
+    if (act === 'addp')   {
+      AV.hours[k].periods = (AV.hours[k].periods || []).concat([{ open: '09:00', close: '17:00' }]);
+      AV.dirty = true; return renderAvailability(p);
+    }
+    if (act === 'delp')   {
+      AV.hours[k].periods.splice(i, 1); AV.dirty = true; return renderAvailability(p);
+    }
+    if (act === 'addov')  {
+      var el = document.getElementById('av-ovdate');
+      var v = el && el.value;
+      if (!v) { toast('Pick a date first.'); return; }
+      AV.overrides[v] = { closed: true }; AV.dirty = true; return renderAvailability(p);
+    }
+    if (act === 'delov')  { delete AV.overrides[k]; AV.dirty = true; return renderAvailability(p); }
+    if (act === 'save')   return avSave(b);
   });
-  async function saveHours (btn) {
-    var ta = document.getElementById('av-hours'); if (!ta) return;
-    busy(btn, 'Saving…');
+
+  document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || !el.getAttribute) return;
+    var act = el.getAttribute('data-av');
+    if (act !== 'open' && act !== 't') return;
+    var k = el.getAttribute('data-d');
+    if (!AV.hours || !AV.hours[k]) return;
+    if (act === 'open') {
+      AV.hours[k].closed = !el.checked;
+      if (!AV.hours[k].closed && !(AV.hours[k].periods || []).length) {
+        AV.hours[k].periods = [{ open: '09:00', close: '17:00' }];
+      }
+      AV.dirty = true;
+      return renderAvailability(nativePanel('availability'));
+    }
+    var i = parseInt(el.getAttribute('data-i'), 10);
+    var w = el.getAttribute('data-w');
+    if (AV.hours[k].periods && AV.hours[k].periods[i]) {
+      AV.hours[k].periods[i][w] = el.value;
+      AV.dirty = true;
+    }
+  });
+
+  async function avSave (btn) {
+    var M = avModel();
+    if (!M || AV.saving) return;
+    /* Validate BEFORE writing: the resolver reads a malformed period as 'no hours',
+       which would quietly close the shop. */
+    var errs = M.validate(AV.hours);
+    if (errs.length) { toast(errs[0]); return; }
+
+    AV.saving = true; renderAvailability(nativePanel('availability'));
     try {
       var f = await firestore();
-      /* Only allowlisted keys are sent. Anything else would be refused wholesale —
-         the rule uses hasOnly(), so ONE stray field fails the entire write. */
-      await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid), {
-        openingHours: ta.value, hours: ta.value, updatedAt: new Date(),
-      });
-      if (S.shop) { S.shop.openingHours = ta.value; S.shop.hours = ta.value; }
-      toast('Opening hours saved.');
+      await f.m.setDoc(f.m.doc(f.db, 'providerAvailability', S.uid), {
+        /* The canonical field names effectiveForShop reads. `overrides` is a MAP,
+           deliberately — the subcollection is invisible to the resolver. */
+        hours: AV.hours,
+        overrides: AV.overrides,
+        uid: S.uid,
+        updatedAt: new Date(),
+      }, { merge: true });
+      /* AND the denormalised copy on the shop record. effectiveForShop falls back to
+         shops/{uid}.openingHours when no structured schedule exists, and other surfaces
+         render it as text — so writing only providerAvailability would leave the shop
+         document describing hours the seller no longer keeps.
+
+         Only allowlisted keys: the rule uses hasOnly(), so one stray field fails the
+         entire write. A failure here is NOT fatal — the canonical schedule is already
+         saved — but it is reported rather than swallowed. */
+      var human = M.formatWeek(AV.hours);
+      try {
+        await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid), {
+          openingHours: human, hours: human, updatedAt: new Date(),
+        });
+        if (S.shop) { S.shop.openingHours = human; S.shop.hours = human; }
+      } catch (e2) {
+        toast(e2 && e2.code === 'permission-denied'
+          ? 'Saved, but the server refused to update your shop record.'
+          : 'Saved, but the shop record was not updated (' + ((e2 && e2.code) || 'unknown') + ').');
+      }
+      AV.dirty = false;
+      toast('Availability saved. Customers see this on your shop page.');
     } catch (e) {
       toast(e && e.code === 'permission-denied'
         ? 'The server refused that change.'
         : 'Could not save: ' + ((e && e.code) || e.message || 'unknown'));
     }
-    done(btn);
+    AV.saving = false;
+    renderAvailability(nativePanel('availability'));
   }
 
   /* ══ SETTINGS ═════════════════════════════════════════════════════════════

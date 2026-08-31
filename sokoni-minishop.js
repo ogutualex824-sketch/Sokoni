@@ -196,6 +196,42 @@ window.SokoniMiniShop = (() => {
     no_schedule:   { label: 'Open',                    cls: 'open' },
   };
 
+  /* WHAT THE PAYLOAD DOES NOT CARRY. getMinishopPublic sends the open/closed verdict
+     and the timetable, but not 'closes at 18:00' or 'opens Tuesday 08:00' — and those
+     are what a shopper actually wants when a shop is shut. Derived from the SAME model
+     the merchant edits against, never re-deciding open/closed: the server's verdict
+     stays the authority and this only elaborates it.
+
+     Silent when the schedule is absent. A shop with no timetable gets no invented
+     'opens tomorrow'. */
+  function _renderAvailabilityDetail(availability, schedule) {
+    const el = document.getElementById('msOpenDetail');
+    if (!el) return;
+    const M = (typeof window !== 'undefined') && window.SokoniAvailabilityModel;
+    const hours = schedule && (schedule.hours || schedule.openingHours);
+    if (!M || !availability || !hours) { el.hidden = true; el.textContent = ''; return; }
+
+    const overrides = (schedule && schedule.overrides) || {};
+    let txt = '';
+    if (availability.open) {
+      const c = M.closesAt(hours, overrides, Date.now());
+      if (c) txt = 'Closes at ' + c;
+    } else {
+      const n = M.nextOpening(hours, overrides, Date.now());
+      if (n) {
+        txt = n.inDays === 0 ? ('Opens today at ' + n.time)
+            : n.inDays === 1 ? ('Opens tomorrow at ' + n.time)
+            : ('Opens ' + n.dayLabel + ' at ' + n.time);
+      }
+    }
+    const soon = M.upcomingClosure(overrides, Date.now(), null, 14);
+    if (soon && soon.inDays > 0 && soon.inDays <= 7) {
+      txt += (txt ? ' · ' : '') + 'Closed on ' + soon.date;
+    }
+    el.textContent = txt;
+    el.hidden = !txt;
+  }
+
   function _renderAvailability(availability) {
     const osEl = document.getElementById('msOpenStatus');
     if (!osEl) return;
@@ -684,6 +720,7 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
        `data.availability` is null when it could not be resolved, and the renderer
        hides the badge rather than inventing a state. */
     _renderAvailability(_state.availability);
+    _renderAvailabilityDetail(_state.availability, _state.schedule);
     _renderSchedule(_state.schedule);
 
     // Response time badge

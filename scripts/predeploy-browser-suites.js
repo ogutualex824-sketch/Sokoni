@@ -50,6 +50,7 @@ const REQUIRED = [
   { f: 'test-merchant-consent-lifecycle.js',     why: 'consent is required, completable, and non-blocking',    browser: false, ms: 120000 },
   { f: 'test-pos-print-delegation.js',           why: 'a receipt reports what actually happened',              browser: false, ms: 120000 },
   { f: 'test-merchant-shell-callables.js',       why: 'every callable the shell names exists',                 browser: false, ms: 120000 },
+  { f: 'test-availability-convergence.js',       why: 'one canonical schedule governs both surfaces',          browser: false, ms: 120000 },
 ];
 
 console.log(NL + '[predeploy] required release suites — ' + REQUIRED.length + ' declared');
