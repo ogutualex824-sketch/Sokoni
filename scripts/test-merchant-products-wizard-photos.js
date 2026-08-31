@@ -86,6 +86,18 @@ head('3 · photos upload against the id the writer returned');
 const attach = grab('attachAfterCreate');
 const createText = grab('createText');
 ck('attachAfterCreate exists', !!attach);
+/* The gate suite asserts exactly ONE attachProductImages call site, and it is right to:
+   a second upload path is a second place the ownership-then-Storage-then-record sequence
+   could be skipped. Adding the wizard created a second one and the deploy was refused. */
+ck('there is exactly ONE media entry point',
+   SRC.split('attachProductImages(').length - 1 === 1,
+   'both surfaces delegate to uploadPicked');
+ck('...and BOTH surfaces call it — the sheet and the wizard',
+   SRC.split('uploadPicked(').length - 1 === 2 && !!grab('uploadPicked'),
+   'two call sites plus one definition; a single caller would mean a surface still forks');
+ck('CONTROL the module still never touches the Storage SDK itself',
+   !/uploadBytes|getDownloadURL|putString|firebase-storage/.test(SRC));
+
 ck('create routes through it only when photos were chosen',
    SRC.indexOf("mode === 'create' && _picked.length && res && res.id") > -1,
    'a product with no photos must not wait on an upload path');
@@ -115,7 +127,10 @@ function runAttach (opts) {
     Promise, Object, console,
   };
   vm.createContext(sb);
-  vm.runInContext(createText + NL + attach + '; attachAfterCreate(' + JSON.stringify(opts.res) + ');', sb);
+  /* The REAL uploadPicked runs too — the single media entry point is part of what is
+     under test, not something the harness may substitute. */
+  vm.runInContext(createText + NL + grab('uploadPicked') + NL + attach +
+    '; attachAfterCreate(' + JSON.stringify(opts.res) + ');', sb);
   return new Promise((r) => setTimeout(() => r({ said, usedId, loaded, sb }), 40));
 }
 

@@ -826,33 +826,18 @@
       };
       if (!E) return finish('');
 
-      var M;
-      try { M = md(); mediaModule(); }
-      catch (e) {
-        return finish('The photos were not uploaded (' + ((e && e.message) || 'unavailable') +
-                      ') — open Photos on the product to add them.');
-      }
-
       E.busy = true; E.phase = 'photos'; E.err = null;
       E.progress = { done: 0, total: n };
       paint();
 
-      M.attachProductImages({
-        scope: ctx.scope, db: ctx.db, media: mediaModule(), storage: ctx.storage,
-        id: res.id, files: _picked,
-        onProgress: function (d, t) {
-          if (S.destroyed || !S.editor) return;
-          S.editor.progress = { done: d, total: t };
-          paint();
-        },
-      }).then(function (r) {
+      uploadPicked(res.id, function (r) {
         if (S.destroyed) return;
         var count = (r && r.urls && r.urls.length) || n;
         finish(r && r.complete === false
           ? (count === 1 ? 'The photo is on your product but has not reached the till yet.'
                          : 'The photos are on your product but have not reached the till yet.')
           : (count === 1 ? 'Photo added.' : count + ' photos added.'));
-      }).catch(function (e) {
+      }, function (e) {
         if (S.destroyed) return;
         finish('The photos could not be uploaded (' + ((e && e.message) || 'upload failed') +
                ') — open Photos on the product to try again.');
@@ -998,19 +983,7 @@
       E.busy = true; E.err = null; E.progress = { done: 0, total: _picked.length };
       paint();
 
-      var M;
-      try { M = md(); mediaModule(); }
-      catch (e) { E.busy = false; E.err = e.message; return paint(); }
-
-      M.attachProductImages({
-        scope: ctx.scope, db: ctx.db, media: mediaModule(), storage: ctx.storage,
-        id: E.product.id, files: _picked,
-        onProgress: function (done, total) {
-          if (S.destroyed || !S.editor) return;
-          S.editor.progress = { done: done, total: total };
-          paint();
-        },
-      }).then(function (res) {
+      uploadPicked(E.product.id, function (res) {
         if (S.destroyed) return;
         _picked = [];
         S.editor = null;
@@ -1022,7 +995,7 @@
               'open Products again to finish syncing.');
         }
         S.rows = null; load();
-      }).catch(function (e) {
+      }, function (e) {
         if (S.destroyed) return;
         E.busy = false;
         E.progress = null;
@@ -1033,6 +1006,33 @@
         E.wroteNothing = (e && e.wrote === false);
         paint();
       });
+    }
+
+    /* ── THE ONLY CALL INTO THE MEDIA WRITER ──────────────────────────────
+       Both surfaces that send photos — the per-product sheet and the create
+       wizard — come through here, so there is exactly ONE media entry point to
+       audit. That is not bookkeeping: a second upload path is a second place the
+       ownership-then-Storage-then-record-then-projections sequence could be
+       skipped, which is why test-merchant-v2-products-2b asserts there is one.
+
+       It owns no policy. The caller decides what to say and what to do next,
+       because the two surfaces genuinely differ: the sheet is finished when the
+       upload is, while the wizard has already created a product whose existence
+       must be reported whatever the photos do. */
+    function uploadPicked (productId, onDone, onFail) {
+      var M;
+      try { M = md(); mediaModule(); }
+      catch (e) { return onFail(e); }
+
+      M.attachProductImages({
+        scope: ctx.scope, db: ctx.db, media: mediaModule(), storage: ctx.storage,
+        id: productId, files: _picked,
+        onProgress: function (done, total) {
+          if (S.destroyed || !S.editor) return;
+          S.editor.progress = { done: done, total: total };
+          paint();
+        },
+      }).then(onDone, onFail);
     }
 
 
