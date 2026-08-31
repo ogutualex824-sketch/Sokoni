@@ -77,6 +77,23 @@
       '.sk-in-shell #sokoniScrollTop{display:none !important}',
       /* A module must never paint its own app-level header inside the shell. */
       '.sk-in-shell .sk-shared-header,.sk-in-shell #shared-header{display:none !important}',
+      /* THE BOTTOM NAV WAS NEVER HIDDEN, AND THAT IS THE DOUBLE NAVIGATION.
+
+         Every embedded module loads shared-header.js, which injects the customer bar
+         (Home / Shop / Services / Messages). This boundary removed the HEADER and left
+         the BAR, so it stacked under the merchant shell own navigation on fulfilment,
+         verification, returns, plans, minishop and the delivery hub alike. One missing
+         rule, every embedded page.
+
+         .bottom-nav also matches the nav a seller dashboard paints itself
+         (shared-header.js:3029 records that those exist and are NOT the injected one),
+         so a module that brings its own bar is covered by the same rule.
+
+         The clearance variable goes with it: hiding a fixed bar while leaving the space
+         reserved for it trades a double nav for a dead strip at the bottom of a panel. */
+      '.sk-in-shell .bottom-nav{display:none !important}',
+      '.sk-in-shell{--sk-bottom-nav-h:0px !important;--bnav-h:0px !important}',
+      '.sk-in-shell body{padding-bottom:0 !important}',
       /* The module viewport IS the panel: never let a module reserve space for chrome
          that the shell already accounts for, and never let it scroll horizontally. */
       '.sk-in-shell,.sk-in-shell body{max-width:100% !important;overflow-x:hidden !important}'
