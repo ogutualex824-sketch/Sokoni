@@ -1,10 +1,10 @@
 {
-  "commit": "876e24140a8724d5bbab6e24cb78c72549c20662",
-  "commitShort": "876e241",
+  "commit": "84eff6d7ad506579e7e9f05d38ccce29f0977fbf",
+  "commitShort": "84eff6d",
   "branch": "fix/printer-connect-autoconnect",
-  "buildTime": "2026-08-30T17:12:49.286Z",
+  "buildTime": "2026-08-31T07:07:32.128Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260830171248-v598",
+  "cacheVersion": "sokoni-20260831070730-v603",
   "environment": "production",
   "dirtyWorkingTree": false,
   "pipelineArtifacts": [
