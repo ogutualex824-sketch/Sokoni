@@ -66,7 +66,10 @@ function makeDb (seed) {
 }
 
 /* ── load the module with its function/admin deps mocked ─────────────────────── */
-function load (ledgerSpy) {
+/* The spy must also PERSIST. A settling entry that is recorded but never written
+   leaves outstandingForSeller re-reading the ledger and still seeing the debt, so
+   "leaving nothing outstanding" could never pass. sink.store is attached after makeDb. */
+function load (ledgerSpy, sink) {
   const mocks = {
     'firebase-functions/v2/scheduler': { onSchedule: (a, b) => (typeof a === 'function' ? a : b) },
     'firebase-functions/v2/https': {
@@ -84,7 +87,12 @@ function load (ledgerSpy) {
       return {
         ACCOUNTS: { EXTERNAL_MPESA: 'external:mpesa', PLATFORM_REVENUE: 'platform:revenue',
                     seller: (id) => 'seller:' + id },
-        createLedgerEntry: async (db, e) => { ledgerSpy.push(e); return { id: 'L' + ledgerSpy.length }; },
+        createLedgerEntry: async (db, e) => {
+          ledgerSpy.push(e);
+          const id = 'LC' + ledgerSpy.length;
+          if (sink && sink.store) { sink.store.ledger = sink.store.ledger || {}; sink.store.ledger[id] = Object.assign({}, e); }
+          return { id };
+        },
       };
     }
     return orig.apply(this, arguments);
@@ -269,6 +277,67 @@ console.log('\nPOS COMMISSION COLLECTION\n' + '='.repeat(64));
     ck('an unresolved unknown from an earlier period is caught',
        rep.findings.some((f) => f.kind === 'stale_unknown'));
     ck('the report is not ok', rep.ok === false);
+  }
+
+  /* ══ 9. MANY SALES — aggregation, and the rate that must survive it ══ */
+  head('9 · many sales, one debt — and it is exactly 5%');
+  {
+    const spy = []; const sink = {}; const M = load(spy, sink);
+    /* Three till sales: KES 3,000 / 1,000 / 500. Bases in cents, and the accrual each
+       sale wrote at 5%. The suite recomputes the rate from the BASIS rather than
+       trusting the seeded figure — otherwise it would be asserting its own arithmetic. */
+    const sales = [[300000, 15000], [100000, 5000], [50000, 2500]];
+    const seed = { ledger: {} };
+    sales.forEach(([basis, comm], i) => {
+      seed.ledger['L' + i] = { type: 'pos_commission_receivable', sellerId: 'S1',
+        amountCents: comm, debitAccount: 'seller:S1', creditAccount: 'platform:revenue',
+        idempotencyKey: 'poscomm_sale' + i, metadata: { basisCents: basis } };
+    });
+    const basisTotal = sales.reduce((a, x) => a + x[0], 0);
+    const commTotal  = sales.reduce((a, x) => a + x[1], 0);
+
+    const { db, store } = makeDb(seed); sink.store = store;
+    const bal = await M.outstandingForSeller(db, 'S1');
+    ck('all three receivables aggregate into one debt', bal.outstandingCents === commTotal,
+       bal.outstandingCents + ' vs ' + commTotal);
+    ck('...and the debt is EXACTLY 5% of the combined basis',
+       bal.outstandingCents === Math.round(basisTotal * 0.05),
+       bal.outstandingCents + ' vs 5% of ' + basisTotal + ' = ' + Math.round(basisTotal * 0.05));
+    ck('...every receivable is accounted for', bal.receivableIds.length === sales.length,
+       bal.receivableIds.length + ' of ' + sales.length);
+
+    let charged = null;
+    M._railRegistry.test = { id: 'test', charge: async (o) => { charged = o.amountCents; return { outcome: 'confirmed', ref: 'R' }; } };
+    await M.collectForSeller(db, 'S1', { period: '20260901', config: { enabled: true, railId: 'test' } });
+    ck('the seller is charged the AGGREGATE, in one attempt', charged === commTotal, charged);
+    ck('...and the settling entry matches it', (spy[0] || {}).amountCents === commTotal, (spy[0] || {}).amountCents);
+    ck('...leaving nothing outstanding',
+       (await M.outstandingForSeller(db, 'S1')).outstandingCents === 0);
+    delete M._railRegistry.test;
+  }
+
+  /* ══ 10. THE SCHEDULER ITSELF, RUN TWICE ══ */
+  head('10 · running the daily job twice cannot double-charge');
+  {
+    const spy = []; const M = load(spy);
+    let charges = 0;
+    M._railRegistry.test = { id: 'test', charge: async () => { charges++; return { outcome: 'confirmed', ref: 'R' }; } };
+    const seed = JSON.parse(JSON.stringify(SEED));
+    seed.ledger.L9 = { type: 'pos_commission_receivable', sellerId: 'S2', amountCents: 5000,
+                       debitAccount: 'seller:S2', creditAccount: 'platform:revenue',
+                       idempotencyKey: 'poscomm_saleB' };
+    const { db } = makeDb(seed);
+    const cfg = { enabled: true, railId: 'test' };
+    const r1 = await M.runDailyCollection(db, { period: '20260901', config: cfg });
+    ck('the job finds every seller carrying a debt', r1.attempted === 2, r1.attempted);
+    ck('...and charges each once', charges === 2, charges + ' charges');
+    const r2 = await M.runDailyCollection(db, { period: '20260901', config: cfg });
+    ck('a SECOND run of the same day charges nobody again', charges === 2, charges + ' charges total');
+    ck('...and reports them as duplicates', (r2.results || []).every((x) => x.duplicate === true),
+       (r2.results || []).map((x) => x.state).join(','));
+    ck('only two settling entries exist in total', spy.length === 2, spy.length);
+    ck('the job reconciles after collecting', !!r2.reconciliation && r2.reconciliation.balanced === true);
+    delete M._railRegistry.test;
   }
 
   /* ══ 8. THE BOUNDARIES ══ */
