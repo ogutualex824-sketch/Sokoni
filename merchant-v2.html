@@ -3849,6 +3849,58 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      reason; this shell shipped without it, which a production smoke test caught before
      the cutover rather than after. shared-header.js is deliberately NOT used here: it
      injects a marketplace header this shell replaces with its own chrome. -->
+<!-- OVERLAY DIAGNOSTIC — /merchant-v2?diag=overlay
+     Inert unless that query is present, so it costs a real merchant nothing.
+
+     A black layer has been reported repeatedly and could not be reproduced signed-out or
+     headlessly. Rather than guess again, this asks the BROWSER what is receiving the tap:
+     elementFromPoint at the centre of the screen returns the topmost hit-testable element,
+     which is by definition the thing blocking. It then walks up the ancestors, because the
+     offender is often a wrapper rather than the node under the finger.
+
+     Rendered at z-index 2147483647 so it is visible ABOVE whatever it is describing. -->
+<script>
+(function () {
+  if (!/[?&]diag=overlay/.test(location.search)) return;
+  function describe (el) {
+    var s = getComputedStyle(el), r = el.getBoundingClientRect();
+    var name = el.id ? ('#' + el.id)
+             : (el.className ? ('.' + String(el.className).trim().split(/s+/)[0]) : el.tagName);
+    return name + '  ' + s.position + ' z=' + s.zIndex +
+           ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+           ' pe=' + s.pointerEvents + ' op=' + s.opacity + ' bg=' + s.backgroundColor;
+  }
+  function report () {
+    var lines = [], el = document.elementFromPoint(innerWidth / 2, innerHeight / 2), n = 0;
+    while (el && n++ < 6) { lines.push(describe(el)); el = el.parentElement; }
+    /* and anything full-viewport that intercepts, wherever it sits */
+    var covers = [];
+    document.querySelectorAll('body *').forEach(function (e) {
+      var s = getComputedStyle(e); if (s.position !== 'fixed' && s.position !== 'absolute') return;
+      if (s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none') return;
+      if (parseFloat(s.opacity || '1') === 0) return;
+      var r = e.getBoundingClientRect();
+      if (r.width < innerWidth * 0.7 || r.height < innerHeight * 0.5) return;
+      covers.push(describe(e));
+    });
+    var box = document.getElementById('sk-diag-overlay') || document.createElement('div');
+    box.id = 'sk-diag-overlay';
+    box.setAttribute('style', 'position:fixed;left:0;right:0;top:0;z-index:2147483647;' +
+      'background:#0a0a0a;color:#71ff00;font:11px/1.45 ui-monospace,Menlo,monospace;' +
+      'padding:10px 12px;max-height:62vh;overflow:auto;border-bottom:2px solid #71ff00;' +
+      '-webkit-user-select:text;user-select:text');
+    box.innerHTML = '<b>AT SCREEN CENTRE (top first)</b><br>' + lines.join('<br>') +
+      '<br><br><b>FULL-VIEWPORT INTERCEPTORS (' + covers.length + ')</b><br>' +
+      (covers.join('<br>') || 'none') +
+      '<br><br><span style="color:#fff">route ' + (location.hash || '(none)') +
+      ' · build ' + (window.__SK_BUILD || 'unknown') + '</span>' +
+      '<br><button style="margin-top:8px;padding:6px 10px" onclick="this.parentNode.remove()">close</button>';
+    if (!box.parentNode) document.body.appendChild(box);
+  }
+  setTimeout(report, 3500);
+  addEventListener('hashchange', function () { setTimeout(report, 1800); });
+})();
+</script>
 <script src="/sw-register.js" defer></script>
 </body>
 </html>
