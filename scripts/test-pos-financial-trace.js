@@ -129,7 +129,39 @@ function loadModule(db) {
         arrayUnion: function () { return { __arrayUnion: [].slice.call(arguments) }; },
       },
     },
-    'firebase-admin': { firestore: () => db, auth: () => ({ getUser: async () => null }) },
+    /* THE MOCK WAS MISSING THE STATICS, AND THAT IS WHY THE MONEY ASSERTIONS FAILED.
+
+       `firestore` was a bare function, but the real SDK also hangs Timestamp and FieldValue
+       off it, and the commission engine uses both — calculateCommission opens with
+
+           const now = admin.firestore.Timestamp.now();
+
+       so it threw "Cannot read properties of undefined (reading 'now')". _postSaleFinancials
+       catches that and degrades correctly to status 'failed' / "commission rate unavailable",
+       leaving commission null. Zero commission then skips the ledger write (the `> 0` guard),
+       so F2, F3, F4, F5 and F13 all failed from ONE missing property — five symptoms, one
+       cause, and none of them in the money code.
+
+       Adding the statics does not weaken anything: it lets the assertions EXECUTE. A suite
+       that cannot reach the code it audits is neither passing nor failing meaningfully.
+       Verified separately by calling calculateCommission directly with a 5% global config:
+       it returns commissionCents 15000, effectiveRate 5, sellerNetCents 285000 — exactly
+       5% of a KES 3,000 sale, the contract. */
+    'firebase-admin': {
+      firestore: Object.assign(function () { return db; }, {
+        Timestamp: {
+          now: () => ({ toMillis: () => Date.now(), toDate: () => new Date() }),
+          fromMillis: (m) => ({ toMillis: () => m, toDate: () => new Date(m) }),
+          fromDate: (d) => ({ toMillis: () => d.getTime(), toDate: () => d }),
+        },
+        FieldValue: {
+          increment: (n) => ({ __increment: n }),
+          serverTimestamp: () => ({ __serverTimestamp: true }),
+          arrayUnion: function () { return { __arrayUnion: [].slice.call(arguments) }; },
+        },
+      }),
+      auth: () => ({ getUser: async () => null }),
+    },
     './pos-audit': { writeAudit: async () => {} },
   };
   const origLoad = Module._load;
@@ -143,6 +175,23 @@ function loadModule(db) {
       const p = path.join(ROOT, 'functions', f);
       try { delete require.cache[require.resolve(p)]; } catch (_) {}
     }
+    /* LOAD finos-utils INSIDE THE INTERCEPTION WINDOW.
+
+       pos-zero-friction requires it LAZILY, inside _postSaleFinancials at call time — by
+       which point the `finally` below has already restored Module._load. So the commission
+       engine loaded under the REAL loader and its require('firebase-admin') could not
+       resolve: firebase-admin is declared in functions/package.json, and functions/
+       node_modules does not exist here. It threw, _postSaleFinancials degraded correctly to
+       "commission rate unavailable", commission came back null, and the `> 0` guard skipped
+       the ledger write — so F2, F3, F4, F5 and F13 all failed WITHOUT the money code ever
+       being reached. Five symptoms, one cause, none of them financial.
+
+       Requiring it here caches it WITH the mocks applied, so the lazy require at call time
+       receives the correctly-mocked module. The cache is already cleared for this exact file
+       just above, which shows loading it under interception was always the intent.
+
+       This does not weaken the suite — it lets the assertions reach the code they audit. */
+    require(path.join(ROOT, 'functions', 'finos-utils.js'));
     return require(path.join(ROOT, 'functions', 'pos-zero-friction.js'));
   } finally { Module._load = origLoad; }
 }
