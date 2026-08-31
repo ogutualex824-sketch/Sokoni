@@ -12823,3 +12823,16 @@ exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: app
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
 exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
 exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read
+
+/* ── POS COMMISSION RECEIVABLE COLLECTION ──────────────────────────────────────
+   The till rail accrued 5% as `pos_commission_receivable` and NOTHING ever read it —
+   no consumer, no scheduled job. These close that loop. The accrual itself is
+   untouched: calculateCommission and _postSaleFinancials stay exactly as they are.
+
+   FAILS CLOSED. No approved seller-collection rail exists yet (mpesa-c2b is inbound
+   only; IntaSend B2C is a PAYOUT rail and would pay sellers 5% daily instead of
+   collecting), so the registry ships empty and the daily job records
+   `blocked_no_rail` and moves NO money until an operator configures one. */
+const _posComm = require("./pos-commission-collection");
+exports.posCommissionDailyCollection = _posComm.posCommissionDailyCollection; // onSchedule 06:00 EAT
+exports.posCommissionReconcile       = _posComm.posCommissionReconcile;       // onCall (admin) — read-only
