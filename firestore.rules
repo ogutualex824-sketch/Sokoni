@@ -1448,8 +1448,16 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
       allow create: if isAdmin()
                     || (isAuthed() && request.resource.data.shopOwnerId == request.auth.uid);
+      /* anchor immutable on update — see docs/findings/SHOPEMPLOYEES_ESCALATION.md
+         RECONCILIATION (2026-09-02): this clause is PRESENT in served ruleset
+         59af870d-72eb-4791-a3b6-2f4de7eb8ff7 and was ABSENT here, so publishing this
+         artifact would have REMOVED a live protection. shopOwnerId is the tenant anchor:
+         without pinning it across an update, the holder of a membership row can repoint
+         it at another shop and inherit that shop's employee authority. Restored VERBATIM
+         from the served ruleset — not re-derived. */
       allow update: if isAdmin()
-                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid
+                        && request.resource.data.shopOwnerId == resource.data.shopOwnerId);
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
     }
