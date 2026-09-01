@@ -777,10 +777,35 @@ exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Audit Logs
 ──────────────────────────────────────────────────────────────────────────── */
+
+/* AdminOS Authority Core pilot (binding scope 05df4c9) — SUBORDINATE capability check.
+   The ONLY reader of `adminPermissions` in this build. It runs strictly AFTER the coarse
+   `_requireAdmin` gate has already established admin authority, and can only NARROW that
+   caller: it never grants admin and never widens authority. `adminPermissions/{uid}` is
+   consulted for a SINGLE capability (`audit.read`); absent doc or absent/true value → the
+   coarse admin claim governs (non-regressive); an EXPLICIT `false` denies. A read failure
+   falls back to the already-verified coarse claim (the narrowing layer must never itself
+   break a legitimate admin). No other callable reads adminPermissions in this build. */
+async function _adminCapabilityAllows(db, uid, capPath) {
+  try {
+    const snap = await db.collection('adminPermissions').doc(uid).get();
+    if (!snap.exists) return true;                                   // no override → coarse admin governs
+    const caps = (snap.data() || {}).capabilities || {};
+    const val = capPath.split('.').reduce((o, k) => (o == null ? undefined : o[k]), caps);
+    return val !== false;                                            // explicit false narrows; grant/absent allows
+  } catch (_) {
+    return true;                                                     // fail back to the coarse claim, never harder-fail an admin
+  }
+}
+exports._adminCapabilityAllows = _adminCapabilityAllows;             // test hook (mirrors exports._h)
+
 exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAuditLogs = async (req) => {
-  _requireAdmin(req);
-  const { action, limit: lim } = req.data;
+  _requireAdmin(req);                                                // coarse authority — UNCHANGED, still THE gate
   const db = getFirestore();
+  if (!(await _adminCapabilityAllows(db, req.auth.uid, 'audit.read'))) {
+    throw new HttpsError('permission-denied', 'audit.read capability revoked for this admin');
+  }
+  const { action, limit: lim } = req.data;
   let q = db.collection('adminAudit').orderBy('createdAt', 'desc').limit(Math.min(lim || 100, 500));
   if (action) q = q.where('action', '==', action);
   const snap = await q.get().catch(() => ({ docs: [] }));

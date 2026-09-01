@@ -1,3 +1,47 @@
+## [2026-09-01] — feat(adminos): Authority Core canonical-writer + controlEvents chain (UNMERGED / UNDEPLOYED)
+
+Implements the binding build-scope contract `docs/ADMINOS_AUTHORITY_CORE_BUILD_SCOPE.md`
+(design branch `05df4c9`, conditions C1–C10). Behind an explicit Implementation Authorization
+Gate; **not merged, not deployed** — the independent implementation review is the next gate.
+
+- **`setUserRole` becomes the merge-preserving canonical role writer (C1/C2/C6).** The prior body
+  rebuilt a claims object from only the six role flags, **wiping every non-role claim** (merchantId,
+  posId, …) and setting `superAdmin` without `admin`. Now: read current claims → **preserve all
+  non-role claims**, normalize **only** the six governed roles `{admin,superAdmin,seller,driver,
+  moderator,buyer}` (superAdmin ⇒ admin), and stamp `permsVersion = max(existing, 1)` (monotonic,
+  never downgrades). The guard/rate-limit/target-exists behaviour is unchanged.
+- **`controlEvents` intent → mutation → finalize chain (C3/C7/C8/C9/C10)** in the net-new helper
+  `functions/authority-control-events.js`: deterministic event id — cross-call idempotency is
+  guaranteed **only when the caller supplies `requestId`** (documented; omitted → distinct intents
+  by design); atomic Firestore-transaction ownership claim so exactly one execution reaches the
+  single Auth mutation, and a **losing concurrent execution waits/reconciles to `committed` and
+  returns that result** (bounded + fail-closed — never a second mutation); crash recovery for an
+  abandoned `mutating` event that reconciles on **full `current == intended` claims equality**
+  (verifiable completion → committed; otherwise explicit fail-closed `recovery`) and **never
+  repeats the Auth mutation**; and monotonic **owner fencing** so a stale owner's late finalize is
+  rejected as a no-op.
+- **`adminPermissions` pilot (frozen).** Exactly one read-only callable, `adminGetAuditLogs`, reads
+  `adminPermissions/{uid}` for a single capability (`audit.read`) **after** its existing coarse
+  `_requireAdmin` gate. Subordinate — it can only NARROW an already-admin caller (explicit `false`
+  denies; absent/true → coarse claim governs, non-regressive). No other callable reads it.
+
+- **Files:** `functions/super-admin.js` (setUserRole rewrite + guard test-hook export),
+  `functions/authority-control-events.js` (new helper), `functions/admin-os.js`
+  (adminGetAuditLogs capability read + predicate), `functions/test/authority-core.test.js` (new,
+  20 pure), `functions/emulator-tests/authority-core.emul.js` (new, 27 emulator). CHANGELOG.
+- **Database:** net-new `controlEvents/*` (Admin-SDK-only append/transition audit) and
+  `adminPermissions/{uid}` (subordinate capability doc). Both are locked to Admin-SDK-only by
+  Firestore default-deny (no client match block); explicit append-only rule blocks are deferred to
+  the separate rules-release gate — `firestore.rules` is intentionally **not** changed here.
+- **API:** `setUserRole` accepts an optional `requestId` (idempotency key) and returns
+  `permsVersion` + `eventId`; no breaking change to existing callers. No new deployed function
+  (helper + two test hooks only) — named-only deploy remains valid when authorized.
+- **Security:** closes the destructive-overwrite privilege defect and the superAdmin-without-admin
+  inconsistency; adds fail-closed crash recovery and owner fencing to the privilege mutation.
+- **Tests:** 47 new (20 pure + 27 emulator, incl. a mutation-counter negative control); full
+  functions suite 685/685 green, no regressions.
+- **Breaking:** none.
+
 ## [2026-07-27] — fix(commerce): stop overselling + propagate shop renames + Buy Now on category cards
 
 Scoped from a user real-time-sync design proposal. A 3-agent read-only audit mapped the 7-point
