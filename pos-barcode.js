@@ -33,6 +33,60 @@ const PosBarcode = (function () {
     return { detector: !!_detector };
   }
 
+  /* ── Decode a barcode from a STILL IMAGE ─────────────────────────
+     A real image-processing path, not a camera preview wearing an "upload" label:
+     the file is decoded to a bitmap and handed to the SAME BarcodeDetector the live
+     camera path uses, so an uploaded photo and a live frame resolve identically.
+
+     It returns the barcode VALUE ONLY. Resolution stays with the caller's callback —
+     ultimately PosDB.products.getByBarcode — so no scanner surface can invent a
+     product or bypass the catalogue. A decoder that returned a product id instead of
+     a barcode would be a second, unauthoritative product lookup.
+
+     Returns { ok, code, format } or { ok:false, reason }. It never throws at the
+     caller and never guesses: an undecodable image is `no_barcode_found`, which is a
+     real answer the UI can act on, not an error to swallow. */
+  async function decodeImage(fileOrBlob) {
+    if (!fileOrBlob) return { ok: false, reason: 'no_image' };
+    if (!_detector) return { ok: false, reason: 'no_decoder' };
+
+    let bitmap = null;
+    try {
+      /* createImageBitmap handles File, Blob and ImageBitmapSource alike. */
+      bitmap = await createImageBitmap(fileOrBlob);
+    } catch (err) {
+      return { ok: false, reason: 'unreadable_image' };
+    }
+
+    try {
+      const found = await _detector.detect(bitmap);
+      if (!found || !found.length) return { ok: false, reason: 'no_barcode_found' };
+
+      /* A barcode value must be a non-empty string. A detector returning an object,
+         a number, or an empty string is malformed input to a product lookup, and
+         passing it on would turn a decode fault into a mysterious catalogue miss. */
+      const raw = found[0] && found[0].rawValue;
+      if (typeof raw !== 'string' || !raw.trim()) return { ok: false, reason: 'malformed_result' };
+
+      return { ok: true, code: raw.trim(), format: found[0].format || null };
+    } catch (err) {
+      return { ok: false, reason: 'decode_failed' };
+    } finally {
+      try { bitmap && bitmap.close && bitmap.close(); } catch (_) {}
+    }
+  }
+
+  /* THE ONE RESOLUTION ENTRY POINT.
+     The hardware wedge, the live camera and the image decoder all end here, so there is
+     exactly one place where a scanned value becomes a cart line. `_emit` carries the
+     duplicate-scan debounce, which every path therefore inherits — an image uploaded
+     twice behaves like a barcode scanned twice. */
+  function submitScannedCode(code) {
+    if (typeof code !== 'string' || !code.trim()) return false;
+    _emit(code.trim());
+    return true;
+  }
+
   /* ── Hardware scanner intercept ──────────────────────────────── */
   function _onKey(e) {
     if (!_callback) return;
@@ -203,7 +257,10 @@ const PosBarcode = (function () {
     return digits + check;
   }
 
-  return { init, startCamera, stopCamera, setCallback, clearCallback, destroy, generateSVG, generateProductBarcode, ean13CheckDigit };
+  return { init, startCamera, stopCamera, setCallback, clearCallback, destroy, generateSVG, generateProductBarcode, ean13CheckDigit,
+           /* Premium Scanner surface. decodeImage extracts a VALUE; submitScannedCode routes
+              it through the same debounce and callback every other scan path uses. */
+           decodeImage, submitScannedCode, hasDecoder: () => !!_detector };
 })();
 
 window.PosBarcode = PosBarcode;

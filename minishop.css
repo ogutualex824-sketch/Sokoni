@@ -902,6 +902,17 @@ ul, ol {
    without this an add produced a toast and nothing else. */
 /* "Closes at 18:00" / "Opens Tuesday at 08:00" — what a shopper wants the moment
    they see a shop is shut. Silent when there is no schedule to derive it from. */
+/* Shown ONLY for a valid platform attestation. Pending, suspended, revoked,
+   expired and absent all render nothing at all. */
+.ms-cert { margin-top: 12px; padding: 12px 14px; border-radius: 14px;
+           border: 1px solid rgba(113,255,0,0.28); background: rgba(113,255,0,0.06); }
+.ms-cert[hidden] { display: none !important; }
+.ms-cert-head { font-size: 13.5px; font-weight: 800; color: #71ff00; }
+.ms-cert-scopes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ms-cert-scope { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+                 background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.75); }
+.ms-cert-meta { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 8px; line-height: 1.5; }
+
 .ms-open-detail { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 4px; }
 .ms-open-detail[hidden] { display: none !important; }
 

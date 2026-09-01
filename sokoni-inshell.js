@@ -41,7 +41,21 @@
     if (embedded) {
       /* Same-origin check — reading .location.pathname throws cross-origin. */
       var pp = global.parent.location.pathname || '';
-      shellParent = /\/merchant(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
+      /* `-v\d+` MATTERS. This shipped as /\/merchant(\.html)?$/, which knows "merchant" and
+         "merchant.html" but NOT the shell that actually embeds these modules today,
+         merchant-v2. For every page whose only boundary is this file, `.sk-in-shell` then
+         landed solely via the SokoniShell global on this same line — i.e. only when the shell
+         had already executed the statement defining it. A race, so it worked sometimes; when
+         it lost, nothing was scoped: the consent scrim covered the panel from the bottom up
+         and the shared bottom nav stacked under the shell's own. Reported on plans, returns,
+         the delivery hub, fulfilment, verification, stories and POS alike — one missing
+         branch, every embedded page.
+
+         The version suffix is matched generically so a v3 shell does not repeat this, and
+         scripts/test-inshell-chrome.js derives the expected name from the ROUTES CONTRACT and
+         EXECUTES this regex against it, so a rename to something else still fails loudly
+         instead of silently resurrecting the race. */
+      shellParent = /\/merchant(-v\d+)?(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
     }
   } catch (_) { embedded = true; shellParent = false; }
 

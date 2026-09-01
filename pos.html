@@ -867,6 +867,11 @@
     <div class="modal-body" style="padding:12px">
       <video id="scanner-video" playsinline muted style="width:100%;border-radius:10px;background:#000;display:block;aspect-ratio:4/3"></video>
       <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txt2)">Hardware scanner works automatically. Camera requires browser support.</div>
+        <!-- Premium Scanner. The module is LAZY — tapping this is what fetches it. -->
+        <button class="inv-btn inv-btn-green" style="width:100%;margin-top:10px"
+                id="premium-scan-btn" onclick="SPos.barcode.openPremium()">
+          &#10024; Premium Scanner &mdash; camera, image upload &amp; torch
+        </button>
       <div style="margin-top:8px;display:flex;gap:8px">
         <input class="form-input" style="flex:1" id="manual-barcode" placeholder="Type barcode + Enter" onkeydown="if(event.key==='Enter'&&this.value.trim()){SPos.barcode.manualEntry(this.value.trim());this.value=''}">
         <button class="inv-btn inv-btn-green" onclick="if(document.getElementById('manual-barcode').value.trim()){SPos.barcode.manualEntry(document.getElementById('manual-barcode').value.trim());document.getElementById('manual-barcode').value=''}">Go</button>
@@ -953,6 +958,7 @@
     </div>
     <div class="modal-footer">
       <button class="modal-btn modal-btn-ghost" onclick="SPos.cart.removeDiscount()">Remove</button>
+      <button class="modal-btn" onclick="SPos.cart.requestDiscountApproval()">Request manager approval</button>
       <button class="modal-btn modal-btn-primary" onclick="SPos.cart.applyDiscount()">Apply</button>
     </div>
   </div>
@@ -1751,15 +1757,139 @@ html[data-pos-chrome="checkout"] .pos-tabs { display: none !important; }
 <script src="sokoni-bluetooth-printer.js" defer></script>
 <script src="sokoni-printer-manager.js" defer></script>
 <script src="sokoni-receipt-id.js" defer></script><script src="sokoni-pos-print-service.js" defer></script>
-<script src="pos-manager-auth.js" defer></script>
+<!-- ── LAZY MODULES ──────────────────────────────────────────────────────────
+     Nothing below is reachable from the first usable POS screen. Together they were
+     ~160 KB of a 2,148 KB startup payload, parsed on every till boot including the
+     many that never open them.
+
+     MANAGER APPROVAL IS DEFERRED, NOT REMOVED. The control is unchanged: the same
+     eight operations, the same server-side posStaff verification, the same rate
+     limiting. It FAILS CLOSED — if the module cannot be fetched, request() resolves
+     FALSE, the same value a declined approval produces, so the caller's existing
+     `if (!ok) return;` refuses the operation. A load failure must never read as an
+     approval, and must never throw into a handler not written to catch it.
+
+     DELIBERATELY STILL EAGER: pos-plugins.js and pos-omni.js run AT BOOT
+     (installBuiltins / restoreEnabled / startSync) behind `if (window.X)` guards, so
+     deferring them would silently disable plugins and omni sync — a functional change
+     wearing a performance change's clothes. pos-ai-engine.js uses nested namespaces
+     (PosAIEngine.pricing.optimizeAll) that a flat forwarder cannot represent.
+
+     Other pages (manager-auth.html, commissioning.html, pos-checkout.html) load the
+     real modules directly and are unaffected. -->
+<script>
+(function () {
+  var URL_ = 'pos-manager-auth.js';
+  var real = null, pending = null;
+
+  function load () {
+    if (real) return Promise.resolve(real);
+    if (pending) return pending;
+    pending = new Promise(function (resolve) {
+      var shim = window.ManagerAuth;
+      var s = document.createElement('script');
+      s.src = URL_;
+      s.onload = function () {
+        real = (window.ManagerAuth && window.ManagerAuth !== shim) ? window.ManagerAuth : null;
+        if (!real) console.error('[ManagerAuth] loaded but did not register');
+        resolve(real);
+      };
+      s.onerror = function () {
+        console.error('[ManagerAuth] module failed to load — approval unavailable');
+        resolve(null);
+      };
+      document.head.appendChild(s);
+    });
+    return pending;
+  }
+
+  function proxy (name, whenUnavailable) {
+    return function () {
+      var args = arguments;
+      return load().then(function (m) {
+        if (!m || typeof m[name] !== 'function') return whenUnavailable;
+        return m[name].apply(m, args);
+      });
+    };
+  }
+
+  window.ManagerAuth = {
+    __lazy: true,
+    /* false === denied. The one value that must never be optimistic. */
+    request:              proxy('request', false),
+    requestPriceOverride: proxy('requestPriceOverride', null),
+    respondMobileRequest: proxy('respondMobileRequest', false),
+    getConfig:            proxy('getConfig', null),
+    listManagers:         proxy('listManagers', null),
+    getManagerQRData:     proxy('getManagerQRData', null),
+    getAuditLog:          proxy('getAuditLog', null),
+    addManager:           proxy('addManager', null),
+    updateManager:        proxy('updateManager', null),
+    removeManager:        proxy('removeManager', null),
+    enrollNFC:            proxy('enrollNFC', null),
+    enrollBiometric:      proxy('enrollBiometric', null),
+    preload:              load,
+  };
+
+  /* WHY A PROXY for the feature modules: enumerating methods means a call site added
+     later silently becomes undefined. The Proxy forwards ANY property, so a new caller
+     keeps working. `if (window.PosAnalytics)` guards stay TRUE — the shim is a real
+     object — so existing feature checks behave exactly as before. When the real module
+     loads it assigns its own global, replacing the shim. */
+  function lazyGlobal (name, url) {
+    var pending2 = null;
+    function load2 () {
+      if (pending2) return pending2;
+      pending2 = new Promise(function (resolve) {
+        var shim = window[name];
+        var s = document.createElement("script");
+        s.src = url;
+        s.onload = function () {
+          resolve((window[name] && window[name] !== shim) ? window[name] : null);
+        };
+        s.onerror = function () {
+          console.error("[lazy] " + url + " failed to load — " + name + " unavailable");
+          resolve(null);
+        };
+        document.head.appendChild(s);
+      });
+      return pending2;
+    }
+    return new Proxy({}, {
+      get: function (_t, prop) {
+        if (prop === "__lazy") return true;
+        if (prop === "preload") return load2;
+        if (prop === "then") return undefined;   /* never a thenable */
+        return function () {
+          var args = arguments;
+          return load2().then(function (m) {
+            if (!m || typeof m[prop] !== "function") return undefined;
+            return m[prop].apply(m, args);
+          });
+        };
+      },
+    });
+  }
+  window.PosAnalytics      = lazyGlobal("PosAnalytics",      "pos-analytics.js");
+  window.PosReports        = lazyGlobal("PosReports",        "pos-reports.js");
+  window.SokonPOSAnalytics = lazyGlobal("SokonPOSAnalytics", "pos-analytics-live.js");
+  window.PosVoice          = lazyGlobal("PosVoice",          "pos-voice.js");
+  window.PosAI             = lazyGlobal("PosAI",             "pos-ai.js");
+  /* Premium Scanner: camera + image decode UI. Never parsed to open a till. */
+  window.PosPremiumScanner = lazyGlobal("PosPremiumScanner", "sokoni-premium-scanner.js");
+  /* Sales / Employees / Shift. Read-only views over existing authorities. */
+  window.PosSalesView      = lazyGlobal("PosSalesView",      "sokoni-pos-sales.js");
+  window.PosApprovalRequest = lazyGlobal("PosApprovalRequest", "sokoni-pos-approval-request.js");
+})();
+</script>
 <script src="pos-terminals.js" defer></script>
 <script src="pos-device-manager.js" defer></script>
 <script src="pos-barcode.js" defer></script>
-<script src="pos-ai.js" defer></script>
-<script src="pos-analytics.js" defer></script>
+
+
 <script src="pos-boss.js" defer></script>
 <script src="pos-plugins.js" defer></script>
-<script src="pos-voice.js" defer></script>
+
 <script src="pos-ai-engine.js" defer></script>
 <script src="pos-finance.js" defer></script>
 <script src="pos-audit.js" defer></script>
@@ -2217,7 +2347,7 @@ var SPosBranch = (function(){
 <script src="pos-sales.js" defer></script>
 <script src="pos-customers.js" defer></script>
 <script src="pos-suppliers.js" defer></script>
-<script src="pos-reports.js" defer></script>
+
 
 <script>
 /* Auto-init universal print engine after POS loads */
@@ -2556,7 +2686,7 @@ html.in-merchant-shell .pos-quick-nav { display: none !important; }
 <script defer src="pos-session-manager.js"></script>
 <script defer src="pos-terminal-driver.js"></script>
 <script defer src="pos-receipt-engine.js"></script>
-<script defer src="pos-analytics-live.js"></script>
+
 
 <!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
 <script defer src="sokoni-redis.js"></script>

@@ -252,7 +252,26 @@
         await _fsUpdateDoc(invRef, {
           qty:       _fsIncrement(delta),
           updatedAt: new Date().toISOString(),
-        }).catch(() => {}); // non-fatal: inventory doc may not exist for new products
+        }).catch((err) => {
+          /* Still swallowed, deliberately: rethrowing would fail the queue item and change
+             retry/DLQ behaviour, and that is a synchronisation decision this change may not
+             make on its own.
+
+             But a DENIAL is not a missing document. The `inventory` collection has no
+             security rule and there is no catch-all — verified against the SERVED ruleset
+             59af870d-72eb-4791-a3b6-2f4de7eb8ff7 on 2026-09-01 — so in production this write
+             is refused while the posStockMovements record above succeeds. The quantity and
+             the audit trail then diverge permanently, and the old `.catch(() => {})` made
+             that invisible by treating every failure as an absent document.
+
+             A genuinely absent doc for a new product stays benign, exactly as before. */
+          const code = (err && err.code) || '';
+          if (code === 'permission-denied') {
+            console.error('[PosSync] inventory quantity NOT applied — permission-denied on ' +
+              'inventory/' + invId + '. The posStockMovements record WAS written, so the ' +
+              'quantity and the audit trail have diverged for product ' + data.productId + '.');
+          }
+        });
       }
     };
 

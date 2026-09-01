@@ -793,6 +793,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      and another to a shopper. Where the SERVER sends a verdict it wins; this fills
      only what the payload does not carry (unsaved preview, next opening). -->
 <script src="sokoni-availability-model.js"></script>
+<!-- ONE definition of "certified". The merchant surface and the storefront both
+     call SokoniCertificationModel.evaluate, so a shop cannot be certified to its
+     owner and uncertified to a shopper. The record is admin-written; nothing in
+     this shell writes it. -->
+<script src="sokoni-certification-model.js"></script>
 <script src="sokoni-authority.js"></script>
 <script src="sokoni-ai-subscriptions.js"></script>
 <script src="sokoni-creative.js"></script>
@@ -1240,7 +1245,22 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     booted = true;
 
     if (m.kind === 'native') { showOnly(nativePanel(rid)); renderNative(rid); return; }
-    if (m.kind === 'pos')    { showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return; }
+    if (m.kind === 'pos')    {
+      /* SETUP BEFORE SELLING. pos-hardware-wizard.html writes `posSetupComplete` and
+         pos-v2.html already read it — this route never did, so a merchant who had never
+         certified their hardware went straight to the till, and the Complete Retail
+         Operating System wizard was reachable only by a detour through pos-setup.html.
+
+         ONCE-EVER, by operator decision (2026-09-01): no daily expiry is added here. The
+         wizard stays reachable afterwards through its own Manage Devices action.
+
+         A SEPARATE panel key on purpose: framePanel caches by key, so reusing 'pos' would
+         keep serving the cached wizard iframe after setup completed. */
+      var _posReady = null;
+      try { _posReady = localStorage.getItem('posSetupComplete'); } catch (_) { _posReady = null; }
+      if (!_posReady) { showOnly(framePanel('pos:setup', 'pos-hardware-wizard.html', m.name)); return; }
+      showOnly(framePanel('pos', 'pos.html' + (m.tab && m.tab !== 'pos' ? '#' + m.tab : ''), m.name)); return;
+    }
     if (m.kind === 'seller') { showOnly(framePanel('seller:' + (m.sec || ''), 'seller.html' + (m.sec ? '#' + m.sec : ''), m.name)); return; }
     if (m.kind === 'page')   { showOnly(framePanel('page:' + rid, m.src, m.name)); return; }
   }
@@ -3895,6 +3915,111 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      A hub of real sections. A section is listed ONLY where the underlying capability
      exists; where it does not, it says so plainly instead of offering a control that
      does not persist. */
+  /* ══ CERTIFICATION ════════════════════════════════════════════════════════
+     READ-ONLY, and that is the feature. sellerCertifications/{uid} is written by
+     an admin custom claim and by nothing else; there is deliberately no editor,
+     no request button that flips a status, and no local override. A merchant who
+     could change what this says would be certifying themselves, which is the one
+     thing a certification must not permit.
+
+     Business VERIFICATION (the Verification route) is a separate claim on separate
+     evidence and is intentionally not merged with this — either implying the other
+     is how a shop ends up displaying a badge nobody actually granted. */
+  var CERT = { loaded: false, loading: false, rec: null, err: null, denied: false };
+  function certModel () {
+    return (typeof SokoniCertificationModel !== 'undefined') ? SokoniCertificationModel : null;
+  }
+  async function certLoad () {
+    if (CERT.loading) return;
+    CERT.loading = true;
+    try {
+      var f = await firestore();
+      var snap = await f.m.getDoc(f.m.doc(f.db, 'sellerCertifications', S.uid));
+      CERT.rec = snap.exists() ? (snap.data() || {}) : null;
+      CERT.err = null; CERT.denied = false;
+    } catch (e) {
+      /* The rules slice for this collection is not deployed yet, so a refusal is the
+         EXPECTED answer today. It is reported as unreadable — never as 'not
+         certified', which would be a different and possibly false statement. */
+      CERT.denied = !!(e && e.code === 'permission-denied');
+      CERT.err = CERT.denied
+        ? 'not-readable'
+        : ((e && e.code) || 'unknown');
+      CERT.rec = null;
+    }
+    CERT.loaded = true; CERT.loading = false;
+  }
+
+  function certSection () {
+    var C = certModel();
+    if (!C) {
+      return '<div class="note" style="margin:0">The certification model did not load, ' +
+        'so certification status cannot be shown.</div>';
+    }
+    if (S.state !== 'in') {
+      return '<div class="note" style="margin:0">Sign in to see your certification status.</div>';
+    }
+    if (!CERT.loaded) {
+      /* renderNative returns for 'settings' BEFORE it stamps dataset.rendered, so a
+         gate on that flag would never re-render and the panel would sit on
+         'Checking…' for ever. Re-render the live panel, as availability does. */
+      certLoad().then(function () {
+        var p = nativePanel('settings');
+        if (!S.destroyed && p) renderSettings(p);
+      });
+      return '<div class="note" style="margin:0">Checking your certification…</div>';
+    }
+    if (CERT.err) {
+      /* An unreadable record is UNKNOWN. Showing "Not certified" here would assert
+         something we did not measure. */
+      return '<div class="note" style="margin:0"><b>Certification status unavailable.</b> ' +
+        (CERT.denied
+          ? 'The certification register is not open for reading yet, so your status ' +
+            'cannot be shown here. This is a pending platform change, not a decision ' +
+            'about your business.'
+          : 'Could not be read (' + esc(String(CERT.err)) + ').') + '</div>';
+    }
+
+    var v = C.evaluate(CERT.rec, Date.now());
+    var todo = C.outstanding(CERT.rec, Date.now());
+    var days = C.daysUntilExpiry(CERT.rec, Date.now());
+
+    var head = '<div class="dev"><div class="dev-head">' +
+      '<span class="dev-ico">' + (v.valid ? '🛡️' : '–') + '</span>' +
+      '<span class="dev-id"><b>' + esc(v.label) + '</b><small>' +
+        (v.valid
+          ? esc((v.level ? v.level + ' · ' : '') + v.authority)
+          : 'Your storefront does not display a certification badge.') +
+      '</small></span></div>';
+
+    /* THE EVIDENCE. A badge with nothing behind it is decoration; a shopper or a
+       dispute must be able to quote a reference and a date. */
+    var evidence = '';
+    if (v.valid) {
+      evidence = '<dl class="kv" style="margin-top:10px">' +
+        row('Attested by', v.authority) +
+        row('Reference', v.verificationId) +
+        row('Issued', v.issuedAt ? new Date(v.issuedAt).toISOString().slice(0, 10) : '—') +
+        row('Review due', v.expiresAt
+              ? new Date(v.expiresAt).toISOString().slice(0, 10) +
+                (days !== null ? ' (' + days + ' day' + (days === 1 ? '' : 's') + ')' : '')
+              : 'No review date') +
+        row('Scope', (v.scope && v.scope.length)
+              ? v.scope.map(function (k) { return C.scopeLabel(k); }).join(', ')
+              : '—') +
+      '</dl>';
+    }
+
+    var out = todo.length
+      ? '<div class="note" style="margin-top:10px">' + esc(todo[0]) + '</div>'
+      : '';
+
+    return head + evidence + out + '</div>' +
+      '<div class="note" style="margin-top:10px">Certification is issued by SOKONI after ' +
+      'review. It cannot be set, requested away or edited from this screen — a badge a ' +
+      'business could switch on itself would not mean anything to a customer.</div>';
+  }
+
   function renderSettings (p) {
     var shop = S.shop || {};
     var signedIn = S.state === 'in';
@@ -3908,6 +4033,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         setCard('🛵', 'Delivery', 'Methods, times and zones', 'profile', signedIn) +
         setCard('📄', 'Plan', 'Subscription and billing', 'route:plan', true) +
       '</div>' +
+      '<div class="sec-t" style="margin-top:22px">Trust</div>' +
+      certSection() +
       '<div class="sec-t" style="margin-top:22px">Account</div>' +
       '<dl class="kv">' +
         row('Signed in as', signedIn ? (S.email || S.uid) : 'Not signed in') +

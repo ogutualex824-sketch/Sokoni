@@ -118,7 +118,21 @@ const SPos = (function () {
     if (window._posDbDegraded) _showPosDbDegradedStatus();
 
     /* Remaining boot steps — each isolated; none may abort the render. */
-    try { await PosBarcode.init(); PosBarcode.setCallback(handleBarcodeGlobal); } catch (_) {}
+    /* SCANNER INIT MUST NOT FAIL SILENTLY.
+       This was `catch (_) {}`. The hardware wedge listener is only armed once
+       setCallback() has run, so if init() threw, every barcode a cashier scanned did
+       NOTHING — no error, no log, no visible difference from a scanner that is simply
+       unplugged. "The scanner stopped working" is unanswerable when the failure left no
+       trace. Boot still continues (the isolation is deliberate); it just says so now. */
+    try {
+      await PosBarcode.init();
+      PosBarcode.setCallback(handleBarcodeGlobal);
+      state.scannerReady = true;
+    } catch (err) {
+      state.scannerReady = false;
+      console.error('[POS] barcode scanner init failed — hardware scanning is OFF:',
+                    (err && err.message) || err);
+    }
     try { setInterval(updateClock, 1000); updateClock(); } catch (_) {}
     try {
       window.addEventListener('online',  () => updateOnlineStatus(true));
@@ -1132,7 +1146,7 @@ const SPos = (function () {
           <div class="cart-item-name">
             ${_esc(item.name)}
             <small>KES ${Number(item.price).toFixed(2)} / ${item.unit || 'piece'}
-              <button class="cart-price-override" title="Override price" onclick="SPos.cart.overridePrice('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px;margin-left:2px">✏</button>
+              <button class="cart-price-override" title="Override price" onclick="SPos.cart.overridePrice('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px;margin-left:2px">✏</button><button class="cart-price-override" title="Request manager approval for a price override" onclick="SPos.cart.requestPriceOverrideApproval('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px">🔑</button>
             </small>
           </div>
           <div class="cart-item-qty">
@@ -1225,6 +1239,38 @@ const SPos = (function () {
       cart.render();
       modal.close('discount-modal');
       if (val > 0) toast(`Discount applied: ${state.discountType === 'pct' ? val + '%' : 'KES ' + val}`, 'success');
+    },
+
+    /* ── REQUEST MANAGER APPROVAL ─────────────────────────────────────────────
+       Raises a BOUND request and returns. It does NOT apply the discount: no
+       mutation consumes an approval yet, so approving is a recorded decision and
+       nothing more. The PIN path in applyDiscount is untouched and still gates
+       execution. See docs/MANAGER_APPROVAL_ARCHITECTURE.md. */
+    async requestDiscountApproval() {
+      const val = parseFloat(_v('disc-value')) || 0;
+      if (!(val > 0)) { toast('Enter a discount value first', 'error'); return; }
+      const isPct = state.discountType === 'pct';
+      /* The binding must carry the exact figure the manager will see. A percentage is
+         resolved to money against the current subtotal, so "20%" can never be approved
+         and later read as "KES 20". */
+      const sub = cart.getSubtotal();
+      const amount = isPct ? Math.round(sub * (val / 100) * 100) / 100 : val;
+      await PosApprovalRequest.request('discount', { amount: amount }, {
+        reason: isPct ? (val + '% of ' + sub) : 'flat amount',
+        requestedByName: state.currentCashier && state.currentCashier.name,
+      });
+    },
+
+    async requestPriceOverrideApproval(id, name, currentPrice) {
+      const raw = window.prompt('New price for ' + name + ' (current KES ' + currentPrice + ')');
+      if (raw === null) return;
+      const next = parseFloat(raw);
+      if (!isFinite(next) || next < 0) { toast('Enter a valid price', 'error'); return; }
+      await PosApprovalRequest.request('price_override',
+        { productId: String(id), amount: next }, {
+          reason: name + ': KES ' + currentPrice + ' → KES ' + next,
+          requestedByName: state.currentCashier && state.currentCashier.name,
+        });
     },
 
     removeDiscount() {
@@ -1996,6 +2042,35 @@ const SPos = (function () {
       PosBarcode.stopCamera();
       state.scannerForField = null;
       PosBarcode.setCallback(handleBarcodeGlobal);
+    },
+
+    /* ── PREMIUM SCANNER ──────────────────────────────────────────────────
+       Camera + image-upload + torch + continuous scanning, in its own surface.
+
+       IT IS HANDED THE SAME CALLBACK AS EVERY OTHER SCAN PATH. handleBarcodeGlobal
+       is the one place a scanned value becomes a cart line:
+
+         value → PosBarcode.submitScannedCode → PosDB.products.getByBarcode → cart.addByProduct
+
+       The premium module decodes and nothing else; passing it this callback is what
+       keeps the catalogue the single product authority. Passing it anything else —
+       or letting it resolve for itself — would create a second one.
+
+       THE MODULE IS LAZY. window.PosPremiumScanner is a shim installed in pos.html;
+       touching .open() is what fetches sokoni-premium-scanner.js. Nothing here is
+       parsed to open a till, and this call site must never be changed to an eager
+       import to make it feel faster. */
+    async openPremium() {
+      if (barcode.scannerOpen) barcode.closeScanner();
+      try {
+        const ok = await PosPremiumScanner.open(handleBarcodeGlobal);
+        /* The lazy shim resolves undefined when the module cannot be fetched. Say so
+           rather than leaving a merchant tapping a button that does nothing. */
+        if (ok === undefined) toast('Premium Scanner could not be loaded', 'error');
+      } catch (err) {
+        toast('Premium Scanner unavailable', 'error');
+        console.error('[POS] premium scanner failed to open:', (err && err.message) || err);
+      }
     },
 
     async scanForField(fieldId) {
@@ -3349,6 +3424,8 @@ const SPos = (function () {
             <option value="credit">Store Credit</option>
           </select>
         </div>
+          <button type="button" class="row-btn" style="width:100%;margin-top:14px;min-height:46px;font-weight:800" onclick="SPos.sales.requestRefundApproval('${txnId}')">Request manager approval</button>
+          <div style="font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.45">Sends the exact operation to a manager. It does not carry it out.</div>
       `;
 
       confirm.show('Process Refund', body, async () => {
@@ -3448,6 +3525,35 @@ const SPos = (function () {
       }).catch(() => {});
     },
 
+    /* ── REQUEST MANAGER APPROVAL ─────────────────────────────────────────────
+       Creates a bound request and returns. It does NOT refund and does NOT void —
+       `_consumeApproval` has zero mutation call sites, so an approval is a recorded
+       decision, not an authorisation to execute. _processRefund / _processVoid are
+       untouched and still run their own checks. */
+    async requestRefundApproval(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Transaction not found', 'error'); return; }
+      /* Only the selected lines, so the manager approves the amount actually asked
+         for rather than the whole sale. */
+      let amount = 0;
+      document.querySelectorAll('[id^="ref-item-"]').forEach((el) => {
+        if (el.checked) amount += (Number(el.dataset.qty) || 0) * (Number(el.dataset.price) || 0);
+      });
+      if (!(amount > 0)) amount = Number(t.total) || 0;
+      const reason = document.getElementById('refund-reason')?.value || 'customer_request';
+      await PosApprovalRequest.request('refund',
+        { saleId: String(txnId), amount: Math.round(amount * 100) / 100 },
+        { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
+    },
+
+    async requestVoidApproval(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Transaction not found', 'error'); return; }
+      const reason = document.getElementById('void-reason')?.value || 'manager_error';
+      await PosApprovalRequest.request('void', { saleId: String(txnId) },
+        { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
+    },
+
     async voidDialog(txnId) {
       const t = await PosDB.transactions.getById(txnId);
       if (!t) { toast('Transaction not found', 'error'); return; }
@@ -3472,7 +3578,9 @@ const SPos = (function () {
             <option value="system_error">System Error</option>
             <option value="other">Other</option>
           </select>
-        </div>`;
+        </div>
+          <button type="button" class="row-btn" style="width:100%;margin-top:14px;min-height:46px;font-weight:800" onclick="SPos.sales.requestVoidApproval('${txnId}')">Request manager approval</button>
+          <div style="font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.45">Sends the exact operation to a manager. It does not carry it out.</div>`;
 
       confirm.show('Void Transaction', body, async () => {
         await sales._processVoid(t);

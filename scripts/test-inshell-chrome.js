@@ -156,5 +156,61 @@ ck('CONTROL a standalone page keeps its navigation',
    !/^\s*'\.bottom-nav\{display:none/m.test(INS),
    'the rule must stay scoped, or a merchant loses the bar outside the shell');
 
+/* ── 2c. THE SHARED MODULE CARRIES THE SAME DETECTOR ─────────────────────────
+   Section 2b walks the embedded PAGES and skips anything without an inline
+   `window.parent===window` detector — which silently excluded sokoni-inshell.js, the
+   module most of those pages rely on for the boundary. It shipped with
+
+       shellParent = /\/merchant(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
+
+   matching "merchant" and "merchant.html" but NOT the current shell, so for every page
+   whose only boundary is this module the class landed solely via the SokoniShell global
+   — the exact race 2b exists to forbid. Reported on plans, returns, the delivery hub,
+   fulfilment, verification, stories, pos and pos-setup.
+
+   The regex is EXECUTED against the shell path here, not string-matched: a detector can
+   name the shell in a comment and still not match it. */
+head('2c · the SHARED boundary module recognises the current shell');
+{
+  const INSHELL = read('sokoni-inshell.js');
+  /* Take the ASSIGNMENT, not the `var embedded = false, shellParent = false;` declaration —
+     matching the first occurrence grabbed the initialiser and reported "false" as the
+     detector, which would have passed a broken probe off as a broken product. */
+  const line = (INSHELL.match(/shellParent\s*=\s*([^;]*\.test\([^;]*)/) || [])[1] || '';
+  ck('CONTROL the shared detector expression was located', !!line, line.slice(0, 60));
+
+  const lit = (line.match(/\/(?:\\.|\[[^\]]*\]|[^/\\])+\/[gimsuy]*/) || [])[0];
+  ck('CONTROL a regex literal was extracted from it', !!lit, lit || '(none)');
+
+  let re = null;
+  try { re = lit ? eval(lit) : null; } catch (_) { re = null; }   /* eslint-disable-line no-eval */
+  ck('CONTROL the extracted regex compiles', !!re);
+
+  if (re && SHELL) {
+    ck('it matches the CURRENT shell path "/' + SHELL + '"', re.test('/' + SHELL),
+       'unfixed: only /merchant and /merchant.html matched, so the class needed the race');
+    ck('...and the .html form "/' + SHELL + '.html"', re.test('/' + SHELL + '.html'));
+    ck('CONTROL it still matches the legacy shell, so nothing regresses',
+       re.test('/merchant') && re.test('/merchant.html'));
+    ck('NEGATIVE it does not match an unrelated same-origin embed',
+       !re.test('/product') && !re.test('/seller'),
+       'an unrelated embed must keep standalone behaviour');
+  }
+  ck('the SokoniShell global remains only a FALLBACK',
+     line.indexOf('SokoniShell') > -1 && !!lit,
+     'a name check AND a global; never the global alone');
+
+  /* Added after a sabotage drew ZERO failures: deleting the consent rule broke nothing in
+     this suite, so the very layer the detector exists to suppress was unprotected. The
+     bottom-nav rule was already covered by section 1; this one was not. */
+  ck('the module suppresses the consent scrim under .sk-in-shell',
+     INSHELL.indexOf('.sk-in-shell #_sokoniPrivacyBanner{display:none !important}') > -1,
+     'the measured black layer: rgba(0,0,0,0.66) at z-index 300001, pointer-events auto');
+  ck('...and it is SCOPED, so a standalone page still asks for consent',
+     INSHELL.indexOf('#_sokoniPrivacyBanner{display:none !important}') ===
+     INSHELL.indexOf('.sk-in-shell #_sokoniPrivacyBanner{display:none !important}') + '.sk-in-shell '.length,
+     'an unscoped rule would suppress consent everywhere — an ODPC problem, not a fix');
+}
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

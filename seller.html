@@ -4951,6 +4951,14 @@ class="notification-container"
 
 <style>
 /* ── Mobile section back bar ── */
+/* FRAMED IN THE MERCHANT SHELL: the shell owns navigation, so this bar must not exist.
+   A backstop to the guard in sdSwitchTab, deliberately `!important` because the guard
+   sets an INLINE display and any other path that did the same would otherwise win. Two
+   mechanisms because a single missed code path here re-creates the double-back-button
+   the merchant reported. */
+html.sk-in-shell #sdm-back-bar { display: none !important; }
+html.sk-in-shell .seller-nav-back-home { display: none !important; }
+
 #sdm-back-bar {
   position: fixed;          /* out of flow — no longer pushes content sideways */
   top: 68px;                /* sits flush under the seller navbar (68px tall) */
@@ -5516,8 +5524,22 @@ class="notification-container"
     /* Show/hide the back bar + adjust content padding */
     var backBar = document.getElementById('sdm-back-bar');
     var titleEl = document.getElementById('sdm-section-title');
+    /* THE SHELL OWNS NAVIGATION WHEN THIS FILE IS FRAMED.
+       merchant-v2 mounts seller.html for the routes declaring kind:'seller' (Stories
+       among them) and renders its own back/section chrome around the frame. This bar
+       was shown for EVERY non-home section with no frame check, so a merchant opening
+       Stories in the shell got two competing "back" affordances — and the inner one
+       navigates the FRAME to seller's own home, not the shell's dashboard, so pressing
+       it left the shell showing a section it did not route to.
+
+       `sk-in-shell` is the marker this file already sets at the top of the document
+       when the parent is the merchant shell; reusing it keeps one definition of
+       "embedded" rather than adding a second frame test that could disagree with it. */
+    var _inShell = false;
+    try { _inShell = document.documentElement.classList.contains('sk-in-shell'); } catch (_) {}
+
     if(backBar){
-      if(name === 'home'){
+      if(name === 'home' || _inShell){
         backBar.style.display = 'none';
         document.body.classList.remove('sdm-backbar-visible');
         _sdmUnlock();

@@ -204,6 +204,58 @@ window.SokoniMiniShop = (() => {
 
      Silent when the schedule is absent. A shop with no timetable gets no invented
      'opens tomorrow'. */
+  /* ══ SELLER CERTIFICATION ══════════════════════════════════════════════════
+     Read from sellerCertifications/{sellerUid} — a document the SHOP CANNOT WRITE
+     (firestore.rules: allow write: if isAdmin(), and admin is a signed claim set
+     server-side). That is the whole basis of the badge: an attestation the badged
+     party can mint is not an attestation.
+
+     It is NOT derived from shop.verified, ratings, reviews, availability, response
+     rate or completion rate. Those are performance signals and business verification;
+     a five-star shop with no attestation is UNCERTIFIED and shows as such.
+
+     A read that is DENIED or absent means not certified — which is also what happens
+     before the rules slice ships, so this degrades to silence rather than to a claim. */
+  async function _loadCertification() {
+    const C = (typeof window !== 'undefined') && window.SokoniCertificationModel;
+    const sellerUid = _state.shop && (_state.shop.sellerUid || _state.shop.ownerUid);
+    if (!C || !sellerUid || !window.firebaseDB) { _renderCertification(null); return; }
+    try {
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const snap = await m.getDoc(m.doc(window.firebaseDB, 'sellerCertifications', String(sellerUid)));
+      _renderCertification(snap.exists() ? (snap.data() || null) : null);
+    } catch (_) {
+      /* denied, offline, or not yet deployed — all of them mean we cannot assert it */
+      _renderCertification(null);
+    }
+  }
+
+  function _renderCertification(rec) {
+    const el = document.getElementById('msCertification');
+    if (!el) return;
+    const C = (typeof window !== 'undefined') && window.SokoniCertificationModel;
+    if (!C) { el.hidden = true; return; }
+    const v = C.evaluate(rec);
+    /* ONLY a valid attestation is shown. Pending, suspended, revoked, expired and
+       absent all render NOTHING to a shopper — a shop is not advertised as being in
+       trouble, and it is certainly not advertised as certified. */
+    if (!v.valid) { el.hidden = true; el.innerHTML = ''; return; }
+    const scope = (v.scope || []).map(function (k) {
+      return '<span class="ms-cert-scope">' + _esc(C.scopeLabel(k)) + '</span>';
+    }).join('');
+    const issued = v.issuedAt ? new Date(v.issuedAt).toISOString().slice(0, 10) : null;
+    const until  = v.expiresAt ? new Date(v.expiresAt).toISOString().slice(0, 10) : null;
+    el.innerHTML =
+      '<div class="ms-cert-head"><span aria-hidden="true">🛡️</span> ' +
+        _esc(v.label) + (v.level ? ' · ' + _esc(v.level) : '') + '</div>' +
+      (scope ? '<div class="ms-cert-scopes">' + scope + '</div>' : '') +
+      '<div class="ms-cert-meta">Attested by ' + _esc(v.authority) +
+        (issued ? ' · issued ' + _esc(issued) : '') +
+        (until ? ' · valid to ' + _esc(until) : '') +
+        ' · ref ' + _esc(v.verificationId) + '</div>';
+    el.hidden = false;
+  }
+
   function _renderAvailabilityDetail(availability, schedule) {
     const el = document.getElementById('msOpenDetail');
     if (!el) return;
@@ -721,6 +773,7 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
        hides the badge rather than inventing a state. */
     _renderAvailability(_state.availability);
     _renderAvailabilityDetail(_state.availability, _state.schedule);
+    _loadCertification();
     _renderSchedule(_state.schedule);
 
     // Response time badge

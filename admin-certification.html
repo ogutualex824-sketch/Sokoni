@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Seller Certification · SOKONI Admin</title>
+
+<!-- ONE definition of "certified", shared with the merchant shell and the storefront.
+     This page never decides what a valid attestation is; it builds one through the
+     model and writes it. -->
+<script src="sokoni-certification-model.js"></script>
+
+<style>
+  :root{
+    --bg:#0b0d10; --card:#14181d; --line:rgba(255,255,255,.09);
+    --ink:#e9eef5; --dim:rgba(233,238,245,.55); --faint:rgba(233,238,245,.32);
+    --ok:#3ddc84; --warn:#f5a524; --bad:#ef4444; --acc:#71ff00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:820px;margin:0 auto;padding:24px 16px 80px}
+  h1{font-size:20px;margin:0 0 4px;letter-spacing:-.2px}
+  .sub{color:var(--dim);font-size:13px;margin:0 0 22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:18px;margin-bottom:16px}
+  .sec-t{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:var(--faint);
+         margin:0 0 10px;font-weight:700}
+  label{display:block;font-size:12px;color:var(--dim);margin:12px 0 5px;font-weight:600}
+  input[type=text],input[type=date],select{
+    width:100%;background:#0e1116;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:rgba(113,255,0,.45)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>*{flex:1 1 200px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:#0e1116;
+        border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:13px;
+        cursor:pointer;user-select:none}
+  .chip input{accent-color:var(--acc);margin:0}
+  .chk{display:flex;align-items:center;gap:9px;margin-top:10px;font-size:13px;color:var(--dim)}
+  .chk input{accent-color:var(--acc)}
+  button{font:inherit;font-weight:700;border-radius:10px;padding:11px 16px;cursor:pointer;
+         border:1px solid transparent}
+  .primary{background:var(--acc);color:#0b0d10}
+  .ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+  .danger{background:transparent;border-color:rgba(239,68,68,.45);color:#ff8a8a}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .note{background:rgba(255,255,255,.03);border:1px solid var(--line);border-left:3px solid var(--faint);
+        border-radius:0 9px 9px 0;padding:11px 13px;font-size:13px;color:var(--dim);margin-top:12px}
+  .note.bad{border-left-color:var(--bad);color:#ffb4b4}
+  .note.ok{border-left-color:var(--ok);color:#b6f0cf}
+  .note.warn{border-left-color:var(--warn);color:#f7d9a4}
+  dl.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;margin:12px 0 0;font-size:13px}
+  dl.kv dt{color:var(--faint);text-transform:uppercase;font-size:10.5px;letter-spacing:.6px;
+           align-self:center;font-weight:700}
+  dl.kv dd{margin:0;word-break:break-word}
+  .verdict{display:flex;align-items:center;gap:11px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .gate{min-height:70vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px}
+  .gate p{max-width:420px;color:var(--dim)}
+  .errs{margin:12px 0 0;padding-left:18px;color:#ffb4b4;font-size:13px}
+  .errs li{margin:3px 0}
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div>
+    <div style="font-size:34px">🛡️</div>
+    <h1 style="margin-top:10px">Seller Certification</h1>
+    <p id="gateMsg">Checking your access…</p>
+  </div>
+</div>
+
+<div class="wrap" id="main" hidden>
+  <h1>Seller Certification</h1>
+  <p class="sub">Issue, suspend and revoke the attestation shown on a seller's storefront.
+     Signed in as <span id="whoami">—</span>.</p>
+
+  <div class="card">
+    <div class="sec-t">Seller</div>
+    <label for="uid">Seller UID</label>
+    <div class="row">
+      <input type="text" id="uid" placeholder="the seller's Firebase uid" autocomplete="off" spellcheck="false">
+      <button class="ghost" id="lookupBtn" style="flex:0 0 auto">Look up</button>
+    </div>
+    <div id="lookupNote"></div>
+  </div>
+
+  <div class="card" id="currentCard" hidden>
+    <div class="sec-t">Current certification</div>
+    <div id="current"></div>
+    <div class="actions" id="stateActions"></div>
+  </div>
+
+  <div class="card" id="issueCard" hidden>
+    <div class="sec-t">Issue a certification</div>
+
+    <div class="row">
+      <div>
+        <label for="level">Level</label>
+        <select id="level"></select>
+      </div>
+      <div>
+        <label for="authority">Attesting authority</label>
+        <input type="text" id="authority" placeholder="e.g. SOKONI Trust Office" autocomplete="off">
+      </div>
+    </div>
+
+    <label for="ref">Verification reference</label>
+    <input type="text" id="ref" placeholder="the reference of the completed review" autocomplete="off" spellcheck="false">
+    <div class="note">Quote the reference of the review that was actually carried out. It is shown
+      publicly on the storefront so a customer or a dispute can look the decision up. This page
+      will never generate one for you.</div>
+
+    <label>Scope attested</label>
+    <div class="chips" id="scopes"></div>
+
+    <label for="expires">Review due</label>
+    <input type="date" id="expires">
+    <label class="chk"><input type="checkbox" id="noExpiry"> No review date — this certification does not lapse</label>
+
+    <ul class="errs" id="errs" hidden></ul>
+    <div class="actions">
+      <button class="primary" id="issueBtn">Issue certification</button>
+    </div>
+    <div id="issueNote"></div>
+  </div>
+</div>
+
+<script src="/sw-register.js" defer></script>
+
+<script type="module">
+/* ══════════════════════════════════════════════════════════════════════════════
+   SELLER CERTIFICATION — the issuing surface.
+   ══════════════════════════════════════════════════════════════════════════════
+   THE SECURITY MODEL, stated plainly because it is easy to get backwards:
+
+     The gate below is UX. It stops the wrong person seeing a screen that would
+     only fail for them. It stops no writes, because anything running in a browser
+     can be edited by whoever is holding it. The authority is the Firestore rule —
+
+         match /sellerCertifications/{uid} { allow write: if isAdmin(); }
+
+     — evaluated server-side against a SIGNED ID token claim. So: the gate is
+     convenience, the rule is the security. If those two ever disagree, the rule
+     wins and this page simply reports the refusal.
+
+   THE RULE IS NOT DEPLOYED YET. Every write from this page is therefore refused
+   on production today. That is expected, and it is reported as a refusal — never
+   swallowed, and never shown as success.
+
+   NO CLOUD FUNCTION is involved, so the write is a single document write rather
+   than a transaction. The audit entry in adminLog is a SECOND write that can fail
+   on its own; the certification document therefore carries its own provenance
+   (reviewedBy, issuedAt, updatedAt) so the trail survives even if the log write
+   does not. The document is the record; adminLog is a convenience.
+   ══════════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+const V = '10.12.2';
+
+/* THE CANONICAL APP, not a secondary one. An earlier draft did what several older
+   admin pages do — stand up a SECOND named Firebase app — and the deploy gate refused it:
+   a secondary Firebase app carries NO App Check token, so its writes can fail SILENTLY.
+   For an issuing surface that would be the worst possible failure: an admin told a
+   certification was granted when nothing was stored. firebase.js installs App Check,
+   so this page uses that one app. */
+const C = window.SokoniCertificationModel;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+
+let DB = null, FS = null, ADMIN_UID = null;
+let TARGET = null;      /* the uid whose record is loaded */
+let CURRENT = null;     /* the record as last read from Firestore */
+
+/* ── auth ─────────────────────────────────────────────────────────────────── */
+(async function gate () {
+  const deny = (msg, detail) => {
+    $('gateMsg').innerHTML = '<b style="color:#ff8a8a">' + esc(msg) + '</b>' +
+      (detail ? '<br><span style="font-size:12.5px">' + esc(detail) + '</span>' : '');
+  };
+  if (!C) return deny('This page cannot run.', 'The certification model did not load.');
+  try {
+    const { auth, db } = await import('./firebase.js');
+    const { onAuthStateChanged } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+    FS = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    DB = db;
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return deny('Sign in required.', 'This surface is for platform administrators.');
+      /* Force-refresh so a claim granted moments ago is actually present. */
+      const tok = await user.getIdTokenResult(true).catch(() => null);
+      const claims = (tok && tok.claims) || {};
+      if (claims.admin !== true && claims.superAdmin !== true) {
+        return deny('Admin access required.',
+                    'Certification is issued by the platform. Nothing here is available to a seller.');
+      }
+      ADMIN_UID = user.uid;
+      $('whoami').textContent = user.email || user.uid;
+      $('gate').hidden = true;
+      $('main').hidden = false;
+      mount();
+    });
+  } catch (e) {
+    deny('Could not verify your access.', (e && e.code) || 'unknown');
+  }
+})();
+
+/* ── form scaffolding, built from the model's closed vocabularies ─────────── */
+function mount () {
+  $('level').innerHTML = '<option value="">Choose…</option>' +
+    C.LEVELS.map((l) => '<option value="' + esc(l) + '">' + esc(l) + '</option>').join('');
+  $('scopes').innerHTML = C.issuableScopes().map((k) =>
+    '<label class="chip"><input type="checkbox" value="' + esc(k) + '"> ' +
+    esc(C.scopeLabel(k)) + '</label>').join('');
+  $('noExpiry').addEventListener('change', () => { $('expires').disabled = $('noExpiry').checked; });
+  $('lookupBtn').addEventListener('click', lookup);
+  $('uid').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
+  $('issueBtn').addEventListener('click', doIssue);
+}
+
+function pickedScopes () {
+  return Array.prototype.filter.call($('scopes').querySelectorAll('input'), (i) => i.checked)
+    .map((i) => i.value);
+}
+function note (host, cls, html) { $(host).innerHTML = '<div class="note ' + cls + '">' + html + '</div>'; }
+function clearNote (host) { $(host).innerHTML = ''; }
+
+/* A refusal must read as a refusal. permission-denied is the EXPECTED answer until
+   the rules slice ships, so it is named rather than hidden behind "try again". */
+function refusal (e) {
+  const code = (e && e.code) || 'unknown';
+  if (code === 'permission-denied') {
+    return '<b>The server refused that write.</b> The <code>sellerCertifications</code> rule is ' +
+           'not deployed yet, so no certification can be issued or changed on production. ' +
+           'Nothing was saved.';
+  }
+  return '<b>That did not save.</b> (' + esc(code) + ') Nothing was written.';
+}
+
+/* ── read ─────────────────────────────────────────────────────────────────── */
+async function lookup () {
+  const uid = $('uid').value.trim();
+  clearNote('lookupNote');
+  $('currentCard').hidden = true;
+  $('issueCard').hidden = true;
+  if (!uid) return note('lookupNote', 'bad', 'Enter the seller uid.');
+  try {
+    const snap = await FS.getDoc(FS.doc(DB, 'sellerCertifications', uid));
+    TARGET = uid;
+    CURRENT = snap.exists() ? (snap.data() || null) : null;
+    renderCurrent();
+    $('currentCard').hidden = false;
+    $('issueCard').hidden = false;
+  } catch (e) {
+    /* An unreadable record is UNKNOWN. Offering the issue form here would let an
+       admin overwrite a certification we could not read. */
+    TARGET = null; CURRENT = null;
+    note('lookupNote', 'bad', refusal(e));
+  }
+}
+
+function renderCurrent () {
+  const v = C.evaluate(CURRENT, Date.now());
+  const todo = C.outstanding(CURRENT, Date.now());
+  const colour = v.valid ? 'var(--ok)' : (v.reason === 'none' ? 'var(--faint)' : 'var(--warn)');
+  let html =
+    '<div class="verdict"><span class="dot" style="background:' + colour + '"></span>' +
+    '<b>' + esc(v.label) + '</b>' +
+    (v.reason && v.reason !== 'valid' && v.reason !== 'none'
+      ? '<span style="color:var(--faint);font-size:12px">' + esc(v.reason) + '</span>' : '') +
+    '</div>';
+  if (CURRENT) {
+    const d = (t) => { const n = C.ms(t); return n ? new Date(n).toISOString().slice(0, 10) : '—'; };
+    html += '<dl class="kv">' +
+      '<dt>Status</dt><dd>' + esc(CURRENT.status || '—') + '</dd>' +
+      '<dt>Level</dt><dd>' + esc(CURRENT.level || '—') + '</dd>' +
+      '<dt>Authority</dt><dd>' + esc(CURRENT.authority || '—') + '</dd>' +
+      '<dt>Reference</dt><dd>' + esc(CURRENT.verificationId || '—') + '</dd>' +
+      '<dt>Scope</dt><dd>' + esc((CURRENT.scope || []).map((k) => C.scopeLabel(k)).join(', ') || '—') + '</dd>' +
+      '<dt>Issued</dt><dd>' + esc(d(CURRENT.issuedAt)) + '</dd>' +
+      '<dt>Review due</dt><dd>' + esc(CURRENT.expiresAt ? d(CURRENT.expiresAt) : 'no review date') + '</dd>' +
+      '<dt>Reviewed by</dt><dd>' + esc(CURRENT.reviewedBy || '—') + '</dd>' +
+    '</dl>';
+  }
+  if (todo.length) html += '<div class="note">' + esc(todo[0]) + '</div>';
+  $('current').innerHTML = html;
+
+  const st = CURRENT && String(CURRENT.status || '');
+  const btns = [];
+  if (st === 'certified') {
+    btns.push('<button class="ghost" data-act="suspend">Suspend</button>');
+    btns.push('<button class="danger" data-act="revoke">Revoke</button>');
+  } else if (st === 'suspended') {
+    btns.push('<button class="ghost" data-act="reinstate">Reinstate</button>');
+    btns.push('<button class="danger" data-act="revoke">Revoke</button>');
+  }
+  $('stateActions').innerHTML = btns.join('');
+  Array.prototype.forEach.call($('stateActions').querySelectorAll('[data-act]'),
+    (b) => b.addEventListener('click', () => doStatus(b.dataset.act, b)));
+}
+
+/* ── write ────────────────────────────────────────────────────────────────── */
+async function doIssue () {
+  const btn = $('issueBtn');
+  $('errs').hidden = true; $('errs').innerHTML = '';
+  clearNote('issueNote');
+  if (!TARGET) return note('issueNote', 'bad', 'Look a seller up first.');
+
+  /* THE DECISION IS THE MODEL'S. This page collects input and reports the answer;
+     it does not decide what a valid attestation is, and it never assembles a
+     payload of its own — a second builder is a second set of invariants to forget. */
+  const built = C.buildIssue({
+    authority: $('authority').value,
+    verificationId: $('ref').value,
+    level: $('level').value,
+    scope: pickedScopes(),
+    expiresAt: $('noExpiry').checked ? null : $('expires').value,
+    noExpiry: $('noExpiry').checked,
+  }, ADMIN_UID, Date.now());
+
+  if (!built.ok) {
+    $('errs').innerHTML = built.errors.map((e) => '<li>' + esc(e) + '</li>').join('');
+    $('errs').hidden = false;
+    return;
+  }
+
+  /* Times are re-stamped by the SERVER. A client clock is not evidence of when a
+     review happened, and the platform timestamp standard is server UTC. */
+  const body = Object.assign({}, built.payload, {
+    issuedAt: FS.serverTimestamp(),
+    updatedAt: FS.serverTimestamp(),
+    expiresAt: built.payload.expiresAt === null
+      ? null : FS.Timestamp.fromMillis(built.payload.expiresAt),
+  });
+
+  btn.disabled = true;
+  try {
+    await FS.setDoc(FS.doc(DB, 'sellerCertifications', TARGET), body, { merge: true });
+    /* Only now is anything true. */
+    await audit('certification.issue', { level: body.level, ref: body.verificationId });
+    note('issueNote', 'ok', '<b>Certification issued.</b> The storefront will show it.');
+    await lookup();
+  } catch (e) {
+    note('issueNote', 'bad', refusal(e));
+  } finally { btn.disabled = false; }
+}
+
+async function doStatus (action, btn) {
+  clearNote('issueNote');
+  const built = C.buildStatusChange(action, CURRENT, ADMIN_UID, Date.now());
+  if (!built.ok) return note('issueNote', 'bad', esc(built.errors[0]));
+  if (action === 'revoke' &&
+      !window.confirm('Revoke this certification? The storefront badge disappears immediately.')) return;
+
+  const body = Object.assign({}, built.payload, { updatedAt: FS.serverTimestamp() });
+  btn.disabled = true;
+  try {
+    /* A merge write, never a delete: a revoked certification is part of the history
+       of the business, and removing it would erase that one was ever granted. */
+    await FS.setDoc(FS.doc(DB, 'sellerCertifications', TARGET), body, { merge: true });
+    await audit('certification.' + action, {});
+    note('issueNote', 'ok', '<b>Saved.</b> The certification is now ' + esc(built.payload.status) + '.');
+    await lookup();
+  } catch (e) {
+    note('issueNote', 'bad', refusal(e));
+  } finally { btn.disabled = false; }
+}
+
+/* Best-effort audit trail. It is a SEPARATE write and may fail on its own, which is
+   why the certification document carries its own provenance. A failure here is
+   reported, never silent — but it does not un-issue anything. */
+async function audit (action, extra) {
+  try {
+    await FS.addDoc(FS.collection(DB, 'adminLog'), Object.assign({
+      action: action,
+      targetUid: TARGET,
+      adminUid: ADMIN_UID,
+      createdAt: FS.serverTimestamp(),
+    }, extra || {}));
+  } catch (e) {
+    note('issueNote', 'warn', '<b>Saved, but the audit entry was refused.</b> (' +
+      esc((e && e.code) || 'unknown') + ') The certification record still carries who ' +
+      'made the decision and when.');
+  }
+}
+</script>
+</body>
+</html>

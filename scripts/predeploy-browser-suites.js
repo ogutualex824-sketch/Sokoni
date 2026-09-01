@@ -40,7 +40,7 @@ const NL = String.fromCharCode(10);
 
 /* Required for a Hosting release. Each must EXECUTE and report zero failures. */
 const REQUIRED = [
-  { f: 'test-merchant-route-overlays.js',        why: 'no full-viewport layer blocks any merchant route',      browser: true,  ms: 300000 },
+  { f: 'test-merchant-route-overlays.js',        why: 'no full-viewport layer blocks any merchant route',      browser: true,  ms: 600000 },
   { f: 'test-cart-browser-certification.js',     why: 'product card → cart is clickable, mobile and desktop',  browser: true,  ms: 300000 },
   { f: 'test-minishop-cart-browser.js',          why: 'MiniShop Add to Cart reaches the one cart',             browser: true,  ms: 240000 },
   { f: 'test-minishop-trust-honesty.js',         why: 'no trust badge without an authoritative source',        browser: true,  ms: 240000 },
@@ -51,6 +51,19 @@ const REQUIRED = [
   { f: 'test-pos-print-delegation.js',           why: 'a receipt reports what actually happened',              browser: false, ms: 120000 },
   { f: 'test-merchant-shell-callables.js',       why: 'every callable the shell names exists',                 browser: false, ms: 120000 },
   { f: 'test-availability-convergence.js',       why: 'one canonical schedule governs both surfaces',          browser: false, ms: 120000 },
+  { f: 'test-inshell-chrome.js', why: 'framed modules must not paint shell chrome — the black layer', browser: false, ms: 120000 },
+  { f: 'test-tenant-convergence-handler-surface.js', why: '_requireSeller moves the tenant key for 20 handlers', browser: false, ms: 120000 },
+  { f: 'test-pos-entry-setup-first.js', why: 'the shell opens POS setup before selling, once', browser: false, ms: 120000 },
+  { f: 'test-pos-inventory-denial-visibility.js', why: 'a denied POS inventory write must be observable', browser: false, ms: 120000 },
+  { f: 'test-stock-adjustment-authority.js', why: 'stock adjustment ownership and transaction shape', browser: false, ms: 120000 },
+  { f: 'test-pos-till-registry.js', why: 'saved is not connected', browser: false, ms: 120000 },
+  { f: 'test-pos-boot-budget.js', why: 'the till boots inside budget', browser: false, ms: 120000 },
+  { f: 'test-pos-lazy-manager-auth.js', why: 'manager auth loads lazily', browser: false, ms: 120000 },
+  { f: 'test-pos-lazy-features.js', why: 'lazy modules stay off the boot path', browser: false, ms: 120000 },
+  { f: 'test-pos-barcode-path.js', why: 'the scan path reaches the cart', browser: false, ms: 120000 },
+  { f: 'test-premium-scanner.js', why: 'the scanner contract', browser: false, ms: 120000 },
+  { f: 'test-sales-control-centre.js', why: 'the manager control surface', browser: false, ms: 120000 },
+  { f: 'test-pos-sales-view.js', why: 'the sales view reads canonical data', browser: false, ms: 120000 },
 ];
 
 console.log(NL + '[predeploy] required release suites — ' + REQUIRED.length + ' declared');

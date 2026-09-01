@@ -916,7 +916,10 @@
         </div>
       </div>
       <div class="done-actions">
-        <a href="pos-v2"    class="btn-primary btn-lg">&#128722; Start Selling</a>
+        <!-- Opens the till the merchant already uses. Operator decision 2026-09-01, recorded
+             in ADR-013 as a deliberate TEMPORARY state: pos.html is the Rail 2
+             (client-authoritative) sale path that ADR-013 Option A migrates to the server. -->
+        <a href="pos.html"  class="btn-primary btn-lg">&#128722; Start Selling</a>
         <a href="#" onclick="goToStep(1);return false" class="btn-ghost btn-lg">&#128295; Manage Devices</a>
       </div>
     </div>

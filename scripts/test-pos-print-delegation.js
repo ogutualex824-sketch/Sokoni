@@ -172,8 +172,17 @@ ck('Setup listens to the shell printer state',
    'it was the ONLY POS surface that did not');
 ck('...and it is the SHELL state, not a local pairing flag',
    SETUP.indexOf('application-level connection') > -1);
+/* Assert the PROPERTY, not the expression. This pinned the literal
+   `t.key === 'hardwareConnected' && _shellPrinter.connected`, so routing the decision
+   through the canonical device registry failed a rewrite that FIXED a real defect
+   (Devices said saved while Till Setup said no printer). The behaviour that must hold
+   is unchanged: a live connection is offered for recording instead of the wizard. */
 ck('a connected printer replaces the wizard button',
-   SETUP.indexOf("t.key === 'hardwareConnected' && _shellPrinter.connected") > -1);
+   SETUP.indexOf('_pr.connected') > -1 && SETUP.indexOf('_tillPrinter()') > -1,
+   'resolved through the registry, which still takes connected from the shell alone');
+ck('...and a SAVED printer offers reconnection rather than the wizard',
+   SETUP.indexOf('_pr.needsReconnect') > -1,
+   'a paired printer must never be presented as though none was ever set up');
 ck('...and marking it is still an explicit merchant tap',
    /data-mark="hardwareConnected"/.test(SETUP),
    'connected is a precondition for offering, never an automatic completion');

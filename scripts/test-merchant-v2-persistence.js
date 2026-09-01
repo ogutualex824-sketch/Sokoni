@@ -125,9 +125,26 @@ ck('the shell broadcasts printer state to every framed module',
 
 /* ── 6 · POS Setup adopts that connection ─────────────────────────────────── */
 head('6 · POS Setup re-adopts rather than re-asking');
-ck('Setup listens to the shell printer state', SETUP.indexOf('__sokoniPrinterState') > -1);
+/* Assert the PROPERTY, not the literal. This pinned the exact expression
+   `t.key === 'hardwareConnected' && _shellPrinter.connected`, so routing the decision
+   through the canonical device registry — which fixed a real defect — failed a correct
+   rewrite. What must hold is the behaviour: a printer that is CONNECTED is offered for
+   recording rather than sending the merchant back through the wizard, and a printer
+   that is merely SAVED is offered for reconnection rather than reported as absent. */
 ck('a connected printer replaces the "Set up hardware" route',
-   SETUP.indexOf("t.key === 'hardwareConnected' && _shellPrinter.connected") > -1);
+   SETUP.indexOf('_pr.connected') > -1 &&
+   SETUP.indexOf('data-mark="hardwareConnected"') > -1,
+   'connected means offer to record it, never re-open the wizard');
+ck('a SAVED printer is offered for reconnection, not reported as absent',
+   SETUP.indexOf('_pr.needsReconnect') > -1 &&
+   SETUP.indexOf("esc('Reconnect '") > -1,
+   'the observed defect: Devices said saved while Till Setup said no printer');
+ck('CONTROL Till Setup reads the CANONICAL registry, not only a live broadcast',
+   SETUP.indexOf('SokoniTillRegistry.printer(') > -1,
+   'a broadcast-only read cannot see a saved device, and unframed sees nothing at all');
+ck('CONTROL it still never invents a connection',
+   SETUP.indexOf('_shellPrinter.connected, _shellPrinter.name') > -1,
+   'connected is supplied by the transport holder; this page holds none');
 ck('marking the step is still an explicit merchant tap',
    /data-mark="hardwareConnected"/.test(SETUP),
    'connected is a precondition for OFFERING, never an automatic completion');

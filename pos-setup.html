@@ -27,6 +27,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
+<!-- ONE answer to "what hardware does this till have?". Devices and Till Setup were
+     reading different things — a durable list vs a live broadcast — so a printer that
+     was saved but not currently connected showed here as no printer at all. -->
+<script src="sokoni-till-registry.js"></script>
   <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
   <!-- sokoni-config.js sets window.SOKONI_CONFIG; Firebase init is done inline below -->
@@ -1839,6 +1843,10 @@
             <span id="setup-ready-badge" style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;"></span>
           </div>
           <div id="setup-checklist" role="list" style="display:flex;flex-direction:column;gap:6px;"></div>
+            <!-- Current health AFTER completion. A gap is an operational problem to show,
+                 never a reason to re-run onboarding — see the productionReady latch in
+                 functions/business-bootstrap.js. Hidden until there is something to say. -->
+            <div id="setup-gaps" style="display:none;margin-top:10px;"></div>
         </div>
 
         <!-- ── Payment destination (M-PESA Till / PayBill) ─────────────────
@@ -3704,6 +3712,23 @@ const SETUP_TASKS = [
    a disconnect. So it is an application-level connection, which is what may mark the
    hardware step — Bluetooth pairing alone must not. */
 var _shellPrinter = { connected: false, name: null };
+
+/* THE TILL PRINTER, resolved once. `connected` still comes ONLY from the shell
+   broadcast — this page holds no transport and must never claim one. What is new is
+   `saved`, read from the same registry the Devices surface writes, so a printer the
+   merchant already paired is visible here even when nothing is answering. Unframed,
+   this page received no broadcast at all and so reported "no printer" for a till that
+   had one paired. */
+function _tillPrinter () {
+  var uid = null;
+  try { uid = _auth.currentUser && _auth.currentUser.uid; } catch (_) {}
+  if (!window.SokoniTillRegistry) {
+    return { state: _shellPrinter.connected ? "connected" : "none",
+             connected: !!_shellPrinter.connected, saved: null,
+             name: _shellPrinter.name || null, needsReconnect: false };
+  }
+  return window.SokoniTillRegistry.printer(uid, _shellPrinter.connected, _shellPrinter.name);
+}
 try {
   window.addEventListener('message', function (e) {
     var d = (e && e.data) || {};
@@ -3731,12 +3756,86 @@ async function renderSetupChecklist() {
     /* Non-fatal — checklist is informational. Log so ops can investigate if the
        setup guide is consistently missing without interrupting the merchant. */
     console.warn('[POS Setup] getSetupStatus failed — checklist not rendered:', statusErr && statusErr.message);
+    /* Say "unavailable" rather than showing nothing. A silent failure leaves a merchant
+       with no idea whether anything is wrong — and it must never be presented as an
+       incomplete setup, or as a gap we did not actually observe. */
+    try { _paintSetupGaps(null); wrap.style.display = 'block'; } catch (_) {}
   }
+}
+
+/* ── CURRENT GAPS ───────────────────────────────────────────────────────────
+   getSetupStatus returns `currentGaps` and `productionReadyLatched`. Until now
+   nothing rendered them: after the latch landed, a merchant whose subscription
+   lapsed stayed correctly OUT of the onboarding wizard — and was told nothing at
+   all. The lapse became invisible rather than disruptive, which is better but
+   still wrong.
+
+   FOUR STATES, deliberately distinct. Collapsing any pair of them re-creates a
+   version of the bug the latch fixed:
+
+     status unavailable  the call failed. NOT a gap, and NOT incomplete — we do
+                         not know. Rendering this as "incomplete" is exactly how a
+                         transient failure used to send a working till back
+                         through installation.
+     setup incomplete    productionReady is false and was never true. Onboarding
+                         genuinely applies.
+     complete + gaps     onboarding was completed; something has since lapsed.
+                         Shown as health, never as a reason to re-run setup.
+     complete            nothing outstanding.
+
+   This renders ONLY what the authoritative function returns. It invents no gap
+   conditions of its own, and it never writes anything. */
+const GAP_LABEL = {
+  business: 'Business profile', subscription: 'Subscription', branch: 'Branch',
+  taxes: 'Tax configuration', inventory: 'Inventory', hardware: 'Hardware',
+  testSale: 'Test sale',
+};
+
+function _paintSetupGaps(s) {
+  const el = document.getElementById('setup-gaps');
+  if (!el) return;
+  const show = (html) => { el.innerHTML = html; el.style.display = 'block'; };
+
+  /* s === null means the read FAILED. Say so; do not infer anything from it. */
+  if (!s) {
+    show('<div style="font-size:12px;padding:9px 11px;border-radius:9px;' +
+      'background:rgba(255,255,255,.04);border-left:3px solid rgba(255,255,255,.25);' +
+      'color:var(--sk-dim,#9aa4b2)"><b>Setup status unavailable.</b> This does not mean ' +
+      'your setup is incomplete — the status could not be read just now.</div>');
+    return;
+  }
+
+  const gaps = Array.isArray(s.currentGaps) ? s.currentGaps : [];
+  const completed = s.productionReady === true;
+
+  if (!completed) {
+    /* Genuinely incomplete: the existing checklist above already itemises it, so
+       this stays quiet rather than duplicating the same list twice. */
+    el.style.display = 'none'; el.innerHTML = '';
+    return;
+  }
+
+  if (!gaps.length) {
+    show('<div style="font-size:12px;padding:9px 11px;border-radius:9px;' +
+      'background:rgba(61,220,132,.08);border-left:3px solid #3ddc84;color:#b6f0cf">' +
+      '<b>Setup complete.</b> Nothing outstanding.</div>');
+    return;
+  }
+
+  const items = gaps.map((g) => esc(GAP_LABEL[g] || String(g))).join(', ');
+  show('<div style="font-size:12px;padding:9px 11px;border-radius:9px;' +
+    'background:rgba(245,165,36,.08);border-left:3px solid #f5a524;color:#f7d9a4">' +
+    '<b>Setup complete</b> — your till keeps working. ' +
+    '<span style="opacity:.9">' + gaps.length + ' item' + (gaps.length === 1 ? '' : 's') +
+    ' need' + (gaps.length === 1 ? 's' : '') + ' attention: ' + items + '.</span>' +
+    '<div style="margin-top:5px;opacity:.75">Fix these in Settings. They do not require ' +
+    'setting the till up again.</div></div>');
 }
 
 function _paintSetupGuide(s) {
   const list  = document.getElementById('setup-checklist');
   const badge = document.getElementById('setup-ready-badge');
+  _paintSetupGaps(s);
   const cl    = s.checklist || {};
   const next  = s.nextStep;
   /* Map getSetupStatus.nextStep (business/subscription/branch/taxes/inventory/
@@ -3762,10 +3861,18 @@ function _paintSetupGuide(s) {
          reports a live connection, the hardware step offers to record THAT instead of
          sending the merchant back to configure a printer they have already connected.
          Still an explicit tap: the merchant confirms this is the till's printer. */
-      if (t.key === 'hardwareConnected' && _shellPrinter.connected) {
+      const _pr = (t.key === 'hardwareConnected') ? _tillPrinter() : null;
+      if (_pr && _pr.connected) {
         btns.push(`<button class="setup-act setup-act-primary" data-mark="hardwareConnected">` +
-          esc(_shellPrinter.name ? ('Use ' + _shellPrinter.name) : 'Printer connected — use it') +
+          esc(_pr.name ? ('Use ' + _pr.name) : 'Printer connected — use it') +
           `</button>`);
+      } else if (_pr && _pr.needsReconnect) {
+        /* SAVED, NOT CONNECTED. Naming the device the merchant already paired is the
+           honest state; the wizard implied they had never set one up. Reconnect stays
+           an explicit tap — Web Bluetooth cannot re-open a GATT link without one, so
+           an automatic claim here would be a lie the cashier discovers at the till. */
+        btns.push('<button class="setup-act setup-act-primary" data-href="/pos-printer-setup.html">' +
+          esc('Reconnect ' + (_pr.name || 'your printer')) + '</button>');
       } else if (t.primary) {
         const attr = t.primary.mark ? `data-mark="${t.primary.mark}"` : `data-href="${t.primary.href}"`;
         btns.push(`<button class="setup-act setup-act-primary" ${attr}>${esc(t.primary.text)}</button>`);
