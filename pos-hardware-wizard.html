@@ -5,6 +5,14 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
+<!-- IN-SHELL BOUNDARY. This page loads shared-header.js, which injects the customer
+     bottom bar. Until the shell began framing it for POS setup it was only ever opened
+     standalone, so it carried no boundary at all — framed, that bar and the shared header
+     rendered under the merchant shell own navigation. Detector inline so the class lands at
+     FIRST PAINT (the module is deferred); sokoni-inshell.js then supplies the suppression
+     rules. Same pair as pos-printer-setup.html; snippet copied from it verbatim. -->
+<script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||last==="merchant-v2"||last==="merchant-v2.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
+<script src="sokoni-inshell.js" defer></script>
 <script src="security.js"></script>
 <script src="sokoni-config.js"></script>   <!-- Load order matters: this must define the config before any consumer runs. (The earlier note here blamed a <meta charset> parser restart; that claim was withdrawn 2026-07-18 - see sokoni-firebase-config.js.) -->
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge

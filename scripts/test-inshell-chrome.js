@@ -212,5 +212,52 @@ head('2c · the SHARED boundary module recognises the current shell');
      'an unscoped rule would suppress consent everywhere — an ODPC problem, not a fix');
 }
 
+/* ── 2d. PAGES THE SHELL FRAMES OUTSIDE THE ROUTES CONTRACT ────────────────────
+   Section 2 walks the ROUTES contract. merchant-v2 ALSO frames pages straight from its
+   router — pos.html, and (since the setup-before-selling change) pos-hardware-wizard.html.
+
+   THE DEFECT THIS EXISTS TO END: the wizard shipped with no boundary at all — no inline
+   sk-in-shell detector and no sokoni-inshell.js — while still loading shared-header.js,
+   which injects the customer bottom bar. Framed by the shell, that bar and the shared
+   header rendered UNSUPPRESSED beneath the merchant shell's own navigation. Routing the
+   POS entry at the wizard is what exposed it; the page had simply never been framed.
+
+   Derived from the framePanel() call sites rather than a hard-coded list, so the next
+   page the shell frames cannot skip this check. */
+head('2d · every page the shell frames carries the boundary');
+{
+  const SHELL2 = read('merchant-v2.html');
+  const framed = [...new Set((SHELL2.match(/framePanel\([^,]+,\s*'([a-z0-9-]+\.html)'/g) || [])
+    .map((m) => (m.match(/'([a-z0-9-]+\.html)'/) || [])[1]).filter(Boolean))];
+  ck('CONTROL framed pages were discovered from framePanel() call sites',
+     framed.length >= 2, framed.join(', '));
+
+  /* Owning the boundary means declaring a SCOPED SUPPRESSION RULE, not merely mentioning
+     the class. pos.html declares its own rules inline (the module is deferred and would
+     flash); a page that does not must load the module. Testing for the class name alone let
+     a page keep the detector, lose the module, and still pass while suppressing nothing. */
+  const hasOwn = (src) => /\.sk-in-shell\s+[.#][A-Za-z0-9_-]+[^{]*\{/.test(src);
+  const hasMod = (src) => /<script[^>]+src="sokoni-inshell\.js"/.test(src);
+
+  const naked = framed.filter((f) => {
+    let src; try { src = read(f); } catch (_) { return false; }
+    return !hasOwn(src) && !hasMod(src);
+  });
+  ck('each carries its own detector OR loads sokoni-inshell.js', naked.length === 0,
+     naked.length ? 'NO BOUNDARY: ' + naked.join(', ') : framed.length + ' framed pages');
+
+  /* The sharper assertion: painting shared-header chrome without a boundary is the
+     double-nav defect itself, not merely a missing convention. */
+  const leaky = framed.filter((f) => {
+    let src; try { src = read(f); } catch (_) { return false; }
+    const injects = /<script[^>]+src="shared-header\.js"/.test(src);
+    return injects && !hasOwn(src) && !hasMod(src);
+  });
+  ck('NEGATIVE none injects shared-header chrome without suppressing it',
+     leaky.length === 0,
+     leaky.length ? 'DOUBLE NAV: ' + leaky.join(', ') : 'none');
+}
+
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
