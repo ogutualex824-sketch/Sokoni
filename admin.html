@@ -1,6 +1,12 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-no-header="true">
+<html data-admin-guard="admin" lang="en" data-splash="1" data-no-header="true">
 <head>
+<!-- Canonical claims authority: the admin guard hides the shell until a verified
+     admin/superAdmin claim is present. firebase.js (deferred module) installs the
+     window.firebase compat + window.firebaseAuth the guard polls for. Load order
+     mirrors the proven super-admin wiring. -->
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-admin-guard.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
