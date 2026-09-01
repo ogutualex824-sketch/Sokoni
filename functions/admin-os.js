@@ -355,7 +355,7 @@ exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 1
     return (pMap[a.priority] || 2) - (pMap[b.priority] || 2);
   });
 
-  return { tickets };
+  return { tickets, items: tickets, count: tickets.length };
 });
 
 exports.adminResolveSupportTicket = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminResolveSupportTicket = async (req) => {
@@ -437,21 +437,44 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
      Only txToday fetches docs because revenue summation requires the amount field. */
   const [totalUsersCount, newUsersCount, ordersTodayCount, activeOrdersCount,
          txToday, openTicketsCount, openDisputesCount, activeSubsCount,
-         pendingPayoutsCount, activeDeliveriesCount] = await Promise.all([
+         pendingPayoutsCount, activeDeliveriesCount,
+         serviceBookingsTodayCount, activeServiceBookingsCount,
+         totalProvidersCount, activeProvidersCount, totalOrdersCount, totalBookingsCount, pendingPayoutsSnap,
+         activeUsersCount, merchantsCount, pendingVerifCount, pendingAppsCount, reviewsToModerateCount] = await Promise.all([
     db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('transactions').where('createdAt', '>=', todayTs).where('status', '==', 'completed').limit(1000).get().catch(() => ({ docs: [] })),
+    db.collection('payments').where('createdAt', '>=', todayTs).limit(1000).get().catch(() => ({ docs: [] })),   /* canonical payment record (`transactions` was empty); status COMPLETE filtered in memory */
     db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('payouts').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('payoutRequests').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),   /* canonical payout source (matches super-admin queue) */
     db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    /* Service bookings live in providerBookings — NEVER inferred from `orders` (canonical rule).
+       Added as NEW fields so the admin.html rendering (other agent's) is never broken. */
+    db.collection('providerBookings').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerBookings').where('status', 'in', ['pending', 'confirmed', 'in_progress']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    /* Canonical platform totals for the command-center overview. */
+    db.collection('providers').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerBookings').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('payoutRequests').where('status', '==', 'pending').limit(200).get().catch(() => ({ docs: [] })),
+    /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
+    db.collection('users').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('businesses').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerVerification').where('verificationStatus', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('applications').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('reviews').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
-  const revenueToday    = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
-  const commissionToday = (txToday.docs || []).reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
+  const _paidToday      = (txToday.docs || []).filter(d => String(d.data().status || '').toUpperCase() === 'COMPLETE');
+  const revenueToday    = _paidToday.reduce((s, d) => s + (d.data().amount || 0), 0);
+  /* Commission is NOT on the raw payment record — it lives in commissionLedger (products) +
+     providerPayouts (services). Kept best-effort here; the unified Finance endpoint (Phase 2)
+     is the correct aggregation. */
+  const commissionToday = _paidToday.reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
 
   return {
     totalUsers: totalUsersCount.data().count, newUsersToday: newUsersCount.data().count,
@@ -460,8 +483,494 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     openTickets: openTicketsCount.data().count, openDisputes: openDisputesCount.data().count,
     activeSubscriptions: activeSubsCount.data().count, pendingPayouts: pendingPayoutsCount.data().count,
     activeDeliveries: activeDeliveriesCount.data().count,
+    /* Canonical service metrics (providerBookings) — new fields for the admin dashboard. */
+    serviceBookingsToday: serviceBookingsTodayCount.data().count,
+    activeServiceBookings: activeServiceBookingsCount.data().count,
+    /* Command-center platform totals (all canonical sources). */
+    totalProviders: totalProvidersCount.data().count,
+    activeProviders: activeProvidersCount.data().count,
+    totalOrders: totalOrdersCount.data().count,
+    totalServiceBookings: totalBookingsCount.data().count,
+    pendingPayoutAmount: (pendingPayoutsSnap.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0),
+    /* P1 command-center additions (canonical). */
+    activeUsers: activeUsersCount.data().count,
+    merchants: merchantsCount.data().count,
+    pendingProviderVerification: pendingVerifCount.data().count,
+    pendingMerchantApprovals: pendingAppsCount.data().count,
+    reviewsAwaitingModeration: reviewsToModerateCount.data().count,
   };
 });
+
+/* ─────────────────────────────────────────────────────────────────────────
+   System Health (P2) — thin aggregation of REAL signals. Per-service status is
+   ok | warn | issue | unknown. 'unknown' is honest (no fabricated green): services
+   without a cheap server-side signal are reported as unknown, not healthy.
+   Reads: systemHealth/latest (platform rollup), emailQueue/emailLogs, orders (payment
+   liveness), payoutRequests (wallet failures). Read-only; no business logic.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetSystemHealth = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSystemHealth = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+  const dayAgo  = Timestamp.fromDate(new Date(Date.now() - 86400000));
+  const hourAgo = Timestamp.fromDate(new Date(Date.now() - 3600000));
+  const _c0 = () => ({ data: () => ({ count: 0 }) });
+
+  const [latestSnap, emailQ, emailFails, paidOrders, payoutFails] = await Promise.all([
+    db.collection('systemHealth').doc('latest').get().catch(() => null),
+    db.collection('emailQueue').count().get().catch(_c0),
+    db.collection('emailLogs').where('status', '==', 'failed').where('createdAt', '>=', hourAgo).count().get().catch(_c0),
+    db.collection('orders').where('status', 'in', ['paid', 'completed', 'delivered']).where('createdAt', '>=', dayAgo).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('payoutRequests').where('status', 'in', ['failed', 'approval_failed']).where('createdAt', '>=', dayAgo).count().get().catch(_c0),
+  ]);
+
+  const L = latestSnap && latestSnap.exists ? latestSnap.data() : null;
+  const eq = emailQ.data().count, ef = emailFails.data().count, pf = payoutFails.data().count;
+  const paymentsAlive = !(paidOrders.empty);
+  const s = (status, detail) => ({ status, detail: detail || null });
+
+  const services = {
+    cloudFunctions: L ? (L.firestoreOk ? s(L.overallStatus === 'critical' ? 'issue' : L.overallStatus === 'degraded' ? 'warn' : 'ok', 'async queue ' + (L.asyncQueueDepth != null ? L.asyncQueueDepth : '—') + (L.criticalAlertsUnacked > 0 ? ' · ' + L.criticalAlertsUnacked + ' critical alerts' : '')) : s('issue', 'Firestore probe failing')) : s('unknown', 'no snapshot'),
+    payments:       s(paymentsAlive ? 'ok' : 'warn', paymentsAlive ? 'paid orders in last 24h' : 'no paid orders in 24h'),
+    wallet:         s(pf > 0 ? 'warn' : 'ok', pf > 0 ? pf + ' payout failure(s) in 24h' : 'no recent payout failures'),
+    email:          s(ef > 5 ? 'issue' : (ef > 0 || eq > 100) ? 'warn' : 'ok', ef + ' failures/hr · queue ' + eq),
+    search:         s('unknown', 'detail in search-monitor'),
+    sms:            s('unknown', 'no server signal'),
+    notifications:  s('unknown', 'no server signal'),
+    storage:        s('unknown', 'no server signal'),
+    etims:          s('unknown', 'sandbox — not deployed'),
+  };
+  const ov = L && L.overallStatus;
+  return {
+    services,
+    overall: ov === 'healthy' ? 'ok' : ov === 'degraded' ? 'warn' : ov === 'critical' ? 'issue' : 'unknown',
+    checkedAt:  new Date().toISOString(),
+    snapshotAt: (L && L.ts && L.ts.toDate) ? L.ts.toDate().toISOString() : null,
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Merchant Pipeline (P2) — thin funnel aggregation over canonical collections.
+   Applied → Pending Review → Verified → Published → Subscribed → Active. Every stage
+   is a count()+catch→0. Lets operators spot bottlenecks. Read-only, no business logic.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetMerchantPipeline = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const _c0 = () => ({ data: () => ({ count: 0 }) });
+  const [applied, pending, verified, published, subscribed, active] = await Promise.all([
+    db.collection('applications').count().get().catch(_c0),
+    db.collection('applications').where('status', '==', 'pending').count().get().catch(_c0),
+    db.collection('providerVerification').where('verificationStatus', 'in', ['verified', 'approved']).count().get().catch(_c0),
+    db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(_c0),
+    db.collection('providerSubscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(_c0),
+    db.collection('providers').where('status', '==', 'active').count().get().catch(_c0),
+  ]);
+  return {
+    stages: [
+      { key: 'applied',       label: 'Applied',        count: applied.data().count },
+      { key: 'pendingReview', label: 'Pending Review', count: pending.data().count },
+      { key: 'verified',      label: 'Verified',       count: verified.data().count },
+      { key: 'published',     label: 'Published',      count: published.data().count },
+      { key: 'subscribed',    label: 'Subscribed',     count: subscribed.data().count },
+      { key: 'active',        label: 'Active',         count: active.data().count },
+    ],
+    generatedAt: new Date().toISOString(),
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Unified Finance (Priority 2 — Admin OS Phase 1 canonical sync)
+
+   ONE endpoint that aggregates every finance stream from its CANONICAL source
+   (docs/CANONICAL_COLLECTIONS.md → "Reporting rule: aggregate, don't pick one"):
+
+     • payments            → money-in volume + gateway fees (amount − netAmount)
+     • commissionLedger    → product/marketplace commission (sokoniCut)
+     • providerPayouts     → service revenue (gross) + service commission (commission), settled
+     • payoutRequests      → withdrawals: pending (liability in-flight) + paid/completed
+     • wallets             → wallet balance = platform liability to users
+
+   Platform revenue = product commission + service commission (NEVER `transactions`
+   alone — that misses every service booking). Gateway fees are platform-absorbed
+   (Option 1), so netMargin = totalCommission − gatewayFees.
+
+   Index-safe: single-field `createdAt >=` range per collection, all bucketing done
+   in memory (today / 7d / 30d). Reads are capped and the cap is reported, so a
+   truncated total can never masquerade as complete. */
+exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetFinance = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+
+  const DAY = 86400000;
+  const now = Date.now();
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const startToday = t0.getTime();
+  const start7 = now - 7 * DAY;
+  const start30ms = now - 30 * DAY;
+  const start30 = Timestamp.fromMillis(start30ms);
+
+  const CAP_TX = 3000, CAP_WALLET = 2000, CAP_REQ = 1000;
+  const [paysSnap, commSnap, settleSnap, reqSnap, walletsSnap, ordersSnap] = await Promise.all([
+    db.collection('payments').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('commissionLedger').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('providerPayouts').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('payoutRequests').limit(CAP_REQ).get().catch(() => ({ docs: [] })),
+    db.collection('wallets').limit(CAP_WALLET).get().catch(() => ({ docs: [] })),
+    db.collection('orders').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),   /* product GMV */
+  ]);
+
+  const round = (n) => Math.round((n || 0) * 100) / 100;
+  const msOf = (c) => (c && c.toDate ? c.toDate().getTime() : (c && c._seconds ? c._seconds * 1000 : 0));
+  const emptyBucket = () => ({
+    paymentsVolume: 0, gatewayFees: 0,
+    productCommission: 0, serviceRevenue: 0, serviceCommission: 0,
+    totalCommission: 0, netMargin: 0,
+    paymentsCount: 0, settlementsCount: 0,
+  });
+  const B = { today: emptyBucket(), last7d: emptyBucket(), last30d: emptyBucket() };
+  /* apply `fn(bucket)` to every window this timestamp falls inside */
+  const forWindows = (t, fn) => {
+    if (t >= start30ms) fn(B.last30d);
+    if (t >= start7)    fn(B.last7d);
+    if (t >= startToday) fn(B.today);
+  };
+
+  for (const d of (paysSnap.docs || [])) {
+    const x = d.data();
+    if (String(x.status || '').toUpperCase() !== 'COMPLETE') continue;
+    const amt = Number(x.amount != null ? x.amount : x.amountKES) || 0;
+    const net = Number(x.netAmount != null ? x.netAmount : amt) || 0;
+    const fee = Math.max(0, amt - net);
+    forWindows(msOf(x.createdAt), (b) => { b.paymentsVolume += amt; b.gatewayFees += fee; b.paymentsCount++; });
+  }
+  for (const d of (commSnap.docs || [])) {
+    const x = d.data();
+    const cut = Number(x.sokoniCut != null ? x.sokoniCut : x.commission) || 0;
+    forWindows(msOf(x.createdAt), (b) => { b.productCommission += cut; });
+  }
+  for (const d of (settleSnap.docs || [])) {
+    const x = d.data();
+    if (x.status !== 'settled') continue;   /* only credited settlements are realised revenue */
+    const gross = Number(x.gross) || 0;
+    const comm  = Number(x.commission) || 0;
+    forWindows(msOf(x.createdAt), (b) => { b.serviceRevenue += gross; b.serviceCommission += comm; b.settlementsCount++; });
+  }
+  for (const k of Object.keys(B)) {
+    const b = B[k];
+    b.totalCommission = b.productCommission + b.serviceCommission;
+    b.netMargin = b.totalCommission - b.gatewayFees;
+    for (const f of ['paymentsVolume', 'gatewayFees', 'productCommission', 'serviceRevenue', 'serviceCommission', 'totalCommission', 'netMargin']) b[f] = round(b[f]);
+  }
+
+  /* Liability + payout ledger — point-in-time, not windowed. */
+  let walletLiability = 0;
+  for (const d of (walletsSnap.docs || [])) walletLiability += Number(d.data().balance) || 0;
+
+  const PENDING = new Set(['pending', 'approved', 'processing']);   /* in-flight, still owed */
+  const DONE = new Set(['paid', 'completed']);                      /* disbursed via B2C */
+  let pendingAmt = 0, pendingCnt = 0, paidAmt = 0, paidCnt = 0;
+  for (const d of (reqSnap.docs || [])) {
+    const x = d.data(); const a = Number(x.amount) || 0; const s = String(x.status || '').toLowerCase();
+    if (PENDING.has(s)) { pendingAmt += a; pendingCnt++; }
+    else if (DONE.has(s)) { paidAmt += a; paidCnt++; }
+  }
+
+  /* Product GMV (30d) from `orders` — only realised (paid/completed/delivered). */
+  const PAID_ORDER = new Set(['paid', 'completed', 'delivered', 'fulfilled']);
+  let productGMV = 0, refunds = 0;
+  for (const d of (ordersSnap.docs || [])) {
+    const x = d.data(); const s = String(x.status || '').toLowerCase();
+    const amt = Number(x.total != null ? x.total : x.amount) || 0;
+    if (PAID_ORDER.has(s)) productGMV += amt;
+    if (s === 'refunded' || x.refunded) refunds += Number(x.refundAmount != null ? x.refundAmount : amt) || 0;
+  }
+
+  /* ── SINGLE SOURCE OF TRUTH: the reconciliation summary every dashboard/report
+     must consume (never re-compute its own totals). 30-day window + point-in-time
+     liability. Net Platform Revenue = commission earned − gateway fees absorbed. */
+  const b30 = B.last30d;
+  const reconciliation = {
+    window: '30d',
+    grossRevenue:         round(productGMV + b30.serviceRevenue),   /* product GMV + service GMV */
+    productRevenue:       round(productGMV),
+    serviceRevenue:       round(b30.serviceRevenue),
+    commission:           round(b30.totalCommission),
+    productCommission:    round(b30.productCommission),
+    serviceCommission:    round(b30.serviceCommission),
+    gatewayFees:          round(b30.gatewayFees),
+    refunds:              round(refunds),
+    walletFloat:          round(walletLiability),
+    pendingWithdrawals:   round(pendingAmt),
+    completedWithdrawals: round(paidAmt),
+    netPlatformRevenue:   round(b30.totalCommission - b30.gatewayFees - refunds),
+  };
+
+  return {
+    reconciliation,   /* ← the canonical summary; UIs read THIS, not their own math */
+    currency: 'KES',
+    generatedAt: new Date().toISOString(),
+    buckets: B,
+    liability: {
+      walletBalanceTotal: round(walletLiability),
+      walletCount: (walletsSnap.docs || []).length,
+      pendingPayoutAmount: round(pendingAmt), pendingPayoutCount: pendingCnt,
+      completedPayoutAmount: round(paidAmt), completedPayoutCount: paidCnt,
+    },
+    /* Truncation honesty — a capped read must never read as a complete total. */
+    capped: {
+      payments: (paysSnap.docs || []).length >= CAP_TX,
+      commissionLedger: (commSnap.docs || []).length >= CAP_TX,
+      providerPayouts: (settleSnap.docs || []).length >= CAP_TX,
+      payoutRequests: (reqSnap.docs || []).length >= CAP_REQ,
+      wallets: (walletsSnap.docs || []).length >= CAP_WALLET,
+      orders: (ordersSnap.docs || []).length >= CAP_TX,
+    },
+    sources: {
+      revenue: 'commissionLedger.sokoniCut + providerPayouts.commission',
+      productCommission: 'commissionLedger.sokoniCut',
+      serviceCommission: 'providerPayouts.commission (settled)',
+      serviceRevenue: 'providerPayouts.gross (settled)',
+      gatewayFees: 'payments.amount − payments.netAmount (COMPLETE)',
+      walletLiability: 'sum(wallets.balance)',
+      payouts: 'payoutRequests (pending|approved|processing vs paid|completed)',
+    },
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Payments (M-Pesa pane)
+
+   The admin Payments/M-Pesa pane previously read `payments` DIRECTLY from the
+   browser (client Firestore). That read is gated by firestore.rules `isAdmin()`
+   — which depends on the ID token carrying a fresh admin claim AND App Check
+   passing AND `window.firebaseDB` being the authenticated app instance. When the
+   super-admin session hasn't fully propagated the claim yet, that read returns
+   permission-denied and the pane shows empty — even though 11 payments exist and
+   the query is correct (verified server-side). Routing it through this callable
+   (like adminGetBookings/adminGetExecutiveDashboard) validates the token ONCE,
+   server-side (_requireAdmin), and reads with the admin SDK — no rules-timing,
+   no App-Check-on-raw-read, no which-app ambiguity. Same reliability as the panes
+   that already work. Canonical source unchanged: `payments`.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetPayments = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayments = async (req) => {
+  _requireAdmin(req);
+  const { hub, limit: lim } = req.data || {};
+  const db = getFirestore();
+  /* single-field orderBy(createdAt) → built-in index, no composite needed. */
+  const snap = await db.collection('payments').orderBy('createdAt', 'desc').limit(Math.min(lim || 200, 500)).get().catch(() => ({ docs: [] }));
+  let rows = (snap.docs || []).map(d => {
+    const x = d.data(); const meta = x.meta || {};
+    return {
+      id: d.id,
+      amount: Number(x.amount != null ? x.amount : x.amountKES) || 0,
+      status: x.status || '',
+      phone: x.phone || meta.phone || '',
+      mpesaCode: x.mpesaCode || x.mpesaReceipt || x.mpesaReceiptNumber || meta.mpesaCode || '',
+      sellerName: x.sellerName || meta.sellerName || meta.providerName || '',
+      sellerUid: meta.sellerId || meta.providerId || x.uid || '',
+      hub: meta.hub || meta.category || meta.hubType || '',
+      orderId: x.orderId || meta.orderId || x.ref || d.id,
+      createdAtMs: x.createdAt && x.createdAt.toDate ? x.createdAt.toDate().getTime() : null,
+    };
+  });
+  if (hub) rows = rows.filter(r => r.hub === hub);
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const startTodayMs = startToday.getTime();
+  return {
+    payments: rows,
+    count: rows.length,
+    totalVolume: rows.reduce((s, r) => s + r.amount, 0),
+    todayCount: rows.filter(r => r.createdAtMs && r.createdAtMs >= startTodayMs).length,
+    sellerCount: new Set(rows.map(r => r.sellerUid).filter(Boolean)).size,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CANONICAL ADMIN READ CONTRACT — the single authenticated server API
+
+   Every admin module reads through one of these callables (via adminOsDispatch),
+   NEVER directly from client Firestore. Each one: _requireAdmin + App Check
+   (enforced on the callable) → canonical collection → normalized JSON in a
+   { source, count, items, generatedAt } envelope for the module's diagnostics.
+
+   Index-safe by construction: a BOUNDED fetch + in-memory sort — never a bare
+   orderBy() on a field some docs may lack (which silently drops them, the exact
+   class of bug that made panes read empty). Caps are generous for the current
+   scale and can move to keyset pagination when a collection outgrows them.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _iso = (v) => (v && v.toDate ? v.toDate().toISOString() : (v && v._seconds ? new Date(v._seconds * 1000).toISOString() : null));
+const _ms  = (v) => (v && v.toDate ? v.toDate().getTime()  : (v && v._seconds ? v._seconds * 1000 : 0));
+const _env = (source, items, extra) => Object.assign({ source, count: items.length, items, generatedAt: new Date().toISOString() }, extra || {});
+/* Generic bounded fetch → id + raw data + createdAt ISO, newest first. For
+   collections whose schema the UI consumes wholesale (disputes/reviews/etc.). */
+async function _listCanonical(col, { limit: lim, cap = 1000 } = {}) {
+  const db = getFirestore();
+  const snap = await db.collection(col).limit(Math.min(lim || cap, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return Object.assign({ id: d.id }, x, { createdAt: _iso(x.createdAt) || _iso(x.timestamp) || null, _ms: _ms(x.createdAt) || _ms(x.timestamp) }); });
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach(i => { delete i._ms; });
+  return items;
+}
+
+exports.adminGetUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetUsers = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('users').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, name: x.name || x.displayName || '', email: x.email || '', phone: x.phoneNumber || x.phone || '',
+    roles: x.roles || [], role: x.role || '', status: x.status || '', disabled: !!x.disabled,
+    createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  if (search) { const q = String(search).toLowerCase(); items = items.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || String(u.phone || '').includes(q)); }
+  items.forEach(u => { delete u._ms; });
+  return _env('users', items);
+});
+
+exports.adminGetProviders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetProviders = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('providers').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, name: x.name || x.businessName || '', email: x.email || '', category: x.category || '',
+    location: x.location || '', status: x.status || '', verified: !!x.verified, available: !!x.available,
+    rating: x.rating || 0, jobsCompleted: x.jobsCompleted || 0, acceptsBookings: !!x.acceptsBookings,
+    createdAt: _iso(x.createdAt), updatedAt: _iso(x.updatedAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  if (search) { const q = String(search).toLowerCase(); items = items.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)); }
+  const active = items.filter(p => ['active', 'approved'].includes(String(p.status).toLowerCase())).length;
+  const verified = items.filter(p => p.verified).length;
+  items.forEach(p => { delete p._ms; });
+  return _env('providers', items, { active, verified, pending: items.length - active });
+});
+
+exports.adminGetServices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetServices = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, providerId } = req.data || {};
+  const db = getFirestore();
+  let ref = db.collection('providerServices');
+  if (providerId) ref = ref.where('providerId', '==', providerId);
+  const snap = await ref.limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, name: x.name || x.title || '', price: Number(x.price) || 0, duration: x.duration || x.durationMinutes || null,
+    category: x.category || '', providerId: x.providerId || x.uid || '', providerName: x.providerName || '',
+    status: x.status || '', active: x.active !== false, createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach(i => { delete i._ms; });
+  return _env('providerServices', items);
+});
+
+exports.adminGetWallets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetWallets = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('wallets').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, balance: Number(x.balance) || 0, pendingPayout: Number(x.pendingPayout) || 0,
+    currency: x.currency || 'KES', updatedAt: _iso(x.updatedAt), _bal: Number(x.balance) || 0 }; });
+  items.sort((a, b) => b._bal - a._bal);
+  const totalLiability = items.reduce((s, w) => s + w.balance, 0);
+  items.forEach(w => { delete w._bal; });
+  return _env('wallets', items, { totalLiability: Math.round(totalLiability * 100) / 100 });
+});
+
+exports.adminGetPayoutRequests = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayoutRequests = async (req) => {
+  _requireAdmin(req);
+  const { status, limit: lim } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('payoutRequests').limit(Math.min(lim || 500, 1000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, amount: Number(x.amount) || 0, status: String(x.status || '').toLowerCase(),
+    sellerUid: x.sellerUid || x.uid || '', sellerName: x.sellerName || x.name || '',
+    phone: x.accountNumber || x.phone || '', reference: x.reference || x.ref || d.id,
+    reason: x.reason || x.note || '', method: x.method || 'M-Pesa',
+    /* settlement evidence — lets the UI distinguish gateway-paid vs manual + show the journey */
+    settlementMethod: x.settlementMethod || null,
+    gatewayReference: x.gatewayReference || x.intasendRef || null,
+    gatewayStatus: x.gatewayStatus || null,
+    externalReference: x.externalReference || null,
+    submittedAt: _iso(x.submittedAt), confirmedAt: _iso(x.confirmedAt), webhookReceivedAt: _iso(x.webhookReceivedAt),
+    createdAt: _iso(x.createdAt), processedAt: _iso(x.processedAt) || _iso(x.paidAt) || null,
+    timeline: (Array.isArray(x.statusHistory) ? x.statusHistory : []).slice(-8).map(h => ({ status: h.status || '', detail: (h.detail || '').slice(0, 100), at: _iso(h.at) })),
+    _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  const byStatus = items.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
+  const pendingSet = new Set(['pending', 'approved', 'processing']);
+  const pendingAmount = items.filter(r => pendingSet.has(r.status)).reduce((s, r) => s + r.amount, 0);
+  if (status) items = items.filter(r => r.status === String(status).toLowerCase());
+  items.forEach(r => { delete r._ms; });
+  return _env('payoutRequests', items, { byStatus, pendingAmount: Math.round(pendingAmount * 100) / 100 });
+});
+
+/* Single-payout lifecycle inspector — the whole journey (request → gateway → webhook →
+   settlement → timeline) in one call, so an operator never has to cross-reference
+   Firestore + function logs + IntaSend + the webhook. Read-only. */
+exports.adminGetPayout = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayout = async (req) => {
+  _requireAdmin(req);
+  const { id } = req.data || {};
+  if (!id) throw new HttpsError('invalid-argument', 'id required');
+  const db = getFirestore();
+  const snap = await db.collection('payoutRequests').doc(String(id)).get();
+  if (!snap.exists) return { found: false, id };
+  const x = snap.data();
+  const uid = x.sellerUid || x.uid || '';
+  const [walletSnap, txSnap] = await Promise.all([
+    uid ? db.collection('wallets').doc(uid).get().catch(() => null) : Promise.resolve(null),
+    db.collection('walletTransactions').doc(`${uid}_${id}_payout`).get().catch(() => null),
+  ]);
+  const w  = walletSnap && walletSnap.exists ? walletSnap.data() : null;
+  const tx = txSnap && txSnap.exists ? txSnap.data() : null;
+  /* stage: -2 refunded, -1 failed/rejected, 1 pending … 5 paid. Drives the UI progress. */
+  const STAGE = { pending: 1, approved: 2, approving: 3, sending: 3, retry_scheduled: 3, processing: 4, paid: 5, settled_manually: 5, completed: 5, failed: -1, rejected: -1, refunded: -2 };
+  return {
+    found: true,
+    request:   { id, providerName: x.sellerName || x.name || '', sellerUid: uid, amount: Number(x.amount) || 0, phone: x.accountNumber || x.phone || '', method: x.method || 'mpesa', createdAt: _iso(x.createdAt) },
+    status:    { current: String(x.status || ''), stage: STAGE[x.status] || 0, settlementMethod: x.settlementMethod || null, updatedAt: _iso(x.updatedAt) },
+    gateway:   { name: x.gatewayName || 'IntaSend', reference: x.gatewayReference || x.intasendRef || null, gatewayStatus: x.gatewayStatus || null, submittedAt: _iso(x.submittedAt), confirmedAt: _iso(x.confirmedAt) },
+    webhook:   { received: !!(x.webhookReceivedAt || x.lastWebhookState), lastState: x.lastWebhookState || null, receivedAt: _iso(x.webhookReceivedAt), events: (Array.isArray(x.webhookEvents) ? x.webhookEvents : []).map(e => ({ state: e.state, at: _iso(e.at) })) },
+    settlement:{ walletDebited: !!tx, ledgerTxId: tx ? `${uid}_${id}_payout` : null, ledgerStatus: tx ? tx.status : null, settlementType: tx ? tx.settlementType : null, walletBalance: w ? Number(w.balance) || 0 : null, walletPending: w ? Number(w.pendingPayout) || 0 : null, externalReference: x.externalReference || null },
+    errors:    { lastError: x.b2cError || null, retryCount: x.retryCount || 0, gatewayResponse: x.gatewayResponse || x.b2cResponse || null },
+    timeline:  (Array.isArray(x.statusHistory) ? x.statusHistory : []).map(h => ({ status: h.status || '', detail: (h.detail || '').slice(0, 160), at: _iso(h.at) })),
+  };
+});
+
+exports.adminGetAnalytics = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAnalytics = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, providerId } = req.data || {};
+  const db = getFirestore();
+  let ref = db.collection('providerAnalytics');
+  if (providerId) ref = ref.where('providerId', '==', providerId);
+  const snap = await ref.limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, providerId: x.providerId || (d.id.split('_')[0]) || '', date: x.date || (d.id.split('_')[1]) || '',
+    bookingsCompleted: x.bookingsCompleted || 0, grossCents: x.grossCents || 0, commissionCents: x.commissionCents || 0,
+    netCents: x.netCents || 0 }; });
+  const totals = items.reduce((t, r) => { t.bookingsCompleted += r.bookingsCompleted; t.grossCents += r.grossCents; t.commissionCents += r.commissionCents; t.netCents += r.netCents; return t; }, { bookingsCompleted: 0, grossCents: 0, commissionCents: 0, netCents: 0 });
+  return _env('providerAnalytics', items, { totals });
+});
+
+/* NOTE: the canonical adminGetDisputes / adminGetReviews live below (the filtered
+   versions honouring status/flagged). The earlier `_env`-based duplicates were removed —
+   they ignored the caller's filters and returned only `.items`, shadowed at runtime by
+   the filtered versions. One op → one contract. */
+
+exports.adminGetNotifications = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetNotifications = async (req) => {
+  _requireAdmin(req);
+  const items = await _listCanonical('notifications', Object.assign({ cap: 200 }, req.data || {}));
+  return _env('notifications', items);
+});
+
+/* NOTE: canonical adminGetSupportTickets is the filtered version above (status/
+   priority/category + priority sort, returns `.tickets`). This `_env` duplicate was
+   removed — it WON at runtime (later registration) but returned `.items` while the UI
+   reads `.tickets`, and it dropped the priority/category filters → empty Support pane. */
+
+/* Contract aliases — same handler, canonical name the Command Center calls. */
+exports._h.adminGetOverview = exports._h.adminGetExecutiveDashboard;
+exports._h.adminGetReports  = exports._h.adminGetFinance;
 
 /* ─────────────────────────────────────────────────────────────────────────
    Orders
@@ -523,10 +1032,18 @@ exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enf
   _requireAdmin(req);
   const { status, limit: lim } = req.data;
   const db = getFirestore();
-  let q = db.collection('bookings').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
-  if (status) q = q.where('status', '==', status);
-  const snap = await q.get();
-  return { bookings: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  /* Service bookings are the canonical providerBookings collection (booking-service.js),
+     NOT the venue `bookings` collection — the admin Bookings view was blind to every
+     service booking (DJ, mechanic, etc.). Single-field query + in-memory sort avoids a
+     status+createdAt composite index. Return shape unchanged ({ bookings: [...] }). */
+  const cap = Math.min(lim || 50, 200);
+  const q = status
+    ? db.collection('providerBookings').where('status', '==', status).limit(cap)
+    : db.collection('providerBookings').orderBy('createdAt', 'desc').limit(cap);
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  if (status) rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return { bookings: rows };
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -557,21 +1074,21 @@ exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10
    clash with the global payouts CF. Caller: sokoni-aos.js _call('aosGetPendingPayouts'). */
 exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosGetPendingPayouts = async (req) => {
   _requireAdmin(req);
-  const snap = await getFirestore().collection('payouts').where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(100).get().catch(() => ({ docs: [] }));
-  return { payouts: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  /* Canonical source is `payoutRequests` (what requestSellerPayout writes and
+     super-admin.html reads). Was reading the stale `payouts` collection, so this admin
+     view showed 0 while real withdrawals sat in payoutRequests. Single-field query
+     (sort in memory) mirrors wallet.js adminGetPendingPayouts — no composite index. */
+  const snap = await getFirestore().collection('payoutRequests').where('status', '==', 'pending').limit(100).get().catch(() => ({ docs: [] }));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return { payouts: rows };
 });
 
-exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminApprovePayouts = async (req) => {
-  _requireSuperAdmin(req);
-  const { payoutIds } = req.data;
-  if (!Array.isArray(payoutIds) || !payoutIds.length) throw new Error('payoutIds array required');
-  const db = getFirestore();
-  const batch = db.batch();
-  payoutIds.forEach(id => { batch.update(db.collection('payouts').doc(id), { status: 'approved', approvedBy: req.auth.uid, approvedAt: FieldValue.serverTimestamp() }); });
-  await batch.commit();
-  await db.collection('adminAudit').add({ action: 'payouts_approved', count: payoutIds.length, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
-  return { success: true, count: payoutIds.length };
-});
+/* RETIRED: adminApprovePayouts wrote the deprecated `payouts` collection (no engine,
+   no idempotency/reconciliation) — a no-op against the real `payoutRequests` queue.
+   Admin OS now approves (single AND bulk) exclusively through the canonical, frozen
+   wallet engine `adminProcessPayout` (wallet.js), one request at a time. One operation
+   → one contract. See sokoni-aos.js _bulkApprovePayouts + scripts/test-admin-bulk-payout.js. */
 
 /* ─────────────────────────────────────────────────────────────────────────
    Disputes
@@ -583,7 +1100,8 @@ exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enf
   let q = db.collection('disputes').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
   if (status) q = q.where('status', '==', status);
   const snap = await q.get().catch(() => ({ docs: [] }));
-  return { disputes: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  return { disputes: rows, items: rows, count: rows.length };
 });
 
 exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosResolveDispute = async (req) => {
@@ -607,18 +1125,13 @@ exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enfo
     ? db.collection('reviews').where('flagged', '==', true).limit(Math.min(lim || 50, 200))
     : db.collection('reviews').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
   const snap = await q.get().catch(() => ({ docs: [] }));
-  return { reviews: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  return { reviews: rows, items: rows, count: rows.length };
 });
 
-exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminRemoveReview = async (req) => {
-  _requireAdmin(req);
-  const { reviewId, reason } = req.data;
-  if (!reviewId) throw new Error('reviewId required');
-  const db = getFirestore();
-  await db.collection('reviews').doc(reviewId).update({ status: 'removed', removedBy: req.auth.uid, removedReason: reason || '', removedAt: FieldValue.serverTimestamp() });
-  await db.collection('adminAudit').add({ action: 'review_removed', reviewId, reason, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
-  return { success: true };
-});
+/* RETIRED: adminRemoveReview — zero callers; duplicated review moderation. The one
+   canonical review op is `reviews.adminModerateReview` (approve/reject/restore +
+   summary recalc), which the Admin OS Reviews tab already calls. One op → one contract. */
 
 /* ─────────────────────────────────────────────────────────────────────────
    Push Notifications
