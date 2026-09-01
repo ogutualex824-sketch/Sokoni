@@ -2,8 +2,16 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+/* closeShift's catch block calls logger.error. It was never imported, so EVERY failure in
+   that handler — including the legitimate "No open shift found for this cashier" — threw
+   ReferenceError: logger is not defined BEFORE the `if (err instanceof HttpsError) throw err`
+   line could re-raise the real one. Callers saw an opaque crash instead of the reason. */
+const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const { _assertBusinessPermission } = require('./workforce-identity');
+/* The tenant resolver: ownerUid -> canonical merchantId. No new store; it reads the
+   existing businesses.ownerId relationship and refuses when it is ambiguous. */
+const { resolveMerchantIdForOwner, looksLikeOwnerForm, REASON: TENANT_REASON } = require('./tenant-identity');
 if (!admin.apps.length) admin.initializeApp();
 
 exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
@@ -35,17 +43,56 @@ function _requireRole(auth, minRole) {
    Authorization now goes through workforce-identity's _assertBusinessPermission,
    the canonical capability engine, rather than a second one grown here.
 
-   The uid === sellerId short-circuit covers a seller operating their own POS
-   without a Firestore read, and without depending on whether sellerId is a
-   businesses/{id} key — which is NOT uniform across this codebase. Staff go
-   through the membership check. */
+   SUPERSEDED, 2026-09-01. That fix left one thing open, and this note used to
+   describe it as a feature: the `uid === sellerId` short-circuit returned the uid
+   "without depending on whether sellerId is a businesses/{id} key — which is NOT
+   uniform across this codebase". It is now established WHY it was not uniform, and
+   that the non-uniformity was itself the defect: two tenant spaces, one key name.
+   The short-circuit is gone and every path resolves to the canonical merchantId. */
+/* CANONICAL TENANT IDENTITY.
+
+   This used to return whatever the caller sent. An owner passing their own uid got the uid
+   back; staff passing a merchantId got the merchantId back. Both then flowed into
+   `where('sellerId','==',sellerId)` across fourteen queries in this file — so ONE shop was
+   addressed by TWO keys depending on who was acting, and a staff-raised approval was
+   invisible to an owner-manager listing approvals. See docs/TENANT_IDENTITY_CENSUS.md §3.
+
+   The output is now always the canonical merchantId — the `businesses` document id — no
+   matter which form arrived:
+
+     owner sends uid        -> resolved forward to their merchantId
+     owner sends merchantId -> accepted once it matches the one they own
+     staff sends merchantId -> membership verified through the existing capability engine
+     anything ambiguous     -> refused, never guessed
+
+   A client-supplied value never overrides server-derived identity: the uid form is only
+   RECOGNISED, and what it resolves to comes from `businesses where ownerId == auth.uid`. */
 async function _requireSeller(auth, data) {
-  const sellerId = data && data.sellerId;
-  if (!sellerId || typeof sellerId !== 'string')
+  const requested = data && data.sellerId;
+  if (!requested || typeof requested !== 'string')
     throw new HttpsError('invalid-argument', 'sellerId is required');
-  if (auth.uid === sellerId) return sellerId;
-  await _assertBusinessPermission(auth.uid, sellerId, 'pos');
-  return sellerId;
+
+  /* LEGACY OWNER FORM. Recognised, then resolved forward — not trusted. */
+  if (looksLikeOwnerForm(requested, auth.uid)) {
+    const owned = await resolveMerchantIdForOwner(auth.uid);
+    if (!owned.ok) {
+      if (owned.reason === TENANT_REASON.AMBIGUOUS) {
+        throw new HttpsError('failed-precondition',
+          'This account owns more than one business. Send the merchant id explicitly.');
+      }
+      throw new HttpsError('failed-precondition',
+        'No active business is linked to this account.');
+    }
+    return owned.merchantId;
+  }
+
+  /* A merchant id was sent. If the caller owns exactly that merchant, accept it without a
+     membership read; otherwise they must be a member of it. */
+  const owned = await resolveMerchantIdForOwner(auth.uid);
+  if (owned.ok && owned.merchantId === requested) return requested;
+
+  await _assertBusinessPermission(auth.uid, requested, 'pos');
+  return requested;
 }
 
 function _today() {
@@ -92,6 +139,23 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   const branchId = data.branchId || 'default';
   const openingCash = Number(data.openingCash ?? 0);
 
+  /* THE OFFLINE-ORIGIN SHIFT ID.
+
+     A till opens its shift before it has a server: pos-sales.js is offline-first by design
+     ("IndexedDB -> Firestore, never lose a sale") and mints a local uid at that moment.
+     Cash events then carry THAT id, while posRetailSales carries the posShifts document id
+     — two identity spaces for one shift, which is why closeShift cannot find a shift cash
+     events.
+
+     The posShifts DOCUMENT remains the shift. The local id is recorded on it as an alias, so
+     events raised before the server knew about the shift can still be joined to it. No new
+     collection, no second authority: one field on the existing one.
+
+     It is a JOIN KEY, never a permission. Nothing authorises on it, and the caller still
+     cannot select another shift — the open shift is resolved from sellerId + auth.uid. */
+  const clientShiftId = typeof data.clientShiftId === 'string'
+    ? data.clientShiftId.trim().slice(0, 128) : null;
+
   if (isNaN(openingCash) || openingCash < 0)
     throw new HttpsError('invalid-argument', 'openingCash must be a non-negative number');
 
@@ -115,6 +179,7 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
     cashierName,
     branchId,
     status: 'open',
+    clientShiftId,
     openingCash,
     closingCash: null,
     openedAt: _TS(),
@@ -136,6 +201,119 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   await shiftRef.set(shiftData);
 
   return { shiftId: shiftRef.id, message: 'Shift opened successfully', openingCash };
+});
+
+
+/**
+ * registerClientShift — join an offline-born shift to its server record.
+ *
+ * A till opens its shift with no network: pos-sales.js mints a local uid and sells against
+ * it. When connectivity returns, this attaches that id to the authoritative posShifts
+ * document so cash events raised offline can be joined to the shift they belong to.
+ *
+ * Input: { sellerId, clientShiftId, openingCash?, branchId?, cashierName? }
+ *
+ * EVERY IDENTITY IS SERVER-DERIVED. The caller supplies one opaque string and ordinary
+ * shift-opening data. The merchant comes from _requireSeller, the cashier from auth.uid.
+ * A caller cannot name another merchant, another cashier, or an existing server shift —
+ * `data.shiftId` is never read.
+ *
+ * IDEMPOTENT BY (actor, clientShiftId). A device reconnecting repeatedly must not create
+ * duplicate shifts, so a second registration returns the same shift and changes nothing.
+ *
+ * COLLISIONS REFUSE. If the id is already bound to a different cashier or a different
+ * merchant, or the caller's open shift already carries a different id, the request fails —
+ * nothing is overwritten, merged or guessed.
+ *
+ * clientShiftId IS NOT A PERMISSION. It is only ever matched, never trusted to select a
+ * shift for mutation: closeShift continues to resolve the active shift from
+ * sellerId + auth.uid.
+ */
+exports.registerClientShift = onCall(_CF, exports._h.registerClientShift = async (req) => {
+  const auth = _requireAuth(req);
+  const { data } = req;
+  const sellerId = await _requireSeller(auth, data);
+  const cashierUid = auth.uid;
+
+  const clientShiftId = typeof data.clientShiftId === 'string'
+    ? data.clientShiftId.trim().slice(0, 128) : '';
+  if (!clientShiftId) {
+    throw new HttpsError('invalid-argument', 'clientShiftId is required');
+  }
+
+  /* 1 · already registered? Two matches means the data is ambiguous, which is a collision,
+        not something to resolve by picking the first. */
+  const bound = await db.collection('posShifts')
+    .where('clientShiftId', '==', clientShiftId)
+    .limit(2)
+    .get();
+
+  if (bound.size > 1) {
+    throw new HttpsError('failed-precondition',
+      'That shift id is already recorded against more than one shift.');
+  }
+  if (!bound.empty) {
+    const doc = bound.docs[0];
+    const v = doc.data() || {};
+    /* Fail closed on a different actor or a different shop — never reassign. */
+    if (v.cashierUid !== cashierUid || v.sellerId !== sellerId) {
+      throw new HttpsError('permission-denied',
+        'That shift id belongs to another cashier or shop.');
+    }
+    return { shiftId: doc.id, clientShiftId, reused: true, created: false };
+  }
+
+  /* 2 · attach to this cashier's OPEN shift when it carries no id yet. */
+  const openSnap = await db.collection('posShifts')
+    .where('sellerId', '==', sellerId)
+    .where('cashierUid', '==', cashierUid)
+    .where('status', '==', 'open')
+    .limit(1)
+    .get();
+
+  if (!openSnap.empty) {
+    const doc = openSnap.docs[0];
+    const existingId = (doc.data() || {}).clientShiftId;
+    if (existingId && existingId !== clientShiftId) {
+      throw new HttpsError('failed-precondition',
+        'This shift is already registered under a different device shift id.');
+    }
+    await doc.ref.update({ clientShiftId, updatedAt: _TS() });
+    return { shiftId: doc.id, clientShiftId, reused: !!existingId, created: false, attached: true };
+  }
+
+  /* 3 · no open shift — create one carrying the offline-origin id. */
+  const openingCash = Number(data.openingCash ?? 0);
+  if (isNaN(openingCash) || openingCash < 0) {
+    throw new HttpsError('invalid-argument', 'openingCash must be a non-negative number');
+  }
+  const shiftRef = db.collection('posShifts').doc();
+  await shiftRef.set({
+    sellerId,
+    cashierUid,
+    cashierName: data.cashierName || auth.token?.name || 'Unknown',
+    branchId: data.branchId || 'default',
+    status: 'open',
+    clientShiftId,
+    openingCash,
+    closingCash: null,
+    openedAt: _TS(),
+    closedAt: null,
+    totalSales: 0,
+    totalTransactions: 0,
+    cashSales: 0,
+    mpesaSales: 0,
+    cardSales: 0,
+    qrSales: 0,
+    discountsGiven: 0,
+    refundsGiven: 0,
+    voidCount: 0,
+    notes: data.notes || '',
+    registeredOffline: true,
+    createdAt: _TS(),
+    updatedAt: _TS(),
+  });
+  return { shiftId: shiftRef.id, clientShiftId, reused: false, created: true };
 });
 
 /**
