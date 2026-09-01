@@ -18,6 +18,7 @@ if (!admin.apps.length) admin.initializeApp({ projectId: process.env.GCLOUD_PROJ
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const db = getFirestore();
+const crypto = require('crypto');
 const ace = require('../authority-control-events');
 
 let pass = 0, fail = 0;
@@ -39,14 +40,19 @@ const ev = async (id) => (await db.collection('controlEvents').doc(id).get()).da
 
 /* Replicate setUserRole's exact winner sequence against the real emulator. */
 async function runSetUserRole(targetUid, callerUid, role, requestId) {
+  const rid = (typeof requestId === 'string' && requestId.trim()) ? requestId.trim() : crypto.randomUUID();
   const current = await claimsOf(targetUid);
   const merged = ace.computeMergedClaims(current, role);
-  const eventId = ace.deterministicEventId({ targetUid, callerUid, intendedClaims: merged, requestId });
+  const eventId = ace.deterministicEventId({ targetUid, callerUid, intendedClaims: merged, requestId: rid });
   const owner = 'exec_' + Math.random().toString(36).slice(2);
-  const claim = await ace.claimEvent(db, eventId, { type: 'admin.setUserRole', targetUid, callerUid, requestId, intendedClaims: merged }, owner);
+  const claim = await ace.claimEvent(db, eventId, { type: 'admin.setUserRole', targetUid, callerUid, requestId: rid, intendedClaims: merged }, owner);
   if (claim.alreadyCommitted) return { eventId, idempotent: true, result: claim.result };
   if (claim.recovery)   return { eventId, blocked: 'recovery' };
-  if (claim.inProgress) return { eventId, blocked: 'inProgress' };
+  if (claim.inProgress) {                                           // C8 loser: wait/reconcile → committed, never mutate
+    const w = await ace.waitForCommit(db, eventId, getAuth);
+    if (w.status === 'committed') return { eventId, idempotent: true, viaWait: true, result: w.result };
+    return { eventId, blocked: w.status };
+  }
   if (claim.stale) { const rec = await ace.reconcileStaleEvent(db, eventId, getAuth); return { eventId, reconciled: rec.status }; }
   // winner
   await mutate(targetUid, merged);                                  // THE single Auth mutation
@@ -84,9 +90,11 @@ async function runSetUserRole(targetUid, callerUid, role, requestId) {
     runSetUserRole('t3', 'super1', 'moderator', 'rq-3'),
   ]);
   const winners = [a, b].filter(x => x.won).length;
-  const blocked = [a, b].filter(x => x.blocked === 'inProgress' || x.idempotent).length;
+  const waited  = [a, b].filter(x => x.idempotent === true).length;
+  const loser   = [a, b].find(x => x.idempotent === true);
   ok(winners === 1, '3: C8 — exactly ONE execution won the ownership claim');
-  ok(blocked === 1, '3: C8 — the other execution did NOT mutate (inProgress/idempotent)');
+  ok(waited === 1, '3: C8 — the loser WAITED/reconciled to committed (did NOT mutate)');
+  ok(loser && loser.result && loser.result.role === 'moderator', '3: C8 — loser RETURNED the winner\'s committed result (per contract)');
   ok(mutations === 1, '3: C8 — exactly ONE Auth mutation under concurrency');
   ok((await claimsOf('t3')).moderator === true, '3: role applied once');
 
@@ -133,8 +141,10 @@ async function runSetUserRole(targetUid, callerUid, role, requestId) {
   ok(mutations === 0, '6: C9 — fail-closed recovery performed ZERO Auth mutations');
   ok((await ev(id6)).status === 'recovery' && (await claimsOf('t6')).admin !== true, '6: recovery state set; NO privilege granted');
 
-  /* 7 — C3 intent precondition: a fresh live 'mutating' (non-stale) blocks a second execution
-        from mutating at all (inProgress), so intent gates the Auth mutation. */
+  /* 7 — C3 intent precondition + C8 bounded fail-closed: a fresh live 'mutating' (non-stale) event
+        held by another execution (a) is NOT claimable by a second execution — claimEvent → inProgress
+        (intent gates the Auth mutation); (b) a bounded wait that never observes commit and is not
+        stale FAILS CLOSED (timeout) and performs NO Auth mutation. */
   await freshUser('t7', {});
   await clearCol('controlEvents');
   const merged7 = ace.computeMergedClaims({}, 'seller');
@@ -145,9 +155,27 @@ async function runSetUserRole(targetUid, callerUid, role, requestId) {
     intentAt: Timestamp.now(), mutatingAt: Timestamp.now(),
   });
   mutations = 0;
-  const r7 = await runSetUserRole('t7', 'super1', 'seller', 'rq-7');
-  ok(r7.blocked === 'inProgress', '7: C3/C8 — second execution sees live intent → inProgress');
+  const raw7 = await ace.claimEvent(db, id7, { type: 'admin.setUserRole', targetUid: 't7', callerUid: 'super1', requestId: 'rq-7', intendedClaims: merged7 }, 'exec_second');
+  ok(raw7.inProgress === true && !raw7.won, '7: C3/C8 — second execution sees a live intent → NOT granted the mutation (inProgress)');
+  const wait7 = await ace.waitForCommit(db, id7, getAuth, { timeoutMs: 300, pollMs: 50 });
+  ok(wait7.status === 'timeout', '7: C8 — bounded wait on a non-committing, non-stale winner FAILS CLOSED (timeout)');
   ok(mutations === 0 && (await claimsOf('t7')).seller !== true, '7: C3 — no Auth mutation while intent held by another');
+
+  /* 7b — C7 semantics made explicit: WITHOUT a client requestId, calls are DISTINCT intents (no
+        cross-call idempotency, by design); WITH a stable requestId they collapse to at-most-once. */
+  await freshUser('t9', {});
+  await clearCol('controlEvents');
+  mutations = 0;
+  const w1 = await runSetUserRole('t9', 'super1', 'seller');       // no requestId → fresh id
+  const w2 = await runSetUserRole('t9', 'super1', 'seller');       // no requestId → fresh id again
+  ok(w1.eventId !== w2.eventId && w1.won && w2.won, '7b: C7 — omitted requestId → DISTINCT events, each a full intent (documented)');
+  ok(mutations === 2, '7b: C7 — omitted requestId gives NO cross-call idempotency (2 mutations) — by design');
+  await clearCol('controlEvents');
+  mutations = 0;
+  const s1 = await runSetUserRole('t9', 'super1', 'driver', 'stable-key');
+  const s2 = await runSetUserRole('t9', 'super1', 'driver', 'stable-key');
+  ok(s1.eventId === s2.eventId, '7b: C7 — SAME requestId → same deterministic event id');
+  ok((s1.won || s1.idempotent) && s2.idempotent && mutations === 1, '7b: C7 — stable requestId → at-most-once (1 mutation)');
 
   /* 8 — adminPermissions PILOT: the subordinate, narrowing-only capability read (the ONLY reader
         of adminPermissions in this build). Proven directly on the exported predicate. */

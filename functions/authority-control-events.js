@@ -35,13 +35,16 @@ function computeMergedClaims(currentClaims, electedRole) {
   return merged;
 }
 
-/* Compare only the fields the canonical mutation governs (the six roles + permsVersion). */
-function claimsApplied(currentClaims, intendedClaims) {
-  const c = currentClaims || {};
-  for (const k of GOVERNED_ROLE_KEYS) {
-    if (!!c[k] !== !!intendedClaims[k]) return false;
-  }
-  return Number(c.permsVersion || 0) >= Number(intendedClaims.permsVersion || 0);
+/* C9 literal reconciliation predicate — `current Auth claims == intended claims`, FULL deep
+   equality (key-order-independent). Anything short of exact equality (including a differing
+   preserved non-role claim) is "completion not establishable" → fail-closed recovery. */
+function _canon(o) {
+  if (o === null || typeof o !== 'object') return o;
+  if (Array.isArray(o)) return o.map(_canon);
+  return Object.keys(o).sort().reduce((a, k) => { a[k] = _canon(o[k]); return a; }, {});
+}
+function claimsEqual(current, intended) {
+  return JSON.stringify(_canon(current || {})) === JSON.stringify(_canon(intended || {}));
 }
 
 /* ── C7 — deterministic event id from the mutation identity + client requestId ──── */
@@ -117,7 +120,7 @@ async function reconcileStaleEvent(db, eventId, getAuth, nowMs = Date.now()) {
   if (!taken.ok) return taken;
 
   const targetUser = await getAuth().getUser(taken.targetUid);
-  if (claimsApplied(targetUser.customClaims, taken.intendedClaims)) {
+  if (claimsEqual(targetUser.customClaims, taken.intendedClaims)) {   // C9: current == intended (full equality)
     await finalizeEvent(db, eventId, taken.reconciler, taken.fenceToken,
       { ok: true, reconciled: true, mutationCount: 0 });        // C9: NO re-mutation
     return { status: 'committed', reconciled: true };
@@ -133,8 +136,37 @@ async function reconcileStaleEvent(db, eventId, getAuth, nowMs = Date.now()) {
   return { status: 'recovery' };
 }
 
+/* ── C8 loser semantics — a concurrent (non-winning) execution does NOT mutate; it waits for the
+   winner to reach `committed` and returns that result. Bounded + FAIL-CLOSED: if the winner
+   abandons the event (it goes stale) the waiter reconciles it (C9); if neither committed nor
+   recovery is reached within the bound, it returns `timeout` and the caller fails closed (retry).
+   The waiter NEVER performs an Auth mutation on any path. ───────────────────────────────────── */
+async function waitForCommit(db, eventId, getAuth, opts = {}) {
+  const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 8000;   // < function timeout
+  const pollMs    = opts.pollMs    != null ? opts.pollMs    : 100;
+  const nowFn     = opts.nowFn || Date.now;
+  const sleep     = opts.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const ref = db.collection(CE).doc(eventId);
+  const deadline = nowFn() + timeoutMs;
+  for (;;) {
+    const snap = await ref.get();
+    if (!snap.exists) return { status: 'missing' };
+    const d = snap.data();
+    if (d.status === 'committed') return { status: 'committed', result: d.outcome || { ok: true } };
+    if (d.status === 'recovery')  return { status: 'recovery' };
+    // status === 'mutating'
+    if (_isStale(d.mutatingAt, nowFn())) {                            // winner abandoned → C9 reconcile
+      const rec = await reconcileStaleEvent(db, eventId, getAuth, nowFn());
+      if (rec.status === 'committed') return { status: 'committed', result: ((await ref.get()).data() || {}).outcome || { ok: true } };
+      return { status: rec.status || 'recovery' };
+    }
+    if (nowFn() >= deadline) return { status: 'timeout' };            // bounded → caller fails closed
+    await sleep(pollMs);
+  }
+}
+
 module.exports = {
   GOVERNED_ROLE_KEYS, CURRENT_PERMS_VERSION, STALE_MS,
-  computeMergedClaims, claimsApplied, deterministicEventId,
-  claimEvent, finalizeEvent, reconcileStaleEvent, _isStale, Timestamp,
+  computeMergedClaims, claimsEqual, deterministicEventId,
+  claimEvent, finalizeEvent, reconcileStaleEvent, waitForCommit, _isStale, Timestamp,
 };

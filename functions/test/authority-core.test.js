@@ -102,15 +102,23 @@ describe('AdminOS Authority Core — C7 deterministic event identity', () => {
   });
 });
 
-describe('AdminOS Authority Core — claimsApplied (reconciliation predicate)', () => {
-  const intended = ace.computeMergedClaims({}, 'admin');
-  test('true when governed keys + permsVersion satisfied', () => {
-    expect(ace.claimsApplied({ admin: true, superAdmin: false, seller: false, driver: false, moderator: false, buyer: false, permsVersion: 1 }, intended)).toBe(true);
+describe('AdminOS Authority Core — C9 claimsEqual (current == intended, FULL equality)', () => {
+  const intended = ace.computeMergedClaims({ merchantId: 'm1' }, 'admin');   // includes a preserved non-role claim
+  test('true only when the ENTIRE claims object matches (order-independent)', () => {
+    const reordered = { permsVersion: 1, buyer: false, moderator: false, driver: false, seller: false, superAdmin: false, admin: true, merchantId: 'm1' };
+    expect(ace.claimsEqual(reordered, intended)).toBe(true);
   });
-  test('false when a governed key differs (mutation not applied)', () => {
-    expect(ace.claimsApplied({ admin: false, permsVersion: 1 }, intended)).toBe(false);
+  test('false when a governed role differs', () => {
+    expect(ace.claimsEqual({ ...intended, admin: false }, intended)).toBe(false);
   });
-  test('true when permsVersion EXCEEDS intended (already advanced)', () => {
-    expect(ace.claimsApplied({ admin: true, permsVersion: 5 }, intended)).toBe(true);
+  test('false when a PRESERVED non-role claim differs — a governed-subset check would WRONGLY pass', () => {
+    expect(ace.claimsEqual({ ...intended, merchantId: 'DIFFERENT' }, intended)).toBe(false);
+  });
+  test('false when current is MISSING a preserved claim — the exact deviation the review flagged', () => {
+    const c = { ...intended }; delete c.merchantId;
+    expect(ace.claimsEqual(c, intended)).toBe(false);
+  });
+  test('false when current carries an EXTRA claim not in intended', () => {
+    expect(ace.claimsEqual({ ...intended, impersonator: true }, intended)).toBe(false);
   });
 });

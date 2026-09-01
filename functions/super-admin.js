@@ -138,8 +138,11 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
   const currentClaims = targetUser.customClaims || {};
   const mergedClaims  = ace.computeMergedClaims(currentClaims, cleanRole);
 
-  // C7: deterministic event identity for retry idempotency. requestId is OPTIONAL — when the
-  //     caller supplies one, retries of the same intent collapse; absent, a fresh per-run id.
+  // C7: deterministic event identity. Cross-call retry idempotency is GUARANTEED ONLY when the
+  //     caller supplies `requestId` (the idempotency key) — a retry then writes the SAME event and
+  //     collapses to a no-op. When `requestId` is OMITTED a fresh per-invocation id is generated,
+  //     so each call is a DISTINCT intent by design (no cross-call idempotency). Callers that need
+  //     at-most-once semantics MUST pass a stable requestId.
   const requestId = (request.data && typeof request.data.requestId === 'string' && request.data.requestId.trim())
     ? request.data.requestId.trim()
     : crypto.randomUUID();
@@ -171,8 +174,17 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
     }
     throw Object.assign(new Error('FAILED_PRECONDITION: role change requires manual review'), { code: 'failed-precondition' });
   }
-  if (claim.inProgress) {     // C8: another live winner holds the mutation → do not double-apply.
-    throw Object.assign(new Error('ABORTED: role change already in progress — retry'), { code: 'aborted' });
+  if (claim.inProgress) {     // C8: another live winner holds the mutation. Do NOT mutate —
+    //   wait/reconcile to committed and return THAT result (bounded + fail-closed).
+    const w = await ace.waitForCommit(db, eventId, getAuth);
+    if (w.status === 'committed') {
+      return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, idempotent: true };
+    }
+    if (w.status === 'recovery') {
+      throw Object.assign(new Error('FAILED_PRECONDITION: role change requires manual review'), { code: 'failed-precondition' });
+    }
+    // timeout / missing → bounded fail-closed; the winner is slow or gone, caller retries.
+    throw Object.assign(new Error('ABORTED: role change still in progress — retry'), { code: 'aborted' });
   }
   // else claim.won === true → this execution owns the single Auth mutation.
 

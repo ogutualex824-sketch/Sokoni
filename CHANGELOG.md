@@ -11,11 +11,15 @@ Gate; **not merged, not deployed** — the independent implementation review is 
   moderator,buyer}` (superAdmin ⇒ admin), and stamp `permsVersion = max(existing, 1)` (monotonic,
   never downgrades). The guard/rate-limit/target-exists behaviour is unchanged.
 - **`controlEvents` intent → mutation → finalize chain (C3/C7/C8/C9/C10)** in the net-new helper
-  `functions/authority-control-events.js`: deterministic event id (retry idempotency); atomic
-  Firestore-transaction ownership claim so exactly one execution reaches the single Auth mutation;
-  crash recovery for an abandoned `mutating` event that **never repeats the Auth mutation**
-  (verifiable completion → committed; otherwise explicit fail-closed `recovery`); and monotonic
-  **owner fencing** so a stale owner's late finalize is rejected as a no-op.
+  `functions/authority-control-events.js`: deterministic event id — cross-call idempotency is
+  guaranteed **only when the caller supplies `requestId`** (documented; omitted → distinct intents
+  by design); atomic Firestore-transaction ownership claim so exactly one execution reaches the
+  single Auth mutation, and a **losing concurrent execution waits/reconciles to `committed` and
+  returns that result** (bounded + fail-closed — never a second mutation); crash recovery for an
+  abandoned `mutating` event that reconciles on **full `current == intended` claims equality**
+  (verifiable completion → committed; otherwise explicit fail-closed `recovery`) and **never
+  repeats the Auth mutation**; and monotonic **owner fencing** so a stale owner's late finalize is
+  rejected as a no-op.
 - **`adminPermissions` pilot (frozen).** Exactly one read-only callable, `adminGetAuditLogs`, reads
   `adminPermissions/{uid}` for a single capability (`audit.read`) **after** its existing coarse
   `_requireAdmin` gate. Subordinate — it can only NARROW an already-admin caller (explicit `false`
