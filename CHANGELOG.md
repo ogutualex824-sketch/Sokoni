@@ -1,3 +1,24 @@
+## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
+
+Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the
+live `adminOsDispatch` — established byte-identical to commit `252ff65` — because main's lineage had
+**dropped 12 production handlers + 2 aliases**, **regressed 6 shared handlers** to legacy collections
+(`bookings`→ should be `providerBookings`, `payouts`→`payoutRequests`) and dropped `{items,count}`
+response envelopes, and still carried **2 production-retired handlers** (`adminApprovePayouts` — a
+deprecated-`payouts` no-op; `adminRemoveReview` — dead/duplicated). Converged file =
+`252ff65` baseline **+ only** the intentional `adminGetAuditLogs` `adminPermissions` pilot from
+`feat/adminos-authority-core` (`3006358`). See `docs/ADMINOS_CONVERGENCE_REPORT.md`.
+
+- **Files:** `functions/admin-os.js` (converged), `docs/ADMINOS_CONVERGENCE_REPORT.md` (new). CHANGELOG.
+- **Behavior:** restores the 12 dropped handlers + 2 aliases; reverts the 6 regressions to canonical
+  collections/response contracts; drops the 2 retired handlers; keeps the audit-read pilot.
+- **Database:** no schema change (reads canonical `providerBookings` / `payments` / `payoutRequests`).
+- **Verification:** provenance diff vs `252ff65` = pilot graft only (29 lines); zero-drop registry
+  proof (55 == 55 identical set); handler matrix 52/53 identical + pilot; full suite 687/687; pilot
+  emulator 33/33. No new deployed function; `adminOsDispatch` deploy remains a separate later gate.
+- **Breaking:** none vs production (converges main *toward* live behavior; retired handlers were
+  already absent from production).
+
 ## [2026-09-01] — feat(adminos): Authority Core canonical-writer + controlEvents chain (UNMERGED / UNDEPLOYED)
 
 Implements the binding build-scope contract `docs/ADMINOS_AUTHORITY_CORE_BUILD_SCOPE.md`
