@@ -36,60 +36,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .adm-lock-box{background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.15);border-radius:28px;
   padding:32px 28px 24px;max-width:380px;width:100%;text-align:center;
   backdrop-filter:blur(20px);transition:transform .1s;}
-.adm-lock-logo{height:44px;margin-bottom:14px;}
-.adm-lock-title{font-size:21px;font-weight:900;color:white;margin-bottom:2px;}
-.adm-lock-sub{font-size:10px;color:rgba(255,255,255,0.28);margin-bottom:18px;
-  letter-spacing:.12em;text-transform:uppercase;}
-/* Mode Tabs */
-.adm-lock-tabs{display:flex;gap:5px;margin-bottom:20px;background:rgba(255,255,255,0.04);
-  border-radius:14px;padding:4px;}
-.adm-lock-tab{flex:1;padding:8px 4px;border:none;background:transparent;
-  color:rgba(255,255,255,0.35);font-size:11px;font-weight:700;border-radius:10px;
-  cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;font-family:inherit;}
-.adm-lock-tab.active{background:rgba(113,255,0,0.15);color:#71ff00;
-  border:1px solid rgba(113,255,0,0.3);}
-.adm-lock-tab:hover:not(.active){color:rgba(255,255,255,0.65);}
-/* Mode containers */
-.adm-lock-mode{display:flex;flex-direction:column;align-items:center;justify-content:center;}
-/* Pattern */
-.pat-hint{font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:10px;}
-.pat-wrap{position:relative;width:240px;height:240px;touch-action:none;user-select:none;cursor:crosshair;}
-#patternCanvas{position:absolute;inset:0;width:100%;height:100%;}
-/* PIN */
-.adm-pin-dots{display:flex;justify-content:center;gap:14px;margin-bottom:20px;}
-.adm-pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);transition:.18s;}
-.adm-pin-dot.filled{background:#71ff00;border-color:#71ff00;box-shadow:0 0 10px rgba(113,255,0,0.5);}
-.adm-pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:278px;}
-.adm-pin-key{padding:16px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
-  border-radius:14px;font-size:20px;font-weight:700;color:white;cursor:pointer;
-  transition:all .12s;-webkit-tap-highlight-color:transparent;font-family:inherit;}
-.adm-pin-key:active,.adm-pin-key:hover{background:rgba(113,255,0,0.1);
-  border-color:rgba(113,255,0,0.3);color:#71ff00;transform:scale(0.93);}
-/* Password */
-.adm-pw-wrap{position:relative;width:100%;max-width:280px;margin-bottom:12px;}
-.adm-pw-input{width:100%;padding:14px 46px 14px 16px;background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.1);border-radius:14px;font-size:16px;color:white;
-  outline:none;transition:.2s;font-family:inherit;}
-.adm-pw-input:focus{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.04);}
-.adm-pw-input::placeholder{color:rgba(255,255,255,0.25);}
-.adm-pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  background:none;border:none;font-size:16px;cursor:pointer;color:rgba(255,255,255,0.35);padding:4px;}
-.adm-unlock-btn{width:100%;max-width:280px;padding:14px;
-  background:linear-gradient(135deg,#71ff00,#4ac200);border:none;border-radius:14px;
-  font-size:15px;font-weight:900;color:#060606;cursor:pointer;font-family:inherit;
-  transition:transform .12s,box-shadow .12s;letter-spacing:.02em;}
-.adm-unlock-btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(113,255,0,0.3);}
-.adm-unlock-btn:active{transform:scale(0.97);}
-/* Error + back */
-.adm-lock-error{font-size:12px;color:#ff6464;min-height:18px;margin-top:10px;}
+/* [admin-convergence] dead PIN/pattern/password lock-form CSS removed — the credential system is gone; #adminLock is a verifying splash only. Wallet PIN untouched. */
 .adm-lock-back{font-size:12px;color:rgba(255,255,255,0.22);margin-top:14px;
   cursor:pointer;text-decoration:none;display:block;}
 .adm-lock-back:hover{color:rgba(255,255,255,0.55);}
 /* Laptop (>768px) — wider box, bigger password input */
 @media(min-width:769px){
   .adm-lock-box{padding:44px 40px 32px;}
-  .adm-pw-input{font-size:17px;padding:15px 50px 15px 18px;}
-  .pat-wrap{width:260px;height:260px;}
 }
 
 /* TOP NAV */
