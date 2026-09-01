@@ -20,6 +20,9 @@ const { onCall } = require('firebase-functions/v2/https');
 const { getAuth }                   = require('firebase-admin/auth');
 const { getFirestore, FieldValue }  = require('firebase-admin/firestore');
 const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
+const crypto = require('crypto');
+/* AdminOS Authority Core (binding scope 05df4c9) — canonical-writer + controlEvents helpers. */
+const ace = require('./authority-control-events');
 
 /* ── Constants ──────────────────────────────────────────────────────────────── */
 
@@ -42,6 +45,7 @@ function _requireSuperAdmin(ctx) {
     });
   }
 }
+exports._requireSuperAdmin = _requireSuperAdmin;   // test hook — C3 single-authority (claim is THE gate)
 
 /**
  * Throws unless the caller holds `admin` OR `superAdmin` custom claim.
@@ -128,38 +132,74 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
     throw new Error(`NOT_FOUND: user ${cleanUid} does not exist`);
   }
 
-  // ── Build minimal, non-overlapping custom claims ────────────────────────────
-  // Only the flags relevant to the new role are set to `true`; all others are
-  // explicitly `false` so previous role claims are always cleared atomically.
-  const claims = {
-    admin:      cleanRole === 'admin'      || cleanRole === 'superAdmin',
-    superAdmin: cleanRole === 'superAdmin',
-    seller:     cleanRole === 'seller',
-    driver:     cleanRole === 'driver',
-    moderator:  cleanRole === 'moderator',
-    // buyer is the default — no elevated claim needed, but we track it explicitly
-    buyer:      cleanRole === 'buyer',
-  };
+  // ── AdminOS Authority Core (binding scope 05df4c9) ──────────────────────────
+  // C1: preserve every non-role claim; normalize ONLY the six governed roles; superAdmin ⇒ admin.
+  // C2/C6: permsVersion is monotonic — it never downgrades a higher existing value.
+  const currentClaims = targetUser.customClaims || {};
+  const mergedClaims  = ace.computeMergedClaims(currentClaims, cleanRole);
 
-  await getAuth().setCustomUserClaims(cleanUid, claims);
+  // C7: deterministic event identity for retry idempotency. requestId is OPTIONAL — when the
+  //     caller supplies one, retries of the same intent collapse; absent, a fresh per-run id.
+  const requestId = (request.data && typeof request.data.requestId === 'string' && request.data.requestId.trim())
+    ? request.data.requestId.trim()
+    : crypto.randomUUID();
+  const eventId = ace.deterministicEventId({
+    targetUid: cleanUid, callerUid: request.auth.uid, intendedClaims: mergedClaims, requestId,
+  });
+  const owner = crypto.randomUUID();   // unique execution id for this run (C8/C10)
+  const db = getFirestore();
+
+  // C3 (fail-closed) + C8 (atomic ownership): the controlEvents intent is a PRECONDITION for the
+  //   Auth mutation, and exactly one execution may reach setCustomUserClaims. An intent-write
+  //   failure throws here and no privileged mutation occurs.
+  const claim = await ace.claimEvent(db, eventId, {
+    type: 'admin.setUserRole', targetUid: cleanUid, callerUid: request.auth.uid,
+    requestId, intendedClaims: mergedClaims,
+  }, owner);
+
+  // Idempotency / concurrency / recovery resolution — NONE of these branches mutate Auth.
+  if (claim.alreadyCommitted) {
+    return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, idempotent: true };
+  }
+  if (claim.recovery) {
+    throw Object.assign(new Error('FAILED_PRECONDITION: role change is under manual recovery — retry after review'), { code: 'failed-precondition' });
+  }
+  if (claim.stale) {          // C9: a prior winner abandoned mid-flight → reconcile WITHOUT re-mutating.
+    const rec = await ace.reconcileStaleEvent(db, eventId, getAuth);
+    if (rec.status === 'committed') {
+      return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId, reconciled: true };
+    }
+    throw Object.assign(new Error('FAILED_PRECONDITION: role change requires manual review'), { code: 'failed-precondition' });
+  }
+  if (claim.inProgress) {     // C8: another live winner holds the mutation → do not double-apply.
+    throw Object.assign(new Error('ABORTED: role change already in progress — retry'), { code: 'aborted' });
+  }
+  // else claim.won === true → this execution owns the single Auth mutation.
+
+  // ── THE mutation (winner only). Merge-preserving claims — not a destructive overwrite. ──
+  await getAuth().setCustomUserClaims(cleanUid, mergedClaims);
 
   // ── Mirror role into Firestore so the users collection stays consistent ──────
-  const db = getFirestore();
   await db.collection('users').doc(cleanUid).set(
     { role: cleanRole, roleUpdatedAt: FieldValue.serverTimestamp() },
     { merge: true },
   );
 
-  // ── Audit ───────────────────────────────────────────────────────────────────
+  // ── C10: fenced finalize — committed is accepted only from the current (owner,fenceToken). ──
+  await ace.finalizeEvent(db, eventId, owner, claim.fenceToken, {
+    ok: true, role: cleanRole, permsVersion: mergedClaims.permsVersion, mutationCount: 1,
+  });
+
+  // ── Audit (existing stream retained — no legacy audit collection removed or rewired) ─────
   await _auditLog({
     actor:    request.auth.uid,
     action:   'setUserRole',
     resource: `users/${cleanUid}`,
-    details:  { uid: cleanUid, newRole: cleanRole, claims, targetEmail: targetUser.email || null },
+    details:  { uid: cleanUid, newRole: cleanRole, claims: mergedClaims, eventId, targetEmail: targetUser.email || null },
     severity: 'high',
   });
 
-  return { success: true, uid: cleanUid, role: cleanRole };
+  return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId };
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════════
