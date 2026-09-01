@@ -908,6 +908,145 @@ exports.getCommissionsSummary = onCall(_CF, exports._h.getCommissionsSummary = a
 // D. APPROVAL WORKFLOWS
 // ---------------------------------------------------------------------------
 
+/* ── THE APPROVAL BINDING ────────────────────────────────────────────────────
+   The minimum immutable description of the operation a manager agreed to. Each
+   field is one whose alteration would change the decision. Everything else stays
+   in `requestData`, which is caller data and carries no authority.
+
+   AMOUNTS ARE SHILLINGS. This file is shillings throughout — _round2, openingCash,
+   closingCash — and posProcessRefund computes refundTotal the same way.
+   pos-cash-manager.js works in CENTS; that convention is deliberately not imported
+   here, because a binding that silently changed unit would authorise 100x the
+   amount the manager actually saw. */
+/* THE CASHIER-FRAUD OPERATIONS. Product decision, 2026-09-02: six operations require
+   manager approval — quantity_reduction, discount, price_override, void, refund,
+   stock_adjustment.
+
+   `drawer_open` is NOT one of the six. It predates that decision, keeps its existing
+   mechanism, and is deliberately left untouched here rather than quietly folded in.
+
+   `stock_adjustment` is ABSENT ON PURPOSE. Adding the binding is trivial; the operation
+   is not, because merchantAdjustStock refuses employees outright and the branch-scope
+   question (posStaff is branch-aware, workspaceMemberships is not) is unresolved. An
+   approval type for an operation no employee can perform would be inert, and defining it
+   early invites someone to grant the authority just to make it work. It lands after the
+   branch-aware authorization is mapped and proven — not before. */
+const APPROVAL_BINDING = {
+  quantity_reduction: ['productId', 'fromQty', 'toQty'],
+  discount:       ['amount'],
+  refund:         ['saleId', 'amount'],
+  void:           ['saleId'],
+  price_override: ['productId', 'amount'],
+  drawer_open:    [],          /* no target, no amount — opening the drawer is the whole act */
+};
+
+function _bindingValue(field, raw) {
+  if (field === 'amount') {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0)
+      throw new HttpsError('invalid-argument', 'binding amount must be a non-negative number');
+    return _round2(n);
+  }
+  /* QUANTITIES ARE COUNTS, NOT MONEY. `amount` is rounded to 2dp because it is currency;
+     a quantity must be a whole number and must survive as one, or an approval bound to
+     "3 -> 2" could be satisfied by "3 -> 2.4". fromQty may not be zero (there is nothing
+     to reduce) and toQty must be strictly less than it — a "reduction" that raises or
+     preserves the quantity is not the operation the manager was shown. */
+  if (field === 'fromQty' || field === 'toQty') {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0)
+      throw new HttpsError('invalid-argument', `binding ${field} must be a whole number`);
+    if (field === 'fromQty' && n === 0)
+      throw new HttpsError('invalid-argument', 'binding fromQty must be greater than zero');
+    return n;
+  }
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s || s.length > 128)
+    throw new HttpsError('invalid-argument', `binding ${field} is required for this approval type`);
+  return s;
+}
+
+function _buildBinding(type, requestData) {
+  const fields = APPROVAL_BINDING[type] || [];
+  const out = {};
+  for (const f of fields) out[f] = _bindingValue(f, requestData[f]);
+
+  /* CROSS-FIELD, because per-field validation cannot see the relation. A quantity
+     reduction must actually reduce: `toQty` strictly below `fromQty`. Without this a
+     cashier could raise a line under a request the manager read as a reduction, and the
+     approval would still bind cleanly to its own values. */
+  if (type === 'quantity_reduction' && !(out.toQty < out.fromQty)) {
+    throw new HttpsError('invalid-argument',
+      'a quantity reduction must lower the quantity: toQty must be less than fromQty');
+  }
+  return out;
+}
+
+/* ── CONSUMPTION ─────────────────────────────────────────────────────────────
+   Reviewing an approval and SPENDING it are different events. reviewApproval moves
+   pending -> approved. This moves approved -> consumed inside a transaction, so a
+   replay finds it already spent rather than racing.
+
+   It is a module function and NOT a callable, deliberately: an approval must be
+   spent by the server operation it authorises, as part of that operation's own
+   work. A client saying "I used it" is not consumption.
+
+   NOTHING CONSUMES ONE YET. Each protected mutation adopting this is its own slice,
+   and manager approval is not enforceable end-to-end until they do. */
+async function _consumeApproval(approvalId, expected) {
+  if (!approvalId || typeof approvalId !== 'string')
+    throw new HttpsError('invalid-argument', 'approvalId is required');
+  const exp = expected || {};
+  const ref = db.collection('posApprovals').doc(approvalId);
+
+  return db.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Approval not found');
+    const a = snap.data();
+
+    /* Already-spent is reported distinctly from never-approved: a replay and a
+       forgery are different incidents and must not look identical in logs. */
+    if (a.status === 'consumed')
+      throw new HttpsError('failed-precondition', 'Approval has already been used');
+    if (a.status !== 'approved')
+      throw new HttpsError('failed-precondition', `Approval is ${a.status}, not approved`);
+
+    const expiresAt = _toDate(a.expiresAt);
+    if (expiresAt && new Date() > expiresAt)
+      throw new HttpsError('deadline-exceeded', 'Approval has expired');
+
+    if (exp.sellerId && a.sellerId !== exp.sellerId)
+      throw new HttpsError('permission-denied', 'Approval belongs to another shop');
+    if (exp.type && a.type !== exp.type)
+      throw new HttpsError('permission-denied', 'Approval authorises a different operation');
+
+    /* Every bound field must match what was approved, exactly. */
+    const fields = APPROVAL_BINDING[a.type] || [];
+    const want = exp.binding || {};
+    const stored = a.binding || {};
+    for (const f of fields) {
+      const asked = f === 'amount' ? _round2(Number(want[f])) : want[f];
+      if (stored[f] !== asked)
+        throw new HttpsError('permission-denied', `Approval does not authorise this ${f}`);
+    }
+
+    txn.update(ref, {
+      status:     'consumed',
+      consumedBy: exp.consumerUid || null,
+      consumedAt: _TS(),
+      updatedAt:  _TS(),
+    });
+    return {
+      approvalId, sellerId: a.sellerId, type: a.type, binding: stored,
+      reviewedBy: a.reviewedBy || null, requestedBy: a.requestedBy || null,
+    };
+  });
+}
+
+/* Exposed as an OBJECT, following the `_h` precedent, so the Functions loader sees
+   no bare function export that could be mistaken for a trigger. */
+exports._approvals = { consume: _consumeApproval, BINDING: APPROVAL_BINDING, build: _buildBinding };
+
 /**
  * createApprovalRequest — creates a pending approval workflow item.
  * Expires in 5 minutes.
@@ -923,9 +1062,17 @@ exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = a
   const requestedBy = auth.uid;
   const requestedByName = data.requestedByName || auth.token?.name || 'Unknown';
 
-  const VALID_TYPES = ['discount', 'refund', 'void', 'price_override', 'drawer_open'];
+  const VALID_TYPES = Object.keys(APPROVAL_BINDING);
   if (!VALID_TYPES.includes(data.type))
     throw new HttpsError('invalid-argument', `type must be one of: ${VALID_TYPES.join(', ')}`);
+
+  /* WHAT, EXACTLY, IS BEING APPROVED.
+     `requestData` was stored as an arbitrary client blob, so an approval carried no
+     statement of the operation it authorised: one granted for a KES 50 refund was
+     indistinguishable from one for KES 50,000 on a different sale. `binding` is the
+     minimum set of fields whose alteration would change what the manager agreed to.
+     It is written top-level and never read back from requestData. */
+  const binding = _buildBinding(data.type, data.requestData || {});
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
@@ -937,6 +1084,7 @@ exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = a
     requestedBy,
     requestedByName,
     requestData: data.requestData || {},
+    binding,
     status: 'pending',
     reviewedBy: null,
     reviewedAt: null,
@@ -976,6 +1124,25 @@ exports.reviewApproval = onCall(_CF, exports._h.reviewApproval = async (req) => 
   if (!doc.exists) throw new HttpsError('not-found', 'Approval request not found');
 
   const approval = doc.data();
+
+  /* NO SELF-APPROVAL. The reviewer's role was checked, but never their identity, so
+     anyone holding the supervisor claim could approve their own request — which
+     removes the four-eyes property that is the entire purpose of the workflow. */
+  if (approval.requestedBy && approval.requestedBy === auth.uid)
+    throw new HttpsError('permission-denied', 'You cannot approve your own request.');
+
+  /* THE REVIEWER MUST BELONG TO THE APPROVAL'S SHOP.
+     _requireRole proves the caller is a supervisor SOMEWHERE, not here, so a
+     supervisor at one shop could approve another shop's request. The seller id comes
+     from the APPROVAL DOCUMENT and never from req.data — a forged client identifier
+     has nothing to attach to, because none is read.
+
+     This reuses _assertBusinessPermission, the helper every other handler in this
+     file already goes through (see the PRIVILEGE ESCALATION FIX note above), with
+     the same uid === sellerId owner short-circuit. It therefore declares no new
+     canonical employee store; the authority architecture is unchanged. */
+  if (auth.uid !== approval.sellerId)
+    await _assertBusinessPermission(auth.uid, approval.sellerId, 'pos');
 
   if (approval.status !== 'pending')
     throw new HttpsError('failed-precondition', `Approval already ${approval.status}`);

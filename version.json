@@ -1,14 +1,18 @@
 {
-  "commit": "84eff6d7ad506579e7e9f05d38ccce29f0977fbf",
-  "commitShort": "84eff6d",
-  "branch": "fix/printer-connect-autoconnect",
-  "buildTime": "2026-08-31T07:07:32.128Z",
+  "commit": "09cd6aca075bb51ac135b34ce47a5084b40be743",
+  "commitShort": "09cd6ac",
+  "branch": "release/r1-pos-printer-fn",
+  "buildTime": "2026-09-01T22:30:59.588Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260831070730-v603",
+  "cacheVersion": "sokoni-20260901223058-v620",
   "environment": "production",
-  "dirtyWorkingTree": false,
+  "dirtyWorkingTree": true,
   "pipelineArtifacts": [
-    "service-worker.js"
+    "service-worker.js",
+    "version.json"
   ],
-  "dirtyPaths": []
+  "dirtyPaths": [
+    "docs/release-gates/09cd6ac.json",
+    "docs/release-gates/bb2d307.json"
+  ]
 }

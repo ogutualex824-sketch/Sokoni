@@ -56,6 +56,7 @@ const REQUIRED = [
   { f: 'test-pos-entry-setup-first.js', why: 'the shell opens POS setup before selling, once', browser: false, ms: 120000 },
   { f: 'test-pos-inventory-denial-visibility.js', why: 'a denied POS inventory write must be observable', browser: false, ms: 120000 },
   { f: 'test-stock-adjustment-authority.js', why: 'stock adjustment ownership and transaction shape', browser: false, ms: 120000 },
+  { f: 'test-approval-primitive.js', why: 'the approval binding names the exact operation and target', browser: false, ms: 120000 },
   { f: 'test-pos-till-registry.js', why: 'saved is not connected', browser: false, ms: 120000 },
   { f: 'test-pos-boot-budget.js', why: 'the till boots inside budget', browser: false, ms: 120000 },
   { f: 'test-pos-lazy-manager-auth.js', why: 'manager auth loads lazily', browser: false, ms: 120000 },
