@@ -56,17 +56,66 @@
      owns the list and the caps; this is the subset a phone-sized storefront
      editor exposes, with the server's own limits so a refusal is rare and
      explicable rather than surprising. */
+  /* EVERY FIELD HERE IS BACKED BY functions/minishop-config-schema.js. The maxima and
+     item limits below are that schema's, not new ones — a client limit that disagrees
+     with the server's would either reject text the server would accept or promise a save
+     the server then truncates.
+
+     CANONICAL NAMES ONLY. The schema aliases coverImage->coverUrl, logoImage->logoUrl and
+     accentColor->brandColor for legacy inbound data. Sending a canonical name is what
+     stops a merchant ending up with two competing values for one setting.
+
+     NOT HERE, DELIBERATELY: the eight social handles seller.html collects
+     (instagram/tiktok/whatsapp/facebook/twitter/youtube/linkedin/snapchat). They are NOT
+     in the server schema, so rendering inputs for them would silently discard whatever a
+     merchant typed. They need a schema change first — a Functions slice, not this one. */
   var TEXT_FIELDS = [
-    { id: 'tagline',        label: 'Tagline',            max: 200,  hint: 'One line under your shop name', rows: 1 },
-    { id: 'description',    label: 'About the shop',     max: 1000, hint: 'What you sell and what makes it worth buying', rows: 4 },
-    { id: 'location',       label: 'Where you are',      max: 120,  hint: 'Area or town shoppers will recognise', rows: 1 },
-    { id: 'category',       label: 'Main category',      max: 60,   hint: '', rows: 1 },
-    { id: 'contactPhone',   label: 'Contact phone',      max: 20,   hint: '', rows: 1 },
-    { id: 'contactEmail',   label: 'Contact email',      max: 100,  hint: '', rows: 1 },
-    { id: 'responseTime',   label: 'Typical reply time', max: 60,   hint: 'e.g. within an hour', rows: 1 },
-    { id: 'deliveryPolicy', label: 'Delivery',           max: 500,  hint: 'Where you deliver and what it costs', rows: 3 },
-    { id: 'announcement',   label: 'Announcement',       max: 200,  hint: 'Shown at the top of your storefront', rows: 2 },
+    /* ── Identity & branding ─────────────────────────────────────────────────── */
+    { id: 'tagline',        label: 'Tagline',            max: 200,  hint: 'One line under your shop name', rows: 1, group: 'identity' },
+    { id: 'description',    label: 'About the shop',     max: 1000, hint: 'What you sell and what makes it worth buying', rows: 4, group: 'identity' },
+    { id: 'logoUrl',        label: 'Shop logo',          max: 500,  hint: 'Square image. This replaces the initials everywhere your shop appears.', rows: 1, group: 'identity', type: 'url', preview: 'logo' },
+    { id: 'coverUrl',       label: 'Cover image',        max: 500,  hint: 'Wide banner across the top of your storefront', rows: 1, group: 'identity', type: 'url', preview: 'cover' },
+
+    /* ── Appearance ──────────────────────────────────────────────────────────── */
+    { id: 'brandColor',     label: 'Brand colour',       max: 32,   hint: 'Buttons and highlights on your storefront', rows: 1, group: 'appearance', type: 'color' },
+    { id: 'theme',          label: 'Theme',              max: 40,   hint: '', rows: 1, group: 'appearance', type: 'select', options: ['', 'dark', 'light', 'midnight', 'classic'] },
+    { id: 'fontFamily',     label: 'Typeface',           max: 60,   hint: '', rows: 1, group: 'appearance', type: 'select', options: ['', 'Inter', 'Poppins', 'Georgia', 'Roboto Slab', 'system-ui'] },
+
+    /* ── Delivery & service ──────────────────────────────────────────────────── */
+    { id: 'deliveryPolicy', label: 'Delivery',           max: 500,  hint: 'Where you deliver and what it costs', rows: 3, group: 'delivery' },
+    { id: 'deliveryAreas',  label: 'Delivery areas',     max: 20,   itemMax: 100, hint: 'Add each area you cover', rows: 1, group: 'delivery', type: 'chips' },
+    { id: 'responseTime',   label: 'Typical reply time', max: 60,   hint: 'e.g. within an hour', rows: 1, group: 'delivery' },
+
+    /* ── Payments & policies ─────────────────────────────────────────────────── */
+    { id: 'paymentMethods', label: 'Payment methods',    max: 10,   itemMax: 50,  hint: 'M-PESA, cash on delivery, card…', rows: 1, group: 'payments', type: 'chips' },
+    { id: 'policies',       label: 'Returns & policies', max: 1000, hint: 'Returns, warranty, anything a buyer should know before paying', rows: 4, group: 'payments' },
+
+    /* ── Contact ─────────────────────────────────────────────────────────────── */
+    { id: 'contactPhone',   label: 'Contact phone',      max: 20,   hint: '', rows: 1, group: 'contact' },
+    { id: 'contactEmail',   label: 'Contact email',      max: 100,  hint: '', rows: 1, group: 'contact', type: 'email' },
+    { id: 'location',       label: 'Where you are',      max: 120,  hint: 'Area or town shoppers will recognise', rows: 1, group: 'contact' },
+
+    /* ── Discovery ───────────────────────────────────────────────────────────── */
+    { id: 'category',       label: 'Main category',      max: 60,   hint: '', rows: 1, group: 'discovery' },
+    { id: 'tags',           label: 'Tags',               max: 10,   itemMax: 30,  hint: 'Words shoppers might search for', rows: 1, group: 'discovery', type: 'chips' },
+    { id: 'languages',      label: 'Languages you serve', max: 5,   itemMax: 20,  hint: '', rows: 1, group: 'discovery', type: 'chips' },
+    { id: 'announcement',   label: 'Announcement',       max: 200,  hint: 'Shown at the top of your storefront', rows: 2, group: 'discovery' },
   ];
+
+  /* Order and titles for the grouped form. A field whose group is missing here still
+     renders — under "More" — rather than disappearing silently. */
+  var FIELD_GROUPS = [
+    { id: 'identity',   title: 'Identity & branding', hint: 'How your shop introduces itself' },
+    { id: 'appearance', title: 'Appearance',          hint: 'Colour, theme and type on your storefront' },
+    { id: 'delivery',   title: 'Delivery & service',  hint: 'What a buyer can expect after paying' },
+    { id: 'payments',   title: 'Payments & policies', hint: 'How you take money and what you promise' },
+    { id: 'contact',    title: 'Contact',             hint: 'How shoppers reach you' },
+    { id: 'discovery',  title: 'Discovery',           hint: 'How shoppers find you' },
+    { id: 'more',       title: 'More',                hint: '' },
+  ];
+
+  var ARRAY_IDS = TEXT_FIELDS.filter(function (f) { return f.type === 'chips'; })
+                             .map(function (f) { return f.id; });
   var TEXT_IDS = TEXT_FIELDS.map(function (f) { return f.id; });
 
   /* Handle rules, mirroring claimMinishopHandle so the screen can refuse early
@@ -193,6 +242,18 @@
   function changedFields(current, draft) {
     var out = {};
     TEXT_IDS.forEach(function (id) {
+      /* ARRAY FIELDS COMPARE AS ARRAYS. String() on an array yields "a,b", so a chip
+         containing a comma would read as two entries and ['a'] would compare equal to
+         'a' — a real change silently dropped. Arrays compare element by element and are
+         sent as arrays, which is what the schema's ARRAY_FIELDS expects. */
+      if (ARRAY_IDS.indexOf(id) > -1) {
+        var wasA = Array.isArray((current || {})[id]) ? (current || {})[id] : [];
+        var nowA = Array.isArray((draft || {})[id]) ? (draft || {})[id] : [];
+        var same = wasA.length === nowA.length &&
+                   wasA.every(function (v, i) { return String(v) === String(nowA[i]); });
+        if (!same) out[id] = nowA.slice();
+        return;
+      }
       var was = String((current || {})[id] == null ? '' : (current || {})[id]);
       var now = String((draft || {})[id] == null ? '' : (draft || {})[id]);
       if (was !== now) out[id] = now;
@@ -200,9 +261,44 @@
     return out;
   }
 
+  /* Client-side validation MIRRORS the schema rather than inventing rules. A field that
+     fails here is never sent: the server would reject or truncate it, and a merchant
+     deserves to know before pressing Save rather than after. */
+  function validateField(f, value) {
+    if (!f) return null;
+    if (f.type === 'chips') {
+      var arr = Array.isArray(value) ? value : [];
+      if (arr.length > f.max) return 'At most ' + f.max + '.';
+      if (arr.some(function (v) { return String(v).length > f.itemMax; }))
+        return 'Each entry must be ' + f.itemMax + ' characters or fewer.';
+      return null;
+    }
+    var s = String(value == null ? '' : value);
+    if (s.length > f.max) return 'Too long — ' + s.length + ' of ' + f.max + '.';
+    if (!s) return null;                       /* empty clears a field; that is allowed */
+    if (f.type === 'url' && !/^https?:\/\/[^\s]+$/i.test(s)) return 'Must be a full http(s) address.';
+    if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return 'Does not look like an email address.';
+    if (f.type === 'color' && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return 'Use a hex colour like #71ff00.';
+    if (f.type === 'select' && (f.options || []).indexOf(s) === -1) return 'Choose one of the listed options.';
+    return null;
+  }
+
+  function validateAll(draft) {
+    var errs = {};
+    TEXT_FIELDS.forEach(function (f) {
+      var e = validateField(f, (draft || {})[f.id]);
+      if (e) errs[f.id] = e;
+    });
+    return errs;
+  }
+
   return {
     CALLABLES: CALLABLES,
     TEXT_FIELDS: TEXT_FIELDS,
+    FIELD_GROUPS: FIELD_GROUPS,
+    ARRAY_IDS: ARRAY_IDS,
+    validateField: validateField,
+    validateAll: validateAll,
     TEXT_IDS: TEXT_IDS,
     HANDLE_MIN: HANDLE_MIN,
     HANDLE_MAX: HANDLE_MAX,

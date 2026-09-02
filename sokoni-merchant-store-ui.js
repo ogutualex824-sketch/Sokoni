@@ -102,6 +102,40 @@
       'border-top-color:var(--acc);animation:mstSpin .7s linear infinite}',
     '@keyframes mstSpin{to{transform:rotate(360deg)}}',
     '@media (prefers-reduced-motion:reduce){.mst-spin{animation:none}}',
+    /* ── Grouped, premium form ──────────────────────────────────────────────── */
+    '.mst-group{background:var(--card);border:1px solid var(--line);border-radius:16px;',
+      'padding:14px 14px 4px;margin-bottom:12px}',
+    '.mst-gt{margin:0;font-size:13px;font-weight:900;letter-spacing:.01em;color:var(--txt)}',
+    '.mst-gh{margin:4px 0 10px;font-size:11.5px;color:var(--txt3);line-height:1.5}',
+    '.mst-field{margin-bottom:14px}',
+    '.mst-fe{margin-top:6px;font-size:11.5px;font-weight:700;color:#ff9a9a;line-height:1.45}',
+
+    /* Previews: the merchant sees the effect, not just a URL. */
+    '.mst-pv{margin:0 0 9px;border-radius:13px;border:1px solid var(--line);background-size:cover;',
+      'background-position:center;background-repeat:no-repeat;display:flex;align-items:center;',
+      'justify-content:center;color:var(--txt3);font-size:11px;background-color:rgba(255,255,255,.04)}',
+    '.mst-pv-logo{width:84px;height:84px;border-radius:22px}',
+    '.mst-pv-cover{width:100%;aspect-ratio:16/6}',
+    '.mst-pv.empty{border-style:dashed}',
+
+    /* Colour: a swatch, a native picker and a text field — ONE draft value. */
+    '.mst-color{display:flex;align-items:center;gap:9px;flex-wrap:wrap}',
+    '.mst-sw{flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line)}',
+    '.mst-cp{flex:0 0 auto;width:46px;height:44px;padding:0;border:1px solid var(--line);',
+      'border-radius:10px;background:transparent;cursor:pointer}',
+    '.mst-color-tx{flex:1;min-width:120px;min-height:44px}',
+
+    /* Chips: array fields, added and removed one at a time. */
+    '.mst-chips{display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:9px;border-radius:13px;',
+      'border:1px solid var(--line);background:rgba(255,255,255,.05)}',
+    '.mst-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 8px 7px 11px;border-radius:999px;',
+      'background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3);color:var(--acc);',
+      'font-size:12.5px;font-weight:800;max-width:100%;overflow-wrap:anywhere}',
+    '.mst-chip-x{min-width:26px;min-height:26px;border:0;border-radius:50%;background:rgba(0,0,0,.28);',
+      'color:inherit;font-size:15px;line-height:1;cursor:pointer;font-family:inherit}',
+    '.mst-chip-in{flex:1;min-width:110px;min-height:38px;background:transparent;border:0;outline:none;',
+      'color:var(--txt);font-size:15px;font-family:inherit}',
+
     '@media (min-width:821px){.mst-body{max-width:760px;margin:0 auto;width:100%}}',
   ].join('');
 
@@ -291,21 +325,97 @@
       '</div>';
     }
 
+    /* ONE field renderer, switched on type. Every control writes to the same draft and
+       saves through the same changedFields -> saveMinishopConfig path — a second
+       persistence route is exactly what would let two settings disagree. */
+    function fieldHTML(f) {
+      var raw = S.draft[f.id];
+      var isChips = f.type === 'chips';
+      var arr = Array.isArray(raw) ? raw : [];
+      var v = isChips ? '' : String(raw == null ? '' : raw);
+      var err = MS.validateField ? MS.validateField(f, isChips ? arr : v) : null;
+      var over = !isChips && v.length > f.max;
+      var dis = S.busy ? ' disabled' : '';
+
+      var head = '<div class="mst-lbl">' + esc(f.label) + '</div>' +
+        (f.hint ? '<div class="mst-hint">' + esc(f.hint) + '</div>' : '');
+
+      /* A preview sits ABOVE its input so a merchant sees the effect, not just the URL. */
+      var pv = '';
+      if (f.preview) {
+        var ok = v && !err;
+        pv = '<div class="mst-pv mst-pv-' + f.preview + (ok ? '' : ' empty') + '" id="mst-p-' + f.id + '"' +
+             (ok ? ' style="background-image:url(&quot;' + esc(v) + '&quot;)"' : '') + '>' +
+             (ok ? '' : '<span>No ' + esc(f.label.toLowerCase()) + ' yet</span>') + '</div>';
+      }
+
+      var input;
+      if (isChips) {
+        input = '<div class="mst-chips" id="mst-ch-' + f.id + '">' +
+          arr.map(function (c, i) {
+            return '<span class="mst-chip">' + esc(c) +
+              '<button type="button" class="mst-chip-x" data-chip-del="' + f.id + '" data-i="' + i +
+              '" aria-label="Remove ' + esc(c) + '">&times;</button></span>';
+          }).join('') +
+          '<input class="mst-chip-in" data-chip-add="' + f.id + '" placeholder="Add…"' + dis +
+          ' aria-label="Add to ' + esc(f.label) + '">' +
+          '</div>' +
+          '<div class="mst-cnt" id="mst-c-' + f.id + '">' + arr.length + ' / ' + f.max + '</div>';
+      } else if (f.type === 'select') {
+        input = '<select class="mst-inp" id="mst-f-' + f.id + '" data-f="' + f.id + '"' + dis + '>' +
+          (f.options || []).map(function (o) {
+            return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' +
+                   esc(o || '— default —') + '</option>';
+          }).join('') + '</select>';
+      } else if (f.type === 'color') {
+        /* Two controls, ONE value: the picker is a convenience over the text field, and
+           both write the same draft key. A colour the picker cannot express still types. */
+        input = '<div class="mst-color">' +
+          '<span class="mst-sw" id="mst-sw-' + f.id + '" style="background:' + esc(v || 'transparent') + '"></span>' +
+          '<input type="color" class="mst-cp" id="mst-cp-' + f.id + '" data-f="' + f.id + '" value="' +
+            esc(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v) ? v : '#71ff00') + '"' + dis +
+            ' aria-label="' + esc(f.label) + ' picker">' +
+          '<input class="mst-inp mst-color-tx" id="mst-f-' + f.id + '" data-f="' + f.id +
+            '" value="' + esc(v) + '" placeholder="#71ff00"' + dis + '>' +
+          '</div>';
+      } else if (f.rows > 1) {
+        input = '<textarea class="mst-inp" id="mst-f-' + f.id + '" data-f="' + f.id +
+          '" rows="' + f.rows + '"' + dis + '>' + esc(v) + '</textarea>' +
+          '<div class="mst-cnt' + (over ? ' over' : '') + '" id="mst-c-' + f.id + '">' + v.length + ' / ' + f.max + '</div>';
+      } else {
+        input = '<input class="mst-inp" id="mst-f-' + f.id + '" data-f="' + f.id + '" value="' + esc(v) +
+          '"' + (f.type === 'url' ? ' inputmode="url" placeholder="https://…"' : '') +
+          (f.type === 'email' ? ' inputmode="email"' : '') + dis + '>' +
+          '<div class="mst-cnt' + (over ? ' over' : '') + '" id="mst-c-' + f.id + '">' + v.length + ' / ' + f.max + '</div>';
+      }
+
+      return '<div class="mst-field">' + head + pv + input +
+        '<div class="mst-fe" id="mst-e-' + f.id + '"' + (err ? '' : ' style="display:none"') + '>' +
+        esc(err || '') + '</div></div>';
+    }
+
     function detailsHTML() {
+      var groups = MS.FIELD_GROUPS || [{ id: 'more', title: '', hint: '' }];
+      var known = {};
+      groups.forEach(function (g) { known[g.id] = true; });
+
+      var body = groups.map(function (g) {
+        var fields = MS.TEXT_FIELDS.filter(function (f) {
+          /* A field whose group is unknown lands in "More" rather than vanishing — a
+             silently dropped setting is worse than an oddly placed one. */
+          return (f.group && known[f.group] ? f.group : 'more') === g.id;
+        });
+        if (!fields.length) return '';
+        return '<section class="mst-group">' +
+          '<h3 class="mst-gt">' + esc(g.title) + '</h3>' +
+          (g.hint ? '<p class="mst-gh">' + esc(g.hint) + '</p>' : '') +
+          fields.map(fieldHTML).join('') +
+          '</section>';
+      }).join('');
+
       return '<div class="mst-body">' +
         '<div class="mst-banner">These details appear on your public storefront.</div>' +
-        MS.TEXT_FIELDS.map(function (f) {
-          var v = String(S.draft[f.id] == null ? '' : S.draft[f.id]);
-          var over = v.length > f.max;
-          return '<div class="mst-lbl">' + esc(f.label) + '</div>' +
-            (f.hint ? '<div class="mst-hint">' + esc(f.hint) + '</div>' : '') +
-            (f.rows > 1
-              ? '<textarea class="mst-inp" id="mst-f-' + f.id + '" data-f="' + f.id + '" rows="' + f.rows + '"' +
-                (S.busy ? ' disabled' : '') + '>' + esc(v) + '</textarea>'
-              : '<input class="mst-inp" id="mst-f-' + f.id + '" data-f="' + f.id + '" value="' + esc(v) + '"' +
-                (S.busy ? ' disabled' : '') + '>') +
-            '<div class="mst-cnt' + (over ? ' over' : '') + '" id="mst-c-' + f.id + '">' + v.length + ' / ' + f.max + '</div>';
-        }).join('') +
+        body +
         (S.opError ? '<div class="mst-err">' + esc(S.opError) + '</div>' : '') +
         (S.opDone === 'config' ? '<div class="mst-ok">Saved.</div>' : '') +
         (S.busy ? '<div class="mst-prog"><span class="mst-spin"></span>Saving on the server…</div>' : '') +
@@ -397,8 +507,48 @@
       toast('Copying is not available on this device.', 'error');
     }
 
+    /* Chip removal. Repaints, because a chip leaving changes the layout — unlike typing,
+       there is no keyboard to lose. The draft array is replaced rather than mutated so
+       changedFields compares against the saved array cleanly. */
+    function onChipClick(ev) {
+      var x = ev.target && ev.target.closest ? ev.target.closest('[data-chip-del]') : null;
+      if (!x || !host.contains(x)) return false;
+      var id = x.getAttribute('data-chip-del');
+      var i = parseInt(x.getAttribute('data-i'), 10);
+      var arr = Array.isArray(S.draft[id]) ? S.draft[id].slice() : [];
+      if (i >= 0 && i < arr.length) { arr.splice(i, 1); S.draft[id] = arr; paint(); }
+      return true;
+    }
+
+    /* Enter or comma commits a chip. Comma matters: a merchant listing delivery areas
+       types them the way they would write them down, and swallowing the comma into the
+       value would store "Westlands, Kilimani" as one area. */
+    function onChipKey(ev) {
+      var el = ev.target;
+      if (!el || !el.getAttribute || !el.getAttribute('data-chip-add')) return;
+      if (ev.key !== 'Enter' && ev.key !== ',') return;
+      ev.preventDefault();
+      var id = el.getAttribute('data-chip-add');
+      var f = MS.TEXT_FIELDS.filter(function (x) { return x.id === id; })[0];
+      var val = String(el.value || '').trim().replace(/,$/, '');
+      if (!val) return;
+      var arr = Array.isArray(S.draft[id]) ? S.draft[id].slice() : [];
+      if (arr.indexOf(val) > -1) { el.value = ''; return; }      /* no silent duplicates */
+      arr.push(val);
+      var err = MS.validateField ? MS.validateField(f, arr) : null;
+      if (err) {
+        var msg = host.querySelector('#mst-e-' + id);
+        if (msg) { msg.textContent = err; msg.style.display = 'block'; }
+        return;                                   /* refuse rather than send a rejection */
+      }
+      S.draft[id] = arr; el.value = ''; paint();
+      var again = host.querySelector('[data-chip-add="' + id + '"]');
+      if (again) again.focus();                   /* keep the merchant typing the list */
+    }
+
     function onClick(ev) {
-      var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+      if (onChipClick(ev)) return;
+      var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]'): null;
       if (!el || !host.contains(el)) return;
       var act = el.getAttribute('data-act');
       if (act === 'tab')              { S.tab = el.getAttribute('data-t') || 'storefront'; S.opError = null; S.opDone = null; paint(); return; }
@@ -421,14 +571,33 @@
       }
       var f = el.getAttribute && el.getAttribute('data-f');
       if (!f) return;
-      S.draft[f] = el.value;
-      /* Update the counter and the save button in place — repainting would take
-         the keyboard down mid-sentence. */
       var field = MS.TEXT_FIELDS.filter(function (x) { return x.id === f; })[0];
+      S.draft[f] = el.value;
+
+      /* Counter, validation message and live preview all update IN PLACE — repainting
+         would take the keyboard down mid-sentence. */
       var cnt = host.querySelector('#mst-c-' + f);
-      if (cnt && field) {
+      if (cnt && field && field.type !== 'chips') {
         cnt.textContent = el.value.length + ' / ' + field.max;
         cnt.classList.toggle('over', el.value.length > field.max);
+      }
+
+      var err = field ? MS.validateField(field, el.value) : null;
+      var msg = host.querySelector('#mst-e-' + f);
+      if (msg) { msg.textContent = err || ''; msg.style.display = err ? 'block' : 'none'; }
+
+      /* A preview is only honest once the value validates. Painting a broken image for
+         every keystroke of a half-typed URL reads as "your logo is wrong". */
+      var pv = host.querySelector('#mst-p-' + f);
+      if (pv && field && field.preview) {
+        if (el.value && !err) { pv.style.backgroundImage = 'url("' + String(el.value).replace(/"/g, '%22') + '")'; pv.className = 'mst-pv mst-pv-' + field.preview; }
+        else { pv.style.backgroundImage = ''; pv.className = 'mst-pv mst-pv-' + field.preview + ' empty'; }
+      }
+      if (field && field.type === 'color' && !err) {
+        var sw = host.querySelector('#mst-sw-' + f);
+        if (sw) sw.style.background = el.value;
+        var cp = host.querySelector('#mst-cp-' + f);
+        if (cp && cp.value !== el.value) cp.value = el.value;
       }
       var save = host.querySelector('[data-act="save"]');
       if (save) {
@@ -440,6 +609,7 @@
 
     host.addEventListener('click', onClick);
     host.addEventListener('input', onInput);
+    host.addEventListener('keydown', onChipKey);
 
     load();
 
