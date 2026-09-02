@@ -30,7 +30,8 @@ containment — never a bare substring (`"nairobiX"` stays unresolved).
 
 ### Restraint is the property under test
 
-`CITY_ALIAS` ships **empty by design**. 3 of 106 offered towns resolve; the other ~100 keep
+`CITY_ALIAS` ships **empty by design**. **6 of the 106 towns the picker offers resolve** —
+Nairobi CBD, Mombasa, Kisumu, Nakuru, Eldoret, Thika. The other 100 keep
 the existing no-location behaviour. Mapping `Diani → mombasa` (30 km) or `Malindi → mombasa`
 (120 km) would tell a shopper a seller is nearby who is a two-hour drive away — that is a
 commercial catchment decision, not a normalisation one, and `CITY_ALIAS` is where it gets
