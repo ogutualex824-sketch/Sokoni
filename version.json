@@ -1,17 +1,14 @@
 {
-  "commit": "8b1bd55f805a0af1afca089db596c0eccb69d9e0",
-  "commitShort": "8b1bd55",
+  "commit": "e219ee0285ead354020a4fef46134cba9ea4b459",
+  "commitShort": "e219ee0",
   "branch": "release/r1-pos-printer-fn",
-  "buildTime": "2026-09-02T07:21:29.758Z",
+  "buildTime": "2026-09-02T08:10:35.068Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260902072128-v624",
+  "cacheVersion": "sokoni-20260902081033-v625",
   "environment": "production",
-  "dirtyWorkingTree": true,
+  "dirtyWorkingTree": false,
   "pipelineArtifacts": [
-    "service-worker.js",
-    "version.json"
+    "service-worker.js"
   ],
-  "dirtyPaths": [
-    "docs/release-gates/dd4bf3e.json"
-  ]
+  "dirtyPaths": []
 }

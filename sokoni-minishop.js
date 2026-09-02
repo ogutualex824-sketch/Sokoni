@@ -753,9 +753,34 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     // Logo + placeholder
     const logoEl = document.getElementById('msLogo');
     const logoPlaceholder = document.getElementById('msLogoPlaceholder');
+    /* THE MERCHANT'S CONFIGURED LOGO IS THE SHOP'S IDENTITY IMAGE. `shop.logoUrl` is the
+       document field and `config.logoUrl` the storefront configuration a merchant sets in
+       Shop Details; the schema aliases logoImage onto logoUrl server-side, so exactly one
+       value arrives here and there is no second logo-setting mechanism to disagree with. */
     const logoUrl = shop.logoUrl || config.logoUrl || '';
-    if (logoEl) { logoEl.src = logoUrl ? _esc(logoUrl) : ''; logoEl.hidden = !logoUrl; }
-    if (logoPlaceholder) { logoPlaceholder.textContent = (shop.name || 'S')[0].toUpperCase(); logoPlaceholder.hidden = !!logoUrl; }
+    const shopName = shop.name || '';
+    if (logoEl) {
+      logoEl.src = logoUrl ? _esc(logoUrl) : '';
+      logoEl.hidden = !logoUrl;
+      /* An empty alt marked the shop's identity image as decorative, so a screen reader
+         announced nothing at all where a sighted visitor sees the shop. */
+      logoEl.alt = logoUrl ? (shopName ? shopName + ' logo' : 'Shop logo') : '';
+      /* A logo that 404s used to leave a broken-image icon sitting in the header. Falling
+         back to the initials is the same answer as "no logo set", which is what a broken
+         URL actually means to a visitor. */
+      logoEl.onerror = function () {
+        logoEl.hidden = true;
+        if (logoPlaceholder) logoPlaceholder.hidden = false;
+      };
+    }
+    if (logoPlaceholder) {
+      logoPlaceholder.textContent = (shopName || 'S')[0].toUpperCase();
+      logoPlaceholder.hidden = !!logoUrl;
+      /* The initials are a stand-in for the same identity, so they carry the shop's name
+         for assistive technology rather than announcing a bare letter. */
+      logoPlaceholder.setAttribute('role', 'img');
+      logoPlaceholder.setAttribute('aria-label', shopName ? shopName + ' logo' : 'Shop logo');
+    }
 
     // Identity
     _setEl('msShopName', shop.name || '');
