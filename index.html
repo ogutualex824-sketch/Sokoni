@@ -2974,6 +2974,15 @@ import SokoniDB from "./sokoni-db.js";
       var el = document.getElementById('navLocText');
       if(el) el.textContent = city;
       closeSheet();
+      /* Tell the page a location was chosen. Without this the value is stored and nothing
+         re-renders, so "Sellers Near You" stayed hidden until a full reload — which is why
+         it looked removed. script.js owns the reveal; this only announces the change, so
+         the picker keeps its single responsibility and no rendering logic is duplicated
+         here. displayNearbySection() itself decides whether the name resolves to a
+         supported city; a stored value alone must not reveal the section. */
+      try {
+        if (typeof window.displayNearbySection === 'function') window.displayNearbySection();
+      } catch (_) {}
     }
     window._sokoniSetCity = setCity;
 

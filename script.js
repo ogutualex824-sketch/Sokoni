@@ -571,6 +571,66 @@ const KENYA_CITIES = {
 let buyerLocation = null;   /* { lat, lng } */
 let buyerCity     = null;   /* e.g. "nairobi" */
 
+/* ── LOCATION AUTHORITY: sokoniDeliveryCity ─────────────────────────────────────────
+   Two location pickers existed and only one of them ran. index.html's bottom-sheet
+   picker (the ACTIVE one) writes localStorage['sokoniDeliveryCity'] as a DISPLAY NAME
+   ("Nyali", "Kondele"). This file's older `_setDeliveryCity` wrote
+   localStorage['sokoniBuyerCity'] as a CITY KEY ("mombasa") — and this file defers to
+   whichever picker already exists, so the older path never ran.
+
+   Two mismatches, either of which alone hides the section:
+     key    sokoniDeliveryCity  written   vs  sokoniBuyerCity  read
+     shape  "Nyali"             written   vs  "nairobi"        compared
+
+   Products carry a city KEY in `.location` (production: nairobi 55, mombasa 1,
+   remote 4), so `p.location === buyerCity` can only ever match a key.
+
+   The active picker wins. This normalises its display value to a canonical key. */
+
+/* Reviewed name -> canonical key. EMPTY ON PURPOSE. Each entry decides that a town's
+   shoppers should see another city's sellers — a commercial claim about proximity that
+   needs a person. e.g. westlands: 'nairobi', only with that decision made. */
+const CITY_ALIAS = {
+};
+
+/* Resolve a picker display name to a supported KENYA_CITIES key, or null.
+   MATCHES ONLY WHAT IT CAN JUSTIFY: an exact city name, or a label CONTAINING one
+   ("Nairobi CBD" -> nairobi). It does NOT guess catchments — whether Diani (30km from
+   Mombasa) or Malindi (120km) counts as "near" is a commercial claim, not a
+   string-matching problem, and getting it wrong tells a shopper a seller is nearby when
+   they are a two-hour drive away. The picker offers 106 towns; 6 cities are supported.
+   Everything unmatched returns null, and null keeps the EXISTING no-location behaviour. */
+function _canonicalCityKey(raw){
+    const s = String(raw || '').trim().toLowerCase();
+    if (!s) return null;
+    /* OWN properties only. A bare KENYA_CITIES[s] walks the prototype chain, so
+       "__proto__" and "constructor" both returned truthy and were accepted as city keys.
+       The value comes from localStorage, so it is attacker-influenced. */
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    if (own(KENYA_CITIES, s)) return s;                             /* already a key */
+    const alias = own(CITY_ALIAS, s) ? CITY_ALIAS[s] : null;
+    if (alias && own(KENYA_CITIES, alias)) return alias;            /* reviewed alias */
+    for (const key of Object.keys(KENYA_CITIES)) {
+        const name = String(KENYA_CITIES[key].name || key).toLowerCase();
+        if (s === name) return key;
+        if (new RegExp('(^|\\s)' + name + '(\\s|$)').test(s)) return key;
+    }
+    return null;
+}
+
+/* The one place buyerCity is derived. Prefers the ACTIVE picker; falls back to the
+   legacy key so anyone already carrying one keeps working. Returns null when nothing
+   resolves to a SUPPORTED city — a stored value alone must not reveal the section. */
+function _resolveBuyerCity(){
+    let v = null;
+    try { v = localStorage.getItem('sokoniDeliveryCity'); } catch (_) {}
+    let key = _canonicalCityKey(v);
+    if (!key) {
+        try { key = _canonicalCityKey(localStorage.getItem('sokoniBuyerCity')); } catch (_) {}
+    }
+    return key;
+}
+
 function haversineKm(lat1, lng1, lat2, lng2){
     const R = 6371;
     const dLat = (lat2-lat1)*Math.PI/180;
@@ -622,6 +682,9 @@ function initNearbyLocation(){
 
 function displayNearbySection(){
     const section = document.getElementById("nearbySection");
+    /* Derive from the ACTIVE picker when geolocation has not already set it. Geolocation
+       wins when present: a key from real coordinates is better evidence than a typed name. */
+    if (!buyerCity) buyerCity = _resolveBuyerCity();
     if(!section || !buyerCity || !products.length) return;
 
     const nearby = products.filter(p => p.location === buyerCity || p.location === "worldwide");
@@ -697,6 +760,11 @@ function displayNearbySection(){
 }
 
 window.initNearbyLocation = initNearbyLocation;
+/* Exposed so index.html's location picker can announce a change without duplicating any
+   rendering logic. The picker stores the value; this decides whether it reveals anything.
+   `_canonicalCityKey` goes with it so the normalisation is testable from outside. */
+window.displayNearbySection = displayNearbySection;
+window._canonicalCityKey = _canonicalCityKey;
 
 /* ── Delivery location picker — triggered by nav location pill ── */
 function pickDeliveryLocation(){
