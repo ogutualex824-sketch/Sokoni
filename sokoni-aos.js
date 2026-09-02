@@ -1090,7 +1090,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("emailTarget")?.value || "all";
     if (!subject || !html) { _toast("Subject and body are required", "error"); return; }
     if (!(await SK.dialog.confirm(`This will queue emails to all ${target} immediately.`, null, null, { title: `Send email blast to all ${target}?`, variant: "danger", confirmLabel: "Send blast" }))) return;
-    await _call("adminSendEmailBlast", { subject, html, target }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminSendEmailBlast", { subject, html, target });
+    } catch (e) {
+      _toast(_opFailure(e, "The email blast"), "error");
+      return;
+    }
     _toast("Email blast queued for " + target, "success");
   }
 
@@ -1099,7 +1104,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("smsTarget")?.value || "all";
     if (!message) { _toast("Message body is required", "error"); return; }
     if (!(await SK.dialog.confirm(`Carrier charges apply for every recipient.`, null, null, { title: `Send SMS to all ${target}?`, variant: "danger", confirmLabel: "Send SMS" }))) return;
-    await _call("adminSendSMSBlast", { message, target }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminSendSMSBlast", { message, target });
+    } catch (e) {
+      _toast(_opFailure(e, "The SMS blast"), "error");
+      return;
+    }
     _toast("SMS queued for " + target, "success");
   }
 
@@ -1183,24 +1193,36 @@ window.SokoniAOS = (() => {
     const start  = prompt("Start date (YYYY-MM-DD):");
     const end    = prompt("End date (YYYY-MM-DD):");
     if (!name || !type || !start || !end) return;
-    await _call("adminCreateCampaign", { name, type, target, startDate: start, endDate: end })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminCreateCampaign", { name, type, target, startDate: start, endDate: end });
+    } catch (e) {
+      _toast(_opFailure(e, "The campaign"), "error");
+      return;
+    }
     _toast("Campaign created", "success");
     _panelCache.content = false;
     _contentTab("campaigns");
   }
 
   async function activateCampaign(id) {
-    await _call("adminUpdateCampaignStatus", { campaignId: id, status: "active" })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateCampaignStatus", { campaignId: id, status: "active" });
+    } catch (e) {
+      _toast(_opFailure(e, "Campaign activation"), "error");
+      return;
+    }
     _toast("Campaign activated", "success");
     _contentTab("campaigns");
   }
 
   async function deleteCampaign(id) {
     if (!(await SK.dialog.confirm("Permanently delete this campaign?", null, null, { title: "Delete campaign", variant: "danger", confirmLabel: "Delete" }))) return;
-    await _call("adminDeleteCampaign", { campaignId: id })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminDeleteCampaign", { campaignId: id });
+    } catch (e) {
+      _toast(_opFailure(e, "Campaign deletion"), "error");
+      return;
+    }
     _toast("Campaign deleted", "success");
     _panelCache.content = false;
     _contentTab("campaigns");
@@ -1917,6 +1939,19 @@ window.SokoniAOS = (() => {
              "Nothing was changed.";
     }
     return (e && e.message) ? e.message : ("Could not " + what + ".");
+  }
+
+  /* A callable that does not exist fails exactly like one that refuses: the SDK
+     surfaces "internal" or "not-found" and THE OPERATION NEVER RAN. "queued",
+     "created" and "sent" are claims about the server; the client has no standing
+     to make them when the call did not return. Say plainly that nothing happened. */
+  function _opFailure(e, what) {
+    const code = String((e && (e.code || e.message)) || "");
+    if (/not-found|internal|unimplemented/i.test(code)) {
+      return what + " was NOT performed — this operation is unavailable on the server.";
+    }
+    return what + " was NOT performed — " +
+           ((e && e.message) ? e.message : "the server did not respond.");
   }
 
   async function revokeAllSessions() {

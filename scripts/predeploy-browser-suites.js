@@ -69,6 +69,7 @@ const REQUIRED = [
   { f: 'test-sales-control-centre.js', why: 'the manager control surface', browser: false, ms: 120000 },
   { f: 'test-pos-sales-view.js', why: 'the sales view reads canonical data', browser: false, ms: 120000 },
   { f: 'test-adminos-authority-honesty.js', why: 'a refused admin action can never render as a completed one', browser: false, ms: 120000 },
+  { f: 'test-adminos-tier1-dead-controls.js', why: 'the five dead AdminOS controls report failure, not success', browser: false, ms: 120000 },
 ];
 
 console.log(NL + '[predeploy] required release suites — ' + REQUIRED.length + ' declared');

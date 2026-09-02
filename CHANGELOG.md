@@ -1,3 +1,52 @@
+## [2026-09-02] — AdminOS TIER 1: five controls that call functions which do not exist
+
+**Files:** `sokoni-aos.js`; `scripts/test-adminos-tier1-dead-controls.js` (new, 53/0),
+`scripts/census-adminos-honesty-sites.js` (new, read-only), `scripts/predeploy-browser-suites.js`.
+**Database changes:** none. **API changes:** none — **no callable was created**.
+**Security changes:** none. **Breaking changes:** none.
+**Scope:** five controls in `sokoni-aos.js`. TIER 2 untouched. `admin.html` / `super-admin.html` untouched.
+
+### Proven dead, not suspected
+
+| control | callable | production |
+|---|---|---|
+| Create campaign | `adminCreateCampaign` | **404** |
+| Activate campaign | `adminUpdateCampaignStatus` | **404** |
+| Delete campaign | `adminDeleteCampaign` | **404** |
+| Email blast | `adminSendEmailBlast` | **404** |
+| SMS blast | `adminSendSMSBlast` | **404** |
+
+Zero occurrences anywhere in `functions/` — not exported, not in the `adminOs._h` dispatch
+table (55 handlers), not defined in any file. Controls: `adminProcessPayout` returns **401**,
+a nonexistent name returns **404**, so the discriminator is real.
+
+Each swallowed the failure and fired an unconditional success toast: an admin saw
+*"Campaign created"* and *"SMS queued for all"* for operations that never ran. The SMS one
+also warned *"Carrier charges apply for every recipient"* before doing nothing at all.
+
+### The correction — honesty only
+
+`_opFailure()` states plainly that the operation **was NOT performed**, and names an absent
+backend as unavailable rather than reporting a generic error. All five now use try/catch/return.
+
+**The five backends were NOT built.** These controls now fail truthfully; they do not work.
+Whether the Campaigns/Blast feature should exist is a product decision, untouched here.
+
+### Certification
+
+53/0 by **failure injection** — each shipped function is EXECUTED in a sandbox with an injected
+rejecting `_call`, asserting on the toasts actually produced, not on source patterns. Three
+injections each: backend-absent, permission-denied, and success (which must still report
+success). 6/6 sabotages caught, byte-identical restoration. A control feeds the PRE-FIX shape
+through the same harness and confirms it observes the fabricated success.
+
+### TIER 2 held
+
+24 sites across 18 targets share the shape but their backends EXIST. Not equivalent in
+severity; deliberately not changed.
+
+---
+
 ## [2026-09-02] — AdminOS: a refused admin action reported as a completed one
 
 **Files:** `sokoni-aos.js`; `scripts/test-adminos-authority-honesty.js` (new, 28/0),
