@@ -197,8 +197,9 @@ console.log('');
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('');
 console.log('  SCOPE, stated honestly: this certifies the 4 PROVEN paths + the payout rail.');
-console.log('  29 other AdminOS call sites share the swallow-then-succeed shape and are NOT');
-console.log('  covered here — they were not part of the authorized correction.');
+console.log('  24 other AdminOS call sites share the swallow-then-succeed shape and are NOT');
+console.log('  covered here (TIER 2 — their backends EXIST). The 5 TIER-1 dead controls are');
+console.log('  corrected and certified by test-adminos-tier1-dead-controls.js.');
 if (!controlsOk) {
   console.log('');
   console.log('  BLOCKED — a control misbehaved; the result above cannot be trusted.');
