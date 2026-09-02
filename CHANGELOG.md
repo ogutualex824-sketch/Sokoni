@@ -1,3 +1,68 @@
+## [2026-09-02] — AdminOS TIER 2: success claimed before the callable resolved
+
+**Files:** `sokoni-aos.js`; `scripts/test-adminos-tier2-action-honesty.js` (new, 147/0),
+`scripts/census-adminos-tier2.js` (new, read-only), `scripts/test-adminos-tier1-dead-controls.js`
+(boundary repair, 59/0), `scripts/predeploy-browser-suites.js` (31 declared).
+**Database changes:** none. **API changes:** none — no callable created or changed.
+**Security changes:** none; no rules change, no authorization weakened.
+**Breaking changes:** none. **Deployment:** HOSTING only.
+**Scope:** `sokoni-aos.js`. `admin.html` and `super-admin.html` untouched.
+
+### What was wrong
+
+13 targets / 17 call sites discarded a rejected callable with `.catch(e => _toast(...))`
+and then fired an **unconditional** success toast.
+
+Unlike TIER 1, every backend here EXISTS. **The client can legitimately know the outcome** —
+a callable resolves on return and rejects on throw, so the answer arrived and was thrown away.
+Nothing was unknowable, which makes severity a question of consequence, not difficulty.
+
+| band | targets | sites | why it matters |
+|---|---|---|---|
+| authority / money | 4 | 6 | claims about privilege, money policy, and the audit record |
+| state / moderation | 9 | 11 | misstates a record's state, invisibly at the moment of the lie |
+| content (**HELD**) | 6 | 9 | the panel reloads; the operator sees the truth in a second |
+
+`adminUpdateUserRole` is the sharpest: it calls `setCustomUserClaims`, so a false success can
+mean a **demotion never landed** while the user still holds admin claims. `voidTrustReceipt`
+asserts an audit trail exists — the very record anyone would later consult.
+`adminUpdatePlatformSettings` carries **commission rules** and **payout schedule**.
+
+### The correction
+
+All 17 now use `try` / `catch` / **`return`**. `_actionFailure()` shows the **server's own**
+message verbatim — these backends fail for real reasons, so a synthesized message would be less
+informative than the truth — adding only which operation failed.
+
+### Held, and enforced as held
+
+The 6 content targets keep the old shape **by decision**. The suite asserts the inline-catch
+count is exactly **9** and pins each held target by name, so a future well-meaning fix of a
+content site FAILS the gate rather than passing unnoticed.
+
+`adminSendPushNotification`'s *"Notification sent"* **wording** is untouched: a
+`platformNotifications` write is not delivery even on success. That is a separate authority
+question and folding it in would blur what each change was certified for.
+
+### Certification
+
+**147/0 by failure injection** — each shipped function is EXECUTED in a sandbox with an injected
+`_call`: rejects with a server message / rejects with nothing useful / **resolves** (which must
+still report success, so an over-fix is caught too). 6/6 sabotages caught by exit code, including
+deleting a success path and silently "fixing" a HELD site. Byte-identical restoration verified.
+
+### The gate blocked this release once, correctly
+
+`test-adminos-tier1-dead-controls.js` failed at **52/1**. It pinned `adminSendPushNotification`
+as an untouched TIER 2 marker — correct when TIER 1 shipped, stale once TIER 2 was authorized and
+Push became one of its targets. **The boundary moved; the assertion did not.** It was replaced
+with the boundary that is live now (the 6 HELD content targets) rather than deleted, and the
+replacement was proven able to fail by sabotaging `adminDeleteFaq`. Suite now 59/0.
+
+Battery: 31 declared, **31/31 EXECUTED, 0 FAIL**.
+
+---
+
 ## [2026-09-02] — AdminOS TIER 1: five controls that call functions which do not exist
 
 **Files:** `sokoni-aos.js`; `scripts/test-adminos-tier1-dead-controls.js` (new, 53/0),

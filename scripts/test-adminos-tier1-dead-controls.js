@@ -130,9 +130,20 @@ const WORKS = async () => ({ ok: true });
     }
   }
 
-  /* ── the Tier-2 boundary: these must NOT have been touched ─────────────────── */
-  ok('adminSendPushNotification (TIER 2) keeps its inline catch',
-     SRC.indexOf('adminSendPushNotification", { title, body, target, role }).catch') > -1);
+  /* ── the boundary this suite guards ────────────────────────────────────────
+     Originally this pinned adminSendPushNotification as an untouched TIER 2 marker.
+     TIER 2 was later authorized and push notification is one of its 9 state/moderation
+     targets, so that marker became stale and this suite correctly FAILED the gate at
+     52/1. The live boundary is now the 6 CONTENT targets that remain deliberately HELD;
+     pinning those keeps a real check here instead of deleting one. */
+  const inlineCatches = (SRC.match(/\.catch\(\s*e\s*=>\s*_toast/g) || []).length;
+  ok('exactly 9 inline-catch sites remain — the HELD content set', inlineCatches === 9,
+     String(inlineCatches));
+  ['adminUpsertCategory', 'adminSaveBanner', 'adminDeleteBanner',
+   'adminUpsertFaq', 'adminDeleteFaq', 'adminSaveAnnouncement'].forEach(function (t) {
+    ok(t + ' is still HELD',
+       new RegExp('_call\\("' + t + '"[\\s\\S]{0,90}?\\.catch\\(\\s*e\\s*=>\\s*_toast').test(SRC));
+  });
   ok('no new callable was invented',
      !/adminCreateCampaign\s*[:=]\s*(?:async\s*)?\(/.test(SRC));
 

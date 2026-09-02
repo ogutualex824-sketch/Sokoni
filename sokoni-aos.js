@@ -406,7 +406,12 @@ window.SokoniAOS = (() => {
   async function banUser(uid, currentStatus) {
     const action = currentStatus === "banned" ? "restore" : "ban";
     if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
-    await _call("tsBanUser", { userId: uid, action }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("tsBanUser", { userId: uid, action });
+    } catch (e) {
+      _toast(_actionFailure(e, "Moderation action"), "error");
+      return;
+    }
     _toast("User " + action + "ned successfully", "success");
     _panelCache.users = false; _loadUsers();
   }
@@ -414,7 +419,12 @@ window.SokoniAOS = (() => {
   async function changeRole(uid) {
     const role = prompt("Enter new role:\nbuyer, seller, provider, driver, agent, doctor, lawyer, hotel, freelancer, employee, moderator, admin");
     if (!role) return;
-    await _call("adminUpdateUserRole", { uid, role }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateUserRole", { uid, role });
+    } catch (e) {
+      _toast(_actionFailure(e, "Role update"), "error");
+      return;
+    }
     _toast("Role updated", "success");
     _panelCache.users = false; _loadUsers();
   }
@@ -494,7 +504,12 @@ window.SokoniAOS = (() => {
   }
 
   async function updateProduct(id, status) {
-    await _call("adminUpdateProductStatus", { productId: id, status }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateProductStatus", { productId: id, status });
+    } catch (e) {
+      _toast(_actionFailure(e, "Product status update"), "error");
+      return;
+    }
     _toast("Product status updated", "success");
     _marketplaceTab("products");
   }
@@ -502,13 +517,23 @@ window.SokoniAOS = (() => {
   async function updateOrder(id) {
     const status = prompt("New status (pending/processing/completed/cancelled):");
     if (!status) return;
-    await _call("adminUpdateOrderStatus", { orderId: id, status }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateOrderStatus", { orderId: id, status });
+    } catch (e) {
+      _toast(_actionFailure(e, "Order update"), "error");
+      return;
+    }
     _toast("Order updated", "success");
     _marketplaceTab("orders");
   }
 
   async function moderateReview(id, action) {
-    await _call("adminModerateReview", { reviewId: id, action }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminModerateReview", { reviewId: id, action });
+    } catch (e) {
+      _toast(_actionFailure(e, "Review moderation"), "error");
+      return;
+    }
     _toast("Review " + action + "d", "success");
     _marketplaceTab("reviews");
   }
@@ -929,7 +954,12 @@ window.SokoniAOS = (() => {
   async function resolveTicket(id) {
     const note = prompt("Resolution note:");
     if (!note) return;
-    await _call("adminResolveSupportTicket", { ticketId: id, resolution: note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminResolveSupportTicket", { ticketId: id, resolution: note });
+    } catch (e) {
+      _toast(_actionFailure(e, "Ticket resolution"), "error");
+      return;
+    }
     _toast("Ticket resolved","success"); _panelCache.support = false; _loadSupport();
   }
 
@@ -954,7 +984,12 @@ window.SokoniAOS = (() => {
   async function replyTicket(id) {
     const msg = document.getElementById("ticketReply")?.value;
     if (!msg) return;
-    await _call("adminResolveSupportTicket", { ticketId: id, resolution: msg, keepOpen: true }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminResolveSupportTicket", { ticketId: id, resolution: msg, keepOpen: true });
+    } catch (e) {
+      _toast(_actionFailure(e, "Reply"), "error");
+      return;
+    }
     _toast("Reply sent","success"); _closeModal();
   }
 
@@ -1077,7 +1112,12 @@ window.SokoniAOS = (() => {
     const target  = document.getElementById("notifTarget")?.value || "all";
     const role    = document.getElementById("notifRole")?.value;
     if (!title || !body) { _toast("Title and body are required","error"); return; }
-    await _call("adminSendPushNotification", { title, body, target, role }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminSendPushNotification", { title, body, target, role });
+    } catch (e) {
+      _toast(_actionFailure(e, "Notification"), "error");
+      return;
+    }
     _toast("Notification sent to " + target,"success");
     document.getElementById("notifTitle").value = "";
     document.getElementById("notifBody").value  = "";
@@ -1318,8 +1358,12 @@ window.SokoniAOS = (() => {
   }
 
   async function toggleAIModule(name, enabled) {
-    await _call("adminUpdateFeatureFlag", { key: "ai_" + name.toLowerCase().replace(/\s/g,"_"), enabled })
-      .catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminUpdateFeatureFlag", { key: "ai_" + name.toLowerCase().replace(/\s/g,"_"), enabled });
+    } catch (e) {
+      _toast(_actionFailure(e, "Feature flag change"), "error");
+      return;
+    }
     _toast((enabled?"Enabled":"Disabled") + " " + name, "success");
   }
 
@@ -1374,11 +1418,21 @@ window.SokoniAOS = (() => {
 
   async function reindex() {
     if (!(await SK.dialog.confirm("This will reindex all data. It may take a while.", null, null, { title: "Reindex all data?", confirmLabel: "Reindex" }))) return;
-    await _call("searchFullReindex").catch(e => _toast(e.message,"error"));
+    try {
+      await _call("searchFullReindex");
+    } catch (e) {
+      _toast(_actionFailure(e, "Reindex"), "error");
+      return;
+    }
     _toast("Reindex started","success");
   }
   async function repairSearch() {
-    await _call("searchRepairAll").catch(e => _toast(e.message,"error"));
+    try {
+      await _call("searchRepairAll");
+    } catch (e) {
+      _toast(_actionFailure(e, "Search repair"), "error");
+      return;
+    }
     _toast("Search repair started","success");
   }
   async function searchReport() {
@@ -1510,7 +1564,12 @@ window.SokoniAOS = (() => {
     const reason = prompt("Void reason (required for audit):");
     if (!reason) return;
     if (!(await SK.dialog.confirm(`Receipt ${receiptId} will be permanently voided. This action is irreversible and will be logged.`, null, null, { title: "Void receipt?", variant: "danger", confirmLabel: "Void receipt" }))) return;
-    await _call("voidTrustReceipt", { receiptId, reason }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("voidTrustReceipt", { receiptId, reason });
+    } catch (e) {
+      _toast(_actionFailure(e, "Receipt void"), "error");
+      return;
+    }
     _toast("Receipt voided — audit trail recorded", "success");
   }
 
@@ -1532,7 +1591,12 @@ window.SokoniAOS = (() => {
   }
 
   async function reviewReport(id, action) {
-    await _call("tsReviewReport", { reportId: id, action }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("tsReviewReport", { reportId: id, action });
+    } catch (e) {
+      _toast(_actionFailure(e, "Report review"), "error");
+      return;
+    }
     _toast("Report " + action + "ed","success"); _closeModal(); _panelCache.fraud = false; _loadFraud();
   }
 
@@ -1767,12 +1831,22 @@ window.SokoniAOS = (() => {
     form.querySelectorAll("[id]").forEach(el => {
       settings[el.id] = el.type === "checkbox" ? el.checked : el.value;
     });
-    await _call("adminUpdatePlatformSettings", { settings }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings });
+    } catch (e) {
+      _toast(_actionFailure(e, "Settings save"), "error");
+      return;
+    }
     _toast("Settings saved","success");
   }
 
   async function updateFlag(key, enabled) {
-    await _call("adminUpdateFeatureFlag", { key, enabled }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdateFeatureFlag", { key, enabled });
+    } catch (e) {
+      _toast(_actionFailure(e, "Feature flag change"), "error");
+      return;
+    }
     _toast((enabled?"Enabled":"Disabled") + " " + key,"success");
   }
 
@@ -1781,7 +1855,12 @@ window.SokoniAOS = (() => {
     if (!form) return;
     const rules = {};
     form.querySelectorAll("[id]").forEach(el => { rules[el.id] = parseFloat(el.value) || 0; });
-    await _call("adminUpdatePlatformSettings", { settings: rules }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings: rules });
+    } catch (e) {
+      _toast(_actionFailure(e, "Commission rules save"), "error");
+      return;
+    }
     _toast("Commission rules saved","success");
   }
 
@@ -1792,7 +1871,12 @@ window.SokoniAOS = (() => {
     form.querySelectorAll("[id]").forEach(el => {
       schedule[el.id] = el.type === "checkbox" ? el.checked : (isNaN(Number(el.value)) ? el.value : Number(el.value));
     });
-    await _call("adminUpdatePlatformSettings", { settings: schedule }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("adminUpdatePlatformSettings", { settings: schedule });
+    } catch (e) {
+      _toast(_actionFailure(e, "Payout schedule save"), "error");
+      return;
+    }
     _toast("Payout schedule saved","success");
   }
 
@@ -1952,6 +2036,15 @@ window.SokoniAOS = (() => {
     }
     return what + " was NOT performed — " +
            ((e && e.message) ? e.message : "the server did not respond.");
+  }
+
+  /* These backends EXIST and can fail for ordinary reasons — a network drop, or a real
+     HttpsError the handler threw. The server's own message is the honest one, so it is
+     used verbatim; only the fact that NOTHING CHANGED is added, because a resolved call is
+     the sole evidence the client ever has that the operation happened. */
+  function _actionFailure(e, what) {
+    const msg = (e && e.message) ? String(e.message).trim() : "";
+    return what + " failed — " + (msg || "the server did not respond.");
   }
 
   async function revokeAllSessions() {
