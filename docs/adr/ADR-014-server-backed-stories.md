@@ -143,24 +143,79 @@ the query would let a device with a skewed clock read expired content.
 
 ## 6 · Rules footprint — and why publication is NOT forced
 
-Current artifact: **255,822 characters, 178 free** against the 256,000 ceiling. The two
-story blocks are **already present and already counted**.
+> **CORRECTION (2026-09-02).** An earlier version of this section read *"255,822
+> characters, 178 free"*. That was a **unit error**: 255,822 is a count of **source
+> characters** and 256,000 is a ceiling on **compiled bytes**. The two are not comparable,
+> and they do not move together. Measured directly against the served release:
+>
+> | quantity | value |
+> |---|---|
+> | served ruleset | `59af870d-72eb-4791-a3b6-2f4de7eb8ff7` |
+> | compiled executable | **255,551 B** |
+> | free against 256,000 | **449 B** |
+> | `firestore.rules` (repo candidate) | 255,822 source chars — *a different, larger artifact* |
+>
+> The correction is not merely "449 instead of 178". The **currency changed**, and cost in
+> the real currency is not predictable from the wrong one: the recorded `trackb-v1`
+> datapoint added 282 source characters and cost **445 compiled bytes**, ~1.58x. A plan
+> priced in characters can overshoot by half again — which is how a candidate reached
+> `400 INVALID_ARGUMENT` at RELEASE, *after* the ruleset had been created, since there is
+> no predeploy guard on ruleset size.
 
-Making them real costs more: an `expiresAt > request.time` condition, a `status` check, and
-an ownership clause. Realistically **150–400 characters** — which does **not** fit.
+The two story blocks are **already present and already counted**. Making them real adds an
+`expiresAt > request.time` condition, a `status` check and an ownership clause. **Whether
+that fits in 449 compiled bytes is unknown, and cannot be known without compiling it.**
 
-**This ADR does not authorise forcing publication.** Options, to be decided before any
-rules change:
+### What consolidation actually has to work with
 
-1. **Consolidate first.** The artifact carries 15 `firestore.rules.*` variants and blocks
-   whose helpers duplicate one another; a reconciliation pass is likely to free more than
-   400 characters.
-2. **Ship stories with the read rule as-is** (`isAuthed()`) and defer the public-read
-   change until consolidation — functional for signed-in shoppers, invisible to others.
+Mapped read-only by `scripts/audit-rules-budget.js` and
+`scripts/audit-rules-duplicate-scopes.js`:
+
+| lever | source size | behaviour-preserving? |
+|---|---|---|
+| 10 same-scope duplicate `match` blocks | — | **No.** Same-scope blocks **union**; merging is a rules change |
+| 315 `allow …: if false;` | 7,345 ch | Yes — a rule that never grants is a no-op; absent allow already denies |
+| 22 match blocks that are entirely constant-false | 1,568 ch | Yes, same reason |
+| comments | 51,150 ch | Yes in source — **worth an unknown number of compiled bytes** |
+| indentation | 48,528 ch | Yes in source — same unknown |
+
+**The 10 duplicates are a correctness finding before they are a size finding.** Same-scope
+blocks OR together, so the second can grant what the first withholds, and reading either
+alone gives the wrong answer. Three examples, all real:
+
+- `platformConfig` — one block allows `write: if isSuperAdmin()`, the other `write: if
+  false`. The union is superAdmin-writable; **the second block reads as though nothing may
+  write it.**
+- `securityEvents` — one allows `read: if isAdmin()`, the other also allows a user to read
+  their own. The union is the broader rule; the narrower block **misdescribes** it.
+- `fraudAlerts` — the second block (`isAdmin`) is fully subsumed by the first
+  (`isModerator`, which includes admin), so it is inert.
+
+In each case the *narrower or constant-false* member contributes nothing to the union and
+is removable with provably zero behaviour change. That is the safe class. Merging two
+blocks that each grant something is **not** in that class and needs its own proof.
+
+### The measurement that decides the strategy
+
+**Unproven, and it governs everything above:** does stripping comments and indentation
+reduce *compiled* size at all? Compiled (255,551) is ~1.66x the code-only source (154,299)
+— the signature of a bytecode form in which comments have already vanished. If they have,
+then 99,678 characters of comments and indentation are worth **zero** budget, and
+consolidation must be **structural** — deleting inert rules and blocks — rather than
+cosmetic.
+
+The experiment is one control and one variable: compile the artifact unchanged, then
+compile it comments-and-indentation-stripped, and compare. `getExecutable` operates on
+**releases, not rulesets**, so pricing any candidate requires creating a ruleset and
+releasing it under a **disposable name — never `cloud.firestore`** — then deleting it.
+That is a write to the production project, and it is **not** authorised by this ADR.
+
+**This ADR does not authorise forcing publication.** Options:
+
+1. **Consolidate first** — now the accepted order, and the levers are the table above.
+2. **Ship stories with the read rule as-is** (`isAuthed()`) — rejected: it hides the ring
+   from logged-out shoppers, the audience the shop entry point exists for.
 3. **Split the ruleset** — a larger change with its own risk.
-
-The rules boundary stands: nothing is published until the reconciliation proves it removes
-no live protection, per `docs/RULES_RECONCILIATION_59af870d.md`.
 
 ## 7 · Cutover, not migration
 
