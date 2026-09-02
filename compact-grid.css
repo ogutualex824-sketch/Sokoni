@@ -594,6 +594,8 @@
   }
 
   /* ════ ACTION STRIP: social proof + buttons ════ */
+  .products-grid .pcard-mobile-strip,
+  .st-products-grid .pcard-mobile-strip,
   .ptrend-grid .pcard-mobile-strip,
   #productsContainer .pcard-mobile-strip {
     padding: 7px 10px 10px !important;
@@ -601,6 +603,8 @@
   }
 
   /* Social proof text */
+  .products-grid .pcard-strip-info,
+  .st-products-grid .pcard-strip-info,
   .ptrend-grid .pcard-strip-info,
   #productsContainer .pcard-strip-info {
     font-size: 9.5px !important;
@@ -612,6 +616,8 @@
     width: 100% !important;
   }
 
+  .products-grid .pcard-m-wish,
+  .st-products-grid .pcard-m-wish,
   .ptrend-grid .pcard-m-wish,
   #productsContainer .pcard-m-wish {
     width: 32px !important;
@@ -619,6 +625,8 @@
     font-size: 14px !important;
     flex-shrink: 0 !important;
   }
+  .products-grid .pcard-m-buy,
+  .st-products-grid .pcard-m-buy,
   .ptrend-grid .pcard-m-buy,
   #productsContainer .pcard-m-buy {
     flex: 1 !important;
@@ -816,6 +824,31 @@
     box-shadow: 0 2px 10px rgba(113,255,0,0.32) !important;
     transition: filter 0.12s ease, transform 0.12s ease !important;
   }
+  /* ════ THE ROW MUST FIT THE CARD IT SITS IN ════
+     MEASURED on production at 390px: a two-column card is 122px wide (7 -> 129), but the
+     three controls were laid out at a fixed 44px each with flex-shrink:0. Three 44s plus
+     gaps need ~132px, so .pcard-m-cart spanned 117 -> 161 — thirty-two pixels PAST the
+     card's right edge — and .pcard-m-buy further still. Page-level overflow stayed false
+     because an ancestor clips, which is exactly why a scrollWidth check alone reported the
+     layout as healthy: the buttons were not pushing the page sideways, they were being cut
+     off by their own card.
+
+     The fix keeps the 44px HEIGHT — the dimension a thumb actually needs — and lets width
+     flex to whatever the card allows, capped so a wide card still gets 44px controls.
+     min-width:0 is required or flex refuses to shrink below content size. The radius drops
+     to a rounded rectangle because a flexed circle renders as an ellipse. */
+  .pcard-m-btns { gap: 4px !important; }
+  .pcard-m-wish,
+  .pcard-m-cart,
+  .pcard-m-buy {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 44px !important;
+    height: 44px !important;
+    border-radius: 12px !important;
+  }
+
   .pcard-m-buy:active {
     filter: brightness(0.88) !important;
     transform: scale(0.92) !important;
@@ -933,6 +966,8 @@
   .ptrend-grid .pcard-actions,
   #productsContainer .pcard-actions { display: none !important; }
 
+  .products-grid .pcard-mobile-strip,
+  .st-products-grid .pcard-mobile-strip,
   .ptrend-grid .pcard-mobile-strip,
   #productsContainer .pcard-mobile-strip {
     display: flex !important;
@@ -941,6 +976,8 @@
     gap: 5px !important;
   }
 
+  .products-grid .pcard-strip-info,
+  .st-products-grid .pcard-strip-info,
   .ptrend-grid .pcard-strip-info,
   #productsContainer .pcard-strip-info {
     font-size: 9.5px !important;
@@ -953,6 +990,8 @@
     min-width: 0 !important;
   }
 
+  .products-grid .pcard-m-wish,
+  .st-products-grid .pcard-m-wish,
   .ptrend-grid .pcard-m-wish,
   #productsContainer .pcard-m-wish {
     width: 40px !important;
@@ -961,6 +1000,8 @@
     font-size: 15px !important;
   }
 
+  .products-grid .pcard-m-cart,
+  .st-products-grid .pcard-m-cart,
   .ptrend-grid .pcard-m-cart,
   #productsContainer .pcard-m-cart {
     width: 40px !important;
@@ -969,6 +1010,8 @@
     font-size: 15px !important;
   }
 
+  .products-grid .pcard-m-buy,
+  .st-products-grid .pcard-m-buy,
   .ptrend-grid .pcard-m-buy,
   #productsContainer .pcard-m-buy {
     flex: 1 !important;

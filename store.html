@@ -200,6 +200,9 @@
       transition: transform .2s, border-color .2s; display: block;
     }
     .st-product-card:hover { transform: translateY(-3px); border-color: rgba(113,255,0,0.25); }
+    /* The card is no longer the anchor — controls must not live inside a link — so the
+       link styling moves to the element that actually wraps the image and the text. */
+    .st-product-link { display: block; text-decoration: none; color: inherit; }
     .st-product-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: rgba(255,255,255,0.04); }
     .st-product-info { padding: 11px 12px; }
     .st-product-name { font-size: 13px; font-weight: 700; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -380,6 +383,79 @@
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<!-- The canonical cross-page cart/wishlist actions the marketplace cards already use.
+     This page rendered product cards with NO cart, wishlist or buy control on any
+     viewport; adding local handlers instead would make it another writer of the cart
+     shape sokoni-cart.js exists to consolidate. -->
+<script src="sokoni-wishlist.js"></script>
+<script src="market-actions.js"></script>
+<script>
+/* ONE definition of the shop card's action rows. This page has THREE product renderers
+   (the cached-shop path and two live-Firestore paths); emitting the markup inline in each
+   would guarantee they drift, which is the whole reason the shop diverged from the
+   marketplace in the first place. The structure is the canonical pcard one that
+   category.js and script.js emit and compact-grid.css already styles: .pcard-actions is
+   the desktop row (hidden below 600px), .pcard-mobile-strip the 44x44 mobile strip
+   (hidden above it). Exactly one row is visible at any width, so a tap fires once.
+
+   Buttons carry the product id only — serialising a product into a data attribute would
+   mean HTML-escaping user-supplied names for no benefit. */
+function stActionRows (id, name) {
+  var i = String(id).replace(/"/g, '&quot;');
+  var n = String(name || '').replace(/[<>"&]/g, function (c) {
+    return { '<': '&lt;', '>': '&gt;', '"': '&quot;', '&': '&amp;' }[c];
+  });
+  return '<div class="pcard-actions">'
+       +   '<button type="button" class="pcard-wish" data-st-wish="' + i + '" aria-label="Save ' + n + ' to wishlist">&#10084;</button>'
+       +   '<button type="button" class="pcard-cart" data-st-cart="' + i + '" aria-label="Add ' + n + ' to cart">&#128722; Add</button>'
+       + '</div>'
+       + '<div class="pcard-mobile-strip" data-stop-prop="1"><div class="pcard-m-btns">'
+       +   '<button type="button" class="pcard-m-wish" data-st-wish="' + i + '" aria-label="Save ' + n + ' to wishlist">&#10084;</button>'
+       +   '<button type="button" class="pcard-m-cart" data-st-cart="' + i + '" aria-label="Add ' + n + ' to cart">&#128722;</button>'
+       +   '<button type="button" class="pcard-m-buy" data-st-buy="' + i + '" aria-label="Buy ' + n + ' now">&#9889;</button>'
+       + '</div></div>';
+}
+
+/* ONE listener on the document, not one per grid. This page has three renderers writing
+   into more than one container, and a grid-bound handler would only ever cover whichever
+   ran; re-rendering also replaces every button, so per-button handlers would leak.
+
+   The item is read from the card's own DOM rather than a parallel registry — the name and
+   price are already rendered beside the button, so there is no second copy of the product
+   to fall out of step with what the buyer is looking at.
+
+   SokoniMarket is the canonical cross-page action service the marketplace cards use. A
+   local cart write here would make this page another writer of the shape sokoni-cart.js
+   exists to consolidate. */
+document.addEventListener('click', function (ev) {
+  var btn = ev.target && ev.target.closest
+    ? ev.target.closest('[data-st-cart],[data-st-wish],[data-st-buy]') : null;
+  if (!btn) return;
+  ev.preventDefault();      /* the card is a link; an action must never navigate */
+  ev.stopPropagation();
+  var card = btn.closest('.st-product-card');
+  if (!card) return;
+  var nameEl = card.querySelector('.st-product-name');
+  var priceEl = card.querySelector('.st-product-price');
+  var imgEl = card.querySelector('img');
+  var M = window.SokoniMarket;
+  if (!M) { alert('Still loading — please try again in a moment.'); return; }
+  var item = {
+    id:    btn.getAttribute('data-st-cart') || btn.getAttribute('data-st-wish')
+        || btn.getAttribute('data-st-buy'),
+    name:  nameEl ? nameEl.textContent.trim() : '',
+    price: priceEl ? Number(String(priceEl.textContent).replace(/[^0-9.]/g, '')) || 0 : 0,
+    image: imgEl ? imgEl.getAttribute('src') || '' : '',
+    sourceUrl: location.href,
+  };
+  if (btn.hasAttribute('data-st-wish')) {
+    (M.toggleWishlist || M.addToWishlist).call(M, item); return;
+  }
+  M.addToCart(item);
+  /* Buy Now is add-then-checkout, so the cart stays the single source of truth. */
+  if (btn.hasAttribute('data-st-buy')) location.href = 'checkout.html';
+});
+</script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
@@ -627,17 +703,38 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
       const wsTag = p.wholesalePrice
         ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
         : "";
-      return `<a class="st-product-card" href="product.html?id=${p.id}">
-        ${window.renderProductImage
-          ? renderProductImage({ product: p, alt: p.name, wrap: false })
-          : `<img src="${(window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
-        <div class="st-product-info">
-          <div class="st-product-name">${p.name}</div>
-          <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
-          ${wsTag}
-        </div>
-      </a>`;
+      /* THE ACTION ROWS ARE SIBLINGS OF THE LINK, NOT CHILDREN OF IT.
+         This card used to be one <a>, so a button placed inside would follow the href on
+         tap: event.stopPropagation() stops the card's own handler but does NOT cancel an
+         ancestor anchor's default navigation. A <button> inside an <a> is also invalid
+         HTML and is announced as a link. So the anchor now wraps only the image and text,
+         and the controls sit beside it inside the card.
+
+         The markup is the CANONICAL pcard structure category.js and script.js already
+         emit and compact-grid.css already styles: .pcard-actions is the desktop row
+         (display:none below 600px) and .pcard-mobile-strip is the mobile strip with 44x44
+         tap targets (hidden above it). Exactly one row is visible at any width, so a tap
+         can only fire once — and the shop cards cannot drift from the marketplace cards,
+         because there is no second implementation.
+
+         Buttons carry the product ID only. Serialising the product into a data attribute
+         would need HTML-escaping a JSON blob containing user-supplied names — an
+         injection surface for no benefit, when the row is already in memory. */
+      return `<div class="st-product-card">
+        <a class="st-product-link" href="product.html?id=${p.id}">
+          ${window.renderProductImage
+            ? renderProductImage({ product: p, alt: p.name, wrap: false })
+            : `<img src="${(window.pickProductImage?pickProductImage(p):p.image)||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
+          <div class="st-product-info">
+            <div class="st-product-name">${p.name}</div>
+            <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
+            ${wsTag}
+          </div>
+        </a>
+        ${stActionRows(p.id, p.name)}
+      </div>`;
     }).join("");
+
   }
 
   /* Reviews tab */
@@ -915,12 +1012,12 @@ function stRenderCollections(prods) {
           + items.map(function(p) {
               var img  = (window.pickProductImage ? pickProductImage(p) : p.image) || "assets/default-product.png";
               var name = (p.name || "").replace(/</g, "&lt;");
-              return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
+              return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
                 + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
                 + '<div class="st-product-info">'
                 + '<div class="st-product-name">' + name + '</div>'
                 + '<div class="st-product-price">KES ' + Number(p.price || 0).toLocaleString() + '</div>'
-                + '</div></a>';
+                + '</div></a>' + stActionRows(p.id, name) + '</div>';
             }).join("")
           + '</div></div>';
       }).join("")
@@ -1072,12 +1169,12 @@ async function _stLoadFirestore(uid) {
             var ws = p.wholesalePrice
               ? '<div class="st-wholesale-tag">🏷️ Bulk: KES ' + Number(p.wholesalePrice).toLocaleString()
                 + ' (min ' + p.minWholesaleQty + ')</div>' : "";
-            return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
+            return '<div class="st-product-card">' + '<a class="st-product-link" href="product.html?id=' + p.id + '">'
               + '<img src="' + (p.image || "assets/default-product.png") + '" alt="' + (p.name||"").replace(/</g,"&lt;") + '" loading="lazy">'
               + '<div class="st-product-info">'
               + '<div class="st-product-name">' + (p.name||"").replace(/</g,"&lt;") + '</div>'
               + '<div class="st-product-price">KES ' + Number(p.price||0).toLocaleString() + '</div>'
-              + ws + '</div></a>';
+              + ws + '</div></a>' + stActionRows(p.id, name) + '</div>';
           }).join("");
         }
       }
