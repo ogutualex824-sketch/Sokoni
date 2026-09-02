@@ -837,14 +837,27 @@
      flex to whatever the card allows, capped so a wide card still gets 44px controls.
      min-width:0 is required or flex refuses to shrink below content size. The radius drops
      to a rounded rectangle because a flexed circle renders as an ellipse. */
-  .pcard-m-btns { gap: 4px !important; }
+  /* STACK, do not squeeze. Letting the three controls flex across the row collapsed them
+     to TWO PIXELS wide (measured: card 122, strip 104, row 90, button w:2 h:44 with
+     flex:1 1 0 and min-width:0) — a 44px-tall target with no width is not tappable, and
+     the glyphs then clipped. Three 44px controls plus gaps need ~140px and a two-column
+     card is 122px; that arithmetic does not resolve horizontally at any shrink factor.
+
+     Stacked, each control gets the full card width and a real 44px height, which is the
+     dimension a thumb needs. The card grows taller — that is the honest trade, and it is
+     preferable to three unusable slivers. Above this breakpoint the row is untouched. */
+  .pcard-m-btns {
+    flex-direction: column !important;
+    gap: 5px !important;
+    align-items: stretch !important;
+  }
   .pcard-m-wish,
   .pcard-m-cart,
   .pcard-m-buy {
-    flex: 1 1 0 !important;
-    width: auto !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
     min-width: 0 !important;
-    max-width: 44px !important;
+    max-width: none !important;
     height: 44px !important;
     border-radius: 12px !important;
   }
