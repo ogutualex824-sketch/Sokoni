@@ -22,6 +22,8 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [010](ADR-010-financial-append-only-operational-event-driven.md) | Financial records append-only; operational records event-driven until dispatch | **Accepted** · design | `RECEIPT_ARCHITECTURE.md` |
 | [011](ADR-011-server-authoritative-pricing.md) | The server prices, the client displays; reject a mismatch, never substitute it | Accepted |
 | [012](ADR-012-engine-layering.md) | Merchant pricing must never depend on logistics; the dependency is one-way | Accepted |
+| [013](ADR-013-pos-write-authority.md) | Clients express intent; the server establishes authoritative state and money (POS + Marketplace, separate rails) | **Accepted** · implementation NOT authorized | served ruleset `59af870d`; two sale rails, two inventory models |
+| [014](ADR-014-server-backed-stories.md) | Stories need a server authority before they can have a shop entry point | ⛔ **Decision required** | stories are localStorage-only, so a shopper cannot see a merchant story |
 
 ## The rule that governs all of them
 
