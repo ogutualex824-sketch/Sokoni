@@ -147,3 +147,6 @@ scripts/*-output*
 storage.rules.deployed
 _equiv-a.log
 _equiv-control.log
+_equiv-b.log
+_equiv-b-sab.log
+_equiv-b-det.log

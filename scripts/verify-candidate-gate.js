@@ -80,10 +80,28 @@ ck('shopOwnerId clause count unchanged',
    'served ' + (a.match(/shopOwnerId/g) || []).length + ' -> candidate ' + (b.match(/shopOwnerId/g) || []).length);
 
 /* ── 5 · granting-rule count unchanged ────────────────────────────────────── */
-const RE_ALLOW = /allow\s+[a-z, ]+\s*:\s*if\s+/g;
-const RE_FALSE = /allow\s+[a-z, ]+\s*:\s*if\s+false\s*;/g;
-const allowA = (a.match(RE_ALLOW) || []).length, allowB = (b.match(RE_ALLOW) || []).length;
-const falseA = (a.match(RE_FALSE) || []).length, falseB = (b.match(RE_FALSE) || []).length;
+/* COUNT CODE, NOT PROSE. Counting on raw text also counts `allow` written inside
+   comments — the served file has three, including a line reading
+   "// the `allow write: if false` guard in the Digital Products Hub section". That made
+   this check report 1,319 where the code contains 1,316. It happened to be harmless while
+   both sides carried identical comments, but Group B deliberately KEEPS comments whose
+   clause has been removed, so comment-resident `allow` text can shift — and a contaminated
+   count could then fail spuriously, or worse, cancel out a real change. */
+const decommentFor = (s) => {
+  let b2 = false;
+  return s.split(NL).map((l) => {
+    let t = l;
+    if (b2) { const e = t.indexOf('*/'); if (e < 0) return ''; b2 = false; t = t.slice(e + 2); }
+    t = t.replace(/\/\*[\s\S]*?\*\//g, '');
+    const o = t.indexOf('/*'); if (o > -1) { b2 = true; t = t.slice(0, o); }
+    return t.replace(/\/\/.*$/, '');
+  }).join(NL);
+};
+const codeA = decommentFor(a), codeB = decommentFor(b);
+const RE_ALLOW = /allow[ \ta-z,]+:\s*if\s+/g;
+const RE_FALSE = /allow[ \ta-z,]+:\s*if\s+false\s*;/g;
+const allowA = (codeA.match(RE_ALLOW) || []).length, allowB = (codeB.match(RE_ALLOW) || []).length;
+const falseA = (codeA.match(RE_FALSE) || []).length, falseB = (codeB.match(RE_FALSE) || []).length;
 ck('granting rules unchanged  (' + (allowA - falseA) + ')',
    (allowA - falseA) === (allowB - falseB),
    'served ' + (allowA - falseA) + ' -> candidate ' + (allowB - falseB));
@@ -105,16 +123,37 @@ ck('all ' + EXCLUDED.length + ' excluded surfaces have identical occurrence coun
 const RE_MATCHDECL = /match\s+\/[^{\s]*(?:\{[^}]*\}[^{\s]*)*\s*\{/g;
 const mA = (a.match(RE_MATCHDECL) || []).length, mB = (b.match(RE_MATCHDECL) || []).length;
 console.log('        match blocks: served ' + mA + ' -> candidate ' + mB + '   (-' + (mA - mB) + ')');
-ck('candidate is a strict SUBSET of served lines (nothing added or rewritten)', (() => {
-  const sa = a.split(NL), sb = b.split(NL);
-  let i = 0;
-  for (const line of sb) {
-    while (i < sa.length && sa[i] !== line) i++;
-    if (i >= sa.length) return false;
-    i++;
+/* NOTHING WAS ADDED OR REWRITTEN — stated so it survives Group B.
+   Group A only deleted whole blocks, so "candidate lines are a subset of served lines"
+   held. Group B EXCISES a clause from 26 one-line blocks and keeps comments on their own
+   lines, so a plain subset test fails for correct output. The property that actually
+   matters is about CODE: every candidate code line is either a served code line, or a
+   served code line with constant-false clauses removed. Anything else means something was
+   introduced or reworded, which is the failure mode this check exists for. */
+const codeLines = (s) => decommentFor(s).split(NL).map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l);
+ck('every candidate code line derives from a served code line (nothing added or rewritten)', (() => {
+  const A = codeLines(a), B = codeLines(b);
+  const allowed = new Set();
+  A.forEach((l) => {
+    allowed.add(l);
+    const stripped = l.replace(/allow[ \ta-z,]+:\s*if\s+false\s*;/g, '').replace(/\s+/g, ' ').trim();
+    if (stripped) allowed.add(stripped);
+  });
+  const orphans = B.filter((l) => !allowed.has(l));
+  if (orphans.length) {
+    console.log('        ' + orphans.length + ' orphan line(s), first: ' + orphans[0].slice(0, 96));
+    return false;
   }
   return true;
-})(), 'a line in the candidate does not appear in served in order');
+})());
+ck('candidate introduces no granting clause absent from served', (() => {
+  const g = (s) => new Set((decommentFor(s).match(/allow[ \ta-z,]+:\s*if\s+(?!false\s*;)[^;]*;/g) || [])
+    .map((x) => x.replace(/\s+/g, ' ').trim()));
+  const A = g(a), B = g(b);
+  const added = Array.from(B).filter((x) => !A.has(x));
+  if (added.length) { console.log('        added: ' + added[0].slice(0, 96)); return false; }
+  return true;
+})());
 
 /* ── 8 · production release unchanged ─────────────────────────────────────── */
 const tk = spawnSync('gcloud', ['auth', 'print-access-token'],
