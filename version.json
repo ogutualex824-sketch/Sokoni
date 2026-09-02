@@ -1,14 +1,20 @@
 {
-  "commit": "4b54a3a95ea5fbb0e20dd00f57c29733272ee4df",
-  "commitShort": "4b54a3a",
+  "commit": "604e48131f548d8822fc26a4d1dee3355e0b3457",
+  "commitShort": "604e481",
   "branch": "release/r1-pos-printer-fn",
-  "buildTime": "2026-09-02T08:34:37.661Z",
+  "buildTime": "2026-09-02T17:11:50.999Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260902083435-v626",
+  "cacheVersion": "sokoni-20260902171149-v627",
   "environment": "production",
-  "dirtyWorkingTree": false,
+  "dirtyWorkingTree": true,
   "pipelineArtifacts": [
     "service-worker.js"
   ],
-  "dirtyPaths": []
+  "dirtyPaths": [
+    "scripts/bisect-script-execution.js",
+    "scripts/diagnose-home-button-handlers.js",
+    "scripts/measure-home-buttons-postconsent.js",
+    "scripts/measure-home-card-interception.js",
+    "scripts/probe-consent-banner.js"
+  ]
 }
