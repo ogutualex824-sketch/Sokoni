@@ -145,3 +145,4 @@ scripts/*-output*
 # refuses to assert against a repo copy). Regenerate:
 #   gcloud auth print-access-token  ->  firebaserules.googleapis.com rulesets/<storage release>
 storage.rules.deployed
+_equiv-a.log

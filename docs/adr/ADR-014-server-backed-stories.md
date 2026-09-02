@@ -162,7 +162,14 @@ the query would let a device with a skewed clock read expired content.
 > `400 INVALID_ARGUMENT` at RELEASE, *after* the ruleset had been created, since there is
 > no predeploy guard on ruleset size.
 
-The two story blocks are **already present and already counted**. Making them real adds an
+> **CORRECTION.** This section also claimed the two story blocks were *"already present
+> and already counted"*. They are present in the REPO artifact and **absent from the
+> served ruleset** — `merchantStories` and `storyAllocations` are two of only five scopes
+> the repo adds over `59af870d`. Since the repo artifact cannot be released, the story
+> blocks have never been counted against the real budget at all. They are a NEW cost, not
+> a sunk one.
+
+Making the story rules real adds an
 `expiresAt > request.time` condition, a `status` check and an ownership clause. **Whether
 that fits in 449 compiled bytes is unknown, and cannot be known without compiling it.**
 
