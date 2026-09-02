@@ -2,7 +2,20 @@
 
 **Date:** 2026-09-02
 **Transformation:** served `59af870d` → `candidate-a` → **`firestore.rules.candidate-b`**
-**Status:** **Evidence complete. NOT released. Publication requires its own authorization.**
+**Status:** **CERTIFIED EVIDENCE COMPLETE / ACCEPTANCE PENDING.**
+Not released. Acceptance is a separate decision from publication, and neither has been given.
+
+> **The evidence proves candidate-B. It does not by itself authorise accepting B as a
+> production Rules change.** Those are different claims, and the first compile failure is
+> why: Group A and Group B were each correct in isolation and their COMPOSITION was
+> invalid. Certifying transformations independently and composing them blindly is exactly
+> what that failure rules out.
+
+**The artifact under test is the composed one.** `candidate-b` was built FROM
+`candidate-a`, not from served — verified empirically rather than assumed: all 20 Group A
+block paths are present in served, absent in candidate-a, and still absent in candidate-b;
+the 5 single-line blocks Group A missed are present in served AND candidate-a, and absent
+only in candidate-b. So every figure in the gate below is `served -> (A+B)`.
 
 Related: [[RULES_GROUP_A_CERTIFICATION]] · [[ADR-014-server-backed-stories]] ·
 `docs/RULES_CONSOLIDATION_CANDIDATES.md`
