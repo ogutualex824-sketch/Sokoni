@@ -236,7 +236,14 @@ console.log('\nB. The rollout did not mangle any file');
        the service tag arrived where it was missing, and no OTHER cart or wishlist authority
        was smuggled onto the page alongside it. A page gaining an unrelated module is not
        this suite's business; a page gaining a second cart is. */
-    const extra = gained.filter(t => !/sokoni-cart\.js/.test(t));
+    /* sokoni-wishlist.js is the CANONICAL wishlist service, not a rival authority.
+       market-actions.js reaches the wishlist only through it, and all five existing
+       market-actions pages already load the pair. When store.html joined that set on
+       2026-09-02 the heuristic read the canonical service as a second cart and fired.
+       Narrowed to exclude it BY NAME — anything else matching cart/wishlist still trips
+       the check, which is the part worth keeping. */
+    const CANONICAL = /(^|[\/"'])sokoni-wishlist\.js/;
+    const extra = gained.filter(t => !/sokoni-cart\.js/.test(t) && !CANONICAL.test(t));
     const rivalCartAuthority = extra.some(t => /(^|[\/"'])(.*cart.*|.*wishlist.*)\.js/i.test(t));
     if (rivalCartAuthority) return true;
     return hadService ? gained.length !== extra.length
