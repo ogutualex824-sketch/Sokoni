@@ -195,20 +195,78 @@ In each case the *narrower or constant-false* member contributes nothing to the 
 is removable with provably zero behaviour change. That is the safe class. Merging two
 blocks that each grant something is **not** in that class and needs its own proof.
 
-### The measurement that decides the strategy
+### 6a · The measurement — run 2026-09-02, disposable rulesets, production untouched
 
-**Unproven, and it governs everything above:** does stripping comments and indentation
-reduce *compiled* size at all? Compiled (255,551) is ~1.66x the code-only source (154,299)
-— the signature of a bytecode form in which comments have already vanished. If they have,
-then 99,678 characters of comments and indentation are worth **zero** budget, and
-consolidation must be **structural** — deleting inert rules and blocks — rather than
-cosmetic.
+`scripts/measure-rules-compiled-delta.js`. One control, one variable, then a candidate.
+Every release created was named `sizeprobe-<ts>-<tag>`, guarded by an assertion that
+**refuses** `cloud.firestore` rather than merely avoiding it, and deleted afterwards
+including on failure.
 
-The experiment is one control and one variable: compile the artifact unchanged, then
-compile it comments-and-indentation-stripped, and compare. `getExecutable` operates on
-**releases, not rulesets**, so pricing any candidate requires creating a ruleset and
-releasing it under a **disposable name — never `cloud.firestore`** — then deleting it.
-That is a write to the production project, and it is **not** authorised by this ADR.
+| | source | compiled | free |
+|---|---|---|---|
+| served `59af870d` (live) | 252,640 ch | **255,551 B** | 449 |
+| control — served source recompiled unchanged | 252,640 ch | **255,551 B** | 449 |
+| variable — comments + indentation removed | 153,363 ch (−99,277) | **255,423 B** | 577 |
+
+**The control reproduced the live size exactly**, so the instrument measures what is
+deployed. Without that the delta below would be uninterpretable, and the run aborts rather
+than reporting a number if it fails to match.
+
+> ## 99,277 source characters are worth **128 compiled bytes**.
+>
+> 0.0013 B per character — **0.13%** of what a character-based estimate predicts.
+
+**So the answer is effectively "unchanged."** Deleting every comment and every indent from
+the entire ruleset moves free space from 449 B to 577 B. That does not fund the story
+rules, and it would cost the file all of its explanatory value — the comments that record
+*why* a rule is shaped as it is are, in budget terms, free. **Keep them.**
+
+**Consolidation must therefore be structural**, exactly as §6's table anticipated: remove
+rules and blocks that are inert, not characters that are merely decorative.
+
+### 6b · The repo candidate cannot be released at all
+
+Priced with the same instrument. `firestore.rules` (255,822 ch — a *different and larger*
+artifact than the served `firestore.rules.release-minimal`):
+
+- ruleset **CREATE succeeded** → the syntax is valid
+- release **REJECTED, 400 INVALID_ARGUMENT**
+- stripped of comments and indentation (−101,522 ch, to 154,300) → **still rejected**
+
+Ruleset create validates syntax; release enforces limits. So this candidate is
+syntactically sound and hits a limit — and stripping does not rescue it, which is exactly
+what the 128-byte result predicts.
+
+**Do not record this as "too big" as though it were established.** The API does not return
+the reason. What is established: it **cannot be released as it stands**, and no cosmetic
+reduction changes that.
+
+This is a **blocking fact for the whole rules track**, and it is bigger than the story
+question. The restored `shopEmployees.shopOwnerId` anchor lives in this artifact. Until
+structural consolidation brings the candidate under the limit, **that anchor cannot be
+published** — so the reconciliation in `docs/RULES_RECONCILIATION_59af870d.md` has a size
+precondition it did not previously know about.
+
+### 6c · Production was not changed
+
+| | before | after |
+|---|---|---|
+| `cloud.firestore` ruleset | `59af870d-…` | `59af870d-…` |
+| release `updateTime` | 2026-08-28T14:49:34.255213Z | 2026-08-28T14:49:34.255213Z |
+
+Stray `sizeprobe-` releases: **none**. Rulesets created on 2026-09-02 still present:
+**zero**. Verified by an independent listing, not by the script that did the cleanup.
+
+### The prediction, and what it was worth
+
+Before the measurement this section reasoned that compiled (255,551) being ~1.66x the
+code-only source (154,299) was *the signature of a bytecode form in which comments have
+already vanished*, and predicted they would be worth **zero**.
+
+**The direction was right and the magnitude was not.** They are worth 128 bytes, not zero.
+The prediction would have been a fine hypothesis and a poor foundation: it is the same
+reasoning-from-signature that produced the original 178-character error. Recorded here
+because the lesson is not "comments are free" but **price a candidate by compiling it**.
 
 **This ADR does not authorise forcing publication.** Options:
 
