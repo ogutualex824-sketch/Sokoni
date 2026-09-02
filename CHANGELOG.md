@@ -1,3 +1,46 @@
+## [2026-09-02] — Home: "Sellers Near You" could never appear
+
+**Files:** `script.js`, `index.html`; `scripts/test-nearby-city-normalisation.js` (new, 49/0).
+**Database changes:** none.
+**API changes:** none.
+**Security changes:** none — no money, checkout or authority path touched.
+**Breaking changes:** none.
+**Deployment:** HOSTING only. Live at `604e481` / cache `v627`.
+
+### The defect
+
+Two independent mismatches, either of which alone hides the section permanently:
+
+| | writer | reader |
+|---|---|---|
+| **key** | `index.html` picker writes `sokoniDeliveryCity` | `script.js` read `sokoniBuyerCity` |
+| **shape** | a DISPLAY NAME — `"Nyali"` | a CITY KEY — `"mombasa"` |
+
+`displayNearbySection()` returns early on a falsy `buyerCity`, so the section was
+unreachable for every shopper regardless of which town they picked.
+
+### The fix
+
+`_resolveBuyerCity()` reads the ACTIVE key `sokoniDeliveryCity` first and falls back to
+the legacy `sokoniBuyerCity`. `_canonicalCityKey()` normalises a display name to the key
+products actually carry (`.location`), matching on key, exact name, then whole-word
+containment — never a bare substring (`"nairobiX"` stays unresolved).
+
+`setCity()` now re-renders the section on selection, so the reveal no longer waits for a reload.
+
+### Restraint is the property under test
+
+`CITY_ALIAS` ships **empty by design**. 3 of 106 offered towns resolve; the other ~100 keep
+the existing no-location behaviour. Mapping `Diani → mombasa` (30 km) or `Malindi → mombasa`
+(120 km) would tell a shopper a seller is nearby who is a two-hour drive away — that is a
+commercial catchment decision, not a normalisation one, and `CITY_ALIAS` is where it gets
+recorded when someone makes it.
+
+The certification asserts the restraint, not the coverage: 26 unreviewed towns must ALL return
+`null`, and a control proves a permissive matcher would leak them.
+
+---
+
 ## [2026-08-31] — Shell: Messages had no dispatch; Staff called functions that did not exist
 
 **Files:** `merchant-v2.html`, `functions/index.js`;
