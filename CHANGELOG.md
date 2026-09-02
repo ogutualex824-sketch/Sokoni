@@ -1,3 +1,57 @@
+## [2026-09-02] — AdminOS: a refused admin action reported as a completed one
+
+**Files:** `sokoni-aos.js`; `scripts/test-adminos-authority-honesty.js` (new, 28/0),
+`scripts/predeploy-browser-suites.js` (suite registered).
+**Database changes:** none. **API changes:** none — no callable added, changed or deployed.
+**Security changes:** no weakening. No rules change. Authorization architecture untouched.
+**Breaking changes:** none.
+**Scope:** `admin-os.html` / `sokoni-aos.js` only. `admin.html` and `super-admin.html` are UNTOUCHED.
+
+### Provenance first
+
+All 16 admin surfaces served by production were confirmed **byte-identical** (sha256) to the
+deployed lineage at `604e481`, so the corrections were made against what production actually
+runs — not one of the 12 admin-named worktrees on this machine.
+
+### 1 · Reject Payout called a seller-facing callable
+
+`rejectPayout` invoked `finosRequestBankPayout({payoutId, action:reject})` — a SELLER
+bank-payout REQUEST function, with the wrong parameter name. It now calls
+`adminProcessPayout({requestId, status:rejected, note})`, which refunds the reserved funds
+and refuses any payout past a pre-disbursement state. **This is the mapping `super-admin.html`
+already carried**, comment included: *"(Was sending { payoutId, action } which the function
+rejects.)"* — Super Admin was fixed and AdminOS was left behind. Nothing was invented.
+
+A cancelled `prompt()` returns `null`; the old path carried that straight into a money
+operation, so pressing Escape rejected the payout. It now aborts.
+
+### 2 · Four controls fabricated success after a denied write
+
+`approvalRequests` and `activeSessions` appear **0 times** in the served ruleset — which has
+705 explicit top-level matches and **zero wildcards** — so Firestore default-denies every
+access. Approve/Reject Request, Revoke Session and Revoke All Sessions each swallowed the
+denial with `.catch(e => _toast(...))` and then fired an **unconditional** success toast.
+
+`revokeAllSessions` was the worst: a denied READ became **"No active sessions to revoke"** —
+an absence the client has no way to know. That is a fabricated operational fact.
+
+All four now use the try/catch/**return** discipline the payout controls already used, via a
+new `_writeFailure()` that renders a denial as *"Not permitted to … Nothing was changed."*
+and never as an absence.
+
+### Not fixed, and deliberately so
+
+**29 other AdminOS call sites share the same swallow-then-succeed shape** — including
+`adminUpdateUserRole`, `voidTrustReceipt`, `tsBanUser` and `adminUpdatePlatformSettings`.
+They were not part of the authorized correction and are NOT covered by the new suite. The
+release gate cannot see them: `check-money-toast-safety` covers financial calls only.
+
+**Functions provenance remains unproven.** `adminOsDispatch` is deployed and reachable (401
+unauthenticated vs 404 for a nonexistent name), but a deployed function cannot be hashed, so
+the running build may predate this lineage. Hosting is byte-proven; functions are not.
+
+---
+
 ## [2026-09-02] — Home: "Sellers Near You" could never appear
 
 **Files:** `script.js`, `index.html`; `scripts/test-nearby-city-normalisation.js` (new, 49/0).

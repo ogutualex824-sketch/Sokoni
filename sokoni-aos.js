@@ -866,8 +866,14 @@ window.SokoniAOS = (() => {
   }
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
+    /* A cancelled prompt is not a rejection. prompt() returns null on Cancel/Escape,
+       and the previous code carried that straight into a money operation. */
+    if (note === null) return;
     try {
-      await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note });
+      /* Contract is { requestId, status } — the same mapping super-admin.html uses.
+         The retired call passed { payoutId, action } to finosRequestBankPayout, a
+         SELLER bank-payout request, which is not an admin rejection path at all. */
+      await _call("adminProcessPayout", { requestId: id, status: "rejected", note: note || "" });
     } catch (e) {
       _toast(e.message, "error");
       return;
@@ -1900,13 +1906,37 @@ window.SokoniAOS = (() => {
         }).join("")}</tbody></table>`;
   }
 
+  /* A refused read or write must never be rendered as an ABSENCE. "permission-denied"
+     means this console could not SEE or CHANGE the record — not that there is nothing
+     there and not that the change already holds. Reporting the former as the latter
+     tells an operator a security action succeeded when it did not. */
+  function _writeFailure(e, what) {
+    const code = String((e && (e.code || e.message)) || "");
+    if (/permission-denied|insufficient permissions|PERMISSION_DENIED/i.test(code)) {
+      return "Not permitted to " + what + " — this console has no access to that record. " +
+             "Nothing was changed.";
+    }
+    return (e && e.message) ? e.message : ("Could not " + what + ".");
+  }
+
   async function revokeAllSessions() {
     if (!(await SK.dialog.confirm("Every signed-in user will be signed out immediately.", null, null, { title: "Revoke ALL active sessions?", variant: "danger", confirmLabel: "Revoke all" }))) return;
-    const snap = await _db.collection("activeSessions").get().catch(() => null);
-    if (!snap || snap.empty) { _toast("No active sessions to revoke", "info"); return; }
+    let snap;
+    try {
+      snap = await _db.collection("activeSessions").get();
+    } catch (e) {
+      _toast(_writeFailure(e, "read active sessions"), "error");
+      return;
+    }
+    if (snap.empty) { _toast("No active sessions to revoke", "info"); return; }
     const batch = _db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit().catch(e => _toast(e.message, "error"));
+    try {
+      await batch.commit();
+    } catch (e) {
+      _toast(_writeFailure(e, "revoke sessions"), "error");
+      return;
+    }
     _toast(`${snap.size} session(s) revoked`, "success");
     _panelCache.security = false;
     _loadSecurity();
@@ -1914,19 +1944,33 @@ window.SokoniAOS = (() => {
 
   async function revokeSession(sessionId) {
     if (!(await SK.dialog.confirm("This device will be signed out immediately.", null, null, { title: "Revoke this session?", variant: "danger", confirmLabel: "Revoke" }))) return;
-    await _db.collection("activeSessions").doc(sessionId).delete().catch(e => _toast(e.message,"error"));
+    try {
+      await _db.collection("activeSessions").doc(sessionId).delete();
+    } catch (e) {
+      _toast(_writeFailure(e, "revoke the session"), "error");
+      return;
+    }
     _toast("Session revoked","success"); _panelCache.security = false; _loadSecurity();
   }
 
   async function approveRequest(id) {
-    await _db.collection("approvalRequests").doc(id).update({ status:"approved", approvedBy: _currentUser.uid, approvedAt: firebase.firestore.FieldValue.serverTimestamp() })
-      .catch(e => _toast(e.message,"error"));
+    try {
+      await _db.collection("approvalRequests").doc(id).update({ status:"approved", approvedBy: _currentUser.uid, approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    } catch (e) {
+      _toast(_writeFailure(e, "approve the request"), "error");
+      return;
+    }
     _toast("Request approved","success"); _panelCache.security = false; _loadSecurity();
   }
   async function rejectRequest(id) {
     const reason = prompt("Rejection reason:");
-    await _db.collection("approvalRequests").doc(id).update({ status:"rejected", rejectedBy: _currentUser.uid, rejectionReason: reason||"", rejectedAt: firebase.firestore.FieldValue.serverTimestamp() })
-      .catch(e => _toast(e.message,"error"));
+    if (reason === null) return;
+    try {
+      await _db.collection("approvalRequests").doc(id).update({ status:"rejected", rejectedBy: _currentUser.uid, rejectionReason: reason||"", rejectedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    } catch (e) {
+      _toast(_writeFailure(e, "reject the request"), "error");
+      return;
+    }
     _toast("Request rejected","success"); _panelCache.security = false; _loadSecurity();
   }
 
