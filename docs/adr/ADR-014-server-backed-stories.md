@@ -99,6 +99,24 @@ stories for instant feedback**, never the source of truth.
 seller's whole set. Home must stay bounded; an unbounded feed is a cost and latency defect
 waiting for the platform to grow.
 
+### 3a · Home is added to, never moved from
+
+The shop entry point is **additional**. The same story must be discoverable from Home *and*
+from the merchant's shop — one record, two doorways. Moving stories from Home to the shop
+would trade one surface for another and lose reach the merchant already has.
+
+That makes the cutover a **dual-read**, not a switch, and
+[[ADR-009-canonical-field-representation]] already governs that shape: read both sources,
+prefer the canonical one, converge the write first. Concretely, during cutover Home reads
+server stories and falls back to the `localStorage` set **only for the viewing merchant's
+own stories**, so a merchant never watches their own post vanish — while a shopper only
+ever sees server records. Once `postStory` has been server-side for longer than the 24h
+lifetime, the local branch is dead by construction and comes out.
+
+**The order is fixed:** server authority → Home reads it → shop reads it → ring → viewer.
+The ring is built *last*, because it is the only part that is purely decorative until
+everything above it is real.
+
 ## 4 · The decision this ADR most needs
 
 **Who may read a live story?**
