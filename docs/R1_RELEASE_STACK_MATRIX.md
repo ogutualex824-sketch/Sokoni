@@ -1,17 +1,19 @@
 # r1 release-stack matrix — the 34-commit production delta
 
 **Status:** 📋 READ-ONLY RECONCILIATION. No cherry-pick, merge, or deploy performed.
-**Date:** 2026-09-03, **updated 2026-09-04** (Part 4b + Part 6 added — Till/QR re-anchored, the
-four-way release classification) · **Branch:** `release/r1-pos-printer-fn` (worktree
-`C:/temp/sok-r1`, confirmed still dirty and untouched by the 2026-09-04 update)
+**Date:** 2026-09-03, updated 2026-09-04 (Part 4b + Part 6 added — Till/QR re-anchored, the
+four-way release classification), **updated again 2026-09-04** (Part 4c added — Till Approval
+Automation + Unified Dashboard Profile, Parts 1-8, re-anchored) · **Branch:**
+`release/r1-pos-printer-fn` (worktree `C:/temp/sok-r1`, confirmed still dirty and untouched by
+every 2026-09-04 update, including this one)
 **Production:** `d592d8f` / v632 (confirmed live via `mysokoni.co.ke/version.json`, re-checked
-2026-09-04)
-**r1 tip:** `8fc3673` — unchanged since 2026-09-03, re-verified 2026-09-04 — 34 commits ahead of
-deployed production
+2026-09-04, this reconciliation pass)
+**r1 tip:** `8fc3673` — unchanged since 2026-09-03, re-verified 2026-09-04 (this pass, both the
+worktree HEAD and the branch ref) — 34 commits ahead of deployed production
 **Certification runs cited from Parts 1-4 were executed directly against r1's checked-out code**
-(`C:/temp/sok-r1`) on 2026-09-03, not assumed from commit messages. **Parts 4b/6 (2026-09-04) are
-read-only git/log synthesis** — ancestry checks, export counts, and a live production probe,
-re-verified fresh; `C:/temp/sok-r1` was not entered or modified to produce them.
+(`C:/temp/sok-r1`) on 2026-09-03, not assumed from commit messages. **Parts 4b/4c/6 (2026-09-04)
+are read-only git/log synthesis** — ancestry checks, export counts, and a live production probe,
+re-verified fresh each time; `C:/temp/sok-r1` was not entered or modified to produce any of them.
 
 ---
 
@@ -142,37 +144,115 @@ mass release.** It belongs in the same "must be explicitly reconciled into r1" b
 messaging — a real merge decision, not an automatic one, given both branches have since diverged
 further on shared files.
 
+## Part 4c — Till Approval Automation + Unified Dashboard Profile (Parts 1-8), re-anchored to r1 (2026-09-04)
+
+**Re-verified today, fresh, not carried over:** `git merge-base --is-ancestor <c> release/r1-pos-printer-fn`
+returns false for all 8 commits (`c3b8de9, 1ebc58e, 230643a, 622d55a, acfd437, 7b49e34, ef62142,
+2f1eed3`); all 8 confirmed reachable from this branch's own `HEAD` (`2f1eed3`). r1's tip is
+unchanged at `8fc3673` (worktree HEAD and branch ref both re-checked, identical). Production is
+unchanged, confirmed live right now: `commit: d592d8f...`, `cacheVersion: sokoni-...-v632`,
+`branch: release/r1-pos-printer-fn`, `dirtyWorkingTree: true` (the live build's own dirty-path
+list is unrelated to any of this work — five `scripts/*.js` probes, not present in this branch's
+8 commits).
+
+One coherent, linearly-chained feature — every commit's parent is the previous commit in the
+list above, confirmed by direct `git log` parent inspection, not assumed from commit order:
+
+| Part | What | Commit | Files (new or touched) |
+|---|---|---|---|
+| 1 | Till Approval Automation — auto-issue SOKONI Till on merchant approval | `c3b8de9` | `functions/application-lifecycle.js` (+55/-0, additive Till-issuance block + `QR_SIGNING_SECRET` binding) |
+| 2 | Till & QR surface in Merchant V2 shell | `1ebc58e` | `merchant-v2.html` (**first commit of this file on this branch** — see divergence note below), `sokoni-merchant-till.js` (new), `sokoni-merchant-routes.js` (+13/-0, isolated from pre-existing unrelated dirty content in that file) |
+| 3 | `merchantIdentity` — merchant-v2.html's missing core dependency | `230643a` | `functions/shop-employees.js` (+, new callable + `ROLE_CAPABILITIES`), `functions/index.js` (+2 exports), `scripts/test-merchant-identity.js` (new) |
+| 4 | `getMyShopWorkspaces` — server-derived Switch Shop list | `622d55a` | `functions/shop-employees.js` (extended), `functions/index.js` (+1 export) |
+| 5 | Shop switcher + profile dropdown in Merchant V2 header | `acfd437` | `sokoni-dashboard-profile.js`, `sokoni-dashboard-profile-core.js` (both new, shared component), `merchant-v2.html` (header wiring + sign-out fix) |
+| 8 | KASS Shop Till backfill — dry-run verified against real production | `7b49e34` | `scripts/backfill-kass-shop-till-dryrun.js` (new, zero-write dry-run only) |
+| 6 | Login Choose Shop — auto-enter or pick a workspace after sign-in | `ef62142` | `auth.js` (+65/-0, isolated from a pre-existing unrelated `_merchantEntry()` addition already dirty in that file), `choose-shop.html` (new) |
+| 7 | Provider Dashboard — reuse of the shared identity widget | `2f1eed3` | `provider-dashboard.html` (+42/-1, sign-out fix + widget mount, zero collision with other dirty content — none present) |
+
+**Certification, all re-confirmed clean this pass, re-run together:** Q5-derived Till pure core
+(`scripts/test-sokoni-qr-payment.js`, extended in Part 1) **81/81** · Parts 3-4 pure core
+(`functions/shop-employees.js` via `scripts/test-merchant-identity.js`) **23/23** · Parts 5-7
+shared client-side pure core (`scripts/test-dashboard-profile-core.js`) **18/18** — each with its
+own negative + sabotage control. Plus served-page browser checks for every client-facing surface
+this workstream touches (`merchant-v2.html`'s header, `choose-shop.html`, `provider-dashboard.html`),
+each independently confirmed against the real DOM/network log, not assumed from source review.
+Part 8's `--execute` (the actual write) was never run — confirmed by the dry-run script's own
+`action: dry-run-would-create` output and by re-reading `docs/KASS_SHOP_TILL_BACKFILL.md`, which
+records the `--execute` path as explicitly deferred.
+
+**What it touches that r1 also has, and how that was checked — two files, two different risk
+profiles:**
+
+- **`functions/index.js`** — this workstream adds exactly 4 exports, in two isolated,
+  comment-marked hunks (`merchantIdentity`/`getMyShopWorkspaces` near line 10679;
+  `getMySokoniTill`/`getSokoniTillActivity` — carried from the earlier Q5-Q8 programme's own
+  extension of `sokoni-till.js`, re-confirmed present here — near line 12285), both purely
+  additive, no line removed. `C:/temp/sok-r1`'s own uncommitted `functions/index.js` change sits
+  at a third, non-overlapping location (line ~11504, a `posRetail` require). No line-range
+  collision exists today, but the file has independently diverged on both branches beyond just
+  these hunks (per Part 4b's finding for `webhookIntasend`/`initiateSTKPush`), so reconciling it
+  is still a real merge, not a mechanical concatenation — re-diff at merge time, don't assume
+  today's non-collision holds after further commits on either side.
+- **`merchant-v2.html`** — a genuine **two-way content divergence**, confirmed by direct
+  comparison, not assumed from the Part 2 commit message's own flag: r1's committed copy (`8fc3673`,
+  4292 lines) contains the Supplier Hub feature (`SupplierHub`/`supplier-hub`, 2 references) that
+  this branch's copy does not; this branch's copy (4388 lines, first committed here in Part 2) 
+  contains this workstream's Till/QR module and header identity wiring (`SokoniMerchantTill`,
+  `dash-identity`, 3 references) that r1's copy does not. Line-level diff: 123 lines only in this
+  branch's version, 27 lines only in r1's version. r1's own worktree shows `merchant-v2.html` as
+  **not dirty** — the divergence is entirely between two already-committed versions on two
+  branches, not against any in-progress edit. **This is not a fast-forward or a clean auto-merge
+  candidate** — it needs a deliberate three-way merge (common ancestor, then both features
+  reconciled into one file) before either branch's copy can be called canonical.
+
+**Explicit instruction on record, same as Till/QR: this workstream is not to be deployed
+independently of the eventual mass release.** It belongs in the same "must be explicitly
+reconciled into r1" bucket as premium messaging and Till/QR — a real merge decision for two files
+(`functions/index.js`, `merchant-v2.html`), not an automatic one.
+
 ---
 
 ## Part 5 — what this reconciliation does NOT do
 
 - Does not merge, cherry-pick, or deploy anything.
 - Does not decide how `release/multishop-checkout-certified`'s independent work (premium
-  messaging, **Till/QR (Q1-Q8)**, 18b's `posSendPurchaseOrder` retirement, the 18c disposition
-  record, the KASS AI audit itself as a *document*) gets reconciled into r1. That's a real
-  decision — this branch's 18b retirement and r1's own (not-yet-executed) "18b" target the
-  identical thing with the identical verdict, which argues for reusing this branch's
-  already-certified commit rather than re-doing the work on r1, but that's a recommendation, not
-  an action taken here.
+  messaging, **Till/QR (Q1-Q8)**, **Till Approval Automation + Unified Dashboard Profile
+  (Parts 1-8)**, 18b's `posSendPurchaseOrder` retirement, the 18c disposition record, the KASS AI
+  audit itself as a *document*) gets reconciled into r1. That's a real decision — this branch's
+  18b retirement and r1's own (not-yet-executed) "18b" target the identical thing with the
+  identical verdict, which argues for reusing this branch's already-certified commit rather than
+  re-doing the work on r1, but that's a recommendation, not an action taken here.
 - Does not resolve the ADR-018 filename collision. Both versions remain, at their own paths, on
   their own branches.
-- Does not change either branch's function export count. This branch: **1515**, counted directly
-  (`grep -c "^exports\." functions/index.js`) 2026-09-04, not carried over — was 1511 before this
-  session's Till/QR work added 4 (`mintSokoniTill`, `setSokoniTillStatus`, `mintDynamicSokoniQR`,
-  `resolveSokoniQR`). r1: 1519 (measured 2026-09-03, `d592d8f`: 1514, `8fc3673`: 1519 — not
-  re-measured today; r1's tip is unchanged, so this figure still holds).
+- Does not resolve the `merchant-v2.html` two-way content divergence found in Part 4c (Supplier
+  Hub on r1 vs. Till/QR + header identity on this branch). Both versions remain, uncombined, on
+  their own branches.
+- Does not change either branch's function export count. This branch: **1519**, counted directly
+  (`grep -c "^exports\." functions/index.js`) 2026-09-04 (this reconciliation pass) — was 1515
+  before Parts 1-8 of the Till Approval Automation + Unified Dashboard Profile workstream added 4
+  (`merchantIdentity`, `getMyShopWorkspaces`, plus the previously-uncounted `getMySokoniTill`/
+  `getSokoniTillActivity` from the earlier Till/QR programme's own `sokoni-till.js` extension), and
+  1511 before that session's original Till/QR work added its first 4
+  (`mintSokoniTill`/`setSokoniTillStatus`/`mintDynamicSokoniQR`/`resolveSokoniQR`). r1: **1519**
+  (worktree re-read directly this pass, `d592d8f`: 1514, `8fc3673`: 1519 — r1's tip is unchanged,
+  so the figure still holds). **The two branches' export counts now coincide numerically
+  (1519 = 1519) — this is a coincidence of count, not of content**: the two branches' added
+  exports are entirely disjoint (this branch's are Till/QR + identity/workspace callables; r1's
+  are the 34-commit authority/rails/Supplier-Hub programme) — a real merge will produce a total
+  higher than either branch's current count, not 1519.
 - Does not touch `C:/temp/sok-r1`, which remains dirty (`CHANGELOG.md`, `docs/adr/ADR-018-legacy-
   retirement-graph.md`, `docs/cf-invocation-census.json`, `functions/index.js`,
-  `functions/pos-retail.js` modified; several untracked scripts under `scripts/`) — confirmed via
-  `git status`, not assumed carried-over from the 2026-09-03 state. That dirty state is itself
-  part of Part 6's blocker list below, not resolved by this document.
+  `functions/pos-retail.js` modified; several untracked scripts under `scripts/`) — re-confirmed
+  via `git status` this pass, identical file list to the 2026-09-03/earlier-2026-09-04 checks, no
+  drift. That dirty state is itself part of Part 6's blocker list below, not resolved by this
+  document.
 
 ---
 
-## Part 6 — the four-way release classification (2026-09-04)
+## Part 6 — the four-way release classification (2026-09-04, updated for Part 4c)
 
 Every item this document and its companions have inventoried, sorted into exactly one of four
-buckets. Synthesis over the evidence already gathered in Parts 1-4b — no new certification runs
+buckets. Synthesis over the evidence already gathered in Parts 1-4c — no new certification runs
 performed here, and `C:/temp/sok-r1` was not entered or modified to produce this (git-log/
 merge-base checks only, all read-only). Where a fact needed re-checking (export counts,
 production version, r1 tip, ancestry), it was re-verified today rather than carried forward — see
@@ -203,6 +283,7 @@ individually only because their certification evidence is per-feature; the block
 |---|---|---|---|
 | Premium messaging | `86b4e43`→`96c3244`→`8fc3673` (anchored on r1's *parent* chain, tag `pending-premium-messaging-r1`, but not on r1's actual branch ref) | 39/39 + real headless-browser load, 0 console errors | fast-forward-shaped once `C:/temp/sok-r1`'s own dirty work is committed |
 | **SOKONI Till/QR (Q1-Q8)** | `release/multishop-checkout-certified` only, 8 commits (`db89663` … `584cfcc`) | **170/170** across 4 pure-core suites + 1 served-page browser check | **real merge, not a fast-forward** — both branches have independently touched `functions/index.js`'s `webhookIntasend`/`initiateSTKPush`; reconciliation must diff both sides' hunks by hand, not auto-merge |
+| **Till Approval Automation + Unified Dashboard Profile (Parts 1-8)** | `release/multishop-checkout-certified` only, 8 commits (`c3b8de9`→`1ebc58e`→`230643a`→`622d55a`→`acfd437`→`7b49e34`→`ef62142`→`2f1eed3`, one linear chain) | **81/81 + 23/23 + 18/18** (122/122) across 3 pure-core suites, each with its own negative + sabotage control, plus served-page browser checks on all 3 client-facing surfaces (`merchant-v2.html` header, `choose-shop.html`, `provider-dashboard.html`) | **real merge, not a fast-forward, on TWO files**: `functions/index.js` (4 new exports, currently non-overlapping with r1's own dirty hunk but the file has independently diverged elsewhere — see Part 4c) **and** `merchant-v2.html` (genuine two-way content split — r1 has Supplier Hub, this branch has Till/QR + header identity, neither is a superset of the other) — the second is the harder of the two, needing an actual three-way content merge, not a hunk-level diff |
 | 18b — bare `purchaseOrders`/Model D retirement | `release/multishop-checkout-certified` (`2539aad`, 20/20) | 20/20 | r1 has reached the identical verdict but not executed it — recommend reusing this branch's commit rather than redoing the work (see Part 5) |
 
 ### C — UNRESOLVED (a decision is needed before the item can be sorted into A, B, or D)
@@ -227,4 +308,8 @@ individually only because their certification evidence is per-feature; the block
 ## Related
 
 `docs/RELEASE_LINEAGE_RECONCILIATION.md` (the branch-topology finding this matrix builds on) ·
-`docs/RELEASE_STACK_LEDGER.md` · `docs/adr/ADR-018c-purchase-order-batch-disposition.md`
+`docs/RELEASE_STACK_LEDGER.md` · `docs/adr/ADR-018c-purchase-order-batch-disposition.md` ·
+`docs/TILL_APPROVAL_AUTOMATION.md`, `docs/TILL_MERCHANT_V2_SURFACE.md`,
+`docs/MERCHANT_IDENTITY_CALLABLE.md`, `docs/SWITCH_SHOP_WORKSPACES.md`,
+`docs/MERCHANT_V2_HEADER_IDENTITY.md`, `docs/KASS_SHOP_TILL_BACKFILL.md`,
+`docs/LOGIN_CHOOSE_SHOP.md`, `docs/PROVIDER_DASHBOARD_IDENTITY.md` (Part 4c's per-slice detail)
