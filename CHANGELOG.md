@@ -1,3 +1,37 @@
+## 2026-09-03 — SOKONI Till / QR payment: existing-authority trace (read-only, DESIGN/TRACE ONLY)
+
+**Traces** `sokonipay-collect-settlement`, `money-authority.js`, the IntaSend STK/webhook
+contract, `paymentIntents`, commission authority, POS checkout paths, and the IntaSend webhook
+handlers together — see `docs/SOKONI_TILL_QR_PAYMENT_TRACE.md`. Answers whether a merchant-QR
+payment system, collecting through IntaSend rather than the merchant's own M-PESA Till, can reuse
+existing infrastructure before any of it is designed as new.
+
+**Headline: two existing, unconnected payment authorities, not a blank slate.** (1)
+`paymentIntents` → `initiateSTKPush` → `payments/{ref}` → the IntaSend webhook →
+commission/receipt/notification fan-out — mature, live, proven exactly-once. (2)
+`pos-sale-commission.js`'s rail/custody-aware commission engine on `money-authority.js` — the
+correct shape for an in-person sale, but its own header says it plainly: *"NOT INTEGRATED, NOT
+DEPLOYED. Nothing calls this."*
+
+**Also found:** `pos-qr.js` already implements almost the exact QR shape proposed (opaque,
+HMAC-signed token; no amount/merchant in the QR) but writes to its own `posPayments` collection,
+invisible to the entire payment-success fan-out. Its completion path
+(`completePOSQRPayment`) is an authenticated `onCall` trusting a caller-supplied payment
+reference with no webhook verification — exactly the "confirmed without a verified server event"
+hazard — currently inert only because it has zero callers (grep-confirmed).
+
+**Every hazard requested is checked with evidence**, including that `pos-sale-commission.js`'s
+own `RAIL` map already keeps the ordinary M-PESA Till (`TILL_DIRECT`, non-custodial) structurally
+separate from any IntaSend-collected rail — confirming a SOKONI Till is not a rename of an
+M-PESA Till, it's a new rail entry alongside it.
+
+**Final table:** Till identity is the one genuinely net-new component; every other piece (QR
+token, payment intent, IntaSend collection, webhook, amount verification, commission engine, PAID
+state, settlement timing) already exists and needs joining, not rebuilding.
+
+**Status: DESIGN/TRACE ONLY.** No collection, webhook, commission path, or POS transition
+created. **Not deployed.**
+
 ## 2026-09-03 — marketing-engine.js cross-sell/upsell trace (read-only, no decision executed)
 
 **Traces** `getCrossSellRecommendations`/`getUpsellRecommendations` — see
