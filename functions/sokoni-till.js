@@ -361,6 +361,103 @@ exports.resolveSokoniQR = onCall(OPT128, async (request) => {
   };
 });
 
+/* ═══════════════════════════════════════════════════════════
+   getMySokoniTill — the merchant-facing lookup (Till Approval Automation,
+   Part 2). Resolves the Till from the AUTHENTICATED caller's own
+   (shopId, branchId) — never a client-supplied Till id — so a merchant can
+   never read, and no page can ever be tricked into displaying, a Till that
+   belongs to a different shop. Prefers the ACTIVE Till for the branch; if
+   none is active (disabled/retired, or issued before this feature shipped
+   and never backfilled) falls back to the most recently issued one, so the
+   page has something to show rather than a bare "not found."
+════════════════════════════════════════════════════════════ */
+exports.getMySokoniTill = onCall(OPT128, async (request) => {
+  const auth = request.auth;
+  if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const data = request.data || {};
+  const shopId = String(data.shopId || auth.uid).trim();
+  if (!_isAdmin(auth) && shopId !== auth.uid) {
+    throw new HttpsError('permission-denied', "You may only view your own shop's Till.");
+  }
+  const branchId = _san(data.branchId || `${shopId}-main`, 80);
+
+  const snap = await db().collection('sokoniTills')
+    .where('shopId', '==', shopId)
+    .where('branchId', '==', branchId)
+    .get();
+
+  if (snap.empty) return { exists: false, shopId, branchId };
+
+  const tills = snap.docs.map((d) => d.data());
+  const till = tills.find((t) => t.status === 'ACTIVE')
+    || tills.sort((a, b) => (Number(b.sequenceNumber) || 0) - (Number(a.sequenceNumber) || 0))[0];
+
+  const secret = QR_SIGNING_SECRET.value();
+  const token = QA.mintToken('till', till.sokoniTillId, secret);
+
+  return {
+    exists: true,
+    sokoniTillId: till.sokoniTillId,
+    shopId: till.shopId,
+    branchId: till.branchId,
+    status: till.status,
+    currency: till.currency || 'KES',
+    token,
+    qrUrl: QR_BASE + token,
+    createdAt: till.createdAt?.toMillis ? till.createdAt.toMillis() : null,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   getSokoniTillActivity — recent PAID sales for one Till (Part 2's
+   "Payment activity" panel). Authorized to the Till's own merchant or an
+   admin only — never by anyone who merely knows the sokoniTillId string.
+
+   Deliberately does NOT orderBy() — a query filtering on the nested
+   `metadata.sokoniTillId` field AND `status` plus an orderBy on a third
+   field (paidAt) would need a composite index that does not exist and is
+   not being deployed in this slice. Two equality filters alone are served
+   by Firestore's automatic single-field indexes; sorting the (small,
+   capped) result set in memory avoids introducing an index dependency.
+════════════════════════════════════════════════════════════ */
+exports.getSokoniTillActivity = onCall(OPT128, async (request) => {
+  const auth = request.auth;
+  if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const sokoniTillId = String((request.data || {}).sokoniTillId || '').trim();
+  if (!sokoniTillId) throw new HttpsError('invalid-argument', 'sokoniTillId is required.');
+
+  const tSnap = await db().collection('sokoniTills').doc(sokoniTillId).get();
+  if (!tSnap.exists) throw new HttpsError('not-found', 'Till not found.');
+  const till = tSnap.data();
+  if (!_isAdmin(auth) && String(auth.uid) !== String(till.merchantUid)) {
+    throw new HttpsError('permission-denied', 'Not authorized for this Till.');
+  }
+
+  const snap = await db().collection('paymentIntents')
+    .where('metadata.sokoniTillId', '==', sokoniTillId)
+    .where('status', '==', 'paid')
+    .limit(50)
+    .get();
+
+  const items = snap.docs
+    .map((d) => {
+      const x = d.data();
+      return {
+        ref: d.id,
+        amount: x.amount,
+        currency: x.currency || 'KES',
+        paidAt: x.paidAt?.toMillis ? x.paidAt.toMillis() : null,
+        sourceMode: x.metadata?.sourceMode || null,
+      };
+    })
+    .sort((a, b) => (b.paidAt || 0) - (a.paidAt || 0))
+    .slice(0, 25);
+
+  return { sokoniTillId, items };
+});
+
 /* Server-side entry point for other Cloud Functions (Till Approval
    Automation, functions/application-lifecycle.js) — never for client
    requests. Follows this codebase's own `_internal` convention (see

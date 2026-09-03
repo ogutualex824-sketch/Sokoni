@@ -12279,6 +12279,8 @@ exports.mintSokoniTill          = sokoniTill.mintSokoniTill;
 exports.setSokoniTillStatus     = sokoniTill.setSokoniTillStatus;
 exports.mintDynamicSokoniQR     = sokoniTill.mintDynamicSokoniQR;
 exports.resolveSokoniQR         = sokoniTill.resolveSokoniQR;
+exports.getMySokoniTill         = sokoniTill.getMySokoniTill;
+exports.getSokoniTillActivity   = sokoniTill.getSokoniTillActivity;
 
 /* ── Redis Infrastructure Layer v1.0 ───────────────────────────── */
 /* DISPATCH CONSOLIDATION: 28 onCall CFs → 1 redisDispatch + 2 scheduled.

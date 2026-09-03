@@ -128,6 +128,17 @@
            'engine. Methods tab: accepted collection methods for this shop. Never computes balances ' +
            'client-side — unknown renders as — , never 0.' },
 
+    { id:'till', name:'Till & QR', icon:'🏧', tier:'primary',
+      kind:'native',
+      role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID, CTX.BRANCH_ID],
+      mobile:true, desktop:true, activeKey:'till',
+      note:'Native surface (sokoni-merchant-till.js) on the Till/QR programme\'s own callables ' +
+           '(getMySokoniTill / getSokoniTillActivity / mintDynamicSokoniQR / setSokoniTillStatus, ' +
+           'functions/sokoni-till.js) — resolves the Till from the AUTHENTICATED shop/branch ' +
+           'only, never a client-supplied Till id. Till issuance itself is server-side, automatic ' +
+           'on merchant approval (docs/TILL_APPROVAL_AUTOMATION.md) — this surface reads and ' +
+           'displays it, and mints dynamic (POS-sale) QRs; it does not itself create a Till.' },
+
     { id:'deliveries', name:'Delivery Hub', icon:'🛵', tier:'primary',
       kind:'page', src:'seller-delivery.html',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -345,7 +356,7 @@
      tier:'primary' route must appear here — validate() enforces both directions. */
   var PRIMARY_ORDER = [
     'dashboard', 'plan', 'sell', 'products', 'inventory', 'pos', 'orders', 'analytics', 'revenue',
-    'payments', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
+    'payments', 'till', 'deliveries', 'returns', 'receipts', 'staff', 'messages', 'disputes', 'settings'
   ];
 
   /* Legacy route ids -> canonical ids. Phase 2 renamed several destinations; a merchant
