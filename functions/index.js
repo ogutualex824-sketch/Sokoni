@@ -12144,6 +12144,16 @@ exports.cancelPOSPaymentQR      = posQr.cancelPOSPaymentQR;
 exports.refundPOSPayment        = posQr.refundPOSPayment;
 exports.getPOSPaymentHistory    = posQr.getPOSPaymentHistory;
 
+/* ── SOKONI Till / QR payment layer (Q5 of the Till/QR gate) ──────
+   Permanent + dynamic QR, resolved server-side, minting financial intents
+   ONLY through the existing createPaymentIntent -> pos_till_sale registry
+   entry. See docs/SOKONI_TILL_QR_IMPLEMENTATION.md. */
+const sokoniTill = require('./sokoni-till');
+exports.mintSokoniTill          = sokoniTill.mintSokoniTill;
+exports.setSokoniTillStatus     = sokoniTill.setSokoniTillStatus;
+exports.mintDynamicSokoniQR     = sokoniTill.mintDynamicSokoniQR;
+exports.resolveSokoniQR         = sokoniTill.resolveSokoniQR;
+
 /* ── Redis Infrastructure Layer v1.0 ───────────────────────────── */
 /* DISPATCH CONSOLIDATION: 28 onCall CFs → 1 redisDispatch + 2 scheduled.
    Clients route all redis ops via sokoni-redis.js: redisDispatch({op:'redisXxx',...data}). */

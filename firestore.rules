@@ -553,6 +553,27 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /* SOKONI Till identity (Q2/Q4/Q5) — immutable once issued; status is the
+       ONLY mutable field, transitioned only by setSokoniTillStatus. Issuance
+       and status transitions run transactionally server-side (mintSokoniTill/
+       setSokoniTillStatus, functions/sokoni-till.js) — a client that could
+       write one could mint an unlimited number of Tills or reactivate a
+       retired one, which is exactly the identity-authority gap this
+       collection exists to close. Buyers never read this directly; QR
+       resolution goes through resolveSokoniQR, which uses the Admin SDK. */
+    match /sokoniTills/{sokoniTillId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    /* Per-shop Till-issuance sequence counter — not information a client
+       needs (mirrors the /_counters/{counterId} rationale immediately
+       below: exposing it reveals how many Tills a shop has issued). */
+    match /shopTillCounters/{shopId} {
+      allow read, write: if false;
+    }
+
     /* Reconciliation queue — payments whose paperwork failed. Operational. */
     match /financialEngineFailures/{ref} {
       allow read:   if isAdmin();

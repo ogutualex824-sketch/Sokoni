@@ -236,6 +236,35 @@ const PURPOSES = {
     },
   },
 
+  /* ── SOKONI Till sale (Q5 of the Till/QR gate) ────────────────────────
+     The one registry entry the Till/QR programme adds — no change to
+     createPaymentIntent, the webhook, or the reconciler, per this file's own
+     "one entry here" contract (docs/SOKONI_TILL_QR_CONTRACT.md,
+     docs/SOKONI_TILL_PAYMENT_INTENT_ATTACHMENT.md). The actual pricing
+     decision — cashier-cart vs. buyer-entered amount, the authorization
+     check, and reading shopId/branchId/merchantUid EXCLUSIVELY off the Till
+     document rather than the request — lives in the pure, independently
+     certified core (./sokoni-qr-authority.js's priceTillSale), so this entry
+     is only the Firestore lookup + error translation every other pricer
+     already does inline. */
+  pos_till_sale: {
+    resourceType: 'posTillSale',
+    async price(uid, data) {
+      const sokoniTillId = String((data || {}).sokoniTillId || '').trim();
+      if (!sokoniTillId) fail('invalid-argument', 'sokoniTillId is required.');
+
+      const tSnap = await db().collection('sokoniTills').doc(sokoniTillId).get();
+      const till = tSnap.exists ? tSnap.data() : null;
+
+      const authority = require('./sokoni-qr-authority');
+      try {
+        return authority.priceTillSale({ till, callerUid: uid, data });
+      } catch (e) {
+        fail(e.code || 'failed-precondition', e.message || 'This Till sale could not be priced.');
+      }
+    },
+  },
+
   /* ── Hub registration ─────────────────────────────────────────────────
      Replaces the localStorage grant. The tier price is read from the hub
      catalogue so a merchant cannot register for an Enterprise hub at the
