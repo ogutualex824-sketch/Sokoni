@@ -25,7 +25,7 @@ SOURCE/EVIDENCE BRANCH   release/multishop-checkout-certified   (this session's 
                                                              branch — not stacked toward deployment
                                                              until explicitly reconciled into r1)
 PRODUCTION               d592d8f / v632   (UNCHANGED)
-HEAD (this branch)       2e5bee0   (was 9f2dcb9 when this ledger's header was last updated —
+HEAD (this branch)       32436f8   (was 9f2dcb9 when this ledger's header was last updated —
                                      several commits of further stacked, certified work since, see
                                      the seller-handover / tracking rows below; not re-enumerated
                                      row-by-row)
