@@ -1,3 +1,27 @@
+## 2026-09-03 — QR contract design (Q4) + standalone payment-authority defects log
+
+**Two documents.** `docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md` — a living log for payment-authority
+findings that reach beyond the Till, kept separate per instruction. D1 (`payments/{ref}.meta` is
+client-supplied — Q3's finding, recorded in full here) and D2 (`initiateSTKPush`'s amount
+enforcement covers only `subscription`) are re-recorded, not new. **D3 is new this pass:**
+`pos-qr.js`'s QR-to-paid chain has no working completion path — traced client-side this time.
+`pos.html`'s `complete()` calls a client method (`SPos.payment.completeQR`) that does not exist
+anywhere in the codebase; `pay.html` polls for a `'paid'` status nothing ever sets; the `mpesa`
+branch never calls the real, proven `initiateSTKPush`; the `card` branch reaches a real, hosted
+IntaSend checkout whose confirmation would carry an `api_ref` `webhookIntasend` cannot resolve — a
+real-money path with no reconciliation to the confirmed-live webhook.
+
+`docs/SOKONI_TILL_QR_CONTRACT.md` — Q4 of the Till/QR gate. Confirms what to reuse from
+`pos-qr.js`: the signed-opaque-token mechanism and `sokoni-qr.js`'s first-party QR renderer — both
+real and working. Confirms what not to: `posPayments`, `completePOSQRPayment`, `pay.html`'s
+current backend calls — all part of D3's broken chain. Designs both QR products (permanent Till
+QR resolves to `sokoniTills/{id}` directly; dynamic POS QR points at an already-minted
+`paymentIntents/{ref}`) sharing one resolution shape: verify signature → resolve target →
+re-check status at resolution time → derive merchant/amount from the resolved record, never the
+URL. All 10 posed questions answered against existing mechanisms.
+
+**Status: DESIGN ONLY.** No code changed anywhere. Not deployed.
+
 ## 2026-09-03 — Till -> paymentIntent attachment design (Q3, read-only, DESIGN ONLY)
 
 **Designs** how a SOKONI Till reference attaches to the existing `paymentIntents` model without a
