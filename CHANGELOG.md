@@ -1,3 +1,53 @@
+## 2026-09-03 — seller.js -> posProducts mirror writer: retirement graph (read-only)
+
+**Traces** the `seller.js` `posProducts` mirror write to its retirement decision — see
+`docs/POSPRODUCTS_SELLERJS_RETIREMENT_GRAPH.md`. Executes the disposition from the served-rules
+gate below (Option C).
+
+**The write:** one site (`seller.js:1065`, inside `addProduct()`), one trigger (`seller.html`'s
+Publish Product button — the only page that loads `seller.js`), never updated or deleted
+afterward — every mirror document is permanently stale from creation. Same-named `addProduct()` in
+`digital-esoko-seller.html`/`ministore.html`, and `seller-wiring.js`'s global patch, each read in
+full: none touch `posProducts`.
+
+**Consumer census, re-run fresh:** merchantId-scoped Admin SDK consumers already structurally
+excluded; `self-heal.js`'s dual-schema check degrades gracefully, no code change needed; client
+consumers already rules-blocked regardless of this writer (per the gate below). **New finding:**
+`marketing-engine.js`'s `getCrossSellRecommendations`/`getUpsellRecommendations` run their own
+`status=='active'` queries (the same mismatch class, missed by the original graph's
+characterization) — but have **zero callers anywhere in the repo**, confirmed by grep. Logged as
+that function's own separate, unfixed bug, not conflated with this decision.
+
+**Canonical replacement:** `products`, written by the same `addProduct()` three lines earlier,
+already the checkout's real read path. **`tenants/{uid}/inventory_products` sync:** proven
+structurally independent (separate statement, separate catch) — cannot be affected by removing the
+mirror write.
+
+**Conclusion:** no legitimate consumer depends on future mirror writes; retirement is safe as its
+own slice. **Not executed here** — this is the read-only proof, not the removal.
+
+## 2026-09-03 — posProducts served-rules verification (18/18) + writer disposition: Option C
+
+**Fetches** the SERVED Firestore ruleset (not the repo file) for `posProducts` — see
+`docs/POSPRODUCTS_SERVED_RULES_GATE.md`. Upgrades the prior repo-rules finding to authoritative.
+
+**Finding:** ownership is keyed on `sellerId == request.auth.uid` only (served block + helpers
+identical to the repo). The canonical writer (`posUpsertProduct`) never sets `sellerId`. No client
+reader of `posProducts` filters on `sellerId` — so under "rules are not filters," **every client
+query on the collection is rejected wholesale** for non-admins, not just canonical documents.
+`pos-inventory.js` (both listeners), `pos-sync.js`, `sokoni-reconcile.js` all fail silently.
+
+**`seller.js` writer disposition: Option C, retire.** The write is permitted (passes
+`claimsPosOwner`) — not dead on the write side — but has zero working consumers, and its only
+intended purpose (POS visibility of marketplace listings) was already replaced: the checkout
+(`pos-zero-friction.js`) and `pos.js` read canonical `products` directly. Corrects a stale claim in
+the original migration graph (dated note added): the checkout no longer reads `posProducts`.
+
+18/18 checks: probe validity, positive control (`packageRequests` block present), absent control
+(`deliveryPins` absent, deny-by-default as live tests already proved).
+
+**Not done here:** the retirement itself (see the slice above), any rules change, any code change.
+
 ## 2026-09-03 — posProducts field-mismatch remediation (migration graph step 1), 21/0
 
 **Fixes** eight `posProducts` consumers that queried or read field names no writer ever populates —
