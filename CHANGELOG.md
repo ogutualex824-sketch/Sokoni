@@ -1,3 +1,63 @@
+## 2026-09-03 — POS Till QR paid-state integration (Q7)
+
+**Files:** `functions/payment-attribution.js` (+`decidePaidTransition`, pure), `functions/index.js`
+(`webhookIntasend` only — 1 hunk, within its own line range), `docs/POS_QR_PAID_STATE_INTEGRATION.md`
+(new — trace + a governance finding + design + certification record),
+`scripts/test-pos-till-paid-transition.js` (new certification suite).
+
+**What it does.** A verified `pos_till_sale` payment (Q5 QR authority, Q6 attribution) now
+transitions `paymentIntents/{ref}.status` to `'paid'` exactly once — the intent's own first-ever
+terminal-state write (a repo-wide grep confirmed nothing previously set a paid/completed status on
+any intent, for any purpose). A cashier terminal that minted the dynamic QR already knows the
+`ref`; listening on that one document is the PAID signal, with no second "payment completed"
+mechanism invented. An amount mismatch (webhook-confirmed vs. the intent's own server-derived
+figure) leaves the sale unpaid and flagged for review rather than trusted; an already-terminal
+intent (paid/expired/cancelled) is never re-transitioned.
+
+**A finding that reshaped this slice's scope, surfaced directly, not just filed:**
+`posCompleteCheckout` was traced in full and confirmed to be the wrong integration target — a
+synchronous, cashier-present checkout authority keyed to a real employment record, an open shift,
+and `posPayments/{ref}` (Safaricom Daraja's own separate webhook rail), incompatible with an
+asynchronous, webhook-confirmed, catalogue-free Till sale. More significantly:
+**`posRetailSales`/`posSales` are under active, ratified governance** — already three-way
+diverged in production (`docs/POS_SALES_LIFECYCLE_AUDIT.md`), with a replacement authority
+(`retailSettlements/{txnId}`) already ratified by the platform owner but **explicitly locked**
+behind a stated trigger phrase and unmet dependencies this conversation did not receive
+(`docs/POS_SETTLEMENT_CONVERGENCE_DESIGN.md`). Writing a Till sale into `posRetailSales` now would
+have been a fourth divergent writer into exactly the collection that design exists to retire —
+**not done.** This is why Q7's actual deliverable is the `paymentIntents` transition rather than a
+new POS "sale" record.
+
+**Database changes:** `paymentIntents/{ref}` gains a `status:'paid'`/`paidAt`/`paymentRef` write
+path (Till sales only) — no new collection, no rules change (the collection was already
+Cloud-Functions-only, read-own to its owner).
+
+**API changes:** none. **Security changes:** none beyond what Q5/Q6 already established (this
+slice reads the same already-certified `attribution.sokoniTillId` floor as its sole gate).
+
+**Deliberately out of scope, confirmed by trace not assumed:** `_finalizeMarketplacePayment`'s
+seller-guard and the dead booking-creation branch (neither reachable for Till sales — no
+`orderId`, no booking `type`), D4's commission-category mapping (Q6, untouched),
+`intasendWebhook`, `posCompleteCheckout` itself, inventory deduction (Till items carry no
+`productId` — no catalogue stock to move), and any buyer-facing `/pay/q/**` page.
+
+**Breaking changes:** none. **Deployment:** none — `d592d8f`/v632 unchanged, `release/r1-pos-
+printer-fn` / `C:/temp/sok-r1` unchanged.
+
+**Certification.** `scripts/test-pos-till-paid-transition.js` — 19/19 pure-core assertions (valid
+match → paid; replay/already-paid → idempotent noop; missing intent → never paid; non-Till → gated
+off entirely; amount mismatch, several magnitudes → flagged, never paid; every terminal status →
+no transition, even with a matching amount; purity/independence across calls), plus a negative
+control and a sabotage control (loosening the amount-equality check was proven to wrongly mark a
+grossly mismatched sale paid, caught). Q5 (60/60) and Q6 (34/34) suites re-run clean — no
+regression from extending the shared `payment-attribution.js` module.
+
+**STATUS: BUILT · CERTIFIED (pure core) · COMMITTED · STACKED. NOT ON R1. NOT DEPLOYED.**
+Backend payment path (Till issuance → dynamic QR → resolution → intent → verified webhook →
+attribution → PAID) is now trustworthy end-to-end. No buyer-facing page yet — later slice.
+
+---
+
 ## 2026-09-03 — webhookIntasend financial attribution — D1 fix (Q6)
 
 **Files:** `functions/payment-attribution.js` (new, pure core — `mergeAttribution`,
