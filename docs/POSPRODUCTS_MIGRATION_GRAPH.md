@@ -1,5 +1,16 @@
 # `posProducts` — consumer migration graph (read-only)
 
+> **Correction, 2026-09-03 (later the same day):** row #1's warning that the checkout read path
+> (`pos-zero-friction`) "depends on exactly this shape" is **stale**. `functions/pos-zero-friction.js:346-351`
+> reads the canonical `products` collection, not `posProducts` — its own comment records that
+> `posProducts` "was empty for most merchants, so the till failed on every sale." `pos.js` likewise
+> reads `products`. **`posProducts` is no longer the collection a sale is priced or stocked from.**
+> Step 1 (field fixes) is done — `docs/POSPRODUCTS_FIELD_MISMATCH_REMEDIATION.md`. Step 2 (the
+> `seller.js` writer) is **decided: Option C, retire** — `docs/POSPRODUCTS_SERVED_RULES_GATE.md`,
+> which also adds the rules fact this graph lacked: the **served** ruleset keys `posProducts`
+> ownership on `sellerId`, which the canonical writer never sets, and every client query on the
+> collection is rejected wholesale. Original text below left as written.
+
 **Status:** 📋 READ-ONLY GRAPH. No code changed, no migration, no deploy, no r1 touch.
 **Date:** 2026-09-03 · Per instruction: **not a collection rename.** `posProductIndex` (barcode
 uniqueness) is a separate concern and is explicitly out of scope here, as already decided.
