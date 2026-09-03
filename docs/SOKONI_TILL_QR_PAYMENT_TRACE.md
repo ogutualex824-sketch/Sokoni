@@ -1,3 +1,15 @@
+> **Correction, 2026-09-03 (later the same day):** the "one duplication found" note below,
+> characterizing `intasendWebhook`/`webhookIntasend` as "two near-identical exported functions,"
+> is **wrong on both counts** — checked properly in
+> `docs/INTASEND_WEBHOOK_ENDPOINT_RESOLUTION.md` (Q1 of the Till/QR gate ordering). They are not
+> near-identical (`webhookIntasend` is 624 lines vs. 254, and is a strict superset — wallet
+> credit, marketplace order finalisation, booking creation, and an entitlement-materialisation
+> incident fix that `intasendWebhook` never received). And the authority question is **not** out
+> of scope-and-unresolved: 30 days of Cloud Run logs show `intasendwebhook` failed its challenge
+> check on **100% of requests** (18/18 → 401), while `webhookintasend` served real,
+> successfully-authenticated IntaSend traffic (47× 200 OK, real B2C payout payloads observed).
+> **`webhookIntasend` is the live production endpoint.** Original text below left as written.
+
 # SOKONI Till / QR payment — existing authority trace (read-only)
 
 **Status:** 📋 READ-ONLY. No collection, no webhook, no commission path, no POS transition
