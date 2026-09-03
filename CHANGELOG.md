@@ -1,3 +1,52 @@
+## 2026-09-03 — SOKONI Till/QR authority layer (Q5) — first real payment code in the programme
+
+**Files:** `functions/sokoni-qr-authority.js` (new, pure core), `functions/sokoni-till.js` (new,
+onCall I/O layer — `mintSokoniTill`, `setSokoniTillStatus`, `mintDynamicSokoniQR`,
+`resolveSokoniQR`), `functions/payment-purposes.js` (+1 additive entry, `pos_till_sale`),
+`functions/index.js` (+4 exports), `firestore.rules` (+`sokoniTills`/`shopTillCounters`, both
+Cloud-Functions-only), `scripts/test-sokoni-qr-payment.js` (new certification suite).
+
+**What it does.** Implements Q1-Q4's design: a permanent Till QR resolves to `sokoniTills/{id}`
+directly (buyer types an amount); a dynamic POS QR points at an already-created
+`paymentIntents/{ref}` (cashier confirms the cart first, QR minted only after). Both mint the
+actual financial intent through the **existing, unmodified** `createPaymentIntent` via one new
+registry entry — no change to `createPaymentIntent` itself, `webhookIntasend`, `initiateSTKPush`,
+or any commission/settlement logic. `metadata.shopId`/`merchantUid`/`branchId` are read
+exclusively off the resolved Till/intent, never off the client's request — proven, not assumed
+(see certification).
+
+**Database changes.** Two new collections: `sokoniTills/{sokoniTillId}` (immutable identity +
+`status` lifecycle, Q2's design) and `shopTillCounters/{shopId}` (per-shop issuance counter). Both
+`write: if false` in rules — issuance/status transitions run only inside Cloud Functions
+transactions.
+
+**API changes.** Four new callables (`mintSokoniTill`, `setSokoniTillStatus`,
+`mintDynamicSokoniQR`, `resolveSokoniQR`) and one new `payment-purposes.js` purpose
+(`pos_till_sale`). No existing callable's signature or behaviour changed.
+
+**Security changes.** New HMAC-signed opaque token (`type.id.signature`, reusing `pos-qr.js`'s
+mechanism, widened to 128-bit truncation) gates both QR products; verified with
+`crypto.timingSafeEqual`. Till/intent resolution re-checks status at resolution time, not just at
+mint time (a Till disabled between mint and scan fails closed). See
+`docs/SOKONI_TILL_QR_IMPLEMENTATION.md` for the full deviation log from Q1-Q4's pseudocode
+(shop-code collision fix, dual-mode pricer, required buyer auth, `saleId` idempotency key).
+
+**Breaking changes:** none. **Deployment:** none — `d592d8f`/v632 unchanged, `release/r1-pos-
+printer-fn` / `C:/temp/sok-r1` unchanged.
+
+**Certification.** `scripts/test-sokoni-qr-payment.js` — 60/60 pure-core assertions (forged/
+foreign/malformed/type-confused tokens all denied; disabled/retired Till denied; expired/terminal/
+wrong-purpose intent denied; client-supplied shopId/merchantUid/branchId/sokoniTillId/amount all
+proven ignored; non-operator cashier denied), plus a negative control and a sabotage control (a
+weakened copy of the merchant-authorization check was proven to wrongly allow the attack the real
+code denies). **D1/D2/D3 (`docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md`) remain open — Q5 does not fix
+them**, and the buyer-facing payment page/`/pay/q/**` route is deliberately deferred until D1's
+webhook read-path fix lands (next in the sequence, Q6).
+
+**STATUS: BUILT · CERTIFIED (pure core) · COMMITTED · STACKED. NOT ON R1. NOT DEPLOYED.**
+
+---
+
 ## 2026-09-03 — QR contract design (Q4) + standalone payment-authority defects log
 
 **Two documents.** `docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md` — a living log for payment-authority
