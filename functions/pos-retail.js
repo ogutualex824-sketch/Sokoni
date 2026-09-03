@@ -2,7 +2,9 @@
    SOKONI SmartPOS Retail Cloud Functions v2.0
    – posSyncToMarketplace  (callable) — POS sale → marketplace stock
    – sendPOSReceipt        (callable) — SMS/email receipt to customer
-   – sendPurchaseOrder     (callable) — email PO to supplier
+   – sendPurchaseOrder     RETIRED 2026-09-03, see ADR-018. Superseded by
+                           procurement.sendPurchaseOrder (functions/procurement.js),
+                           the wired, structurally-complete PO lifecycle engine.
    – posLowStockAlert      (scheduled) — daily low-stock notifications
    – posMarketplaceOrderSync (Firestore trigger) — marketplace orders → POS
 ================================================================ */
@@ -198,70 +200,20 @@ exports.sendPOSReceipt = onCall(
 );
 
 /* ══════════════════════════════════════════════════════════
-   3. SEND PURCHASE ORDER EMAIL
-   Emails formatted PO to supplier's email address.
-══════════════════════════════════════════════════════════ */
-exports.sendPurchaseOrder = onCall(
-  { secrets: [SENDGRID_SK], region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
-  async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
-
-    const { poId, supplierEmail } = request.data;
-    if (!poId || !supplierEmail) {
-      throw new HttpsError('invalid-argument', 'poId and supplierEmail required');
-    }
-
-    const poSnap = await db.collection('purchaseOrders').doc(poId).get();
-    if (!poSnap.exists) throw new HttpsError('not-found', 'PO not found');
-
-    const po = poSnap.data();
-    if (po.status === 'cancelled') throw new HttpsError('failed-precondition', 'PO is cancelled');
-
-    const sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(SENDGRID_SK.value());
-
-    const itemRows = (po.items||[]).map(i =>
-      `<tr><td style="padding:6px 10px">${_sanitize(i.productName||i.productId)}</td><td style="padding:6px 10px;text-align:center">${i.qty}</td><td style="padding:6px 10px;text-align:right">${_kes(i.unitCost)}</td><td style="padding:6px 10px;text-align:right">${_kes(i.lineTotal)}</td></tr>`
-    ).join('');
-
-    const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f5;padding:20px">
-      <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
-        <div style="background:#71ff00;padding:20px;color:#000">
-          <h2 style="margin:0">Purchase Order</h2>
-          <p style="margin:4px 0;opacity:.8">PO #${_sanitize(po.poNumber)}</p>
-        </div>
-        <div style="padding:20px">
-          <p>Dear ${_sanitize(po.supplierName||'Supplier')},</p>
-          <p>Please supply the following items as per our Purchase Order.</p>
-          <table style="width:100%;border-collapse:collapse;margin:16px 0">
-            <thead><tr style="background:#f5f5f5"><th style="padding:8px 10px;text-align:left">Item</th><th style="padding:8px 10px">Qty</th><th style="padding:8px 10px;text-align:right">Unit Cost</th><th style="padding:8px 10px;text-align:right">Total</th></tr></thead>
-            <tbody>${itemRows}</tbody>
-            <tfoot><tr style="border-top:2px solid #4db800"><td colspan="3" style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#4db800">${_kes(po.totalAmount)}</td></tr></tfoot>
-          </table>
-          ${po.expectedDelivery?`<p><strong>Expected Delivery:</strong> ${new Date(po.expectedDelivery).toLocaleDateString('en-KE')}</p>`:''}
-          ${po.notes?`<p><strong>Notes:</strong> ${_sanitize(po.notes)}</p>`:''}
-          <p>Please confirm receipt and delivery date.</p>
-          <p style="color:#888;font-size:12px;margin-top:20px">SOKONI SmartPOS · PO issued ${new Date().toLocaleDateString('en-KE')}</p>
-        </div>
-      </div>
-    </body></html>`;
-
-    try {
-      await sgMail.send({
-        to:      supplierEmail,
-        from:    { email: 'purchasing@mysokoni.co.ke', name: 'SOKONI Purchasing' },
-        subject: `Purchase Order #${po.poNumber}`,
-        html,
-      });
-    } catch (e) {
-      logger.error('sendgrid error', e.message);
-      throw new HttpsError('internal', 'Failed to send receipt email');
-    }
-
-    await db.collection('purchaseOrders').doc(poId).update({ status: 'sent', sentAt: Date.now() });
-    return { sent: true, to: supplierEmail };
-  }
-);
+   3. sendPurchaseOrder — RETIRED 2026-09-03, see docs/adr/ADR-018-legacy-retirement-graph.md.
+   Was exported as posSendPurchaseOrder in index.js: a standalone "email an
+   existing purchaseOrders/{poId} doc" callable with no createPurchaseOrder/
+   approvePurchaseOrder/receiveGoods lifecycle around it. Zero code-level
+   callers anywhere in the repo, and zero Cloud Logging invocation entries
+   across the full ~30-day retention window covering the Cloud Run service
+   (possendpurchaseorder), against a control query (poscompletecheckout,
+   122 entries same window) proving the logging pipe itself is not silent.
+   Superseded by the structurally-complete procurement.sendPurchaseOrder
+   (functions/procurement.js), which IS wired to real callers (inventory.html,
+   pos-suppliers.js) and is NOT retired here — that endpoint having its own
+   zero production traffic in the same window is a separate, still-open
+   lifecycle-use question, not a retirement decision. Removed to reclaim one
+   Cloud Run slot; no functional behaviour was lost — nothing called this. */
 
 /* ══════════════════════════════════════════════════════════
    4. SCHEDULED LOW-STOCK ALERT (daily 8 AM EAT)

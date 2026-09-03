@@ -1,0 +1,82 @@
+{
+  "$schema": "sokoni.cf-invocation-census.v1",
+  "generatedAt": "2026-09-03T14:09:21Z",
+  "generatedBy": "manual gcloud logging read, ADR-018 legacy-retirement-graph",
+  "sourceCommit": "fa5082bc0cc1f541edba9b28950f3ca28fd4e6a6",
+  "gcpProject": "sokoni-aeb26",
+  "methodology": {
+    "tool": "gcloud logging read (Cloud SDK bundled Python interpreter; system gcloud shim fails with 'Python not found')",
+    "queryShape": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"<gen2 function name, lowercased>\"",
+    "note": "Firebase Functions v2 (Gen2) run on Cloud Run; the Cloud Run service name is the export name lowercased with no separators (verified against posprint -> \"posprint\").",
+    "observableWindow": "~30 days",
+    "windowCaveat": "The claim of '90-day production caller evidence' could not be substantiated. gcloud logging buckets list --location=global shows the _Default log bucket (which holds Cloud Run/Cloud Functions request and execution logs) has retention_days=30, not 90. Only the _Required bucket (400 days) goes back further, and it holds Admin Activity audit logs (deploys, IAM, config changes) — not invocation/request logs. The true observable evidence window for caller traffic is therefore 30 days, and this census reports that real window rather than repeating the unverified 90-day figure.",
+    "controlValidation": "A known-busy function (posCompleteCheckout) was queried with the same filter shape over the same window and returned 122 log entries, proving the logging pipeline surfaces real traffic when it exists — the zero counts below are not an artifact of a broken or empty query."
+  },
+  "totalCfExports": {
+    "count": 1508,
+    "measuredAs": "grep -c '^exports\\.' functions/index.js, after this commit's retirement of posSendPurchaseOrder",
+    "beforeThisRetirement": 1509
+  },
+  "functions": [
+    {
+      "exportName": "posSendPurchaseOrder",
+      "sourceModule": "functions/pos-retail.js",
+      "sourceFunction": "sendPurchaseOrder",
+      "cloudRunService": "possendpurchaseorder",
+      "status": "retired_2026-09-03",
+      "createTime": "2026-07-11T19:01:39.660871458Z",
+      "codeCallers": {
+        "count": 0,
+        "searchedFor": "posSendPurchaseOrder",
+        "searchScope": "repo-wide, *.js and *.html, excluding node_modules",
+        "matchesOutsideOwnExportLine": 0
+      },
+      "invocationLogEntries30d": {
+        "count": 0,
+        "logTypesSeen": [
+          "cloudaudit.googleapis.com/activity (deploy)",
+          "cloudaudit.googleapis.com/system_event (deploy)",
+          "run.googleapis.com/varlog/system (instance startup/probe)"
+        ],
+        "requestLogEntries": 0,
+        "note": "All 12 log entries in the window are deployment/system lifecycle events from an unrelated 2026-08-22 redeploy, not caller requests."
+      },
+      "disposition": "RETIRED — zero code callers AND zero production invocations. Removed from functions/index.js and functions/pos-retail.js; body preserved in git history."
+    },
+    {
+      "exportName": "sendPurchaseOrder",
+      "sourceModule": "functions/procurement.js",
+      "sourceFunction": "sendPurchaseOrder",
+      "cloudRunService": "sendpurchaseorder",
+      "status": "live_not_retired",
+      "createTime": "2026-06-27T08:47:05.843883147Z",
+      "codeCallers": {
+        "count": 2,
+        "callSites": [
+          "inventory.html:2969 — call('sendPurchaseOrder')({ poId })",
+          "pos-suppliers.js:168 — firebase.functions().httpsCallable('sendPurchaseOrder')({ poId, method })"
+        ]
+      },
+      "invocationLogEntries30d": {
+        "count": 0,
+        "logTypesSeen": [
+          "cloudaudit.googleapis.com/activity (deploy)",
+          "cloudaudit.googleapis.com/system_event (deploy)",
+          "run.googleapis.com/varlog/system (instance startup/probe)"
+        ],
+        "requestLogEntries": 0
+      },
+      "disposition": "NOT RETIRED. This is the canonical, structurally-complete PO lifecycle engine (addSupplier -> createPurchaseOrder -> approvePurchaseOrder -> sendPurchaseOrder -> receiveGoods -> createSupplierInvoice -> approveAndPayInvoice, all in functions/procurement.js) and it IS wired to real UI callers. Its zero invocation count in this window reflects unexercised traffic, not dead code — a separate lifecycle-use question, explicitly out of scope for this retirement."
+    },
+    {
+      "exportName": "posCompleteCheckout",
+      "sourceModule": "functions/pos-zero-friction.js",
+      "cloudRunService": "poscompletecheckout",
+      "status": "control_reference_only",
+      "invocationLogEntries30d": {
+        "count": 122
+      },
+      "disposition": "Used only as a control to validate that the logging query methodology surfaces real traffic; not part of this retirement."
+    }
+  ]
+}

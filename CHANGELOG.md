@@ -1,3 +1,2706 @@
+## 2026-09-03 — 18b: retire `posSendPurchaseOrder`; `procurement.sendPurchaseOrder` stays live
+
+**Retires** the legacy `posSendPurchaseOrder` Cloud Function. **Does not touch** the canonical
+`procurement.sendPurchaseOrder` — see `docs/adr/ADR-018-legacy-retirement-graph.md`.
+
+**Why.** Two Cloud Functions both "send a purchase order" existed side by side.
+`posSendPurchaseOrder` (`functions/pos-retail.js`) was a standalone callable emailing an existing
+`purchaseOrders/{poId}` doc, with no surrounding create/approve/receive lifecycle and **zero
+code-level callers anywhere in the repo**. `procurement.sendPurchaseOrder`
+(`functions/procurement.js`) is the structurally-complete engine (`addSupplier` →
+`createPurchaseOrder` → `approvePurchaseOrder` → `sendPurchaseOrder` → `receiveGoods` →
+`createSupplierInvoice` → `approveAndPayInvoice`) and **is** wired to real callers
+(`inventory.html:2969`, `pos-suppliers.js:168`).
+
+Both showed zero Cloud Logging invocation entries over the observable window — retirement was
+decided on the caller-graph axis, not the traffic axis, because traffic-alone would have flagged
+the live one too. A control query against `posCompleteCheckout` (122 entries, same window) proves
+the logging pipeline was not silently empty.
+
+**Correction to the evidence claim.** The originally-cited "90-day production caller evidence" does
+not hold: `gcloud logging buckets list` shows the `_Default` log bucket (Cloud Run/Cloud Functions
+request logs) retains **30 days**, not 90. `docs/cf-invocation-census.json` and ADR-018 report the
+real, provable window.
+
+**Files**
+- `functions/pos-retail.js` — `sendPurchaseOrder` function body removed, replaced with a dated
+  retirement comment (implementation preserved in git history); module header comment updated
+  from 5 functions to 4.
+- `functions/index.js` — `exports.posSendPurchaseOrder = posRetail.sendPurchaseOrder;` removed,
+  replaced with a dated retirement comment. Top-level export count: 1509 → 1508. The canonical
+  `exports.sendPurchaseOrder = procurement.sendPurchaseOrder;` wiring is untouched.
+- `docs/adr/ADR-018-legacy-retirement-graph.md` — new. Records the retire-on-both-axes rule, the
+  18b decision, and flags 18c (`posPurchaseOrders` writer / `posBatches` BI readers) as blocked on
+  a reader-graph trace not yet done.
+- `docs/cf-invocation-census.json` — new. Raw evidence: per-function caller counts, invocation log
+  counts, the control query, and the corrected 30-day window methodology.
+- `scripts/test-retire-18b.js` — new, `node scripts/test-retire-18b.js`. 20/20 checks: retirement
+  landed, sibling exports untouched, canonical `procurement.sendPurchaseOrder` and its surrounding
+  lifecycle exports intact, no live code caller of the retired export remains, export count is
+  exactly 1508. Every detector is paired with a synthetic-fixture self-check proving it can catch
+  the regression it claims to catch.
+
+**Database changes:** none. **API changes:** one Cloud Function export removed
+(`posSendPurchaseOrder`); no other export's signature changed. **Security changes:** none.
+**Breaking changes:** none — the retired export had no callers.
+
+**Not deployed.** This is a functions-source change only; 18c (the `posPurchaseOrders`/`posBatches`
+reader trace) blocks any further retirement in this graph, and no deploy was run as part of this
+change.
+
+---
+
+## 2026-09-02 — Sellers Near You: converge on the active location picker
+
+**Fixes** the "Sellers Near You" section never appearing on Home.
+
+**Root cause.** Two location pickers existed and only one ran. `index.html`'s
+bottom-sheet picker (active) writes `localStorage.sokoniDeliveryCity` as a DISPLAY NAME
+("Nyali"); `script.js`'s reveal read `sokoniBuyerCity` as a CITY KEY ("mombasa"), and
+`script.js` defers to whichever picker already exists so the older path never ran. Two
+mismatches — key and value shape — either of which alone hides the section permanently.
+Products carry a city KEY in `.location` (production: nairobi 55, mombasa 1, remote 4),
+so the comparison could only ever match a key.
+
+**Files**
+- `script.js` — added `CITY_ALIAS`, `_canonicalCityKey()`, `_resolveBuyerCity()`;
+  `displayNearbySection()` now derives `buyerCity` from the active picker when
+  geolocation has not already set one. Geolocation still wins when present.
+  Exposed `window.displayNearbySection` and `window._canonicalCityKey`.
+- `index.html` — `setCity()` announces the change so the section reveals without a
+  reload. It stores the value; `script.js` still owns the reveal. No rendering logic
+  duplicated.
+
+**Deliberately limited.** `_canonicalCityKey` resolves an exact city name or a label
+containing one ("Nairobi CBD" → nairobi). It does NOT guess catchments: whether Diani
+(30km from Mombasa) or Malindi (120km) count as "near" is a commercial claim about
+proximity, not string matching. **6 of the 106 offered towns resolve**; the rest keep the
+existing no-location behaviour. `CITY_ALIAS` is where that decision gets recorded and is
+EMPTY by design.
+
+A stored value alone does not reveal the section — it must resolve to a supported city.
+
+**Security.** `_canonicalCityKey` uses own-property lookups. A bare `KENYA_CITIES[s]`
+walks the prototype chain, so `"__proto__"` and `"constructor"` were accepted as valid
+city keys. The value comes from `localStorage`, so it is attacker-influenced. Caught by
+the certification, not by review.
+
+**Tests** `scripts/test-nearby-city-normalisation.js` — 49/0, extracting the function
+from the shipped `script.js` so it cannot drift. Includes a restraint test (26 unreviewed
+towns must not resolve) and a control proving a permissive matcher would leak 12 of them.
+
+**No database, API, security-rule or breaking changes. Not deployed.**
+
+---
+
+## [2026-09-02] — RELEASE 1 DEPLOYED: POS/printer/functions consolidation
+
+**Production: `09cd6ac`, cache `v617 → v620`, build `2026-09-01T22:30:59Z`. Hosting + Functions
+now on the same Release-1 baseline.** Gate 325 PASS / 0 FAIL. Approval consumption 0.
+
+### What shipped
+
+Functions (earlier): `smartPosDispatch` updated 20:27:46Z — carries P15C `registerClientShift`.
+Hosting: 18 files uploaded from the clean integration tree `/c/temp/sok-r1` @ `09cd6ac`, built on
+the live `6775b09` baseline. Rollback guard: *"local 09cd6ac contains live 6775b09"*.
+
+### Live verification
+
+| # | item | result |
+|---|---|---|
+| 1 | deployed release + SW/version | **PASS** — `09cd6ac`, v620, served SW matches |
+| 2 | black-layer behaviour | **PASS** — 6 framed routes, zero full-viewport covers, no consent scrim |
+| 3 | POS loading | **PARTIAL** — route frames the wizard as designed; authenticated load UNPROVEN |
+| 4 | till registry / setup | **PASS** — loader referenced, `TillRegistry` used |
+| 5 | printer/P58E stack | **PASS (file integrity)** — 6 files byte-match; physical print UNPROVEN |
+| 6 | Sales Control Centre | **PASS** — 404 → 200, 40,262 B |
+| 7 | cashier approval UI | **PASS** — 404 → 200, 11,862 B |
+| 8 | multicart | **PASS** — 3 files byte-match |
+| 9 | P20B denial visibility | **PASS** — classified catch live, bare swallow gone |
+| 10 | production smoke | **PASS** — 8 routes 200, 0.7–1.5s |
+
+`.sk-in-shell` true and `covering: []` on pos-setup, plan, returns, verification, fulfilment.
+
+### UNPROVEN, stated as such
+
+- **P15C device proof** — deployment makes the handset procedure runnable; it is not the proof.
+- **Authenticated POS/wizard load** — the headless probe is unauthenticated and sees the login
+  gate inside the frame. No duplicate chrome was present (`bottomNav`, `quickNav`,
+  `sharedHeader` all empty), so this is a coverage limit, not an observed defect.
+- **Physical P58E printing** — file integrity only.
+
+### How green was reached — no protection was weakened
+
+`FAIL 5 → 1 → 0` came from: one real fix (harness drift, `09cd6ac`), `npm install`, and a
+read-only fetch of the deployed Storage ruleset the gate itself demands. **No `--force`, no
+disabled hook, no quarantine edit, no Rules published.**
+
+Four of the five original "failures" were provisioning artifacts of my own making, not defects —
+recorded because the gate corrected me, and because it is the reason the next item matters.
+
+### Gate-precondition defect — open
+
+Two provisioning gaps produced two false verdicts in one session: missing `node_modules` (red)
+and a missing fetched artifact (red), while the 19:21 gate ran without dependencies (falsely
+green). The gate should assert its own preconditions and report *cannot gate* rather than a
+verdict. Own slice; the gate was not modified.
+
+### Still excluded
+
+Firestore Rules **not published** — the repo artifact still regresses `shopEmployees`
+anchor-immutability and `products` `isSeller()`. AdminOS/SuperAdmin (Release 2+, 281 commits,
+worktrees preserved). Rail 2 not migrated. No data migration. Approval consumption 0.
+
+## [2026-09-01] — DEPLOYED: black-layer fix (Hosting only)
+
+**Production: `6775b09`, cache `v616 → v617`, build `2026-09-01T19:21:38Z`.**
+Hosting only. No Functions, no Rules, no migration. Approval consumption 0.
+
+### What shipped — exactly two files
+
+| file | change |
+|---|---|
+| `sokoni-inshell.js` | shell detector now matches `merchant-v2`: `/\/merchant(-v\d+)?(\.html)?$/` |
+| `sokoni-till-registry.js` | new file, previously **404** in production |
+
+Firebase scanned 842 files and uploaded **4**: those two plus the predeploy's `version.json`
+and service-worker cache bump. Nothing else entered the deployment.
+
+`pos-setup.html` was deliberately EXCLUDED. Its diff is +109/-2 and mixes the TillRegistry
+integration with unrelated `_paintSetupGaps` work, so shipping it would have imported certified
+work outside this slice. Consequence, stated plainly: `sokoni-till-registry.js` is now served but
+**nothing references it yet** — the till-registry behaviour is not active until its loader ships
+as its own slice.
+
+### Pre-deploy proof
+
+Clean worktree at `6775b09` (0 dirty) — the live commit. Rollback guard: *"tree is at the live
+commit (6775b09) — allowing redeploy"*, exit 0. Cooldown guard exit 0. Full predeploy gate passed.
+
+### Live verification
+
+Six framed modules measured at 390x844 through the real shell, after the fix:
+
+| route | module | `.sk-in-shell` | consent scrim | full-viewport covers |
+|---|---|---|---|---|
+| `#returns` | returns.html | true | absent | none |
+| `#pos-setup` | pos-printer-setup.html | true | absent | none |
+| `#deliveries` | seller-delivery.html | true | absent | none |
+| `#verification` | verification.html | true | absent | none |
+| `#plan` | plans.html | true | absent | none |
+| `#fulfilment` | seller-fulfilment.html | true | absent | none |
+
+**No regression:** `sokoni-pos-print-service.js`, `sokoni-printer-manager.js`,
+`sokoni-universal-printer.js`, `sokoni-bluetooth-printer.js`, `pos.html` and
+`pos-printer-setup.html` are byte-identical to the deployed lineage. P58E behaviour is untouched
+by this deploy.
+
+### Still blocked / unchanged
+
+P15C (`bc44f33`) paused, Functions not deployed · Rules not published · Rail 2 not migrated ·
+manager-approval execution NOT implemented (design only, see `docs/POS_APPROVAL_CONTROL_MAP.md`)
+· approval consumption **0** · functions lineage untouched.
+
+## [2026-09-01] — the black layer on every framed module: one missing branch
+
+**43/43 suites, 0 FAIL. Two files changed. NOT DEPLOYED — production still has the defect.**
+
+### Root cause
+
+`sokoni-inshell.js` decides "am I inside the merchant shell?" and, when it is, scopes away the
+chrome the shell already provides. It shipped with:
+
+```js
+shellParent = /\/merchant(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
+```
+
+That knows `merchant` and `merchant.html` — **not `merchant-v2`, the shell that actually embeds
+these modules.** So `.sk-in-shell` landed only via the `SokoniShell` global on the same line,
+i.e. only when the shell had already executed the statement defining it. **A race.** When it
+lost, nothing was scoped: the consent scrim (`rgba(0,0,0,0.66)`, z-index 300001, pointer-events
+auto) covered the panel from the bottom up, and the shared bottom nav stacked under the shell's
+own — the page looked black and only partly visible, and nothing could be tapped.
+
+Reported on **plans, returns, the delivery hub, fulfilment, verification, stories, POS and the
+POS setup route** — one missing branch, every embedded page. This is the same class recorded in
+`2a7873d`, which fixed the ten inline page detectors and **left the shared module blind**.
+
+### The fix
+
+```js
+shellParent = /\/merchant(-v\d+)?(\.html)?$/.test(pp) || !!global.parent.SokoniShell;
+```
+
+The version suffix is generic so a v3 shell cannot repeat it. The global stays a fallback, never
+the only path.
+
+### Why the existing suite missed it
+
+`test-inshell-chrome.js` section 2b walks the embedded **pages** and returns early on any file
+without an inline `window.parent===window` detector — silently excluding the shared module most
+of those pages rely on. New section **2c** EXECUTES the module's regex against the shell name
+derived from the ROUTES CONTRACT, rather than string-matching it: a detector can name the shell
+in a comment and still not match it.
+
+### Evidence
+
+`scripts/test-inshell-chrome.js` 17/0 → **27/0**. Unfixed, section 2c failed on exactly the two
+shell-path assertions. Sabotages, each `applied:true` by hash: regex reverted to blind (2),
+fallback removed (1), regex over-broadened so an unrelated embed gains shell semantics (3),
+consent rule deleted (2), consent rule UNSCOPED (2). Restored byte-identical
+(`aad92fbc1257f3fd0e8d8b3839e1da07`); three trees hash-equal.
+
+Two probe defects were found and fixed rather than worked around: the detector extraction first
+matched `var … shellParent = false`, reporting the initialiser as the detector; and deleting the
+consent rule originally drew **zero** failures, so the layer the module exists to suppress was
+unprotected. Both now bite.
+
+### Not deployed — this does not reach a device yet
+
+Production `sokoni-inshell.js` is byte-identical to the pre-fix repo file. **Merchants keep the
+black layer until a hosting deploy ships this**, which is a separate, unauthorised action.
+
+## [2026-09-01] — POS entry: setup before selling, once
+
+**43/43 suites, 0 FAIL. Two files changed. Nothing deployed.**
+
+### The defect
+
+The merchant shell framed `pos.html` unconditionally and **never consulted the
+`posSetupComplete` latch**. The latch was already written by `pos-hardware-wizard.html` and
+already read by `pos-v2.html` — the shell route was simply not wired to it. So a merchant who
+had never certified their hardware went straight to selling, and the Complete Retail Operating
+System wizard was reachable only by a detour through `pos-setup.html`. That is why two different
+POS surfaces appeared depending on how it was opened.
+
+### The change
+
+`merchant-v2.html` — the POS route now reads the latch: no latch → frame
+`pos-hardware-wizard.html`; latch present → frame `pos.html` as before, tab deep-link intact.
+The wizard gets a **separate panel key** (`pos:setup`), because `framePanel` caches by key and
+reusing `'pos'` would keep serving the cached wizard iframe after setup completed.
+
+`pos-hardware-wizard.html` — **Start Selling** now opens `pos.html` instead of `pos-v2`.
+
+The latch stays **once-ever**; no daily expiry was added. Manage Devices remains the way back.
+
+### Recorded as temporary, not as a destination
+
+`pos.html` is the Rail 2 client-authoritative sale path. Routing daily selling through it is an
+operator decision recorded in **ADR-013**, which is unchanged: Rail 2 is still what Option A
+migrates, and this makes that migration more urgent rather than less. Because the shell routes to
+a *page* and not to a *rail*, this entry point inherits the fix when Rail 2 is server-mediated,
+with no further UX change.
+
+### Evidence
+
+`scripts/test-pos-entry-setup-first.js` (new). The POS branch of the shell router is **sliced out
+of `merchant-v2.html` and executed** with its collaborators injected, so the routing decision is
+observed from the shipping bytes. Unfixed: **9 passed, 5 failed**. After: **14/0/0**.
+
+Five sabotages, each `applied:true` by hash, each drawing failures: latch check removed (3),
+wizard reuses the `'pos'` key (1), latch inverted (5), tab deep-link dropped (1), Start Selling
+back to pos-v2 (2). Both files restored byte-identical; three trees hash-equal. A misleading
+diagnostic was also fixed — the Start-Selling window overran into the next anchor and named the
+wrong `href`.
+
+### Not fixed, flagged
+
+The completion screen tells the merchant "your printer reconnects automatically". Zero-tap
+Bluetooth reconnect is impossible without `getDevices()`, and this project has already ruled that
+needing a tap is a PASS. The copy overstates the hardware and will read as a bug to merchants.
+
+### Not deployed. Not committed. No rules, functions, migration or Marketplace change.
+
+## [2026-09-01] — P15C tenant census: ZERO legacy-UID records; no migration required
+
+**Read-only production census. Nothing written. Approval consumption: 0.**
+
+Run with `sokoni-tenant-census-reader@sokoni-aeb26`, verified to hold **exactly**
+`roles/datastore.viewer` and nothing else (control: `sokoni-hosting-deployer@` returns
+`roles/firebasehosting.admin`, so the IAM probe was proven working before the empty result was
+trusted).
+
+### Result
+
+| collection | total | canonical | **legacy** | missing | unresolved | ambiguous | collide |
+|---|---|---|---|---|---|---|---|
+| posShifts | 0 | 0 | **0** | 0 | 0 | 0 | 0 |
+| posAttendance | 0 | 0 | **0** | 0 | 0 | 0 | 0 |
+| posRetailSales | 5 | 0 | **0** | 5 | 0 | 0 | 0 |
+| posCommissions | 0 | 0 | **0** | 0 | 0 | 0 | 0 |
+| posCashReconciliation | 0 | 0 | **0** | 0 | 0 | 0 | 0 |
+| posApprovals | 0 | 0 | **0** | 0 | 0 | 0 | 0 |
+
+`businesses`: 4 documents, 2 distinct owners. **Eligible for migration: 0. Collisions: 0.**
+
+### Classification
+
+- **Deterministically mappable to a canonical merchantId: 0**
+- **Unresolved / ambiguous: 0** — no document carries a legacy uid tenancy key
+- **No legacy records: CONFIRMED** across all six collections
+
+**The five `posRetailSales` refusals are a different defect.** They are `missing-sellerId` — no
+tenant key at all, legacy or canonical. They are therefore already unreachable by any
+`sellerId`-keyed query, before and after the convergence; re-keying does not orphan them because
+nothing ever reached them. Recorded as a pre-existing finding, **not fixed here**, and not
+counted as legacy tenancy.
+
+### What this unblocks, and what it does not
+
+`posShifts` — the collection the convergence most affects — is **empty**. So deploying the
+converged `_requireSeller` orphans nothing, and **no migration or backfill is required**.
+
+This resolves the empirical question that gated P15C. It does **not** by itself authorise the
+functions deploy: the deploy still re-keys tenancy for 20 call sites across 22 handlers, and the
+device proof still needs the deployed callable topology.
+
+### Known cosmetic defect in the tool
+
+The "affected window per collection" line prints `[object Object] -> [object Object]` instead of
+formatted timestamps. Display only; the counts are unaffected. Not fixed — the census was
+authorised, a code change was not.
+
+### No writes · no backfill · no migration · no deploy · no rules publish · Marketplace and Rail 2 untouched.
+
+## [2026-09-01] — Tenant convergence proven; P15C committed but NOT deployed; hosting preview
+
+**42/42 suites, 0 FAIL. Approval consumption: 0. Nothing deployed to production.**
+
+### P15C committed, deployment PAUSED
+
+`bc44f33` on `release/functions-converged-6775b09` — four files, isolated at hunk level from the
+surrounding certified-but-uncommitted work (5 of 9 hunks in `pos-staff-ops.js`, 3 of 4 in
+`pos-sync.js`). Verified in the committed content: the P8 approval hardening and the P20B change
+are **absent** (0 occurrences); both remain intact in the working tree.
+
+**Deployment is paused** because the commit necessarily carries the `_requireSeller` convergence —
+a prerequisite of `registerClientShift` — and that function has **20 call sites across 22
+handlers** feeding **15 sellerId-keyed queries**. Deploying P15C would re-key live POS tenancy.
+That is broader than the P15C authorization covered.
+
+### The tenant convergence, proven independently
+
+`scripts/test-tenant-convergence-handler-surface.js` — **23/0/2**. Both the pre- and
+post-convergence `_requireSeller` are sliced from their real sources and compiled with
+dependencies injected, driven by the REAL `tenant-identity.js` resolver over a fake Firestore, so
+the delta is observed on identical fixtures:
+
+- **BEFORE:** an owner sending their own uid got the **uid** back.
+- **AFTER:** the same call returns the **canonical merchantId**.
+- **Consequence, executed:** a record written under the legacy key is found under the old key and
+  **not** under the converged key.
+
+Also proven: owner-by-ownership needs no membership read; a member cashier resolves to the same
+merchant and *does* consult membership; cross-merchant is denied; naming the owner's uid does not
+grant owner tenancy; ambiguity, unlinked and inactive all **refuse rather than guess**; every call
+site binds the resolved value and no handler queries the raw client value.
+
+**Deliberately UNPROVEN (2):** how many real production records carry legacy uid tenancy, and
+whether every legacy record can be deterministically mapped. Both need a read-only production
+credential. **Not estimated, not guessed, and no migration or backfill was performed.**
+
+### Two harness defects found by sabotage, and fixed
+
+1. Narrowing the resolver's `limit(2)` to `limit(1)` drew **0 failures** — the fake Firestore
+   ignored `limit` and hardcoded `slice(0,2)`, so the ambiguity assertion passed for the wrong
+   reason. The fake now honours `limit`; the sabotage then bit.
+2. A throwing sabotage **crashed** the harness instead of reporting, losing every later
+   assertion. Section 3 now wraps both calls.
+
+Six sabotages, each `applied:true` by hash, each drawing failures: owner-form detection off (5),
+ambiguity picks the first (1), `limit(2)`→`limit(1)` (1), inactive allowed (1), returns the client
+value (3), membership check removed (3). Restored byte-identical.
+
+### Hosting preview — production untouched
+
+Channel **`p15c-proof`** → `https://sokoni-aeb26--p15c-proof-5b4tnqr9.web.app` (expires
+2026-09-08), built from a clean worktree at **`6775b09`** — exactly live — plus only the two P15C
+client files taken from `bc44f33`.
+
+Verified after deployment: production `mysokoni.co.ke` remains **`6775b09`**, buildTime
+`2026-08-31T15:29:10.667Z`, cache `v616` — unchanged. `sokoni-aeb26.web.app` likewise unchanged.
+Preview carries `shift_registration` (3) and `_queueShiftRegistration` (2); production carries
+**0** of each — the control that proves both the probe and the separation.
+
+### The device proof was NOT run
+
+The preview supplies the client half only. `registerClientShift` is reachable solely through
+`smartPosDispatch`, whose deployed build (2026-08-27) predates the handler. A preview cannot turn
+an undeployed callable into a deployed one, so the seven-step proof would be meaningless.
+
+### No functions deploy · no rules publish · no migration · Marketplace untouched · Rail 2 untouched.
+
+## [2026-09-01] — Priority 20B: denied POS inventory writes are now observable
+
+**41/41 suites, 0 FAIL. Approval consumption: 0. One file changed: `pos-sync.js`.**
+
+### The unfixed behaviour, established by execution first
+
+`writeStockMovement` is not exported, so the harness slices its source out of `pos-sync.js` and
+compiles that exact text with its dependencies injected — it runs the bytes that ship, not a
+paraphrase. Against the unfixed file the suite reported **23 passed, 3 failed**, and the three
+failures were precisely the denial-visibility assertions: the movement record was written, the
+inventory write was attempted, and the failure was discarded with nothing emitted.
+
+### The change
+
+`.catch(() => {})` becomes a classified catch:
+
+- **Still swallowed, deliberately.** Rethrowing would fail the queue item and change retry/DLQ
+  behaviour — a synchronisation decision this slice is not allowed to make. `_isPermanentError`
+  is untouched and asserted unchanged.
+- **`permission-denied` is reported** with the collection, the document id and the consequence:
+  the `posStockMovements` record was written, so quantity and audit have diverged.
+- **`not-found` stays benign.** A new product legitimately has no inventory document; that was
+  always harmless and still is.
+
+### What is explicitly NOT in this slice, and is asserted as unchanged
+
+No rule for `inventory/{id}` and still no catch-all; no employee authority; the two inventory
+models unreconciled (the branch-scoped doc id is asserted intact); Rail 2 pricing/total authority
+untouched; the movement/audit write unchanged; the transaction and callable sync routes intact.
+
+### Evidence
+
+`scripts/test-pos-inventory-denial-visibility.js` (new) **26/0/0**. Seven sabotages, each
+`applied:true` by hash, each drawing failures: bare swallow restored (3), not-found also escalated
+(1), rethrown (5), doc id dropped from the report (1), movement write removed (3), retry
+classification moved (1), inventory rule added (1). Restored byte-identical
+(`2874712d70fe73f60f0aab1bf5eb7da4`); three trees hash-equal.
+
+### A test defect found and fixed in the process
+
+The P20 suite passed 51/0 **after** this change while still asserting the old bare swallow — it
+was matching the phrase inside the new comment. Its `pos-sync.js` slices are now comment-stripped,
+and the assertion records the current truth instead: the denial is no longer discarded, and a
+denial is classified. P20 is now **52/0/0**. The divergence itself is unchanged and still
+asserted — only its visibility moved. This is the seventh assert-on-prose defect in this
+programme, and the reason the rule is in the suite header.
+
+### Not deployed. Not committed. Rules not published.
+
+## [2026-09-01] — Served-Rules verification + Priority 20 evidence (no product change)
+
+**40/40 suites, 0 FAIL. Approval consumption: 0. No source fix in this entry.**
+
+### Served-Rules verification (read-only)
+
+Served ruleset `59af870d-72eb-4791-a3b6-2f4de7eb8ff7`, file **`firestore.rules.release-minimal`**
+(252,640 B) — a different filename from the repo's `firestore.rules`. **REPO != SERVED**: a deploy
+would add 96 rule lines and remove 40.
+
+Two findings previously resting on the repo proposal are now confirmed against production:
+
+- **`posTransactions`** — served block byte-identical to the repo. Production permits the direct
+  client sale write, enforcing only `sellerId == auth.uid`, `total is number`, `total >= 0`, a
+  status enum, and absence of `adminNote`. No per-item validation; no relation between `items`
+  and `total`.
+- **`inventory/{id}`** — **no served rule and no catch-all**, so the client write is denied.
+  `posStockMovements` create *is* permitted, so the audit record succeeds while the quantity
+  increment is denied and swallowed. The divergence is real, permanent and silent.
+
+**A deploy from this repo would REGRESS two live protections** — measured, not suspected:
+`shopEmployees` served carries an anchor-immutability clause the repo lacks, and served `products`
+requires `isSeller()` where the repo drops it. `f88e8953` must not be published until both are
+reconciled.
+
+### Priority 20 — evidence only
+
+`scripts/test-stock-adjustment-authority.js` (new, **51/0/0**) executes the real
+`merchantAdjustStock` handler against a Firestore fake that records operation order, so ownership,
+validation, transaction shape, the zero floor and idempotency are observed rather than read out of
+the source. `merchantAdjustStock` is sound on every axis tested.
+
+Two boundaries are recorded, deliberately unreconciled:
+
+- **Employee authority** — employees are blocked by *every* path, callable and direct. The suite
+  asserts that block as the present truth. It is evidence of a gap, not a licence to grant
+  authority so a test goes green.
+- **Two inventory models** — canonical `products.stock` has no branch concept; the POS path is
+  branch-scoped (`inventory/{branchId}__{productId}`). Both are asserted; neither is changed.
+
+Eight sabotages, each `applied:true` by hash, each drawing failures: ownership removed (2), zero
+floor removed (1), idempotency bypassed (2), version bump decoupled (1), employment store read (1),
+reason vocabulary widened (2), swallowed denial exposed (1), inventory rule added (1). All three
+touched files restored byte-identical.
+
+### Not deployed. Not committed. Rules not published.
+
+## [2026-09-01] — Priority 18: discount authority converged
+
+**39/39 suites, 1,336 assertions, 0 FAIL. Guard 14/14 exit 0. Approval consumption: 0.**
+
+Discount is the third protected operation onto `workspaceMemberships`. It is kept strictly
+separate from price override (Priority 19), which is a different mutation with a different
+binding.
+
+### The load-bearing fact was checked, not assumed
+
+The instruction was not to assume that because `ROLE_PERMISSIONS` contains `discounts`, every
+cashier may discount. So both tables were read, and the suite now parses them out of the real
+source files at run time rather than restating them:
+
+| role | Stack A `discount` (`ROLE_CAPABILITIES`) | Stack B `discounts` (`ROLE_PERMISSIONS`) |
+|---|---|---|
+| owner | yes | yes |
+| manager | yes | yes |
+| supervisor | *no such role in Stack A* | yes |
+| **cashier** | **no** | **no** |
+
+`cashier: ['pos','view_products','customers','refunds']` — no `discounts`. So the convergence
+**cannot** widen discounting to cashiers. The only role it adds is `supervisor`, which Stack A
+has no concept of, and that follows from adopting the richer model as canonical.
+
+This is the opposite of the refund result, where `refunds` *is* held by cashier and authority had
+to be the conjunction of the role claim and the capability. The two operations were checked
+independently because the vocabularies disagree about them independently.
+
+### The change
+
+`functions/pos-zero-friction.js`, checkout discount branch:
+
+- Stack A is tried **first and unchanged** — `_actor.capabilities` via `resolveActor` →
+  `shopEmployees`. No existing till changes behaviour.
+- The canonical path is **additive**, for staff who exist only in `workspaceMemberships`: the
+  merchant is recognised in either tenant space (`businesses/{merchantId}`, else
+  `resolveMerchantIdForOwner`), then `_assertBusinessPermission(cashierId, canonical, 'discounts')`.
+- The actor is the **authenticated** `cashierId`. Nothing here reads an identity or a merchant
+  from the request payload.
+- A failed canonical check leaves authority **false** — the catch does not grant.
+- The sale-size ceiling (`manualDiscount > serverSubtotal`) is unchanged.
+
+The three states stay distinct: requesting a discount, a manager approving one, and executing
+one. This slice governs **execution only**. No approval is consumed — consume sites remain 0.
+
+### Evidence
+
+`scripts/test-refund-authority-convergence.js` 22/0/4 → **36/0/4** (verified executed *inside*
+the gate, not merely registered — the per-suite line moved with it). Five sabotages, each
+`applied:true` by hash, each drawing failures: canonical check dropped (2), Stack A check removed
+(1), catch silently allowing (1), actor taken from the payload (2), sale ceiling removed (1).
+Restored byte-identical (`1bbb6d0a…`); three trees hash-equal.
+
+A regex-based table parser was replaced after it collapsed in transit to `/^s*([a-z_]+):s*[(.*)]/`
+and reported a null table against correct source — the CONTROL assertion caught it, which is what
+the control is for. Parsing is now literal.
+
+### Carried forward, unresolved
+
+**Branch scope.** `posStaff` is branch-aware (`branchId`); `workspaceMemberships` is not. Nothing
+in this slice pretends otherwise, and the membership data does not currently carry enough branch
+information to prove equivalence. A staff member authorised at one branch is, under the canonical
+store, authorised for the merchant. This is an open architectural decision, not a solved one.
+
+### Not deployed. Not committed.
+
+## [2026-09-01] — Priority 17: refund authority converged
+
+**39/39 suites, 1,322 assertions, 0 FAIL. Guard 14/14 exit 0. Approval consumption: 0.**
+
+Refund is the second protected operation onto `workspaceMemberships`. `posStaff` — the third
+employee store — becomes the compatibility surface the decision artifact names.
+
+### What the map established, and why each fact shaped the fix
+
+1. **The role sets differ from void.** Refund requires `manager|owner`; void also allows
+   `supervisor`. That is existing product behaviour, so the role gate is untouched — a
+   convergence is not a licence to normalise away a difference nobody asked about.
+2. **`refunds` is held by CASHIER** in `ROLE_PERMISSIONS`, so the capability alone would widen
+   authority to every cashier. Authority is the **conjunction** of the role claim and the
+   capability — the same shape void uses.
+3. **The merchant arrives in either tenant space.** Checkout validates against `shops/{uid}`
+   while memberships are keyed by the generated merchantId, so the value is recognised in both
+   forms and resolved forward — recognised, never trusted.
+4. **The old check had no capability model at all**: any active `posStaff` row authorised a
+   refund.
+5. **The sale was already bound** — `sale.merchantId !== merchantId` refuses a cross-merchant
+   refund. That was correct and is asserted so it stays.
+
+### Proven
+
+| case | result |
+|---|---|
+| same-merchant manager with capability | allowed |
+| member without the capability | denied — membership alone is not authority |
+| former employee (inactive) | denied |
+| employee of another merchant | denied |
+| cashier claim (holds `refunds`) | denied by the role gate |
+| supervisor | denied — refund differs from void, deliberately |
+| owner / admin | preserved |
+| posStaff-only employee | still allowed via the compatibility surface |
+| forged `merchantId` | cannot elevate — the sale binding refuses it |
+| unlinked merchant | fails closed |
+
+### Evidence
+
+Five sabotages, `applied:true` by hash, restored byte-identically: capability check removed (5),
+role gate dropped (3), supervisor silently added (1), sale/merchant binding removed (2),
+posStaff promoted ahead of the canonical check (1).
+
+### Two process notes, both against myself
+
+**The order of evidence was wrong.** The directive asked for the unfixed code to be executed
+against the battery *first*. I mapped, implemented, then tested. The equivalent proof came from
+sabotage — reverting each mechanism and showing the battery fails — which is the same evidence
+obtained in the other direction, and the suite header says so rather than implying a
+before-and-after.
+
+**A fixture was more permissive than production.** The `_assertBusinessPermission` stub omitted
+the `businesses/{id}` existence read the real helper performs, so "unlinked merchant fails
+closed" failed against a stub that authorised a non-existent merchant. The *mock* was wrong,
+not the product — the same class as the Priority 10 void fixture, caught this time by a control
+that was written to expect the production behaviour.
+
+### Files changed
+
+`functions/pos-zero-friction.js` (`_assertRefundAuthority`),
+`scripts/test-refund-authority-convergence.js` (new, 22/0/4),
+`scripts/predeploy-browser-suites.js` (38 → 39).
+
+### NOT changed
+
+Approval consumption **0 call sites** — employee authority and approval consumption remain
+independently proven gates. PIN, Rules, Sales Control Centre, tenant migration untouched.
+Discount, price override, stock adjustment and shift close are not converged.
+
+### Open, recorded
+
+**Branch scope.** `posStaff` is branch-aware; `workspaceMemberships` is not. A refund
+authorised through the canonical path carries no branch restriction. Unresolved, and it is a
+vocabulary decision rather than something to invent here.
+## [2026-09-01] — Employee authority convergence: void
+
+**38/38 suites, 1,300 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+The first protected operation converges onto the ratified decision:
+**`workspaceMemberships` is the employee authority**, `businessId === merchantId`.
+
+### The bridge that made it possible
+
+`posSales.sellerId` is an **owner uid**; a membership is keyed by the **generated merchantId**.
+Those are the two tenant spaces from the census, so the sale's owner is resolved forward
+through `businesses where ownerId == sellerId` — the same resolver the tenant convergence
+uses — and the membership is checked against *that* merchant. No new store, no new field.
+
+### Authority is a conjunction, deliberately
+
+`ROLE_PERMISSIONS` gives **`cashier` the `refunds` permission**, so capability alone would let
+any cashier void. The existing `posRole` claim gate therefore stays as the role layer:
+
+```
+manager/supervisor/owner CLAIM  ∧  active membership  ∧  capability for the sale's merchant
+```
+
+A distinct `voids` permission would be cleaner, but adding one is a vocabulary decision the
+artifact left open — so the conjunction uses existing vocabulary rather than inventing.
+
+### Authorization moved outside the transaction
+
+The capability engine reads Firestore, and a transaction's reads must go through `txn.get`. So
+the actor is authorized **before** the transaction opens, and the transaction re-reads the sale
+and pins it to the shop authority was granted for — a genuine TOCTOU guard, not a restatement:
+
+```js
+if (!isAdmin && sale.sellerId !== authorizedSellerId)
+```
+
+For the owner path `authorizedSellerId` **is** `auth.uid`, so Priority 7's boundary is
+unchanged there. Priority 7's atomicity, product-ownership and audit guarantees are all
+asserted intact.
+
+### Proven both directions
+
+| case | result |
+|---|---|
+| same-merchant employee with capability | **allowed** — P7 denied this |
+| employee of another merchant | denied |
+| employee without the capability | denied |
+| **former** employee (inactive membership) | denied |
+| cashier claim (holds `refunds`) | denied by the role gate |
+| forged `merchantId`/`sellerId` in the payload | ignored — resolved from the SALE |
+| owner path | unchanged |
+| admin | still crosses shops |
+| sale's shop has no canonical merchant | refused, not loosened |
+
+### Evidence
+
+Five sabotages, `applied:true` by hash, restored byte-identically: capability check removed (5),
+merchant taken from the payload (4), TOCTOU guard removed (1), role gate dropped (2),
+unresolvable merchant allowed (1).
+
+**A shadowed control, made specific.** The unresolvable-merchant sabotage first produced zero
+failures: with the refusal removed, `_assertBusinessPermission` is called with an undefined
+merchantId and denies anyway. Defence in depth is good; a control that cannot see one of the
+layers is not. It is now asserted by source, scoped to the handler.
+
+### Two cross-suite catches
+
+`test-pos-cashier-approval-request.js` pinned Priority 7's exact guard and **fired** when the
+line changed. The convergence was reviewed before the pin was updated to the new boundary —
+and the pin still guards it, now asserting the TOCTOU form and the server-derived merchant.
+
+`test-recordpossale-money-provenance.js` went **NO-TALLY**: the new imports meant the module no
+longer loaded under its mock. That suite tests `recordPOSSale`, which uses neither engine — but
+imports resolve at load time. Mocks added.
+
+### Files changed
+
+`functions/pos-retail-engine.js`, `scripts/test-void-tenant-atomicity.js` (30 → 49),
+`scripts/test-pos-cashier-approval-request.js` (pin updated),
+`scripts/test-recordpossale-money-provenance.js` (mocks).
+
+### NOT changed
+
+Approval consumption remains **0 call sites** — authority convergence and approval consumption
+are separate gates. PIN, Rules, Sales Control Centre, tenant migration untouched. Refund,
+discount, price override, stock adjustment and shift close are **not** converged; each is its
+own slice.
+## [2026-09-01] — 15C reachability defect: the registration could never have arrived
+
+**38/38 suites, 1,280 assertions, 0 FAIL. Guard 14/14 exit 0.**
+
+Preparing the real-device proof surfaced a defect in the Priority 15C code itself, before any
+device was involved.
+
+### The defect
+
+`_syncCallable` invoked `httpsCallable(fns, 'registerClientShift')`. But **no pos-staff-ops
+handler is exported by name** — `functions/index.js` records them as *"fully consolidated into
+smartPosDispatch"*, and every other POS client call goes through
+`httpsCallable('smartPosDispatch')({ op, ...data })`.
+
+So the queued registration would have resolved to a function that does not exist: fail,
+`markRetry` eight times, then the DLQ — **permanently, and silently**, since registration is
+best-effort by design and a sale never depends on it. The shift would simply never register,
+and Priority 16 would later reconcile against a join that was never made.
+
+This is the same class as the `recordPOSSale` finding in Priority 10: a client calling a
+consolidated handler by name.
+
+### The fix
+
+The route now carries both the dispatcher and the op:
+
+```
+shift_registration: { callable: 'smartPosDispatch', op: 'registerClientShift', idKey: 'clientShiftId' }
+```
+
+`_syncCallable` places the op in the body the dispatcher reads. Asserted, with a control
+confirming this is how every other POS client call reaches these handlers, and a sabotage that
+restores the by-name form fails 2.
+
+### Why this matters beyond the fix
+
+A harness that loads modules directly cannot see that a callable name does not resolve — only
+the deployed dispatcher knows. The suite now asserts the routing shape, which is the closest a
+static harness can get, but it remains **inference, not delivery**.
+
+### Real-device proof — BLOCKED, three ways
+
+| prerequisite | state |
+|---|---|
+| `registerClientShift` deployed | **NOT DEPLOYED** — no functions deploy has run; the candidate sits at `919333e` |
+| handset | not available in this environment |
+| authorized credentials | absent — the production census is still blocked on the same gap |
+
+The chain *local shift → clientShiftId → queue → reconnect → callable → posShifts* cannot be
+exercised end to end here. Nothing in this changelog claims it was.
+
+### Status
+
+- **15C: CODE COMPLETE / HARNESS GREEN / REAL DEVICE UNPROVEN**
+- **Priority 16: BLOCKED** — no proven join between `posCashEvents.shiftId` and an
+  authoritative `posShifts`
+- **Employee authority convergence: NEXT** — the staff-cashier registration path fails closed
+  until it lands, and that must not be "fixed" by letting a cashier supply a merchant id
+- Approval consumption: **0 call sites** · Rules: unchanged · PIN: unchanged
+- Production: nothing deployed, nothing committed
+
+### Files changed
+
+`pos-sync.js` (dispatcher routing), `scripts/test-closeshift-reconciliation.js` (76 → 79).
+## [2026-09-01] — Priority 15C: the offline queue carries shift registration
+
+**38/38 suites, 1,277 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+The server contract from 15B is no longer stranded. A checkout shift born offline now queues
+its registration and delivers it when connectivity returns.
+
+### The extension — additive, one route
+
+`PosSync` gained a **callable** route kind. Every existing route writes a Firestore document;
+registration cannot, because only the server can bind the acting merchant and cashier, and a
+client document write binds nothing.
+
+```
+shift_registration: { callable: 'registerClientShift', idKey: 'clientShiftId' }
+```
+
+`_syncItem` branches on `route.callable` **before** any document logic, so the sale sync path
+is untouched — asserted by position, not just presence.
+
+### The payload is an allow-list, never a spread
+
+A queued item lives in IndexedDB, where a corrupted or tampered entry could otherwise smuggle
+an identity into the call. Only `sellerId`, `clientShiftId`, `openingCash`, `branchId` and
+`cashierName` ever leave the queue. `cashierUid` is not on that list and cannot be added
+without failing a control.
+
+The server would reject a forged merchant regardless — `_requireSeller` validates it — so this
+is belt and braces, cheaply.
+
+### Retry and idempotency come from what already exists
+
+A throw in `_syncCallable` becomes `markRetry`, and after eight attempts the DLQ. A return
+becomes `markDone`. **No new machinery, no second persistence authority.** Repeated delivery is
+safe because the *server* is idempotent: the same actor and `clientShiftId` return the same
+shift.
+
+### The offline-first guarantee is preserved
+
+`_queueShiftRegistration` is best-effort by construction: it returns early when `PosSync` is
+absent or no merchant is known, and swallows its own throw. **A sale can never fail because a
+registration did.** Asserted directly.
+
+### Evidence
+
+Five sabotages, `applied:true` by hash, restored byte-identically: payload becomes a spread (1),
+`cashierUid` allow-listed (1), callable branch removed (1), registration never enqueued (7),
+sale route altered (6).
+
+**I repeated a mistake I had just recorded.** A `pos-sync.js` backup was taken *before* the
+extension, so restoring after the first sabotage silently reverted the whole feature and the
+baseline dropped to 6 failures. Caught by the baseline, re-applied, and backups re-taken
+**after** the change. The lesson was written down last slice and still not followed; the
+practice is now: back up after the edit you intend to keep, never before.
+
+### Files changed
+
+`pos-sync.js` (callable route + `_syncCallable`), `pos-sales.js` (enqueue on shift open),
+`scripts/test-closeshift-reconciliation.js` (63 → 76).
+
+### Known limitation
+
+`sellerId` is taken from `window._posMerchantId`, `sokoni_merchant_id`, or the signed-in uid.
+For an **owner** the uid resolves forward to the canonical merchantId (Priority 9). For a
+**staff cashier** it will not, and registration fails closed and retries into the DLQ. That is
+the employee-authority boundary, not a new defect — recorded, not worked around.
+
+### NOT changed
+
+No reconciliation. No approval consumption (still 0 sites). No historical migration. PIN,
+Rules, employee authority, Sales Control Centre untouched.
+
+**Priority 16 remains frozen** until a registration is proven against a real device.
+## [2026-09-01] — Priority 15B: offline shift registration (server contract)
+
+**38/38 suites, 1,264 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### `registerClientShift` — the server half
+
+Joins an offline-born shift to its authoritative `posShifts` record. Every identity is
+server-derived: merchant from `_requireSeller`, cashier from `auth.uid`. The caller supplies
+one opaque string and ordinary shift-opening data, and **`data.shiftId` is never read** — a
+caller cannot name another merchant, another cashier, or an existing server shift.
+
+| behaviour | outcome |
+|---|---|
+| no open shift | creates one carrying the id |
+| open shift, no id | **attaches** — no duplicate |
+| repeat registration | **idempotent** — same shift, `reused: true` |
+| different cashier, same id | `permission-denied` |
+| different merchant | `permission-denied` |
+| open shift already bound to another id | `failed-precondition` — never reassigned |
+| id bound to >1 shift | `failed-precondition` — a collision, not a first-match |
+| empty id | `invalid-argument` |
+
+`closeShift` still resolves the active shift from `sellerId + auth.uid` — asserted, so
+`clientShiftId` cannot become an authorization input.
+
+### Two findings from the map
+
+**`pos-sales.js` already writes `posShifts` directly** — `_queueFirestore('posShifts',
+shift.id, shift)` with the local uid as the document id. But that shape carries `cashierId`
+and **no `sellerId`/`cashierUid`**, so those documents are invisible to every server query;
+and the served rule's `allow update` permits only `notes`/`updatedAt`, so later client merges
+are denied and swallowed by `.catch(() => {})`. They are orphan documents, frozen at open.
+
+**The offline queue cannot carry this.** `PosSync` is a Firestore *document-write* queue with
+a `ROUTES` table keyed by type; it has no callable dispatch. Registration must be a callable,
+because only the server can bind the actor — a client Firestore write cannot.
+
+### Client half NOT implemented — the reported constraint
+
+Extending `PosSync` with a callable route is the correct minimal change and the right home.
+It was not made in this slice: that queue is the mechanism protecting against lost sales, and
+changing it in the same pass as the server contract risks the one thing it exists to prevent.
+The directive's own instruction applies — report the constraint rather than work around it.
+
+Until it lands, `clientShiftId` is null for checkout-opened shifts and **`closeShift` still
+cannot reconcile**. No partial reconciliation was added.
+
+### Evidence
+
+Six sabotages, `applied:true` by hash, restored byte-identically: actor binding removed (1),
+client may name the shift (1), collision protection gone (2), cashier not server-bound (1),
+idempotency **both mechanisms** removed (9).
+
+**A sabotage that produced zero failures, investigated not excused.** Removing the early return
+alone still yielded the same shift — idempotency has *two* independent mechanisms, and the
+attach path covered for the missing return. Both are now asserted separately, and the sabotage
+that matters removes both.
+
+**A cross-suite regression, caught by a pin.** `test-cashier-identity-map.js` failed because
+`registerClientShift` became a fifth `cashierUid` consumer. The handler list was reviewed before
+the pin was raised 4 → 5 — a pin bumped without looking is worth less than no pin.
+
+### Files changed
+
+`functions/pos-staff-ops.js` (+`registerClientShift`),
+`scripts/test-closeshift-reconciliation.js` (43 → 63),
+`scripts/test-cashier-identity-map.js` (pin reviewed).
+
+### NOT changed
+
+No client change, no second shift store, no reconciliation, no historical migration. PIN,
+Rules, Sales Control Centre, approval consumption (0 sites), employee authority, tenant
+migration, `calculateMonthlyCommission`, `pos-accounting` COGS — all intact.
+## [2026-09-01] — Shift identity: the join key, not the equal string
+
+**38/38 suites, 1,245 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### The split is three-way, not two
+
+| producer | collection | id source | server-authoritative |
+|---|---|---|---|
+| `openShift` (functions) | `posShifts` | Firestore doc id | **yes** |
+| checkout (`posCompleteCheckout`) | `posRetailSales` | derived from `posShifts` (P3) | **yes** |
+| `cmRecordCashEvent` / `cdRecordCashEvent` | `posCashEvents`, `posTillEvents` | `_san(shiftId)` from the client | no |
+| `pos-session.js` | sessions | client | no |
+
+Three surfaces open a shift **independently**:
+
+```
+pos-checkout.html   -> PosSales.openShift() -> uid()  -> IndexedDB   (never reaches Firestore)
+pos-staff-ops.html  -> server openShift               -> posShifts
+sokoni-pos-sales.js -> server openShift               -> posShifts
+```
+
+So the surface that actually **sells and raises cash events** creates a shift that reaches
+Firestore in neither identity. **No join field existed** between them.
+
+### The constraint that decides the design
+
+`pos-sales.js` is offline-first by declaration — *"IndexedDB → Firestore, never lose a sale"* —
+and mints its local id precisely so a till can open a shift with **no network**. Converging by
+"just call the server" would break the property that store exists for.
+
+So the local id is not a mistake to be renamed away. It is the identity the shift is **born
+with**, before a server exists to ask.
+
+### The convergence: one meaning, one authority
+
+**The `posShifts` document remains the shift.** The offline-origin id is recorded on it as
+`clientShiftId` — an alias, so events raised before the server knew about the shift can be
+joined to it. No new collection, no fifth shift authority: **one field on the existing one**.
+
+It is a **join key, never a permission**:
+
+- nothing authorises on it
+- `closeShift` still resolves the open shift from `sellerId + auth.uid` — asserted, so
+  Priority 3's property cannot regress
+- a non-string is refused rather than coerced; an omitted value records `null`, not an
+  invented id
+
+### Deliberately NOT done
+
+The client half — checkout registering its local id with the server when connectivity allows,
+and queueing when it does not — is **not implemented**. That is a change to the selling surface
+with offline semantics attached, and it is a product decision about when a shift becomes known
+to the server, not a mechanical fix.
+
+Until it lands, `clientShiftId` will be null for checkout-opened shifts, and `closeShift` still
+cannot reconcile. **No partial reconciliation was added**, for the reason established in
+Priority 14: a variance missing the drawer movements accuses honest cashiers.
+
+### Evidence
+
+Three sabotages, `applied:true` by hash, restored byte-identically: join key not stored (3),
+non-string coerced (1), join key consulted during shift selection (4).
+
+**A restore failure, caught and corrected.** One backup predated the change, so restoring it
+silently reverted the feature — the baseline then showed 3 failures. Re-applied, a correct
+backup taken, and the remaining sabotage re-run. A backup is only a restore point for the state
+it was taken in.
+
+### Files changed
+
+`functions/pos-staff-ops.js` (accepts and stores `clientShiftId`),
+`scripts/test-closeshift-reconciliation.js` (37 → 43).
+
+### NOT changed
+
+No new collection. No reconciliation. No client change. PIN, Rules, Sales Control Centre,
+approval consumption (0 sites), employee authority, tenant migration,
+`calculateMonthlyCommission`, `pos-accounting` `costPrice`, and Priorities 11–14 all intact.
+
+### Legacy classification
+
+Existing `posCashEvents.shiftId` values were written before any `clientShiftId` existed, so
+they cannot be deterministically mapped to a `posShifts` document. They are **unresolved**, not
+guessable — the same classification the tenant census uses, and a migration question rather
+than something to infer.
+## [2026-09-01] — closeShift: it records honestly, and cannot yet reconcile
+
+**38/38 suites, 1,239 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### What closeShift does
+
+It **records**. It resolves the caller's open shift server-side, aggregates that shift's sales
+from `posRetailSales`, and writes `closingCash` beside `cashSales` — never comparing them.
+There is no expected figure and no variance.
+
+That also means there is **nothing to falsify**: it does not accept a client reconciliation
+because it computes none. Proven by execution — a close sending
+`expectedCash: 99999, variance: 0, status: 'balanced'` stores none of them, and `status`
+remains the server's `'closed'`.
+
+Scenario coverage, all executed: balanced, genuine short, genuine over, duplicate close
+(refused), cross-tenant (refused), no open shift (refused), negative counted amount (refused).
+Shift identity is server-resolved and no client `shiftId` is accepted — the Priority 3 trust
+problem has not returned.
+
+### A LIVE DEFECT, found by execution
+
+`pos-staff-ops.js` calls `logger.error` in `closeShift`'s catch block and **never imported
+`logger`**. So every failure inside that handler — including the legitimate *"No open shift
+found for this cashier"* — threw `ReferenceError: logger is not defined` **before** the
+`if (err instanceof HttpsError) throw err` line could re-raise the real error.
+
+A cashier closing with no open shift received an opaque crash instead of the reason, and any
+genuine Firestore failure was masked the same way. One-line import; the suite now asserts it.
+
+This surfaced only because the harness executes the handler. No source reading had caught it
+across several passes over this file.
+
+### THE BLOCKER — why no reconciliation was added
+
+The ratified contract needs the drawer movements (`cash_in`, `cash_out`, `safe_drop`,
+`cash_pickup`, `float_adjustment`), which live in `posCashEvents` keyed by `shiftId`. That id
+is **local**:
+
+```
+pos-sales.js openShift()   -> id: uid()            -> IndexedDB, never calls the server
+pos-checkout.html          -> _s.shiftId = that id -> sent to cmRecordCashEvent
+functions openShift()      -> posShifts doc id     -> Firestore
+```
+
+`posCashEvents.shiftId` and the `posShifts` document id are **disjoint identity spaces**.
+closeShift resolves a `posShifts` document; that shift's cash events are filed under an id it
+has never seen.
+
+`posRetailSales.shiftId` **does** align — Priority 3 derived it from `posShifts` — which is why
+a sales figure is computable here and a drawer expectation is not.
+
+**A partial expectation would be worse than none.** `openingCash + cashSales − refunds`, without
+cash-out, safe drops, pickups and adjustments, is not an incomplete answer but a **wrong** one:
+it would report a cashier who made a legitimate safe drop as short by exactly that amount. A
+variance that accuses an honest cashier is worse than no variance. That is the "unknown is not
+zero" rule applied to a partial calculation.
+
+The correction is **shift-identity convergence** — its own slice, and now the highest-value
+remaining source-level item.
+
+### Evidence
+
+Three sabotages, `applied:true` by hash, restored byte-identically: logger import removed (3),
+client `shiftId` trusted again (1), tenant no longer canonical (2).
+
+### Files changed
+
+`functions/pos-staff-ops.js` (logger import), `scripts/test-closeshift-reconciliation.js`
+(new, 37/0/4), `scripts/predeploy-browser-suites.js` (37 → 38).
+
+### NOT changed
+
+No reconciliation, no second formula, no new collection. Approval consumption remains **0 call
+sites**. PIN, Rules, Sales Control Centre, employee authority, tenant migration,
+`calculateMonthlyCommission`, `pos-accounting` `costPrice`, and Priorities 11–13 all untouched.
+## [2026-09-01] — cmRequestCloseApproval: a manager no longer signs the cashier's number
+
+**37/37 suites, 1,202 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### The defect, proven before the fix
+
+`cmRequestCloseApproval` took `countedCents` **and** `varianceCents` from the till, stored both,
+and `pos-cash-manager.html` rendered `r.varianceCents` straight back out. `cmApproveRegisterClose`
+binds the merchant and checks the status — it never re-derives the figure. So the number a
+manager signed off on was the number the cashier chose.
+
+Executed against the unfixed code: a till counting 8,000 against a server-computable 13,000,
+claiming `varianceCents: 0`, produced an approval record storing **0**, with no server
+expectation and no shift binding. **Seven assertions failed.**
+
+| | before | after |
+|---|---|---|
+| stored variance | **0 (the claim)** | **−5,000 (derived)** |
+| stored expectation | *absent* | 13,000 |
+| shift binding | *absent* | the resolved shift |
+
+### The fix
+
+`_deriveOpenShiftClose()` resolves the shift the request does not carry — the most recent
+`register_open` on that register **whose shift has no `register_close`** — then computes
+expected via `_computeBalance` over that shift's own events and derives
+`variance = counted − expected`. A claim that disagrees is logged as a security signal.
+
+The resolved `shiftId` is now stored, so **the approval is bound to a specific close** rather
+than to a register in general. That matters given the hardened approval primitive's exact-binding
+requirement: a manager approving one reconciliation cannot have a materially different one
+attached later.
+
+**Not reconcilable is NULL.** No open shift, or no counted amount, records null — never a zero
+that reads as "balanced". A register whose shift is already closed yields no binding and no
+figures rather than reconciling against a shift already signed off.
+
+`varianceExplanation` stays client-entered prose, asserted to survive intact.
+
+### Evidence
+
+Five sabotages, `applied:true` by hash, restored byte-identically: claim accepted again (4),
+shift binding dropped (1), unreconcilable becomes zero (2), a **closed** shift reused (2),
+expectation not recorded (1).
+
+**One control was missing, not broken.** The closed-shift sabotage first produced **zero**
+failures because no scenario exercised it — a sabotage that applies and changes nothing means
+the case is untested, not that the code is safe. The case was added; it now fails 2.
+
+### Files changed
+
+`functions/pos-cash-manager.js`, `scripts/test-cash-event-authority.js` (23 → 35).
+
+### NOT changed
+
+Approval consumption remains **0 call sites**. `cmApproveRegisterClose` still only records the
+decision — wiring it to consume the hardened primitive waits on employee-authority convergence.
+`cmGetShiftReport` (fixed in Priority 12), `cdGetShiftSummary`, `posTillEvents` vocabulary,
+`closeShift`, `calculateMonthlyCommission`, `pos-accounting` `costPrice`, PIN, Rules, employee
+authority, tenant migration.
+
+### Migration note
+
+Approval records already stored with client figures keep them. Re-deriving history is a
+migration question, like the tenant key.
+## [2026-09-01] — cmRecordCashEvent: the variance is derived, not declared
+
+**37/37 suites, 1,190 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### It was authority, not record-keeping
+
+`cmGetShiftReport` computes the balance itself with `_computeBalance` — and then reported the
+variance from `closeEv.varianceCents`, **the cashier's own number**, deriving
+balanced/over/short from it. The server's truth and the client's claim sat in the same return
+object, and the claim won. `cmGetEndOfDay`, `cmGetCashierPerformance` and `cmGetBranchSummary`
+aggregate the same stored value.
+
+**Proven by execution before any fix.** A shift with float 5,000 + cash sales 8,000 → server
+expects 13,000. A close counting 8,000 while claiming `varianceCents: -999,999`:
+
+| | before | after |
+|---|---|---|
+| reported variance | **−999,999 (the lie)** | **−5,000 (derived)** |
+| persisted `expectedCents` | 999,999 | 13,000 |
+| status | driven by the claim | `short` |
+
+Ten assertions failed against the unfixed code; all pass now.
+
+### The fix, at the mutation boundary
+
+`_deriveClose()` runs before the event is persisted: `_computeBalance` over the shift's own
+events gives the expectation, and the close event's `amountCents` is the counted cash. A
+mismatch between the claim and the derived figure is logged as a security signal; the derived
+figure is the record.
+
+**Not computable is NULL, never zero.** A close with no opening event, or no counted amount,
+records `null` — "we cannot say" and "it balanced" are different facts, and a fabricated zero
+reads as the second.
+
+`cmGetShiftReport`'s status gained a null branch: it now returns **`not-reconcilable`** rather
+than falling through to `short`. Reporting an unknown as a shortfall is the same defect class
+as showing an unknown as zero.
+
+### Preserved deliberately
+
+`varianceExplanation` remains client-reported. It is prose, not arithmetic — a cashier
+accounting for a shortfall is exactly what it is for, and the suite asserts it survives intact.
+
+### Evidence
+
+Five sabotages, `applied:true` by hash, restored byte-identically: payload variance accepted
+again (9), payload expected accepted again (3), not-computable becomes zero (4), null status
+falls through to short (1), derivation skipped entirely (12).
+
+### Standing rule locked into the gate header
+
+> **Scope every assertion to the block it claims to verify.** A token that legitimately occurs
+> in several semantic blocks cannot be asserted against the whole file.
+
+Recorded with the four times it has bitten here, each a sabotage that applied and caused **zero**
+failures: one of four `cashierUid` consumers switched; `cash_sale` sourcing reverted while the
+vocabulary set still held the name; the vocabulary narrowed while the aggregation still held it;
+and two identically-worded Rules blocks, one correct and one not.
+
+### Files changed
+
+`functions/pos-cash-manager.js`, `scripts/test-cash-event-authority.js` (new, 23/0/4),
+`scripts/predeploy-browser-suites.js` (36 → 37, plus the header rule).
+
+### NOT changed
+
+`cmRequestCloseApproval` — a **second** client-supplied variance on the manager sign-off path,
+recorded as the next slice rather than folded in. `cdGetShiftSummary`, `posTillEvents`
+vocabulary, `closeShift`, `calculateMonthlyCommission`, `pos-accounting` `costPrice`, PIN,
+Rules, approval consumption (0 sites), employee authority, tenant migration.
+
+### Migration note
+
+Events already stored with client figures keep them. Re-deriving history is a migration
+question, like the tenant key — not done here.
+## [2026-09-01] — cdGetShiftSummary converged onto the ratified accounting contract
+
+**36/36 suites, 1,167 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### The root cause was a vocabulary gap, not the formula
+
+`sokoni-shift.js` calls itself THE SHIFT / TILL AUTHORITY and states it uses *"the vocabulary
+of functions/pos-cash-manager.js:66. Not a new one."* It posts its events to
+`cdRecordCashEvent` — whose `TILL_EVENT_TYPES` accepted only **six of the ten** it sends:
+
+| emitted | accepted before |
+|---|---|
+| `cash_in`, `cash_out`, `safe_drop`, `cash_pickup`, `opening_float` | ✅ |
+| **`cash_sale`, `cash_refund`, `float_adjustment`** | ❌ **rejected `invalid-argument`** |
+| `register_open`, `register_close` | ❌ rejected |
+
+Those events never reached `posTillEvents` at all. That single gap explains everything else:
+
+- with no `cash_sale` to read, the summary inferred sales from **hardware drawer-open entries**
+  in `posDrawerLog` — which is why a phone till with no drawer reported **zero** cash sales
+- with no `float_adjustment`, the `+ adjustments` term of the contract could not exist
+
+### The convergence
+
+1. `TILL_EVENT_TYPES` widened to the canonical vocabulary — the endpoint now accepts what the
+   authority sends.
+2. Sales and refunds read from `posTillEvents` `cash_sale`/`cash_refund` — the same event
+   stream, with the same names, that `_computeBalance` uses.
+3. `+ adjustments` added, sourced from `float_adjustment`'s **signed** `adjustmentCents` — the
+   only term that may legitimately be negative.
+4. The `posDrawerLog` sales/refunds source removed.
+
+The formula is now the ratified contract, term for term:
+
+```
+expected = openingFloat + cashSales − cashRefunds + cashIn − cashOut − safeDrops
+         − cashPickups + adjustments
+```
+
+**Counting both sources was rejected as the fix**: a hardware till emits a drawer entry AND a
+`cash_sale` for the same sale, so summing them would double every figure.
+
+### MIGRATION CONSEQUENCE — stated, not hidden
+
+Events rejected before this change **do not exist**. A till whose sales were only ever recorded
+as drawer openings will report **0 cash sales** until it records `cash_sale` events. This is the
+same class as the tenant-key migration and needs the same census treatment before deployment.
+
+### A defect I introduced and caught
+
+Adding `+ till.adjustments` before the aggregation was updated left `till` without that key —
+`expectedCents` evaluated to **NaN**. Caught by an arithmetic check before the suite ran, and
+fixed by completing the aggregation.
+
+### Evidence
+
+Five sabotages, each `applied:true` by hash, restored byte-identically: sales pointed back at
+the drawer log (1), adjustments term dropped (1), vocabulary narrowed again (1), refunds term
+removed (2), pickup sign flipped (anchor rejected by the shell, re-verified separately).
+
+**Two controls were broken and repaired — the same failure mode, twice.** `'cash_sale'` appears
+in *both* the vocabulary set and the aggregation, so each whole-file assertion was satisfied by
+the other's occurrence and both sabotages produced **0 failures**. Scoped to their own blocks,
+both now fail. A third scoping bug followed: the `VOCAB` slice ended at `cdOpenDrawer`, which
+also appears in the file's header export list, so the slice was empty.
+
+That is the third distinct duplicate-occurrence control failure in this programme. The pattern
+is consistent: a name that appears in two places cannot be asserted against the whole file.
+
+### Files changed
+
+`functions/pos-cash-drawer.js`, `scripts/test-shift-cash.js` (61 → 64).
+
+### Deliberately NOT touched
+
+`cmRecordCashEvent`'s client-supplied `expectedCents`/`varianceCents` — a separate
+server-authority defect, characterised in `SHIFT_ACCOUNTING_CONTRACT.md`, untouched here.
+`closeShift` reconciliation, `calculateMonthlyCommission`, `pos-accounting`'s `item.costPrice`,
+PIN, Rules, approval consumption (0 sites), employee authority.
+
+### Still open in this function
+
+It requires **manager claims**, which a solo merchant does not have — unchanged, and still
+asserted by the suite as live behaviour.
+## [2026-09-01] — recordPOSSale money provenance: price/cost cleared, stock identity fixed
+
+**36/36 suites, 1,164 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+### The map
+
+All five inputs are client-supplied; none is looked up from the product:
+
+| input | flows to | classification |
+|---|---|---|
+| `price` | lineTotal → subtotal → total → `posSales.total` | **legitimate override** |
+| `cost` | costTotal → `posSales.profit` | client-supplied, display scope |
+| `qty` | lineTotal **and `products.stock` decrement** | **authoritative outcome** |
+| `discount` | lineTotal | client input |
+| `taxRate` | **read, stored, then ignored** — `taxAmount` uses a hardcoded 16 | legacy/unconsumed |
+
+`posSales` is read by ten POS-domain modules and by **no** commission, settlement, payout,
+ledger, finos, sfos or escrow module. `profit` is consumed only by analytics inside
+`pos-retail-engine`. So a distorted price or cost corrupts the seller's **own reporting**, not
+platform money.
+
+### Price is NOT a defect
+
+The POS has a `price_override` approval type and `ManagerAuth.requestPriceOverride`. Selling at
+a cashier-entered price is intended behaviour, governed by the PIN today and by the approval
+primitive later. **It was not removed** — a control asserts it is still accepted, because
+removing a legitimate override would be a regression dressed as a fix.
+
+### The real defect was neither price nor cost
+
+`productId` is caller-supplied and the transaction decrements `products/{id}.stock`. Nothing
+checked the product belonged to the caller's shop, so a seller could record a sale in their own
+books naming **another merchant's product** and decrement that merchant's inventory. The
+oversell guard protected the **quantity**; it never protected the **identity**.
+
+Fixed inside the existing transaction, before any write. Proven by execution: the cross-shop
+sale is refused, the other shop's stock stays at 10, no sale document is written — and an
+own-shop sale still succeeds and decrements 10 → 8.
+
+### A defect in my own earlier work
+
+The `voidPOSSale` product-ownership check added in Priority 7 read
+`p.data().sellerId || p.data().merchantId`. The **served rule** creates products with
+`request.resource.data.sellerUid == request.auth.uid`, so `sellerUid` is canonical and those
+two fields are absent. Guarded by `if (owner && …)`, `owner` was undefined and **the check was
+skipped on every real product**.
+
+It passed its suite because **the fixture used `sellerId` too** — a control proved against a
+shape production does not have. Both the check and the fixture are corrected; reverting to the
+old field names now fails 2 assertions, where before it failed none.
+
+### Separately characterised, not fixed
+
+`pos-accounting` computes COGS from `item.costPrice`; this writer emits `item.cost`. **COGS
+from POS sales is therefore always zero**, understating cost of goods in the financial
+statements. Its intended contract has never been established, so it is recorded rather than
+renamed — the same discipline as `calculateMonthlyCommission`.
+
+### Known limit, recorded
+
+A product carrying **no** owner field still sells. Failing closed there would block any legacy
+product lacking the field, and how many exist is a production-data question the census has not
+answered. Asserted explicitly so it cannot be mistaken for coverage.
+
+### Evidence
+
+Five sabotages, each `applied:true` by hash, restored byte-identically: ownership check removed
+(3), guard reads the dead field (4), oversell guard removed (2), price dropped (4), cost
+dropped (2). Plus the void-path revert (2), which was the proof that the earlier control had
+been vacuous.
+
+### Files changed
+
+`functions/pos-retail-engine.js`, `scripts/test-recordpossale-money-provenance.js` (new,
+28/0/4), `scripts/test-void-tenant-atomicity.js` (fixture corrected),
+`scripts/predeploy-browser-suites.js` (35 → 36).
+
+### NOT changed
+
+`firestore.rules` (the `cashierId` delta stays parked behind `f88e8953`), PIN, Sales Control
+Centre, approval consumption (0 sites), employee authority, shift accounting, the tenant
+bindings from Priorities 7 and 9.
+## [2026-09-01] — Cashier identity map + owner-lookup convergence
+
+**35/35 suites, 1,136 assertions, 0 FAIL. `firestore.rules` untouched. No production data read.**
+
+### Cashier identity: two collections, two legitimate contracts
+
+| collection | writer(s) | field | consumer | verdict |
+|---|---|---|---|---|
+| `posRetailSales` | `posCompleteCheckout` + `pos-retail-mirror-map` | **`cashierId`** | rule checks `cashierUid` | ❌ mismatch |
+| `posSales` | `recordPOSSale` | **`cashierUid`** | queried by `cashierUid` | ✅ |
+| `posShifts` | `openShift` | `cashierUid` | 4 consumers, all `cashierUid` | ✅ |
+| `posAttendance` | `clockIn` | `cashierUid` | `cashierUid` | ✅ |
+| `posCashEvents` | `cmRecordCashEvent` | `cashierId` | `cashierId` | ✅ |
+
+Both sale fields are the **authenticated uid** — server identity, not client input.
+
+**`cashierId` is canonical for `posRetailSales`**: two independent writers produce it, zero
+produce `cashierUid`. The rule is wrong; the data is not. No alias added.
+
+The two rule blocks are worded identically, so every assertion is scoped to its own block —
+a whole-file match would have proven nothing, and `posSales`' `cashierUid` rule is **correct**
+and must not change.
+
+### Rules delta — drafted, NOT applied
+
+```
+match /posRetailSales/{saleId}
+-  || (isAuthed() && resource.data.cashierUid == request.auth.uid);
++  || (isAuthed() && resource.data.cashierId  == request.auth.uid);
+```
+
+`posSales` unchanged. This is the revision **after** `f88e8953` publishes and is live-verified —
+not bundled into it.
+
+### Owner lookups: a correction to my own claim
+
+I previously wrote that **thirteen** `limit(1)` lookups were "a wrong-tenant bug waiting to
+happen". Both halves were wrong. There are 13 `ownerId == uid` lookups of which **seven** use
+`limit(1)`, and **none is a cross-tenant hole** — every one that uses the id re-checks
+`ownerId !== uid` afterwards, or uses only `size > 0`.
+
+The real defect is narrower and still worth fixing: an owner of several businesses could
+silently get the **wrong one of their own**, which for a payment destination means money routed
+to the wrong till of the same owner.
+
+Per-site determination:
+
+| site | verdict |
+|---|---|
+| `_savePaymentDestination` | **converged** — refuses on ambiguity |
+| `_getPaymentDestination` | **converged** — returns `multiple-businesses` |
+| `_getSetupStatus` | **converged** — surfaces the reason |
+| `_ensureBusinessForOwner` | **kept** — asks only *whether any* exists; a provisioning guard |
+| `profileGetCompletion` | **kept** — uses only `size > 0` |
+| `confirmOwner` (catalogue-repair) | **kept** — own-business only; note it searches `merchants` *and* `businesses` |
+
+Converging the two "kept" sites would break every owner with more than one business, so the
+suite asserts they stay — and a sabotage that converges the provisioning guard **fails**, which
+makes that control bidirectional.
+
+### Evidence
+
+Identity map: 4 sabotages — writer removed (1), canonical→noncanonical (5), consumer switched
+(2), `posSales` writer switched (2). Owner lookups: 3 sabotages — payment destination reverted
+(2), ambiguity refusal removed (1), provisioning guard over-converged (2). All `applied:true`
+by hash, all restored byte-identically.
+
+**A broken control, found and fixed.** The consumer-switch sabotage applied cleanly and
+produced **0 failures**: the assertion used `indexOf`, so switching one of four `cashierUid`
+consumers still left three and it passed — the "duplicate occurrence satisfies a whole-file
+assertion" failure named in the gate header. Now counted, plus a negative on `cashierId`
+appearing at all. Re-run: 2 failures.
+
+**A second probe defect:** a regex lost its escaping in transit and became
+`resolveMerchantIdForOwner(uid)` with `(uid)` as a capture group — it matched nothing and
+reported 0 sites against correct code. Replaced with literal `split` counting, which has no
+escaping to lose.
+
+Two sabotage scripts **aborted rather than making bogus edits** when their expected occurrence
+counts were wrong.
+
+### Files changed
+
+`functions/business-bootstrap.js`, `functions/tenant-identity.js` (comment corrected),
+`scripts/test-cashier-identity-map.js` (new, 27/0/4),
+`scripts/test-tenant-identity-convergence.js` (31 → 37), `scripts/predeploy-browser-suites.js`.
+
+### NOT changed
+
+`firestore.rules`, PIN, Sales Control Centre, approval consumption (0 sites), employee
+authority, shift accounting, `calculateMonthlyCommission` (still separately characterised as a
+dead `cashierUid` query whose intended business behaviour is unestablished).
+## [2026-09-01] — pos-retail-engine: the remaining seven tenant bindings
+
+**34/34 suites, 1,099 assertions, 0 FAIL. Guard 14/14 exit 0. No production data read.**
+
+The eight `sellerId || auth.uid` sites tracked since the `recordPOSSale` fix are closed. They
+were seven handlers plus `recordPOSSale`'s own (already-bound) derivation.
+
+### What each one allowed
+
+| handler | gate before | exposure |
+|---|---|---|
+| `getInventoryAlerts` | `_adminOrSeller` | any seller reads any shop's low-stock data |
+| `getInventoryInsights` | `_adminOrSeller` | any seller reads any shop's insights |
+| `getReorderSuggestions` | `_adminOrSeller` | any seller reads any shop's reorder plan |
+| `getPOSAnalytics` | `_adminOrSeller` | any seller reads any shop's analytics |
+| `getLivePOSMetrics` | `_adminOrSeller` | any seller reads any shop's live metrics |
+| **`getBranchComparison`** | **`_authRequired`** | **any authenticated account** reads another merchant's branch revenue and profit |
+| **`initiateInventoryTransfer`** | **`_authRequired`** | **any authenticated account** files a pending transfer into another merchant's queue and emits a platform event carrying the forged shop id |
+
+`sellerId || auth.uid` is a **default, not a binding** — the payload won whenever present.
+
+### The fix
+
+One shared helper, `_boundSellerId(auth, requested)`: admin may name any shop, everyone else
+gets `permission-denied` unless the id is their own uid. Ownership is the `sellers/{id}`
+document id, the same basis `recordPOSSale` was bound on. **No employee store is consulted**,
+so no authority is introduced.
+
+Both `_authRequired` gates were raised to `_adminOrSeller`, matching every sibling handler.
+
+The transfer's **emitted event** is bound too, not just the document — a forged shop id in an
+event poisons every downstream subscriber, and the census confirmed `pos-hq` lists transfers by
+`sellerId`, which is the queue a forged pending record would appear in.
+
+Severity note: no path was found that moves `products.stock` from an `inventoryTransfers`
+record, so the impact is queue injection and a forged event, **not** direct inventory movement.
+Recorded as measured rather than assumed.
+
+### Deliberate narrowing
+
+An employee cannot use these seven on an owner's behalf, because no employee store may be
+chosen here. Fail-closed; restored by authority convergence, not this slice.
+
+### Evidence
+
+Five sabotages, each `applied:true` by hash, restored byte-identically: helper stops refusing
+(1 failure), one read reverted to the default (4), transfer document unbound (3), transfer
+**event** unbound (3), transfer gate weakened (1).
+
+One sabotage script **correctly aborted** rather than making a bogus edit: it expected six
+identical binding lines and found five, because `getBranchComparison` uses different internal
+spacing. The guard did its job; the count was corrected and the sabotage re-run.
+
+The characterization test pinning the old count at 8 **failed on repair**, as designed, and was
+rewritten to assert the new state rather than have its number bumped.
+
+### Files changed
+
+`functions/pos-retail-engine.js`, `scripts/test-pos-retail-tenant-binding.js` (18 → 33 assertions).
+
+### Files NOT changed
+
+PIN, Rules, Sales Control Centre, approval consumption (0 sites), employee authority, shift
+accounting, the census tool. Nothing deployed, nothing committed.
+## [2026-09-01] — Legacy tenant-key migration: census tooling + safety classifier
+
+**34/34 suites, 1,083 assertions, 0 FAIL. NOTHING MIGRATED. No production read performed.**
+
+Tenant convergence made every converged reader ask for `sellerId = merchantId`. Records written
+earlier carry `sellerId = owner uid` and are now unreachable — present, but invisible. This
+slice builds the tooling to find out exactly how many, and refuses to guess.
+
+### Collections in scope — derived, not assumed
+
+The six reached by a `sellerId` filter in `pos-staff-ops.js`:
+
+| collection | queries |
+|---|---|
+| `posShifts` | 4 |
+| `posAttendance` | 3 |
+| `posRetailSales` | 2 |
+| `posCommissions` | 2 |
+| `posCashReconciliation` | 2 |
+| `posApprovals` | 1 |
+
+**Two findings while enumerating them.**
+
+`posRetailSales.sellerId` may not even be in the same space: checkout writes it from a
+`merchantId` that `resolveActor` validates against **`shops/{shopId}`** — the owner-uid space —
+while `pos-staff-ops` now reads it with a canonical merchantId. The census must settle that; it
+is not assumed either way.
+
+And one of the two `posRetailSales` queries (`calculateMonthlyCommission`) filters on
+**`cashierUid`**, a field that collection does not carry — it writes `cashierId`. **That query
+has always returned nothing**, independent of this work. Recorded as a separate pre-existing
+defect, not folded into the migration.
+
+### The classifier — `scripts/lib/tenant-migration.js`
+
+Pure, no I/O, no write path. Ten named outcomes, and a record is **ELIGIBLE** only when every
+question has an unambiguous answer:
+
+`canonical` · `eligible` · `unresolved` · `ambiguous` · `malformed` · `inactive` ·
+`missing-sellerId` · `unknown-key` · `collision` · `meaning-change`
+
+Deliberate choices:
+
+- **an owner of two businesses is `ambiguous`, never auto-assigned** to one
+- **a collision skips** — neither document is merged, neither overwritten
+- **`meaning-change`**: if a record's own `merchantId` disagrees with the resolved one,
+  rewriting `sellerId` would change what the record *says*, not merely where it is filed
+- **`unknown-key`** is distinct from "failed to resolve", so a data-quality problem cannot hide
+  inside a migration statistic
+- the only patch it will ever propose is **one field**, `sellerId`. Document id, timestamps,
+  `cashierUid`, `servedBy`, `shiftId`, requester/approver and audit fields are named as
+  preserved and asserted absent from the patch
+
+### The census — `scripts/census-legacy-tenant-keys.js`
+
+Read-only. It **refuses to run** without `GOOGLE_APPLICATION_CREDENTIALS` or an explicit
+`--project`, because a production read must never happen by accident. It contains no Firestore
+write verb, opens no batch and no transaction — asserted by a scoped regex, not a bare grep,
+because the three `.set`/`.add` calls in that file are `Map` and `Set` operations and a naive
+check would fail correct code.
+
+It reports **truncation explicitly**: if a collection hits `--limit`, the counts are labelled a
+FLOOR rather than presented as totals.
+
+### Evidence
+
+Six sabotages, each `applied:true` by hash and restored byte-identically:
+
+| sabotage | failures |
+|---|---|
+| ambiguous silently resolves | 3 |
+| collision check removed | 1 |
+| patch issued for any status | 6 |
+| patch carries extra fields | 3 |
+| meaning-change check removed | 1 |
+| **a real Firestore write added to the census** | **1** |
+
+### Files changed
+
+`scripts/lib/tenant-migration.js` (new), `scripts/census-legacy-tenant-keys.js` (new),
+`scripts/test-tenant-migration-safety.js` (new, 36/0/5),
+`scripts/predeploy-browser-suites.js` (33 → 34).
+
+### Files NOT changed
+
+No `functions/` file. PIN, Rules, Sales Control Centre, approval consumption (still 0 sites),
+employee authority, shift accounting — all frozen.
+
+### BLOCKED — needs operator credentials
+
+The census cannot run here. Per-collection counts, collision rate, eligible total, estimated
+write count and the affected time window are all **unknown until it is run against production
+with an authorised read-only service account**. No number in this changelog is a count of real
+data, because none was read.
+## [2026-09-01] — Tenant key convergence: one merchant, one canonical id
+
+**33/33 suites, 1,047 assertions, 0 FAIL. Guard 14/14 exit 0. Approval consumption still ZERO.**
+
+### The defect
+
+`_requireSeller` returned whatever the caller sent:
+
+```js
+if (auth.uid === sellerId) return sellerId;                  // OWNER → a uid
+await _assertBusinessPermission(auth.uid, sellerId, 'pos');  // STAFF → a merchantId
+```
+
+Fourteen queries in `pos-staff-ops.js` then filter `where('sellerId','==',sellerId)`. So **one
+shop had two keys**, and a staff-raised approval was invisible to an owner-manager: no error,
+an empty list that looked correct. `posShifts` had the same split, masked because
+`getCurrentShift` also filters on `cashierUid`, so each party only ever saw their own.
+
+### The resolver — `functions/tenant-identity.js` (new module, no new store)
+
+`ownerUid → canonical merchantId`, reading the one existing relationship
+(`businesses.ownerId`) and refusing rather than guessing:
+
+| condition | result |
+|---|---|
+| exactly one active business | `{ ok: true, merchantId }` — the **document id** |
+| none | `unlinked` |
+| **two or more** | `ambiguous` — never first-wins |
+| `merchantId` field ≠ doc id | `malformed` |
+| status ≠ active | `inactive` |
+
+It reads `.limit(2)` deliberately. The **thirteen existing `where('ownerId','==',uid).limit(1)`
+lookups in this codebase silently select the first business** when someone owns several — a
+wrong-tenant bug waiting to happen. Those thirteen are recorded, not changed, in this slice.
+
+It never reads `businesses.businessId` — that `'BIZ-…'` field is decorative and is not a key.
+
+### `_requireSeller` is now canonical
+
+Every path returns the merchantId:
+
+- owner sends **uid** → resolved forward to their merchantId
+- owner sends **merchantId** → accepted once it matches the one they own
+- staff sends **merchantId** → membership verified through the existing capability engine
+- ambiguous → **refused**
+
+A client value never overrides server-derived identity: the uid form is only *recognised*, and
+what it resolves to comes from `businesses where ownerId == auth.uid`.
+
+The old privilege-escalation note described the short-circuit as a feature — *"without
+depending on whether sellerId is a businesses/{id} key, which is NOT uniform"*. It is now
+established that the non-uniformity **was** the defect. The note is marked SUPERSEDED rather
+than left to mislead.
+
+### The loop now closes — proven by execution
+
+A staff cashier raises a request (stored `sellerId = merchantId`); an owner-manager lists with
+their **uid** and **sees it**. Both directions converge on one key, and a Shop B manager still
+sees nothing of Shop A. This is executed against an in-memory Firestore whose `where()` filters
+actually apply — a fake that ignored them would make every such assertion vacuous, so that is
+asserted first as a control.
+
+### ⚠ MIGRATION REQUIRED — existing owner-keyed records
+
+Records written **before** this change under an owner's uid are now unreachable, because reads
+resolve to the merchantId. Affected: `posShifts`, `posApprovals`, `posAttendance`, and the
+other collections behind those fourteen queries.
+
+This is **not** fixed here and cannot be from source: it needs a production query to find how
+many records carry a uid in `sellerId`, then a backfill to the resolved merchantId. Until then,
+an owner who had open shifts or pending approvals under the old key will not see them.
+
+### Files changed
+
+| file | change |
+|---|---|
+| `functions/tenant-identity.js` | **new** — the resolver |
+| `functions/pos-staff-ops.js` | `_requireSeller` canonical; resolver imported; stale note corrected |
+| `scripts/test-tenant-identity-convergence.js` | **new** — 31/0/5, executed |
+| `scripts/predeploy-browser-suites.js` | 32 → 33 |
+| `docs/TENANT_IDENTITY_CENSUS.md`, `docs/EMPLOYEE_AUTHORITY_CONVERGENCE_DECISION.md` | **new** |
+
+### Files NOT changed
+
+`pos-manager-auth.js` (PIN), `firestore.rules`, `sokoni-pos-sales.js` (UI frozen),
+`sokoni-pos-approval-request.js`, `pos-retail-engine.js`, `pos-zero-friction.js`,
+`pos-cash-drawer.js`, `workforce-identity.js`, `business-bootstrap.js`.
+
+### Evidence
+
+Five sabotages, each `applied:true` by hash, restored byte-identically:
+
+| sabotage | failures |
+|---|---|
+| restore the uid short-circuit | 5 |
+| owner form returns the uid | 3 |
+| ambiguity picks the first | 2 |
+| malformed doc accepted | 1 |
+| drop the membership check | 4 |
+
+**Two probe defects fixed, not worked around.** A control matched this module's own sentence
+saying it never reads `businesses.businessId` — the seventh assert-on-prose here; the source is
+now comment-stripped. And under sabotage the harness **crashed** on an unguarded `.value.x`
+instead of reporting failures (exit 2, not a clean count) — `caught()` now always returns an
+object, so a control degrades into a failure rather than a stack trace.
+
+### NOT proven
+
+Existing owner-keyed records (migration above). Merchants whose data already straddles both
+spaces — needs a production query. The other thirteen `limit(1)` lookups. Employee **capability**
+convergence: `workspaceMemberships` is canonical for the **tenant key** here, not yet for
+capability. Approval enforcement — consumption remains at zero call sites by design.
+
+Not production-ready. Nothing deployed, nothing committed.
+## [2026-09-01] — Cashier → Manager approval loop (request only; approval ≠ execution)
+
+**32/32 suites, 1,016 assertions, 0 FAIL. Approval consume call sites: ZERO. Nothing deployed.**
+
+The cashier half of the loop now exists. A cashier raises a **bound** request; the manager sees
+the exact operation in the Sales Control Centre and decides; the cashier reads the **server's**
+decision. Nothing executes.
+
+### The audit that shaped it
+
+Four existing entry points were found and extended — none was replaced or duplicated:
+
+| operation | entry point | executes today? | binding |
+|---|---|---|---|
+| discount | `cart.applyDiscount()` (discount-modal) | **no** — cart state only, server validates at checkout | `amount` |
+| price override | `cart.overridePrice()` (cart row ✏) | **no** — cart state only | `productId` + `amount` |
+| refund | `sales.refundDialog()` → `_processRefund` | **yes** | `saleId` + `amount` |
+| void | `sales.voidDialog()` → `_processVoid` | **yes** | `saleId` |
+
+They map exactly onto the hardened `APPROVAL_BINDING`, so nothing had to be invented.
+
+### New module: `sokoni-pos-approval-request.js` (lazy)
+
+Calls only `createApprovalRequest` and `checkApproval`. It creates no collection, uses no
+browser storage, and decides nothing.
+
+**A percentage is resolved to money before binding.** `20%` is bound as its shilling value
+against the current subtotal, so it can never be approved and later read as `KES 20`.
+
+**`getPendingApprovals` is deliberately not used here** — it requires the supervisor role,
+which a cashier does not have. Duplicate protection therefore works from the ids raised in this
+session, each **re-checked against the server** before being trusted. The map is in memory
+only; it is lost on reload, and the server stays the record.
+
+**The words are the contract.** `Approved by manager` — never `Refund completed`,
+`Sale voided`, or `Discount applied`. An approved request additionally states that it has
+**not** been carried out.
+
+### Manager side
+
+Unchanged and reused: Overview → *Needs your attention* → Approvals → exact binding →
+Approve/Reject → `reviewApproval` → **re-read from the server**. No local status painting on
+either side.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `sokoni-pos-approval-request.js` | **new** — cashier request + authoritative status polling |
+| `pos.js` | 4 request methods; request buttons in refund/void dialogs; 🔑 control on the cart row |
+| `pos.html` | request button in the discount modal; lazy shim registration |
+| `scripts/test-pos-cashier-approval-request.js` | **new** — 46/0/5 |
+| `scripts/test-sales-control-centre.js` | zero-consumption control corrected (below) |
+| `scripts/predeploy-browser-suites.js` | 31 → 32 |
+
+### THE IMPORTANT FINDING — a vacuous control on the slice's core invariant
+
+The whole slice rests on *"no mutation consumes an approval."* That control grepped for
+`_consumeApproval(`. **`_consumeApproval` is module-private** — the only name another file can
+reach is the exported alias `_approvals.consume(...)`. The assertion was therefore looking for
+a spelling that **cannot occur**.
+
+Proven, not theorised: wiring a real consumption into `posProcessRefund` via
+`require('./pos-staff-ops')._approvals.consume(...)` produced **0 failures**. The control now
+checks both spellings plus the bare `.consume(` form, and the same sabotage fails assertion 35
+naming the offending file. **The identical hole existed in `test-sales-control-centre.js` and
+was corrected there too.**
+
+This is the third probe defect caught today by insisting a sabotage must actually bite.
+
+### Evidence
+
+Five sabotages, each `applied:true` verified by hash and restored byte-identically:
+
+| sabotage | failures |
+|---|---|
+| drop the discount request button | 1 |
+| bind the raw percentage instead of money | 1 |
+| copy claims execution ("Refund completed") | 1 |
+| take `binding` from the request instead of deriving it | 4 |
+| wire real approval consumption into `posProcessRefund` | **1 (only after the control was fixed; 0 before)** |
+
+### Invariants held
+
+- approval consume call sites (**both spellings**): **0**
+- `pos-manager-auth.js`: unmodified; the PIN still gates all 5 execute paths
+- new collections / stores / notification channels: **0**
+- `localStorage` / `sessionStorage` in the request path: **0**
+- boot: 64 scripts, 4 blocking, **1,996 KB of 2,040 KB** — both new modules lazy
+- `firestore.rules`: untouched
+
+### NOT proven
+
+No real cashier has raised a request and no real manager has approved one; the loop is proven
+by parts, not in production. Button wiring is source-asserted — clicking needs a browser. And
+approval still gates nothing: **APPROVED ≠ EXECUTED**, by design, until the employee-authority
+decision unlocks consumption at each mutation.
+## [2026-09-01] — Sales becomes the Manager Control Centre
+
+**31/31 suites, 970 assertions, 0 FAIL. Nothing deployed. Nothing committed.**
+
+The Sales page is now the manager's operational screen — overview, transactions with detail,
+by-employee, employees, shifts, approvals and activity — built entirely on authorities that
+already exist. No new store, no new shift arithmetic, no client-side authorisation.
+
+### What it answers
+
+Who sold what, which shift it belongs to, what was refunded or voided, and what is waiting on
+the manager. `Overview` opens by default with metric cards and a **Needs your attention** block
+that routes straight to the pending approvals or to today's reversals.
+
+### The four honesty rules it enforces
+
+1. **A metric with no authority renders `Not available`.** `getCurrentShift` is *caller-scoped* —
+   there is no readable "all active shifts for this shop" — so the Active shifts card says
+   `Not available` rather than being approximated from employee count, sale timestamps, or the
+   caller's own shift. When sales are unreadable, every money card says the same. An unknown
+   rendered as `0` is the defect this rule exists for.
+2. **An approval is shown as the operation it binds**, never as a category. The detail view
+   renders the bound `amount`, `saleId`/`productId`, requester and reason from `binding` — the
+   thing the hardened primitive made precise. An approval with no binding says
+   *"No bound detail recorded"* rather than implying one.
+3. **A decision is re-read from the server.** `reviewApproval` is called, then the list is
+   re-fetched. The client never paints `approved` locally — that would be the browser asserting
+   an authorisation outcome.
+4. **Attribution stays exactly as strong as it is.** A sale with no server-resolved `servedBy`
+   reads `Not recorded` and stays out of employee totals — never filled from `cashierId`, the
+   shift, or the session.
+
+### The notice that had to be there
+
+Approving in this screen **records a decision; it does not gate the operation.**
+`_consumeApproval` has **zero mutation call sites**, so a refund, void or discount is still
+controlled by the till PIN and the operation's own permission check. That notice appears on the
+approvals list and on every approval detail, and a suite control fails if any mutation ever
+starts consuming an approval while the notice still says otherwise.
+
+### Filters are presentation
+
+Employee/status/payment/search narrow what is already on screen. The boundary remains the
+served rule plus `where('sellerId','==',uid)`; no filter value reaches Firestore, asserted
+directly.
+
+### A real gap the tests caught
+
+Transaction rows already carried `data-sale`, but **nothing listened for it** — the sale detail
+view was unreachable by tap. The baseline run failed on that assertion; the handler was added.
+Three other baseline failures in the same run were bugs in my own assertions (a comma
+expression, a nonsensical identity check, and `.length` on an `indexOf` result) and were fixed
+as probe defects, not by weakening the claims.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `sokoni-pos-sales.js` | control centre: overview, approvals, activity, sale detail, filters, badge (20,202 → 39,935 bytes) |
+| `scripts/test-sales-control-centre.js` | **new** — 49/0/5 |
+| `scripts/predeploy-browser-suites.js` | 30 → 31 |
+
+### Still lazy
+
+`pos.html` loads it only through `lazyGlobal("PosSalesView")`. The module nearly doubled and
+**none of it is in the boot payload**; the boot-budget suite stays green. Note that the budget
+alone did not catch a deliberately eager `<script>` tag — it has headroom — so the explicit
+eager-load assertion in the new suite is what protects this, and it does fail under that
+sabotage.
+
+### Evidence
+
+Five sabotages, each with `applied:true` verified by hash before the result was counted, and
+byte-identical restoration after:
+
+| sabotage | failures |
+|---|---|
+| fabricate an active-shift count instead of `Not available` | 2 |
+| drop the approval binding from the detail | 2 |
+| remove the not-enforced notice | 2 |
+| infer the seller from `cashierId` | 2 |
+| load the module eagerly in `pos.html` | 2 |
+
+### NOT built, and the loop is therefore not closed
+
+The **cashier-side request path** (checkout → discount/refund/void → *Request manager approval*
+→ pending) is **not implemented**. `createApprovalRequest` is hardened and callable, so this is
+buildable without touching the employee decision — it is simply not done, and the completion
+loop in the directive cannot close without it.
+
+Beyond that, the loop cannot close at all until a protected mutation consumes an approval,
+which remains behind the employee-authority decision. The PIN is untouched.
+## [2026-09-01] — voidPOSSale: tenant-bound, atomic, failure-visible (P1)
+
+**29/30 suites EXECUTED, 0 assertion failures. 1 suite blocked by browser-runner instability
+(detail below). Functions safety guard 14/14, exit 0. Nothing deployed.**
+
+### The P1
+
+`voidPOSSale` required a `manager`/`supervisor`/`owner`/`admin` claim — **at any shop** — then
+took a client-supplied `saleId`, voided `posSales/{saleId}`, and restored inventory:
+
+```js
+items.filter(i => i.productId).map(i =>
+  admin.firestore().collection('products').doc(i.productId)
+    .update({ stock: incr(i.qty), soldCount: incr(-i.qty) }).catch(() => {}))
+```
+
+Three defects in one block: a manager at one shop could void **another merchant's sale**; the
+void also **incremented that merchant's stock**; and the restore ran outside any transaction
+with failures discarded, so a partial restore left a **voided sale with unrecovered stock** and
+still returned success.
+
+### The fix
+
+One `runTransaction`, all reads before any write:
+
+1. **The sale must belong to the caller's shop.** The shop is read from the *sale*, never from
+   the payload. Ownership is the `sellers/{id}` document id — the owner's uid — exactly as
+   `recordPOSSale` binds it. **No employee store is consulted, so no authority is introduced.**
+2. **Every product is read and validated first.** A product that no longer exists, or that
+   belongs to a different shop, fails the whole void before anything is written.
+3. **Sale update, stock restores and the audit row commit together.** A void that is not
+   audited, and an audit row for a void that did not happen, are both wrong.
+4. **`.catch(() => {})` is gone** from this path. A restoration failure now fails the call.
+5. The `pos.sale.voided` event is emitted only **after** commit.
+
+### Deliberate narrowing, recorded
+
+A non-admin may now void only sales whose `sellerId` is their own uid. **An employee manager
+can no longer void**, because no employee store may be chosen here without silently declaring
+one canonical — which is the parked convergence decision. This is fail-closed and narrower than
+before; it is restored by that slice, not by this one.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `functions/pos-retail-engine.js` | `voidPOSSale` rewritten: tenant binding, single transaction, no swallow |
+| `scripts/test-void-tenant-atomicity.js` | **new** — 30/0/4, executes the handler |
+| `scripts/predeploy-browser-suites.js` | 29 → 30 |
+
+### Evidence — executed, not asserted from source
+
+The suite runs the handler against an in-memory Firestore whose commit is **all-or-nothing**
+(snapshot, roll back on any write failure), because a fake that applied writes eagerly would
+report an absence of atomicity that belongs to the harness, not the code.
+
+The attack path is exercised end to end: **Shop A manager → void Shop B sale → DENIED → Shop B
+sale unchanged, Shop B stock unchanged, no audit row.** And the legitimate path: **Shop A owner
+→ void Shop A sale → voided, both products restored, audit row written in the same commit.**
+
+Five sabotages, each verified applied by hash and restored byte-identically:
+
+| sabotage | failures |
+|---|---|
+| tenant binding removed | 5 |
+| product-owner check removed | 2 |
+| missing-product throw removed (the swallow, restored) | 4 |
+| sale update moved OUTSIDE the transaction | 1 |
+| authorization broadened to any claim | 1 |
+
+**A probe correction.** The atomicity sabotage first produced **0 failures**. Moving the sale
+update out of the transaction changed nothing, because the pre-flight validation throws
+*before* that line — so what the suite proved was ordering, not commit atomicity. A
+commit-time write-failure injection was added (`FAIL_WRITE_ON`), after which the same sabotage
+fails the "sale is NOT left voided" assertion. Zero failures under an applied sabotage is a
+broken probe, not a passing control — the second time that has been caught today.
+
+### Gate — reported honestly
+
+29 of 30 suites EXECUTED with **0 assertion failures**.
+`test-seller-certification-browser.js` reported **24/1**, the single failure being *"the suite
+itself threw: page.route: Target page, context or browser has been closed"* — a WebKit
+lifecycle error in the runner, not a product assertion. Standalone immediately after it
+reported 36/1 with the same harness error. Today that suite has returned 57/0 three times, one
+300s timeout, 57/0 again, and now this.
+
+It is recorded as **BLOCKED by runner instability**, not converted into a pass and not treated
+as a product defect: nothing in this slice touches hosting pages or certification, and the
+failure text names the browser lifecycle rather than any assertion. It was not re-run to obtain
+a better result.
+
+### Not in scope, unchanged
+
+Approval consumption (the primitive exists; wiring is downstream of the authority decision),
+the PIN (`pos-manager-auth.js` untouched), employee convergence, Rules, shift accounting.
+## [2026-09-01] — Approval primitive: four-eyes, shop-bound, single-use, operation-bound
+
+**29/29 suites, 891 assertions, 0 FAIL. Functions safety guard 14/14, exit 0. Nothing deployed.**
+
+Four foundational defects closed in `posApprovals` itself. **No employee store was made
+canonical, no mutation was changed, and the PIN is untouched.**
+
+### 1 · Self-approval eliminated
+
+`reviewApproval` checked the reviewer's *role* and never their *identity*, so anyone holding
+the `supervisor` claim could approve their own request — removing the four-eyes property that
+is the entire purpose of the workflow.
+
+```js
+if (approval.requestedBy && approval.requestedBy === auth.uid)
+  throw new HttpsError('permission-denied', 'You cannot approve your own request.');
+```
+
+The legitimate flow is preserved and asserted: a *different* authorised manager in the same
+shop may still approve, and the decision is recorded.
+
+### 2 · Review bound to the approval's shop
+
+`_requireRole` proves the caller is a supervisor *somewhere*, not here — so a supervisor at one
+shop could approve another shop's request. The seller id now comes from the **approval
+document**, never from `req.data`, so a forged client identifier has nothing to attach to
+because none is read.
+
+This reuses `_assertBusinessPermission` — the helper every other handler in this file already
+goes through, per the PRIVILEGE ESCALATION FIX note — with the same `uid === sellerId` owner
+short-circuit as `_requireSeller`. **The authority architecture is unchanged; no store was
+declared canonical.**
+
+### 3 · Genuine single use
+
+Reviewing an approval and *spending* it are different events. `_consumeApproval()` performs an
+atomic `approved → consumed` transition inside a transaction, so a replay finds it already
+spent. Already-spent is reported distinctly from never-approved: a replay and a forgery are
+different incidents and must not look identical in logs.
+
+It is a **module function, not a callable** — an approval must be spent by the server operation
+it authorises, as part of that operation's own work. A client saying "I used it" is not
+consumption. Exposed as an object (`exports._approvals`), following the `_h` precedent, so the
+Functions loader sees no bare function export that could be mistaken for a trigger.
+
+### 4 · `requestData` bound to the exact operation
+
+`requestData` was an arbitrary client blob, so an approval carried no statement of what it
+authorised. A `binding` is now built at creation from the minimum set of fields whose
+alteration would change the manager's decision:
+
+| type | bound fields |
+|---|---|
+| `refund` | `saleId`, `amount` |
+| `void` | `saleId` |
+| `price_override` | `productId`, `amount` |
+| `discount` | `amount` |
+| `drawer_open` | *(none — opening the drawer is the whole act)* |
+
+No type was added or removed, and no field was invented to make a test pass. `drawer_open`
+binds nothing because it has no target; inventing one would be theatre.
+
+**Amounts are SHILLINGS.** `pos-staff-ops.js` has zero `Cents` references and is shillings
+throughout (`_round2`, `openingCash`, `closingCash`), and `posProcessRefund` computes
+`refundTotal` the same way. `pos-cash-manager.js` works in cents; importing that convention
+here would have authorised **100×** the amount the manager saw.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `functions/pos-staff-ops.js` | self-approval block; shop binding; `APPROVAL_BINDING`; `_consumeApproval` |
+| `scripts/test-approval-primitive.js` | **new** — 31/0/3, executes against an in-memory Firestore |
+| `scripts/predeploy-browser-suites.js` | 28 → 29 |
+| `docs/MANAGER_APPROVAL_ARCHITECTURE.md` | **new** — the census this work came from |
+
+### Database / API / breaking changes
+
+`posApprovals` gains `binding` (at creation) and `consumedBy` / `consumedAt` (at consumption),
+and a fourth status value, `consumed`. Existing documents have no `binding`; `_consumeApproval`
+compares field-by-field, so a legacy document with an absent bound field is **refused**, never
+matched. That is the safe direction. `createApprovalRequest` now **rejects** a request whose
+`requestData` lacks the fields its type requires — a caller sending an unbound refund request
+receives `invalid-argument` where it previously succeeded.
+
+### Evidence
+
+The suite executes the module against a mocked Firestore rather than reading its source — a
+source assertion cannot show whether an approval can be spent twice. All four mechanisms were
+sabotage-proved, each verified as applied by hash and restored byte-identically:
+
+| mechanism | sabotage | result |
+|---|---|---|
+| self-approval | requester check → `if (false)` | 2 failed |
+| shop binding | permission check → `if (false)` | 3 failed |
+| **single use** | **terminal state write removed** | **2 failed** |
+| operation binding | field comparison → `if (false)` | 7 failed |
+
+**A probe correction worth recording.** The first single-use sabotage removed the
+`status === 'consumed'` check and produced **0 failures** — the sabotage applied, and the test
+did not catch it. The two status checks overlap: with the first removed, `status !== 'approved'`
+still rejects a consumed approval. The real single-use mechanism is the *terminal state write*,
+so the sabotage was re-aimed there. Zero failures under an applied sabotage is a broken probe,
+not a passing control.
+
+### NOT proven
+
+Nothing consumes an approval in production. Manager approval is **not** enforceable end to end,
+and the PIN stays until a protected mutation actually consumes one. True concurrent
+double-spend is untested — the harness serialises transactions; it needs the emulator or a real
+Firestore.
+## [2026-09-01] — Shift accounting: cdGetShiftSummary converged onto the canonical formula
+
+**28/28 suites, 858 assertions, 0 FAIL. Functions safety guard 14/14, exit 0. Nothing deployed.**
+
+### The contract already existed
+
+The task was to establish one accounting contract before wiring implementations together, and
+not to invent another formula. There was no need to write one — the platform already has it,
+implemented three times identically:
+
+```
+expected = openingFloat + cashSales − cashRefunds
+         + cashIn − cashOut − safeDrops − cashPickups + adjustments
+variance = countedCash − expected
+```
+
+`functions/pos-cash-manager.js::_computeBalance()` (server), `pos-cash-manager.js` (client),
+and `sokoni-shift.js` — which declares itself *"THE SHIFT / TILL AUTHORITY"* and states it
+takes the cash-manager formula **"character for character"**.
+
+`docs/SHIFT_ACCOUNTING_CONTRACT.md` **ratifies** that formula and defines every term's business
+meaning and sign. It proposes nothing new.
+
+### Two defects fixed, both overstating the drawer
+
+`cdGetShiftSummary` was the sole dissenter, and both of its errors made an honest cashier look
+short:
+
+1. **Cash refunds had no term.** `posDrawerLog` records `type: 'refund'` (a `DRAWER_OPEN_TYPE`)
+   with an `amount` and an `outcome`. Those events existed all along and were simply excluded
+   from the expectation. Now summed from the same collection, with the same shape and the same
+   success filter as `sale`, opposite sign.
+2. **`cashPickup` was ADDED where the canon SUBTRACTS.** On a KES 5,000 pickup the report read
+   **10,000 over** the canonical figure — twice the pickup. This was *not* a business
+   judgement left open: three implementations and a written contract subtract it, so
+   converging is a correction, not a decision.
+
+Both were already characterized by `scripts/test-shift-cash.js`, which **failed the moment
+they were repaired** — the intended behaviour of a characterization test.
+
+### The suite itself was strengthened
+
+`asDrawerFn` was a hand-written mirror of the drawer formula, so the numeric assertions tested
+the mirror rather than the source: under sabotage they stayed green while only the text
+assertions moved. It is now **compiled out of `pos-cash-drawer.js`**. Re-running the same
+sabotage now moves the arithmetic too — 18,000 vs 8,000, exactly the 10,000 double-count the
+original finding described.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `functions/pos-cash-drawer.js` | refund term added; `cashPickup` sign corrected |
+| `scripts/test-shift-cash.js` | section 10 asserts convergence; `asDrawerFn` derived from source; refund control added |
+| `scripts/predeploy-browser-suites.js` | 27 → 28; `test-shift-cash.js` registered (it was not in the gate) |
+| `docs/SHIFT_ACCOUNTING_CONTRACT.md` | **new** — ratified contract, census, open decisions |
+
+### Database / API / breaking changes
+
+None. `cdGetShiftSummary` returns the same shape with one added field, `cashRefunds`. Values
+change only where they were wrong.
+
+### Still divergent — deliberately not fixed
+
+`cdGetShiftSummary` remains structurally wrong in ways a sign change cannot repair, and the
+suite continues to assert each: its cash sales come from **drawer-open events, not sales** (a
+phone till never opens a hardware drawer, so it reports **zero** cash sales against a real
+8,000); it reads `posTillEvents` while the canon reads `posCashEvents`, and
+`TILL_EVENT_TYPES` cannot express `float_adjustment` at all; and it requires manager claims a
+solo merchant lacks. It is deployed, so all of that is live behaviour.
+
+### Open — decisions, not edits
+
+1. `cmRecordCashEvent` accepts `expectedCents` **and** `varianceCents` from the request body
+   and only sanitizes them — the client establishes a financial fact the server could derive.
+2. `closeShift` computes neither expected cash nor variance; it records `closingCash` beside
+   `cashSales` and never compares them.
+3. `pos-db.js` computes a client-side variance from IndexedDB, ignoring refunds and all drawer
+   movements — and it is the figure printed on the shift receipt.
+4. Refunds paid for a prior shift's sale are captured nowhere.
+5. `cashierId || auth.uid` in `pos-cash-manager.js` — the same defaulting-is-not-binding
+   pattern corrected in `recordPOSSale`, tracked separately as a tenant-boundary finding.
+
+### Correction to the prior report
+
+An earlier note in this session claimed the printed shift receipt showed a fabricated
+`Variance: KES 0`. That was wrong: `pos-db.js` does compute a variance, and `pos.js`'s field
+reads are correct against it. The real finding is different — that variance is a **fifth**
+implementation, computed client-side, ignoring refunds and every drawer movement.
+
+### Gate
+
+28/28 EXECUTED, 0 FAIL. `test-seller-certification-browser.js` passed at 47s this run, after
+timing out at 300s in the previous one — confirming that timeout as runner instability rather
+than a defect. It was not re-run to obtain that result; it ran once as part of this gate.
+
+Drawer movements were found to already have an authoritative record (`posCashEvents`, closed
+vocabulary, validated categories, witness and approver fields). No new store was created.
+## [2026-09-01] — recordPOSSale: tenant binding (P1, live path)
+
+**18/0/3. Functions safety guard 14/14, exit 0. Nothing deployed.**
+
+### The defect
+
+`recordPOSSale` is reachable in production. `smartpos-dispatch.js` merges
+`posRetailEngine._h` into `_H`, and `smartPosDispatch` routes to it by `op` name while
+adding **no authorization of its own** — so the handler's own gate is the entire gate.
+
+That gate was `_adminOrSeller(req)`, which establishes the caller **is** a seller. It never
+establishes **which** shop's books they may write. `sellerId` and `cashierUid` were then taken
+from the request payload and merely *defaulted* to `auth.uid`:
+
+```js
+sellerId:   sellerId   || auth.uid,
+cashierUid: cashierUid || auth.uid,
+```
+
+Defaulting is not binding — the payload won whenever it was present. Any caller holding a
+seller claim could record a sale into **another shop's** `posSales`, attributed to **any**
+cashier they named, and emit a `pos.checkout.completed` platform event carrying the forged
+shop id to every downstream subscriber.
+
+### The fix
+
+A tenant binding derived once, up front, and used at every write site in the handler:
+
+```js
+const _sellerId   = _san(sellerId || auth.uid, 40);
+const _cashierUid = auth.uid;
+if (!_isAdmin && _sellerId !== auth.uid)
+  throw new HttpsError('permission-denied', 'A sale can only be recorded for your own shop.');
+```
+
+`sellers/{id}` is keyed by the owner's uid — `pos-onboard.html` writes
+`sellers/{currentUser.uid}` — so identity **is** the document id, exactly as `shops/{uid}` is
+in `resolveActor`. There is no `ownerId` field to forge. The cashier is whoever invoked the
+call, matching `posCompleteCheckout` where `cashierId` is `auth.uid` unconditionally.
+
+Five sites now use the bound values: the seller lookup, the sale record, the receipt, the
+emitted event, and the cashier field. Looking up one shop while writing another would have
+been worse than not checking at all.
+
+### Why this breaks no caller
+
+The only known client (`pos-onboard.html`) sends neither `sellerId` nor `cashierUid` — it
+sends `uid`, `items`, `total`, `payMethod`, `currency`, `isDemo`. Binding both to the token
+therefore changes no legitimate request. Admin remains the single exception, declared once and
+consumed once.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `functions/pos-retail-engine.js` | tenant binding in `recordPOSSale`; 5 write sites bound |
+| `scripts/test-pos-retail-tenant-binding.js` | **new** — 18/0/3 |
+| `scripts/predeploy-browser-suites.js` | 26 → 27 required suites |
+
+### Database / API / breaking changes
+
+None. `posSales` keeps its shape. `sellerId` and `cashierUid` are still accepted in the
+payload and now ignored in favour of the token. A cross-tenant caller who previously succeeded
+now receives `permission-denied` — which is the point.
+
+### Security changes
+
+Narrowing only. Removes two client-controlled identity fields from a money-adjacent write
+path. No authorization widened; safety guard passes 14/14 after the change.
+
+### Deliberately NOT fixed
+
+- **Eight further `sellerId || auth.uid` sites** remain in `pos-retail-engine.js`. Six are
+  reads (`const sid = …`); **lines 1087 and 1101 are WRITES** on the inventory-transfer path.
+  Each is a separate operation needing its own review. The count is **pinned at 8** in the
+  suite so new ones cannot appear unnoticed — if that assertion fails, review, do not just
+  update the number.
+- **Client-supplied prices.** `recordPOSSale` still computes totals from payload `price` and
+  `cost`. That is a separate defect from attribution and is not touched here.
+
+### Gate status — reported honestly
+
+26 of 27 suites EXECUTED with **0 FAIL**. `test-seller-certification-browser.js` **TIMED OUT**
+at 300s inside the sequential runner, having passed at ~34s in two earlier runs today. Run
+standalone immediately afterwards it returned **57 passed, 0 failed, exit 0**. This is the
+known browser-runner instability, not an assertion failure — and it is recorded as BLOCKED
+rather than re-run until it happened to come up green.
+## [2026-09-01] — POS shift attribution: server-derived; two employment stacks mapped
+
+**26/26 suites, 779 assertions, 0 FAIL. Functions safety guard 14/14, exit 0. Nothing deployed.**
+
+### 1. A caller can no longer choose the shift a sale belongs to
+
+`posCompleteCheckout` took `shiftId` from the request body and only sanitized it. A caller
+could therefore attach a sale to **another cashier's shift, or to one already closed** — which
+silently corrupts whatever shift reconciliation is eventually built on top of it.
+
+Checkout now derives the open shift server-side (step `4b`), using the *same* query
+`openShift` and `getCurrentShift` already use:
+
+```
+posShifts where sellerId == merchantId
+          and   cashierUid == cashierId
+          and   status == 'open'
+```
+
+Both inputs were already server-bound, which is why this needed no new authority:
+`merchantId` is enforced by `resolveActor` (the sale is refused when `!_actor.ok`, and
+`resolveActor` grants only the owner — whose ownership *is* the `shops/{uid}` document id and
+so cannot be forged — or an active employee whose `shopOwnerId` matches). `cashierId` is
+`auth.uid`.
+
+Deliberate behaviours:
+- **No open shift is a legitimate state.** A till may sell without one, so the result is
+  `null` — never a fabricated id, never the caller's claim.
+- **A lookup failure never fails a paid sale.** It records `null`. An unattributed sale is
+  recoverable; a misattributed one is not.
+- **A mismatched claim is logged**, not silently dropped — a caller naming a shift that is not
+  theirs is a security signal worth seeing.
+
+### 2. Employee authority: two complete stacks, and five dead reads
+
+Mapping `shopEmployees`/`ROLE_CAPABILITIES` against `workspaceMemberships`/`permissions`
+answered the question asked and found more: a second authority **already exists**, so there is
+nothing to add for symmetry. See [[EMPLOYEE_AUTHORITY_MAP]].
+
+`shopEmployees` has **one writer** (invite acceptance in `index.js`), keyed by `auth.uid`,
+storing `shopOwnerId` — and **no `shopId`, no `userId`**. Five of its six consumers query on
+exactly those absent fields, so their reads cannot resolve for any record that writer has ever
+created. All five **fail closed** (`Access denied` / `forbidden`), so this is a functionality
+defect, not an escalation — a legitimately invited employee is simply denied by five
+subsystems while only `merchant-identity` recognises them.
+
+**Not repaired here.** Every available repair converts DENY into ALLOW across five
+authorization paths, which is an expansion that needs explicit authorization and real
+employment data — not an edit that merely looks right.
+
+`shiftSessions` (Stack B) is a **fifth** shift store; the shift audit counted four. Shift
+convergence is therefore blocked on the employee-stack decision, not on capacity.
+
+### Files affected
+
+| file | change |
+|---|---|
+| `functions/pos-zero-friction.js` | step `4b` shift derivation; `shiftId` now server-derived |
+| `scripts/test-employee-authority-map.js` | **new** — characterizes both stacks (28/0/4) |
+| `scripts/test-pos-sale-attribution.js` | section 5 rewritten to the new contract (27/0/3) |
+| `scripts/test-pos-sales-view.js` | stale note corrected; UI copy deliberately unchanged |
+| `scripts/predeploy-browser-suites.js` | 25 → 26 required suites |
+| `docs/EMPLOYEE_AUTHORITY_MAP.md` | **new** — the census and the pending decision |
+
+### Database changes
+
+None. `posRetailSales.shiftId` keeps its shape and nullability; only its *provenance* changes,
+from client-supplied to server-derived. No migration. Existing records keep client-claimed
+shift ids and are not distinguishable from new ones — which is why the Sales UI warning that
+the id is "recorded by the till, not verified by the server" was **left in place**.
+
+### API changes
+
+None. `shiftId` is still accepted in the request payload (it is used only to log a mismatch)
+and is silently ignored for the written value. No caller breaks.
+
+### Security changes
+
+Narrowing only. Removes a client-controlled attribution key from the money path. No
+authorization was widened; no protection was removed. The functions safety guard passes 14/14
+on `release/functions-converged-6775b09` **after** the change.
+
+### Breaking changes
+
+None.
+
+### Evidence
+
+Both claims were sabotage-proved, with the sabotage verified as applied and the file restored
+byte-identically (md5 compared before and after):
+- reverting the write to `shiftId ? _sanitize(shiftId) : null` failed 2 assertions
+- adding `shopId` to the `shopEmployees` writer brought two consumers alive, dropped the dead
+  count 5 → 3, and failed the 2 assertions carrying that claim
+
+### Still required (external)
+
+- Firebase Console publish of ruleset `f88e8953` — served ruleset is still `59af870d`
+- A decision on the canonical employee stack, before any shift convergence
+- Authorization to repair the five dead reads
+- A deployed function plus a real `posShifts` record to prove the derived shift is correct
+## [2026-08-27] — 48-hour commission invoice: BUILT, fail-closed, NOT DEPLOYED
+
+**52/0. Nothing deployed. No commission invoice can be issued** — the VAT policy is unset,
+and unset means refuse. Enforced by code, not by remembering.
+
+### The gap this closed
+
+An audit found the invoice engine already existed: `etimsPlatformInvoice` (`etims.js`),
+ACTIVE in production, KRA-fiscalised, with sequential numbering and idempotency. Building a
+`commissionInvoices` collection would have been the **fifth** parallel financial system in a
+platform that already paid for nine disagreeing commission tables.
+
+The real gap was linkage: the amount came from the caller rather than the ledger, nothing
+generated invoices for `PER_SALE_48H` rows, and the `invoiceId` field already present on
+every ledger row was never populated on that path.
+
+### ⚠️ A tax position was being set by a library default
+
+`etims-tax-engine.js` computes `const inclusive = cfg.inclusive !== false`, and **no caller
+ever passed a config**. So "is the 5% commission VAT-inclusive or exclusive?" was being
+answered by a default — *inclusive*, which happens to match `terms.html:255` while
+`legal-hub.html:3228` reads the other way. Both pages are live; the seller agreement is
+silent. On a KES 10,000 sale that is 500/431.03 versus 580/500.
+
+`revenueConfig/commission_vat` now has **no default**. Absent, disabled, non-boolean
+`inclusive`, missing `decidedBy`, or unreadable — every one refuses to issue. An
+unattributable tax decision is not a decision.
+
+### Invariants
+
+* **The amount is read, never accepted.** The callable takes `ledgerRowId`; there is no
+  `amount` parameter.
+* **A failed document never erases a real debt.** The receivable arises from order completion
+  (§6a), not from a document. Tested as *absence*: no write of `collectionStatus`,
+  `totalOwed`, `totalOutstanding`, `dueAt` or `penaltyKES` on any path.
+* **One invoice implementation.** `_issuePlatformInvoice` extracted and reused, not copied.
+* **Deterministic idempotency** via `reference = ledgerRowId`; concurrent runs re-check
+  `invoiceId` transactionally, so one receivable cannot yield two invoices.
+
+### The VAT gate is scoped to `commission`
+
+`VAT_GATED_FEE_TYPES = new Set(["commission"])`. Subscription, advertising, delivery,
+verification and premium keep **exactly** the behaviour they had — gating them on a dispute
+that does not concern them would be an unrelated production regression. Their
+`vatInclusive: true` is the prior TaxEngine default stated out loud, not a new decision.
+
+### Still blocking issuance
+
+**#2** invoice frequency (per-sale vs periodic) and **#3** whether a merchant without a KRA
+PIN may be invoiced remain **unresolved**. **#4** (KRA failure does not erase the debt) is
+**decided** and enforced. Arming the VAT policy alone makes issuance possible, not correct.
+
+**Files:** `functions/commission-vat-policy.js` (new) · `functions/commission-invoice.js`
+(new) · `functions/etims.js` · `functions/index.js` · `scripts/test-commission-invoice.js`
+(new, 52/0)
+
+**Regression:** `test-etims-tax-engine` 22/22 incl. **5,100 fuzz cases** (signature change is
+behaviour-preserving) · commission suites 51/0 · 87/0 · 39/0 · single-source gate PASS.
+
+**Untouched:** Daraja · STK · C2B · `productionAuthorized` (false) · commissionSettlements ·
+FinOS ledger · the held POS release `233ac4d`.
+
+---
+
+## [2026-08-27] — POS manual M-PESA Till payment (no Safaricom API dependency)
+
+**Not deployed.** Requires a functions deploy + hosting deploy.
+
+### Deployed 2026-08-27 09:03 UTC — **FUNCTIONS ONLY, not the feature**
+
+Release `233ac4d` (`release/pos-manual-till-94719d5`), built on live `4771b1d` which it
+preserves as an ancestor.
+
+**Deployed:** `claimPosMpesaReference` · `onPosTransactionMpesaRef`.
+Verified independently via `gcloud functions describe` — both **ACTIVE**, 09:03:11Z and
+09:03:28Z — not by trusting the deploy's own output.
+
+**Controls unchanged**, which is what proves the deploy was scoped rather than blanket, and
+that the `sendTestSTKPush` description fix did NOT ship: `darajaSTKPush` and
+`sendTestSTKPush` still 2026-08-25 20:10Z, `posCompleteCheckout` 2026-08-24 01:47Z.
+
+> **The manual M-PESA Till FEATURE is not deployed.** Both functions are inert: nothing calls
+> `claimPosMpesaReference` until the POS UI ships, and `onPosTransactionMpesaRef` only fires
+> on `mpesa_till_manual` sales, which cannot exist while the UI is held. No merchant or
+> customer behaviour changed.
+
+**Held:** hosting (live remains `4771b1d`) · manual Till UI (0 matches for
+`data-method="mpesa_till"` on live `pos.html`, control returns 1) · the receipt
+payment-section change.
+
+**Closed / untouched:** `productionAuthorized` false · Daraja · STK Push · C2B · STK Query ·
+`darajaStoreNumber` · commission implementation · print bridge.
+
+**Certification pending** — requires the hosting deploy, then real devices and a real printer:
+two-device duplicate-reference race (both sales must survive), physical prints for cash /
+card / split / Till, and a reprint round-trip. **Not certified, not released.**
+
+### Added — `mpesa_till_manual`
+
+The customer pays the merchant's own Till directly; the cashier records the M-PESA
+confirmation code against that sale. `sale → Till payment → reference → paid → sync →
+receipt → print`, with **no** STK Push, Daraja credentials, callback, or shortcode.
+
+Recording is not verification: the record states that the cashier recorded a Till payment
+and supplied a reference — never that SOKONI confirmed the money arrived. Carried in data as
+`paymentVerified: false` / `paymentAttestedBy: 'operator'`, and stated on the UI. Other
+payment methods were deliberately NOT given a verification status this change cannot
+establish.
+
+`posTransactions` confirmed canonical (what `PosSyncEngine` actually writes, already
+idempotent). `posCompleteCheckout` is a `dryRun`/shadow harness, not an authoritative write.
+
+### Fixed — POS receipts printed no payment section at all
+
+`PosPrintService` renders its payment block from a `payments` array
+(`sokoni-pos-print-service.js:1243`). **Nothing ever populated it** — the transaction had no
+such field and the call site passed `undefined`. So `b.payment()` was never called: no
+method, no code, no tendered, no change, on every POS receipt. The renderer supported all of
+it.
+
+⚠️ **User-visible:** every POS receipt will now show a payment section that was previously
+absent. `amount` (applied) is kept distinct from `tendered` (handed over) — conflating them
+would overstate takings on every cash receipt.
+
+The live renderer is **`PosPrintService`, not `SokoniReceiptDoc`** — the latter is loaded by
+`pos.html:2383` but referenced zero times by the print service. Wiring to it would have
+printed nothing. The suite asserts this assumption so it fails loudly if it changes.
+
+### Fixed in review — a split sale is TWO tenders
+
+`payment.complete` receives `method: 'split'` with `splitCash`/`splitMpesa`. The first tender
+builder emitted ONE line labelled **`split`** — a word naming no payment method — carrying the
+M-PESA code, and would have printed that on the customer's receipt. Caught before deployment.
+A split now emits two tenders, the code on the M-PESA line only; a zero portion emits no line
+and a tender set is never empty. The suite **executes the shipped builder** rather than
+matching its source, because a split rendering wrongly is a runtime fact.
+
+Previously invisible precisely because the payment section never rendered.
+
+### Security — server-side reference uniqueness
+
+One M-PESA code may attach to at most one completed sale. Enforced by a deterministic
+transactional claim at `mpesaReferenceClaims/{merchantId}__{REF}`, idempotent for the same
+sale (the sync queue retries). The client check cannot be the guard: the POS is offline-first
+and two devices can accept the same reference independently.
+
+**A duplicate does not reject the sale.** The money moved before SOKONI heard about it;
+voiding would destroy the record of a real payment. Conflicts are written to
+`mpesaReferenceConflicts` and the sale is marked — status and total untouched. Mirrors the
+existing oversell rule.
+
+**Rules:** no change needed. Neither collection is matched by any clause and there is no
+`{document=**}` catch-all, so both are default-denied to clients and reachable only by Cloud
+Functions. This also avoids the compiled-ruleset size ceiling.
+
+### Documented, NOT fixed
+
+`posSales` is referenced by ten backend modules and written by nothing in `pos.js`. Three POS
+sale collections exist (`posTransactions`, `posRetailSales`, `posSales`). This is likely the
+mechanism behind the recorded "POS sales absent from Orders/Analytics/Revenue" defect, and is
+left as a separate pre-existing defect rather than fixed silently inside a payment change.
+
+**Files:** `pos.html` · `pos.js` · `sokoni-pos-print-service.js` ·
+`functions/pos-mpesa-refs.js` (new) · `functions/index.js` (re-export) ·
+`scripts/test-pos-manual-till-payment.js` (new, 57/0) · `docs/POS_MANUAL_TILL_PAYMENT.md` (new)
+
+**Regression:** `test-pos-payment-destination` 90/0 · `test-receipt-contract` 132/0 ·
+`test-single-shop-checkout` 29/0 · `test-daraja-stk-payload` 14/0
+
+**Untouched:** Daraja/STK · `productionAuthorized` · `darajaStoreNumber` · C2B · commission ·
+print bridge (`BRIDGE_ENABLED = false`).
+
+---
+
+## [2026-08-26] — KASS merchant-owned Daraja: test-harness correction (§6b specified separately)
+
+**Not deployed.** `productionAuthorized` remains `false` and is NOT part of this path.
+
+### `sendTestSTKPush` — Daraja field-format fix
+
+`TransactionDesc` was `"SOKONI Payment Test — 1 KES"`: 27 characters against Daraja's ~13
+limit, and carrying a non-ASCII em dash. `darajaSTKPush` slices to 13; this call site did
+not, so the KES 1 live test could be refused on **format** while the real push succeeded —
+a failure that reads to the merchant as "bad credentials" and sends them hunting a problem
+that does not exist. Now `"SOKONI Test"` (11 chars, ASCII).
+
+**Files:** `functions/index.js` · `scripts/test-daraja-stk-payload.js` (new, 14/0)
+
+No database, API, security or breaking changes. Requires a functions deploy to take effect.
+
+### Correction to the prior session note
+
+`validateDarajaCredentials` does **not** send an STK push. It requests an OAuth token and
+returns; no money moves. The KES 1 push is `sendTestSTKPush`. The two are separate
+functions and separate steps.
+
+Consequence for merchant onboarding: `validateDarajaCredentials` proves the **Consumer Key
+and Secret** only. It cannot prove the **shortcode ↔ passkey binding**, because it never
+sends the password anywhere. That binding is proven only by an actual push.
+
+### Open, blocking the KASS test
+
+1. **Store / Head Office number** — `darajaSTKPush` (:3759/:3765) and `sendTestSTKPush`
+   (:4673/:4679) both set `BusinessShortCode` and `PartyB` from a single `darajaShortCode`
+   and hash the password with it. No store-number field exists anywhere in the tree. If
+   KASS's Till 3588275 has a distinct Store/HO number, the configuration is
+   unrepresentable. Fix — pending confirmation — is `darajaStoreNumber || darajaShortCode`
+   in **both** call sites.
+2. **Callback IP allowlists diverge.** `SAFARICOM_CALLBACK_IPS` (8 IPs, guards
+   `darajaSTKCallback`) and `_DARAJA_IPS` (12 IPs, guards `webhookMpesa`) share only four
+   entries. Deliberately NOT changed first: reconcile from an observed source IP after a
+   real transaction, not by guessing.
+3. **`resolveActiveDestination()` is called by nothing.** Its docstring names it the
+   production gate for `darajaSTKPush`; that path reads `shopSettings` directly and never
+   consults it. The gate governs nothing today. Recorded, not changed.
+
+### Live state
+
+`shopSettings`: **0 documents** — no merchant has Daraja credentials configured.
+`paymentDestinations/D5Ql2EYr95bt79IpcGTmOMTK0P83` (KASS SHOP): pending TILL 3588275,
+`productionAuthorized: false`, no active destination.
+
+---
+
 ## [2026-08-26] — Admin certification frozen; role-authority convergence opened as its own track
 
 **Not deployed.** Production HOLD stands.

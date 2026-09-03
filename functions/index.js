@@ -11407,14 +11407,22 @@ exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0
-   5 Cloud Functions: marketplace stock sync, SMS/email receipts,
-   purchase order email, daily low-stock alert, order→POS inventory.
+   4 Cloud Functions: marketplace stock sync, SMS/email receipts,
+   daily low-stock alert, order→POS inventory.
 ══════════════════════════════════════════════════════════════════ */
 const posRetail = require("./pos-retail");
 
 exports.posSyncToMarketplace       = posRetail.posSyncToMarketplace;
 exports.sendPOSReceipt             = posRetail.sendPOSReceipt;
-exports.posSendPurchaseOrder       = posRetail.sendPurchaseOrder;
+/* posSendPurchaseOrder — RETIRED 2026-09-03, see docs/adr/ADR-018-legacy-retirement-graph.md.
+   Was posRetail.sendPurchaseOrder: zero code-level callers anywhere in the
+   repo, and zero Cloud Logging invocation entries for the underlying Cloud
+   Run service across the full ~30-day retention window (control query
+   against poscompletecheckout returned 122 entries the same window, proving
+   the logging pipe was not silently empty). Superseded by the structurally
+   complete procurement.sendPurchaseOrder below, which stays live and is NOT
+   part of this retirement — its own zero production traffic in the same
+   window is a separate, still-open lifecycle-use question. */
 exports.posLowStockAlert           = posRetail.posLowStockAlert;
 exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;
 
