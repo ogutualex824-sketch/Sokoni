@@ -299,7 +299,7 @@ a{color:var(--acc);text-decoration:none}
     </nav>
     <div class="sb-foot">
       <a href="onboarding.html" class="btn btn-s btn-sm" style="display:block;text-align:center;margin-bottom:8px">+ Add Another Role</a>
-      <button class="btn btn-g btn-sm" style="width:100%" onclick="firebase.auth().signOut().then(()=>location.href='login.html')">Sign Out</button>
+      <div id="dash-identity" style="display:flex;justify-content:center"></div>
     </div>
   </div>
 
@@ -812,6 +812,14 @@ a{color:var(--acc);text-decoration:none}
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
 <script src="shared-header.js" defer></script>
+<!-- Shared dashboard identity widget — the SAME component Merchant V2 uses
+     (Part 5/7, Till Approval Automation + Unified Dashboard Profile), not a
+     second implementation. No shop-switcher here: this host supplies no
+     getWorkspaces, so that trigger simply does not render — a provider
+     account has no shops-workspace concept in this codebase, and this is
+     not the place to invent one. -->
+<script src="sokoni-dashboard-profile-core.js"></script>
+<script src="sokoni-dashboard-profile.js"></script>
 <script src="sokoni-provider.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
 <script src="sokoni-pricing-studio.js" defer></script>
@@ -1765,6 +1773,37 @@ const Sv={
 };
 window.Sv=Sv;
 
+/* ── Shared dashboard identity widget (Part 7, Till Approval Automation +
+   Unified Dashboard Profile) — the SAME sokoni-dashboard-profile.js
+   Merchant V2's header uses, not a second implementation. No
+   getWorkspaces: a provider account has no shops-workspace concept in
+   this codebase — omitting it is what makes the shop-switcher trigger not
+   render at all, never a stub pretending to work. Also fixes a real,
+   pre-existing sign-out gap: the sidebar's old Sign Out button called
+   firebase.auth().signOut() directly, bypassing the canonical
+   window.sokoniSignOut() (listener teardown, full storage wipe, IndexedDB
+   purge) — the same class of fix Part 5 already made for Merchant V2's
+   own doSignOut(). */
+let _dashIdentityUI = null;
+function _mountDashIdentity(profile, user){
+  const host = document.getElementById('dash-identity');
+  if(!host || !window.SokoniDashboardProfile || _dashIdentityUI) return;
+  try {
+    _dashIdentityUI = window.SokoniDashboardProfile.mount(host, {
+      displayName: profile.name || user.displayName || 'Provider',
+      currentRoleLabel: 'Service Provider',
+      profileHref: '/profile.html',
+      accountSettingsHref: '/account-centre.html',
+      availableRoles: [],
+      signOut: function(){
+        const _go = function(){ window.location.href = 'login.html'; };
+        return (typeof window.sokoniSignOut === 'function' ? window.sokoniSignOut() : Promise.resolve())
+          .then(_go).catch(_go);
+      },
+    });
+  } catch(e){ console.error('[provider-dashboard] dash identity mount failed', e); }
+}
+
 /* ── Bootstrap ───────────────────────────────────────────────────────────── */
 async function loadDashboard(user){
   if(!_sdk)_sdk=new SokoniProvider();
@@ -1781,6 +1820,7 @@ async function loadDashboard(user){
     _q('sbName').textContent=p.name||user.displayName||'Provider';
     _q('sbPlan').textContent=(sub.plan||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     _q('sbAva').textContent=p.category?'🔧':SokoniProvider?'🔧':'🔧';
+    _mountDashIdentity(p, user);
     // Greeting
     const hr=new Date().getHours();
     _q('greetTitle').textContent=(hr<12?'Good morning':hr<17?'Good afternoon':'Good evening')+', '+(p.name||user.displayName||'there').split(' ')[0]+'!';
