@@ -1,3 +1,26 @@
+## 2026-09-03 — seller.js -> posProducts mirror write RETIRED, 14/0
+
+**Executes** the retirement traced read-only in `docs/POSPRODUCTS_SELLERJS_RETIREMENT_GRAPH.md` —
+see `docs/POSPRODUCTS_SELLERJS_RETIREMENT_RESULT.md`. Narrowly scoped: removes only the
+`seller.js:1065-1070` mirror write. Canonical `products` write and the
+`tenants/{uid}/inventory_products` sync are unchanged; a dated retirement comment replaces the
+removed block (same convention as the 18b `posSendPurchaseOrder` retirement).
+
+**Certification (`scripts/test-posproducts-mirror-retirement.js`, 14/14)** uses sabotage controls
+throughout: the canonical-write and inventory-sync detectors are each proven to actually fail when
+that code is broken/removed in a copy, not just proven to pass on the real source; a resurrected
+mirror write is proven caught; a cross-contamination control proves the three detectors are
+independent; `digital-esoko-seller.html`/`ministore.html`/`seller-wiring.js` are diffed
+byte-for-byte against the last commit to prove the two unrelated `addProduct()` implementations and
+the global patch were not touched; a repo-wide git grep confirms the only other posProducts write
+site is the already-known, deliberately out-of-scope `sokoni-reconcile.js`.
+
+**Not done here, deliberately:** `firestore.rules` unchanged; every other posProducts writer/
+consumer untouched; `marketing-engine.js`'s separate `status=='active'` bug (two dormant
+callables, zero real callers) logged but not fixed; the broader 14-consumer migration not started.
+
+**Not deployed.**
+
 ## 2026-09-03 — seller.js -> posProducts mirror writer: retirement graph (read-only)
 
 **Traces** the `seller.js` `posProducts` mirror write to its retirement decision — see
