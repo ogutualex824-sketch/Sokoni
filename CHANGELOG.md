@@ -1,3 +1,69 @@
+## 2026-09-04 — Buyer-facing SOKONI Till QR payment page — /pay/q/** (Q8)
+
+**Files:** `pay-q.html`, `sokoni-pay-q-core.js` (both new), `firebase.json` (+`/pay/q/**`
+rewrite, ordered before the existing `/pay/**`), `functions/sokoni-qr-authority.js`
+(`classifyIntentResolution`'s 'paid' outcome, new `canInitiateStkForIntent`),
+`functions/sokoni-till.js` (`resolveSokoniQR` surfaces intent `status`), `functions/index.js`
+(`initiateSTKPush` — 1 hunk, a narrow STK-caller ownership exception), `scripts/test-pay-q-core.js`
+(new), `scripts/test-sokoni-qr-payment.js` (+14 assertions), `docs/SOKONI_TILL_QR_BUYER_PAGE.md`
+(new), `docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md` (D1-D4 reaffirmed open).
+
+**What it does.** The page a buyer actually lands on after scanning either QR product: resolves
+the token via `resolveSokoniQR` (Q5), shows the merchant and — for a permanent Till QR — an amount
+field, or — for a dynamic POS QR — a fixed, non-editable server amount; mints a payment intent
+(permanent) or reuses the existing one (dynamic); pushes the STK request; and waits for the
+**verified** `paymentIntents/{ref}.status === 'paid'` transition (Q7) before ever showing success.
+`QR page loaded ≠ payment started ≠ payment confirmed ≠ POS marked paid` holds by construction —
+the page never sets a paid state itself, only ever reads one.
+
+**A real, proven blocking dependency, found by tracing before touching anything:**
+`initiateSTKPush`'s existing ownership check (`intent.uid === caller`) is correct for
+subscriptions/checkout/bookings but structurally wrong for a dynamic Till QR — the CASHIER creates
+the intent (Q5), the WALK-UP BUYER must push the STK request. Fixed with a narrow, certified
+exception (`canInitiateStkForIntent`): true only for a `pos_till_sale` intent whose money-routing
+is already fully locked to the Till's own merchant (Q6) — the caller's identity has zero
+influence on who gets credited or what is charged (the amount-match check stays unconditional and
+untouched). Every other purpose's ownership check is unchanged.
+
+**Also extended:** `classifyIntentResolution` (Q5's own pure core) now treats an intent's
+`status:'paid'` as a success outcome, not a refusal — needed because the dynamic-QR buyer cannot
+read `paymentIntents/{ref}` directly (the cashier owns it) and must poll the same, already-hardened
+`resolveSokoniQR` instead. The permanent-Till flow listens directly on Firestore (the buyer owns
+that intent). Neither introduces a new payment-completion authority — `webhookIntasend` (Q7)
+remains the only writer of `status:'paid'`.
+
+**Database/API changes:** none beyond what's listed above — no new collection, no new rules.
+
+**A served-page browser check (not just source review) caught a real, console-silent bug before
+commit:** the page's `<script src>` tags were root-relative without a leading slash — on the
+two-segments-deep `/pay/q/{token}` route they resolved into the SPA rewrite itself, silently
+receiving HTML instead of JS, with **no console error at all**. `window.SokoniPayQCore` never
+loaded; the page sat on its loading state forever. Fixed (leading slashes) and re-verified live in
+a headless browser: correct script URLs, `SokoniPayQCore` loads and answers correctly, the page
+reaches its sign-in-required state as expected with no live Auth session.
+
+**Confirmed untouched, per instruction:** `posCompleteCheckout`, `posRetailSales`/`posSales`, D4's
+commission-category mapping, `intasendWebhook`. **D1/D2/D3 reaffirmed open** — Q5-Q8 avoid these
+hazards on the Till path specifically, by construction; they remain general, unfixed
+payment-system defects for every other purpose.
+
+**Breaking changes:** none. **Deployment:** none — `d592d8f`/v632 unchanged, `release/r1-pos-
+printer-fn` / `C:/temp/sok-r1` unchanged.
+
+**Certification.** Source/static: `scripts/test-sokoni-qr-payment.js` now **74/74** (was 60/60,
++14 for the two Q8 additions, including a second dedicated sabotage control for
+`canInitiateStkForIntent`); `scripts/test-pay-q-core.js` (new) **43/43** with a sabotage control
+proving "the dynamic-QR amount is never buyer-suppliable" would be caught if it regressed; Q6
+(34/34) and Q7 (19/19) re-run clean. Served-page: the bug above, found and fixed, then
+re-confirmed live — no `ReferenceError`/`TypeError`/`SyntaxError`, no 404s, correct state
+transitions, only expected App-Check-without-a-backend noise in the console.
+
+**STATUS: BUILT · CERTIFIED (pure core + served-page). COMMITTED · STACKED. NOT ON R1. NOT
+DEPLOYED.** Full backend-to-buyer-page path — Till issuance → QR → resolve → intent → STK →
+verified webhook → attribution → PAID → page observes it — is now real, wired, and certified.
+
+---
+
 ## 2026-09-03 — POS Till QR paid-state integration (Q7)
 
 **Files:** `functions/payment-attribution.js` (+`decidePaidTransition`, pure), `functions/index.js`
