@@ -4543,23 +4543,58 @@ async function approvePR(id) {
   showToast('Requisition approved');
 }
 
+/* convertPRtoPO used to call SokoniInventory.createPurchaseOrder(poData) — a method that does
+   not exist on that module (it exports createPO, a different, client-only write to
+   inventory_purchaseOrders). The call evaluated to undefined, threw, and the catch below showed
+   an error toast — no PO was ever created and the requisition was never marked converted.
+
+   Fixed to match submitPO() (this same page, line ~2912), the already-working sibling: route
+   through the canonical httpsCallable('createPurchaseOrder') — procurement.js, procPurchaseOrders
+   — not the client-only inventory_purchaseOrders path. That preserves server-computed VAT, the
+   deterministic idempotent PO id, supplier validation, and the approval workflow; none of which
+   exist on the client-only path, and reverting to it would also break the certified assertion in
+   scripts/test-procurement.js that inventory.html never calls createPO(.
+
+   Two payload gaps beyond the method name, found while tracing this defect:
+     - merchantId was missing entirely — createPurchaseOrder requires it.
+     - requisition items are shaped {productId, productName, qty, costPrice} (savePR(), this
+       page); the callable's _validateItems() reads {productId, sku, name, qty, unitCost} with
+       no aliasing — costPrice arriving as unitCost is undefined, and _posNum() throws on that
+       (a hard failure, not a silent zero-cost PO), so remapping is required, not optional.
+
+   The requisition's supplierId does NOT need remapping — it already resolves against
+   procSuppliers (the same canonical list submitPO's own supplier dropdown uses; see the
+   loadSuppliers()/getSuppliers() comment near line 2318), a prior fix already unified that part. */
 async function convertPRtoPO(id) {
   const pr = _allPRs.find(r => r.id === id);
   if (!pr) return;
+
+  const merchantId = _merchantId();
+  if (!merchantId) { showToast('Please sign in again'); return; }
+  if (!pr.supplierId) { showToast('Requisition has no supplier'); return; }
+  if (!Array.isArray(pr.items) || !pr.items.length) { showToast('Requisition has no items'); return; }
+
+  const payload = {
+    merchantId,
+    supplierId: pr.supplierId,
+    expectedDelivery: pr.deliveryDate || null,
+    notes: pr.justification || '',
+    items: pr.items.map(i => ({
+      productId: i.productId || i.id || '',
+      sku:       i.sku || '',
+      name:      i.name || i.productName || 'Item',
+      qty:       Number(i.qty),
+      unitCost:  Number(i.unitCost != null ? i.unitCost : i.costPrice),
+    })),
+  };
+
   try {
-    const poData = {
-      status:      'draft',
-      supplierId:  pr.supplierId || '',
-      items:       pr.items,
-      totalAmount: pr.totalEstimate || 0,
-      requisitionId: id,
-      expectedDate:  pr.deliveryDate || '',
-    };
-    await SokoniInventory.createPurchaseOrder(poData);
+    const created = await firebase.functions().httpsCallable('createPurchaseOrder')(payload);
+    const poNo    = (created.data && created.data.poNumber) || (created.data && created.data.poId) || '';
     if (SokoniInventoryV2.updateRequisition) await SokoniInventoryV2.updateRequisition(id, { status: 'converted' });
     pr.status = 'converted';
     renderPRList();
-    showToast('PO created from requisition');
+    showToast(poNo ? `PO ${poNo} created from requisition` : 'PO created from requisition');
   } catch (e) { showToast('Error: ' + e.message); }
 }
 
