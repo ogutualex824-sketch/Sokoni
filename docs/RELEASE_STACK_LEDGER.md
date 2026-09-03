@@ -29,8 +29,9 @@ HEAD (this branch)       32436f8   (was 9f2dcb9 when this ledger's header was la
                                      several commits of further stacked, certified work since, see
                                      the seller-handover / tracking rows below; not re-enumerated
                                      row-by-row)
-FUNCTION EXPORT COUNT    this branch: 1511 (was 1508 — +3, sellerAuthorizeHandover/getMyPickupPin/
-                                     completePickupWithPin) · r1 tip (8fc3673): 1519 · d592d8f
+FUNCTION EXPORT COUNT    this branch: 1515, counted directly 2026-09-04 (was 1511 — +4, Till/QR's
+                                     mintSokoniTill/setSokoniTillStatus/mintDynamicSokoniQR/
+                                     resolveSokoniQR) · r1 tip (8fc3673): 1519 · d592d8f
                                      (deployed): 1514
 ```
 
