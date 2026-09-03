@@ -82,4 +82,39 @@ async function resolveFinancialAttribution(db, { intentRef, legacyMeta }) {
   return mergeAttribution({ intent, legacyMeta });
 }
 
-module.exports = { mergeAttribution, resolveFinancialAttribution };
+/**
+ * decidePaidTransition — Q7. Given a payment intent's CURRENT state, the
+ * webhook-confirmed amount, and whether this payment is a Till sale, decide
+ * whether paymentIntents/{ref} should transition to 'paid'. Pure — no
+ * Firestore — so it is directly certifiable
+ * (scripts/test-pos-till-paid-transition.js), the same split every pure core
+ * in this programme (Q5, Q6) already uses.
+ *
+ * Scoped to Till sales only by the CALLER (webhookIntasend passes
+ * isTillSale = !!attribution.sokoniTillId) — every other purpose is
+ * untouched by this slice; see docs/POS_QR_PAID_STATE_INTEGRATION.md §4 for
+ * why that is a deliberate scoping decision, not an oversight.
+ *
+ * Returns one of:
+ *   { action: 'noop' }            — already terminal (paid/expired/cancelled), or no intent
+ *   { action: 'mark_paid' }       — safe to transition to 'paid'
+ *   { action: 'flag_mismatch' }   — confirmed amount does not match the intent's own —
+ *                                   intent stays exactly as it is (NOT paid); caller should
+ *                                   log/flag for review, never trust the webhook's figure here
+ */
+const TERMINAL_INTENT_STATUSES = ['paid', 'expired', 'cancelled'];
+
+function decidePaidTransition({ intent, confirmedAmount, isTillSale }) {
+  if (!isTillSale) return { action: 'noop' };
+  if (!intent) return { action: 'noop' };
+  if (TERMINAL_INTENT_STATUSES.includes(String(intent.status))) return { action: 'noop' };
+
+  const expected = Math.round(Number(intent.amount));
+  const confirmed = Math.round(Number(confirmedAmount));
+  if (!Number.isFinite(expected) || !Number.isFinite(confirmed) || expected !== confirmed) {
+    return { action: 'flag_mismatch' };
+  }
+  return { action: 'mark_paid' };
+}
+
+module.exports = { mergeAttribution, resolveFinancialAttribution, decidePaidTransition, TERMINAL_INTENT_STATUSES };

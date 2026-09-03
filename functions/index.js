@@ -8172,6 +8172,53 @@ exports.webhookIntasend = onRequest(
         });
       }
 
+      /* ══ Q7 — POS paid-state: paymentIntents/{ref} itself transitions to
+         'paid'. Scoped to Till sales ONLY (attribution.sokoniTillId truthy) —
+         see docs/POS_QR_PAID_STATE_INTEGRATION.md §4 for why this is
+         deliberately not generalised to every purpose in this slice, and §3
+         for why this — NOT posRetailSales/posSales/retailSettlements — is
+         the correct, uncontested target: those collections are under
+         active, ratified, gated governance (docs/
+         POS_SETTLEMENT_CONVERGENCE_DESIGN.md) this slice must not preempt.
+         Never fails the webhook — the money-moving effects above/below stand
+         regardless of whether this observability transition succeeds. ══ */
+      if (attribution.sokoniTillId) {
+        try {
+          const { decidePaidTransition } = require("./payment-attribution");
+          const _intentRef2 = existing.intentRef || apiRef;
+          const _iSnap2 = await db.collection("paymentIntents").doc(_intentRef2).get();
+          const _decision = decidePaidTransition({
+            intent: _iSnap2.exists ? _iSnap2.data() : null,
+            confirmedAmount: amount,
+            isTillSale: true,
+          });
+          if (_decision.action === "mark_paid") {
+            await db.collection("paymentIntents").doc(_intentRef2).update({
+              status: "paid",
+              paidAt: admin.firestore.FieldValue.serverTimestamp(),
+              paymentRef: apiRef,
+            });
+            logger.info("[webhookIntasend] Till sale PAID", { ref: apiRef, intentRef: _intentRef2, sokoniTillId: attribution.sokoniTillId });
+          } else if (_decision.action === "flag_mismatch") {
+            logger.error("POS_TILL_AMOUNT_MISMATCH — intent left unpaid", {
+              ref: apiRef, intentRef: _intentRef2,
+              intentAmount: _iSnap2.exists ? _iSnap2.data().amount : null,
+              confirmedAmount: amount,
+            });
+            await db.collection("commissionReviewQueue").add({
+              ref: apiRef, reason: "pos_till_amount_mismatch",
+              intentAmount: _iSnap2.exists ? _iSnap2.data().amount : null,
+              confirmedAmount: amount,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+          }
+        } catch (paidTransitionErr) {
+          logger.error("[webhookIntasend] Till PAID transition failed (recoverable)", {
+            ref: apiRef, err: paidTransitionErr && paidTransitionErr.message,
+          });
+        }
+      }
+
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {
