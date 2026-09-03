@@ -2061,6 +2061,10 @@ window.toggleOnline = async function() {
       _drvGpsActive = true;
       SokoniDB.startGPSTracking(drv.id, (lat2, lng2) => {
         SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat2, lng2, { lastPing: new Date().toISOString() }).catch(()=>{});
+        /* Additive: also mirror onto the active delivery's packageRequests doc, if any —
+           see docs/UNIFIED_ORDER_TRACKING_DESIGN.md. rideDrivers (above) stays exactly
+           as it was for dispatch/fleet views; this feeds order-specific tracking. */
+        _drvMirrorPosition(lat2, lng2);
       });
     }
 
@@ -2121,9 +2125,16 @@ function _getDrvDeliveryContainer() {
   return el;
 }
 
+/* The delivery this rider is currently working, for the GPS push below — set/cleared
+   alongside _showDrvDelivery/_clearDrvDelivery. Not the assignment authority (that stays
+   claimAvailableDelivery/packageRequests); this only tells the throttled GPS callback
+   which document to mirror position onto. */
+var _drvActiveDeliveryRef = null;
+
 function _showDrvDelivery(req) {
   const el = _getDrvDeliveryContainer();
   if (!el) return;
+  _drvActiveDeliveryRef = req.deliveryRef || req.ref || null;
   const fee  = Number(req.deliveryFee || req.total || 0).toLocaleString();
   const km   = req.distanceKm ? req.distanceKm.toFixed(1) + ' km' : '—';
   const catIcon = { marketplace:'🛒', food:'🍱', pharmacy:'💊', property:'📑', general:'📦' };
@@ -2308,8 +2319,35 @@ function _deliveryActionBtns(req) {
 }
 
 function _clearDrvDelivery() {
+  _drvActiveDeliveryRef = null;
   const el = document.getElementById('drvLiveDeliveryCard');
   if (el) el.style.display = 'none';
+}
+
+/* A coordinate is usable only if it's a finite, in-range, non-(0,0) fix — same guard
+   delivery-tracking.html's _isGeo already uses for the same field, so a bad fix is
+   rejected identically on both the write and the read side. */
+function _drvIsGeo(lat, lng) {
+  const a = Number(lat), b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) &&
+    Math.abs(a) <= 90 && Math.abs(b) <= 180 && !(a === 0 && b === 0);
+}
+
+/* ── Mirror this rider's position onto the CANONICAL delivery record ─────────────────
+   docs/UNIFIED_ORDER_TRACKING_DESIGN.md. sokoni-delivery.js's updateDriverPosition()
+   already does exactly this, but that module isn't loaded on this page — this writes
+   the SAME fields (driverLat/driverLng/driverLocUpdatedAt) directly via the compat SDK
+   this file already uses everywhere else, so every existing reader of the mirror
+   (delivery-tracking.html, and now seller-delivery.html's mini-map) needs no change.
+   Rides the ALREADY-THROTTLED GPS watch below — no new geolocation watcher, no new
+   interval, per the one-map/GPS-engine discipline this codebase already enforces. */
+function _drvMirrorPosition(lat, lng) {
+  if (!_drvActiveDeliveryRef || !_drvIsGeo(lat, lng)) return;
+  firebase.firestore().collection('packageRequests').doc(_drvActiveDeliveryRef).update({
+    driverLat: lat, driverLng: lng,
+    driverLocUpdatedAt: new Date().toISOString(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }).catch(function (e) { console.warn('[driver] position mirror:', e.message); });
 }
 
 window._drvAcceptDelivery = async function(dRef) {

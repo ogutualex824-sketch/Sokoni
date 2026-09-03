@@ -179,8 +179,6 @@
   var _unsubFailed = null;
   var _activeDeliveries = [];
   var _miniMaps = {};
-  var _miniMapUnsubs = {};
-  window.addEventListener('beforeunload', function() { Object.values(_miniMapUnsubs).forEach(function(fn){ fn(); }); });
 
   /* ── Bootstrap ──
      firebase.js is a MODULE, so it is deferred and runs AFTER this classic block;
@@ -400,7 +398,11 @@
       return;
     }
     el.innerHTML = _activeDeliveries.map(_buildCard).join('');
-    _activeDeliveries.forEach(function (d) { if (d.riderId || d.driverId) _initMiniMap(d); });
+    /* Matches _buildCard's own riderAssigned check exactly (assignedRiderId/riderId/
+       assignedDriverUid) — this used to check only riderId/driverId (the latter isn't
+       even a field this collection uses), so _initMiniMap could be skipped for a
+       delivery the card itself already shows as rider-assigned. */
+    _activeDeliveries.forEach(function (d) { if (d.assignedRiderId || d.riderId || d.assignedDriverUid) _initMiniMap(d); });
   }
 
   function _buildCard(d) {
@@ -461,37 +463,54 @@
       </div>`;
   }
 
-  /* ── Mini map per active delivery ── */
+  /* A coordinate is usable only if it's finite, in-range and not the (0,0) "no fix yet"
+     sentinel — same guard delivery-tracking.html's _isGeo and driver.html's _drvIsGeo
+     already use for this exact field, so all three agree on what counts as real. */
+  function _isGeo(lat, lng) {
+    var a = Number(lat), b = Number(lng);
+    return Number.isFinite(a) && Number.isFinite(b) &&
+      Math.abs(a) <= 90 && Math.abs(b) <= 180 && !(a === 0 && b === 0);
+  }
+
+  /* ── Mini map per active delivery ──────────────────────────────────────────────────
+     ONE LOCATION TRUTH (docs/UNIFIED_ORDER_TRACKING_DESIGN.md): reads d.driverLat/
+     d.driverLng — the SAME driverLat/driverLng mirror on packageRequests that
+     delivery-tracking.html's buyer map already reads — instead of a second, per-rider
+     `rideDrivers` subscription. d is already the live snapshot item _renderActive()
+     holds, so this needs no listener of its own: _loadActive's existing onSnapshot
+     already re-fires (and re-calls this) whenever the rider's position changes. */
   function _initMiniMap(d) {
     var mapId = 'map_' + d.id;
-    if (_miniMaps[mapId]) return;
-    var riderId = d.riderId || d.assignedRiderId;
+    var riderId = d.riderId || d.assignedRiderId || d.assignedDriverUid;
     if (!riderId) return;
-    /* Subscribe to rider GPS — guard against stale listener for same map */
-    if (_miniMapUnsubs[mapId]) { _miniMapUnsubs[mapId](); delete _miniMapUnsubs[mapId]; }
-    _miniMapUnsubs[mapId] = firebase.firestore().collection('rideDrivers').doc(riderId)
-      .onSnapshot(function (snap) {
-        var riderData = snap.data() || {};
-        if (!riderData.lat || !riderData.lng) return;
-        /* Lazy-init map */
-        if (!_miniMaps[mapId]) {
-          if (!window.L) {
-            var _mel = document.getElementById(mapId);
-            if (_mel) { _mel.style.display='block'; _mel.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>'; }
-            return;
-          }
-          var el = document.getElementById(mapId);
-          if (!el) return;
-          el.style.display = 'block';
-          var m = L.map(mapId, { zoomControl:false, attributionControl:false }).setView([riderData.lat, riderData.lng], 14);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
-          var icon = L.divIcon({ html:'<div style="font-size:22px;line-height:1">🏍️</div>', iconSize:[28,28], iconAnchor:[14,14], className:'' });
-          _miniMaps[mapId] = { map: m, marker: L.marker([riderData.lat, riderData.lng], { icon }).addTo(m) };
-        } else {
-          _miniMaps[mapId].marker.setLatLng([riderData.lat, riderData.lng]);
-          _miniMaps[mapId].map.panTo([riderData.lat, riderData.lng]);
-        }
-      });
+
+    if (!_isGeo(d.driverLat, d.driverLng)) {
+      if (!_miniMaps[mapId]) {
+        var _wait = document.getElementById(mapId);
+        if (_wait) { _wait.style.display='block'; _wait.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,0.35);font-size:12px;text-align:center;padding:16px;">Waiting for rider location…</div>'; }
+      }
+      return;
+    }
+    var lat = +d.driverLat, lng = +d.driverLng;
+
+    if (!_miniMaps[mapId]) {
+      if (!window.L) {
+        var _mel = document.getElementById(mapId);
+        if (_mel) { _mel.style.display='block'; _mel.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>'; }
+        return;
+      }
+      var el = document.getElementById(mapId);
+      if (!el) return;
+      el.style.display = 'block';
+      el.innerHTML = '';
+      var m = L.map(mapId, { zoomControl:false, attributionControl:false }).setView([lat, lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+      var icon = L.divIcon({ html:'<div style="font-size:22px;line-height:1">🏍️</div>', iconSize:[28,28], iconAnchor:[14,14], className:'' });
+      _miniMaps[mapId] = { map: m, marker: L.marker([lat, lng], { icon }).addTo(m) };
+    } else {
+      _miniMaps[mapId].marker.setLatLng([lat, lng]);
+      _miniMaps[mapId].map.panTo([lat, lng]);
+    }
   }
 
   /* ── Pending deliveries ── */
