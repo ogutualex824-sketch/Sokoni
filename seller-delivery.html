@@ -57,6 +57,15 @@
     .btn-track { flex: 1; padding: 10px; background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2); color: #71ff00; font-weight: 700; border-radius: 10px; cursor: pointer; font-size: 12px; font-family: inherit; text-align: center; text-decoration: none; }
     .btn-report { padding: 10px 14px; background: rgba(255,140,0,0.08); border: 1px solid rgba(255,140,0,0.2); color: #ff8c00; font-weight: 700; border-radius: 10px; cursor: pointer; font-size: 12px; font-family: inherit; }
 
+    /* ── Seller handover authorization / pickup PIN ── */
+    .sd-handover { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(0,170,255,0.05); border: 1px solid rgba(0,170,255,0.15); border-radius: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .btn-authorize { padding: 10px 14px; background: rgba(0,170,255,0.1); border: 1px solid rgba(0,170,255,0.3); color: #00aaff; font-weight: 700; border-radius: 10px; cursor: pointer; font-size: 12px; font-family: inherit; }
+    .btn-authorize:disabled { opacity: 0.5; cursor: default; }
+    .sd-handover-label { font-size: 12px; font-weight: 700; color: #71ff00; }
+    .btn-pin { padding: 8px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); font-weight: 700; border-radius: 8px; cursor: pointer; font-size: 11px; font-family: inherit; }
+    .sd-pin-value { font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #00aaff; font-family: 'Courier New', monospace; }
+    .sd-handover-err { font-size: 11px; color: #ff5a5a; }
+
     /* ── Analytics ── */
     .sd-chart-placeholder { height: 140px; background: rgba(113,255,0,0.03); border: 1px dashed rgba(113,255,0,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.25); font-size: 13px; margin-top: 16px; }
     .sd-metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; margin-top: 16px; }
@@ -173,13 +182,29 @@
   var _miniMapUnsubs = {};
   window.addEventListener('beforeunload', function() { Object.values(_miniMapUnsubs).forEach(function(fn){ fn(); }); });
 
-  /* ── Bootstrap ── */
-  firebase.auth().onAuthStateChanged(function (user) {
-    if (!user) return;
-    _sellerUid = user.uid;
-    _initTabs();
-    _loadActive();
-    _loadStats();
+  /* ── Bootstrap ──
+     firebase.js is a MODULE, so it is deferred and runs AFTER this classic block;
+     calling firebase.auth() synchronously here threw "Can't find variable: firebase"
+     on the IIFE's FIRST statement, so _initTabs() never ran and none of the six
+     Firestore listeners below (riders, active, pending, history, failed,
+     packageRequests) ever attached. Delivery Hub and Riders both mount this file.
+
+     Same defect, same fix as dispatch.html and driver.html — this file was simply
+     missed when those two were repaired. Only the init call waits for the
+     firebaseReady signal; every function above and the window.* handlers below stay
+     synchronous, so the inline onclick attributes still resolve immediately. */
+  function _whenFirebaseReady(fn) {
+    if (window.firebase) { fn(); return; }
+    window.addEventListener('firebaseReady', fn, { once: true });
+  }
+  _whenFirebaseReady(function () {
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      _sellerUid = user.uid;
+      _initTabs();
+      _loadActive();
+      _loadStats();
+    });
   });
 
   /* ── Tab switching ── */
@@ -347,7 +372,15 @@
     _unsubActive = firebase.firestore()
       .collection('packageRequests')
       .where('sellerUid', '==', _sellerUid)
-      .where('status', 'in', ['driver_assigned','driver_accepted','driver_at_seller','in_transit','arriving'])
+      /* 'picked_up' added: the CANONICAL post-handover-authorization stage
+         (functions/fulfilment-lifecycle.js) that completePickupWithPin now writes.
+         Omitting it would silently drop a delivery from Active the moment a rider
+         completes pickup — the exact failure class fulfilment-lifecycle.js exists
+         to prevent (see its own header). This page still keys off its own literal
+         status list rather than the canonical module — a known, separate,
+         pre-existing divergence (e.g. 'driver_at_seller' is not in
+         fulfilment-lifecycle's alias table either) — out of scope here. */
+      .where('status', 'in', ['driver_assigned','driver_accepted','driver_at_seller','picked_up','in_transit','arriving'])
       .onSnapshot(function (snap) {
         _activeDeliveries = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         _renderActive();
@@ -372,12 +405,37 @@
 
   function _buildCard(d) {
     var status   = d.status || 'unknown';
-    var badgeCls = { driver_assigned:'badge-blue', driver_accepted:'badge-blue', driver_at_seller:'badge-orange', in_transit:'badge-orange', arriving:'badge-green', delivered:'badge-green', failed:'badge-red', returned:'badge-red' }[status] || 'badge-grey';
-    var statusLabel = { driver_assigned:'Rider Assigned', driver_accepted:'Rider En Route', driver_at_seller:'Parcel Collected', in_transit:'Out for Delivery', arriving:'Arriving Now', delivered:'Delivered', failed:'Failed', returned:'Returned' }[status] || status.replace(/_/g,' ');
+    var badgeCls = { driver_assigned:'badge-blue', driver_accepted:'badge-blue', driver_at_seller:'badge-orange', picked_up:'badge-orange', in_transit:'badge-orange', arriving:'badge-green', delivered:'badge-green', failed:'badge-red', returned:'badge-red' }[status] || 'badge-grey';
+    var statusLabel = { driver_assigned:'Rider Assigned', driver_accepted:'Rider En Route', driver_at_seller:'Parcel Collected', picked_up:'Picked Up', in_transit:'Out for Delivery', arriving:'Arriving Now', delivered:'Delivered', failed:'Failed', returned:'Returned' }[status] || status.replace(/_/g,' ');
     var createdStr = d.createdAt ? new Date(d.createdAt.seconds ? d.createdAt.seconds*1000 : d.createdAt).toLocaleString('en-KE',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}) : '—';
     var riderHtml = '';
     if (d.assignedRiderName || d.riderName) {
       riderHtml = `<div class="sd-rider"><span class="sd-rider-icon">🏍️</span><div><div class="sd-rider-name">${_esc(d.assignedRiderName||d.riderName||'Rider')}</div><div class="sd-rider-sub">${_esc(d.assignedRiderPhone||d.riderPhone||'')} ${d.dispatchDistKm ? '· '+d.dispatchDistKm+'km away' : ''}</div></div><div class="sd-rider-eta">${d.dispatchEtaMin ? d.dispatchEtaMin+'min' : 'ETA —'}</div></div>`;
+    }
+
+    /* ── Seller handover authorization ──────────────────────────────────────
+       Only relevant once a rider is actually assigned, and only before pickup
+       is already complete — once picked_up/in_transit/delivered, the handover
+       has already happened and this control has nothing left to do. Reads
+       handoverAuthorizedAt directly off the packageRequests snapshot (mirrored
+       there by sellerAuthorizeHandover) — no extra read needed to decide which
+       state to show. The PIN itself is fetched on demand via getMyPickupPin
+       (not embedded in this snapshot — the plaintext lives only in the
+       deny-by-default deliveryPins collection). */
+    var handoverHtml = '';
+    var riderAssigned = !!(d.assignedRiderId || d.riderId || d.assignedDriverUid);
+    var pastPickup = ['picked_up','in_transit','arriving','delivered','buyer_confirmed'].includes(status);
+    if (riderAssigned && !pastPickup) {
+      if (d.handoverAuthorizedAt) {
+        handoverHtml = `<div class="sd-handover" id="handover_${_esc(d.id)}">
+          <span class="sd-handover-label">✓ Handover authorized</span>
+          <button class="btn-pin" onclick="_showPickupPin('${_esc(d.id)}','${_esc(d.orderId||'')}',this)">Show Pickup PIN</button>
+        </div>`;
+      } else {
+        handoverHtml = `<div class="sd-handover" id="handover_${_esc(d.id)}">
+          <button class="btn-authorize" onclick="_authorizeHandover('${_esc(d.id)}','${_esc(d.orderId||'')}',this)">Authorize Handover</button>
+        </div>`;
+      }
     }
     return `
       <div class="sd-card">
@@ -394,6 +452,7 @@
           <div>Fee: KES ${(d.deliveryFee||0).toLocaleString()} ${d.vehicleType ? '· '+d.vehicleType : ''}</div>
         </div>
         ${riderHtml}
+        ${handoverHtml}
         <div id="map_${d.id}" class="sd-map" style="display:${d.assignedRiderId||d.riderId?'block':'none'}"></div>
         <div class="sd-card-actions">
           <a class="btn-track" href="delivery-tracking.html?ref=${_esc(d.id)}" target="_blank">Track Live</a>
@@ -556,6 +615,55 @@
   function _metric(title, val, sub) {
     return `<div class="sd-metric"><div class="sd-metric-title">${_esc(String(title))}</div><div class="sd-metric-val">${_esc(String(val))}</div><div class="sd-metric-sub">${_esc(String(sub))}</div></div>`;
   }
+
+  /* ── Seller handover authorization ──────────────────────────────────────
+     sellerAuthorizeHandover/getMyPickupPin are the certified backend from
+     functions/seller-handover.js (docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md).
+     This is additive UI only — no new authority is created here; the button
+     just calls the already-certified callable and reflects its result. */
+  window._authorizeHandover = function (pkgId, orderId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Authorizing…'; }
+    var authorize = firebase.functions().httpsCallable('sellerAuthorizeHandover');
+    authorize({ deliveryRef: pkgId })
+      .then(function () {
+        /* The live packageRequests snapshot listener (_loadActive) will pick up
+           handoverAuthorizedAt on its next event and re-render this card into
+           the "Show Pickup PIN" state — no need to hand-patch the DOM here. */
+      })
+      .catch(function (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Authorize Handover'; }
+        var el = document.getElementById('handover_' + pkgId);
+        if (el) {
+          var errEl = document.createElement('div');
+          errEl.className = 'sd-handover-err';
+          errEl.textContent = err.message || 'Could not authorize handover.';
+          el.appendChild(errEl);
+        }
+      });
+  };
+
+  window._showPickupPin = function (pkgId, orderId, btn) {
+    if (!orderId) { SK.dialog.alert('This delivery has no linked order — cannot fetch a pickup PIN.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    var getPin = firebase.functions().httpsCallable('getMyPickupPin');
+    getPin({ orderId: orderId })
+      .then(function (result) {
+        var el = document.getElementById('handover_' + pkgId);
+        if (!el) return;
+        var data = result.data || {};
+        if (data.issued && data.pin) {
+          el.innerHTML = '<span class="sd-handover-label">✓ Handover authorized</span>' +
+            '<span class="sd-pin-value">' + _esc(data.pin) + '</span>' +
+            '<span class="sd-handover-err" style="color:rgba(255,255,255,0.4)">Read this to your rider</span>';
+        } else {
+          el.innerHTML = '<span class="sd-handover-err">PIN not available yet — try again in a moment.</span>';
+        }
+      })
+      .catch(function (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Show Pickup PIN'; }
+        SK.dialog.alert('Error: ' + err.message);
+      });
+  };
 
   /* ── Report issue modal ── */
   window._openReport = function (deliveryRef) {

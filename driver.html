@@ -2129,12 +2129,17 @@ function _showDrvDelivery(req) {
   const catIcon = { marketplace:'🛒', food:'🍱', pharmacy:'💊', property:'📑', general:'📦' };
   const icon = catIcon[req.category] || '📦';
 
-  const activeStatus = { driver_accepted:'heading to seller', driver_at_seller:'at seller', in_transit:'in transit' };
+  /* 'picked_up' is the canonical post-pickup-PIN stage (functions/fulfilment-lifecycle.js),
+     written by completePickupWithPin. 'driver_at_seller' stays listed for any delivery
+     still on the older, unverified self-declare path (functions/seller-handover.js's
+     PIN gate does not retroactively touch it) — see docs/SELLER_DELIVERY_UI_INTEGRATION.md. */
+  const activeStatus = { driver_accepted:'heading to seller', driver_at_seller:'at seller', picked_up:'picked up', in_transit:'in transit' };
   if (activeStatus[req.status]) {
     /* Navigate destination: heading to the SELLER until picked up, then to the BUYER.
        Prefer live coords; fall back to the saved address (Google geocodes it). */
     const _dc = req.deliveryCoords || {}, _pc = req.pickupCoords || {};
-    const _navRaw = (req.status === 'in_transit')
+    const _headingToBuyer = req.status === 'in_transit' || req.status === 'picked_up' || req.status === 'driver_at_seller';
+    const _navRaw = _headingToBuyer
       ? (_dc.lat != null ? _dc.lat + ',' + _dc.lng : (req.deliveryAddress || ''))
       : (_pc.lat != null ? _pc.lat + ',' + _pc.lng : (req.pickupAddress || ''));
     const _navDest = encodeURIComponent(_navRaw);
@@ -2257,19 +2262,42 @@ window._drvUploadProof = async function (input, dRef) {
 function _deliveryActionBtns(req) {
   const dRef = req.deliveryRef || req.ref;
   const s = req.status;
-  if (s === 'driver_accepted') return `
-    <button onclick="window._drvUpdateDelivery('${dRef}','driver_at_seller')"
-      style="width:100%;padding:11px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
-      📍 I'm at the Seller
-    </button>`;
-  if (s === 'driver_at_seller') return `
+  /* ── Pickup — now server-verified, not a self-declare button ────────────────
+     This used to be a single tap ("I'm at the Seller") that wrote the status
+     directly from the client. Custody transfer is now a decision the SELLER
+     makes (sellerAuthorizeHandover), proven with a PIN the rider must obtain
+     from them in person — see docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md. Until
+     the seller has authorized, there is nothing for the rider to tap; the card
+     re-renders automatically the moment they do (live listener, no polling). */
+  if (s === 'driver_accepted') {
+    if (!req.handoverAuthorizedAt) return `
+      <div style="width:100%;padding:11px;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border-radius:10px;font-size:12px;font-weight:700;text-align:center;">
+        ⏳ Waiting for the seller to authorize handover
+      </div>`;
+    return `
+      <div style="margin-top:4px;">
+        <input id="drvPickupPinInput_${dRef}" placeholder="Enter pickup PIN from seller" maxlength="6" inputmode="numeric"
+          style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;letter-spacing:6px;box-sizing:border-box;margin-bottom:8px;">
+        <button onclick="window._drvCompletePickup('${dRef}')"
+          style="width:100%;padding:11px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
+          📍 Confirm Pickup
+        </button>
+      </div>`;
+  }
+  /* 'driver_at_seller' kept for any delivery still on the older, unverified
+     self-declare path (out of scope for this slice — see the finding logged
+     in docs/SELLER_DELIVERY_UI_INTEGRATION.md). 'picked_up' is the canonical
+     stage completePickupWithPin actually writes. Both simply advance to
+     in_transit from here — custody was already proven (or, for the legacy
+     path, was never gated) before either is reached. */
+  if (s === 'driver_at_seller' || s === 'picked_up') return `
     <button onclick="window._drvUpdateDelivery('${dRef}','in_transit')"
       style="width:100%;padding:11px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
-      📦 Picked Up — Start Delivery
+      🚗 Start Delivery
     </button>`;
   if (s === 'in_transit') return `
     <div style="margin-top:4px;">
-      <input id="drvPinInput_${dRef}" placeholder="Enter 4-digit delivery PIN" maxlength="4" inputmode="numeric"
+      <input id="drvPinInput_${dRef}" placeholder="Enter delivery PIN" maxlength="6" inputmode="numeric"
         style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;letter-spacing:6px;box-sizing:border-box;margin-bottom:8px;">
       <button onclick="window._drvCompleteDelivery('${dRef}')"
         style="width:100%;padding:11px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
@@ -2395,6 +2423,38 @@ window._drvCompleteDelivery = async function(dRef) {
     }
     _clearDrvDelivery();
   });
+};
+
+/* ── Pickup confirmation — completePickupWithPin (functions/seller-handover.js) ──────
+   Mirrors _drvCompleteDelivery's shape exactly: server verifies, this client only
+   collects the PIN and reports the result. Advances packageRequests.status to the
+   canonical `picked_up` — a custody transition, not a payout one; no earnings update
+   happens here (that stays exclusively in _drvCompleteDelivery, on the delivery PIN). */
+window._drvCompletePickup = async function (dRef) {
+  const inputEl = document.getElementById('drvPickupPinInput_' + dRef);
+  const entered = (inputEl && inputEl.value || '').trim();
+  if (!/^\d{4,8}$/.test(entered)) {
+    window.toast('❌ Enter the pickup PIN from the seller.');
+    return;
+  }
+  try {
+    const _fn = window.firebaseFunctions && window.firebaseFunctions.httpsCallable
+      ? window.firebaseFunctions.httpsCallable('completePickupWithPin')
+      : null;
+    if (!_fn) { window.toast('❌ Cannot reach the server. Check your connection and try again.'); return; }
+    const _res = await _fn({ deliveryRef: dRef, pin: entered });
+    const _ok  = _res && _res.data && _res.data.ok;
+    if (!_ok) { window.toast('❌ Pickup could not be confirmed. Try again.'); return; }
+    window.toast(_res.data.alreadyAdvanced ? '✅ Already confirmed.' : '✅ Pickup confirmed — head to the buyer.');
+    /* No manual re-render needed — the live packageRequests listener
+       (listenDriverDeliveryRequests) picks up the new status and redraws
+       this card into the 'Start Delivery' state on its own. */
+  } catch (e) {
+    /* Same discipline as the delivery-PIN path: the server's message is the useful
+       one — wrong PIN, not authorized yet, locked out. Show it, don't paper over it. */
+    const _m = (e && (e.message || e.code)) || 'Pickup could not be confirmed.';
+    window.toast('❌ ' + _m);
+  }
 };
 
 /* ── Auto-restore: if driver was already online, resume both listeners ── */
