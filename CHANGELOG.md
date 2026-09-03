@@ -1,3 +1,55 @@
+## 2026-09-03 — webhookIntasend financial attribution — D1 fix (Q6)
+
+**Files:** `functions/payment-attribution.js` (new, pure core — `mergeAttribution`,
+`resolveFinancialAttribution`), `functions/index.js` (`webhookIntasend` only — 4 hunks, all
+within its own line range; `intasendWebhook`, `initiateSTKPush`, every existing idempotency/
+transaction guard untouched), `docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md` (new, trace + design +
+certification record), `docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md` (D1 status updated to
+partially-fixed; new D4 logged), `scripts/test-webhook-attribution.js` (new certification suite).
+
+**What it does.** `webhookIntasend` used to source `sellerUid`/`providerId` (who gets the wallet
+credit), `orderId`/`items` (which order/stock is finalised) from `payments/{ref}.meta` — written
+verbatim from the client's own `initiateSTKPush` request argument, never cross-checked against
+`paymentIntents/{ref}.metadata`. It now resolves attribution once per completed payment: prefers
+the server-derived intent metadata when an intent exists, falls back to the client-supplied meta
+**unchanged** when it does not (D2's remaining, separate gap — no existing unmigrated caller's
+behaviour changes). Till-identity fields (`sokoniTillId`/`shopId`/`branchId`/`merchantUid`, from
+Q5) are a hard floor: never sourced from client meta, intent present or not — closing the gap
+where a permanent-Till-QR buyer payment would have credited the buyer's own wallet instead of the
+Till's merchant.
+
+**Database changes:** none — reads `paymentIntents/{ref}` (already existed), writes nothing new.
+
+**API changes:** none — no new callable; `webhookIntasend`'s external contract (IntaSend's POST
+payload, its 200/401/405 responses) is unchanged.
+
+**Security changes.** Closes the money-routing half of D1 (`docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md`).
+**Deliberately deferred, with evidence, not an oversight:** commission `category` stays sourced
+from `payData.meta` unchanged — `commission-config.js`'s rate/alias vocabulary has no entry for
+any `payment-purposes.js` registry key (verified: live evidence in that file shows the actual
+production category string is `"product"`, deliberately aliased to `marketplace` 5%), so
+switching that field's source would have silently mis-rated live commission for categories other
+than `product_order`. Logged as new finding **D4**, not fixed. Cosmetic/logistics fields (`hub`,
+`sellerName`, `buyerName`, `address`, `fulfillmentType`, `serviceDesc`) also stay unchanged — no
+pricer's metadata carries them yet, extending that schema is separate, later work.
+
+**Breaking changes:** none. **Deployment:** none — `d592d8f`/v632 unchanged, `release/r1-pos-
+printer-fn` / `C:/temp/sok-r1` unchanged. `intasendWebhook` re-confirmed as still the correct
+non-target (Q1's finding unaffected, nothing about IntaSend's dashboard config changed).
+
+**Certification.** `scripts/test-webhook-attribution.js` — 34/34 pure-core assertions (valid
+intent resolves correctly for product/booking/Till purposes; tampered `legacyMeta` proven ignored
+alongside a valid intent; the Till floor proven to hold with no intent, a non-Till intent, and an
+intent with no `.metadata` at all; missing/invalid intent proven byte-identical to pre-fix
+behaviour for every other purpose; purity/independence across calls), plus a negative control and
+a sabotage control (removing the Till floor was proven to let a hostile `merchantUid` leak
+through, caught failing).
+
+**STATUS: BUILT · CERTIFIED (pure core) · COMMITTED · STACKED. NOT ON R1. NOT DEPLOYED.**
+D1: partially fixed (attribution), not closed (category deferred, D4 logged). D2/D3 remain open.
+
+---
+
 ## 2026-09-03 — SOKONI Till/QR authority layer (Q5) — first real payment code in the programme
 
 **Files:** `functions/sokoni-qr-authority.js` (new, pure core), `functions/sokoni-till.js` (new,
