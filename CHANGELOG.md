@@ -1,3 +1,36 @@
+## 2026-09-03 — Seller handover / pickup-PIN UI: seller-delivery.html + driver.html, 20/0
+
+**Wires** the `sellerAuthorizeHandover`/`getMyPickupPin`/`completePickupWithPin` backend into the
+existing tracking surfaces — see `docs/SELLER_DELIVERY_UI_INTEGRATION.md`.
+
+**seller-delivery.html.** Assigned-rider card gains "Authorize Handover" / "Show Pickup PIN".
+Also fixes a real bug this change would otherwise have shipped with: the Active-tab query's status
+filter never included `picked_up`, so a delivery would silently vanish from Active the instant
+pickup completed.
+
+**driver.html.** The old single-tap, unverified "I'm at the Seller" button
+(`_drvUpdateDelivery` writing `packageRequests.status` directly, no PIN, no seller gate) is
+replaced for the `driver_accepted` stage with a wait state → PIN entry → `_drvCompletePickup`
+flow. Also fixes an adjacent, pre-existing, live bug found while touching this code: the
+delivery-completion PIN input had `maxlength="4"` against a real 6-digit PIN — a rider could not
+type the last digit.
+
+**Logged, not fixed (separate finding, kept out of this slice).** `sokoni-delivery.js` — loaded
+by `checkout.html`, `seller.html`, AND `delivery-tracking.html` — exposes
+`driverAcceptDelivery`/`driverArrivedAtSeller`/`driverPickedUp` as direct, unauthenticated-by-PIN
+client writes to `packageRequests.status`, and `firestore.rules` currently permits them. Confirmed
+this does not release money (no trigger watches `packageRequests` for these transitions); a
+custody/display-integrity gap, not a financial one. Queued alongside the existing `proofPin`
+cleanup.
+
+**Files**
+- `seller-delivery.html` — handover UI, active-list query fix, label/badge entries.
+- `driver.html` — pickup-PIN entry flow, `_drvCompletePickup`, delivery-PIN `maxlength` fix.
+- `scripts/test-seller-handover-ui.js` — new, 20/20, static assertions on both files.
+- `docs/SELLER_DELIVERY_UI_INTEGRATION.md` — new. This slice's design/trace/finding record.
+
+**Not deployed.**
+
 ## 2026-09-03 — Tracking-experience audit + `sellerAuthorizeHandover` (pickup-PIN custody stage)
 
 **Adds** a second, independent pickup-stage PIN so a seller can authorize an already-assigned
