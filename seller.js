@@ -1026,16 +1026,27 @@ async function addProduct(){
                    there, keyed by the SAME id so the two stay linked, mapping the
                    storefront fields to the inventory schema saveProduct() expects
                    (price->sellingPrice, costPrice->buyingPrice, stock->stockLevel) and
-                   assigning the default branch (warehouseId). Also mirror to posProducts —
-                   the same two writes SokoniInventory.saveProduct does — so the product is
-                   visible at POS checkout too.
+                   assigning the default branch (warehouseId).
 
                    FULLY SEPARATE and fire-and-forget: the products write above has already
                    succeeded and is awaited; this runs after it and is wrapped so a sync
                    failure (rules, offline, quota) can NEVER affect the storefront listing,
                    which is the merchant's revenue path. Branch stock separation and a
                    branch picker on the upload form are follow-on; this establishes the
-                   link and the default-branch assignment. */
+                   link and the default-branch assignment.
+
+                   2026-09-03: the posProducts mirror write that used to sit here (same
+                   collection SokoniInventory.saveProduct also writes to) is RETIRED, not
+                   just removed silently. It was the ONLY posProducts writer in this file,
+                   fed by this ONE trigger, never kept in sync by any edit/delete path, and
+                   proven to have no legitimate remaining consumer — the served Firestore
+                   rules key ownership on `sellerId`, which the canonical posUpsertProduct
+                   writer never sets, so no client reader of posProducts could see either
+                   schema anyway. Full evidence:
+                   docs/POSPRODUCTS_SERVED_RULES_GATE.md,
+                   docs/POSPRODUCTS_SELLERJS_RETIREMENT_GRAPH.md. The checkout's real read
+                   path is canonical `products` (functions/pos-zero-friction.js), already
+                   written above, unaffected by this retirement. */
                 if (sellerUid) {
                     try {
                         const _img = (storageUrls && storageUrls[0]) || newProduct.image || '';
@@ -1062,12 +1073,6 @@ async function addProduct(){
                         };
                         m.setDoc(m.doc(db, 'tenants', sellerUid, 'inventory_products', newProduct.id), _invProduct, { merge: true })
                           .catch(function (e) { console.warn('[SOKONI] inventory sync (non-blocking):', e && e.message); });
-                        m.setDoc(m.doc(db, 'posProducts', newProduct.id), {
-                            name: _invProduct.name, price: _invProduct.sellingPrice, cost: _invProduct.buyingPrice,
-                            category: _invProduct.category, sku: _sku, unit: 'pcs', stockLevel: _invProduct.stockLevel,
-                            reorderPoint: 10, imageUrl: _img, description: _invProduct.description,
-                            sellerId: sellerUid, status: 'active', tenantId: sellerUid, updatedAt: m.serverTimestamp(),
-                        }, { merge: true }).catch(function () { /* POS mirror is best-effort */ });
                     } catch (_) { /* sync must never break the upload */ }
                 }
             } catch(e){
