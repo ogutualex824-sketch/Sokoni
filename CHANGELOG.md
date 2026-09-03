@@ -1,3 +1,31 @@
+## 2026-09-03 — Resolved the live IntaSend webhook endpoint from production logs (Q1)
+
+**Resolves**, from Cloud Run logs rather than documentation, which of `intasendWebhook` /
+`webhookIntasend` IntaSend's dashboard actually calls — see
+`docs/INTASEND_WEBHOOK_ENDPOINT_RESOLUTION.md`. Q1 of the Till/QR gate ordering, done before any
+new Till flow integrates with either.
+
+**The documentation was split and contradictory** — several docs name `webhookIntasend` as
+registered; others (`DISASTER_RECOVERY_PLAYBOOK.md`, `WEBHOOK_FIX_RUNBOOK.md`,
+`RIDER_EARNINGS_AUTHORITY.md`) name or assume a move to `intasendWebhook`. Resolved from
+evidence instead.
+
+**Source comparison, measured not estimated:** `webhookIntasend` is 624 lines vs.
+`intasendWebhook`'s 254 — a strict superset, not "near-identical" as this session's own earlier
+trace mischaracterized it. Only `webhookIntasend` has seller wallet crediting, marketplace order
+finalisation, booking creation, and a real, described incident fix (`materialiseEntitlements`,
+fixing a 10-product-limit bug) that `intasendWebhook` never received.
+
+**Production evidence, 30-day Cloud Run logs:** `intasendwebhook` — 18 requests, **all 18
+returned 401** (challenge check failed every single time). `webhookintasend` — 57 requests, 47×
+200 OK with real, verbatim IntaSend B2C payout payloads logged.
+
+**Conclusion: `webhookIntasend` is the live production endpoint.** Corrects a stale comment in
+`scripts/certify-payment.js` and adds a dated correction note to
+`docs/SOKONI_TILL_QR_PAYMENT_TRACE.md`.
+
+**Read-only. No code, config, or dashboard setting changed. Not deployed.**
+
 ## 2026-09-03 — SOKONI Till / QR payment: existing-authority trace (read-only, DESIGN/TRACE ONLY)
 
 **Traces** `sokonipay-collect-settlement`, `money-authority.js`, the IntaSend STK/webhook
