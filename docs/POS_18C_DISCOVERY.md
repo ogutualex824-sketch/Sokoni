@@ -162,7 +162,13 @@ Per the classification the discovery was asked to establish:
 Confirmed by direct reads, not inferred from naming alone:
 
 1. **`functions/procurement.js` + `procurement.html`** — canonical PO lifecycle engine, collection
-   `purchaseOrders` (no `pos` prefix). Real caller. This is the survivor from 18b/ADR-018.
+   **`procPurchaseOrders`** (verified: `grep -n "collection('procPurchaseOrders')" functions/procurement.js`,
+   11 call sites). *Correction: an earlier draft of this document said `purchaseOrders`, no prefix —
+   that was the collection name hardcoded in the now-retired `pos-retail.js` `sendPurchaseOrder`
+   (see ADR-018/18b), which was itself pointing at the wrong collection; it was never
+   `procurement.js`'s own name for it. `purchaseOrders` (bare) does not appear to be written by any
+   live path found in this repo.* Real caller (`inventory.html`/`pos-suppliers.js`
+   → `procurement.sendPurchaseOrder`). This is the survivor from 18b/ADR-018.
 2. **`functions/pos-inventory-pro.js` (+ `smartPosDispatch`)** — AVCO/FEFO-costed engine, collections
    `posPurchaseOrders`/`posBatches`. Internally consistent and server-correct where reachable, but
    its reachable creation op (`createAutoReorderPO`) has no found frontend caller (§A.2).
