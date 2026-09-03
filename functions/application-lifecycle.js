@@ -62,6 +62,7 @@
 
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const logger = require('firebase-functions/logger');
@@ -73,6 +74,14 @@ const { startSellerFreeTrial } = require('./seller-trial');
 const REGION = 'us-central1';
 const _db = () => getFirestore();
 const _ts = () => FieldValue.serverTimestamp();
+
+/* Till Approval Automation — same secret name functions/sokoni-till.js
+   already declares (defineSecret is safe to declare more than once for the
+   same secret name; this codebase already does this for ALGOLIA_ADMIN_KEY
+   across a dozen files). Must be listed in every entry point below that can
+   reach applyDecision's seller branch, or mintSokoniTillCore's
+   QR_SIGNING_SECRET.value() call throws at runtime. */
+const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
 
 /* Intake normalizer version. Bump when the normalizer learns a new field so
    existing documents are re-normalized exactly once on their next write. */
@@ -751,6 +760,45 @@ async function applyDecision(appId, app, opts = {}) {
       }
     }
 
+    /* SOKONI Till — Till Approval Automation. Same reasoning as the trial
+       above: an entitlement, not a gate, and LAST for the identical reason
+       (only after the shop genuinely exists). Every approved seller with a
+       real shop gets exactly one ACTIVE Till for their main branch,
+       automatically — nobody has to find a settings page and press
+       "Generate." Reuses mintSokoniTillCore — functions/sokoni-till.js's
+       OWN identity-allocation transaction, unmodified logic, called
+       server-side rather than duplicated here. shopId/branchId are
+       resolved GENERICALLY from projectSeller's own receipt — the exact
+       same path any shop takes, KASS Shop included; nothing here names a
+       specific merchant. onExisting:'return' is what makes this
+       idempotent: applicationLifecycle (the Firestore trigger below) can
+       legitimately re-fire for the same approval, and a repeat must
+       converge on the same Till, never mint a second one. A failure here
+       is reported, never a reason to undo an approval that already
+       granted the role and activated the shop — matches every other
+       entitlement in this function. */
+    if (approved && role === 'seller') {
+      const shopWrite = receipt.writes.find((w) => w && w.shopId);
+      if (shopWrite && shopWrite.shopId) {
+        try {
+          const { mintSokoniTillCore } = require('./sokoni-till')._internal;
+          const till = await mintSokoniTillCore({
+            shopId: shopWrite.shopId,
+            branchId: `${shopWrite.shopId}-main`,
+            actorUid: uid,
+            onExisting: 'return',
+            source: 'application_approval',
+          });
+          receipt.till = { sokoniTillId: till.sokoniTillId, created: till.created };
+        } catch (tillErr) {
+          logger.error('[appLifecycle] Till issuance failed (recoverable)', {
+            appId, uid, shopId: shopWrite.shopId, error: tillErr.message,
+          });
+          receipt.till = { error: String(tillErr.message || tillErr).slice(0, 300) };
+        }
+      }
+    }
+
     /* The projection is only 'applied' when BOTH halves of the role landed. A
        granted role whose Auth claim never minted leaves the applicant behaving
        as a buyer, so it is reported as pending — `applicationList` already
@@ -875,7 +923,8 @@ async function decisionAuthority(after) {
    guard short-circuits.
    ────────────────────────────────────────────────────────────────────────── */
 exports.applicationLifecycle = onDocumentWritten(
-  { document: 'applications/{appId}', region: REGION, timeoutSeconds: 120, memory: '256MiB' },
+  { document: 'applications/{appId}', region: REGION, timeoutSeconds: 120, memory: '256MiB',
+    secrets: [QR_SIGNING_SECRET] },
   async (event) => {
     const after = event.data?.after?.exists ? event.data.after.data() : null;
     if (!after) return;                                  // deleted
@@ -953,7 +1002,7 @@ function _requireAdmin(req) {
 }
 
 exports.applicationDecide = onCall(
-  { region: REGION, maxInstances: 10, enforceAppCheck: true },
+  { region: REGION, maxInstances: 10, enforceAppCheck: true, secrets: [QR_SIGNING_SECRET] },
   async (req) => {
     _requireAdmin(req);
     const { applicationId, decision, reason } = req.data || {};
@@ -1046,7 +1095,7 @@ exports.applicationDecide = onCall(
 /* Re-run the projection for an application whose registry record is missing or
    stale — the repair path for anything approved before this engine existed. */
 exports.applicationReconcile = onCall(
-  { region: REGION, maxInstances: 5, enforceAppCheck: true, timeoutSeconds: 300 },
+  { region: REGION, maxInstances: 5, enforceAppCheck: true, timeoutSeconds: 300, secrets: [QR_SIGNING_SECRET] },
   async (req) => {
     _requireAdmin(req);
     const { applicationId, all } = req.data || {};

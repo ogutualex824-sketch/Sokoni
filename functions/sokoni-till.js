@@ -51,6 +51,15 @@ const _isAdmin = (auth) => auth && (
   auth.token?.superAdmin === true
 );
 
+/** A plain, framework-independent error — so mintSokoniTillCore can be
+    called from a non-onCall context (a Firestore trigger) without pulling
+    in HttpsError semantics there. */
+function _err(code, message) {
+  const e = new Error(message);
+  e.code = code;
+  return e;
+}
+
 /** Raise a plain-core `_err`-shaped Error as the matching HttpsError. */
 function _raise(e) {
   if (e instanceof HttpsError) throw e;
@@ -60,25 +69,37 @@ function _raise(e) {
 const QR_BASE = 'https://mysokoni.co.ke/pay/q/';
 
 /* ═══════════════════════════════════════════════════════════
-   mintSokoniTill — issue a permanent Till identity (Q2/Q4).
-   Immutable identity + status lifecycle; at most one ACTIVE Till per
-   (shopId, branchId), enforced transactionally.
-════════════════════════════════════════════════════════════ */
-exports.mintSokoniTill = onCall(OPT, async (request) => {
-  const auth = request.auth;
-  if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Sign in required.');
-  if (!_isSeller(auth) && !_isAdmin(auth)) throw new HttpsError('permission-denied', 'Seller account required.');
+   mintSokoniTillCore — the identity-allocation transaction itself,
+   extracted so it has exactly ONE implementation reachable from two
+   places: this file's own onCall (self-service, below) and the merchant
+   approval pipeline (functions/application-lifecycle.js's applyDecision,
+   "Till Approval Automation" — a seller is never left to find a settings
+   page and press Generate). No auth/ownership decision lives here — that
+   is each caller's own job; this function only knows how to allocate an
+   identity, transactionally, exactly once per (shopId, branchId).
 
-  const data = request.data || {};
-  const shopId = String(data.shopId || auth.uid).trim();
-  if (!_isAdmin(auth) && shopId !== auth.uid) {
-    throw new HttpsError('permission-denied', 'You may only issue a Till for your own shop.');
-  }
-  const branchId = _san(data.branchId || `${shopId}-main`, 80);
-  if (!branchId) throw new HttpsError('invalid-argument', 'Invalid branchId.');
+   onExisting controls what happens when an ACTIVE Till already exists for
+   this (shopId, branchId):
+     'throw'  (default, matches the original onCall behaviour byte-for-byte)
+              — a seller who double-taps "Generate" sees an explicit error.
+     'return' — the EXISTING Till is returned, created:false, no write at
+              all. This is what makes "approving/reprocessing the same
+              merchant returns the existing Till rather than minting a
+              second one" true — required for a Firestore trigger
+              (applicationLifecycle) that can legitimately re-fire for the
+              same approval.
+   `source` is purely an audit field on the Till document (never read for
+   any authorization decision) — 'self_service' vs 'application_approval'.
+════════════════════════════════════════════════════════════ */
+async function mintSokoniTillCore({ shopId, branchId, actorUid, onExisting = 'throw', source = 'self_service' }) {
+  shopId = String(shopId || '').trim();
+  if (!shopId) throw _err('invalid-argument', 'shopId is required.');
+  branchId = _san(branchId || `${shopId}-main`, 80);
+  if (!branchId) throw _err('invalid-argument', 'Invalid branchId.');
+  if (!['throw', 'return'].includes(onExisting)) onExisting = 'throw';
 
   const shopSnap = await db().collection('shops').doc(shopId).get();
-  if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+  if (!shopSnap.exists) throw _err('not-found', 'Shop not found.');
   const shop = shopSnap.data() || {};
 
   const tillsCol = db().collection('sokoniTills');
@@ -90,10 +111,17 @@ exports.mintSokoniTill = onCall(OPT, async (request) => {
       const activeQ = await tx.get(
         tillsCol.where('shopId', '==', shopId).where('branchId', '==', branchId).where('status', '==', 'ACTIVE')
       );
-      if (!activeQ.empty) {
-        const e = new Error('This branch already has an active Till.');
-        e.code = 'already-exists';
-        throw e;
+      const decision = QA.decideTillAllocation({ hasActiveTill: !activeQ.empty, onExisting });
+
+      if (decision.action === 'return_existing') {
+        const existing = activeQ.docs[0].data();
+        return {
+          sokoniTillId: existing.sokoniTillId, shopId: existing.shopId, branchId: existing.branchId,
+          created: false,
+        };
+      }
+      if (decision.action === 'throw_conflict') {
+        throw _err('already-exists', 'This branch already has an active Till.');
       }
 
       const counterSnap = await tx.get(counterRef);
@@ -111,27 +139,30 @@ exports.mintSokoniTill = onCall(OPT, async (request) => {
         qrVersion: 1,
         intasendCollectionAccount: null,
         createdAt: now(),
-        createdBy: auth.uid,
+        createdBy: actorUid || shopId,
+        source,
         sequenceNumber: seq,
-        statusHistory: [{ status: 'ACTIVE', at: Date.now(), by: auth.uid }],
+        statusHistory: [{ status: 'ACTIVE', at: Date.now(), by: actorUid || shopId }],
       };
 
       tx.set(counterRef, { shopCode, seq }, { merge: true });
       tx.create(tillRef, tillDoc);
 
-      return { sokoniTillId, shopId, branchId, shopCode, seq };
+      return { sokoniTillId, shopId, branchId, created: true };
     });
   } catch (e) {
     if (e.code === 6 || /ALREADY_EXISTS/i.test(e.message || '')) {
-      throw new HttpsError('already-exists', 'This Till id is already in use — please retry.');
+      throw _err('already-exists', 'This Till id is already in use — please retry.');
     }
-    _raise(e);
+    throw e;
   }
 
   const secret = QR_SIGNING_SECRET.value();
   const token = QA.mintToken('till', minted.sokoniTillId, secret);
 
-  logger.info('[sokoniTill] issued', { sokoniTillId: minted.sokoniTillId, shopId, branchId });
+  logger.info('[sokoniTill] issued', {
+    sokoniTillId: minted.sokoniTillId, shopId, branchId, created: minted.created, source,
+  });
 
   return {
     sokoniTillId: minted.sokoniTillId,
@@ -140,7 +171,31 @@ exports.mintSokoniTill = onCall(OPT, async (request) => {
     currency: 'KES',
     token,
     qrUrl: QR_BASE + token,
+    created: minted.created,
   };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   mintSokoniTill — issue a permanent Till identity (Q2/Q4).
+   Immutable identity + status lifecycle; at most one ACTIVE Till per
+   (shopId, branchId), enforced transactionally. Thin onCall wrapper
+   around mintSokoniTillCore — auth/ownership only, byte-identical
+   behaviour to before the refactor (onExisting defaults to 'throw').
+════════════════════════════════════════════════════════════ */
+exports.mintSokoniTill = onCall(OPT, async (request) => {
+  const auth = request.auth;
+  if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Sign in required.');
+  if (!_isSeller(auth) && !_isAdmin(auth)) throw new HttpsError('permission-denied', 'Seller account required.');
+
+  const data = request.data || {};
+  const shopId = String(data.shopId || auth.uid).trim();
+  if (!_isAdmin(auth) && shopId !== auth.uid) {
+    throw new HttpsError('permission-denied', 'You may only issue a Till for your own shop.');
+  }
+
+  try {
+    return await mintSokoniTillCore({ shopId, branchId: data.branchId, actorUid: auth.uid });
+  } catch (e) { _raise(e); }
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -305,3 +360,10 @@ exports.resolveSokoniQR = onCall(OPT128, async (request) => {
     status: decision.status || 'created',
   };
 });
+
+/* Server-side entry point for other Cloud Functions (Till Approval
+   Automation, functions/application-lifecycle.js) — never for client
+   requests. Follows this codebase's own `_internal` convention (see
+   functions/subscription-authority.js's materialiseEntitlements, called the
+   same way from webhookIntasend). */
+exports._internal = { mintSokoniTillCore };

@@ -115,6 +115,25 @@ function formatTillId(shopCode, seq) {
   return `SK-${shopCode}-${String(n).padStart(4, '0')}`;
 }
 
+/* ── Till allocation decision (Till Approval Automation) ─────────────────
+   Given whether an ACTIVE Till already exists for (shopId, branchId) and
+   the caller's requested behaviour, decide what mintSokoniTillCore
+   (functions/sokoni-till.js) should do next. Pure — no Firestore — so the
+   idempotency guarantee this whole feature depends on ("approving the same
+   merchant twice returns the existing Till, never mints a second one") is
+   directly certifiable, the same way every other Till/QR safety property
+   in this programme is (Q5-Q8).
+     onExisting:'throw'  — self-service (mintSokoniTill's own onCall): a
+       seller double-tapping "Generate" sees an explicit conflict error.
+     onExisting:'return' — server-triggered (application-lifecycle.js's
+       applyDecision, and the Firestore trigger that can legitimately
+       re-fire for the same approval): converge on the existing Till. */
+function decideTillAllocation({ hasActiveTill, onExisting }) {
+  if (!hasActiveTill) return { action: 'mint' };
+  if (onExisting === 'return') return { action: 'return_existing' };
+  return { action: 'throw_conflict' };
+}
+
 /* ── Till payability (Q2 Q6/Q7, Q4 Q6) ───────────────────────────────────
    The ONE gate every resolution path (permanent-QR scan, dynamic-sale
    pricing) must pass through, re-checked at resolution time — not cached
@@ -286,5 +305,5 @@ module.exports = {
   mintToken, verifyToken,
   deriveShopCode, formatTillId,
   checkTillPayable, classifyIntentResolution, priceTillSale,
-  canInitiateStkForIntent,
+  canInitiateStkForIntent, decideTillAllocation,
 };

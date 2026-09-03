@@ -278,7 +278,27 @@ console.log('  -- canInitiateStkForIntent (Q8: buyer != intent owner, Till sales
   ok('undefined intent -> exception DENIED', QA.canInitiateStkForIntent(undefined) === false);
 }
 
-/* ── 7. NEGATIVE CONTROL — must itself fail ────────────────────────────── */
+/* ── 6c. Till Approval Automation: decideTillAllocation ─────────────────── */
+console.log('  -- decideTillAllocation (Till Approval Automation idempotency) --');
+{
+  const mint = QA.decideTillAllocation({ hasActiveTill: false, onExisting: 'throw' });
+  ok('no active Till, onExisting:throw -> mint', mint.action === 'mint');
+  const mint2 = QA.decideTillAllocation({ hasActiveTill: false, onExisting: 'return' });
+  ok('no active Till, onExisting:return -> still mint (nothing to return)', mint2.action === 'mint');
+
+  const selfServiceRepeat = QA.decideTillAllocation({ hasActiveTill: true, onExisting: 'throw' });
+  ok('active Till exists, self-service (throw) -> throw_conflict, matches pre-refactor onCall behaviour',
+    selfServiceRepeat.action === 'throw_conflict');
+
+  const approvalRepeat = QA.decideTillAllocation({ hasActiveTill: true, onExisting: 'return' });
+  ok('active Till exists, approval-triggered (return) -> return_existing, NOT a second mint',
+    approvalRepeat.action === 'return_existing');
+
+  ok('unknown onExisting value defaults to the safe (throw) behaviour when a Till exists',
+    QA.decideTillAllocation({ hasActiveTill: true, onExisting: 'bogus' }).action === 'throw_conflict');
+}
+
+/* ── NEGATIVE CONTROL — must itself fail ────────────────────────────── */
 console.log('  -- negative control (must fail; proves the harness can detect failure) --');
 {
   const before = fail;
@@ -362,6 +382,39 @@ console.log('  -- sabotage control (loosened STK-authorization purpose check mus
 
     ok('control: the REAL (unmodified) module still denies the exception for a non-Till purpose',
       QA.canInitiateStkForIntent(nonTillIntent) === false);
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (_) { /* best-effort cleanup */ }
+  }
+}
+
+/* ── 10. SABOTAGE CONTROL — decideTillAllocation's idempotency floor ────── */
+console.log('  -- sabotage control (Till-allocation idempotency floor must be CAUGHT) --');
+{
+  const realSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'sokoni-qr-authority.js'), 'utf8');
+
+  // Break the idempotency floor: always mint, even when an active Till already exists.
+  const sabotagedSrc = realSrc.replace(
+    "function decideTillAllocation({ hasActiveTill, onExisting }) {\n  if (!hasActiveTill) return { action: 'mint' };",
+    "function decideTillAllocation({ hasActiveTill, onExisting }) {\n  return { action: 'mint' }; // SABOTAGED: idempotency floor removed\n  if (!hasActiveTill) return { action: 'mint' };"
+  );
+  if (sabotagedSrc === realSrc) {
+    throw new Error('SABOTAGE CONTROL SETUP FAILED — the idempotency-floor line to weaken was not found; ' +
+      'the control cannot prove anything and the run must be blocked.');
+  }
+
+  const tmpFile = path.join(os.tmpdir(), `sokoni-qr-authority.sabotaged3.${process.pid}.js`);
+  fs.writeFileSync(tmpFile, sabotagedSrc);
+  let sabotaged;
+  try {
+    sabotaged = require(tmpFile);
+
+    const sabotagedDecision = sabotaged.decideTillAllocation({ hasActiveTill: true, onExisting: 'return' });
+    ok('SABOTAGE: weakened code WRONGLY mints again when an active Till already exists',
+      sabotagedDecision.action === 'mint');
+
+    const realDecision = QA.decideTillAllocation({ hasActiveTill: true, onExisting: 'return' });
+    ok('control: the REAL (unmodified) module still converges on the existing Till',
+      realDecision.action === 'return_existing');
   } finally {
     try { fs.unlinkSync(tmpFile); } catch (_) { /* best-effort cleanup */ }
   }
