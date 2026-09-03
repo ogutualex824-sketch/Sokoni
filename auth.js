@@ -237,6 +237,58 @@ function _sokoniLoginRedirect(peek, rawOverride){
     return /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(raw) && !raw.includes('//') ? raw : "index.html";
 }
 
+/* ── Merchant/shop workspace entry (Part 6, Till Approval Automation +
+   Unified Dashboard Profile) ────────────────────────────────────────────
+   ONE shared decision, called from both loginUser() and
+   _handleGoogleResult() below — not two copies that could drift apart.
+   Calls the SAME server-derived resolver Switch Shop (Part 5,
+   merchant-v2.html) already uses, getMyShopWorkspaces — never a second,
+   client-guessed shop list, and never a check this file invents its own
+   authority for. Login routing is a high-blast-radius surface, so this is
+   deliberately narrow: it can only ever ADD a new destination for an
+   account with 1+ ACTIVE workspace; every other account (the overwhelming
+   majority — plain buyers) falls through, completely unaffected, to
+   whichever redirect the CALLER already had before this existed.
+
+   Returns true once it has navigated the browser. Zero active workspaces,
+   or any failure to resolve them (network error, callable unavailable), is
+   deliberately NOT "handled" — returns false so the caller's own existing,
+   unchanged fallback redirect runs. Login must never be blocked, slowed
+   past its own timeout, or altered in outcome by this resolution failing. */
+async function _sokoniResolveShopEntry(displayName){
+    try {
+        const { getFunctions, httpsCallable } = await import(
+            "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js"
+        );
+        const fns  = getFunctions(window.firebaseApp, "us-central1");
+        const call = httpsCallable(fns, "getMyShopWorkspaces");
+        const res  = await call({});
+        const workspaces = (res && res.data && res.data.workspaces) || [];
+        const active = workspaces.filter(function (w) { return w.isActive !== false; });
+
+        if (active.length === 1) {
+            try { window.localStorage.setItem('sokoniActiveShopId', active[0].shopId); } catch (_) {}
+            showAuthMsg(`Welcome${displayName ? ' ' + displayName : ''}! Opening ${active[0].shopName}…`, "success");
+            setTimeout(() => { window.location.href = "/merchant-v2.html"; }, 1200);
+            return true;
+        }
+        if (active.length > 1) {
+            /* The list itself, not just a count — choose-shop.html reads this
+               so it never has to re-derive "which shops" on its own either.
+               sessionStorage (not localStorage): a picker choice a user never
+               completed should not leak into a later, unrelated session. */
+            try { window.sessionStorage.setItem('sokoniChooseShopWorkspaces', JSON.stringify(active)); } catch (_) {}
+            showAuthMsg(`Welcome${displayName ? ' ' + displayName : ''}! Choose a shop to continue…`, "success");
+            setTimeout(() => { window.location.href = "/choose-shop.html"; }, 1200);
+            return true;
+        }
+        return false; /* zero active workspaces — this account has no merchant entry to offer */
+    } catch (wsErr) {
+        console.warn('[AUTH] shop workspace resolution failed (non-fatal):', wsErr && wsErr.message);
+        return false;
+    }
+}
+
 function showAuthMsg(msg, type){
     const el = document.getElementById("authMsg");
     if(!el) return;
@@ -500,6 +552,12 @@ async function loginUser(){
             setTimeout(() => window.location.href = "seller.html?employee=1", 1200);
             return;
         }
+
+        /* ── Merchant/shop workspace entry (Part 6) — additive, runs ONLY for
+           accounts the legacy check above did not already claim (that branch
+           always returns), so this can never change what a "legacy employee"
+           account experiences today. */
+        if (await _sokoniResolveShopEntry(profile.name)) return;
 
         showAuthMsg("Login successful! Taking you home...", "success");
 
@@ -1252,6 +1310,13 @@ async function _handleGoogleResult(result) {
     if (window.SokoniSessions && window.SokoniSessions.createSession) {
         window.SokoniSessions.createSession(user.email).catch(() => {});
     }
+
+    /* Merchant/shop workspace entry (Part 6) — the SAME resolver
+       loginUser() calls, so email/password and Google sign-in behave
+       identically for an account with 1+ active shop. A plain buyer (zero
+       workspaces) or a resolution failure falls through unchanged to this
+       function's own existing redirect below. */
+    if (await _sokoniResolveShopEntry(user.displayName)) return;
 
     showAuthMsg('Signed in with Google! Taking you home…', 'success');
     const btn = document.getElementById('googleSignInBtn');

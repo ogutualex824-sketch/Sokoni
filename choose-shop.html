@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="/security.js"></script>
+  <script src="/shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Choose Shop</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --sk-green:  #71ff00;
+      --sk-dark:   #050505;
+      --sk-card:   #141414;
+      --sk-border: rgba(255,255,255,0.09);
+      --sk-text:   #f4f4f4;
+      --sk-muted:  #a8a8a8;
+      --sk-radius: 16px;
+      --sk-safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      background: var(--sk-dark);
+      color: var(--sk-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .cs-wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 32px 16px calc(24px + var(--sk-safe-b));
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .cs-brand { text-align: center; font-weight: 700; letter-spacing: .04em; color: var(--sk-green); font-size: 14px; }
+    .cs-title { font-size: 22px; font-weight: 800; text-align: center; margin-top: 8px; }
+    .cs-sub { font-size: 13px; color: var(--sk-muted); text-align: center; margin-bottom: 4px; }
+    .cs-list { display: flex; flex-direction: column; gap: 10px; }
+    .cs-shop {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 16px;
+      cursor: pointer;
+      text-align: left;
+      color: var(--sk-text);
+      font: inherit;
+    }
+    .cs-shop:disabled { opacity: .5; cursor: not-allowed; }
+    .cs-shop .ico { font-size: 22px; }
+    .cs-shop .body { flex: 1; min-width: 0; }
+    .cs-shop .name { font-size: 15px; font-weight: 700; }
+    .cs-shop .role { font-size: 12px; color: var(--sk-muted); margin-top: 2px; }
+    .cs-shop .badge { font-size: 11px; color: var(--sk-muted); }
+    .cs-state { padding: 40px 8px; text-align: center; color: var(--sk-muted); font-size: 13px; display: none; flex-direction: column; gap: 14px; align-items: center; }
+    .cs-state.active { display: flex; }
+    .cs-spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--sk-border); border-top-color: var(--sk-green); animation: cs-spin .8s linear infinite; }
+    @keyframes cs-spin { to { transform: rotate(360deg); } }
+    .cs-footer { text-align: center; margin-top: 8px; }
+    .cs-footer button { background: transparent; border: none; color: var(--sk-muted); font-size: 12.5px; text-decoration: underline; cursor: pointer; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="cs-wrap">
+    <div class="cs-brand">SOKONI</div>
+
+    <div id="stateLoading" class="cs-state active">
+      <div class="cs-spinner"></div>
+      <div>Loading your shops…</div>
+    </div>
+
+    <div id="stateSignin" class="cs-state">
+      <div>Sign in to continue.</div>
+      <a href="/login.html" style="color:var(--sk-green)">Sign in</a>
+    </div>
+
+    <div id="stateError" class="cs-state">
+      <div id="errorText">Could not load your shops.</div>
+    </div>
+
+    <div id="stateEmpty" class="cs-state">
+      <div>You don't have access to any shop yet.</div>
+      <a href="/index.html" style="color:var(--sk-green)">Continue to SOKONI</a>
+    </div>
+
+    <div id="stateMain" hidden>
+      <div class="cs-title">Choose Shop</div>
+      <div class="cs-sub">Select which shop you're working in today.</div>
+      <div class="cs-list" id="shopList"></div>
+      <div class="cs-footer">
+        <button type="button" id="signOutBtn">Not you? Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+  'use strict';
+
+  /* ── The canonical, App-Check-initialised app instance — same reasoning
+     as pay-q.html: getMyShopWorkspaces enforces App Check, and /firebase.js
+     is the one module already wired for it across the platform. ── */
+  import { app, auth } from '/firebase.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+  const fn = getFunctions(app, 'us-central1');
+  const $ = (id) => document.getElementById(id);
+
+  const STATES = ['stateLoading', 'stateSignin', 'stateError', 'stateEmpty'];
+  function showState(id) {
+    STATES.forEach((s) => $(s).classList.remove('active'));
+    $('stateMain').hidden = true;
+    if (id === 'main') { $('stateMain').hidden = false; return; }
+    $(id).classList.add('active');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderShops(workspaces) {
+    const list = $('shopList');
+    list.innerHTML = '';
+    workspaces.forEach((w) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cs-shop';
+      const disabled = w.isActive === false;
+      if (disabled) btn.disabled = true;
+      btn.innerHTML =
+        '<span class="ico">🏪</span>' +
+        '<span class="body"><span class="name">' + esc(w.name) + '</span>' +
+        '<span class="role">' + esc(w.roleLabel || w.role || '') + '</span></span>' +
+        (disabled ? '<span class="badge">Disabled</span>' : '');
+      btn.addEventListener('click', () => selectShop(w));
+      list.appendChild(btn);
+    });
+    showState('main');
+  }
+
+  function selectShop(w) {
+    /* The choice is only ever a HINT for merchant-v2.html's own discovery
+       step (see docs/MERCHANT_V2_HEADER_IDENTITY.md) — it decides WHICH
+       shop to ask about, never WHAT this account may do there.
+       merchantIdentity's server-side resolveShopAccess still refuses it
+       outright if this account is not actually authorised, exactly as it
+       already does for Switch Shop. */
+    try { window.localStorage.setItem('sokoniActiveShopId', w.id); } catch (_) {}
+    try { window.sessionStorage.removeItem('sokoniChooseShopWorkspaces'); } catch (_) {}
+    window.location.href = '/merchant-v2.html';
+  }
+
+  function loadFromSession() {
+    try {
+      const raw = window.sessionStorage.getItem('sokoniChooseShopWorkspaces');
+      if (!raw) return null;
+      const list = JSON.parse(raw);
+      return Array.isArray(list) && list.length ? list.map((w) => ({ id: w.shopId, name: w.shopName, isActive: w.isActive, role: w.role })) : null;
+    } catch (_) { return null; }
+  }
+
+  function loadFromServer() {
+    return httpsCallable(fn, 'getMyShopWorkspaces')({}).then((r) => {
+      const list = (r.data && r.data.workspaces) || [];
+      return list.map((w) => ({ id: w.shopId, name: w.shopName, isActive: w.isActive, role: w.role }));
+    });
+  }
+
+  function boot() {
+    showState('stateLoading');
+    /* The list login.html just resolved is used first — avoids a second
+       round trip for the common "just signed in" case. A direct visit (no
+       session value) re-resolves fresh from the SAME server authority. */
+    const fromSession = loadFromSession();
+    const p = fromSession ? Promise.resolve(fromSession) : loadFromServer();
+    p.then((workspaces) => {
+      const active = workspaces.filter((w) => w.isActive !== false);
+      if (!active.length && !workspaces.length) { showState('stateEmpty'); return; }
+      renderShops(workspaces);
+    }).catch((e) => {
+      $('errorText').textContent = (e && e.message) || 'Could not load your shops.';
+      showState('stateError');
+    });
+  }
+
+  $('signOutBtn').addEventListener('click', () => {
+    if (typeof window.sokoniSignOut === 'function') {
+      window.sokoniSignOut().then(() => { window.location.href = '/login.html'; });
+    } else {
+      window.location.href = '/login.html';
+    }
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user) { showState('stateSignin'); return; }
+    boot();
+  });
+  </script>
+  <script src="/sw-register.js" defer></script>
+</body>
+</html>
