@@ -1,3 +1,33 @@
+## 2026-09-03 — marketing-engine.js cross-sell/upsell trace (read-only, no decision executed)
+
+**Traces** `getCrossSellRecommendations`/`getUpsellRecommendations` — see
+`docs/MARKETING_ENGINE_RECOMMENDATIONS_TRACE.md`. Flagged as a follow-up in the mirror-retirement
+graph, kept separate from `procForecast`'s missing writer, `expiresAt`'s capability gap, and
+`sokoni-reconcile.js`'s remaining posProducts writer.
+
+**Callers:** zero, repo-wide, in both calling conventions (direct name and the `commerceDispatch`
+op-name form). `commerceDispatch` itself is confirmed live (called from four real pages); these two
+specific ops, requested through it, are not.
+
+**Production evidence:** 30-day Cloud Run log window for `commercedispatch`, positive-control
+verified (1,283 real logged requests) so a zero-result search means something — zero matches for
+either op name anywhere in the retained history.
+
+**Field reality:** no writer in the current codebase sets `status` on `posProducts` anymore — the
+seller.js mirror was the only one that ever did, and it was retired this session. The
+`status=='active'` queries these functions run are now structurally guaranteed empty going
+forward.
+
+**Intent:** not deliberate dormancy — `docs/MERCHANT_MARKETING_AUTHORITY.md`, a pre-existing,
+independent census, already classifies both (and all nine siblings) as **BLOCKED** for a separate,
+more serious reason: no ownership assertion on the caller-supplied `merchantId` anywhere in the
+module.
+
+**Recommendation, not executed:** evidence favors retirement over repair. Disposition left to the
+user.
+
+**Not deployed. Nothing retired or repaired.**
+
 ## 2026-09-03 — seller.js -> posProducts mirror write RETIRED, 14/0
 
 **Executes** the retirement traced read-only in `docs/POSPRODUCTS_SELLERJS_RETIREMENT_GRAPH.md` —
