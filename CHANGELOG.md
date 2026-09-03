@@ -1,3 +1,28 @@
+## 2026-09-03 — SOKONI Till identity design (Q2 of the Till/QR gate, DESIGN ONLY)
+
+**Designs** the one genuinely net-new domain object the existing-authority trace identified — see
+`docs/SOKONI_TILL_IDENTITY_DESIGN.md`. Answers all seven posed questions from checked facts, not
+assumption.
+
+**Grounding fact that resolved Q1/Q2 directly:** `shops/{uid}` (`firestore.rules:1435`) is keyed
+by the seller's own uid — one shop per seller account today. "Multi-shop checkout"
+(`multishop-checkout-quote.js`) means a *buyer's* basket spanning several *different* sellers,
+not one merchant owning several shops. So: one ACTIVE Till per `(shopId, branchId)` in v1 —
+`branchId` (already a real concept via `posUpsertProduct`) future-proofs multi-counter merchants
+without a schema migration. A Till never moves shops once issued (immutable identity, following
+this session's own established `delivery-pin.js`/`seller-handover.js` convention); shop
+retirement cascades every Till to `RETIRED`; a Till id is a per-shop counter minted
+transactionally (no sequence pattern exists elsewhere in this codebase — deliberately, to avoid
+contention on high-frequency writes — but Till creation is rare enough that the concern doesn't
+apply); QR authentication reuses `pos-qr.js`'s signed-opaque-token pattern (its cryptographic
+idea only, per instruction — not its `posPayments`/completion path); IntaSend collection config
+is a routing pointer, never a credential — confirmed no per-merchant sub-account exists anywhere
+today.
+
+Full proposed `sokoniTills/{sokoniTillId}` schema included.
+
+**Status: DESIGN ONLY.** No collection, no function, no code. Not deployed.
+
 ## 2026-09-03 — Resolved the live IntaSend webhook endpoint from production logs (Q1)
 
 **Resolves**, from Cloud Run logs rather than documentation, which of `intasendWebhook` /
