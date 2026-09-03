@@ -17,9 +17,18 @@ A row's "source exists" is not "the feature is live."
 ```
 PRODUCTION            d592d8f / v632   (UNCHANGED throughout this document's construction)
 SOURCE BRANCH         release/multishop-checkout-certified
-HEAD                  a8c94dd
+HEAD                  741cd26
 FUNCTION EXPORT COUNT 1508   (grep -c '^exports\.' functions/index.js — measured 2026-09-03)
 ```
+
+> ⚠️ **Lineage correction (see `docs/RELEASE_LINEAGE_RECONCILIATION.md`):** `d592d8f` is
+> confirmed live (`https://mysokoni.co.ke/version.json`), but its own `branch` field reads
+> `release/r1-pos-printer-fn` — **not** `release/multishop-checkout-certified`. The two branches
+> share only a 2026-08-13 common ancestor (`3dcf572`); neither is an ancestor of the other. This
+> ledger's "verified this session" rows are real for *this* branch, but this branch is not
+> currently the one sitting on top of deployed production — `release/r1-pos-printer-fn` is, by 34
+> commits. Read the reconciliation doc before treating this ledger as the sole release-stack
+> record.
 
 **Verification-status key**, applies per row, not per document:
 - 🟢 **VERIFIED THIS SESSION** — traced with the same method as 18b/18c/KASS AI: real `git`
@@ -46,39 +55,49 @@ FUNCTION EXPORT COUNT 1508   (grep -c '^exports\.' functions/index.js — measur
 
 ---
 
-## Named in this session but NOT yet re-verified — the queue
+## RESOLVED this session — 18a and ADR-017 provenance
 
-These are carried from **project memory**, not fresh evidence. Two of them already failed a
-cheap check (ancestry against this HEAD) and are flagged 🔴 rather than silently accepted.
+Full trace in `docs/RELEASE_LINEAGE_RECONCILIATION.md`. Summary: **both are real, committed, and
+already sitting cleanly 34 commits ahead of deployed production — on `release/r1-pos-printer-fn`
+(worktree `C:/temp/sok-r1`), not on this branch.** The earlier note attributing them to
+`audit/employee-attribution` was wrong — corrected here. In fact **every** item in the "current
+known stacked release" list (tenant/POS-inventory/POS-document/procurement/inventory-engine/
+merchant/warehouse authorities, receipt bridge, ADR-017, 18a, warehouse management UI) maps onto a
+specific commit in that same 34-commit chain — see the reconciliation doc for the full ordered
+list. None of it needs its own separate trace; it's already accounted for as one block, on the
+other branch. Not cherry-picked or merged — that decision is explicitly deferred.
 
-| feature/module | memory's last-known status | HEAD presence (this session) | next check needed |
-|---|---|---|---|
-| **Legacy retirement 18a** | commits `8fc3673` "retire legacy POS inventory handlers", `d627355` "map legacy inventory retirement dependencies" | 🔴 **DISCREPANCY** — `git merge-base --is-ancestor 8fc3673 HEAD` and same for `d627355` both return **false**. Neither commit is an ancestor of `release/multishop-checkout-certified` HEAD. They exist on a different lineage (seen earlier this session on `audit/employee-attribution`, worktree `C:/temp/sok-empaudit`). | Before treating 18a as "part of the stack," confirm whether it needs to be cherry-picked/merged onto this branch, or whether it was never meant to be — do not assume it's already here. |
-| **ADR-017 (inventory authority debt)** | commit `59d2225` "fix: close ADR-017 inventory authority debt" | 🔴 **DISCREPANCY** — `git merge-base --is-ancestor 59d2225 HEAD` returns **false**. Not present in this branch. No `docs/adr/ADR-017-*.md` file exists in the current tree either. | Same as above — locate which branch/worktree actually holds this and decide whether it belongs in the stack. |
-| Tenant authority (`merchantId` boundary) | 🟡 P1 open defect — 8+ callables take caller-supplied `merchantId` with no ownership binding | not checked this session | re-run the same caller-graph + live-probe method used for KASS AI |
-| POS inventory authority | 🟡 various — canonical model is `tenants/{tid}/inventory_*` (ADR-015); `pos*` collections are the ones just audited in 18c and found largely inert | overlaps directly with 18c findings this session | no new check needed beyond 18c; already covered |
-| POS document authority | 🟡 not detailed in this pass | not checked | needs its own trace |
-| Procurement authority | 🟡 partially touched — see `9acca68` row above | partially checked (found, not traced) | finish the trace: is it deployed, does `inventory.html` still call it, what's the current caller graph |
-| Inventory engine authority | 🟡 ADR-015, `sokoni-inventory-v2.js` → `inventoryCreateBatch` etc. (touched in 18c as a contrast case, not audited itself) | touched, not audited | own trace |
-| Merchant authority | 🟡 multiple open items in memory (`project_merchant_auth_boundary`, live defect: shell guard inert) | not checked this session | own trace |
-| Warehouse authority / Warehouse management UI | 🟡 commits exist on this branch touching "warehouse" (`0fb5d4b` Logistics+ Sprint 4.4 includes Warehouse; `0830f57` consolidation) — not the same thing as `pos-inventory-pro.js`'s `posWarehouses`, which 18c already covers | some commits confirmed present via `git log HEAD -i --grep=warehouse`; not traced to a deploy/route level | own trace — and clarify this is a *different* warehouse surface than 18c's `posWarehouses` |
-| Receipt bridge / Receipt Contract | 🟡 memory: "LOCKED 113/0; global is SokoniReceiptDoc; not deployed" | `git log HEAD -i --grep=receipt` shows real receipt-related commits present (e.g. `fd06114` receipt truncation fix) but the specific "Receipt Contract"/bridge commit was not identified this session | own trace — locate the specific commit(s), confirm HEAD presence and deployment status |
+Also found in that reconciliation: `docs/adr/ADR-018-legacy-retirement-graph.md` **exists on both
+branches under the same path with unrelated content** — this branch's version (18b,
+`posSendPurchaseOrder`) and r1's version (broader `pos*`/procurement graph, larger evidence base,
+explicitly framed as "retirement NOT authorised... as a single slice"). Read r1's version before
+extending this branch's ADR-018c any further — it may already answer the same questions.
+
+## Still queued — not yet re-verified, not resolved by the 18a/ADR-017 trace
+
+| feature/module | status |
+|---|---|
+| Procurement "two systems" fix (`9acca68`) | 🟡 found on this branch, not traced to deployment — separate from the r1 procurement-authority commits (`c5ff85b`, `af7525f`, `7ec2360`), which are a different effort on the other lineage |
 
 ---
 
 ## What this ledger does NOT yet do
 
-- Does not cover every item the user's original "current known stacked release" list named
-  (tenant/POS inventory/POS document/procurement/inventory engine/merchant/warehouse
-  authorities, receipt bridge) at KASS-AI depth. Those are queued above, not audited.
+- Does not decide which branch (`release/multishop-checkout-certified` or
+  `release/r1-pos-printer-fn`) is the release-stack branch going forward, or how/whether they get
+  reconciled. See `docs/RELEASE_LINEAGE_RECONCILIATION.md` — a provenance report, not a decision.
 - Does not authorize deployment of anything. Production remains **d592d8f / v632**.
-- Does not change the function export baseline. It remains **1508**.
+- Does not change the function export baseline. It remains **1508** (this branch only —
+  `release/r1-pos-printer-fn`'s export count has not been measured in this ledger).
 - Does not resolve the KASS AI Anthropic billing outage — that's a billing action, out of scope
   for a code/release-stack process.
+- Does not resolve the `docs/adr/ADR-018-legacy-retirement-graph.md` filename collision between
+  the two branches.
 
 ## Suggested next slice
 
-Given the 🔴 discrepancies found (18a and ADR-017 are *not* on this branch, contrary to how they
-were named), the next cheap, high-value step is resolving **where** that work actually lives before
-adding more items to the queue above — otherwise the ledger inherits the same "I assumed it was
-already here" gap it exists to prevent.
+The lineage question (which branch is "the" release stack) blocks adding further implementation
+work to this ledger with any confidence — a new row added here today could turn out to belong to
+the same "wrong branch" category 18a and ADR-017 were just found in. Resolve that before continuing
+the remaining release work, per the agreed order: reconcile lineage → update ledger (done) → then
+continue.
