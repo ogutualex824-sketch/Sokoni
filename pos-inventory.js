@@ -673,12 +673,34 @@ window.PosInventory = (() => {
     const db = window.firebase?.firestore?.();
     if (!db) return;
 
-    /* Listen to product changes — sequential writes prevent IDB transaction storm on iOS */
+    /* Listen to product changes — sequential writes prevent IDB transaction storm on iOS.
+       posProducts has two live writers with different "not deleted" fields: the
+       posUpsertProduct catalogue backend writes `active` (boolean, soft-delete via
+       posDeleteProduct sets active:false — never a real Firestore delete, never a
+       `status` field at all), while the seller.js marketplace mirror writes
+       `status:'active'`/never `active`. A single `status != 'deleted'` filter only
+       ever matched the second writer — Firestore excludes documents missing the
+       filtered field entirely, so every posUpsertProduct-created product was
+       structurally invisible to this listener, in the POS app's own catalogue sync.
+       Firestore allows only one inequality filter per query, so this needs two
+       listeners, not one broader filter. See docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
     const unsub1 = db.collection('posProducts')
       .where('status', '!=', 'deleted')
       .onSnapshot(async snap => {
         for (const change of snap.docChanges()) {
           const data = { id: change.doc.id, ...change.doc.data() };
+          if (change.type === 'removed') { await _delete(S.PRODUCTS, data.id).catch(() => {}); }
+          else { await _put(S.PRODUCTS, data).catch(() => {}); }
+        }
+      }, () => {});
+    const unsub1b = db.collection('posProducts')
+      .where('active', '==', true)
+      .onSnapshot(async snap => {
+        for (const change of snap.docChanges()) {
+          const data = { id: change.doc.id, ...change.doc.data() };
+          /* A transition to active:false fires 'removed' here too (the document
+             leaves this query's result set even though it wasn't Firestore-deleted)
+             — exactly the semantics this store needs. */
           if (change.type === 'removed') { await _delete(S.PRODUCTS, data.id).catch(() => {}); }
           else { await _put(S.PRODUCTS, data).catch(() => {}); }
         }
@@ -694,7 +716,7 @@ window.PosInventory = (() => {
         }
       }, () => {});
 
-    _unsubs = [unsub1, unsub2];
+    _unsubs = [unsub1, unsub1b, unsub2];
   }
 
   function stopFirestoreSync() {

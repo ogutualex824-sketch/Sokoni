@@ -980,6 +980,17 @@ const getSupplierPerformance = onCall(OPT, async (request) => {
 /* ════════════════════════════════════════════════════════════════
    9. getProcurementForecast
    Reorder suggestions: products below reorder point with qty guidance.
+
+   A SEPARATE, deeper gap than the posProducts field-mismatch this function's
+   body was fixed for (docs/POSPRODUCTS_MIGRATION_GRAPH.md): `procForecast` —
+   the collection this function reads FIRST, below — has no writer anywhere in
+   this codebase. Nothing computes or populates a forecast row, ever, so
+   `forecastSnap` is always empty and this function always returns an empty
+   `reorderList`, regardless of the posProducts lookup fix. That fix is still
+   correct and worth having (it removes a real, independent defect, and holds
+   if a forecast-generation writer is ever built), but does not make this
+   feature functional end to end. Not fixed here — building a forecast
+   generator is a materially larger undertaking than a field-name correction.
 ════════════════════════════════════════════════════════════════ */
 const getProcurementForecast = onCall(OPT, async (request) => {
   _requireAuth(request);
@@ -1002,18 +1013,21 @@ const getProcurementForecast = onCall(OPT, async (request) => {
   const forecasts = forecastSnap.docs.map(d => d.data());
   const productIds = forecasts.map(f => f.productId).filter(Boolean);
 
-  /* Fetch posProducts in batches (Firestore limit: 30 per 'in' query) */
+  /* Fetch posProducts in batches (Firestore limit: 30 per 'in' query).
+     posUpsertProduct's real document ID is the plain productId (or `p_<idemKey>`
+     on create) — never a `${branchId}_${productId}` composite, and the document
+     itself never carries a `productId` FIELD (only merchantId/branchId/name/...).
+     The previous composite-ID lookup, keyed by a field that doesn't exist on any
+     real document, could never match anything. See
+     docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
   const BATCH_SIZE  = 30;
   const productDocs = {};
   for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-    const batchIds   = productIds.slice(i, i + BATCH_SIZE).map(pid => `${branchId}_${pid}`);
+    const batchIds   = productIds.slice(i, i + BATCH_SIZE);
     const batchSnaps = await db.collection('posProducts')
       .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
       .get();
-    batchSnaps.forEach(s => {
-      const d = s.data();
-      if (d.productId) productDocs[d.productId] = d;
-    });
+    batchSnaps.forEach(s => { productDocs[s.id] = s.data(); });
   }
 
   /* Compute usage from stockMovements in the last FORECAST_DAYS days */

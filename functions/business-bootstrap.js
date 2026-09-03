@@ -27,10 +27,9 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
-/* The 14-day seller_free trial has ONE implementation, shared with marketplace
-   approval. TRIAL_DAYS / TRIAL_GRACE_DAYS below are re-exported from it so the
-   policy cannot drift between the two callers. */
-const { buildSellerFreeTrial, TRIAL_DAYS: _TRIAL_DAYS, TRIAL_GRACE_DAYS: _TRIAL_GRACE_DAYS } = require('./seller-trial');
+/* Canonical ownerUid -> merchantId. Refuses when an owner has more than one business
+   rather than silently picking the first. See docs/TENANT_IDENTITY_CENSUS.md. */
+const { resolveMerchantIdForOwner, REASON: TENANT_REASON } = require('./tenant-identity');
 
 const db     = admin.firestore();
 const F      = admin.firestore.FieldValue;
@@ -47,11 +46,11 @@ const OPT    = {
 };
 
 /* ── Free-trial window ─────────────────────────────────────────────
-   The boundaries are policy, and the policy now lives in ./seller-trial so the
-   POS path and marketplace approval cannot drift apart. Re-exported here under
-   the original names because other code in this module reads them. */
-const TRIAL_DAYS       = _TRIAL_DAYS;
-const TRIAL_GRACE_DAYS = _TRIAL_GRACE_DAYS;
+   Referenced by the subscription doc written in _createBusiness. Declared here (module scope)
+   because the trial boundaries are policy, not per-call state. TRIAL_GRACE_DAYS mirrors the
+   grace window sub-billing applies between currentPeriodEnd and graceEnd. */
+const TRIAL_DAYS       = 14;
+const TRIAL_GRACE_DAYS = 3;
 
 /* ── Cache TTL ─────────────────────────────────────────────────── */
 const CACHE_TTL_MS   = 5 * 60 * 1000;   // 5 minutes
@@ -148,9 +147,14 @@ async function _buildBundle(merchantId, branchId) {
   ] = await Promise.all([
     db.collection('businesses').doc(merchantId).get(),
     db.collection('branches').doc(branchId).get(),
+    /* posUpsertProduct — the only posProducts writer that sets merchantId at all, so a
+       merchantId-scoped query can only ever match its documents — writes `active`
+       (boolean), never `status`. The seller.js marketplace mirror writes `status`, but
+       never `merchantId`, so it was never reachable here regardless of this field.
+       See docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
     db.collection('posProducts')
       .where('merchantId', '==', merchantId)
-      .where('status', '==', 'active')
+      .where('active', '==', true)
       .limit(500)
       .get(),
     db.collection('categories')
@@ -499,9 +503,11 @@ exports.getIncrementalSync = onCall(OPT, async (req) => {
   _log('INFO', 'getIncrementalSync', { merchantId: safeMerchantId, branchId: safeBranchId, since, uid });
 
   const [productsSnap, employeesSnap, discountsSnap, flagsSnap] = await Promise.all([
+    /* Same fix as getSetupStatus above: active (boolean), not status — see
+       docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
     db.collection('posProducts')
       .where('merchantId', '==', safeMerchantId)
-      .where('status', '==', 'active')
+      .where('active', '==', true)
       .where('updatedAt', '>', sinceDate)
       .limit(200)
       .get(),
@@ -914,6 +920,75 @@ async function _getMyBusinesses(req) {
   return { businesses, count: businesses.length };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ENSURE — the IDEMPOTENT entry point. Approval is retried; onboarding is
+   re-entered; a device pairs twice. _createBusiness itself has NO guard: it
+   mints a fresh merchantId with _generateMerchantId() and unconditionally
+   commits, so calling it twice produces TWO businesses, two branch sets, two
+   pairing tokens and two identities for one merchant.
+
+   Two locks, because one is not enough:
+
+     1. An OWNERSHIP read — businesses where ownerId == uid. This is what
+        catches a merchant provisioned before this guard existed, and it is
+        the same question sokoni-pos-context.js asks, so 'provisioned' and
+        'the till can see it' cannot disagree.
+
+     2. A TRANSACTIONAL claim at posProvisioning/{uid}. The read above cannot
+        stop two concurrent approvals both finding nothing and both creating.
+        The claim is keyed on the CANONICAL uid — never a browser value — and
+        winning it is what grants the right to create.
+
+   Returns { created:false } when a business already exists. It does NOT
+   repair or migrate an existing record: silently rewriting a live merchant's
+   identity from an approval retry is a larger risk than a missing default. */
+async function _ensureBusinessForOwner(o) {
+  const uid = _san(o && o.uid, 128);
+  if (!uid) throw new Error('_ensureBusinessForOwner requires a uid');
+
+  /* CORRECT AS IT STANDS. This asks only WHETHER a business exists — a provisioning
+     idempotency guard. Converging it to refuse on ambiguity would break every owner who
+     legitimately has more than one. See docs/TENANT_IDENTITY_CENSUS.md. */
+  const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
+  if (!owned.empty) {
+    const doc = owned.docs[0];
+    return { created: false, reason: 'already-provisioned', merchantId: doc.id,
+             provisionedBy: (doc.data() || {}).provisionedBy || null };
+  }
+
+  const guard = db.collection('posProvisioning').doc(uid);
+  const won = await db.runTransaction(async (t) => {
+    const g = await t.get(guard);
+    if (g.exists) return false;
+    t.set(guard, { uid, provisionedBy: 'approval',
+                   startedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return true;
+  });
+  if (!won) return { created: false, reason: 'claim-held', merchantId: null };
+
+  try {
+    const res = await _createBusiness({
+      auth: { uid: uid },
+      data: {
+        businessName: _san(o.businessName || '', 200).trim() || 'My Business',
+        category: _san(o.category || '', 80).trim() || 'General',
+        phone: o.phone || '', county: o.county || '', city: o.city || '',
+        __provisionedBy: 'approval',
+      },
+    });
+    await guard.set({ merchantId: res.merchantId, ok: true,
+                      finishedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { created: true, reason: 'provisioned', merchantId: res.merchantId,
+             branchId: res.branchId };
+  } catch (e) {
+    /* RELEASE THE CLAIM ON FAILURE. A claim held by a run that died leaves the
+       merchant permanently unprovisionable — the exact failure this guard
+       exists to prevent, arrived at from the other direction. */
+    await guard.delete().catch(() => {});
+    throw e;
+  }
+}
+
 /* createBusiness — first-time onboarding. Auto-generates the Merchant ID and
    Business ID, provisions defaults (branch, owner staff+role, payment methods,
    tax/receipt/flags/settings, starter category), and returns a pairing QR. */
@@ -955,7 +1030,11 @@ async function _createBusiness(req) {
       inventoryReady: false, hardwareConnected: false, testSaleSuccessful: false,
     },
     productionReady: false,
-    provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
+    /* WHO provisioned this business. An allowlist, not a passthrough: this is
+       a provenance label on a canonical record, and a caller must not be able
+       to write an arbitrary string onto it. */
+    provisionedBy: (d.__provisionedBy === 'approval') ? 'approval' : 'onboarding-v2',
+    createdAt: now, updatedAt: now,
   });
   /* Auto-activate a free trial (Step 7 — activates automatically where applicable).
    *
@@ -969,18 +1048,29 @@ async function _createBusiness(req) {
    *
    * Write the fields the engines actually read. `now` is a serverTimestamp sentinel and cannot
    * be used in arithmetic, so the boundaries are explicit Timestamps off the server clock. */
-  /* The trial payload now comes from the ONE authority (./seller-trial), which
-     marketplace approval also uses. Same document id (subscriptions/{merchantId}),
-     same batch, same atomicity, same field values — the module is where the
-     block moved to, not a change to what it writes. `planName: 'SmartPOS'` is
-     passed so this path's label is unchanged. */
-  batch.set(db.collection('subscriptions').doc(merchantId), buildSellerFreeTrial({
-    uid,
-    shopId: merchantId,
+  const _trialMs   = Date.now();
+  const _trialEnd  = admin.firestore.Timestamp.fromMillis(_trialMs + TRIAL_DAYS * 86400000);
+  const _graceEnd  = admin.firestore.Timestamp.fromMillis(
+    _trialMs + (TRIAL_DAYS + TRIAL_GRACE_DAYS) * 86400000
+  );
+  batch.set(db.collection('subscriptions').doc(merchantId), {
+    merchantId,
+    uid,                                  // required by the expiry notifier (users/{uid})
+    hubType:  'seller',                   // drives the post-trial downgrade to `${hubType}_free`
+    planId:   'seller_free',
     planName: 'SmartPOS',
-    now,
-    source: 'pos_create_business',
-  }));
+    plan: 'trial',
+    status: 'trialing',
+    trial: true,                          // subscription-core.computeStatus gate
+    trialDays: TRIAL_DAYS,
+    trialStartsAt:      now,
+    currentPeriodStart: now,
+    trialEndsAt:      _trialEnd,          // subscription-core
+    currentPeriodEnd: _trialEnd,          // sub-billing sweep + sub-engine renewal query
+    graceEnd:         _graceEnd,
+    autoActivated: true,
+    startedAt: now, createdAt: now,
+  });
   batch.set(db.collection('merchants').doc(merchantId), {
     merchantId, name: businessName, ownerId: uid, adminUids: [uid], status: 'active', createdAt: now,
   });
@@ -1076,14 +1166,115 @@ async function _regeneratePairingQR(req) {
 /* getSetupStatus — authoritative resume logic + production-readiness checklist,
    computed from REAL Firestore state so the wizard resumes at the first
    incomplete step and never marks a merchant production-ready prematurely. */
+/* ── THE MERCHANT'S PAYMENT DESTINATION — MANUAL M-PESA ────────────────────
+   Under DIRECT_TO_SELLER the customer pays the shop's OWN till and the shop
+   keeps 100%; SOKONI records the sale and holds the commission as a
+   receivable. So the only thing SOKONI needs is WHERE the money goes, for the
+   receipt and for reconciliation — a till number and an account name.
+
+   THIS DELIBERATELY ACCEPTS NO API CREDENTIALS. Consumer key, consumer secret
+   and LNM passkey are not parameters here and must never become merchant-
+   editable fields. Automatic STK needs them because Safaricom binds the
+   passkey to the shortcode — base64(ShortCode + PassKey + Timestamp) cannot be
+   signed for a till SOKONI does not hold the passkey for — which is exactly
+   why automatic STK is an upgrade requiring the merchant's own Daraja app,
+   and not a prerequisite for selling.
+
+   Written SERVER-SIDE because posSettings has no Firestore rule at all, and
+   an unmatched collection denies by default. That is the correct posture for
+   POS configuration: it is not client-writable, and this is the one door. */
+async function _savePaymentDestination(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) {
+    /* Canonical, and REFUSES rather than picking when this owner has several. A payment
+       destination filed against the wrong one of your own businesses routes real money to
+       the wrong till. */
+    const owned = await resolveMerchantIdForOwner(uid);
+    if (!owned.ok) {
+      _err(owned.reason === TENANT_REASON.AMBIGUOUS
+        ? 'This account owns more than one business. Send merchantId explicitly.'
+        : 'No business on this account.',
+        owned.reason === TENANT_REASON.AMBIGUOUS ? 'failed-precondition' : 'not-found');
+    }
+    merchantId = owned.merchantId;
+  }
+  /* TENANCY. Never trust a client-supplied merchantId — the whole point of
+     resolving it above is defeated if a caller may simply pass another one. */
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  if ((bizSnap.data() || {}).ownerId !== uid && !_isAdmin(req)) {
+    _err('Access denied.', 'permission-denied');
+  }
+
+  const till = _san(d.till || '', 20).replace(/\D/g, '');
+  const accountName = _san(d.accountName || '', 60).trim();
+  const kind = (d.kind === 'paybill') ? 'paybill' : 'till';
+  if (!till) _err('A Till or PayBill number is required.');
+  if (till.length < 5 || till.length > 12) _err('That does not look like a Till or PayBill number.');
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.collection('posSettings').doc(merchantId).set({
+    merchantId,
+    mpesaMode: 'manual',        /* the customer pays the till directly */
+    mpesaKind: kind,
+    mpesaTill: till,
+    mpesaAccountName: accountName || (bizSnap.data() || {}).name || '',
+    mpesaConfiguredAt: now,
+    mpesaConfiguredBy: uid,
+    updatedAt: now,
+  }, { merge: true });
+
+  return { ok: true, merchantId, mpesaMode: 'manual', mpesaKind: kind,
+           mpesaTill: till, mpesaAccountName: accountName };
+}
+
+/* Read it back for the setup screen. Same tenancy guard; no secrets exist here
+   to leak, because none are ever accepted. */
+async function _getPaymentDestination(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) {
+    /* Reporting one business's payment configuration as another's is worse than reporting
+       none, so ambiguity is surfaced rather than resolved by guessing. */
+    const owned = await resolveMerchantIdForOwner(uid);
+    if (!owned.ok) {
+      return { configured: false, reason: owned.reason === TENANT_REASON.AMBIGUOUS
+        ? 'multiple-businesses' : 'no-business' };
+    }
+    merchantId = owned.merchantId;
+  }
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  if ((bizSnap.data() || {}).ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
+  const ps = await db.collection('posSettings').doc(merchantId).get();
+  const v = ps.exists ? (ps.data() || {}) : {};
+  return {
+    configured: !!v.mpesaTill,
+    merchantId,
+    mpesaMode: v.mpesaMode || 'manual',
+    mpesaKind: v.mpesaKind || 'till',
+    mpesaTill: v.mpesaTill || '',
+    mpesaAccountName: v.mpesaAccountName || '',
+    /* Automatic STK is an UPGRADE and is reported, never assumed. It requires
+       the merchant's own Daraja credentials, which this door does not accept. */
+    autoStkEnabled: false,
+  };
+}
+
 async function _getSetupStatus(req) {
   const uid = _requireAuth(req);
   const d = req.data || {};
   let merchantId = _san(d.merchantId || '', 128).trim();
   if (!merchantId) {
-    const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
-    if (owned.empty) return { hasBusiness: false, nextStep: 'business', productionReady: false, checklist: { authenticated: true, businessCreated: false } };
-    merchantId = owned.docs[0].id;
+    /* Ambiguity is surfaced, not resolved by guessing: reporting one business's setup
+       state as another's would send an owner to fix the wrong shop. */
+    const owned = await resolveMerchantIdForOwner(uid);
+    if (!owned.ok) return { hasBusiness: false, nextStep: 'business', productionReady: false,
+      reason: owned.reason, checklist: { authenticated: true, businessCreated: false } };
+    merchantId = owned.merchantId;
   }
   const bizSnap = await db.collection('businesses').doc(merchantId).get();
   if (!bizSnap.exists) _err('Business not found.', 'not-found');
@@ -1091,12 +1282,28 @@ async function _getSetupStatus(req) {
   if (b.ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
   const cl = b.setupChecklist || {};
 
-  const [subSnap, branchSnap, taxSnap, prodSnap, deviceSnap] = await Promise.all([
+  const [subSnap, branchSnap, taxSnap, prodSnap, deviceSnap, shopProdSnap] = await Promise.all([
     db.collection('subscriptions').where('merchantId', '==', merchantId).where('status', 'in', ['active', 'trialing']).limit(1).get().catch(() => ({ empty: true })),
     db.collection('branches').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
     db.collection('taxConfig').doc(merchantId).get().catch(() => ({ exists: false })),
+    /* THE CATALOGUE IS NOT WHERE THIS WAS LOOKING.
+
+       This asked posProducts for merchantId. A live census found the platform
+       keys its catalogue the other way: of 108 products, 103 carry
+       `products.shopId == the OWNER'S UID` and ZERO carry a SOK- merchantId.
+       So a shop with 103 products on the shelf reported an empty catalogue and
+       the setup screen would have told its owner they were not ready to sell.
+
+       BOTH vocabularies are accepted rather than swapped. posProducts is real
+       for merchants who use it, and answering 'does this shop have anything to
+       sell' with only one of the two collections is the mistake being fixed —
+       replacing it with the opposite mistake would be no better.
+
+       Scoped by ownerId, not merchantId: ownerId is what products actually
+       carry, and for a wizard-provisioned business the two differ. */
     db.collection('posProducts').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
     db.collection('posDevices').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('products').where('shopId', '==', String(b.ownerId || '')).limit(1).get().catch(() => ({ empty: true })),
   ]);
 
   const checklist = {
@@ -1107,7 +1314,7 @@ async function _getSetupStatus(req) {
     branchCreated:       !branchSnap.empty,
     taxesConfigured:     taxSnap.exists || cl.taxesConfigured === true,
     staff:               cl.staff === true,                                  // optional
-    inventoryReady:      !prodSnap.empty || cl.inventoryReady === true,
+    inventoryReady:      !prodSnap.empty || !shopProdSnap.empty || cl.inventoryReady === true,
     hardwareConnected:   !deviceSnap.empty || cl.hardwareConnected === true, // connected OR intentionally skipped
     testSaleSuccessful:  cl.testSaleSuccessful === true,
   };
@@ -1122,8 +1329,34 @@ async function _getSetupStatus(req) {
     ['testSale',     checklist.testSaleSuccessful],
   ];
   const firstIncomplete = order.find(([, ok]) => !ok);
-  const requiredOk = !firstIncomplete;
+
+  /* COMPLETION IS A ONE-TIME INITIALISATION, NOT A RECURRING PREREQUISITE.
+
+     This recomputed productionReady from live state on EVERY call and ignored the
+     stamped `productionReady` on the business document entirely. Several inputs can go
+     false long after a till is in daily use:
+
+       subscription    queries status in ['active','trialing'] — a LAPSED subscription
+                       empties it
+       inventoryReady  goes false if the catalogue is emptied
+       branchCreated   goes false if the branch document is removed
+
+     Any of those sent a working merchant back through the onboarding wizard, mid-
+     trading. That is the recurring-setup report.
+
+     Onboarding completion is now LATCHED: once `productionReady` has been stamped on the
+     business document it is not withdrawn by recomputation. The live checklist is still
+     returned in full, and `currentGaps` names anything that has since lapsed so a surface
+     can show it — but a gap is an OPERATIONAL problem to raise in-app, not a reason to
+     re-run installation.
+
+     THIS IS NOT A BILLING BYPASS. Re-running onboarding was never subscription
+     enforcement: it collects no payment and blocks no trading. Paid-plan enforcement
+     lives in the subscription/trial boundary and is unaffected by this change. */
+  const everReady = b.productionReady === true;
+  const requiredOk = everReady || !firstIncomplete;
   const nextStep = requiredOk ? 'ready' : firstIncomplete[0];
+  const currentGaps = order.filter(([, ok]) => !ok).map(([k]) => k);
 
   return {
     hasBusiness: true, merchantId,
@@ -1133,6 +1366,10 @@ async function _getSetupStatus(req) {
       category: b.category || null, storeCode: b.storeCode || null,
     },
     checklist, nextStep, productionReady: requiredOk,
+    /* Truthful about WHY it is ready: latched from an earlier completion, with whatever
+       has since lapsed named rather than hidden behind a green verdict. */
+    productionReadyLatched: everReady && !!firstIncomplete,
+    currentGaps,
   };
 }
 
@@ -1297,6 +1534,8 @@ module.exports = {
   /* Canonical merchant tenant-guard. Exported so other POS modules reuse it instead of
      re-implementing membership checks (owner / active branch staff / merchant admin). */
   _assertMerchantAccess,
+  /* Idempotent provisioning, called by the approval path. */
+  _ensureBusinessForOwner,
   /* Onboarding v2 handlers — served through smartPosDispatch (no new CF). */
   _h: {
     getMyBusinesses:        _getMyBusinesses,
@@ -1306,6 +1545,8 @@ module.exports = {
     saveOnboardingProgress: _saveOnboardingProgress,
     getOnboardingProgress:  _getOnboardingProgress,
     getSetupStatus:         _getSetupStatus,
+    savePaymentDestination: _savePaymentDestination,
+    getPaymentDestination:  _getPaymentDestination,
     markSetupStep:          _markSetupStep,
     setStaffPin:            _setStaffPin,
   },

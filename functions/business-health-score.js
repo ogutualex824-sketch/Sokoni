@@ -187,10 +187,18 @@ async function _scoreInventory(merchantId) {
 
     const [allSnap, lowSnap, expiringSnap] = await Promise.all([
       db.collection('posProducts').where('merchantId', '==', merchantId).select('sku').get(),
+      /* posUpsertProduct — the only posProducts writer that sets merchantId — writes
+         the stock field as `stockQty`, never `qty`. See
+         docs/POSPRODUCTS_MIGRATION_GRAPH.md. */
       db.collection('posProducts')
         .where('merchantId', '==', merchantId)
-        .where('qty', '<=', 5)
+        .where('stockQty', '<=', 5)
         .get(),
+      /* `expiresAt` is not a field-name mismatch to fix — NEITHER posProducts writer
+         (posUpsertProduct or the seller.js mirror) has ever set an expiry field. This
+         metric is structurally always 0 until product-expiry tracking is actually
+         built somewhere, not because the query spells the field wrong. Left as-is
+         rather than renamed to a field that still wouldn't exist. */
       db.collection('posProducts')
         .where('merchantId', '==', merchantId)
         .where('expiresAt', '<=', _ts(in7Days))
@@ -202,7 +210,7 @@ async function _scoreInventory(merchantId) {
     const lowStockCount = lowSnap.docs.filter((d) => {
       const p = d.data();
       const threshold = p.reorderPoint || 5;
-      return (p.qty || 0) <= threshold;
+      return (p.stockQty || 0) <= threshold;
     }).length;
     const expiringCount = expiringSnap.size;
 
@@ -1072,3 +1080,7 @@ exports.getMultibranchHealthComparison = onCall(
     };
   }
 );
+
+/* Exposed for the test suite, same convention as delivery-complete.js's exports._h —
+   so the test can exercise the real _scoreInventory logic without a live emulator. */
+exports._h = { _scoreInventory };

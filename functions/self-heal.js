@@ -169,30 +169,43 @@ async function checkInventoryIntegrity(log) {
   const result = { check: 'inventory_integrity', negativeQtyCount: 0, errors: 0 };
 
   try {
-    const snap = await db.collection('posProducts')
-      .where('qty', '<', 0)
-      .limit(100)
-      .get();
+    /* posProducts has two live writers with different stock field names — no
+       merchantId scope here to exclude either one, so both must be checked.
+       posUpsertProduct: stockQty. The seller.js marketplace mirror: stockLevel.
+       A single `qty` field matches neither. See
+       docs/POSPRODUCTS_MIGRATION_GRAPH.md. Two queries, not one, because
+       Firestore cannot compare two different field names in one filter. */
+    const [snapA, snapB] = await Promise.all([
+      db.collection('posProducts').where('stockQty',   '<', 0).limit(100).get(),
+      db.collection('posProducts').where('stockLevel', '<', 0).limit(100).get(),
+    ]);
+    const byId = new Map();
+    snapA.docs.forEach(d => byId.set(d.id, d));
+    snapB.docs.forEach(d => { if (!byId.has(d.id)) byId.set(d.id, d); });
+    const docs = Array.from(byId.values());
 
-    result.negativeQtyCount = snap.size;
+    result.negativeQtyCount = docs.length;
 
-    if (snap.size > 0) {
+    if (docs.length > 0) {
       /* Write a single grouped alert rather than flooding adminAlerts */
-      const affected = snap.docs.slice(0, 20).map(d => ({
-        productId:  d.id,
-        name:       d.data().name || 'Unknown',
-        qty:        d.data().qty,
-        merchantId: d.data().merchantId || null,
-        branchId:   d.data().branchId || null,
-      }));
+      const affected = docs.slice(0, 20).map(d => {
+        const data = d.data();
+        return {
+          productId:  d.id,
+          name:       data.name || 'Unknown',
+          qty:        data.stockQty ?? data.stockLevel,
+          merchantId: data.merchantId || null,
+          branchId:   data.branchId || null,
+        };
+      });
 
       await _writeAdminAlert({
         severity: 'warning',
         category: 'inventory',
-        title:    `Negative inventory detected: ${snap.size} product(s)`,
+        title:    `Negative inventory detected: ${docs.length} product(s)`,
         detail:   'One or more POS products have negative stock quantities. Manual review required.',
         meta: {
-          affectedCount: snap.size,
+          affectedCount: docs.length,
           affectedSample: affected,
           requiresHumanReview: true,
         },
@@ -598,3 +611,8 @@ module.exports = {
   runManualSelfHeal,
   getSelfHealHistory,
 };
+
+/* Exposed for the test suite, same convention as delivery-complete.js's exports._h —
+   so the test can exercise the real checkInventoryIntegrity logic without a live
+   emulator. */
+module.exports._h = { checkInventoryIntegrity };
