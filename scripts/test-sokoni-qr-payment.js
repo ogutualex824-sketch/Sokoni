@@ -149,10 +149,21 @@ console.log('  -- dynamic-intent resolution state --');
   const wrongPurpose = QA.classifyIntentResolution({ purpose: 'subscription', status: 'created', expiresAtMs: NOW + 60_000 }, NOW);
   ok('a non-pos_till_sale intent is refused (no cross-purpose resolution)', wrongPurpose.ok === false && wrongPurpose.code === 'failed-precondition');
 
-  for (const status of ['paid', 'completed', 'cancelled', 'expired']) {
+  for (const status of ['completed', 'cancelled', 'expired']) {
     const terminal = QA.classifyIntentResolution({ purpose: 'pos_till_sale', status, expiresAtMs: NOW + 60_000 }, NOW);
     ok(`terminal status "${status}" is refused, not re-offered`, terminal.ok === false && terminal.code === 'failed-precondition');
   }
+
+  /* Q8: 'paid' is a distinct SUCCESS outcome, not a refusal — the buyer's
+     payment page polls this same function for the dynamic-QR flow (it
+     cannot read paymentIntents/{ref} directly; the cashier owns it), and a
+     second poll after a successful payment must not start throwing. This is
+     never a re-payment risk: initiateSTKPush's own unmodified idempotent
+     replay guard is what actually stops a double charge, not this function. */
+  const paidState = QA.classifyIntentResolution({ purpose: 'pos_till_sale', status: 'paid', expiresAtMs: NOW + 60_000 }, NOW);
+  ok('status "paid" resolves successfully (not refused) — Q8 polling', paidState.ok === true && paidState.status === 'paid');
+  const paidStateEvenIfConceptuallyExpired = QA.classifyIntentResolution({ purpose: 'pos_till_sale', status: 'paid', expiresAtMs: NOW - 1 }, NOW);
+  ok('status "paid" resolves successfully even past its original expiresAtMs (already paid, expiry is moot)', paidStateEvenIfConceptuallyExpired.ok === true);
 
   const expired = QA.classifyIntentResolution({ purpose: 'pos_till_sale', status: 'created', expiresAtMs: NOW - 1 }, NOW);
   ok('expired (by timestamp, still status=created) intent is refused', expired.ok === false && expired.code === 'failed-precondition');
@@ -244,6 +255,29 @@ console.log('  -- pos_till_sale pricing: authorization, amount, merchant-tamper 
   ok('a DIFFERENT saleId -> a DIFFERENT preferredRef (no accidental collision across sales)', q1.preferredRef !== q3.preferredRef);
 }
 
+/* ── 6b. Q8: STK-push caller authorization for a Till-sale intent ──────── */
+console.log('  -- canInitiateStkForIntent (Q8: buyer != intent owner, Till sales only) --');
+{
+  const tillIntent = { purpose: 'pos_till_sale', metadata: { merchantUid: 'shop1', sokoniTillId: 'SK-X-0001' } };
+  ok('a valid Till-sale intent with merchantUid -> caller exception ALLOWED', QA.canInitiateStkForIntent(tillIntent) === true);
+
+  const tillIntentNoMerchant = { purpose: 'pos_till_sale', metadata: {} };
+  ok('a pos_till_sale intent with NO merchantUid in metadata -> exception DENIED (defence in depth)',
+    QA.canInitiateStkForIntent(tillIntentNoMerchant) === false);
+
+  const tillIntentNoMetadata = { purpose: 'pos_till_sale' };
+  ok('a pos_till_sale intent with no .metadata at all -> exception DENIED', QA.canInitiateStkForIntent(tillIntentNoMetadata) === false);
+
+  for (const purpose of ['subscription', 'product_order', 'digital_download', 'service_booking', 'event_ticket', 'hub_registration']) {
+    const other = { purpose, metadata: { sellerUid: 'someone', merchantUid: 'someone-else' } };
+    ok(`every OTHER purpose ("${purpose}") -> exception DENIED, ownership check still enforced normally`,
+      QA.canInitiateStkForIntent(other) === false);
+  }
+
+  ok('null intent -> exception DENIED', QA.canInitiateStkForIntent(null) === false);
+  ok('undefined intent -> exception DENIED', QA.canInitiateStkForIntent(undefined) === false);
+}
+
 /* ── 7. NEGATIVE CONTROL — must itself fail ────────────────────────────── */
 console.log('  -- negative control (must fail; proves the harness can detect failure) --');
 {
@@ -294,6 +328,40 @@ console.log('  -- sabotage control (weakened merchant-authorization must be CAUG
     throwsWith('control: the REAL (unmodified) module still denies the same attack', 'permission-denied', () => {
       QA.priceTillSale({ till, callerUid: 'SOME-OTHER-UID', data: { items: [{ name: 'Bread', price: 60, qty: 1 }] } });
     });
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (_) { /* best-effort cleanup */ }
+  }
+}
+
+/* ── 9. SABOTAGE CONTROL — canInitiateStkForIntent's purpose check (Q8) ──── */
+console.log('  -- sabotage control (loosened STK-authorization purpose check must be CAUGHT) --');
+{
+  const realSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'sokoni-qr-authority.js'), 'utf8');
+
+  // Loosen the purpose check so ANY purpose gets the Till exception, not just pos_till_sale.
+  const sabotagedSrc = realSrc.replace(
+    "return intent.purpose === 'pos_till_sale'\n    && !!(intent.metadata && intent.metadata.merchantUid);",
+    "return !!(intent.metadata && intent.metadata.merchantUid); // SABOTAGED: purpose check removed"
+  );
+  if (sabotagedSrc === realSrc) {
+    throw new Error('SABOTAGE CONTROL SETUP FAILED — the purpose-check line to weaken was not found; ' +
+      'the control cannot prove anything and the run must be blocked.');
+  }
+
+  const tmpFile = path.join(os.tmpdir(), `sokoni-qr-authority.sabotaged2.${process.pid}.js`);
+  fs.writeFileSync(tmpFile, sabotagedSrc);
+  let sabotaged;
+  try {
+    sabotaged = require(tmpFile);
+
+    // A subscription intent (payer MUST equal owner) with an unrelated merchantUid-shaped field.
+    const nonTillIntent = { purpose: 'subscription', metadata: { merchantUid: 'irrelevant-here' } };
+
+    ok('SABOTAGE: weakened code WRONGLY grants the STK-caller exception to a non-Till purpose',
+      sabotaged.canInitiateStkForIntent(nonTillIntent) === true);
+
+    ok('control: the REAL (unmodified) module still denies the exception for a non-Till purpose',
+      QA.canInitiateStkForIntent(nonTillIntent) === false);
   } finally {
     try { fs.unlinkSync(tmpFile); } catch (_) { /* best-effort cleanup */ }
   }

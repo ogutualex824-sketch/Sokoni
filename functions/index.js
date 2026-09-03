@@ -6565,7 +6565,29 @@ exports.initiateSTKPush = onCall(
         const intent = intentSnap.data() || {};
         const expected = Math.round(Number(intent.amount));
 
-        if (intent.uid && intent.uid !== request.auth.uid) {
+        /* ══ Q8 EXCEPTION — dynamic SOKONI Till QR ═══════════════════════════
+           The ownership check below assumes the payer IS the intent's own
+           owner — true for subscriptions/checkout/bookings, where the buyer
+           mints their own intent before paying. It does NOT hold for a
+           dynamic Till QR: the intent is created by the CASHIER (Q5's
+           pos_till_sale cart-mode requires callerUid === till.merchantUid),
+           but the person who must push the STK request and receive the
+           prompt is the WALK-UP BUYER scanning the QR — a different uid, by
+           design, every time.
+
+           canInitiateStkForIntent (functions/sokoni-qr-authority.js) is the
+           ONE place this exception is decided, certified in isolation. It is
+           narrow: true only for a pos_till_sale intent whose money-routing
+           is ALREADY fully locked to the Till's own merchant
+           (metadata.merchantUid, Q6-hardened) — the caller's identity has
+           zero influence on who gets credited (attribution never falls back
+           to payData.uid when merchantUid is populated) or what is charged
+           (the amount-match check immediately below is UNCONDITIONAL and
+           untouched — it still refuses any mismatch). Every other purpose's
+           ownership check is enforced exactly as before. */
+        const _stkOwnerOk = !intent.uid || intent.uid === request.auth.uid
+          || require('./sokoni-qr-authority').canInitiateStkForIntent(intent);
+        if (!_stkOwnerOk) {
           logger.error("[STK] intent ownership mismatch", {
             ref, intentUid: intent.uid, caller: request.auth.uid,
           });

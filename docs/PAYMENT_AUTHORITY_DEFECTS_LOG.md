@@ -161,13 +161,26 @@ commission-rate regression) and the cosmetic/logistics fields (`hub`, `sellerNam
 `address`, `fulfillmentType`, `serviceDesc`) that no pricer's metadata carries yet. D2 and D3
 remain fully open, untouched by Q6.
 
+## Status reaffirmation (2026-09-03, Q8)
+
+Q7 (POS paid-state) and Q8 (buyer-facing `/pay/q/**` page, `docs/SOKONI_TILL_QR_BUYER_PAGE.md`)
+both shipped real, live-code changes since the note above — Q8 specifically modified
+`initiateSTKPush` (a narrow, certified STK-caller ownership exception for `pos_till_sale` intents
+only, see that doc §2). **None of D1's remaining gap, D2, D3, or D4 are touched or fixed by
+either slice.** Q5-Q8 avoid these hazards **on the Till/QR path specifically**, by construction
+(server-derived metadata, never client meta, end to end) — they remain open, general
+payment-system defects for every other purpose and are not to be considered closed by the Till
+programme's progress. This is a deliberate, standing reaffirmation, not a re-audit — nothing new
+was checked here beyond confirming the two new slices didn't touch any of D1-D4's own code.
+
 ## What this log does NOT do
 
-Does not fully close D1 (see the status update above), or fix D2 or D3, or D4. Does not touch
-`intasendWebhook` (confirmed, Q6, still unnecessary), `initiateSTKPush`, `pos-qr.js`, `pay.html`,
-or `pos.html`. Does not quantify real-world exposure (no Cloud Logging query run against
-`posPayments`/`pos-qr.js`'s Cloud Run traffic in this pass). Not deployed. Does not touch
-`C:/temp/sok-r1`.
+Does not fully close D1 (see the status updates above), or fix D2, D3, or D4. Does not touch
+`intasendWebhook` (confirmed, Q6/Q8, still unnecessary), `pos-qr.js`, `pay.html`, or `pos.html`.
+`initiateSTKPush` gained one narrow, unrelated exception in Q8 (STK-caller ownership for
+`pos_till_sale` intents) — its D2 amount-enforcement gap (`_enforcedCategories`) is untouched.
+Does not quantify real-world exposure (no Cloud Logging query run against `posPayments`/
+`pos-qr.js`'s Cloud Run traffic in this pass). Not deployed. Does not touch `C:/temp/sok-r1`.
 
 ## Related
 

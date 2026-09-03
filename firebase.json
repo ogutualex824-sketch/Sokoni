@@ -121,6 +121,10 @@
         "destination": "/minishop-status.html"
       },
       {
+        "source": "/pay/q/**",
+        "destination": "/pay-q.html"
+      },
+      {
         "source": "/pay/**",
         "destination": "/pay.html"
       }

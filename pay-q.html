@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="/security.js"></script>
+  <script src="/shared-header.js"></script>
+  <script src="/sokoni-pay-q-core.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SOKONI Till Payment</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --sk-green:  #71ff00;
+      --sk-dark:   #050505;
+      --sk-card:   #141414;
+      --sk-border: rgba(255,255,255,0.08);
+      --sk-text:   #e8e8e8;
+      --sk-muted:  rgba(255,255,255,0.45);
+      --sk-red:    #ff5a5a;
+      --sk-radius: 16px;
+      --sk-safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      background: var(--sk-dark);
+      color: var(--sk-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .pq-wrap {
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 24px 16px calc(24px + var(--sk-safe-b));
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .pq-brand { text-align: center; font-weight: 700; letter-spacing: .04em; color: var(--sk-green); font-size: 14px; }
+    .pq-card {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pq-shop { font-size: 20px; font-weight: 700; }
+    .pq-sub { font-size: 13px; color: var(--sk-muted); }
+    .pq-amount-label { font-size: 12px; color: var(--sk-muted); text-transform: uppercase; letter-spacing: .06em; }
+    .pq-amount-fixed { font-size: 34px; font-weight: 800; color: var(--sk-green); }
+    .pq-field { display: flex; flex-direction: column; gap: 6px; }
+    .pq-field label { font-size: 12px; color: var(--sk-muted); }
+    .pq-field input {
+      background: #0c0c0c;
+      border: 1px solid var(--sk-border);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 18px;
+      color: var(--sk-text);
+      outline: none;
+    }
+    .pq-field input:focus { border-color: var(--sk-green); }
+    .pq-field input[readonly] { color: var(--sk-muted); background: #0a0a0a; }
+    .pq-btn {
+      background: var(--sk-green);
+      color: #050505;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .pq-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .pq-btn.secondary { background: transparent; color: var(--sk-text); border: 1px solid var(--sk-border); }
+    .pq-msg { font-size: 13px; color: var(--sk-muted); text-align: center; line-height: 1.5; }
+    .pq-msg.err { color: var(--sk-red); }
+    .pq-state { display: none; flex-direction: column; gap: 16px; align-items: center; text-align: center; padding: 40px 8px; }
+    .pq-state.active { display: flex; }
+    .pq-icon { font-size: 40px; }
+    .pq-spinner {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid var(--sk-border); border-top-color: var(--sk-green);
+      animation: pq-spin 0.8s linear infinite;
+    }
+    @keyframes pq-spin { to { transform: rotate(360deg); } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="pq-wrap">
+    <div class="pq-brand">SOKONI</div>
+
+    <div id="stateLoading" class="pq-state active">
+      <div class="pq-spinner"></div>
+      <div class="pq-msg">Loading payment…</div>
+    </div>
+
+    <div id="stateSignin" class="pq-state">
+      <div class="pq-icon">🔒</div>
+      <div class="pq-msg">Sign in to SOKONI to continue this payment.</div>
+      <a class="pq-btn" style="text-decoration:none;display:inline-block" href="/login.html">Sign in</a>
+      <div class="pq-msg">After signing in, open this payment link again.</div>
+    </div>
+
+    <div id="stateError" class="pq-state">
+      <div class="pq-icon">⚠️</div>
+      <div id="errorText" class="pq-msg err">Something went wrong.</div>
+    </div>
+
+    <div id="stateAlreadyPaid" class="pq-state">
+      <div class="pq-icon">✅</div>
+      <div class="pq-msg">This payment has already been completed.</div>
+    </div>
+
+    <div id="statePaid" class="pq-state">
+      <div class="pq-icon">✅</div>
+      <div class="pq-msg" style="font-size:16px;color:var(--sk-text);font-weight:700">Payment received</div>
+      <div id="paidAmountText" class="pq-msg"></div>
+    </div>
+
+    <div id="stateWaiting" class="pq-state">
+      <div class="pq-spinner"></div>
+      <div class="pq-msg" style="font-size:15px;color:var(--sk-text)">Check your phone and enter your M-Pesa PIN</div>
+      <div class="pq-msg">Waiting for confirmation — this page will update automatically.</div>
+      <button id="checkAgainBtn" class="pq-btn secondary" hidden>Check again</button>
+    </div>
+
+    <div id="stateMain" class="pq-card" style="display:none">
+      <div>
+        <div id="shopName" class="pq-shop">SOKONI Merchant</div>
+        <div class="pq-sub">SOKONI Till payment</div>
+      </div>
+
+      <div id="amountFixedWrap" hidden>
+        <div class="pq-amount-label">Amount</div>
+        <div id="amountFixed" class="pq-amount-fixed">KES 0</div>
+      </div>
+
+      <div id="amountInputWrap" class="pq-field" hidden>
+        <label for="amountInput">Amount to pay (KES)</label>
+        <input id="amountInput" type="number" inputmode="decimal" min="1" step="1" placeholder="Enter amount">
+      </div>
+
+      <div class="pq-field">
+        <label for="phoneInput">M-Pesa phone number</label>
+        <input id="phoneInput" type="tel" inputmode="tel" placeholder="07XXXXXXXX">
+      </div>
+
+      <div id="payMsg" class="pq-msg" hidden></div>
+
+      <button id="payBtn" class="pq-btn">Pay now</button>
+    </div>
+  </div>
+
+  <script type="module">
+  'use strict';
+
+  /* ── Firebase — the CANONICAL, App-Check-initialised app instance.
+     Reusing /firebase.js rather than a bespoke init (as pay.html's own,
+     older init does) is deliberate: resolveSokoniQR/createPaymentIntent/
+     initiateSTKPush all enforce App Check, and firebase.js is the one
+     module already wired for it across the platform. */
+  import { app, auth, db } from '/firebase.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+  const fn = getFunctions(app, 'us-central1');
+  const fc = (name) => httpsCallable(fn, name);
+
+  /* Pure token-parse/phone-validate/amount-decision logic lives in
+     sokoni-pay-q-core.js (window.SokoniPayQCore), loaded as a classic script
+     above — certified directly with Node (scripts/test-pay-q-core.js), no
+     browser needed for that half. This module only does DOM + network I/O
+     around it. */
+  const Core = window.SokoniPayQCore;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = Core.fmt;
+
+  const STATES = ['stateLoading', 'stateSignin', 'stateError', 'stateAlreadyPaid', 'statePaid', 'stateWaiting'];
+  function showState(id) {
+    STATES.forEach((s) => $(s).classList.remove('active'));
+    $('stateMain').style.display = 'none';
+    if (id === 'main') { $('stateMain').style.display = 'flex'; return; }
+    $(id).classList.add('active');
+  }
+  function showError(message) {
+    $('errorText').textContent = message || 'This payment link is not valid.';
+    showState('stateError');
+  }
+
+  /* ── State the resolved QR gave us. NEVER mutated by client input for the
+     dynamic-QR (fixed-amount) case — the amount shown and sent to
+     initiateSTKPush always comes from THIS object, never from a DOM value
+     the buyer could tamper with (enforced by Core.decidePaymentAction,
+     which does not even read rawAmountInput for the 'intent' case). ── */
+  let resolved = null;     // { type, ref?/sokoniTillId, shopName, currency, amount?, status? }
+  let activeRef = null;    // the paymentIntents/{ref} this page is actually paying
+  let activeAmount = null; // the SERVER-CONFIRMED amount for activeRef
+  let pollTimer = null;
+  let unsubscribeIntent = null;
+  let waitingSince = 0;
+
+  function stopWatchers() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (unsubscribeIntent) { unsubscribeIntent(); unsubscribeIntent = null; }
+  }
+
+  function renderMain() {
+    $('shopName').textContent = resolved.shopName || 'SOKONI Merchant';
+
+    if (resolved.type === 'till') {
+      $('amountFixedWrap').hidden = true;
+      $('amountInputWrap').hidden = false;
+    } else {
+      $('amountFixedWrap').hidden = false;
+      $('amountInputWrap').hidden = true;
+      $('amountFixed').textContent = fmt(resolved.amount, resolved.currency);
+    }
+    showState('main');
+  }
+
+  async function resolveToken(token) {
+    showState('stateLoading');
+    let data;
+    try {
+      const r = await fc('resolveSokoniQR')({ token });
+      data = r.data;
+    } catch (e) {
+      showError(e && e.message);
+      return;
+    }
+    resolved = data;
+
+    if (resolved.type === 'intent' && resolved.status === 'paid') {
+      showState('stateAlreadyPaid');
+      return;
+    }
+    renderMain();
+  }
+
+  /* ── Pay ──────────────────────────────────────────────────────────── */
+  async function onPay() {
+    $('payMsg').hidden = true;
+
+    const action = Core.decidePaymentAction({
+      resolved,
+      rawAmountInput: $('amountInput').value,
+    });
+    if (!action.ok) {
+      $('payMsg').hidden = false; $('payMsg').textContent = action.reason; $('payMsg').classList.add('err');
+      return;
+    }
+
+    $('payBtn').disabled = true;
+    $('payBtn').textContent = 'Please wait…';
+
+    try {
+      if (action.mode === 'create_intent') {
+        /* Permanent-Till flow — the buyer's own typed amount is only the SEED
+           for a fresh, server-validated intent (functions/
+           sokoni-qr-authority.js priceTillSale). What comes BACK from
+           createPaymentIntent — never the raw input — becomes
+           activeAmount/activeRef from this point on. */
+        const created = await fc('createPaymentIntent')({
+          purpose: 'pos_till_sale',
+          sokoniTillId: action.sokoniTillId,
+          amount: action.amount,
+        });
+        activeRef = created.data.ref;
+        activeAmount = created.data.amount;
+      } else {
+        /* Dynamic-QR flow — the intent already exists (minted by the POS
+           BEFORE this QR was ever shown). action.amount is resolved.amount,
+           verbatim — Core.decidePaymentAction never reads rawAmountInput for
+           this mode, so there is no code path where the buyer's typed value
+           (there is no amount field shown for this case at all) could reach
+           the request built below. */
+        activeRef = action.ref;
+        activeAmount = action.amount;
+      }
+
+      const stkReq = Core.buildStkRequest({ phone: $('phoneInput').value, ref: activeRef, amount: activeAmount });
+      if (!stkReq.ok) throw new Error(stkReq.reason);
+
+      const stk = await fc('initiateSTKPush')(stkReq.request);
+
+      if (stk.data && stk.data.alreadyPaid) {
+        $('paidAmountText').textContent = fmt(activeAmount, resolved.currency);
+        showState('statePaid');
+        return;
+      }
+
+      beginWaiting();
+    } catch (e) {
+      $('payMsg').hidden = false;
+      $('payMsg').textContent = (e && e.message) || 'Payment could not be started.';
+      $('payMsg').classList.add('err');
+      $('payBtn').disabled = false;
+      $('payBtn').textContent = 'Pay now';
+    }
+  }
+
+  /* ── Waiting for the VERIFIED backend result — never a client-side
+     shortcut. Two mechanisms, chosen by who owns the intent:
+       - dynamic QR: the CASHIER owns the intent (Q5), so this page cannot
+         read paymentIntents/{ref} directly — it polls resolveSokoniQR again
+         (same token, already certified to treat 'paid' as success, Q8).
+       - permanent QR: the BUYER owns the intent they just created, so a
+         direct Firestore listener (allowed by the existing owner-only rule)
+         is used — no extra callable round trips needed.
+     Either way, "paid" here means paymentIntents/{ref}.status === 'paid',
+     which only webhookIntasend ever writes (Q7) after a verified IntaSend
+     event. This page never marks itself paid. ── */
+  function beginWaiting() {
+    showState('stateWaiting');
+    waitingSince = Date.now();
+    $('checkAgainBtn').hidden = true;
+
+    if (resolved.type === 'till') {
+      const ref = doc(db, 'paymentIntents', activeRef);
+      unsubscribeIntent = onSnapshot(ref, (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (d.status === 'paid') {
+          stopWatchers();
+          $('paidAmountText').textContent = fmt(activeAmount, resolved.currency);
+          showState('statePaid');
+        }
+      }, () => { /* a transient listener error just leaves the waiting state showing */ });
+    } else {
+      const poll = async () => {
+        try {
+          const r = await fc('resolveSokoniQR')({ token: Core.parseToken(window.location.pathname) });
+          if (r.data && r.data.status === 'paid') {
+            stopWatchers();
+            $('paidAmountText').textContent = fmt(activeAmount, resolved.currency);
+            showState('statePaid');
+          }
+        } catch (_) { /* a transient poll failure just tries again next tick */ }
+        if (Date.now() - waitingSince > 4 * 60 * 1000) {
+          clearInterval(pollTimer); pollTimer = null;
+          $('checkAgainBtn').hidden = false;
+        }
+      };
+      pollTimer = setInterval(poll, 4000);
+      poll();
+    }
+  }
+
+  $('checkAgainBtn').addEventListener('click', () => beginWaiting());
+  $('payBtn').addEventListener('click', onPay);
+
+  /* ── Entry point ──────────────────────────────────────────────────── */
+  const token = Core.parseToken(window.location.pathname);
+  if (!token) {
+    showError('This payment link is missing its reference.');
+  } else {
+    onAuthStateChanged(auth, (user) => {
+      if (!user) { showState('stateSignin'); return; }
+      resolveToken(token);
+    });
+  }
+  </script>
+</body>
+</html>

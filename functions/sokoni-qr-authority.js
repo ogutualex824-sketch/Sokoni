@@ -127,16 +127,34 @@ function checkTillPayable(till) {
   return { ok: true };
 }
 
-/* ── Dynamic-intent resolution state (Q4 Q4/Q5) ──────────────────────────
+/* ── Dynamic-intent resolution state (Q4 Q4/Q5; extended Q8) ─────────────
    `nowMs` is a parameter (not Date.now() internally) purely so this stays a
-   pure function certifiable with fixed clocks in the test suite. */
+   pure function certifiable with fixed clocks in the test suite.
+
+   Q8 ADDITION: `status:'paid'` is now a distinct SUCCESS outcome
+   (`{ok:true, status:'paid'}`), not a refusal. The buyer's payment page
+   (Q8) polls resolveSokoniQR for the dynamic-QR flow — the buyer is not the
+   intent's owner (the cashier is, Q5), so it cannot read paymentIntents/{ref}
+   directly via Firestore rules, and must poll through this same,
+   already-hardened resolution path instead of a new one. Treating 'paid' as
+   a refusal would make the SECOND poll after a successful payment throw,
+   which is wrong — the buyer scanning/polling their own already-paid sale is
+   not a security concern (initiateSTKPush's own idempotent-replay guard,
+   unmodified, is what actually prevents a double charge; this function only
+   decides whether resolveSokoniQR replies, never whether money moves).
+   `completed`/`cancelled`/`expired` remain refusals, unchanged — those are
+   genuinely no-longer-payable and never in this function's caller's
+   interest to succeed on. */
 function classifyIntentResolution(intent, nowMs) {
   if (!intent) return { ok: false, code: 'not-found', reason: 'Payment reference not found.' };
   if (intent.purpose !== 'pos_till_sale') {
     return { ok: false, code: 'failed-precondition', reason: 'Not a Till payment.' };
   }
   const status = String(intent.status || '');
-  const terminal = ['paid', 'completed', 'cancelled', 'expired'].includes(status);
+
+  if (status === 'paid') return { ok: true, status: 'paid' };
+
+  const terminal = ['completed', 'cancelled', 'expired'].includes(status);
   if (terminal) return { ok: false, code: 'failed-precondition', reason: 'This payment is no longer available.' };
 
   const expMs = Number(intent.expiresAtMs);
@@ -146,7 +164,32 @@ function classifyIntentResolution(intent, nowMs) {
   if (status !== 'created') {
     return { ok: false, code: 'failed-precondition', reason: 'This payment is not available.' };
   }
-  return { ok: true };
+  return { ok: true, status: 'created' };
+}
+
+/* ── STK-push caller authorization for a Till-sale intent (Q8) ───────────
+   initiateSTKPush (functions/index.js) refuses to push an STK request
+   whenever `intent.uid !== request.auth.uid` — correct and unchanged for
+   every purpose where the payer IS the intent's own owner (subscriptions,
+   marketplace checkout, bookings). It does NOT hold for the dynamic-QR Till
+   flow: the intent is created by the CASHIER (Q5's `pos_till_sale`
+   cart-mode requires `callerUid === till.merchantUid`), but the person who
+   must actually push the STK request and receive the prompt is the WALK-UP
+   BUYER scanning the QR — a different uid, by design, every time.
+
+   This function is the ONE place that exception is decided, so it is
+   certifiable in isolation. It is deliberately narrow: it returns true only
+   when the intent unambiguously IS a Till sale whose money-routing is
+   ALREADY fully locked to the Till's own merchant (`metadata.merchantUid`,
+   Q6-hardened) — meaning the STK caller's identity has zero influence on
+   who gets credited or what is charged (amount is separately enforced,
+   unconditionally, by initiateSTKPush's own existing amount-match check
+   whenever an intent exists — untouched by this function). Any other
+   ownership mismatch (every other purpose) is refused exactly as before. */
+function canInitiateStkForIntent(intent) {
+  if (!intent) return false;
+  return intent.purpose === 'pos_till_sale'
+    && !!(intent.metadata && intent.metadata.merchantUid);
 }
 
 /* ── pos_till_sale pricing decision (Q3) ─────────────────────────────────
@@ -243,4 +286,5 @@ module.exports = {
   mintToken, verifyToken,
   deriveShopCode, formatTillId,
   checkTillPayable, classifyIntentResolution, priceTillSale,
+  canInitiateStkForIntent,
 };

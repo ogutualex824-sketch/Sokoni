@@ -297,5 +297,11 @@ exports.resolveSokoniQR = onCall(OPT128, async (request) => {
     type: 'intent', ref: parsed.id,
     amount: intent.amount, currency: intent.currency || 'KES',
     shopName, expiresAt: expiresAtMs,
+    /* Q8: 'created' (payable) or 'paid' (already done — the buyer's payment
+       page polls this same callable for status, since it cannot read
+       paymentIntents/{ref} directly: the cashier who created the dynamic
+       intent owns it, not the buyer). decision.status is only present on an
+       {ok:true} result — see classifyIntentResolution. */
+    status: decision.status || 'created',
   };
 });
