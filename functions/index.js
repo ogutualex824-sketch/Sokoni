@@ -8148,6 +8148,30 @@ exports.webhookIntasend = onRequest(
          the provider is credited only by Phase C settlement at completion. Handled in
          isolation via the server-minted intent; skips all commission/credit/creation. */
       if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
+
+      /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════
+         Everything below that used to read payData.meta directly for WHO gets
+         paid or WHAT resource is finalised now reads `attribution` instead.
+         Prefers paymentIntents/{intentRef}.metadata (server-derived) when an
+         intent exists; falls back to payData.meta UNCHANGED when it does not,
+         so a not-yet-migrated caller (D2) keeps working exactly as today.
+         Till-identity fields are the one hard floor: never sourced from
+         payData.meta, intent present or not. See
+         docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md, docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md D1.
+         `category` (commission RATE lookup) is deliberately UNCHANGED/out of
+         scope — see that doc §2 for the live-evidence reason. ═════════════════ */
+      const { resolveFinancialAttribution } = require("./payment-attribution");
+      const attribution = await resolveFinancialAttribution(db, {
+        intentRef: existing.intentRef || apiRef,
+        legacyMeta: payData.meta || {},
+      });
+      if (attribution.source === "legacy_meta") {
+        logger.warn("WEBHOOK_NO_INTENT_AUTHORITY", {
+          ref: apiRef, uid: payData.uid,
+          note: "no paymentIntents record — financial attribution sourced from client-supplied meta (caller not yet migrated)",
+        });
+      }
+
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {
@@ -8224,10 +8248,18 @@ exports.webhookIntasend = onRequest(
            For a BUYER-INITIATED marketplace checkout the earner is neither: payData.uid
            is the BUYER, and the seller to credit is carried in meta.sellerUid (set by the
            checkout when it calls initiateSTKPush). POS and other flows where uid already
-           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged. */
-        const _isBooking = payData.meta?.type === "booking";
-        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId
-                         : (payData.meta?.sellerUid || payData.uid);
+           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged.
+
+           D1 FIX (Q6): sourced from `attribution` (intent-derived when an intent
+           exists, else byte-identical to the old payData.meta reads — see
+           functions/payment-attribution.js). `attribution.merchantUid` is the
+           new fallback: a pos_till_sale intent (Q5) has no sellerUid — the Till's
+           own merchant is credited instead, closing the gap where a PERMANENT
+           Till QR's buyer-initiated payment would otherwise have credited the
+           buyer's own wallet (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §5). */
+        const _isBooking = attribution.type === "booking" || attribution.type === "service-booking";
+        const _sellerId  = (_isBooking && attribution.providerId) ? attribution.providerId
+                         : (attribution.sellerUid || attribution.merchantUid || payData.uid);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
@@ -8315,7 +8347,21 @@ exports.webhookIntasend = onRequest(
          already credited above — a settlement sweep must not double-credit.
          Idempotent via the order's inventoryApplied flag; never fails the webhook. */
       try {
-        const _pm  = payData.meta || {};
+        /* D1 FIX (Q6): sellerUid/orderId/items shadowed with the resolved
+           attribution (intent-derived when available) so every read below
+           (_finalizeMarketplacePayment, posReceipts, clickAndCollect, delivery
+           dispatch, notifications) gets the authoritative value with no
+           further changes. Every OTHER field (hub, sellerName, buyerName,
+           address, fulfillmentType, serviceDesc) is deliberately still read
+           from payData.meta, unchanged — see
+           docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §3 for why those stay in
+           scope for a later slice rather than this one. */
+        const _pm  = {
+          ...(payData.meta || {}),
+          sellerUid: attribution.sellerUid || (payData.meta || {}).sellerUid,
+          orderId:   attribution.orderId   || (payData.meta || {}).orderId,
+          items:     (attribution.items && attribution.items.length) ? attribution.items : (payData.meta || {}).items,
+        };
         const _cat = String(_pm.category || "").toLowerCase();
         const _isProductPay = !!_pm.orderId
           && _pm.type !== "booking"
@@ -8516,9 +8562,20 @@ exports.webhookIntasend = onRequest(
          bookNow only collects payment; the booking itself MUST be created here,
          server-side, because the customer's payment wizard may be closed before
          this webhook arrives (money taken, but no confirmation — the reported bug).
-         Idempotent: keyed by the payment ref. Additive — no money flow changed. */
+         Idempotent: keyed by the payment ref. Additive — no money flow changed.
+
+         D1 FIX (Q6): type/providerId shadowed with `attribution` when
+         present. Confirmed (docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md §4) this
+         branch is already unreachable for any booking with a service_booking
+         intent — holdServiceBookingPayment (above, line ~8150) returns early
+         for those. Fixed anyway for consistency/defence in depth; the legacy
+         `type==='booking'` string (no intent) is unaffected. */
       try {
-        const m = payData.meta || {};
+        const m = {
+          ...(payData.meta || {}),
+          type:       attribution.type       || (payData.meta || {}).type,
+          providerId: attribution.providerId || (payData.meta || {}).providerId,
+        };
         if (m.type === "booking") {
           const bookingRef = db.collection("bookings").doc(apiRef);
           const created = await db.runTransaction(async (txn) => {

@@ -122,11 +122,51 @@ re-derive.
 
 ---
 
+## D4 — `payment-purposes.js` registry keys have no `commission-config.js` alias
+
+**Found during:** Q6 (`docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md` §2), while scoping the D1 fix.
+
+**The fact:** `commission-config.js`'s `RATES` table is keyed by names like `marketplace`,
+`digital_products`, `services`, `events`; its `ALIASES` table maps the **legacy, ad-hoc strings
+clients actually send today** (`product`, `pos`, `restaurant`, `digital`, …) onto those keys —
+verified against live evidence recorded in that file itself (all 11 live `commissionLedger` rows
+carry category `"product"`, deliberately aliased to `marketplace` at 5%). **None of
+`payment-purposes.js`'s registry keys** (`product_order`, `digital_download`, `service_booking`,
+`event_ticket`, `hub_registration`, `pos_till_sale`) **appear in `ALIASES` or `RATES`.**
+
+**The gap:** if `webhookIntasend`'s commission-rate lookup were ever switched from
+`payData.meta?.category` (today's source) to `intent.purpose` (the server-authoritative
+registry key), every non-subscription purpose would silently resolve to `RATES.default` (5%) —
+coincidentally correct for `product_order` (marketplace is also 5%) but **wrong for
+`digital_download` (should be 10%, `digital_products`)** and any other purpose whose correct
+rate differs from the default. Not exploitable today: `category` is not sourced from
+`intent.purpose` anywhere in the codebase (Q6 deliberately kept it unchanged, precisely because
+of this finding).
+
+**Not fixed here.** This is real, separate work — reconciling `payment-purposes.js`'s purpose
+vocabulary with `commission-config.js`'s rate vocabulary, either by adding registry-key aliases
+or by having each pricer return an explicit commission category. Recorded so nobody wires
+`category` to `intent.purpose` later without seeing this.
+
+## Status update — D1 (2026-09-03, Q6)
+
+**D1 is now PARTIALLY FIXED**, not closed. `docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md` (Q6) fixed the
+part of D1 that misroutes money or mutates the wrong resource — `sellerUid`/`providerId` (wallet
+credit destination), `orderId`/`items` (which order is finalised) — plus the new Q5 Till fields
+(`sokoniTillId`/`shopId`/`branchId`/`merchantUid`), all now sourced from
+`paymentIntents/{ref}.metadata` when an intent exists, never from the client-tainted
+`payments/{ref}.meta`. **Deliberately left as D1 describes it, unfixed:** the commission
+`category` field (see the new D4 below — fixing it the naive way would have been a live
+commission-rate regression) and the cosmetic/logistics fields (`hub`, `sellerName`, `buyerName`,
+`address`, `fulfillmentType`, `serviceDesc`) that no pricer's metadata carries yet. D2 and D3
+remain fully open, untouched by Q6.
+
 ## What this log does NOT do
 
-Does not fix D1, D2, or D3. Does not touch `webhookIntasend`, `initiateSTKPush`, `pos-qr.js`,
-`pay.html`, or `pos.html`. Does not quantify real-world exposure (no Cloud Logging query run
-against `posPayments`/`pos-qr.js`'s Cloud Run traffic in this pass). Not deployed. Does not touch
+Does not fully close D1 (see the status update above), or fix D2 or D3, or D4. Does not touch
+`intasendWebhook` (confirmed, Q6, still unnecessary), `initiateSTKPush`, `pos-qr.js`, `pay.html`,
+or `pos.html`. Does not quantify real-world exposure (no Cloud Logging query run against
+`posPayments`/`pos-qr.js`'s Cloud Run traffic in this pass). Not deployed. Does not touch
 `C:/temp/sok-r1`.
 
 ## Related
@@ -134,4 +174,5 @@ against `posPayments`/`pos-qr.js`'s Cloud Run traffic in this pass). Not deploye
 `docs/SOKONI_TILL_PAYMENT_INTENT_ATTACHMENT.md` (Q3, where D1/D2 were first surfaced) ·
 `docs/SOKONI_TILL_QR_CONTRACT.md` (Q4, where D3 was surfaced) ·
 `docs/INTASEND_WEBHOOK_ENDPOINT_RESOLUTION.md` (Q1, establishes `webhookIntasend` as the
-live endpoint these defects are measured against)
+live endpoint these defects are measured against) ·
+`docs/WEBHOOK_ATTRIBUTION_AUTHORITY.md` (Q6, D1's partial fix + D4's discovery)
