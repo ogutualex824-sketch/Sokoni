@@ -57,6 +57,12 @@
  * Exports (re-exported by name from functions/index.js):
  *   listShopEmployees     onCall  — owner/admin: the staff of one shop
  *   removeShopEmployee    onCall  — owner/admin: deactivate one employee
+ *   merchantIdentity      onCall  — any authenticated caller: capabilities +
+ *                          shop projection for ONE shopId, built on
+ *                          resolveShopAccess. merchant-v2.html's own core
+ *                          identity step — was a missing dependency on this
+ *                          branch until now (Till Approval Automation +
+ *                          Unified Dashboard Profile, Part 3).
  * Plus the internal contract used by other authorities:
  *   employeeDocId, resolveShopAccess, assertShopAccess, shopOwnerOf, SHOP_ROLES
  */
@@ -189,6 +195,91 @@ async function resolveOwnedShopId(uid) {
   }
   return null;
 }
+
+/* Capabilities per resolved role — first defined here. Nothing on this branch
+   had a ROLE_CAPABILITIES table before (the one merchant-v2.html's own
+   comments describe living in functions/merchant-identity.js exists only on
+   a different, unmerged branch, release/merchant-identity). `'sell'` is the
+   only capability any current shell code actually checks (merchant-v2.html's
+   `can('sell')`, gating the POS/till surface) — the rest is forward-looking,
+   conservative scaffolding for the same SHOP_ROLES vocabulary
+   resolveShopAccess already resolves, not an assumption ported from
+   elsewhere. Owner/admin get everything; a role of narrower, undefined scope
+   ('support') gets nothing beyond being recognised, on the principle that an
+   unreviewed capability grant is a worse default than an under-permissioned
+   one a real product decision can widen later. */
+const ROLE_CAPABILITIES = Object.freeze({
+  owner:     ['sell', 'discount', 'refund', 'staff', 'settings', 'reports', 'till'],
+  admin:     ['sell', 'discount', 'refund', 'staff', 'settings', 'reports', 'till'],
+  manager:   ['sell', 'discount', 'refund', 'staff', 'reports', 'till'],
+  cashier:   ['sell', 'till'],
+  inventory: ['inventory', 'reports'],
+  support:   [],
+});
+
+function _sanIdent(s, max) {
+  return String(s || '').replace(/[<>]/g, '').trim().slice(0, max || 160);
+}
+
+/** Pure — no Firestore. An unrecognised/malformed role (never expected from
+    resolveShopAccess, which only ever returns 'owner'/'admin'/SHOP_ROLES, but
+    checked here anyway rather than trusted) resolves to NO capabilities, not
+    every capability — the fail-closed direction is the only safe default for
+    a lookup table indexed by a value this function does not itself verify. */
+function capabilitiesForRole(role) {
+  /* .slice() — ROLE_CAPABILITIES itself is frozen, but Object.freeze is
+     shallow: the ARRAYS it holds are not, so returning them directly would
+     hand every caller a live reference to the shared table. A caller that
+     mutated its own "copy" would corrupt every future resolution for that
+     role — certified directly (scripts/test-merchant-identity.js). */
+  return (ROLE_CAPABILITIES[role] || []).slice();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   merchantIdentity — resolve WHAT an authenticated caller may do at shopId,
+   and the shop's own display projection. merchant-v2.html has called this
+   exact callable, with this exact request/response shape, since before this
+   file existed on this branch (its own comments describe the contract in
+   detail) — this was a missing dependency, not new API surface invented for
+   this slice. ONE source of truth for owners and employees alike, built
+   directly on resolveShopAccess's already-corroborated resolution — no
+   capability is ever mirrored from the client, and a client that names a
+   shopId cannot assert its own relationship to it.
+   ════════════════════════════════════════════════════════════════════════════ */
+exports.merchantIdentity = onCall(
+  { region: REGION, maxInstances: 20, memory: '128MiB', timeoutSeconds: 20, enforceAppCheck: true },
+  async (req) => {
+    const uid = req.auth && req.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    const shopId = String((req.data || {}).shopId || '').trim();
+    if (!shopId) throw new HttpsError('invalid-argument', 'shopId is required.');
+
+    /* Never re-thrown as a generic 'internal' — resolveShopAccess's own codes
+       (not-found / permission-denied / unauthenticated) are exactly what the
+       caller needs to distinguish "no such shop" from "not your shop". */
+    const access = await resolveShopAccess(uid, shopId);
+    const capabilities = capabilitiesForRole(access.role);
+
+    const shopSnap = await _db().collection(SHOPS).doc(shopId).get();
+    const s = shopSnap.exists ? (shopSnap.data() || {}) : {};
+    /* A projection, deliberately — merchant-v2.html's own comment states it
+       prefers a direct shops/{uid} read when the caller already has one and
+       falls back to this only "when the direct read was not ours to make"
+       (the employee path, which cannot read another owner's full document
+       under firestore.rules). */
+    const shop = {
+      name:  _sanIdent(s.name || s.storeName, 160),
+      logo:  s.logo || s.logoUrl || null,
+      phone: s.phone || s.phoneNumber || null,
+      email: s.email || null,
+      address: s.address || null,
+      city:  s.city || null,
+    };
+
+    return { capabilities, shop, servedBy: access.via, role: access.role };
+  }
+);
 
 /* ════════════════════════════════════════════════════════════════════════════
    listShopEmployees — the staff of ONE shop, for the owner of that shop.
@@ -341,3 +432,5 @@ exports.resolveShopAccess = resolveShopAccess;
 exports.assertShopAccess = assertShopAccess;
 exports.assertShopOwner = assertShopOwner;
 exports.resolveOwnedShopId = resolveOwnedShopId;
+exports.ROLE_CAPABILITIES = ROLE_CAPABILITIES;
+exports.capabilitiesForRole = capabilitiesForRole;

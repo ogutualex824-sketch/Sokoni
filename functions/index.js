@@ -10679,6 +10679,9 @@ exports.merchantAdjustStock          = merchantInventory.merchantAdjustStock;
 exports.listShopEmployees            = _shopEmployees.listShopEmployees;
 exports.listShopInvites              = _shopEmployees.listShopInvites;
 exports.removeShopEmployee           = _shopEmployees.removeShopEmployee;
+/* merchant-v2.html's own core identity step — a missing dependency until now
+   (Till Approval Automation + Unified Dashboard Profile, Part 3). */
+exports.merchantIdentity             = _shopEmployees.merchantIdentity;
 
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
