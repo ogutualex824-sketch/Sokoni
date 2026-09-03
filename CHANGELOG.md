@@ -1,3 +1,50 @@
+## 2026-09-03 — Unified order tracking: one position feeds seller map + buyer map, 15/0
+
+**Converges** the seller's mini-map and the rider's GPS push onto the SAME order-level position
+field the buyer's map already reads — see `docs/UNIFIED_ORDER_TRACKING_DESIGN.md`.
+
+**Why.** Traced the field model before touching any page (per instruction). Found the
+authoritative, order-centric tracking projection already exists —
+`delivery-tracking.html`/`sokoni-delivery.js`'s own "ONE LOCATION TRUTH" design
+(`packageRequests.driverLat`/`driverLng`, mirrored from a rider's real GPS, already correctly read
+by the buyer's map). It just wasn't fully wired: `driver.html` — the rider's actual app — never
+wrote it at all (only `delivery-tracking.html`'s own rider-side push did, and only while a rider
+happened to have that page open), and `seller-delivery.html`'s mini-map read a completely
+different, per-rider collection (`rideDrivers`) instead — the exact "duplicated seller-specific
+tracking record" divergence risk flagged.
+
+**`driver.html`.** The existing throttled GPS watch (`SokoniDB.startGPSTracking`'s `onUpdate`,
+already firing at most once per 5s) gains one additive write: mirrors position onto the rider's
+active delivery (`packageRequests.driverLat`/`driverLng`/`driverLocUpdatedAt`) using the exact
+field names `sokoni-delivery.js` already uses. No new geolocation watcher or interval — rides the
+one loop that already exists. The existing `rideDrivers` write (dispatch/fleet matching) is
+untouched.
+
+**`seller-delivery.html`.** `_initMiniMap` no longer opens its own per-card `rideDrivers`
+subscription — it reads `driverLat`/`driverLng` directly off the same `packageRequests` snapshot
+item that already drives the card's status and rider name. No second async source that could ever
+disagree with the buyer's map for the same order. Also fixed the `_renderActive` call-site
+condition, which gated on `riderId||driverId` (`driverId` isn't even a real field on this
+collection) instead of matching `_buildCard`'s own rider-assigned check.
+
+`rideDrivers` itself is untouched — it correctly remains the separate fleet/dispatch-matching
+collection.
+
+**Logged, not fixed, explicitly out of scope.** `track.html` has no live map at all — left alone
+since `delivery-tracking.html` is the stronger-evidence buyer tracking surface (open identity
+question, unchanged from the tracking audit). The `sokoni-delivery.js`/`driver.html`
+unauthenticated-by-PIN client-write finding from the prior slice is unchanged.
+
+**Files**
+- `driver.html` — `_drvMirrorPosition`, `_drvActiveDeliveryRef`, wired into the existing GPS
+  callback.
+- `seller-delivery.html` — `_initMiniMap` rewritten to read the shared field; `_renderActive`
+  call-site condition fixed; dead `_miniMapUnsubs` removed.
+- `scripts/test-unified-tracking.js` — new, 15/15, static assertions on both files.
+- `docs/UNIFIED_ORDER_TRACKING_DESIGN.md` — new. Full field trace + design record.
+
+**Not deployed.**
+
 ## 2026-09-03 — Seller handover / pickup-PIN UI: seller-delivery.html + driver.html, 20/0
 
 **Wires** the `sellerAuthorizeHandover`/`getMyPickupPin`/`completePickupWithPin` backend into the
