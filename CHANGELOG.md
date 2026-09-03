@@ -1,3 +1,53 @@
+## 2026-09-03 — Tracking-experience audit + `sellerAuthorizeHandover` (pickup-PIN custody stage)
+
+**Adds** a second, independent pickup-stage PIN so a seller can authorize an already-assigned
+rider's handover before the rider completes the delivery — see
+`docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md`, `docs/SELLER_ACCEPTANCE_PICKUP_PIN_TRACE.md`,
+`docs/ORDER_PIN_DISPATCH_AUTHORIZATION_TRACE.md`, `docs/TRACKING_EXPERIENCE_AUDIT.md`.
+
+**Why.** The recommended build order for this feature assumed pickup-PIN issuance could simply
+move from rider-claim time to seller-authorization time. Tracing the actual code first (per
+standing instruction, before changing anything) found that `completeDeliveryWithPin` —
+**live, enforcing, money-adjacent, today** — fails closed when `deliveryPinHash` is absent, and
+that field is the SAME one `deliveryPinOnAccept` issues at claim time for BOTH the (not-yet-live)
+pickup stage and the (live) delivery stage. Moving issuance as literally proposed would have
+starved every real delivery of its completion PIN until a seller acted through a button that does
+not exist yet — a regression on a live path. Corrected design: add a SECOND, independent PIN
+(`pickupPinHash`, its own attempt counter) for the pickup stage; leave `deliveryPinOnAccept` and
+`completeDeliveryWithPin` byte-for-byte unchanged.
+
+The custody transition itself uses the **existing** canonical `picked_up` stage
+(`functions/fulfilment-lifecycle.js`'s ladder already places it immediately after `assigned`) —
+no new status value was invented. Seller authorization is modeled as a gating fact
+(`handoverAuthorizedAt`/`handoverAuthorizedBy`), not a new status, keeping the five already-
+reconciled status vocabularies untouched.
+
+**Files**
+- `functions/seller-handover.js` — new. Three callables: `sellerAuthorizeHandover` (seller/admin-
+  only, requires an already-assigned rider, idempotent, fails closed on a missing HMAC secret),
+  `getMyPickupPin` (seller-only reveal, mirrors `getMyDeliveryPin`, explicitly refuses the rider),
+  `completePickupWithPin` (rider-only, own 5-attempt lockout isolated from the delivery stage's,
+  advances to `picked_up` via an index comparison so a replay or an already-further-along order is
+  inert rather than regressed — touches no wallet/escrow collection).
+- `functions/delivery-authority.js` — one new `OPERATION_ACTORS` entry, `authorizeHandover:
+  ['seller', 'admin']`, reusing the existing authority module rather than a second vocabulary.
+- `functions/delivery-pin.js` — additive only: exports `_gen6`/`_hash` for reuse. No other line
+  changed.
+- `functions/index.js` — three new exports re-registered by name.
+- `scripts/test-seller-handover.js` — new, 55/55 checks, isolated (stubbed firebase-admin/
+  functions, transactional in-memory Firestore) against the real `delivery-authority.js`/
+  `fulfilment-lifecycle.js`. Confirmed no regression in `test-delivery-pin-buyer-path.js` (20/20),
+  `test-delivery-pin-unreachable.js`, and `test-order-advance-authority.js` (47/47).
+- `docs/TRACKING_EXPERIENCE_AUDIT.md` — new. Audits `delivery-tracking.html` (best-evidence
+  candidate for "premium tracking", explicitly flagged as unconfirmed) against BUILT/CERTIFIED/
+  ON R1/DEPLOYED/LIVE VERIFIED; verifies buyer (`orders`) vs. seller/premium (`packageRequests`)
+  tracking views are kept in sync by common writers, not divergent state.
+- `docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md` — new. The trace/design this slice implements.
+
+**No `firestore.rules` change** — only existing collections/fields are used; `deliveryPins`
+already denies all client reads. **No UI wired yet** — backend-first, matching how the existing
+Phase 0/Phase 1 delivery-PIN work shipped. **Not deployed.**
+
 ## 2026-09-03 — 18b: retire `posSendPurchaseOrder`; `procurement.sendPurchaseOrder` stays live
 
 **Retires** the legacy `posSendPurchaseOrder` Cloud Function. **Does not touch** the canonical
