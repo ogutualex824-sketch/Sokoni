@@ -11842,6 +11842,15 @@ exports.getMyDeliveryPin          = _deliveryPin.getMyDeliveryPin;
 const _deliveryComplete = require("./delivery-complete");
 exports.completeDeliveryWithPin   = _deliveryComplete.completeDeliveryWithPin;
 exports.buyerConfirmDelivery      = _deliveryComplete.buyerConfirmDelivery;
+
+/* SELLER HANDOVER — a second, independent PIN stage (pickup, not delivery). Does not
+   touch deliveryPinOnAccept/completeDeliveryWithPin above. See
+   docs/SELLER_AUTHORIZE_HANDOVER_DESIGN.md. New Cloud Functions must be re-exported by
+   name here or they are not deployed. */
+const _sellerHandover = require("./seller-handover");
+exports.sellerAuthorizeHandover   = _sellerHandover.sellerAuthorizeHandover;
+exports.getMyPickupPin            = _sellerHandover.getMyPickupPin;
+exports.completePickupWithPin     = _sellerHandover.completePickupWithPin;
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;

@@ -81,11 +81,18 @@ function resolveActor({ uid, token, delivery, order }) {
                and does not run through here.
 
    route       a RIDER planning their own route. Every delivery in the batch is
-               checked individually, so "rider" does not mean "any rider".      */
+               checked individually, so "rider" does not mean "any rider".
+
+   authorizeHandover   the SELLER (or admin) authorizing the ALREADY-ASSIGNED rider
+               to take custody — the same custody-transfer decision as `dispatch`,
+               later in the timeline, once a specific rider is on the job. A rider
+               cannot authorize their own pickup, and a buyer has no operational
+               role here either.                                                  */
 const OPERATION_ACTORS = {
   dispatch: ['seller', 'admin'],
   fail:     ['rider', 'seller', 'admin'],
   route:    ['rider', 'admin'],
+  authorizeHandover: ['seller', 'admin'],
 };
 
 function mayPerform(operation, actor) {
@@ -102,7 +109,8 @@ function assertMayPerform(operation, { uid, token, delivery, order, HttpsError, 
     const E = HttpsError || Error;
     throw new E('permission-denied',
       'You are not authorised to ' +
-      (operation === 'dispatch' ? 'dispatch' : operation === 'fail' ? 'report a failure on' : 'route') +
+      (operation === 'dispatch' ? 'dispatch' : operation === 'fail' ? 'report a failure on' :
+       operation === 'authorizeHandover' ? 'authorize handover for' : 'route') +
       ' this delivery.');
   }
   return actor;
