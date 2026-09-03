@@ -656,6 +656,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         <div class="hdr-chip" title="Receipt printer status">
           <span class="dot" id="top-print"></span><span id="top-print-t">Printer</span>
         </div>
+        <div id="dash-identity"></div>
       </div>
     </header>
 
@@ -763,6 +764,11 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      in this shell before now. -->
 <script src="sokoni-qr.js"></script>
 <script src="sokoni-merchant-till.js"></script>
+<!-- Shared dashboard identity widget (shop switcher + profile dropdown) —
+     the SAME component provider-dashboard.html uses, not a second
+     implementation. Core loads first: the DOM half calls into it. -->
+<script src="sokoni-dashboard-profile-core.js"></script>
+<script src="sokoni-dashboard-profile.js"></script>
 <!-- Products, native. Reads the shop-scoped authority (SokoniMerchantData.listProducts)
      and writes through the certified product writer — the SAME authority POS and Sell
      consume, so the till and the catalogue cannot disagree about stock. The module holds
@@ -964,6 +970,67 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
       setDot('st-role', 'bad'); text('st-user', 'Signed out');
     } else {
       setDot('st-role', 'warn'); text('st-user', 'Checking…');
+    }
+    _paintDashIdentity();
+  }
+
+  /* ── Header identity widget (Part 5) — shop switcher + profile dropdown.
+     ONE shared component (sokoni-dashboard-profile.js), the same one
+     provider-dashboard.html uses. Mounted once; every later paintStatus()
+     call only refreshes its data — the popups themselves are not
+     re-rendered on a timer, only on open. */
+  var ROLE_LABELS = {
+    owner: 'Merchant', admin: 'Admin', manager: 'Manager',
+    cashier: 'Cashier', inventory: 'Inventory', support: 'Support',
+  };
+  var _dashIdentityUI = null;
+  /* ONE persistent config object, mutated in place on every paint rather than
+     replaced — sokoni-dashboard-profile.js's mount() closes over this exact
+     reference, so mutating its fields is what makes refresh() (and the
+     popups, opened lazily on tap) see up-to-date data without re-mounting
+     the widget or losing its open/closed state. */
+  var _dashIdentityConfig = {
+    profileHref: '/profile.html',
+    accountSettingsHref: '/account-centre.html',
+    /* No myShopHref here — this IS the shop workspace already. */
+    getWorkspaces: function () {
+      return _callable('getMyShopWorkspaces')({}).then(function (r) {
+        var list = (r && r.data && r.data.workspaces) || [];
+        return list.map(function (w) {
+          return { id: w.shopId, name: w.shopName, isActive: w.isActive !== false, roleLabel: w.role };
+        });
+      });
+    },
+    onSwitchWorkspace: function (shopId) {
+      try { window.localStorage.setItem('sokoniActiveShopId', shopId); } catch (_) {}
+      /* A full reload, deliberately — this shell mounts a dozen modules that
+         all assume ONE shop for their lifetime (_mounted{} cache, DEV
+         state, etc.). Re-resolving in place risks half of them still
+         holding the PREVIOUS shop's data; a fresh load cannot. */
+      window.location.reload();
+    },
+    /* availableRoles intentionally left empty — this shell has no
+       multi-role account surface to switch BETWEEN yet (S.role is a single
+       resolved value per shop, not an account-wide role list); the shared
+       component simply does not render a role section without entries in
+       it, never a second, invented role system. */
+    availableRoles: [],
+    signOut: doSignOut,
+  };
+  function _paintDashIdentity () {
+    var host = document.getElementById('dash-identity');
+    if (!host || S.state !== 'in' || !window.SokoniDashboardProfile) return;
+
+    _dashIdentityConfig.displayName = merchantDisplayName() || S.email || 'Merchant';
+    _dashIdentityConfig.currentRoleLabel = ROLE_LABELS[S.role] || (S.servedBy === 'employee' ? 'Staff' : 'Merchant');
+    _dashIdentityConfig.activeWorkspaceName = (S.shop && (S.shop.name || S.shop.shopName)) || 'SOKONI';
+    _dashIdentityConfig.activeWorkspaceId = S.activeShopId;
+    _dashIdentityConfig.currentRoleKey = S.role;
+
+    if (_dashIdentityUI) { _dashIdentityUI.refresh && _dashIdentityUI.refresh(); }
+    else {
+      try { _dashIdentityUI = window.SokoniDashboardProfile.mount(host, _dashIdentityConfig); }
+      catch (e) { console.error('[merchant-v2] dash identity mount failed', e); }
     }
   }
   function setDot (id, cls) { var el = document.getElementById(id); if (el) el.className = 'dot' + (cls ? ' ' + cls : ''); }
@@ -1319,7 +1386,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
        — for owners and employees alike. Never derived from a document the client
        can write, and never inferred from "is signed in". An owner gets the owner
        set; an employee gets exactly what their employment role grants. */
-    capabilities: [], servedBy: null,
+    capabilities: [], servedBy: null, role: null,
   };
   /* NO CLIENT-SIDE CAPABILITY LIST, DELIBERATELY. An earlier draft mirrored
      ROLE_CAPABILITIES.owner here so the owner path could stay a single read.
@@ -1478,6 +1545,18 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
            here, and used to be indistinguishable from a signed-out visitor. That
            is why a signed-in cashier could be told to sign in. */
         var shopId = null, ownShop = null;
+        /* Switch Shop's own choice, if the account has more than one workspace
+           (Part 5/getMyShopWorkspaces) — a HINT ONLY, exactly like every other
+           discovery step here: it decides WHICH shop to ask about, never WHAT
+           the caller may do there. merchantIdentity's own resolveShopAccess
+           (step 2, below) still refuses it outright if this account is not
+           actually authorised for it — an attacker editing localStorage gains
+           nothing, the same property the comment above already states for
+           the owner/employee discovery reads. */
+        var switchChoice = null;
+        try { switchChoice = window.localStorage.getItem('sokoniActiveShopId'); } catch (_) {}
+        if (switchChoice) { shopId = String(switchChoice); }
+        else {
         var snap = await m.fs.getDoc(m.fs.doc(m.db, 'shops', S.uid));
         if (snap.exists()) { ownShop = snap.data() || {}; shopId = snap.id; }
         else {
@@ -1492,6 +1571,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
             }
           } catch (_) { /* absent or unreadable — falls through to no-shop */ }
         }
+        } /* end switchChoice-absent branch */
 
         if (!shopId) { S.shopError = 'no-shop-document'; return; }
 
@@ -1522,12 +1602,20 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           S.activeShopId = shopId;
           S.capabilities = d.capabilities;
           S.servedBy = d.servedBy || null;
+          S.role = d.role || null;
           S.shopError = null;
           return;
         } catch (e) {
           /* A refusal here is an ANSWER, not a failure to retry: the server
              declined the relationship. Recorded with its reason so an inactive
-             employment or an unknown role stays diagnosable. */
+             employment or an unknown role stays diagnosable.
+
+             If this shopId came from a Switch Shop choice (switchChoice, above)
+             and the server refused it, the stored choice is stale/invalid —
+             clearing it prevents every future load from retrying the same
+             refused shop forever. Only ever clears OUR OWN prior choice; never
+             touches the owner/employee discovery reads above it. */
+          if (switchChoice) { try { window.localStorage.removeItem('sokoniActiveShopId'); } catch (_) {} }
           S.shopError = 'identity-' + ((e && e.code) || 'unresolved');
           return;
         }
@@ -4080,8 +4168,22 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
   });
   async function doSignOut () {
     try {
-      var m = await sdk();
-      await m.auth.signOut(m.authI);
+      /* window.sokoniSignOut (firebase.js, already loaded as a module by this
+         shell) is the CANONICAL sign-out — it tears down Firestore listeners,
+         wipes every non-infra localStorage/sessionStorage key, and
+         best-effort purges Firestore's IndexedDB persistence. This function
+         previously called m.auth.signOut() directly, bypassing all of that —
+         a real, pre-existing session-teardown gap, fixed here rather than
+         perpetuated by the new profile dropdown's own sign-out entry point.
+         Falls back to the old direct call ONLY if the canonical function is
+         somehow unavailable, so sign-out itself is never blocked on it. */
+      if (typeof window.sokoniSignOut === 'function') {
+        await window.sokoniSignOut();
+      } else {
+        var m = await sdk();
+        await m.auth.signOut(m.authI);
+      }
+      try { window.localStorage.removeItem('sokoniActiveShopId'); } catch (_) {}
       try { localStorage.removeItem('loggedIn'); } catch (_) {}
       /* Sign-out has COMPLETED — only now may the shell leave, and only through the
          contract's declared exit. The destination lives in the route, not here. */
