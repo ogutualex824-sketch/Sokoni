@@ -1,3 +1,41 @@
+## 2026-09-03 — posProducts field-mismatch remediation (migration graph step 1), 21/0
+
+**Fixes** eight `posProducts` consumers that queried or read field names no writer ever populates —
+see `docs/POSPRODUCTS_FIELD_MISMATCH_REMEDIATION.md`. Step 1 of
+`docs/POSPRODUCTS_MIGRATION_GRAPH.md`; no migration, no collection rename, no `seller.js` change.
+
+**Why.** `posUpsertProduct` writes `stockQty`/`active`(boolean)/`merchantId`; the `seller.js`
+marketplace mirror writes `stockLevel`/`status`/`sellerId` — and **no `merchantId`**. Readers used
+`qty`/`quantity`/`status=='active'`, which match neither. Firestore excludes a document missing the
+filtered field from any comparison, so these queries returned nothing, silently: low-stock always 0,
+the inventory release gate always 100, the POS app's own catalogue sync blind to every product its
+own backend created.
+
+**Key simplification, verified not assumed.** Every `merchantId`-scoped consumer can only ever match
+`posUpsertProduct` documents (the mirror never sets `merchantId`), so five of the eight needed only
+the correct field name — no dual-schema logic. Only the two unscoped consumers (`self-heal.js`,
+`pos-inventory.js`) see both writers, and there Firestore itself forces two queries/listeners.
+
+**Files**
+- `functions/bi-advanced.js` — `inventoryHealth` reads `stockQty ?? stockLevel`.
+- `functions/business-bootstrap.js` — two posProducts queries: `active==true`, not `status=='active'`.
+- `functions/business-health-score.js` — `_scoreInventory` low-stock query/read on `stockQty`;
+  `expiresAt` query left as-is with a comment (neither writer sets any expiry field — not a naming bug).
+- `functions/release-readiness.js` — inventory gate reads `stockQty`; gate now actually gates.
+- `functions/self-heal.js` — `checkInventoryIntegrity` runs `stockQty<0` and `stockLevel<0`, merged.
+- `functions/procurement.js` — `getProcurementForecast` looks up plain product ids, keyed by doc id
+  (was a `${branchId}_${productId}` composite keyed by a field no writer sets).
+- `pos-inventory.js` — second catalogue listener on `active==true`, unsubscribed on stop.
+- `scripts/test-posproducts-field-fixes.js` — new, 21/21; four fixes executed against the real
+  functions, the guard-heavy two source-inspected.
+- Three `exports._h` test hooks added (`_scoreInventory`, `checkInventoryIntegrity`, `_runDomainCheck`).
+
+**New finding, logged not fixed.** `procForecast` — read first by `getProcurementForecast` and by
+`getProcurementDashboard`'s reorder alerts — has **no writer anywhere**. The forecast function is
+inert end to end for that reason; the lookup fix is still correct but does not make the feature work.
+
+**Not deployed.**
+
 ## 2026-09-03 — Unified order tracking: one position feeds seller map + buyer map, 15/0
 
 **Converges** the seller's mini-map and the rider's GPS push onto the SAME order-level position
