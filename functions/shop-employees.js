@@ -63,6 +63,10 @@
  *                          identity step — was a missing dependency on this
  *                          branch until now (Till Approval Automation +
  *                          Unified Dashboard Profile, Part 3).
+ *   getMyShopWorkspaces   onCall  — any authenticated caller: EVERY shop
+ *                          (owned or corroborated-employee) they may
+ *                          operate. Powers Switch Shop + the login
+ *                          "Choose Shop" step (Part 4).
  * Plus the internal contract used by other authorities:
  *   employeeDocId, resolveShopAccess, assertShopAccess, shopOwnerOf, SHOP_ROLES
  */
@@ -195,6 +199,100 @@ async function resolveOwnedShopId(uid) {
   }
   return null;
 }
+
+/** One workspace-list entry. `role`/`via` mirror resolveShopAccess's own
+    vocabulary so a consumer never has to learn a second one. */
+function _workspaceEntry(shopId, shopData, role, via) {
+  return {
+    shopId,
+    shopName: _sanIdent(shopData && (shopData.name || shopData.storeName), 160) || 'My Shop',
+    role,
+    via,
+    isActive: !shopData || shopData.status !== 'suspended',
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   getMyShopWorkspaces — every shop the AUTHENTICATED caller may operate,
+   server-derived, never a client-supplied list (Till Approval Automation +
+   Unified Dashboard Profile, Part 4). Powers "Switch Shop" and the login
+   "Choose Shop" step alike — ONE resolver, not two.
+
+   Scoped deliberately to the shops/shopEmployees tenant space only — the
+   same one merchant-v2.html and merchantIdentity already operate in.
+   functions/workforce-identity.js's separate businesses/workspaceMemberships
+   space (a different, POS-shift-oriented tenant model, per
+   functions/tenant-identity.js's own "two disjoint tenant spaces" framing)
+   is a deliberate non-goal here, not an oversight.
+
+   Uses the SAME corroboration resolveShopAccess already enforces (an
+   employee record is believed only when the shop document's own owner field
+   agrees with it) — reimplemented as a scan rather than a single lookup,
+   because listing requires finding candidates BEFORE their shopId is known,
+   which resolveShopAccess (built for "what may I do at THIS shop") cannot
+   do. Every corroboration check it performs is performed here too; none are
+   relaxed for the sake of building a list.
+   ════════════════════════════════════════════════════════════════════════════ */
+exports.getMyShopWorkspaces = onCall(
+  { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 20, enforceAppCheck: true },
+  async (req) => {
+    const uid = req.auth && req.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    const db = _db();
+    const workspaces = [];
+    const seen = new Set();
+
+    /* ── Owned shops ─────────────────────────────────────────────────────
+       shops/{uid} is the common shape, checked first. The field-union scan
+       (mirroring resolveOwnedShopId's own field list) catches the less
+       common shapes WITHOUT that function's single-shop limitation — it
+       throws if an account owns more than one; a list has no such
+       constraint to violate. */
+    const directSnap = await db.collection(SHOPS).doc(uid).get();
+    if (directSnap.exists && shopOwnerOf(directSnap.data()) === uid) {
+      workspaces.push(_workspaceEntry(directSnap.id, directSnap.data(), 'owner', 'owner'));
+      seen.add(directSnap.id);
+    }
+    for (const field of ['ownerId', 'sellerUid', 'ownerUid']) {
+      const q = await db.collection(SHOPS).where(field, '==', uid).get();
+      q.forEach((d) => {
+        if (seen.has(d.id)) return;
+        const s = d.data() || {};
+        if (shopOwnerOf(s) !== uid) return; /* the field alone is not the corroboration; shopOwnerOf's own union is */
+        workspaces.push(_workspaceEntry(d.id, s, 'owner', 'owner'));
+        seen.add(d.id);
+      });
+    }
+
+    /* ── Employee memberships — corroborated exactly like resolveShopAccess ── */
+    const empSnap = await db.collection(EMPLOYEES).where('uid', '==', uid).get();
+    for (const doc of empSnap.docs) {
+      const e = doc.data() || {};
+      if (e.active === false) continue;
+      if (!SHOP_ROLES.includes(e.role)) continue;
+      const shopId = String(e.shopId || '');
+      if (!shopId || seen.has(shopId)) continue;
+
+      const shopSnap = await db.collection(SHOPS).doc(shopId).get();
+      if (!shopSnap.exists) continue;
+      const s = shopSnap.data() || {};
+      const ownerUid = shopOwnerOf(s);
+      /* THE corroboration, unchanged from resolveShopAccess: a forged record
+         names the forger as owner; the real shop document names the real
+         one; they will not agree, and the candidate is silently dropped —
+         never surfaced as "denied" (which would tell a prober which check
+         failed), just absent from the list, exactly as resolveShopAccess
+         itself never distinguishes "no record" from "corroboration failed". */
+      if (!ownerUid || String(e.shopOwnerId || '') !== String(ownerUid)) continue;
+
+      workspaces.push(_workspaceEntry(shopId, s, e.role, 'employee'));
+      seen.add(shopId);
+    }
+
+    return { workspaces };
+  }
+);
 
 /* Capabilities per resolved role — first defined here. Nothing on this branch
    had a ROLE_CAPABILITIES table before (the one merchant-v2.html's own
@@ -434,3 +532,4 @@ exports.assertShopOwner = assertShopOwner;
 exports.resolveOwnedShopId = resolveOwnedShopId;
 exports.ROLE_CAPABILITIES = ROLE_CAPABILITIES;
 exports.capabilitiesForRole = capabilitiesForRole;
+exports._workspaceEntry = _workspaceEntry;

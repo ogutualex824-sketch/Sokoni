@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-/* merchantIdentity — Part 3 (Till Approval Automation + Unified Dashboard
- * Profile) — pure-core certification of functions/shop-employees.js's new
- * capabilitiesForRole(role).
+/* merchantIdentity (Part 3) + getMyShopWorkspaces (Part 4) — Till Approval
+ * Automation + Unified Dashboard Profile — pure-core certification of
+ * functions/shop-employees.js's new capabilitiesForRole(role) and
+ * _workspaceEntry(...).
  *
- * No Firestore, no network — resolveShopAccess itself (pre-existing,
- * unmodified, already this codebase's corroborated authority for "what may
- * this uid do at this shop") is not re-certified here; only the NEW mapping
- * this slice adds is. Negative control + sabotage control, per this
- * session's standing rule.
+ * No Firestore, no network — resolveShopAccess/shopOwnerOf (pre-existing,
+ * unmodified, already this codebase's corroborated authority) are not
+ * re-certified here; only the NEW logic each slice adds is. The corroboration
+ * scan inside getMyShopWorkspaces itself is I/O-bound (real Firestore reads)
+ * and is certified by code-path tracing in docs/SWITCH_SHOP_WORKSPACES.md,
+ * consistent with every I/O wrapper's methodology in this programme (Q5-Q8).
+ * Negative control + sabotage control, per this session's standing rule.
  */
 'use strict';
 const fs = require('fs');
@@ -22,7 +25,7 @@ function ok(label, cond, note) {
 }
 
 console.log('');
-console.log('  merchantIdentity (Part 3) — pure core certification');
+console.log('  merchantIdentity (Part 3) + Switch Shop list entries (Part 4) — pure core certification');
 console.log('');
 
 console.log('  -- capabilitiesForRole --');
@@ -49,6 +52,28 @@ console.log('  -- capabilitiesForRole --');
   first.push('forged-capability');
   const second = SE.capabilitiesForRole('cashier');
   ok('mutating a returned capability list does not contaminate the shared table', !second.includes('forged-capability'));
+}
+
+console.log('  -- _workspaceEntry (Part 4: Switch Shop / Choose Shop list entries) --');
+{
+  const active = SE._workspaceEntry('shop1', { name: 'Kass Traders', status: 'active' }, 'owner', 'owner');
+  ok('normal entry: shopId passed through', active.shopId === 'shop1');
+  ok('normal entry: shopName from shop data', active.shopName === 'Kass Traders');
+  ok('normal entry: role/via passed through', active.role === 'owner' && active.via === 'owner');
+  ok('normal entry: isActive true for a non-suspended shop', active.isActive === true);
+
+  const suspended = SE._workspaceEntry('shop2', { name: 'Old Shop', status: 'suspended' }, 'owner', 'owner');
+  ok('suspended shop -> isActive false', suspended.isActive === false);
+
+  const noName = SE._workspaceEntry('shop3', { status: 'active' }, 'cashier', 'employee');
+  ok('missing shop name falls back to "My Shop", never blank', noName.shopName === 'My Shop');
+
+  const xss = SE._workspaceEntry('shop4', { name: '<script>evil</script>Shop', status: 'active' }, 'owner', 'owner');
+  ok('shop name is sanitised (no raw angle brackets survive)', !/[<>]/.test(xss.shopName));
+
+  const noShopData = SE._workspaceEntry('shop5', null, 'employee', 'employee');
+  ok('missing shop data entirely -> does not throw, isActive defaults true (absence is not the same as suspended)',
+    noShopData.isActive === true && noShopData.shopName === 'My Shop');
 }
 
 console.log('  -- negative control (must fail; proves the harness can detect failure) --');
@@ -99,6 +124,6 @@ if (fail > 0) {
   console.log('  BLOCKED — see FAIL lines above.');
   process.exit(1);
 } else {
-  console.log('  CERTIFIED — Part 3 pure core (capabilitiesForRole, functions/shop-employees.js).');
+  console.log('  CERTIFIED — Parts 3-4 pure core (functions/shop-employees.js).');
   process.exit(0);
 }

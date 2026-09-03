@@ -10682,6 +10682,9 @@ exports.removeShopEmployee           = _shopEmployees.removeShopEmployee;
 /* merchant-v2.html's own core identity step — a missing dependency until now
    (Till Approval Automation + Unified Dashboard Profile, Part 3). */
 exports.merchantIdentity             = _shopEmployees.merchantIdentity;
+/* Switch Shop + login "Choose Shop" — every shop this uid may operate,
+   server-derived (Part 4). */
+exports.getMyShopWorkspaces          = _shopEmployees.getMyShopWorkspaces;
 
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
