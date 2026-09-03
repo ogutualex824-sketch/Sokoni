@@ -1,11 +1,17 @@
 # r1 release-stack matrix — the 34-commit production delta
 
 **Status:** 📋 READ-ONLY RECONCILIATION. No cherry-pick, merge, or deploy performed.
-**Date:** 2026-09-03 · **Branch:** `release/r1-pos-printer-fn` (worktree `C:/temp/sok-r1`)
-**Production:** `d592d8f` / v632 (confirmed live via `mysokoni.co.ke/version.json`)
-**r1 tip:** `8fc3673` — 34 commits ahead of deployed production
-**Certification runs in this document were executed directly against r1's checked-out code**
-(`C:/temp/sok-r1`), today, not assumed from commit messages.
+**Date:** 2026-09-03, **updated 2026-09-04** (Part 4b + Part 6 added — Till/QR re-anchored, the
+four-way release classification) · **Branch:** `release/r1-pos-printer-fn` (worktree
+`C:/temp/sok-r1`, confirmed still dirty and untouched by the 2026-09-04 update)
+**Production:** `d592d8f` / v632 (confirmed live via `mysokoni.co.ke/version.json`, re-checked
+2026-09-04)
+**r1 tip:** `8fc3673` — unchanged since 2026-09-03, re-verified 2026-09-04 — 34 commits ahead of
+deployed production
+**Certification runs cited from Parts 1-4 were executed directly against r1's checked-out code**
+(`C:/temp/sok-r1`) on 2026-09-03, not assumed from commit messages. **Parts 4b/6 (2026-09-04) are
+read-only git/log synthesis** — ancestry checks, export counts, and a live production probe,
+re-verified fresh; `C:/temp/sok-r1` was not entered or modified to produce them.
 
 ---
 
@@ -110,21 +116,113 @@ real, committed, built-but-undeployed work, but it is not part of the 34-commit 
 It belongs in a "must be explicitly reconciled into r1" bucket of its own, not the r1 stack table
 above.
 
+## Part 4b — SOKONI Till/QR (Q1-Q8), re-anchored to r1 (2026-09-04)
+
+**Re-verified today, fresh, not carried over:** `git merge-base --is-ancestor <c> release/r1-pos-printer-fn`
+returns false for all 8 commits (`db89663, 2ba7d00, 2d27454, 82212eb, 4d78f1c, 4df3e79, 2e5bee0,
+584cfcc`). r1's tip is unchanged at `8fc3673` since this matrix was first written. Production is
+unchanged, confirmed live via `mysokoni.co.ke/version.json` right now: `commit: d592d8f...`,
+`cacheVersion: sokoni-...-v632`.
+
+Same shape as premium messaging (Part 4): real, built, certified work — **170/170 across four
+independent pure-core suites** (Q5 74/74, Q6 34/34, Q7 19/19, Q8 43/43), each with its own
+negative + sabotage control, plus a served-page browser check for the one client-side surface —
+that exists **only** on `release/multishop-checkout-certified`, not on r1's lineage. It is one
+coherent feature (`docs/RELEASE_STACK_LEDGER.md`'s consolidated ⭐ row), not eight scattered ones.
+
+**What it touches that r1 also has, and how that was kept safe:** `functions/index.js`'s
+`webhookIntasend` (Q6/Q7) and `initiateSTKPush` (Q8) are both live functions r1 also carries
+(unmodified there). Every edit to either was scoped, hunk-checked, and diffed to confirm it falls
+only within that function's own line range — none of r1's independent work on the same file is
+touched or at risk of a silent overwrite; reconciling this into r1 will be a real merge (both
+sides have touched `functions/index.js`), not a fast-forward.
+
+**Explicit instruction on record: Till/QR is not to be deployed independently of the eventual
+mass release.** It belongs in the same "must be explicitly reconciled into r1" bucket as premium
+messaging — a real merge decision, not an automatic one, given both branches have since diverged
+further on shared files.
+
 ---
 
 ## Part 5 — what this reconciliation does NOT do
 
 - Does not merge, cherry-pick, or deploy anything.
 - Does not decide how `release/multishop-checkout-certified`'s independent work (premium
-  messaging, 18b's `posSendPurchaseOrder` retirement, the 18c disposition record, the KASS AI audit
-  itself as a *document*) gets reconciled into r1. That's a real decision — this branch's 18b
-  retirement and r1's own (not-yet-executed) "18b" target the identical thing with the identical
-  verdict, which argues for reusing this branch's already-certified commit rather than re-doing the
-  work on r1, but that's a recommendation, not an action taken here.
+  messaging, **Till/QR (Q1-Q8)**, 18b's `posSendPurchaseOrder` retirement, the 18c disposition
+  record, the KASS AI audit itself as a *document*) gets reconciled into r1. That's a real
+  decision — this branch's 18b retirement and r1's own (not-yet-executed) "18b" target the
+  identical thing with the identical verdict, which argues for reusing this branch's
+  already-certified commit rather than re-doing the work on r1, but that's a recommendation, not
+  an action taken here.
 - Does not resolve the ADR-018 filename collision. Both versions remain, at their own paths, on
   their own branches.
-- Does not change either branch's function export count. This branch: 1508. r1: 1519 (measured
-  today, `d592d8f`: 1514, `8fc3673`: 1519).
+- Does not change either branch's function export count. This branch: **1515**, counted directly
+  (`grep -c "^exports\." functions/index.js`) 2026-09-04, not carried over — was 1511 before this
+  session's Till/QR work added 4 (`mintSokoniTill`, `setSokoniTillStatus`, `mintDynamicSokoniQR`,
+  `resolveSokoniQR`). r1: 1519 (measured 2026-09-03, `d592d8f`: 1514, `8fc3673`: 1519 — not
+  re-measured today; r1's tip is unchanged, so this figure still holds).
+- Does not touch `C:/temp/sok-r1`, which remains dirty (`CHANGELOG.md`, `docs/adr/ADR-018-legacy-
+  retirement-graph.md`, `docs/cf-invocation-census.json`, `functions/index.js`,
+  `functions/pos-retail.js` modified; several untracked scripts under `scripts/`) — confirmed via
+  `git status`, not assumed carried-over from the 2026-09-03 state. That dirty state is itself
+  part of Part 6's blocker list below, not resolved by this document.
+
+---
+
+## Part 6 — the four-way release classification (2026-09-04)
+
+Every item this document and its companions have inventoried, sorted into exactly one of four
+buckets. Synthesis over the evidence already gathered in Parts 1-4b — no new certification runs
+performed here, and `C:/temp/sok-r1` was not entered or modified to produce this (git-log/
+merge-base checks only, all read-only). Where a fact needed re-checking (export counts,
+production version, r1 tip, ancestry), it was re-verified today rather than carried forward — see
+inline notes.
+
+### A — ON R1, CERTIFIED (blocked only on the authorized deploy itself)
+
+Part of r1's 34-commit lineage, already certified against r1's own checked-out code. All ten rows
+below share **one single blocker**: an authorized Functions/Hosting deploy of r1's tip. Listed
+individually only because their certification evidence is per-feature; the blocker is not.
+
+| Feature | Certification | Caveat |
+|---|---|---|
+| Recovered rails (boost/commission/pickup) | 4 suites, each 0 failures: `test-pickup-handover.js` 21/0, `test-commission-collection.js` 59/0, `test-boost-ranking.js` 33/33, `test-c2b-commission-caller.js` 18/0 | live `mpesa-c2b` caller path unverified beyond unit level — see bucket D |
+| Tenant authority | 46/0 | resolver stays unbound (old behaviour) until deployed |
+| POS document authority | 45/0 | — |
+| Procurement authority (Model C) | 64/0 | — |
+| Merchant authority | 40/0 | needs Functions **+** hosting deploy together |
+| Warehouse authority | 42/0 | — |
+| Supplier Hub | 36/0 | ships in a deliberately-empty state until Tenant/Warehouse authority above is also live — a real dependency, not just co-scheduling |
+| Receipt bridge | 53/0 | — |
+| ADR-017 + resurrection gate | 63/0 + master gate PASSED (16 modules/106 handlers/85 bound/0 frozen debt) | — |
+| 18a — legacy POS inventory handler retirement | 46/0 | — |
+
+### B — CERTIFIED + ANCHORED, but NOT ON R1 (needs an explicit merge decision before it can ride the mass deploy)
+
+| Feature | Where it lives | Certification | Merge note |
+|---|---|---|---|
+| Premium messaging | `86b4e43`→`96c3244`→`8fc3673` (anchored on r1's *parent* chain, tag `pending-premium-messaging-r1`, but not on r1's actual branch ref) | 39/39 + real headless-browser load, 0 console errors | fast-forward-shaped once `C:/temp/sok-r1`'s own dirty work is committed |
+| **SOKONI Till/QR (Q1-Q8)** | `release/multishop-checkout-certified` only, 8 commits (`db89663` … `584cfcc`) | **170/170** across 4 pure-core suites + 1 served-page browser check | **real merge, not a fast-forward** — both branches have independently touched `functions/index.js`'s `webhookIntasend`/`initiateSTKPush`; reconciliation must diff both sides' hunks by hand, not auto-merge |
+| 18b — bare `purchaseOrders`/Model D retirement | `release/multishop-checkout-certified` (`2539aad`, 20/20) | 20/20 | r1 has reached the identical verdict but not executed it — recommend reusing this branch's commit rather than redoing the work (see Part 5) |
+
+### C — UNRESOLVED (a decision is needed before the item can be sorted into A, B, or D)
+
+| Item | What's blocking classification |
+|---|---|
+| ADR-018 filename collision | Two documents, same path, different branches, complementary content, neither supersedes — needs a merged/reconciled version before either branch's ADR-018 can be called canonical |
+| 18c — `posPurchaseOrders`/`posBatches` disposition | Blocked on **both** branches identically — needs the ERP-webhook and BI-reader product decisions named in Part 1, not a certification gap |
+| Warehouse management UI | 30/0 unit-passing, but the suite's own note says page **rendering** was never exercised live — needs a served-page check (the same class of gap Q8's browser check just caught for `pay-q.html`) before it can move to bucket A |
+| POS Settlement Convergence (`retailSettlements/{txnId}`) | Architecture **ratified** by the platform owner but implementation is explicitly locked behind a stated trigger phrase ("Build the POS settlement implementation candidate") this conversation has never received, plus two named security-candidate dependencies with no confirmed landing status. Directly relevant to Till/QR: Q7 deliberately did not write into `posRetailSales`/`posSales` because of this exact lock — see `docs/POS_SETTLEMENT_CONVERGENCE_DESIGN.md`, `docs/POS_QR_PAID_STATE_INTEGRATION.md` §3 |
+
+### D — OPERATIONAL BLOCKER (external dependency or an unpassed gate, not a code or design question)
+
+| Blocker | Affects |
+|---|---|
+| **The authorized Functions/Hosting deploy itself** | Every row in bucket A (ten features) — the single dominant blocker across this whole document. Nothing in bucket A needs more code; it needs one authorized deployment event. |
+| `mpesa-c2b` live production caller — transport/signature/allowlist behaviour unverified beyond the unit level | Recovered rails' commission-collection rail specifically (bucket A) |
+| KASS AI customer widget (`sokoniChat`) — **broken in production right now** | Root cause is Anthropic account credit exhaustion (`ANTHROPIC_API_KEY`), a billing/operational fix, not a code change or a deploy — independent of everything else in this document |
+| `C:/temp/sok-r1` itself dirty (uncommitted `CHANGELOG.md`, `docs/adr/ADR-018-...md`, `docs/cf-invocation-census.json`, `functions/index.js`, `functions/pos-retail.js`, several untracked scripts) | Blocks r1 from being a clean deploy source at all, and blocks the premium-messaging fast-forward (bucket B) — whoever owns that worktree needs to commit or discard it before anything else in bucket A/B can proceed |
+| POS Settlement Convergence's Gate 1 (served-security verification via a "SAFE topology" — live auth matrix, `guard-no-rollback` pass, targeted callable deploy) | Blocks Gate 2 (already ratified) from becoming buildable — a prerequisite to the item in bucket C, not yet started |
 
 ## Related
 
