@@ -22,6 +22,7 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [010](ADR-010-financial-append-only-operational-event-driven.md) | Financial records append-only; operational records event-driven until dispatch | **Accepted** · design | `RECEIPT_ARCHITECTURE.md` |
 | [011](ADR-011-server-authoritative-pricing.md) | The server prices, the client displays; reject a mismatch, never substitute it | Accepted |
 | [012](ADR-012-engine-layering.md) | Merchant pricing must never depend on logistics; the dependency is one-way | Accepted |
+| [018](ADR-018-legacy-retirement-graph.md) | An endpoint retires only on zero code-callers AND zero production traffic — never traffic alone | **Accepted** · 18b executed, 18c blocked | `docs/cf-invocation-census.json`; `test-retire-18b.js` 20/20 |
 
 ## The rule that governs all of them
 
