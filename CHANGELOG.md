@@ -1,3 +1,35 @@
+## 2026-09-03 — Till -> paymentIntent attachment design (Q3, read-only, DESIGN ONLY)
+
+**Designs** how a SOKONI Till reference attaches to the existing `paymentIntents` model without a
+second payment authority — see `docs/SOKONI_TILL_PAYMENT_INTENT_ATTACHMENT.md`. `webhookIntasend`
+not touched, per instruction — this determines how the Till's intent reaches it, not how the
+webhook changes.
+
+**Headline finding, checked directly against `initiateSTKPush`'s actual write:**
+`payments/{ref}.meta` is written **verbatim from the client's own `initiateSTKPush` argument**,
+never merged with or checked against `paymentIntents/{ref}.metadata` (the server-derived field).
+`webhookIntasend`'s wallet-credit and marketplace-order-finalisation logic read this
+client-supplied `meta` for everything except subscriptions — a real, pre-existing gap, unrelated
+to the Till design, that decides where a Till reference can attach safely.
+
+**Design:** one new `payment-purposes.js` pricer (`pos_till_sale`) — "one entry here," no
+parallel intent schema. Resolves the Till server-side from `sokoniTillId` alone (must be
+`ACTIVE`), reads `shopId`/`branchId`/`merchantUid` off the Till document — never off the request
+— and derives the amount server-side from the sale's own items.
+`paymentIntents.metadata.sokoniTillId` becomes the one place the Till is recorded, frozen by the
+collection's existing write-once semantics.
+
+**Names, does not fix:** the correct fix for reaching `webhookIntasend` safely is for its
+Till-handling logic to read `paymentIntents/{intentRef}.metadata` directly — mirroring the one
+branch (subscription) that already does this correctly — rather than `payData.meta`. Real code to
+an already-live function; belongs in its own reviewed slice, not this trace.
+
+**All seven reconciliation controls answered against the design**, not assumed: duplicate intent,
+duplicate QR scan, client-amount tampering, client-Till tampering, reference replay,
+retired/disabled Till, historical-intent identity retention.
+
+**Status: DESIGN ONLY.** No code changed anywhere. Not deployed.
+
 ## 2026-09-03 — SOKONI Till identity design (Q2 of the Till/QR gate, DESIGN ONLY)
 
 **Designs** the one genuinely net-new domain object the existing-authority trace identified — see
