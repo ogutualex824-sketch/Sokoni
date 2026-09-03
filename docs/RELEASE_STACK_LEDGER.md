@@ -13,22 +13,26 @@ IMPLEMENT → CERTIFY → COMMIT → ADD TO RELEASE STACK → DO NOT DEPLOY
 **Governing distinction, never collapse it:** `BUILT ≠ CERTIFIED ≠ DEPLOYED ≠ VERIFIED LIVE`.
 A row's "source exists" is not "the feature is live."
 
-**Baseline at ledger creation:**
+**Branch roles (decided 2026-09-03, see `docs/RELEASE_LINEAGE_RECONCILIATION.md` and
+`docs/R1_RELEASE_STACK_MATRIX.md`):**
 ```
-PRODUCTION            d592d8f / v632   (UNCHANGED throughout this document's construction)
-SOURCE BRANCH         release/multishop-checkout-certified
-HEAD                  741cd26
-FUNCTION EXPORT COUNT 1508   (grep -c '^exports\.' functions/index.js — measured 2026-09-03)
+CURRENT RELEASE BRANCH   release/r1-pos-printer-fn        (carries the production lineage;
+                                                             d592d8f is its ancestor, tip is 34
+                                                             commits beyond it — see the matrix doc)
+SOURCE/EVIDENCE BRANCH   release/multishop-checkout-certified   (this session's work: 18b/18c,
+                                                             ADR-018/018c, KASS AI audit, this
+                                                             ledger itself. FROZEN as a work/evidence
+                                                             branch — not stacked toward deployment
+                                                             until explicitly reconciled into r1)
+PRODUCTION               d592d8f / v632   (UNCHANGED)
+HEAD (this branch)       9f2dcb9
+FUNCTION EXPORT COUNT    this branch: 1508 · r1 tip (8fc3673): 1519 · d592d8f (deployed): 1514
 ```
 
-> ⚠️ **Lineage correction (see `docs/RELEASE_LINEAGE_RECONCILIATION.md`):** `d592d8f` is
-> confirmed live (`https://mysokoni.co.ke/version.json`), but its own `branch` field reads
-> `release/r1-pos-printer-fn` — **not** `release/multishop-checkout-certified`. The two branches
-> share only a 2026-08-13 common ancestor (`3dcf572`); neither is an ancestor of the other. This
-> ledger's "verified this session" rows are real for *this* branch, but this branch is not
-> currently the one sitting on top of deployed production — `release/r1-pos-printer-fn` is, by 34
-> commits. Read the reconciliation doc before treating this ledger as the sole release-stack
-> record.
+The rows below marked "verified this session" were gathered on the evidence branch before the
+branch-role decision above and remain accurate as *evidence*, but per the new policy this branch is
+not itself the thing being stacked toward deployment. The authoritative release-stack inventory for
+what's actually ahead of production is `docs/R1_RELEASE_STACK_MATRIX.md`.
 
 **Verification-status key**, applies per row, not per document:
 - 🟢 **VERIFIED THIS SESSION** — traced with the same method as 18b/18c/KASS AI: real `git`
