@@ -397,6 +397,40 @@ Diff scope confirmed via `git diff --stat`: exactly the 2 files touched — `adm
 AdminOS/Super Admin authorization boundaries and Moderator/Employee least-privilege are preserved
 by construction, not merely by re-running old tests.
 
+**SMS notification delivery (`c9d1e3e`) — root cause traced, fixed, certified.** A prior audit had
+established notify.js's routing/fallback logic exists but left the actual failure point in the
+delivery chain explicitly unproven. A read-only production Firestore probe (`.get()` reads only,
+script deleted immediately after) confirmed `smsQueue`/`smsDeadLetter`/`smsDelivery` all empty and
+`notifyLog`'s `sms` channel key absent on every sampled row — traced to the exact line: `notify.js`'s
+SMS gate required a caller-supplied `phone`, and the three highest-volume commerce callers
+(`payment_success`/`order_placed`/`booking_confirmed`, all fired from `webhookIntasend`) never
+passed one, so Africa's Talking was never invoked. Fixed with `resolveRecipientPhone(uid,
+callerPhone)`, mirroring `collectTokens()`'s existing push pattern: a real `users/{uid}` account's
+own phone is canonical and always wins; a caller-supplied phone is used only for a synthetic
+recipient with no account at all. A second, separate defect (six live-caller notification types —
+`booking_affected`, `order_ready_pickup`, `order_dispatching`, `payout_paid`, `payout_failed`,
+`booking_confirmed` — not registered in `TYPES`, throwing "Unknown notification type" and silently
+swallowed) was found and fixed alongside it — same bug class the file already documents fixing once
+before. `result.channels.sms` is now always one of a defined vocabulary (queued / suppressed /
+deduped / not_needed / failed:no_phone / not_applicable), never silently absent — closing the exact
+observability gap that let the phone-resolution defect go unnoticed. The six direct-SMS-bypass call
+sites (5 in `index.js`'s `sendSms()` wrapper, 1 in `redis-jobs.js`'s `handleSMS`) were classified,
+not rewritten: 2 intentional (POS's merchant-initiated `posSendSMS` callable), 2 intentional
+transport bypass (order-status-change trigger, architecturally independent of the uid-keyed engine
+— flagged as a future consolidation candidate, along with a hardcoded `seller.html` deep-link in
+one of them that now redirects to `merchant-v2.html` rather than being canonical), 1 legacy/partially
+defective (`onNewOrderCreated`'s direct in-app write uses `recipientUid`, not the `targetUid` field
+the notification center actually queries — same failure class already fixed once elsewhere,
+flagged not fixed), 1 legacy/dead (`redis-jobs.js`'s `handleSMS` — grepped the whole repo, nothing
+enqueues a `type:'sms'` job today). Full detail: `docs/SMS_DELIVERY_TRACE.md` (lives inside
+`release/r1-fold-candidate`'s own commit history, not on this branch). Certification:
+`scripts/test-notify-sms-delivery.js` **44/44** (registry/throw-safety for all 6 types, canonical-
+phone-wins scenarios, observability vocabulary, sabotage-verified). Full regression: the two
+pre-existing `notify.js` suites (`test-notify.js` 26/26, `test-notify-booking-types.js` 9/9) plus
+this branch's other certified suites all green. **LIVE SMS TEST remains explicitly BLOCKED** —
+nothing in this pass invoked Africa's Talking; the gate is an explicit recipient number plus
+explicit send authorization, neither substituted.
+
 **Still blocked, unchanged by this pass:**
 - Parts 3, 4, 5, 6 (`merchantIdentity`/`getMyShopWorkspaces`/header wiring/login Choose Shop) —
   remain paused on the R1-vs-evidence-branch `merchantIdentity` collision (Part 4c above); explicit

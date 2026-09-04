@@ -106,6 +106,7 @@ what's actually ahead of production is `docs/R1_RELEASE_STACK_MATRIX.md`.
 | Employee platform-capability grants (first lifecycle) | `7a625dc` | `scripts/test-employee-platform-authority.js` 29/29 + real headless-browser verification of grant→use→revoke | implemented fresh, certified |
 | Census + design docs | 4 doc-only commits | n/a — read-only trace + approved design specs | committed |
 | Platform Health fix (target ID + trace + fix) | `0f60549` | `scripts/test-platform-health-perf.js` 7/7 + sabotage-verified; full 433-assertion regression clean; `git diff --stat` confirms `admin-os.html`/`moderation.html`/both authority files zero diff | traced, fixed, certified |
+| SMS notification delivery (root cause trace + fix) | `c9d1e3e` | `scripts/test-notify-sms-delivery.js` 44/44 (new) + sabotage-verified; the two pre-existing `notify.js` suites (`test-notify.js` 26/26, `test-notify-booking-types.js` 9/9) and this branch's other certified suites all re-run clean | traced, fixed, certified — LIVE SMS TEST still BLOCKED |
 
 **Still blocked on this branch, unchanged:** Parts 3-6 (the `merchantIdentity` collision, deferred
 pending your decision), ADR-018 (r1's own dirty worktree is actively executing 18b on this exact
@@ -122,11 +123,34 @@ gap — measured 0px) and re-themed, CSS only. `_costEfficiency()`'s hardcoded c
 flagged, deliberately not silently fixed — a real, documented, pre-existing tradeoff, not a new
 scope decision to make unilaterally. Full detail: `docs/PLATFORM_HEALTH_TRACE.md`.
 
-**BUILT · CERTIFIED · COMMITTED (16 commits) · STACKED on `release/r1-fold-candidate`. NOT on
+**SMS notification delivery — root cause traced (was explicitly unproven before this pass), fixed,
+certified.** A read-only production Firestore probe confirmed `smsQueue`/`smsDeadLetter`/
+`smsDelivery` all empty and `notifyLog`'s `sms` channel key absent on every sampled row — Africa's
+Talking had never been invoked. Traced to `notify.js`'s SMS gate requiring a caller-supplied
+`phone`, which `payment_success`/`order_placed`/`booking_confirmed` (fired from `webhookIntasend`)
+never passed. Fixed with `resolveRecipientPhone(uid, callerPhone)` — a real account's own
+`users/{uid}` phone is canonical and always wins over anything a caller claims; a caller-supplied
+phone is used only for a synthetic recipient with no account at all. Six live-caller notification
+types that were throwing "Unknown notification type" (`booking_affected`, `order_ready_pickup`,
+`order_dispatching`, `payout_paid`, `payout_failed`, `booking_confirmed`) registered alongside it.
+`result.channels.sms` is now always a defined outcome (queued/suppressed/deduped/not_needed/
+failed:no_phone/not_applicable), never silently absent. The six direct-SMS-bypass call sites
+(`index.js`'s `sendSms()` × 5, `redis-jobs.js`'s `handleSMS` × 1) were classified — not rewritten:
+2 canonical (POS's merchant-initiated `posSendSMS`), 2 intentional transport bypass (the
+order-status-change trigger, architecturally independent of notify.js's uid-keyed model — flagged
+for a future consolidation decision, along with a hardcoded `seller.html` deep-link found in one of
+them that now redirects to `merchant-v2.html` rather than being canonical), 1 legacy/partially
+defective (a direct in-app write using `recipientUid` instead of the `targetUid` field the
+notification center actually queries), 1 legacy/dead (nothing in the repo enqueues the job type
+`handleSMS` handles). Full detail: `docs/SMS_DELIVERY_TRACE.md`. **LIVE SMS TEST remains explicitly
+BLOCKED** — no test in this pass invoked Africa's Talking; the gate is an explicit recipient number
+plus explicit send authorization from you, neither substituted.
+
+**BUILT · CERTIFIED · COMMITTED (17 commits) · STACKED on `release/r1-fold-candidate`. NOT on
 `release/r1-pos-printer-fn`'s real branch ref · NOT DEPLOYED.** `C:/temp/sok-r1` reconfirmed
-untouched (same 11-item dirty set, same HEAD `8fc3673`) after every one of the 16 commits, not
-just once at the end. The eventual R1 merge remains a separate, deliberate operation — explicitly
-not authorized as part of this work.
+untouched (same HEAD `8fc3673`) after this commit too, not just at the end of the earlier 16. The
+eventual R1 merge remains a separate, deliberate operation — explicitly not authorized as part of
+this work.
 
 ---
 
