@@ -445,6 +445,29 @@ explicit send authorization, neither substituted.
 end. Does not deploy anything. Does not resolve the still-open items listed above. The eventual R1
 merge remains a separate, deliberate operation, explicitly not authorized by this pass.
 
+## Part 8 — Tier 1: a separate, narrower release, not "RC1" (2026-09-04)
+
+`release/r1-fold-candidate`'s full reconciliation onto production's lineage was assessed as
+multi-session-scale (627 vs 155 diverged commits, ~100 conflicting files touching
+`firestore.rules`/`functions/index.js`/payment code) and deferred at your explicit direction, in
+favor of a deliberately narrower release: **Tier 1**, on its own branch
+(`release/tier1-admin-notification-reliability`, worktree `C:/temp/sok-tier1`, branched from
+`release/multishop-checkout-certified`'s own HEAD) — reapplying only SMS delivery, Moderator
+hardening, Employee authorization, and Platform Health directly onto production's real lineage.
+Till/QR + Parts 1/2/8 (this matrix's Part 4b/4c) are Tier 2, explicitly deferred to their own
+reconciliation given their payment-critical surface. Full detail, per-commit certification, and the
+`order-claim.js` source-integrity blocker/repair: `docs/RELEASE_STACK_LEDGER.md`'s Tier 1 section,
+`docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md`, `docs/ORDER_CLAIM_PROVENANCE_TRACE.md`.
+
+**Status: SMS + Moderator reapplied and certified (`690b013`, `8e81bd3`); source-integrity repair
+committed (`82f4767`) neutralizing four order-claim-class requires with disposition `order-claim.js:
+PROVEN IMPLEMENTATION · PROVEN TESTED · PROVENANCE UNRESOLVED · NOT ADMITTED TO TIER 1`; Employee and
+Platform Health not yet reapplied; a fourth, structurally different instance of the same pattern
+(`functions/business-bootstrap.js` → `./tenant-identity`, already committed on this branch, woven
+into real payment-destination-setup logic) discovered and deliberately left untouched pending
+separate direction. Tier 1 remains FROZEN — `functions/index.js` does not yet load cleanly from a
+clean checkout. No production deployment.**
+
 ## Related
 
 `docs/RELEASE_LINEAGE_RECONCILIATION.md` (the branch-topology finding this matrix builds on) ·

@@ -154,6 +154,79 @@ this work.
 
 ---
 
+## ⭐ `release/tier1-admin-notification-reliability` — Tier 1, a SEPARATE narrower release (2026-09-04)
+
+**Not `release/r1-fold-candidate`, not R1.** Branched from `release/multishop-checkout-certified`'s
+own HEAD (`0ee6947`), worktree `C:/temp/sok-tier1`, created after a full-scope reconciliation of
+`release/r1-fold-candidate` (627 diverged commits, ~100 conflicting files including
+`firestore.rules`/`functions/index.js`/payment code) was assessed as multi-session-scale and
+explicitly deferred. Tier 1 is the deliberately narrower, focused-scope alternative: reapply only
+the comparatively isolated, already-certified work (SMS fix, Moderator hardening, Employee
+authorization, Platform Health) directly onto production's real lineage, re-certified against the
+branch that will actually deploy — not "RC1," a name reserved for a release that still includes the
+whole R1 fold. Till/QR + Parts 1/2/8 are explicitly Tier 2, deferred to their own dedicated
+reconciliation given their payment-critical surface.
+
+| Slice | Commit | Certification | Status |
+|---|---|---|---|
+| SMS delivery fix reapplied | `690b013` (cherry-pick -x of `c9d1e3e`) | auto-merged clean; `test-notify-sms-delivery.js` 44/44, `test-notify.js` 26/26, `test-notify-booking-types.js` 9/9 re-run against this lineage's actual `notify.js` (confirmed its own independent 37-line `orderAdvance` authorization fix survived intact) | reapplied, certified |
+| Moderator hardening reapplied | `8e81bd3` (cherry-pick -x of `481227f`) | auto-merged clean across `firestore.rules`/`functions/index.js`/`moderation.html`; `test-platform-claims-authority.js` 15/15 +1 expected negative control | reapplied, certified |
+| Source-integrity repair | `82f4767` | see below | repaired (partial — see blocker) |
+| Employee authorization (`7a625dc`) | not yet started | — | pending |
+| Platform Health (`0f60549`) | not yet started | — | pending |
+
+**Discovered mid-reapplication: `release/multishop-checkout-certified`'s own committed
+`functions/index.js` cannot load from a clean checkout** — unconditional, module-scope
+`require('./order-claim')`/`./manual-till-orders`/`./commission-invoice`/`./pos-mpesa-refs`, none of
+which have ever been committed to this repository on any branch. Full investigation:
+`docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md` (14 untracked `functions/*.js` files censused
+individually — provenance, callers, doc coverage, classification A/B/C/D) and
+`docs/ORDER_CLAIM_PROVENANCE_TRACE.md` (dedicated trace: the code is real, technically accurate in
+its embedded claims about `notify.js`/`firestore.rules` — both independently verified — and its
+companion test, `scripts/test-order-claim-race.js`, passed **27/27** against a real Firestore
+emulator under genuine 10-way and 100-way concurrent contention). `fa5082b`'s own commit message
+explains the mechanism: committing `functions/index.js` as a whole captured requires already
+sitting uncommitted in the working tree, mitigated procedurally ("NAMED-FUNCTION deploy ONLY...
+NEVER deploy FULL index.js") rather than by fixing the source tree — a mitigation with no tooling
+enforcement (`scripts/predeploy-syntax-gate.js` only runs `node --check`, which does not catch a
+missing-module `require()`).
+
+**`82f4767` — source-integrity repair, order-claim.js class only.** Neutralizes (comments out, with
+full rationale) the four requires named above in Tier 1's `functions/index.js`. Does **not** add
+`order-claim.js`, its companion test, or any of the other three files — all remain untracked,
+outside the release. Disposition, exactly as authorized:
+
+> **`order-claim.js`: PROVEN IMPLEMENTATION · PROVEN TESTED · PROVENANCE UNRESOLVED · NOT ADMITTED TO TIER 1.**
+
+Verified after the repair: a comment-aware static require-closure walk from `index.js` (329 files
+walked) finds exactly **one** remaining gap — `./tenant-identity`, required by
+`functions/business-bootstrap.js`, **already part of this branch's own committed history** (zero
+local diff), woven into three real payment-destination-setup functions
+(`_savePaymentDestination`/`_getPaymentDestination`/`_getSetupStatus`), not a clean bounded block
+like the other four. This is a fourth instance of the same systemic pattern, discovered but
+**deliberately not touched** — the three other files independently found to reference
+`tenant-identity.js` (`pos-retail-engine.js`/`pos-staff-ops.js`/`pos-zero-friction.js`) turned out to
+have that require only in the main worktree's large uncommitted local edits (248/319/673 lines
+each), not in what Tier 1's clean checkout actually inherited, so they are not a Tier 1 problem.
+`business-bootstrap.js` awaits its own explicit direction before any repair is attempted, given its
+payment-adjacent surface. No other Tier 1 file references `claimOrder`/`releaseOrderClaim` outside
+the now-commented block in `index.js` itself (checked directly). Full Tier 1 regression re-run
+clean after the repair: `test-notify-sms-delivery.js` 44/44, `test-notify.js` 26/26,
+`test-notify-booking-types.js` 9/9, `test-platform-claims-authority.js` 15/15 (+1 expected negative
+control).
+
+**Follow-up recorded, explicitly NOT pulled into this repair:** the trace independently confirmed
+`notify.js`'s `advanceOrder()` has a genuine non-transactional read-modify-write race — two cashiers
+can both advance the same order today, exactly the defect `order-claim.js`'s own header comment
+names by file and line. A real, separate future hardening item; out of scope here.
+
+**BLOCKER, unchanged: `functions/index.js` does not yet load cleanly end-to-end.** Tier 1 stays
+**FROZEN**. No production deployment. `release/r1-fold-candidate` (`C:/temp/sok-r1-fold`) and R1
+itself (`C:/temp/sok-r1`, `8fc3673`) are untouched by any of this — Tier 1 is a wholly separate
+branch and worktree.
+
+---
+
 ## RESOLVED this session — 18a and ADR-017 provenance
 
 Full trace in `docs/RELEASE_LINEAGE_RECONCILIATION.md`. Summary: **both are real, committed, and
