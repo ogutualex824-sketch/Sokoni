@@ -105,15 +105,26 @@ what's actually ahead of production is `docs/R1_RELEASE_STACK_MATRIX.md`.
 | Moderator hardening | `481227f` | `scripts/test-platform-claims-authority.js` 15/15 + real headless-browser verification | implemented fresh, certified |
 | Employee platform-capability grants (first lifecycle) | `7a625dc` | `scripts/test-employee-platform-authority.js` 29/29 + real headless-browser verification of grant→use→revoke | implemented fresh, certified |
 | Census + design docs | 4 doc-only commits | n/a — read-only trace + approved design specs | committed |
+| Platform Health fix (target ID + trace + fix) | `0f60549` | `scripts/test-platform-health-perf.js` 7/7 + sabotage-verified; full 433-assertion regression clean; `git diff --stat` confirms `admin-os.html`/`moderation.html`/both authority files zero diff | traced, fixed, certified |
 
 **Still blocked on this branch, unchanged:** Parts 3-6 (the `merchantIdentity` collision, deferred
 pending your decision), ADR-018 (r1's own dirty worktree is actively executing 18b on this exact
-file — deferred, not touched), Platform Health (target surface unidentified — held BLOCKED, not
-guessed at).
+file — deferred, not touched).
 
-**BUILT · CERTIFIED · COMMITTED (15 commits) · STACKED on `release/r1-fold-candidate`. NOT on
+**Platform Health — RESOLVED this pass, no longer blocked.** Target identified as
+`platform-health.html`/`functions/platform-health.js` per your explicit confirmation (the literal
+"Buyer/Seller/Helper/Onboarding" screen was not found anywhere searched). Traced "stuck at 43" to
+two real causes — zero client-side refresh (fixed: honestly-labelled 90s timer) and a triple
+`sellerPerformance` fetch (fixed: deduped to one, benefiting `admin-os.html`'s own dashboard via
+the same shared callable with no client change there). "White area" traced to a real light-theme
+inconsistency (this was the only light-themed page in an all-dark admin system, not a structural
+gap — measured 0px) and re-themed, CSS only. `_costEfficiency()`'s hardcoded constants found and
+flagged, deliberately not silently fixed — a real, documented, pre-existing tradeoff, not a new
+scope decision to make unilaterally. Full detail: `docs/PLATFORM_HEALTH_TRACE.md`.
+
+**BUILT · CERTIFIED · COMMITTED (16 commits) · STACKED on `release/r1-fold-candidate`. NOT on
 `release/r1-pos-printer-fn`'s real branch ref · NOT DEPLOYED.** `C:/temp/sok-r1` reconfirmed
-untouched (same 11-item dirty set, same HEAD `8fc3673`) after every one of the 15 commits, not
+untouched (same 11-item dirty set, same HEAD `8fc3673`) after every one of the 16 commits, not
 just once at the end. The eventual R1 merge remains a separate, deliberate operation — explicitly
 not authorized as part of this work.
 

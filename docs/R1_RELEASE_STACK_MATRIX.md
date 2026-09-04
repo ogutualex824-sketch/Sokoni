@@ -5,7 +5,9 @@
 four-way release classification), updated again 2026-09-04 (Part 4c added — Till Approval
 Automation + Unified Dashboard Profile, Parts 1-8, re-anchored), **updated again 2026-09-04**
 (Part 7 added — the R1 fold-candidate branch: Q1-Q8 + Parts 1/2/8 folded, moderator hardening +
-employee authorization implemented and certified there) · **Branch:** `release/r1-pos-printer-fn`
+employee authorization implemented and certified there; updated again 2026-09-04 with the
+Platform Health fix, target identified and traced to real defects, `0f60549`) · **Branch:**
+`release/r1-pos-printer-fn`
 (worktree `C:/temp/sok-r1`, confirmed still dirty and untouched by every update on this page,
 including this one) · **Fold-candidate branch:** `release/r1-fold-candidate` (worktree
 `C:/temp/sok-r1-fold`, based on r1's own `8fc3673`, a SEPARATE branch created specifically so the
@@ -319,9 +321,10 @@ individually only because their certification evidence is per-feature; the block
 implementations, on a NEW branch created specifically so the fold work never touches `C:/temp/sok-r1`'s
 dirty worktree. That branch is `release/r1-fold-candidate` (worktree `C:/temp/sok-r1-fold`),
 branched from r1's own `8fc3673` — **not** a copy of `release/multishop-checkout-certified`. It now
-carries **15 commits** ahead of `8fc3673`, re-verified this pass:
+carries **16 commits** ahead of `8fc3673`, re-verified this pass:
 
 ```
+0f60549  fix(platform-health): trace and fix the real defects behind "stuck" scores, white area, slow load
 9e8a688  shared dashboard identity widget — files only (prerequisite for Part 7 below)
 e6cd709  Part 7 — Provider Dashboard identity wiring
 1f0af52  fix(applications): guarantee createdAt at the intake-normalization boundary
@@ -373,6 +376,27 @@ gated controls. Full detail: `docs/MODERATOR_AUTHORITY_CENSUS.md`, `docs/MODERAT
 six live inside `release/r1-fold-candidate`'s own commit history (`git show <commit>:docs/...`
 from that branch), not on `release/multishop-checkout-certified`.
 
+**Platform Health (`0f60549`) — RESOLVED, no longer blocked.** Target identification (blocked for
+two prior turns) resolved per your explicit call to treat `platform-health.html` +
+`functions/platform-health.js` as the real target — the literal "Buyer/Seller/Helper/Onboarding"
+screen does not exist anywhere searched (this tree, 4 AdminOS design branches, live production).
+Traced to real, evidenced defects: (1) zero client-side refresh — the callable has no server cache
+but the page only ever called it once at load, confirmed via its own footer text ("recompute on
+each page load"); fixed with a 90s honestly-labelled refresh timer, since true `onSnapshot`
+real-time is architecturally unavailable for computed-not-stored values. (2) `sellerPerformance`
+fetched three independent times inside one request — deduped to one fetch, shared with
+`admin-os.html`'s own dashboard via the same callable (`sokoni-aos.js:280`) with zero client-side
+change needed there. (3) the page was the only light-themed screen in an otherwise all-dark admin
+system — the "white area" traced to this, not a structural gap (measured 0px, twice) — re-themed,
+CSS only. `_costEfficiency()`'s hardcoded constants (§3b of the trace doc) found and flagged, not
+silently fixed — a real, deliberate, documented tradeoff, and making it live is a separate scope
+decision. Full detail: `docs/PLATFORM_HEALTH_TRACE.md`. Certification:
+`scripts/test-platform-health-perf.js` **7/7** (+1 expected negative control, sabotage-verified).
+Diff scope confirmed via `git diff --stat`: exactly the 2 files touched — `admin-os.html`,
+`sokoni-aos.js`, `moderation.html`, and both new authority files all **zero diff**, confirming
+AdminOS/Super Admin authorization boundaries and Moderator/Employee least-privilege are preserved
+by construction, not merely by re-running old tests.
+
 **Still blocked, unchanged by this pass:**
 - Parts 3, 4, 5, 6 (`merchantIdentity`/`getMyShopWorkspaces`/header wiring/login Choose Shop) —
   remain paused on the R1-vs-evidence-branch `merchantIdentity` collision (Part 4c above); explicit
@@ -380,12 +404,10 @@ from that branch), not on `release/multishop-checkout-certified`.
 - ADR-018 — deferred; `C:/temp/sok-r1`'s own dirty worktree was found mid-executing the 18b
   retirement on this exact file during this pass, confirming it is still real, active, in-progress
   work this branch must not touch.
-- Platform Health (the "Buyer/Seller/Helper/Onboarding, stuck at 43" report) — explicitly held
-  BLOCKED, target surface unidentified, per your instruction not to guess.
 
 **What Part 7 does NOT do:** does not merge `release/r1-fold-candidate` into
 `release/r1-pos-printer-fn`'s real branch ref. Does not touch `C:/temp/sok-r1` — reconfirmed clean
-(same 11-item dirty set, same HEAD) after every one of the 15 commits above, not just once at the
+(same 11-item dirty set, same HEAD) after every one of the 16 commits above, not just once at the
 end. Does not deploy anything. Does not resolve the still-open items listed above. The eventual R1
 merge remains a separate, deliberate operation, explicitly not authorized by this pass.
 
