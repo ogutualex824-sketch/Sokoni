@@ -225,6 +225,51 @@ names by file and line. A real, separate future hardening item; out of scope her
 itself (`C:/temp/sok-r1`, `8fc3673`) are untouched by any of this — Tier 1 is a wholly separate
 branch and worktree.
 
+**Follow-on investigation (2026-09-04, `8796777`): `business-bootstrap.js`'s own committed
+`tenant-identity.js` dependency traced to completion, with direct evidence rather than inference.**
+Downloaded the actual deployed `smartPosDispatch` source from its immutable GCS generation
+(`1788294400928902`) and diffed it file-by-file against known commits — the standard this
+investigation established for any future "what is live" question: **the deployed artifact, not the
+worktree or even the branch tip, is the authority.** Result, corrected from an earlier inference:
+
+- `business-bootstrap.js` — **CLOSED, not a divergence.** The deployed copy predates the commit
+  (`1f5664c`, 2026-09-03) that wired in `tenant-identity.js`, by two days. Ordinary staleness. The
+  live `getSetupStatus` path does not touch `tenant-identity.js` today.
+- `tenant-identity.js` — **R1-canonical**, byte-identical between production and R1's `bc44f33`.
+  The only remaining gap is governance, not code: `docs/EMPLOYEE_AUTHORITY_CONVERGENCE_DECISION.md`
+  (itself uncommitted, dated 2026-09-01, explicitly titled "DECISION ARTIFACT — decision required")
+  was never resolved before the implementation moved ahead. Not reinterpreted as a production risk.
+- `pos-staff-ops.js` — **the one genuine finding.** Its deployed copy also traces cleanly to R1's
+  history, but `release/multishop-checkout-certified` has never committed that wiring at all —
+  confirmed on every commit checked. Production is running R1-derived staff-ops authority code this
+  branch's own git history cannot produce. Real, pre-existing, unrelated to Tier 1. Tracked on its
+  own as `docs/POS_STAFF_OPS_CROSS_BRANCH_PROVENANCE.md`, deliberately kept out of Tier 1 —
+  mixing a production-lineage provenance question into the Admin/Notification release would make
+  the release boundary less trustworthy.
+
+Full detail: `docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md`, `docs/ORDER_CLAIM_PROVENANCE_TRACE.md`,
+`docs/TENANT_IDENTITY_DEPENDENCY_TRACE.md`, `docs/SMARTPOS_DISPATCH_PROVENANCE_RECONCILIATION.md`,
+`docs/POS_STAFF_OPS_CROSS_BRANCH_PROVENANCE.md`.
+
+**Release board, frozen:**
+```
+Tier 1:                FROZEN
+order-claim.js:         NOT ADMITTED — technical proof stands (27/27, real emulator concurrency),
+                        provenance/ownership unresolved
+tenant-identity.js:     R1-canonical implementation; governance decision unresolved
+business-bootstrap.js:  CLOSED — confirmed not a production divergence
+pos-staff-ops.js:       OPEN — separate cross-branch provenance track, pre-existing, unrelated to
+                        Tier 1, not to be resolved as a side effect of any release
+Production:             no change (fa5082b)
+R1:                     no change (8fc3673)
+```
+
+**Next governance decision, explicitly not this investigation's to make:** resolve
+`docs/EMPLOYEE_AUTHORITY_CONVERGENCE_DECISION.md` — whether R1's `tenant-identity.js`/employee-
+authority model was actually authorized for adoption, recorded explicitly. That decision will very
+likely also settle `pos-staff-ops.js`'s disposition, since its tenant-identity usage is one instance
+of exactly the convergence question that document poses.
+
 ---
 
 ## RESOLVED this session — 18a and ADR-017 provenance
