@@ -25,9 +25,11 @@ SOURCE/EVIDENCE BRANCH   release/multishop-checkout-certified   (this session's 
                                                              branch — not stacked toward deployment
                                                              until explicitly reconciled into r1)
 PRODUCTION               d592d8f / v632   (UNCHANGED, re-verified live 2026-09-04, this pass)
-HEAD (this branch)       2f1eed3   (was 32436f8 when this header was last updated — the 8-commit
-                                     Till Approval Automation + Unified Dashboard Profile
-                                     workstream, Parts 1-8, landed since; see the ⭐ row below)
+HEAD (this branch)       22df787   (was 2f1eed3 — the reconciliation-doc commit landed since; see
+                                     the ⭐ row below. This branch's OWN work is otherwise
+                                     unchanged this pass — everything new since is on a SEPARATE
+                                     branch, release/r1-fold-candidate, see the new row below and
+                                     docs/R1_RELEASE_STACK_MATRIX.md Part 7)
 FUNCTION EXPORT COUNT    this branch: 1519, counted directly 2026-09-04 (this pass) — was 1515
                                      (+4: merchantIdentity/getMyShopWorkspaces from Parts 3-4 of
                                      this ledger's newest ⭐ row, plus getMySokoniTill/
@@ -86,6 +88,34 @@ what's actually ahead of production is `docs/R1_RELEASE_STACK_MATRIX.md`.
 | **`marketing-engine.js` cross-sell/upsell — read-only trace** | `f434100` | 🟢 present | docs only — no code touched | n/a | n/a — 0 callers repo-wide, 0 invocations in 30d logs (positive-control verified) | n/a | none | read-only trace, no test suite (nothing to certify — no code changed) — see `docs/MARKETING_ENGINE_RECOMMENDATIONS_TRACE.md` | **TRACED · NO DECISION EXECUTED · NOT DEPLOYED.** Corroborated by a pre-existing, independent census (`docs/MERCHANT_MARKETING_AUTHORITY.md`) already blocking both callables (and 9 siblings) for a separate, more serious no-ownership-assertion defect. Evidence favors retirement over repair; disposition left to the user. |
 | **`seller.js` mirror writer — RETIRED** (executes the graph above) | `cf02d1b` | 🟢 present | `seller.html` (the addProduct() trigger page) — reachable, no UI change | n/a — client-side only, no export change | n/a — not deployed | n/a — not deployed | none — no `firestore.rules` change, no other writer/consumer touched | **14/14** `scripts/test-posproducts-mirror-retirement.js`, static + sabotage controls (canonical-write and inventory-sync detectors each proven to fail on a broken/removed copy, not just pass on the real source; resurrected-mirror-write caught; cross-contamination control proves detector independence; the two unrelated `addProduct()` implementations + `seller-wiring.js` diffed byte-identical to HEAD; repo-wide grep confirms only the already-known `sokoni-reconcile.js` writer remains) — see `docs/POSPRODUCTS_SELLERJS_RETIREMENT_RESULT.md` | **BUILT · CERTIFIED · COMMITTED · NOT ON R1 · NOT DEPLOYED.** The `posProducts` mirror write is gone from `seller.js`; canonical `products` and `tenants/{uid}/inventory_products` are unchanged. `marketing-engine.js`'s separate `status=='active'` bug (two dormant, zero-caller recommendation callables) is logged, explicitly not fixed here. `sokoni-reconcile.js`'s writer is out of scope, left alone. |
 | **Unified order tracking — one position feeds seller + buyer maps** | `0baf927` | 🟢 present | `seller-delivery.html` (mini-map), `driver.html` (position mirror) — no new page | none (client-side Firestore writes/reads only) | n/a — not deployed | n/a — not deployed | none — writes go through the existing `packageRequests` update permission an assigned rider already has | **15/15** `scripts/test-unified-tracking.js` (static); both pages headless-loaded, 0 console errors; confirmed no regression in the two prior slices' suites — see `docs/UNIFIED_ORDER_TRACKING_DESIGN.md` | **BUILT · CERTIFIED · COMMITTED · NOT ON R1 · NOT DEPLOYED.** Converges seller's mini-map and rider's GPS push onto the SAME `packageRequests.driverLat`/`driverLng` mirror the buyer's map (`delivery-tracking.html`) already reads — an already-existing "ONE LOCATION TRUTH" design, previously fed by nothing in the rider's real app. `track.html`'s missing live map and the `sokoni-delivery.js` client-write finding remain explicitly out of scope. |
+
+---
+
+## ⭐ `release/r1-fold-candidate` — a SEPARATE branch, authorized R1 fold in progress (2026-09-04)
+
+**Not this branch.** `release/r1-fold-candidate` is branched directly from r1's own `8fc3673`
+(worktree `C:/temp/sok-r1-fold`), created specifically so this authorized fold work never touches
+`C:/temp/sok-r1`'s dirty worktree. Full detail, commit list, and per-slice conflict resolution:
+`docs/R1_RELEASE_STACK_MATRIX.md` Part 7. Summary:
+
+| Slice | Commits | Certification | Status |
+|---|---|---|---|
+| Q1-Q8 Till/QR fold | `56f9e8c`→`bdcad4d`→`0bb27a3`→`c95519e` (4 bookkeeping-only commits skipped, not real product code) | **177/177** across 4 pure-core suites, re-certified against r1's real folded code | folded, certified |
+| Parts 1, 2, 8 (Till Approval Automation, Till&QR merchant surface, KASS backfill) | `7d4dcbd`→`1e77536`→`f4e934b` | re-uses the suites above; `merchant-v2.html`'s two-way Supplier-Hub-vs-Till/QR split resolved keeping BOTH sides, confirmed present exactly once | folded, certified |
+| Moderator hardening | `481227f` | `scripts/test-platform-claims-authority.js` 15/15 + real headless-browser verification | implemented fresh, certified |
+| Employee platform-capability grants (first lifecycle) | `7a625dc` | `scripts/test-employee-platform-authority.js` 29/29 + real headless-browser verification of grant→use→revoke | implemented fresh, certified |
+| Census + design docs | 4 doc-only commits | n/a — read-only trace + approved design specs | committed |
+
+**Still blocked on this branch, unchanged:** Parts 3-6 (the `merchantIdentity` collision, deferred
+pending your decision), ADR-018 (r1's own dirty worktree is actively executing 18b on this exact
+file — deferred, not touched), Platform Health (target surface unidentified — held BLOCKED, not
+guessed at).
+
+**BUILT · CERTIFIED · COMMITTED (15 commits) · STACKED on `release/r1-fold-candidate`. NOT on
+`release/r1-pos-printer-fn`'s real branch ref · NOT DEPLOYED.** `C:/temp/sok-r1` reconfirmed
+untouched (same 11-item dirty set, same HEAD `8fc3673`) after every one of the 15 commits, not
+just once at the end. The eventual R1 merge remains a separate, deliberate operation — explicitly
+not authorized as part of this work.
 
 ---
 

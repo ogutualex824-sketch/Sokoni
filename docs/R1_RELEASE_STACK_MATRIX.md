@@ -2,10 +2,14 @@
 
 **Status:** 📋 READ-ONLY RECONCILIATION. No cherry-pick, merge, or deploy performed.
 **Date:** 2026-09-03, updated 2026-09-04 (Part 4b + Part 6 added — Till/QR re-anchored, the
-four-way release classification), **updated again 2026-09-04** (Part 4c added — Till Approval
-Automation + Unified Dashboard Profile, Parts 1-8, re-anchored) · **Branch:**
-`release/r1-pos-printer-fn` (worktree `C:/temp/sok-r1`, confirmed still dirty and untouched by
-every 2026-09-04 update, including this one)
+four-way release classification), updated again 2026-09-04 (Part 4c added — Till Approval
+Automation + Unified Dashboard Profile, Parts 1-8, re-anchored), **updated again 2026-09-04**
+(Part 7 added — the R1 fold-candidate branch: Q1-Q8 + Parts 1/2/8 folded, moderator hardening +
+employee authorization implemented and certified there) · **Branch:** `release/r1-pos-printer-fn`
+(worktree `C:/temp/sok-r1`, confirmed still dirty and untouched by every update on this page,
+including this one) · **Fold-candidate branch:** `release/r1-fold-candidate` (worktree
+`C:/temp/sok-r1-fold`, based on r1's own `8fc3673`, a SEPARATE branch created specifically so the
+fold work never touches `C:/temp/sok-r1`'s dirty worktree — see Part 7)
 **Production:** `d592d8f` / v632 (confirmed live via `mysokoni.co.ke/version.json`, re-checked
 2026-09-04, this reconciliation pass)
 **r1 tip:** `8fc3673` — unchanged since 2026-09-03, re-verified 2026-09-04 (this pass, both the
@@ -14,6 +18,9 @@ worktree HEAD and the branch ref) — 34 commits ahead of deployed production
 (`C:/temp/sok-r1`) on 2026-09-03, not assumed from commit messages. **Parts 4b/4c/6 (2026-09-04)
 are read-only git/log synthesis** — ancestry checks, export counts, and a live production probe,
 re-verified fresh each time; `C:/temp/sok-r1` was not entered or modified to produce any of them.
+**Part 7's certification runs were executed directly against `release/r1-fold-candidate`'s real,
+folded code** (`C:/temp/sok-r1-fold`), same standard as Parts 1-4 — not assumed from commit
+messages, and `C:/temp/sok-r1` was, again, never entered or modified.
 
 ---
 
@@ -304,6 +311,83 @@ individually only because their certification evidence is per-feature; the block
 | KASS AI customer widget (`sokoniChat`) — **broken in production right now** | Root cause is Anthropic account credit exhaustion (`ANTHROPIC_API_KEY`), a billing/operational fix, not a code change or a deploy — independent of everything else in this document |
 | `C:/temp/sok-r1` itself dirty (uncommitted `CHANGELOG.md`, `docs/adr/ADR-018-...md`, `docs/cf-invocation-census.json`, `functions/index.js`, `functions/pos-retail.js`, several untracked scripts) | Blocks r1 from being a clean deploy source at all, and blocks the premium-messaging fast-forward (bucket B) — whoever owns that worktree needs to commit or discard it before anything else in bucket A/B can proceed |
 | POS Settlement Convergence's Gate 1 (served-security verification via a "SAFE topology" — live auth matrix, `guard-no-rollback` pass, targeted callable deploy) | Blocks Gate 2 (already ratified) from becoming buildable — a prerequisite to the item in bucket C, not yet started |
+
+## Part 7 — the R1 fold-candidate branch: authorized, in-progress reconciliation (2026-09-04)
+
+**Explicit authorization on record:** you authorized folding the Q1-Q8 Till/QR dependency
+(unblocking Parts 1/2/8) and proceeding with the moderator-hardening and employee-authorization
+implementations, on a NEW branch created specifically so the fold work never touches `C:/temp/sok-r1`'s
+dirty worktree. That branch is `release/r1-fold-candidate` (worktree `C:/temp/sok-r1-fold`),
+branched from r1's own `8fc3673` — **not** a copy of `release/multishop-checkout-certified`. It now
+carries **15 commits** ahead of `8fc3673`, re-verified this pass:
+
+```
+9e8a688  shared dashboard identity widget — files only (prerequisite for Part 7 below)
+e6cd709  Part 7 — Provider Dashboard identity wiring
+1f0af52  fix(applications): guarantee createdAt at the intake-normalization boundary
+92937f8  fix(admin): super-admin.html topbar clips its title at phone widths
+56f9e8c  Q5 — SOKONI Till/QR authority layer
+bdcad4d  Q6 — webhookIntasend financial attribution (D1 fix)
+0bb27a3  Q7 — POS Till QR paid-state integration
+c95519e  Q8 — buyer-facing SOKONI Till QR payment page (/pay/q/**)
+7d4dcbd  Part 1 — Till Approval Automation
+1e77536  Part 2 — Till & QR surface in Merchant V2 shell
+f4e934b  Part 8 — KASS Shop Till backfill script (dry-run only)
+481227f  moderator hardening (claims-writer reconciliation, dead-control disable, audit trail)
+7a625dc  employee platform-capability grants (first grant/inspect/use/revoke lifecycle)
+docs: moderator + employee authority census (5c32380 equivalent, doc-only)
+docs: moderator hardening design + employee authorization contract (design-only)
+```
+
+**Q1-Q8 fold — clean, all 4 real code commits landed** (`db89663`→`2ba7d00`[skipped: pure
+evidence-branch bookkeeping, `docs/RELEASE_STACK_LEDGER.md` doesn't belong on r1]→`2d27454`→`82212eb`[skipped,
+same reason]→`4d78f1c`→`4df3e79`[skipped, same reason]→`2e5bee0`→`584cfcc`[skipped, same reason]).
+Q5 (`56f9e8c`) and Q7 (`0bb27a3`) cherry-picked with zero conflicts. Q6 (`bdcad4d`) conflicted only
+on a `docs/PAYMENT_AUTHORITY_DEFECTS_LOG.md` modify/delete (the doc didn't exist on r1 yet —
+resolved by taking the incoming content, a clean new-file introduction, not a real merge
+decision). Q8 (`c95519e`) conflicted on `firebase.json` (git rendered the WHOLE file as one
+conflict block; resolved by diffing Q8's commit against its own parent to isolate the actual
+one-rule addition — `/pay/q/** → /pay-q.html`, inserted before r1's own existing `/pay/**` rule —
+and applying that precisely, not by trusting the automatic merge). All four Till/QR pure-core
+suites re-certified against r1's real folded code: **81/81 + 34/34 + 19/19 + 43/43 (177/177)**,
+matching or exceeding the evidence-branch's own certification levels.
+
+**Parts 1, 2, 8 — all three landed, now that their Till/QR dependency exists.** Part 1
+(`7d4dcbd`) conflicted in `functions/application-lifecycle.js`: r1's version of that file has
+never called `startSellerFreeTrial` anywhere despite importing it — the incoming trial+Till block
+was a pure insertion into a genuine gap, not competing content, confirmed by grep before
+resolving. Part 2 (`1e77536`) was the anticipated hard case — `merchant-v2.html`'s two-way
+split (r1's Supplier Hub vs. this branch's Till/QR + header identity) — resolved by keeping BOTH
+sides: Supplier Hub's script tag and MODULES entry preserved exactly as r1 had them, Till/QR's
+script tags and `till:` MODULES entry inserted alongside, confirmed both present exactly once and
+the page's inline scripts syntax-valid afterward. Part 8 (`f4e934b`) applied cleanly, no
+conflicts.
+
+**Moderator hardening (`481227f`) and employee platform-capability grants (`7a625dc`)** — both
+implemented fresh directly against r1's real code (not carried over from the evidence branch, since
+neither existed there before this session), each with its own approved design doc, full
+certification evidence, and a real headless-browser verification of `moderation.html`'s actual
+gated controls. Full detail: `docs/MODERATOR_AUTHORITY_CENSUS.md`, `docs/MODERATOR_HARDENING_DESIGN.md`,
+`docs/MODERATOR_HARDENING_CERTIFICATION.md`, `docs/EMPLOYEE_AUTHORITY_CENSUS.md`,
+`docs/EMPLOYEE_AUTHORIZATION_CONTRACT.md`, `docs/EMPLOYEE_PLATFORM_GRANTS_CERTIFICATION.md` — all
+six live inside `release/r1-fold-candidate`'s own commit history (`git show <commit>:docs/...`
+from that branch), not on `release/multishop-checkout-certified`.
+
+**Still blocked, unchanged by this pass:**
+- Parts 3, 4, 5, 6 (`merchantIdentity`/`getMyShopWorkspaces`/header wiring/login Choose Shop) —
+  remain paused on the R1-vs-evidence-branch `merchantIdentity` collision (Part 4c above); explicit
+  decision deferred at your instruction.
+- ADR-018 — deferred; `C:/temp/sok-r1`'s own dirty worktree was found mid-executing the 18b
+  retirement on this exact file during this pass, confirming it is still real, active, in-progress
+  work this branch must not touch.
+- Platform Health (the "Buyer/Seller/Helper/Onboarding, stuck at 43" report) — explicitly held
+  BLOCKED, target surface unidentified, per your instruction not to guess.
+
+**What Part 7 does NOT do:** does not merge `release/r1-fold-candidate` into
+`release/r1-pos-printer-fn`'s real branch ref. Does not touch `C:/temp/sok-r1` — reconfirmed clean
+(same 11-item dirty set, same HEAD) after every one of the 15 commits above, not just once at the
+end. Does not deploy anything. Does not resolve the still-open items listed above. The eventual R1
+merge remains a separate, deliberate operation, explicitly not authorized by this pass.
 
 ## Related
 
