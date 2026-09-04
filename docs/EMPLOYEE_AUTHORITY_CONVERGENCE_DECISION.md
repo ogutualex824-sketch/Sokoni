@@ -1,8 +1,9 @@
 # Employee Authority Convergence — Decision Required
 
-**Status:** DECISION ARTIFACT — no code changed. §6 Q1 (the one blocking data question)
-ANSWERED 2026-09-04 by production census — see the inline note under Q1. Questions 2–5 remain
-open; this document's overall recommendation (§3) is still a proposal, not an authorized decision.
+**Status:** DECISION ARTIFACT — no code changed. **All five §6 questions now ANSWERED
+(2026-09-04)** — Q1 by production census, Q2–Q5 by explicit product/policy decision. See the
+inline note under each question. §4's convergence protocol has not been started; whether and when
+to begin implementing against these five answers is a separate authorization.
 **Date:** 2026-09-01
 **Blocks:** approval consumption · void restoration · refund · discount · shift · stock · the five dead reads
 **Related:** [[EMPLOYEE_AUTHORITY_MAP]] · [[MANAGER_APPROVAL_ARCHITECTURE]] · [[SHIFT_ACCOUNTING_CONTRACT]]
@@ -140,10 +141,53 @@ time, with the same battery.
    > this answer.
 
 2. Does `ALL_PERMISSIONS` gain `openShift`/`closeShift`, or does `pos` continue to gate both?
+
+   > **ANSWERED, 2026-09-04.** `ALL_PERMISSIONS` gains explicit `openShift` and `closeShift`
+   > capabilities, distinct from `pos`. An employee granted `pos` must not thereby gain shift
+   > control — the canonical model distinguishes `pos` / `openShift` / `closeShift` as three
+   > independently grantable permissions, preserving least privilege.
+
 3. Does void get `refunds`, or a new `voids` permission?
+
+   > **ANSWERED, 2026-09-04.** A dedicated `voids` permission, independent of `refunds` —
+   > they are operationally different actions and must remain independently grantable, so an
+   > owner can let an employee void an eligible unfinalized transaction without also granting
+   > refund authority. The existing owner/admin-only behavior for void (P7) remains the safe
+   > baseline until `voids` is explicitly implemented and enforced — this answer does not by
+   > itself change void's current authority.
+
 4. Is branch scope a requirement of the canonical model, or may refunds lose branch
    granularity during migration?
+
+   > **ANSWERED, 2026-09-04.** Branch scope is mandatory in the canonical model. Refund
+   > authority must not lose branch granularity during migration — the canonical chain is
+   > employee identity → business/workspace → branch → permitted operation. A refund-capable
+   > employee must not gain cross-branch access merely because `workspaceMemberships` today
+   > lacks a branch dimension. Given §6 Q1's production evidence that `shopId`/`businessId`/
+   > `merchantId` are distinct, non-interchangeable spaces, branch ownership must be
+   > represented explicitly in the canonical model — never inferred from any one of those
+   > three identifiers.
+
 5. Is there an acceptable dual-read window on the checkout path, or must it cut over atomically?
+
+   > **ANSWERED, 2026-09-04.** No dual-read window on the money path. Checkout/`servedBy`
+   > cuts over atomically: old authority → atomic cutover → canonical authority, with
+   > compatibility handled *before* the cutover rather than via ambiguous runtime fallback. A
+   > checkout request must resolve `servedBy` from the canonical authenticated employee/
+   > merchant authority — it must not silently fall back to a second identity source
+   > depending on which document happens to exist, which is exactly the kind of implicit
+   > equality §6 Q1's evidence showed is unsafe.
+
+## 6a · Standing invariants reaffirmed alongside the five answers (2026-09-04)
+
+Not new decisions — restated explicitly so the convergence work builds against them without
+re-deriving them from older material:
+
+- **`permissions[]` is the authoritative grant.** `roleTemplate` stays descriptive only — a label
+  for the UI, never itself a source of authority.
+- **The model stays server-authoritative.** The owner grants permission; the employee's
+  authenticated identity establishes who they are; the server — never the client — determines
+  what they may access.
 
 ## 7 · State this decision does not change
 
