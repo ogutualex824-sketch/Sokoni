@@ -194,15 +194,16 @@ been taken.
 
 ### So the real position
 
-Nothing in the certified Supply stack blocks a functions deploy, and  is
-now committed (, byte-identical to ). What still stands between this branch
-and a functions deploy is **not** Supply work:
+Nothing in the certified Supply stack blocks a functions deploy, and
+`functions/tenant-identity.js` is now committed (`24f50ba`, byte-identical to `25d2c19`). What
+still stands between this branch and a functions deploy is **not** Supply work:
 
-1. **Four modules  requires are untracked** — , ,
-   , . Three have never been committed on any ref. Each
+1. **Four modules `index.js` requires are untracked** — `order-claim`, `manual-till-orders`,
+   `commission-invoice`, `pos-mpesa-refs`. Three have never been committed on any ref. Each
    needs its own owner and provenance decision, exactly as tenant-identity did.
-2. **** — another workstream's in-progress edit to 
-   depends on it; two divergent committed versions exist; that decision is theirs.
+2. **`merchant-identity.js`** — another workstream's in-progress edit to
+   `pos-zero-friction.js` depends on it; two divergent committed versions exist; that
+   decision is theirs.
 3. **The lineages have diverged**, and production was itself built from a dirty tree.
 
 None of these is resolved here, and no deployment has been performed.
