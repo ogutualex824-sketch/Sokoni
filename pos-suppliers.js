@@ -20,6 +20,7 @@ window.PosSuppliers = (() => {
   let _listeners = {};
   let _online  = navigator.onLine;
   let _branchId = 'default';
+  let _merchantId = null;   /* canonical merchant/business id — required for cloud sync */
 
   const uid = () => { try { return crypto.randomUUID(); } catch (_) { return Date.now().toString(36)+Math.random().toString(36).slice(2); } };
   function on(e, fn)  { (_listeners[e] = _listeners[e] || []).push(fn); }
@@ -54,7 +55,101 @@ window.PosSuppliers = (() => {
   async function _all(store, idx, val) { const db = await _openDB(); return new Promise((res, rej) => { const tx = db.transaction(store,'readonly'); const st = tx.objectStore(store); const req = idx ? st.index(idx).getAll(val) : st.getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=e=>rej(e.target.error); }); }
   async function _del(store, id)  { const db = await _openDB(); return new Promise((res, rej) => { const tx = db.transaction(store,'readwrite'); const req = tx.objectStore(store).delete(id); req.onsuccess=()=>res(); req.onerror=e=>rej(e.target.error); }); }
 
-  function _sync(col, id, data) { if (!_online || !window.firebase?.firestore) return; firebase.firestore().collection(col).doc(id).set(data, { merge: true }).catch(() => {}); }
+  /* ── Cloud sync ──────────────────────────────────────────────────────────────
+     These collections are server-authoritative: the served ruleset grants the browser
+     READ only (posSuppliers, posPurchaseOrders) and has no match block at all for
+     posGRN / posSupplierInvoices / posSupplierPayments, which is a closed-world deny.
+     A direct browser write is therefore ALWAYS denied. The previous implementation did
+     exactly that and swallowed the rejection with .catch(() => {}), so the UI reported
+     success while nothing ever reached the cloud.
+
+     Writes now route through the smartPosDispatch op `posSupplierSync`, which resolves
+     the merchant authority server-side and writes with Admin SDK authority. Local-first
+     behaviour is unchanged — IndexedDB is still written first and remains the source the
+     UI reads — but a sync failure is now RECORDED and EMITTED instead of discarded.
+  ─────────────────────────────────────────────────────────────────────────────── */
+
+  /* entity keys accepted by the posSupplierSync op, keyed by local store */
+  const SYNC_ENTITY = {
+    posSuppliers:         'supplier',
+    posPurchaseOrders:    'purchaseOrder',
+    posGRN:               'grn',
+    posSupplierInvoices:  'supplierInvoice',
+    posSupplierPayments:  'supplierPayment',
+  };
+
+  /* Pending/failed mirrors, observable via getSyncState() and the 'sync:*' events. */
+  const _syncState = { pending: 0, failed: [], lastError: null, lastOkAt: null };
+
+  function getSyncState() {
+    return {
+      pending:   _syncState.pending,
+      failed:    _syncState.failed.slice(),
+      lastError: _syncState.lastError,
+      lastOkAt:  _syncState.lastOkAt,
+      online:    _online,
+    };
+  }
+
+  /* Re-attempt every failed mirror. Returns {attempted, ok, failed}. */
+  async function retryFailedSyncs() {
+    const queue = _syncState.failed.splice(0, _syncState.failed.length);
+    let ok = 0, failed = 0;
+    for (const item of queue) {
+      const r = await _sync(item.col, item.id, item.data);
+      if (r && r.ok) ok++; else failed++;
+    }
+    return { attempted: queue.length, ok: ok, failed: failed };
+  }
+
+  /**
+   * Mirror one record to its authoritative collection.
+   * Never throws — the caller's local write already succeeded — but ALWAYS reports.
+   * @returns {Promise<{ok:boolean, skipped?:string, error?:string}>}
+   */
+  async function _sync(col, id, data) {
+    const entity = SYNC_ENTITY[col];
+    if (!entity) {
+      const msg = 'No sync entity mapped for collection ' + col;
+      _syncState.lastError = msg;
+      emit('sync:error', { collection: col, id: id, error: msg });
+      return { ok: false, error: msg };
+    }
+    if (!_merchantId) {
+      const msg = 'Not initialised with a merchantId — cloud sync unavailable';
+      _syncState.lastError = msg;
+      _syncState.failed.push({ col: col, id: id, data: data, error: msg });
+      emit('sync:error', { collection: col, id: id, error: msg });
+      return { ok: false, error: msg };
+    }
+    if (!_online || !window.firebase?.functions) {
+      const msg = _online ? 'Firebase Functions unavailable' : 'Offline';
+      _syncState.failed.push({ col: col, id: id, data: data, error: msg });
+      emit('sync:deferred', { collection: col, id: id, reason: msg });
+      return { ok: false, skipped: msg };
+    }
+
+    _syncState.pending++;
+    emit('sync:start', { collection: col, id: id });
+    try {
+      const call = firebase.functions().httpsCallable('smartPosDispatch');
+      const res  = await call({ op: 'posSupplierSync', merchantId: _merchantId, entity: entity, id: id, data: data });
+      if (!res || !res.data || res.data.ok !== true) {
+        throw new Error((res && res.data && res.data.error) || 'Sync rejected by server');
+      }
+      _syncState.lastOkAt = Date.now();
+      emit('sync:ok', { collection: col, id: id });
+      return { ok: true };
+    } catch (e) {
+      const msg = (e && (e.message || e.code)) || 'Unknown sync error';
+      _syncState.lastError = msg;
+      _syncState.failed.push({ col: col, id: id, data: data, error: msg });
+      emit('sync:error', { collection: col, id: id, error: msg });
+      return { ok: false, error: msg };
+    } finally {
+      _syncState.pending--;
+    }
+  }
 
   /* ── PO number generator ── */
   let _poSeq = 0;
@@ -423,8 +518,9 @@ window.PosSuppliers = (() => {
   /* ══════════════════════════════════════════
      INIT
   ══════════════════════════════════════════ */
-  async function init(branchId = 'default') {
+  async function init(branchId = 'default', merchantId = null) {
     _branchId = branchId;
+    _merchantId = merchantId || null;
     await _openDB();
     window.addEventListener('online',  () => { _online = true; });
     window.addEventListener('offline', () => { _online = false; });
@@ -447,5 +543,7 @@ window.PosSuppliers = (() => {
     getSupplierPerformance,
     /* Auto-reorder */
     createAutoReorderPOs,
+    /* Cloud sync observability — a failed mirror is reported, never swallowed */
+    getSyncState, retryFailedSyncs,
   };
 })();
