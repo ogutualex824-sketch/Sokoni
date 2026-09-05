@@ -372,6 +372,105 @@ const addSupplier = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   0. resolveMerchantContext — WHICH BUSINESS AM I ACTING FOR?
+
+   The Merchant V2 shell resolves a `shopId` (merchantIdentity / resolveActor, ownership
+   derived from `uid === shopId`). Every procurement operation is keyed on a `merchantId`,
+   which is a `businesses/{id}` document id. THESE ARE NOT THE SAME IDENTIFIER, and they
+   coincide only in the owner-uid form. Passing an activeShopId as a merchantId would
+   silently address whichever business happened to share that key.
+
+   That is not hypothetical. Production holds an owner with THREE `businesses` documents,
+   TWO of them simultaneously active (identifier census, 2026-09-04). For that account there
+   is no single correct answer to "my business", so this refuses and returns the choices
+   rather than picking one. A Supply surface showing the wrong business's spend, stock and
+   payables is worse than one that asks.
+
+   No second resolver is introduced. Ownership resolution is `tenant-identity`'s
+   `resolveMerchantIdForOwner` (the canonical one, which already refuses on AMBIGUOUS), and
+   authorization of an explicit choice is `_assertMerchantAuthority` — the same primitive
+   every other operation in this module uses.
+
+   Never reads localStorage, a URL, or any `users/{uid}` identity field: all four of those
+   fields are self-writable, and the shell's own localStorage fallback can hand back a uid
+   from a previous session.
+════════════════════════════════════════════════════════════════ */
+
+/** The shape of the id, for callers that need to know which space they are in. */
+function _merchantIdForm(merchantId, uid) {
+  return String(merchantId) === String(uid) ? 'owner-uid' : 'generated';
+}
+
+const resolveMerchantContext = onCall(OPT, async (request) => {
+  const uid = _requireAuth(request);
+  const { businessId } = request.data ?? {};
+
+  /* ── An explicit choice: authorize it, never merely accept it. ───────────────────
+     This is how a multi-business owner proceeds after the selection state below. The
+     caller names a business; the server decides whether they may act for it. */
+  if (businessId) {
+    const merchantId = await _assertMerchantAuthority(request, String(businessId));
+    const snap = await db.collection('businesses').doc(merchantId).get();
+    if (!snap.exists) _err('Business not found.', 'not-found');
+    const b = snap.data() || {};
+    return {
+      resolved:   true,
+      merchantId,
+      form:       _merchantIdForm(merchantId, uid),
+      selected:   true,
+      name:       b.name || b.businessName || null,
+      supplyEnabled: !!(b.supply && b.supply.enabled === true),
+      choices:    [],
+      reason:     null,
+    };
+  }
+
+  /* ── No choice supplied: resolve, or refuse. ────────────────────────────────────── */
+  const owned = await resolveMerchantIdForOwner(String(uid));
+
+  if (owned && owned.ok) {
+    const snap = await db.collection('businesses').doc(owned.merchantId).get();
+    const b = snap.exists ? (snap.data() || {}) : {};
+    return {
+      resolved:   true,
+      merchantId: owned.merchantId,
+      form:       _merchantIdForm(owned.merchantId, uid),
+      selected:   false,
+      name:       b.name || b.businessName || null,
+      supplyEnabled: !!(b.supply && b.supply.enabled === true),
+      choices:    [],
+      reason:     null,
+    };
+  }
+
+  const reason = (owned && owned.reason) || TENANT_REASON.UNLINKED;
+
+  /* AMBIGUOUS is the case this operation exists for. Return the candidates so the shell
+     can present a selection state — an unresolved context with the information needed to
+     resolve it is useful; an arbitrarily chosen one is a defect. */
+  let choices = [];
+  if (reason === TENANT_REASON.AMBIGUOUS) {
+    const snap = await db.collection('businesses')
+      .where('ownerId', '==', String(uid))
+      .limit(20)
+      .get();
+    choices = snap.docs.map((d) => {
+      const b = d.data() || {};
+      return {
+        businessId: d.id,
+        name:       b.name || b.businessName || null,
+        status:     b.status || null,
+        form:       _merchantIdForm(d.id, uid),
+        supplyEnabled: !!(b.supply && b.supply.enabled === true),
+      };
+    });
+  }
+
+  logger.info('procurement.resolveMerchantContext', { resolved: false, reason, choiceCount: choices.length });
+  return { resolved: false, merchantId: null, form: null, selected: false, name: null,
+           supplyEnabled: false, choices, reason };
+});
+/* ════════════════════════════════════════════════════════════════
    1a. SUPPLY PARTICIPATION — a business opts in to supplying other businesses.
 
    SOKONI has ONE canonical identity: businesses/{businessId}. A merchant that also
@@ -1930,6 +2029,7 @@ const scheduledVendorPerformanceUpdate = onSchedule(
    Module Exports
 ════════════════════════════════════════════════════════════════ */
 module.exports = {
+  resolveMerchantContext,
   addSupplier,
   updateSupplier,
   setSupplyParticipation,
@@ -1949,6 +2049,7 @@ module.exports = {
   _assertMerchantAuthority,
   _assertSupplierSideAuthority,
   _assertPoAuthority,
+  _merchantIdForm,
   _assertSuppliesEnabled,
   _SUPPLY_MUTABLE: SUPPLY_MUTABLE,
 };

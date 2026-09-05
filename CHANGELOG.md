@@ -1,3 +1,75 @@
+## 2026-09-05 — Slice H: Merchant V2 business-identity resolution
+
+**Files:** `functions/procurement.js`, `functions/index.js` (+1 export), `merchant-v2.html`,
+`scripts/test-merchant-context-slice-h.js` (new), `CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**The blocker this removes.** The Merchant V2 shell resolves a **`shopId`**
+(`merchantIdentity`/`resolveActor`, ownership derived from `uid === shopId`). Every A→G
+procurement operation is keyed on a **`merchantId`** — a `businesses/{id}` document. **These
+are different identifier spaces** and coincide only in the owner-uid form. The shell had *no
+business-id concept at all* (zero occurrences of `businesses`/`businessId`), so any Supply
+panel would have had to pass `activeShopId` as a `merchantId` and silently address whichever
+business happened to share that key.
+
+Not hypothetical: production holds an owner with **three `businesses` documents, two
+simultaneously active**. For that account "my business" has no single correct answer.
+
+**New `resolveMerchantContext`.** Resolves an unambiguous `merchantId`, or **refuses and
+returns the candidates** so the shell can present a selection state. An explicit
+`businessId` is *authorized*, never merely accepted. No second resolver was written: ownership
+resolution is `tenant-identity`'s canonical `resolveMerchantIdForOwner` (which already refuses
+on `AMBIGUOUS`), and explicit selection goes through `_assertMerchantAuthority` — the same
+primitive every other procurement operation uses. Both id forms resolve, and the form
+(`owner-uid` / `generated`) is reported so callers know which space they are in.
+
+**Shell wiring, state only.** `S.merchantId` / `merchantForm` / `merchantName` /
+`merchantSupplyEnabled` / `merchantError` / `merchantChoices`, plus
+`SokoniShell.merchantContext()`. It returns `merchantId: null` when unresolved —
+**deliberately, with no fallback to `activeShopId`** — so a consumer cannot proceed on a guess.
+`activeShopId` is exposed alongside it precisely so the distinction stays visible at the call
+site. Resolution runs after shop identity settles and its failure never invalidates the shop
+session, since the two are independent. No localStorage is consulted for identity.
+
+**Certification.** `scripts/test-merchant-context-slice-h.js` — **66/66 checks, 6/6 sabotage
+catches**, executing the real resolver against a fixture with two principals and businesses in
+both id forms, including the two-active-businesses shape. Single ✅, uid-keyed ✅, generated ✅,
+explicit selection ✅; multiple ❌ with both choices returned, no business ❌, stale/nonexistent
+❌ fail-closed, cross-principal ❌, unauthenticated ❌, forged identity fields ignored (resolves
+the caller's *own* business). `shopId ≠ merchantId` asserted four ways. RESTORE four ways —
+silently picking the first business, accepting an unauthorized `businessId`, falling back to
+`activeShopId`, and bypassing the canonical resolver — each drives exit 1 and each restore
+returns 0, every sabotage with an applied-check.
+
+**Scope held.** Six explicit checks assert Slice I did not leak in: no `listSuppliers`, no
+PO/GRN/invoice list APIs, no warehouse/movement reads, no supplier discovery, **no Supply
+route registered**, and dashboard/forecast authorization untouched.
+
+**Three of my own assertions were wrong and were corrected, not the implementation:** a
+stale business refuses with `not-found` rather than `permission-denied` (both fail closed — the
+check now asserts refusal against a closed set); forged identity fields resolve the caller's
+*own* business rather than returning null (a stronger property than the one I first asserted);
+and a fixed-width regex window ran past the resolver into unrelated shell code that
+legitimately uses localStorage for Switch Shop. All three now scope to what they mean.
+
+**API changes:** one new callable, `resolveMerchantContext`; export count 1523 → **1524**.
+**Database changes:** none. **Breaking changes:** none — the shell gains state; nothing consumes
+it yet. **No Firestore rule widened. No route registered. No Supply UI.**
+
+### Two dependency findings
+
+1. **My own:** `functions/procurement.js` gained `require('./tenant-identity')` in Slice B2
+   (`b239ae5`), and **`functions/tenant-identity.js` is UNTRACKED**. Slice H adds no new
+   dependency (requires are byte-identical to `HEAD`), but the existing one is mine to own.
+   Note `functions/business-bootstrap.js` already required the same untracked file before my
+   work, so the break predates B2 — I added to it rather than creating it.
+2. **Pre-existing, another workstream's:** `functions/pos-zero-friction.js` requires
+   `./merchant-identity`, also untracked. `scripts/test-merchant-routes.js` also reports 2
+   failures (sidebar order, 18 primaries vs 17) from uncommitted edits to
+   `sokoni-merchant-routes.js` — a file no commit of mine has touched, and a suite that does
+   not read `merchant-v2.html` at all.
+
+**Both untracked modules must be resolved before a functions deploy can succeed.**
+
 ## 2026-09-05 — Slice G: local-draft reconciliation (A→G convergence complete)
 
 **Files:** `pos-suppliers.js`, `functions/procurement.js`, `functions/index.js` (+1 export),
