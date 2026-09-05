@@ -1022,15 +1022,21 @@ const receiveGoods = onCall(OPT, async (request) => {
     poId, branchId, items, receivedBy,
   } = request.data ?? {};
 
-  if (!poId)     _err('poId is required.');
   if (!branchId) _err('branchId is required.');
   if (!Array.isArray(items) || items.length === 0) _err('items array is required.');
 
-  const poRef  = db.collection('procPurchaseOrders').doc(poId);
-  const poSnap = await poRef.get();
-  if (!poSnap.exists) _err('Purchase order not found.', 'not-found');
+  /* MERCHANT SCOPING (Slice D). Previously this required only that the caller was signed
+     in, so any authenticated user could record receipt against any merchant's purchase
+     order — and receipt increments inventory and creates a payable. The buyer is derived
+     from the authoritative PO document, so a forged merchantId/supplierId in the payload
+     has nothing to influence.
 
-  const po = poSnap.data();
+     Note this is BUYER-side authority deliberately. Being the SUPPLIER on a PO does not
+     entitle you to record that the buyer received the goods; that is the buyer's assertion
+     about their own warehouse. Slice B2's supplier-side path is separate and does not
+     reach here. */
+  const { poRef, po } = await _assertPoAuthority(request, poId);
+
   if (!['sent', 'partially_received'].includes(po.status)) {
     _err(`Cannot receive goods for a PO in status '${po.status}'.`);
   }

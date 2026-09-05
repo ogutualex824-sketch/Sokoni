@@ -296,8 +296,15 @@ async function verdict(fn) { try { return { ok: true, value: await fn() }; } cat
     /typeof supply\.enabled !== 'boolean'/.test(PROC));
   check('PRESERVED: Slice B2 supplier-side authority is separate',
     /async function _assertSupplierSideAuthority/.test(PROC));
-  check('NOT TOUCHED: receiveGoods still reads the PO directly (Slice D)',
-    /const receiveGoods[\s\S]{0,600}const poRef  = db\.collection\('procPurchaseOrders'\)\.doc\(poId\);/.test(PROC));
+  /* At Slice C this asserted receiveGoods was still UNGATED, because converging it was
+     Slice D's job. Slice D has since landed, so the invariant flips: receiveGoods must now
+     carry the same PO-derived gate. Updated rather than deleted — the operation still needs
+     an assertion, just the opposite one. */
+  check('receiveGoods now carries the same PO-derived gate (Slice D)',
+    /const receiveGoods[\s\S]{0,1400}await _assertPoAuthority\(request, poId\)/.test(PROC));
+  sab('the detector catches receiveGoods losing the gate',
+    !/const receiveGoods[\s\S]{0,1400}await _assertPoAuthority\(request, poId\)/.test(
+      "const receiveGoods = onCall(OPT, async (request) => {\n  const uid = _requireAuth(request);\n  const poSnap = await poRef.get();"));
   check('NOT REVIVED: posSendPurchaseOrder stays retired', !/^exports\.posSendPurchaseOrder\s*=/m.test(IDX));
   check('sendPurchaseOrder still exported by name', /^exports\.sendPurchaseOrder\s+=\s+procurement\.sendPurchaseOrder;/m.test(IDX));
 

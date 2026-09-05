@@ -1,3 +1,76 @@
+## 2026-09-05 — Slice D: GRN / receiving converged onto canonical receiveGoods
+
+**Files:** `functions/procurement.js`, `pos-suppliers.js`,
+`scripts/test-grn-receiving-slice-d.js` (new), `scripts/test-po-approval-send-slice-c.js`,
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**The defect.** `receiveGoods` required only `_requireAuth`, so **any authenticated user could
+record receipt against any merchant's purchase order** — and receipt increments inventory and
+creates a payable. Merchant scoping added via the Slice C `_assertPoAuthority` gate: the buyer
+is derived from the authoritative PO, so a forged `merchantId`/`supplierId` in the payload has
+nothing to influence.
+
+Deliberately **buyer-side** authority. Being the supplier on a PO does not entitle you to
+record that the buyer received the goods — that is the buyer's assertion about their own
+warehouse. Slice B2's supplier-side path does not reach here, and the suite proves it.
+
+**Receipt is now the canonical inventory event.** The client `createGRN` was a five-part local
+transaction: write a GRN, mirror it to `posGRN`, mutate the local PO's received quantities and
+status, call `PosInventory.receiveGoods` to change stock, create a supplier invoice, and adjust
+the supplier's outstanding balance — none of it authoritative, all of it claimed before any
+server agreed. It now calls canonical `receiveGoods`, which writes the GRN, the PO status, the
+`posProducts` stock increment and the `stockMovements` record **in one Firestore batch**. The
+local record is kept for continuity but can never claim `received` before confirmation.
+
+**Two things in the removed path were outright broken.** `PosInventory.receiveGoods`
+destructures `{ qty, cost }` while GRN items carry `{ receivedQty, unitCost }`, so
+`inv.qty + qty` evaluated to **NaN** and local stock was set to NaN — the same
+producer/consumer field-name class as the three Communication Engine failures. And the
+supplier's `outstandingBalance`, a money figure, was maintained entirely on one device.
+
+`_grnNo()` is deleted: GRN numbering is server-issued, like PO numbering.
+
+**Certification.** `scripts/test-grn-receiving-slice-d.js` — **64/64 checks, 4/4 sabotage
+catches**. The real `receiveGoods` and `_assertPoAuthority` are EXECUTED against an injected
+fixture with two businesses, three principals and three POs; the client runs in a VM sandbox.
+Negatives: A→B denied, B→A denied, **the supplier on the PO denied the buyer-side path**,
+manager claim denied cross-merchant, nonexistent PO fails closed, unauthenticated rejected,
+forged ids inert. Three client failure modes (rejection, missing `grnId`, offline) each leave
+the GRN `local_draft`, invent no canonical id, leave the PO status untouched and emit
+`grn:failed`. RESTORE three ways — removing the gate, removing the primitive's relationship
+check, or letting the client claim receipt on an empty reply — each drives exit 1, and each
+restore returns 0. Every sabotage carries an applied-check, after two earlier ones silently
+no-opped and proved nothing.
+
+**One Slice C check updated, not deleted.** It asserted `receiveGoods` was still *ungated*,
+which was correct while converging it was Slice D's job. Slice D landed, so the invariant flips
+and it now asserts the gate is present, with a sabotage proving it is not vacuous. Slice C
+44/44.
+
+### Two canonical-contract findings — reported, NOT silently changed
+
+1. **Over-receipt is permitted by design.** `receivedQty` is checked only for `< 0`; there is
+   no ceiling against `orderedQty`. A larger quantity is accepted and recorded in
+   `discrepancies`. That is the existing canonical contract, and this slice preserves it rather
+   than adding a prohibition the contract does not have.
+2. **`receiveGoods` has no idempotency.** Two calls create two GRNs and increment stock twice,
+   and `newPoStatus` is computed from the current receipt alone rather than cumulatively across
+   GRNs — so a second full receipt again reports `received`. A double-submit would double
+   inventory. Changing it is a contract change beyond this slice; flagged for a decision.
+
+Related fragility, also unchanged: the stock increment uses `batch.update` on
+`posProducts/{branchId}_{productId}`, which fails the whole batch if that document does not yet
+exist.
+
+**Security changes:** one operation moved from authenticated-only to merchant-scoped; one
+client-side inventory mutation removed. **No Firestore rule widened** — asserted for `posGRN`
+and `posBatches`. **API changes:** none; export count unchanged at 1522. No server `createGRN`
+endpoint was added. **Database changes:** none. **Breaking changes:** receipt now requires a
+submitted PO and an authorized buyer; unauthorized callers receive `permission-denied`.
+
+**Still blocking deployment, unchanged and not mine:** `functions/pos-zero-friction.js` requires
+`./merchant-identity`, which does not exist and was never tracked.
+
 ## 2026-09-05 — Slice C: merchant-scoped approval + send
 
 **Files:** `functions/procurement.js`, `scripts/test-po-approval-send-slice-c.js` (new),

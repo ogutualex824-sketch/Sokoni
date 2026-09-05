@@ -155,7 +155,7 @@ window.PosSuppliers = (() => {
      removed here reset _poSeq to 0 on every page load, so two devices — or one device
      twice — reliably minted the same PO-YYYY-00001. A PO number appears on a supplier's
      invoice and delivery note; it cannot come from a counter that restarts. */
-  function _grnNo()  { return 'GRN-' + Date.now().toString().slice(-8); }
+  /* _grnNo() removed (Slice D): GRN numbering is server-issued, like PO numbering. */
   function _invNo()  { return 'INV-' + Date.now().toString().slice(-8); }
 
   /* ══════════════════════════════════════════
@@ -433,6 +433,31 @@ window.PosSuppliers = (() => {
   /* ══════════════════════════════════════════
      GOODS RECEIVED NOTES (GRNs)
   ══════════════════════════════════════════ */
+  /**
+   * Record receipt of goods against a purchase order.
+   *
+   * CONVERGED (Slice D). This used to be a five-part CLIENT transaction: write a local GRN,
+   * mirror it to posGRN, mutate the local PO's received quantities and status, call
+   * PosInventory.receiveGoods to change stock, create a supplier invoice, and adjust the
+   * supplier's outstanding balance — all locally, none of it authoritative, and all of it
+   * claimed as done before any server had agreed.
+   *
+   * Two of those were outright broken. PosInventory.receiveGoods destructures
+   * { qty, cost } while GRN items carry { receivedQty, unitCost }, so `inv.qty + qty`
+   * evaluated to NaN and stock was set to NaN. And the supplier balance was a money figure
+   * maintained entirely on one device.
+   *
+   * Receipt is now a single authoritative server event. procurement.receiveGoods writes the
+   * GRN, updates the PO status, increments posProducts stock and records a stockMovement —
+   * in ONE Firestore batch. That makes receipt the canonical inventory event rather than
+   * one of two parallel mutations that could disagree.
+   *
+   * The local record is written for offline continuity but is never authoritative and can
+   * never claim 'received' before the server confirms.
+   *
+   * @returns {Promise<object>} the local GRN record, reconciled with the server result
+   * @throws  {Error} when the authoritative receipt did not succeed
+   */
   async function createGRN(data) {
     const items = (data.items || []).map(i => ({
       productId:    i.productId,
@@ -448,9 +473,11 @@ window.PosSuppliers = (() => {
       condition:    i.condition || 'good',
     }));
     const totalCost = items.reduce((s, i) => s + i.lineTotal, 0);
+
     const grn = {
       id:           data.id || uid(),
-      grnNo:        _grnNo(),
+      grnNo:        null,          /* server-issued; no client GRN numbering */
+      procGrnId:    null,          /* canonical procGRN id, set on confirmation */
       poId:         data.poId || null,
       supplierId:   data.supplierId,
       supplierName: data.supplierName || '',
@@ -461,56 +488,59 @@ window.PosSuppliers = (() => {
       deliveryNote: data.deliveryNote || '',
       notes:        data.notes || '',
       receivedBy:   data.receivedBy || '',
-      receivedAt:   Date.now(),
+      status:       'local_draft', /* never 'received' until the server says so */
+      receivedAt:   null,
       createdAt:    Date.now(),
     };
-
     await _put(S.GRNS, grn);
-    _sync('posGRN', grn.id, grn);
 
-    /* Update PO status */
-    if (grn.poId) {
-      const po = await _get(S.POS, grn.poId);
-      if (po) {
-        /* Update received quantities on PO items */
-        for (const gItem of grn.items) {
-          const pItem = po.items.find(i => i.productId === gItem.productId);
-          if (pItem) { pItem.receivedQty = (pItem.receivedQty || 0) + gItem.receivedQty; }
-        }
-        const allReceived = po.items.every(i => i.receivedQty >= i.qty);
-        const anyReceived = po.items.some(i => (i.receivedQty || 0) > 0);
-        po.status    = allReceived ? 'received' : anyReceived ? 'partial' : po.status;
-        po.receivedAt = allReceived ? Date.now() : null;
-        po.updatedAt  = Date.now();
-        await _put(S.POS, po);
-      }
+    const failLocally = async (message, code) => {
+      grn.lastReceiveError     = message;
+      grn.lastReceiveAttemptAt = Date.now();
+      await _put(S.GRNS, grn);
+      emit('grn:failed', { grnId: grn.id, error: message, code: code || null });
+      const err = new Error(message); err.code = code || null; throw err;
+    };
+
+    /* Receipt is a canonical PO event — it cannot be recorded without one. */
+    const po = grn.poId ? await _get(S.POS, grn.poId) : null;
+    if (!po)            return failLocally('Receipt requires a purchase order.', 'no-po');
+    if (!po.procPoId)   return failLocally('Submit the purchase order before receiving against it.', 'not-submitted');
+    if (!_online)       return failLocally('Cannot record receipt while offline — the note is saved.', 'offline');
+    if (!window.firebase?.functions) return failLocally('Cannot record receipt — the service is unavailable.', 'unavailable');
+
+    let res;
+    try {
+      res = await firebase.functions().httpsCallable('receiveGoods')({
+        poId:     po.procPoId,          /* the CANONICAL id, never the local one */
+        branchId: grn.branchId,
+        receivedBy: grn.receivedBy || '',
+        items: items.map(function (i) {
+          return { productId: i.productId, receivedQty: i.receivedQty, condition: i.condition };
+        }),
+      });
+    } catch (e) {
+      return failLocally('Could not record receipt: ' + ((e && (e.message || e.code)) || 'the server rejected it'),
+                         (e && e.code) || 'receive-failed');
     }
 
-    /* Receive goods into inventory */
-    if (window.PosInventory) {
-      await PosInventory.receiveGoods(items, grn.branchId, grn.id, grn.receivedBy);
+    const out = res && res.data;
+    if (!out || !out.grnId) {
+      return failLocally('The server did not confirm receipt.', 'unconfirmed');
     }
 
-    /* Create supplier invoice */
-    await createInvoice({
-      supplierId:   grn.supplierId,
-      supplierName: grn.supplierName,
-      grnId:        grn.id,
-      poId:         grn.poId,
-      amount:       totalCost,
-      invoiceRef:   grn.invoiceRef,
-    });
+    /* Reconcile ONLY from the authoritative result. Inventory, the PO status and the
+       stock movement were all written server-side inside one batch; the client does not
+       repeat any of them. */
+    grn.procGrnId    = out.grnId;
+    grn.grnNo        = out.grnId;
+    grn.status       = 'received';
+    grn.receivedAt   = Date.now();
+    grn.discrepancies = out.discrepancies || [];
+    delete grn.lastReceiveError;
+    await _put(S.GRNS, grn);
 
-    /* Update supplier stats */
-    const supplier = await _get(S.SUPPLIERS, grn.supplierId);
-    if (supplier) {
-      supplier.totalOrders      = (supplier.totalOrders || 0) + 1;
-      supplier.totalSpent       = (supplier.totalSpent || 0) + totalCost;
-      supplier.outstandingBalance = (supplier.outstandingBalance || 0) + totalCost;
-      supplier.updatedAt        = Date.now();
-      await _put(S.SUPPLIERS, supplier);
-      _sync('posSuppliers', supplier.id, supplier);
-    }
+    if (out.poStatus) { po.status = out.poStatus; po.updatedAt = Date.now(); await _put(S.POS, po); }
 
     emit('grn:created', grn);
     return grn;
