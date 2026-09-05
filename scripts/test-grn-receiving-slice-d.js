@@ -68,7 +68,7 @@ function freshData() {
   };
 }
 
-/** Load the REAL procurement.js over a fixture, capturing every batch write. */
+/** Load the REAL procurement.js over a fixture, capturing every transaction write. */
 function loadProcurement(data) {
   const writes = { set: [], update: [], committed: 0 };
   const fsFn = () => ({
@@ -89,6 +89,37 @@ function loadProcurement(data) {
         },
       };
     },
+    async runTransaction(fn) {
+      /* A transaction double with real read-your-writes and a contention hook. `docs` is
+         the shared store, so a duplicate submission genuinely sees the first one's GRN. */
+      const staged = [];
+      const t = {
+        async get(ref) {
+          if (data.__beforeRead) await data.__beforeRead(ref);
+          const d = (data[ref._c] || {})[ref._id];
+          return { exists: !!d, data: () => d };
+        },
+        set(ref, val, opts) {
+          staged.push({ op: 'set', collection: ref._c, id: ref._id, val, merge: !!(opts && opts.merge) });
+        },
+        update(ref, val) { staged.push({ op: 'update', collection: ref._c, id: ref._id, val }); },
+      };
+      const out = await fn(t);
+      /* Commit: apply staged writes to the shared store so later reads see them. */
+      for (const w of staged) {
+        writes[w.op].push(w);
+        const bag = (data[w.collection] = data[w.collection] || {});
+        const cur = bag[w.id] || {};
+        const next = Object.assign({}, w.merge || w.op === 'update' ? cur : {}, w.val);
+        for (const k of Object.keys(w.val || {})) {
+          const v = w.val[k];
+          if (v && typeof v === 'object' && v.__inc != null) next[k] = (Number(cur[k]) || 0) + v.__inc;
+        }
+        bag[w.id] = next;
+      }
+      writes.committed++;
+      return out;
+    },
     batch() {
       return {
         set(ref, val) { writes.set.push({ collection: ref._c, id: ref._id, val }); },
@@ -96,7 +127,6 @@ function loadProcurement(data) {
         async commit() { writes.committed++; return true; },
       };
     },
-    async runTransaction(fn) { return fn({ get: async () => ({ exists: false, data: () => ({}) }), set() {} }); },
   });
   fsFn.FieldValue = { serverTimestamp: () => 'TS', increment: (n) => ({ __inc: n }) };
   fsFn.Timestamp  = { fromDate: (d) => d };
@@ -181,7 +211,14 @@ function callReceive(procLive, a, data) {
   check('receiveGoods no longer reads the PO independently of the gate',
     !/const receiveGoods[\s\S]{0,1400}const poSnap = await poRef\.get\(\)/.test(PROC));
   check('receivable states are exactly sent | partially_received',
-    /\['sent', 'partially_received'\]\.includes\(po\.status\)/.test(PROC));
+    /\['sent', 'partially_received'\]\.includes\(poNow\.status\)/.test(PROC));
+  /* Ordering matters and is easy to get wrong: an earlier version checked the state BEFORE
+     the idempotency read, so retrying the very receipt that closed the order was rejected
+     as "cannot receive in status 'received'" instead of recognised as a duplicate. */
+  check('the state gate runs AFTER the idempotency check',
+    PROC.indexOf('if (grnSnap.exists)') < PROC.indexOf("includes(poNow.status)"));
+  sab('the ordering detector is not vacuous',
+    !('state();\nidem();'.indexOf('idem') < 'state();\nidem();'.indexOf('state')));
   check('orderedQty is derived from the PO, not the payload',
     /orderedQty:\s*ordered\?\.qty \?\? 0,/.test(PROC));
   check('unitCost is derived from the PO, not the payload',
@@ -197,16 +234,155 @@ function callReceive(procLive, a, data) {
      §3 receipt IS the canonical inventory event
   ══════════════════════════════════════════════════════════ */
   console.log('\n§3 canonical inventory event');
-  check('GRN, PO status, stock and movement are ONE batch',
-    /const batch  = db\.batch\(\);/.test(PROC) && /await batch\.commit\(\);/.test(PROC));
+  /* The hardening replaced the batch with a TRANSACTION — the idempotency check is a read
+     the writes depend on, which a batch cannot express. Atomicity is unchanged. */
+  check('GRN, PO status, stock and movement are ONE atomic unit',
+    /await db\.runTransaction\(async \(t\) => \{/.test(PROC));
+  check('the op no longer uses a non-transactional batch for receipt',
+    !/const receiveGoods[\s\S]{0,5000}db\.batch\(\)/.test(PROC));
+  sab('the atomicity detector is not vacuous',
+    !/await db\.runTransaction\(async \(t\) => \{/.test('const b = db.batch(); await b.commit();'));
   check('stock is incremented on posProducts', /stockQty:\s*F\.increment\(it\.receivedQty\)/.test(PROC));
   check('a stockMovement is recorded with the GRN reference',
     /type:\s*'procurement_receipt'/.test(PROC) && /refType:\s*'grn'/.test(PROC));
-  check('only GOOD items move stock', /const allGoodItems = cleanReceived\.filter\(it => it\.condition === 'good'\)/.test(PROC));
+  check('only GOOD items move stock', /const allGoodItems\s+= cleanReceived\.filter\(it => it\.condition === 'good'\)/.test(PROC));
   check('zero-quantity lines do not move stock', /if \(it\.receivedQty <= 0\) continue;/.test(PROC));
   sab('the detector catches stock moving for non-good items',
-    !/const allGoodItems = cleanReceived\.filter\(it => it\.condition === 'good'\)/.test(
-      'const allGoodItems = cleanReceived;'));
+    !/const allGoodItems\s+= cleanReceived\.filter\(it => it\.condition === 'good'\)/.test(
+      'const allGoodItems  = cleanReceived;'));
+
+  /* ── the three hardening defects, asserted structurally then executed below ── */
+  check('HARDENING: the GRN id is DERIVED, not minted',
+    /_deterministicId\(keySeed, 'grn'\)/.test(PROC) && !/_genId\('grn'\)/.test(PROC));
+  sab('the detector catches a minted (non-idempotent) GRN id',
+    /_genId\('grn'\)/.test("const grnId = _genId('grn');"));
+  check('HARDENING: the idempotency read is INSIDE the transaction',
+    /runTransaction\(async \(t\) => \{[\s\S]{0,400}await t\.get\(grnRef\)/.test(PROC));
+  check('HARDENING: a duplicate returns the ORIGINAL outcome, not an error',
+    /if \(grnSnap\.exists\)[\s\S]{0,300}duplicate:\s*true/.test(PROC));
+  check('HARDENING: PO status is CUMULATIVE, not per-receipt',
+    /totalReceivedCum >= totalOrderedQty/.test(PROC) &&
+    /receivedQty: \(Number\(it\.receivedQty\) \|\| 0\) \+ add/.test(PROC));
+  sab('the detector catches a per-receipt status computation',
+    !/totalReceivedCum >= totalOrderedQty/.test(
+      'const newPoStatus = totalReceivedGood >= totalOrderedQty ? "received" : "partially_received";'));
+  check('HARDENING: stock uses set-merge so a first receipt can create the doc',
+    /t\.set\(productRef, \{[\s\S]{0,300}\}, \{ merge: true \}\);/.test(PROC));
+  sab('the detector catches update-on-missing-doc (the first-receipt failure)',
+    !/t\.set\(productRef, \{[\s\S]{0,300}\}, \{ merge: true \}\);/.test(
+      'batch.update(productRef, { stockQty: F.increment(q) });'));
+
+  /* ══════════════════════════════════════════════════════════
+     §3b HARDENING, EXECUTED — the real transaction, ten scenarios
+  ══════════════════════════════════════════════════════════ */
+  console.log('\n§3b hardening scenarios (real transaction, executed)');
+
+  /* Drive the real handler body. The onCall wrapper is not directly invocable here, so the
+     transaction is exercised through the exported internals the handler composes: the same
+     gate, the same runTransaction, the same fixture. */
+  function makeReceiver(L) {
+    return async function receive(a, payload) {
+      const inner = L.proc.receiveGoods;
+      if (inner && typeof inner.run === 'function') return inner.run({ auth: a, data: payload });
+      if (inner && typeof inner.__handler === 'function') return inner.__handler({ auth: a, data: payload });
+      throw Object.assign(new Error('handler-not-invocable'), { code: 'harness' });
+    };
+  }
+
+  const stockOf = (L, branch, pid) =>
+    ((L.data.posProducts || {})[branch + '_' + pid] || {}).stockQty || 0;
+  const grnCount = (L) => Object.keys(L.data.procGRN || {}).length;
+  const movCount = (L) => Object.keys(L.data.stockMovements || {}).length;
+
+  const L2 = loadProcurement(freshData());
+  const receive = makeReceiver(L2);
+  const probe = await verdict(() => receive(auth(UID_A), { poId: PO_A_SENT, branchId: 'main', items: [{ productId: 'p1', receivedQty: 1 }] }));
+  const INVOCABLE = !(probe.code === 'harness');
+  check('the real receiveGoods handler is invocable in this harness', INVOCABLE);
+
+  if (INVOCABLE) {
+    /* 1. FIRST RECEIPT of a product with no existing posProducts document. */
+    const F1 = loadProcurement(freshData());
+    const r1 = makeReceiver(F1);
+    const a1 = await verdict(() => r1(auth(UID_A), { poId: PO_A_SENT, branchId: 'main',
+      items: [{ productId: 'p1', receivedQty: 4 }], receiptKey: 'k1' }));
+    check('first receipt of a never-stocked product SUCCEEDS', a1.ok);
+    check('first receipt creates the stock document', stockOf(F1, 'main', 'p1') === 4);
+    check('first receipt writes exactly one GRN', grnCount(F1) === 1);
+    check('first receipt writes one stock movement', movCount(F1) === 1);
+    check('a partial receipt leaves the PO partially_received',
+      a1.ok && a1.value.poStatus === 'partially_received');
+
+    /* 2. CUMULATIVE second receipt closes the order. */
+    const a2 = await verdict(() => r1(auth(UID_A), { poId: PO_A_SENT, branchId: 'main',
+      items: [{ productId: 'p1', receivedQty: 6 }], receiptKey: 'k2' }));
+    check('a second receipt succeeds', a2.ok);
+    check('CUMULATIVE: 4 + 6 against an order of 10 closes the PO',
+      a2.ok && a2.value.poStatus === 'received');
+    check('cumulative stock is 4 + 6 = 10', stockOf(F1, 'main', 'p1') === 10);
+    check('two distinct receipts wrote two GRNs', grnCount(F1) === 2);
+
+    /* 3. DUPLICATE — same key, sequential retry. */
+    const before = { stock: stockOf(F1, 'main', 'p1'), grns: grnCount(F1), movs: movCount(F1) };
+    const dup = await verdict(() => r1(auth(UID_A), { poId: PO_A_SENT, branchId: 'main',
+      items: [{ productId: 'p1', receivedQty: 6 }], receiptKey: 'k2' }));
+    check('a duplicate submission does not error', dup.ok);
+    check('a duplicate is reported as such', dup.ok && dup.value.duplicate === true);
+    check('a duplicate returns the SAME grnId', dup.ok && dup.value.grnId === a2.value.grnId);
+    check('DUPLICATE: no second stock increment', stockOf(F1, 'main', 'p1') === before.stock);
+    check('DUPLICATE: no second GRN', grnCount(F1) === before.grns);
+    check('DUPLICATE: no second stock movement', movCount(F1) === before.movs);
+
+    /* 4. CONCURRENT duplicate — both submitted before either commits. */
+    const F2 = loadProcurement(freshData());
+    const r2 = makeReceiver(F2);
+    const payload = { poId: PO_A_SENT, branchId: 'main', items: [{ productId: 'p1', receivedQty: 5 }], receiptKey: 'race' };
+    /* Hold the first transaction's read open until the second has also read, so both
+       observe "no GRN yet" — the interleaving a sequential retry can never produce. */
+    let released; const gate2 = new Promise((res) => { released = res; });
+    let firstRead = false;
+    F2.data.__beforeRead = async (ref) => {
+      if (ref._c === 'procGRN' && !firstRead) { firstRead = true; await gate2; }
+    };
+    const p1 = r2(auth(UID_A), payload).catch((e) => ({ __err: e }));
+    const p2 = r2(auth(UID_A), payload).catch((e) => ({ __err: e }));
+    setTimeout(released, 10);
+    const [c1, c2] = await Promise.all([p1, p2]);
+    check('CONCURRENT: both submissions resolve', !c1.__err && !c2.__err);
+    check('CONCURRENT: only one GRN exists', grnCount(F2) === 1);
+    check('CONCURRENT: stock incremented exactly once', stockOf(F2, 'main', 'p1') === 5);
+    check('CONCURRENT: exactly one stock movement', movCount(F2) === 1);
+    check('CONCURRENT: both callers see the same grnId',
+      !c1.__err && !c2.__err && c1.grnId === c2.grnId);
+    delete F2.data.__beforeRead;
+
+    /* 5. OVER-RECEIPT — permitted by the existing contract, recorded as a discrepancy. */
+    const F3 = loadProcurement(freshData());
+    const r3 = makeReceiver(F3);
+    const over = await verdict(() => r3(auth(UID_A), { poId: PO_A_SENT, branchId: 'main',
+      items: [{ productId: 'p1', receivedQty: 12 }], receiptKey: 'over' }));
+    check('OVER-RECEIPT is permitted (existing contract, unchanged)', over.ok);
+    check('over-receipt is recorded as a discrepancy',
+      over.ok && over.value.discrepancies.length === 1 && over.value.discrepancies[0].receivedQty === 12);
+    check('over-receipt still closes the PO', over.ok && over.value.poStatus === 'received');
+
+    /* 6-10. authority and state negatives, through the real handler. */
+    const F4 = loadProcurement(freshData());
+    const r4 = makeReceiver(F4);
+    const base = { branchId: 'main', items: [{ productId: 'p1', receivedQty: 1 }] };
+    const nCross = await verdict(() => r4(auth(UID_A), Object.assign({ poId: PO_B_SENT }, base)));
+    check('EXECUTED: cross-merchant receipt is denied', !nCross.ok && nCross.code === 'permission-denied');
+    const nSup = await verdict(() => r4(auth(UID_SUP), Object.assign({ poId: PO_A_SENT }, base)));
+    check('EXECUTED: the supplier cannot use the buyer-side path', !nSup.ok && nSup.code === 'permission-denied');
+    const nMissing = await verdict(() => r4(auth(UID_A), Object.assign({ poId: 'po_nope' }, base)));
+    check('EXECUTED: a nonexistent PO fails closed', !nMissing.ok && nMissing.code === 'not-found');
+    const nState = await verdict(() => r4(auth(UID_A), Object.assign({ poId: PO_A_DRAFT }, base)));
+    check('EXECUTED: a draft PO cannot be received against', !nState.ok);
+    const nAuth = await verdict(() => r4(null, Object.assign({ poId: PO_A_SENT }, base)));
+    check('EXECUTED: unauthenticated is rejected', !nAuth.ok);
+    check('EXECUTED: no failed attempt wrote a GRN', grnCount(F4) === 0);
+    check('EXECUTED: no failed attempt moved stock', stockOf(F4, 'main', 'p1') === 0);
+  }
 
   /* ══════════════════════════════════════════════════════════
      §4 the client no longer mutates inventory in parallel

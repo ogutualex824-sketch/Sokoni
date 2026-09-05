@@ -1019,7 +1019,7 @@ const sendPurchaseOrder = onCall(OPT, async (request) => {
 const receiveGoods = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
   const {
-    poId, branchId, items, receivedBy,
+    poId, branchId, items, receivedBy, receiptKey,
   } = request.data ?? {};
 
   if (!branchId) _err('branchId is required.');
@@ -1037,9 +1037,11 @@ const receiveGoods = onCall(OPT, async (request) => {
      reach here. */
   const { poRef, po } = await _assertPoAuthority(request, poId);
 
-  if (!['sent', 'partially_received'].includes(po.status)) {
-    _err(`Cannot receive goods for a PO in status '${po.status}'.`);
-  }
+  /* The receivable-state gate deliberately lives INSIDE the transaction below, AFTER the
+     idempotency check — not here. Checking it first meant that retrying the very receipt
+     which closed the order was rejected with "cannot receive in status 'received'" rather
+     than recognised as the duplicate it is. A retry must be idempotent regardless of the
+     state its own original write produced. */
 
   /* Map PO items by productId for quick lookup */
   const poItemMap = {};
@@ -1068,12 +1070,12 @@ const receiveGoods = onCall(OPT, async (request) => {
     };
   });
 
-  /* Compute totals and discrepancies */
-  let totalReceived  = 0;
+  /* Compute discrepancies against what was ORDERED. Over-receipt is deliberately
+     PERMITTED by this contract - a supplier who ships 12 against an order of 10 has not
+     committed an error the system should refuse; it is recorded as a discrepancy so a human
+     can reconcile it. Changing that is a product decision, not a hardening. */
   const discrepancies = [];
-
   for (const it of cleanReceived) {
-    totalReceived += it.condition === 'good' ? it.receivedQty : 0;
     if (it.receivedQty !== it.orderedQty || it.condition !== 'good') {
       discrepancies.push({
         productId:   it.productId,
@@ -1083,78 +1085,157 @@ const receiveGoods = onCall(OPT, async (request) => {
       });
     }
   }
+  const allGoodItems  = cleanReceived.filter(it => it.condition === 'good');
+  const totalReceived = allGoodItems.reduce((sum, it) => sum + it.receivedQty, 0);
 
-  /* Determine new PO status */
-  const allGoodItems = cleanReceived.filter(it => it.condition === 'good');
-  const totalOrderedQty   = (po.items ?? []).reduce((s, it) => s + it.qty, 0);
-  const totalReceivedGood = allGoodItems.reduce((s, it) => s + it.receivedQty, 0);
-  const newPoStatus = totalReceivedGood >= totalOrderedQty ? 'received' : 'partially_received';
+  /* -- IDEMPOTENCY ---------------------------------------------------------------
+     The GRN id is DERIVED, not minted. Submitting the same receipt twice - a double
+     click, a retried request after a timeout, an offline queue replaying - must record
+     one receipt and move stock once.
 
-  const grnId  = _genId('grn');
-  const now    = F.serverTimestamp();
-  const batch  = db.batch();
+     `receiptKey` lets a client distinguish two genuinely separate receipts of the same
+     items against the same PO (receiving 5 today and 5 more tomorrow): give each
+     receiving session its own key. Omit it and the key is the payload itself, so an
+     identical resubmission is treated as the same receipt - the safe default.
 
-  /* Write GRN */
-  const grnRef = db.collection('procGRN').doc(grnId);
-  batch.set(grnRef, {
-    grnId,
-    poId,
-    merchantId:    po.merchantId,
-    supplierId:    po.supplierId,
-    branchId:      _san(branchId, 100),
-    items:         cleanReceived,
-    totalReceived,
-    discrepancies,
-    receivedBy:    _san(receivedBy || uid, 150),
-    receivedByUid: uid,
-    receivedAt:    now,
-    createdAt:     now,
-  });
+     The check lives INSIDE the transaction, so two concurrent submissions cannot both
+     observe "no GRN yet" and both write: the loser's read is invalidated and it retries,
+     then sees the winner's document and returns it. Sequential retry and concurrent
+     duplicate therefore have the same outcome, which sequential-only testing would not
+     establish. */
+  const itemFingerprint = cleanReceived
+    .map(it => it.productId + ':' + it.receivedQty + ':' + it.condition)
+    .sort()
+    .join('|');
+  const keySeed = receiptKey
+    ? poId + '|key|' + _san(String(receiptKey), 120)
+    : poId + '|' + _san(branchId, 100) + '|' + itemFingerprint;
+  const grnId = _deterministicId(keySeed, 'grn');
 
-  /* Update PO status */
-  batch.update(poRef, {
-    status:    newPoStatus,
-    updatedAt: now,
-  });
+  /* -- ONE ATOMIC UNIT -----------------------------------------------------------
+     GRN + PO state + stock + stock movement still succeed or fail together. A
+     transaction rather than a batch, because the idempotency check is a READ that the
+     writes depend on - a batch cannot express that. All reads precede all writes. */
+  const result = await db.runTransaction(async (t) => {
+    const grnRef  = db.collection('procGRN').doc(grnId);
+    const grnSnap = await t.get(grnRef);
 
-  /* Inventory increment for 'good' items + stock movement records */
-  for (const it of allGoodItems) {
-    if (it.receivedQty <= 0) continue;
+    /* Already recorded: return the ORIGINAL outcome. No second GRN, no second
+       increment, no error - a retry is not a failure. */
+    if (grnSnap.exists) {
+      const prior = grnSnap.data() || {};
+      return {
+        grnId,
+        totalReceived: prior.totalReceived != null ? prior.totalReceived : 0,
+        discrepancies: prior.discrepancies || [],
+        poStatus:      prior.poStatusAfter || null,
+        duplicate:     true,
+      };
+    }
 
-    /* Update posProducts inventory for this branch */
-    const productDocId = `${branchId}_${it.productId}`;
-    const productRef   = db.collection('posProducts').doc(productDocId);
-    batch.update(productRef, {
-      stockQty:  F.increment(it.receivedQty),
+    /* Re-read the PO inside the transaction: its cumulative quantities may have moved
+       since the authority check, and the aggregate below must be computed from the
+       state we are actually writing against. */
+    const poTxSnap = await t.get(poRef);
+    if (!poTxSnap.exists) _err('Purchase order not found.', 'not-found');
+    const poNow = poTxSnap.data() || {};
+    if (!['sent', 'partially_received'].includes(poNow.status)) {
+      _err("Cannot receive goods for a PO in status '" + poNow.status + "'.");
+    }
+
+    /* -- CUMULATIVE receipt state ------------------------------------------------
+       The status is derived from every receipt so far, not from this one. Previously
+       `totalReceivedGood >= totalOrderedQty` compared THIS receipt against the whole
+       order, so two partial receipts of 5 against an order of 10 both reported
+       'partially_received' and the PO never reached 'received'. Received quantities now
+       accumulate on the PO's own items, which is also what makes a partial receipt
+       followed by its remainder close the order correctly. */
+    const receivedNow = {};
+    for (const it of allGoodItems) {
+      receivedNow[it.productId] = (receivedNow[it.productId] || 0) + it.receivedQty;
+    }
+    const updatedItems = (poNow.items || []).map((it) => {
+      const add = receivedNow[it.productId] || 0;
+      return add ? Object.assign({}, it, { receivedQty: (Number(it.receivedQty) || 0) + add }) : it;
+    });
+    const totalOrderedQty  = updatedItems.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+    const totalReceivedCum = updatedItems.reduce((sum, it) => sum + (Number(it.receivedQty) || 0), 0);
+    const newPoStatus = totalReceivedCum >= totalOrderedQty ? 'received' : 'partially_received';
+
+    /* -- writes -- */
+    const now = F.serverTimestamp();
+
+    t.set(grnRef, {
+      grnId,
+      poId,
+      merchantId:    poNow.merchantId,
+      supplierId:    poNow.supplierId,
+      branchId:      _san(branchId, 100),
+      items:         cleanReceived,
+      totalReceived,
+      discrepancies,
+      poStatusAfter: newPoStatus,   /* so a duplicate can return the original outcome */
+      receiptKey:    receiptKey ? _san(String(receiptKey), 120) : null,
+      receivedBy:    _san(receivedBy || uid, 150),
+      receivedByUid: uid,
+      receivedAt:    now,
+      createdAt:     now,
+    });
+
+    t.update(poRef, {
+      items:     updatedItems,
+      status:    newPoStatus,
       updatedAt: now,
     });
 
-    /* Write stock movement record */
-    const movRef = db.collection('stockMovements').doc();
-    batch.set(movRef, {
-      type:       'procurement_receipt',
-      productId:  it.productId,
-      branchId:   _san(branchId, 100),
-      merchantId: po.merchantId,
-      qty:        it.receivedQty,
-      unitCost:   it.unitCost,
-      refType:    'grn',
-      refId:      grnId,
-      poId,
-      supplierId: po.supplierId,
-      performedBy: uid,
-      createdAt:  now,
+    for (const it of allGoodItems) {
+      if (it.receivedQty <= 0) continue;
+
+      /* set-with-merge, NOT update. A first-ever receipt of a product this branch has
+         never stocked has no posProducts document, and `update` on a missing document
+         rejects the ENTIRE transaction - so the first legitimate receipt failed, and took
+         the GRN and the PO status down with it. increment() creates the field from zero
+         under set-merge. */
+      const productRef = db.collection('posProducts').doc(branchId + '_' + it.productId);
+      t.set(productRef, {
+        productId:  it.productId,
+        branchId:   _san(branchId, 100),
+        merchantId: poNow.merchantId,
+        stockQty:   F.increment(it.receivedQty),
+        updatedAt:  now,
+      }, { merge: true });
+
+      const movRef = db.collection('stockMovements').doc();
+      t.set(movRef, {
+        type:       'procurement_receipt',
+        productId:  it.productId,
+        branchId:   _san(branchId, 100),
+        merchantId: poNow.merchantId,
+        qty:        it.receivedQty,
+        unitCost:   it.unitCost,
+        refType:    'grn',
+        refId:      grnId,
+        poId,
+        supplierId: poNow.supplierId,
+        performedBy: uid,
+        createdAt:  now,
+      });
+    }
+
+    return { grnId, totalReceived, discrepancies, poStatus: newPoStatus, duplicate: false };
+  });
+
+  if (!result.duplicate) {
+    await _audit(uid, 'grn_created', grnId, {
+      poId, merchantId: po.merchantId, totalReceived, discrepancyCount: discrepancies.length,
     });
   }
 
-  await batch.commit();
-
-  await _audit(uid, 'grn_created', grnId, {
-    poId, merchantId: po.merchantId, totalReceived, discrepancyCount: discrepancies.length,
+  logger.info('procurement.receiveGoods', {
+    grnId, poId, poStatus: result.poStatus, totalReceived: result.totalReceived,
+    duplicate: result.duplicate,
   });
-
-  logger.info('procurement.receiveGoods', { grnId, poId, newPoStatus, totalReceived });
-  return { grnId, totalReceived, discrepancies, poStatus: newPoStatus };
+  return result;
 });
 
 /* ════════════════════════════════════════════════════════════════

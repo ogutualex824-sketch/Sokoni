@@ -1,3 +1,60 @@
+## 2026-09-05 — Slice D hardening: receipt idempotency, cumulative state, first-receipt creation
+
+**Files:** `functions/procurement.js`, `scripts/test-grn-receiving-slice-d.js`, `CHANGELOG.md`.
+**Not deployed**; HOLD remains. Prerequisite for Slice E — money must consume receipt state that
+is both authoritative and idempotent.
+
+**1 · Receipt idempotency.** The GRN id is now **derived, not minted**:
+`_deterministicId(keySeed, 'grn')`. An optional `receiptKey` distinguishes two genuinely
+separate receipts of the same items against the same PO (5 today, 5 more tomorrow — give each
+session a key); omit it and the key is the payload itself, so an identical resubmission is
+treated as the same receipt. A duplicate returns the **original** outcome — same `grnId`, same
+totals, `duplicate: true` — and is not an error, because a retry is not a failure.
+
+The check lives **inside** the transaction, so two concurrent submissions cannot both observe
+"no GRN yet" and both write. Proven by an interleaved test that holds the first transaction's
+read open until the second has also read — an ordering sequential retry can never produce.
+
+**2 · Cumulative PO state.** `newPoStatus` was computed from the current receipt alone, so two
+partial receipts of 5 against an order of 10 both reported `partially_received` and the PO never
+closed. Received quantities now accumulate on the PO's own items and the status is derived from
+the aggregate. Tested: 4 then 6 against 10 → `received`, stock 10.
+
+**3 · First-receipt inventory creation.** The stock write used `batch.update` on
+`posProducts/{branchId}_{productId}`, which **rejects the entire transaction** when that
+document does not exist — so a first-ever receipt of a product a branch had never stocked
+failed, and took the GRN and PO status down with it. Now `set(..., { merge: true })`, under
+which `increment()` creates the field from zero. Atomicity is unchanged: GRN + PO state + stock
++ stockMovement still succeed or fail together, now as a transaction rather than a batch
+because the idempotency check is a read the writes depend on.
+
+**A real defect the new tests caught in the hardening itself.** The receivable-state gate ran
+*before* the idempotency check, so retrying the very receipt that closed the order was rejected
+with "cannot receive in status 'received'" instead of being recognised as a duplicate. A retry
+must be idempotent regardless of the state its own original write produced. The gate now lives
+inside the transaction after the duplicate short-circuit, and a dedicated ordering check with a
+non-vacuous sabotage guards it.
+
+**Certification.** `scripts/test-grn-receiving-slice-d.js` — **107/107 checks, 9/9 sabotage
+catches**. The suite now drives the **real** `receiveGoods` handler through a transaction double
+with genuine read-your-writes and a contention hook. All ten required scenarios executed: first
+receipt ✅, partial ✅, cumulative ✅, duplicate ❌ no second mutation, **concurrent duplicate ❌
+no second mutation**, over-receipt ✅ (existing contract), cross-merchant ❌, supplier-side buyer
+receipt ❌, nonexistent PO ❌, wrong state ❌. Explicitly proven: request #1 → one GRN + one
+increment; request #2 same key → same `grnId`, no second GRN, no second increment, no second
+stock movement. RESTORE four ways — minting the id, per-receipt status, `update`-on-missing-doc,
+and moving the idempotency read outside the transaction — each drives exit 1, each restore
+returns 0, every sabotage with an applied-check.
+
+**Preserved:** over-receipt remains permitted and recorded as a discrepancy — unchanged, since
+altering it is a product decision. `sendPurchaseOrder`, `approvePurchaseOrder`, `posBatches`,
+`batchExpiryAlertSweep`, `getPOSInventoryIntelligence` and all client Firestore rules untouched.
+`receiveGoods` remains the single canonical inventory event.
+
+**API changes:** `receiveGoods` accepts an optional `receiptKey` and returns an additional
+`duplicate` flag; export count unchanged at 1522. **Database changes:** none — GRN ids become
+deterministic for new receipts only. **Breaking changes:** none.
+
 ## 2026-09-05 — Slice D: GRN / receiving converged onto canonical receiveGoods
 
 **Files:** `functions/procurement.js`, `pos-suppliers.js`,
