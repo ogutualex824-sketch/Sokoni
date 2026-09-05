@@ -1,3 +1,53 @@
+## 2026-09-05 — A purchase order is "sent" only when the backend confirms it
+
+**Files:** `pos-suppliers.js`, `scripts/test-po-send-honesty.js` (new), `CHANGELOG.md`.
+**`functions/procurement.js` is untouched** — its contract is correct and must not be bent to
+accept `pos*` ids. **Not deployed**; HOLD remains.
+
+**The defect.** `PosSuppliers.sendPurchaseOrder` stamped `status:'sent'` and `sentAt` locally,
+fired the callable **un-awaited**, swallowed every rejection with `.catch(() => {})`, then
+emitted `po:sent` and returned the PO unconditionally. The merchant saw "sent" whether or not
+anything left the building.
+
+**Why it could never succeed** — three independent, compounding reasons, established by trace:
+
+1. **Namespace mismatch.** The canonical callable reads `procPurchaseOrders`; this module's ids
+   live in `posPurchaseOrders`. Every call returns `not-found`.
+2. **Status vocabulary mismatch.** The backend requires `status === 'approved'`; this module's
+   lifecycle is `draft|sent|partial|received|cancelled` — "approved" appears **zero** times.
+3. **Nothing to find.** `procPurchaseOrders` and `procSuppliers` are empty in **both** databases.
+
+The client also sent `{poId, method}` while the backend reads only `poId`, so the channel choice
+was always discarded — which is correct: the server resolves permitted channels from
+authoritative supplier data. `method` is now accepted for signature compatibility and
+deliberately not transmitted.
+
+**The fix.** The callable is awaited; only an explicit authoritative `status === 'sent'` marks
+the PO sent. A failure — rejection, unconfirmed result shape, offline, or missing send service —
+leaves the PO in its prior status, records `lastSendError` / `lastSendAttemptAt` for the
+merchant, emits `po:send-failed`, and **throws**. Retry is therefore possible without ever
+accumulating a false `sentAt`. Local-first IndexedDB behaviour is preserved for the record
+itself; only the *claim* that it was sent now requires a server licence.
+
+Today this surfaces as an explicit "could not send" rather than a silent lie — the honest state
+until the POS supplier engine is deliberately converged onto `proc*`, which is its own slice.
+
+**Certification.** `scripts/test-po-send-honesty.js` — **43/43 checks, 7/7 sabotage catches.**
+The module is loaded into a VM sandbox with IndexedDB / firebase / navigator doubles and the real
+function is **executed** through every outcome. The negative path exercises the **real** failure
+contract — the callable rejects with `not-found` exactly as the live one does — rather than
+matching a string. The sabotage is a genuine differential: the original swallowing
+implementation is rebuilt, run against the identical failing callable, and shown to mark a failed
+send as sent, not throw, and emit `po:sent`, while the current implementation does the opposite
+on all three axes. An earlier draft of that check was a hardcoded `true`; it was replaced,
+because a detector that cannot fail proves nothing. RESTORE: reverting to the swallowing version
+drives the suite to exit 1, restoring returns exit 0. Regression: supplier-sync 72/72,
+fabricated-metrics 40/40, publication contract 36/36; 18b harness deliberately unchanged at 18/20.
+
+**Database changes:** none. **API changes:** none. **Breaking changes:** `sendPurchaseOrder` now
+throws on failure instead of resolving. It has **no UI callers today**, so nothing observable
+changes; any future caller must handle the rejection.
+
 ## 2026-09-05 — CRITICAL: pos-bi.html no longer fabricates business metrics (RC)
 
 **Files:** `pos-bi.html`, `scripts/test-bi-no-fabricated-metrics.js` (new), `CHANGELOG.md`.

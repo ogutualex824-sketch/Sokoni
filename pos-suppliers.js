@@ -250,19 +250,78 @@ window.PosSuppliers = (() => {
     return po;
   }
 
+  /**
+   * Send a purchase order to its supplier.
+   *
+   * A PO is only 'sent' when the AUTHORITATIVE backend says it was sent. The previous
+   * implementation stamped status='sent' and sentAt locally, fired the callable
+   * un-awaited, swallowed every rejection with .catch(() => {}), and emitted 'po:sent'
+   * unconditionally — so a merchant saw "sent" whether or not anything left the building.
+   *
+   * KNOWN NAMESPACE GAP (traced 2026-09-05): the canonical callable reads
+   * `procPurchaseOrders`, while this module's PO ids live in `posPurchaseOrders`, and the
+   * backend additionally requires status 'approved' — a state this module's lifecycle
+   * (draft|sent|partial|received|cancelled) does not have. So today this call is EXPECTED
+   * to fail with not-found. That failure is now surfaced instead of hidden. Converging this
+   * module onto the proc* engine is a separate, deliberately-scoped slice; the canonical
+   * endpoint is correct and must not be altered to accept pos* ids.
+   *
+   * The channel is NOT the caller's decision — the server resolves permitted channels from
+   * authoritative supplier contact data. `method` is accepted for signature compatibility
+   * and deliberately not sent.
+   *
+   * @throws {Error} when the authoritative send did not succeed. The local PO is left in
+   *   its prior status so the action can be retried without stamping a false sentAt.
+   */
   async function sendPurchaseOrder(poId, method = 'email') {
     const po = await _get(S.POS, poId);
     if (!po) throw new Error('PO not found');
-    po.status = 'sent';
-    po.sentAt = Date.now();
-    po.updatedAt = Date.now();
+
+    const failLocally = async (message, code) => {
+      /* Record the attempt WITHOUT advancing status — local-first is preserved for the
+         record itself, but 'sent' is a claim only the server may license. */
+      po.lastSendError     = message;
+      po.lastSendErrorCode = code || null;
+      po.lastSendAttemptAt = Date.now();
+      po.updatedAt         = Date.now();
+      await _put(S.POS, po);
+      emit('po:send-failed', { poId: poId, error: message, code: code || null });
+      const err = new Error(message);
+      err.code = code || null;
+      throw err;
+    };
+
+    if (!_online) return failLocally('Cannot send while offline — the purchase order is saved and can be sent later.', 'offline');
+    if (!window.firebase?.functions) return failLocally('Cannot send — the send service is unavailable.', 'unavailable');
+
+    let res;
+    try {
+      res = await firebase.functions().httpsCallable('sendPurchaseOrder')({ poId: poId });
+    } catch (e) {
+      return failLocally(
+        'Could not send purchase order: ' + ((e && (e.message || e.code)) || 'the server rejected the request'),
+        (e && e.code) || 'send-failed'
+      );
+    }
+
+    /* Only an explicit authoritative 'sent' counts. A missing or differently-shaped
+       result is NOT success — the old code never checked the result at all. */
+    const data = res && res.data;
+    if (!data || data.status !== 'sent') {
+      return failLocally('The server did not confirm the purchase order was sent.', 'unconfirmed');
+    }
+
+    po.status     = 'sent';
+    po.sentAt     = Date.now();
+    po.updatedAt  = Date.now();
+    /* The server's real per-channel outcome, so "sent" stays checkable locally too. */
+    po.delivery   = data.delivery || null;
+    po.poNumber   = data.poNumber || po.poNumber;
+    delete po.lastSendError;
+    delete po.lastSendErrorCode;
     await _put(S.POS, po);
     _sync('posPurchaseOrders', poId, po);
-    /* Notify via Cloud Function */
-    if (_online && window.firebase?.functions) {
-      firebase.functions().httpsCallable('sendPurchaseOrder')({ poId, method }).catch(() => {});
-    }
-    emit('po:sent', { poId, method });
+    emit('po:sent', { poId: poId, delivery: po.delivery });
     return po;
   }
 
