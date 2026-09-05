@@ -105,6 +105,18 @@ Find Suppliers → Supplier Business → Supply Catalogue → Draft
 
 ## The gate — traced 2026-09-05, and NOT what it was previously recorded as
 
+> ### ⚠️ THIS SECTION IS HISTORICAL — SUPERSEDED LATER THE SAME DAY
+>
+> Everything below describes the tree **before** the four admissions
+> (`b28be27`, `b0ba4a6`, `d879238`, `e1be278`). It is kept because the measurement errors it
+> records are the reason the gate exists, and deleting them would erase the lesson.
+>
+> **Current state: the deploy tree is CLOSED.** `functions/index.js` loads from a clean git
+> checkout — 389 tree blobs, 1718 exports, with any file absent from the tree made
+> unresolvable. `node scripts/gate-functions-require-closure.js` exits 0.
+>
+> Read the tables below as *what was true before closure*, not as the position today.
+
 **Correction.** This blocker was previously described (including in earlier revisions of this
 record) as *"two untracked files with no provenance, so `functions/index.js` cannot be
 required."* That description was wrong in both halves. The trace:
