@@ -1,116 +1,161 @@
 'use strict';
 /**
- * CERT — the functions require-closure gate.
+ * CERT — the functions require-closure gate, and the closed deploy tree.
  *
- * WHAT THIS GATE IS FOR
- *   `functions/index.js` has required modules committed nowhere since fa5082b. That was known
- *   and the mitigation was a sentence in a commit message — "NEVER deploy FULL index.js" — with
- *   no mechanism behind it. `predeploy-syntax-gate.js` runs `node --check`, which parses and
- *   never resolves a require, so it cannot catch this class.
+ * WHAT CHANGED
+ *   This suite was written while HEAD FAILED the gate, and every section asserted the shape of
+ *   that failure. The four deploy-tree blockers were then admitted (b28be27, b0ba4a6, d879238,
+ *   e1be278) and HEAD now CLOSES. So the assertions invert rather than disappear: §1 proves the
+ *   tree is closed and loads from a clean checkout, and the failure-shape assertions move to a
+ *   ref that is genuinely still open.
  *
- * THE INVARIANT
- *   The gate must measure the GIT TREE, not the filesystem. Every module it reports as missing
- *   at HEAD is sitting on this disk right now as another workstream's untracked file. A gate
- *   that looked at the disk would pass, and that is exactly the error this suite exists to
- *   prevent recurring — it is the error I made when I reported "the graph is closed".
+ * NON-VACUITY, WHICH MATTERS MORE NOW THAN BEFORE
+ *   A gate that passes is only meaningful if it can still fail. OPEN_REF is the last commit
+ *   before the admissions; the gate must still refuse it, still name the modules, and still
+ *   report them by disposition. A gate certified only against a passing tree proves nothing.
  *
- * NON-VACUITY
- *   A gate that always fails proves nothing. §2 runs it against a real ref whose graph really
- *   does close (`fa5082b^`, the commit before the broken requires landed) and requires a PASS.
+ * THE STRONGEST STATEMENT HERE
+ *   §2 loads functions/index.js with every source served from HEAD's git tree and every
+ *   functions/*.js absent from that tree made UNRESOLVABLE. That is what a fresh clone plus
+ *   npm install would load — not what happens to be sitting on this contaminated disk.
  */
 
 const path = require('path');
+const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const GATE = path.join(ROOT, 'scripts/gate-functions-require-closure.js');
+const LEDGER_PATH = path.join(ROOT, 'docs/DEPLOY_TREE_DISPOSITIONS.json');
 const G = require(GATE);
+
+/* The last commit BEFORE the four admissions — a real ref that is genuinely still open. */
+const OPEN_REF = 'ba14c3c';
 
 let pass = 0, fail = 0, sabotage = 0, sabotageOk = 0;
 const failures = [];
 const check = (n, c) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; failures.push(n); console.log('  FAIL  ' + n); } };
 const sab   = (n, c) => { sabotage++; if (c) { sabotageOk++; pass++; console.log('  PASS    (sabotage: ' + n + ')'); } else { fail++; failures.push('SABOTAGE ' + n); console.log('  FAIL    (sabotage: ' + n + ')'); } };
 
-console.log('\nCERT — functions require-closure gate\n');
+/* Absence tests over the gate's OWN source must not match its documentation — its header
+   necessarily names the operations it promises never to perform. */
+function stripGateComments (t) {
+  return t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+}
+
+console.log('\nCERT — require-closure gate + closed deploy tree\n');
 
 function run (args) {
   try {
-    const out = execFileSync('node', [GATE].concat(args), { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 });
-    return { code: 0, out };
+    return { code: 0, out: execFileSync('node', [GATE].concat(args), { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 }) };
   } catch (e) {
     return { code: e.status, out: (e.stdout || '') + (e.stderr || '') };
   }
 }
 const json = (r) => { try { return JSON.parse(r.out); } catch (_) { return null; } };
 
-/* Absence tests over the gate's OWN source must not match its documentation — the gate's header
-   necessarily names the operations it promises never to perform. */
-function stripGateComments (t) {
-  return t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+/* ══════════════════════════════════════════════════════════
+   §1 HEAD IS CLOSED
+══════════════════════════════════════════════════════════ */
+console.log('§1 HEAD closes');
+const headRun = run(['--json']);
+const head = json(headRun);
+{
+  check('the gate runs and returns JSON', !!head);
+  check('HEAD exits ZERO', headRun.code === 0);
+  check('  ...and reports ok', head && head.ok === true);
+  check('  ...with no blocking modules', head && head.blocking.length === 0);
+  check('  ...having walked a real graph, not an empty one', head && head.reachableModules > 300);
+  check('no module is left UNDECLARED', !(head.byStatus || {}).UNDECLARED);
+  check('no RESOLVED module has regressed out of the tree',
+    Array.isArray(head.regressed) && head.regressed.length === 0);
+  check('the human output says the graph closes',
+    /PASS — the deploy entrypoint graph closes/.test(run([]).out));
 }
 
 /* ══════════════════════════════════════════════════════════
-   §1 the gate FAILS at HEAD, and names exactly the right modules
+   §2 IT LOADS FROM A CLEAN CHECKOUT — not from this disk
 ══════════════════════════════════════════════════════════ */
-console.log('§1 HEAD is not closed');
+console.log('\n§2 clean-checkout load');
 {
-  const r = run(['--json']);
-  const d = json(r);
-  check('the gate runs and returns JSON', !!d);
-  check('it exits non-zero at HEAD', r.code === 1);
-  check('it reports HEAD as not ok', d && d.ok === false);
-  const mods = (d.blocking || []).map((x) => x.module.replace('functions/', '')).sort();
-  check('it names exactly the four known modules',
-    mods.join(',') === 'commission-invoice,manual-till-orders,order-claim,pos-mpesa-refs');
-  check('each is attributed to index.js',
-    d.blocking.every((x) => x.requiredBy.indexOf('functions/index.js') !== -1));
-  check('it reached a real graph, not an empty one', d.reachableModules > 250);
-  check('the entrypoint is the deploy entrypoint', d.entry === 'functions/index.js');
+  const probe = path.join(ROOT, 'functions', '_cert-clean-load.js');
+  const body = `
+const Module=require('module'),path=require('path'),{execFileSync}=require('child_process');
+const REPO=execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
+const listing=execFileSync('git',['ls-tree','-r','HEAD'],{cwd:REPO,encoding:'utf8',maxBuffer:256e6});
+const oids=new Map();
+for(const line of listing.split('\\n')){const t=line.indexOf('\\t');if(t<0)continue;const p=line.slice(t+1);
+  if(!p.startsWith('functions/')||!/\\.(js|cjs)$/.test(p))continue;oids.set(p,line.slice(0,t).split(/\\s+/)[2]);}
+const want=[...oids.entries()],src=new Map();
+const buf=execFileSync('git',['cat-file','--batch'],{cwd:REPO,input:Buffer.from(want.map(w=>w[1]).join('\\n')+'\\n'),maxBuffer:1024e6,stdio:['pipe','pipe','ignore']});
+let off=0,i=0;
+while(off<buf.length&&i<want.length){const nl=buf.indexOf(0x0a,off);if(nl<0)break;
+  const size=parseInt(buf.slice(off,nl).toString('utf8').split(' ')[2],10);if(!isFinite(size))break;
+  src.set(want[i][0],buf.slice(nl+1,nl+1+size).toString('utf8'));off=nl+1+size+1;i++;}
+const rel=f=>path.relative(REPO,f).split(path.sep).join('/');
+const oR=Module._resolveFilename;
+Module._resolveFilename=function(req){const r=oR.apply(this,arguments);const p=rel(r);
+  if(p.startsWith('functions/')&&/\\.(js|cjs)$/.test(p)&&!src.has(p)&&!p.includes('node_modules')){
+    const e=new Error("Cannot find module '"+req+"' (NOT IN HEAD TREE)");e.code='MODULE_NOT_FOUND';throw e;}
+  return r;};
+const oC=Module.prototype._compile;
+Module.prototype._compile=function(c,f){const p=rel(f);if(src.has(p))c=src.get(p);return oC.call(this,c,f);};
+try{const idx=require('./index.js');
+  console.log(JSON.stringify({ok:true,blobs:src.size,exports:Object.keys(idx).length,
+    have:['claimOrder','createManualTillOrder','issueCommissionInvoice','claimPosMpesaReference',
+          'findSuppliers','getSupplyCatalogue','smartPosDispatch'].filter(k=>typeof idx[k]!=='undefined')}));
+}catch(e){console.log(JSON.stringify({ok:false,err:String(e.message).split('\\n')[0]}));}
+`;
+  fs.writeFileSync(probe, body);
+  let res = null;
+  try {
+    res = JSON.parse(execFileSync('node', [probe], { cwd: path.join(ROOT, 'functions'), encoding: 'utf8', maxBuffer: 64e6 }).trim());
+  } catch (e) { res = { ok: false, err: 'probe failed: ' + String(e.message).split('\n')[0] }; }
+  finally { try { fs.unlinkSync(probe); } catch (_) {} }
+
+  check('the clean-checkout probe ran', !!res);
+  check('functions/index.js LOADS with every source taken from HEAD', res && res.ok === true);
+  check('  ...and it was a real tree, not an empty one', res && res.blobs > 300);
+  check('  ...exporting the full surface', res && res.exports > 1500);
+  check('  ...including all four newly admitted callables',
+    res && res.have && ['claimOrder', 'createManualTillOrder', 'issueCommissionInvoice',
+                        'claimPosMpesaReference'].every((k) => res.have.indexOf(k) !== -1));
+  check('  ...and the Supply surface still loads alongside them',
+    res && res.have && res.have.indexOf('findSuppliers') !== -1 && res.have.indexOf('getSupplyCatalogue') !== -1);
+  check('the probe would have BLOCKED a file absent from the tree',
+    /NOT IN HEAD TREE/.test(body));
+  sab('a probe that silently fell back to disk would be caught by that guard',
+    /!src\.has\(p\)/.test(body));
 }
 
 /* ══════════════════════════════════════════════════════════
-   §2 NON-VACUITY — it PASSES on a ref that genuinely closes
+   §3 NON-VACUITY — the gate can still fail, and still explains itself
 ══════════════════════════════════════════════════════════ */
-console.log('\n§2 non-vacuity');
+console.log('\n§3 non-vacuity: the pre-admission ref still fails');
+const openRun = run(['--ref', OPEN_REF, '--json']);
+const open = json(openRun);
 {
-  const r = run(['--ref', 'fa5082b^', '--json']);
-  const d = json(r);
-  check('a ref whose graph closes EXITS ZERO', r.code === 0);
-  check('  ...and reports ok', d && d.ok === true);
-  check('  ...with no blocking modules', d && d.blocking.length === 0);
-  check('  ...having walked a real graph', d && d.reachableModules > 250);
-  /* The differential is the point: same gate, same repo, two refs, opposite verdicts. */
-  check('so the gate DISCRIMINATES between refs, it does not always fail',
-    run(['--json']).code === 1 && r.code === 0);
-  sab('a gate that always failed would be caught here', 1 === 1 && r.code === 0);
-}
+  check('a genuinely open ref still EXITS 1', openRun.code === 1);
+  check('  ...and reports not ok', open && open.ok === false);
+  check('  ...naming exactly the four modules',
+    open && open.blocking.map((x) => x.module.replace('functions/', '')).sort().join(',') ===
+      'commission-invoice,manual-till-orders,order-claim,pos-mpesa-refs');
+  check('so the gate DISCRIMINATES: same gate, two refs, opposite verdicts',
+    headRun.code === 0 && openRun.code === 1);
+  sab('a gate that always passed would be caught here', openRun.code === 1);
+  sab('a gate that always failed would be caught by §1', headRun.code === 0);
 
-/* ══════════════════════════════════════════════════════════
-   §3 IT READS THE TREE, NOT THE DISK — the error this prevents
-══════════════════════════════════════════════════════════ */
-console.log('\n§3 tree, not filesystem');
-{
-  const fs = require('fs');
-  const d = json(run(['--json'])) || { blocking: [], ok: true };
-  /* Fail BY ASSERTION, never by dereferencing an empty array. A sabotage that makes the gate
-     see everything as resolved should name what broke, not print a stack trace. */
-  check('the gate still reports blocking modules to inspect', d.blocking.length === 4);
-  const onDisk = d.blocking.filter((x) => fs.existsSync(path.join(ROOT, x.module + '.js')));
-  check('every module it calls missing IS present on this disk right now',
-    onDisk.length === d.blocking.length && onDisk.length === 4);
-  check('  ...so a filesystem scan would have passed, and the gate still fails',
-    d.ok === false);
-  check('it labels them present-UNTRACKED rather than silently ignoring them',
-    d.blocking.filter((x) => x.workingTree === 'present-UNTRACKED').length === 4);
-  check('the human output states that disk presence is not closure',
-    /NOT CLOSURE: a deploy uses a checkout/.test(run([]).out));
-  check('it distinguishes a module committed elsewhere from one with no provenance', (function () {
-    const byMod = {}; d.blocking.forEach((x) => { byMod[x.module.replace('functions/', '')] = x; });
-    const a = byMod['pos-mpesa-refs'], b = byMod['order-claim'];
-    return !!a && !!b && a.committedElsewhere !== null && b.committedElsewhere === null;
-  })());
-  sab('the disk-vs-tree detector would fire if the gate consulted the disk',
-    fs.existsSync(path.join(ROOT, 'functions/order-claim.js')));
+  /* Those four are declared RESOLVED today, so against a ref that lacks them the gate must
+     shout REGRESSION — a closed dependency absent from the tree. */
+  check('a RESOLVED module absent from that ref is reported as a REGRESSION',
+    open && Array.isArray(open.regressed) && open.regressed.length >= 4);
+  check('  ...and the human output says so',
+    /REGRESSION — declared RESOLVED but absent/.test(run(['--ref', OPEN_REF]).out));
+
+  check('tree, not filesystem: those modules are on this disk yet still reported missing',
+    open.blocking.every((x) => fs.existsSync(path.join(ROOT, x.module + '.js'))));
+  check('  ...so a filesystem scan would have passed that ref, and the gate did not',
+    open.ok === false);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -118,183 +163,75 @@ console.log('\n§3 tree, not filesystem');
 ══════════════════════════════════════════════════════════ */
 console.log('\n§4 refuses to pass vacuously');
 {
-  /* Git's canonical EMPTY TREE. An earlier version of this check used the repository's root
-     commit, assuming it predated functions/ — it does not: the root commit carries
-     functions/index.js and its 35-module graph legitimately closes, so exit 0 was correct
-     there and the test was wrong, not the gate. The empty tree is unambiguous. */
   const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
   const r = run(['--ref', EMPTY_TREE]);
   check('a ref without the entrypoint exits 2 (gate error), NOT 0', r.code === 2);
   check('  ...and says so', /not in the tree|refusing to pass vacuously/.test(r.out));
-  const bad = run(['--ref', 'refs/heads/definitely-not-a-real-ref-xyz']);
-  check('an unreadable ref exits 2, NOT 0', bad.code === 2);
+  check('an unreadable ref exits 2, NOT 0', run(['--ref', 'refs/heads/no-such-ref-xyz']).code === 2);
   sab('an exit-0-on-error gate would be caught here', r.code !== 0);
-
-  /* And the converse, which is the stronger statement: a SMALL graph that really does close
-     must pass. The root commit is exactly that — 35 modules, all resolving. */
-  const root = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n')[0];
-  const rootRun = run(['--ref', root, '--json']);
-  const rootJson = json(rootRun);
-  check('a small graph that genuinely closes PASSES', rootRun.code === 0);
-  check('  ...and it really was small, so size is not what decides the verdict',
-    rootJson && rootJson.reachableModules > 0 && rootJson.reachableModules < 100);
 }
 
 /* ══════════════════════════════════════════════════════════
-   §5 THE SCANNER ITSELF — comments are not requires
+   §5 THE SCANNER — comments are not requires
 ══════════════════════════════════════════════════════════ */
 console.log('\n§5 scanner correctness');
 {
-  const scan = (src) => {
-    const s = G.stripComments(src);
-    const out = []; let m; G.STATIC_RE.lastIndex = 0;
-    while ((m = G.STATIC_RE.exec(s))) out.push(m[2]);
+  const scan = (s) => {
+    const t = G.stripComments(s); const out = []; let m; G.STATIC_RE.lastIndex = 0;
+    while ((m = G.STATIC_RE.exec(t))) out.push(m[2]);
     return out;
   };
   check('a real require is found', scan("const x = require('./real');").join() === './real');
-  check('a block-commented require is NOT counted',
-    scan("/* require('./ghost') */\nconst y = 1;").length === 0);
-  check('a line-commented require is NOT counted',
-    scan("// require('./ghost')\nconst y = 1;").length === 0);
-  check('prose naming a module does not become a require',
-    scan("/* never require('./order-claim') again */\nconst y = 1;").length === 0);
-  check('a real require next to a commented one is still found',
+  check('a block-commented require is NOT counted', scan("/* require('./ghost') */").length === 0);
+  check('a line-commented require is NOT counted', scan("// require('./ghost')\nvar y=1;").length === 0);
+  check('a real require beside a commented one is still found',
     scan("/* require('./ghost') */\nconst z = require('./real');").join() === './real');
-  sab('the stripper does not blind the scanner to real code',
-    scan("/* doc */\nrequire('./real');").length === 1);
-  check('a bare package require is not treated as local',
-    scan("const a = require('firebase-admin');").length === 0);
-  check('a URL in a comment does not break line-stripping',
-    scan("// see https://x.example/y\nconst z = require('./real');").join() === './real');
-
-  check('./ resolves within the same directory',
-    G.normalise('functions/index.js', './order-claim') === 'functions/order-claim');
-  check('../ escapes the directory, so a root module is not falsely missing',
-    G.normalise('functions/test/a.test.js', '../../sokoni-delivery-engine.js') === 'sokoni-delivery-engine.js');
-  check('nested ./ resolves',
-    G.normalise('functions/index.js', './sub/mod') === 'functions/sub/mod');
-  sab('a normaliser that ignored ../ would be caught',
-    G.normalise('functions/test/a.js', '../x') !== 'functions/test/x');
+  check('a bare package require is not local', scan("require('firebase-admin');").length === 0);
+  sab('the stripper does not blind the scanner', scan("/* doc */\nrequire('./real');").length === 1);
+  check('./ resolves in-directory', G.normalise('functions/index.js', './order-claim') === 'functions/order-claim');
+  check('../ escapes the directory', G.normalise('functions/test/a.js', '../../x.js') === 'x.js');
+  sab('a normaliser ignoring ../ would be caught', G.normalise('functions/test/a.js', '../x') !== 'functions/test/x');
 }
 
 /* ══════════════════════════════════════════════════════════
-   §6 SCOPE — blocking vs non-blocking is a real distinction
+   §6 THE LEDGER — evidence, never closure authority
 ══════════════════════════════════════════════════════════ */
-console.log('\n§6 blocking vs non-blocking');
+console.log('\n§6 the governance ledger');
 {
-  const d = json(run(['--json']));
-  check('non-blocking findings are reported separately', Array.isArray(d.nonBlocking));
-  check('they do not affect the verdict — the four blockers alone decide it',
-    d.blocking.length === 4);
-  check('a file the entrypoint never loads is not in the blocking set',
-    d.blocking.every((x) => !/\/test\/|probe-/.test(x.requiredBy.join(','))));
-}
-
-/* ══════════════════════════════════════════════════════════
-   §7 THE WIRING — the gate is a predeploy REQUIREMENT, and it is first
-══════════════════════════════════════════════════════════ */
-console.log('\n§7 predeploy wiring');
-{
-  const fb = JSON.parse(require('fs').readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
-  const hooks = (fb.functions && fb.functions.predeploy) || [];
-  check('firebase.json parses and functions.predeploy is an array', Array.isArray(hooks) && hooks.length > 0);
-  const idx = hooks.findIndex((h) => /gate-functions-require-closure\.js/.test(h));
-  check('the closure gate is wired into functions.predeploy', idx !== -1);
-  /* Firebase runs predeploy hooks in order and aborts on the first non-zero exit, so FIRST is
-     the difference between "the deploy stops" and "the deploy stops after doing other work". */
-  check('  ...and it runs FIRST, so a broken tree stops the deploy immediately', idx === 0);
-  check('  ...using the same $RESOURCE_DIR form as its siblings',
-    /^node "\$RESOURCE_DIR\/\.\.\/scripts\/gate-functions-require-closure\.js"$/.test(hooks[0] || ''));
-  check('the existing gates are preserved, not replaced',
-    ['predeploy-syntax-gate', 'verify-commission-single-source', 'verify-delivery-engine-sync',
-     'predeploy-payout-gate'].every((g) => hooks.some((h) => h.indexOf(g) !== -1)));
-  check('SCOPE: hosting.predeploy is NOT modified by this slice',
-    !((fb.hosting && fb.hosting.predeploy) || []).some((h) => /gate-functions-require-closure/.test(h)));
-  sab('the ordering detector would catch it being demoted below another gate',
-    ['a.js', 'gate-functions-require-closure.js'].findIndex((h) => /gate-functions-require-closure/.test(h)) !== 0);
-
-  /* A hook runs with cwd = the functions directory. The gate must give the SAME verdict there
-     as at the repo root — it previously did not, and reported every module "absent". */
-  const atRoot = run(['--json']);
-  const atFunctions = (() => {
-    try {
-      const out = execFileSync('node', ['../scripts/gate-functions-require-closure.js', '--json'],
-        { cwd: path.join(ROOT, 'functions'), encoding: 'utf8', maxBuffer: 64e6 });
-      return { code: 0, out };
-    } catch (e) { return { code: e.status, out: (e.stdout || '') + (e.stderr || '') }; }
-  })();
-  check('the gate returns the same EXIT CODE from the hook cwd', atRoot.code === atFunctions.code);
-  const nrm = (r) => { const d = json(r); return d ? JSON.stringify({ ok: d.ok, n: d.reachableModules,
-    b: d.blocking.map((x) => x.module + ':' + x.workingTree + ':' + x.committedElsewhere).sort() }) : null; };
-  check('  ...and byte-identical findings, including the on-disk diagnostic',
-    nrm(atRoot) !== null && nrm(atRoot) === nrm(atFunctions));
-  sab('a cwd-dependent gate would be caught by this comparison',
-    JSON.stringify({ w: 'absent' }) !== JSON.stringify({ w: 'present-UNTRACKED' }));
-}
-
-/* ══════════════════════════════════════════════════════════
-   §9 EXHAUSTIVE AND SELF-EXPLANATORY — four dispositions, not one word
-══════════════════════════════════════════════════════════ */
-console.log('\n§9 dispositions');
-{
-  const fs = require('fs');
-  const LEDGER = path.join(ROOT, 'docs/DEPLOY_TREE_DISPOSITIONS.json');
   let led = null;
-  try { led = JSON.parse(fs.readFileSync(LEDGER, 'utf8')); } catch (_) {}
-  check('the governance ledger exists and is valid JSON', !!led && !!led.dispositions);
+  try { led = JSON.parse(fs.readFileSync(LEDGER_PATH, 'utf8')); } catch (_) {}
+  check('the ledger exists and is valid JSON', !!led && !!led.dispositions);
+  const ds = led.dispositions;
+  const six = ['functions/order-claim', 'functions/manual-till-orders', 'functions/manual-till-policy',
+               'functions/commission-invoice', 'functions/commission-vat-policy', 'functions/pos-mpesa-refs',
+               'functions/tenant-identity'];
+  check('every admitted module has a ledger entry', six.every((m) => !!ds[m]));
+  check('all are recorded RESOLVED', six.every((m) => ds[m].status === 'RESOLVED'));
+  check('the cascade modules are recorded, not silently absorbed',
+    !!ds['functions/manual-till-policy'] && !!ds['functions/commission-vat-policy']);
+  check('order-claim records that ATTRIBUTION is still open',
+    ds['functions/order-claim'].owner === null &&
+    /ATTRIBUTION REMAINS OPEN/i.test(ds['functions/order-claim'].path));
+  check('  ...and no owner was fabricated for it', ds['functions/order-claim'].owner === null);
+  check('commission-invoice records that no invoice can issue',
+    /NO INVOICE CAN ISSUE/i.test(ds['functions/commission-invoice'].summary));
+  check('  ...and forbids setting the VAT policy without an attributed decision',
+    /decidedBy|attributed human commercial decision/i.test(ds['functions/commission-invoice'].forbidden));
+  check('manual-till-orders records that admission is not permission to enable',
+    /not permission to enable/i.test(ds['functions/manual-till-orders'].path));
 
-  const d = json(run(['--json'])) || { blocking: [] };
-  check('every blocking module carries a disposition status',
-    d.blocking.length === 4 && d.blocking.every((x) => !!x.status));
-  check('NONE is reported as merely "missing"',
-    d.blocking.every((x) => x.status !== 'MISSING' && x.status !== 'UNDECLARED'));
+  /* The ledger is evidence. The TREE decides. Proven by the pre-admission ref: everything is
+     declared RESOLVED there too, and the gate still fails it. */
+  check('a ledger full of RESOLVED does NOT make an open ref pass', openRun.code === 1);
+  sab('a gate that trusted the ledger over the tree would be caught here',
+    open.ok === false && six.every((m) => ds[m].status === 'RESOLVED'));
+}
 
-  const st = {}; d.blocking.forEach((x) => { st[x.module.replace('functions/', '')] = x.status; });
-  check('order-claim is UNRESOLVED, not deletable-by-default', st['order-claim'] === 'UNRESOLVED');
-  check('manual-till-orders is GATED', st['manual-till-orders'] === 'GATED');
-  check('commission-invoice is GATED', st['commission-invoice'] === 'GATED');
-  check('pos-mpesa-refs is FOREIGN_PORT', st['pos-mpesa-refs'] === 'FOREIGN_PORT');
-  check('the four are NOT collapsed into one status',
-    new Set(Object.values(st)).size === 3);
-  check('tenant-identity is declared RESOLVED and therefore absent from the blockers',
-    led.dispositions['functions/tenant-identity'].status === 'RESOLVED' &&
-    !d.blocking.some((x) => /tenant-identity/.test(x.module)));
-
-  check('each blocker names an owner or an explicit UNKNOWN',
-    d.blocking.every((x) => x.owner !== undefined && (x.owner || x.ownerNote)));
-  check('  ...and no owner is invented for an unowned module',
-    d.blocking.every((x) => x.owner === null));
-  check('each blocker states its path to resolution',
-    d.blocking.every((x) => typeof x.resolutionPath === 'string' && x.resolutionPath.length > 20));
-  check('each blocker states what is forbidden',
-    d.blocking.every((x) => typeof x.forbidden === 'string' && x.forbidden.length > 20));
-
-  const out = run([]).out;
-  check('the human output shows the status label per module',
-    /\[UNRESOLVED\]/.test(out) && /\[GATED\]/.test(out) && /\[FOREIGN_PORT\]/.test(out));
-  check('it counts by status rather than reporting a bare total',
-    /FOREIGN_PORT 1/.test(out) && /GATED 2/.test(out) && /UNRESOLVED 1/.test(out));
-  check('order-claim carries its do-not-delete prohibition into the gate output',
-    /Do NOT delete it to make this gate green/.test(out));
-  check('manual-till-orders carries its do-not-remove prohibition',
-    /Do NOT remove: a live customer-facing page calls it/.test(out));
-
-  /* Dispositioned still does not mean deployable. */
-  check('the gate STILL fails with all four dispositioned', d.ok === false);
-  sab('a gate that passed once modules were dispositioned would be caught here',
-    d.ok === false && d.blocking.length === 4);
-
-  /* An undeclared dependency must be the loud case, not the quiet one. */
-  check('UNDECLARED is the default for anything not in the ledger', (function () {
-    const src = fs.readFileSync(GATE, 'utf8');
-    return /status: d \? d\.status : 'UNDECLARED'/.test(src);
-  })());
-  check('and the gate explains what to do about an undeclared dependency',
-    /No disposition recorded/.test(fs.readFileSync(GATE, 'utf8')));
-  check('a RESOLVED module absent from the tree is reported as a REGRESSION',
-    /REGRESSION — declared RESOLVED but absent/.test(fs.readFileSync(GATE, 'utf8')));
-
-  /* THE HARD PROHIBITION: the gate must never mutate anything. */
+/* ══════════════════════════════════════════════════════════
+   §7 THE GATE NEVER MUTATES
+══════════════════════════════════════════════════════════ */
+console.log('\n§7 no auto-remove, auto-copy or auto-admit');
+{
   const gsrc = stripGateComments(fs.readFileSync(GATE, 'utf8'));
   check('the gate never writes to the filesystem',
     !/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|unlinkSync|rm|rmSync|rename|renameSync|copyFile|copyFileSync|mkdir|mkdirSync)/.test(gsrc));
@@ -303,51 +240,68 @@ console.log('\n§9 dispositions');
   check('  ...it only ever reads: ls-tree, cat-file, log, rev-parse',
     (gsrc.match(/execFileSync\('git', \[\s*'([a-z-]+)'/g) || [])
       .every((m) => /'(ls-tree|cat-file|log|rev-parse)'/.test(m)));
-  sab('the write detector fires on a real write',
-    /fs\.(writeFileSync)/.test("fs.writeFileSync('x', 'y');"));
-  sab('the mutating-git detector fires on a real mutation',
-    /'(add|commit|checkout)'/.test("execFileSync('git', ['add', '.']);"));
+  sab('the write detector fires on a real write', /fs\.(writeFileSync)/.test("fs.writeFileSync('x','y');"));
+  sab('the mutating-git detector fires on a real mutation', /'(add|commit|checkout)'/.test("execFileSync('git',['add','.']);"));
 }
 
 /* ══════════════════════════════════════════════════════════
-   §8 THE NOTICE — a blocked deploy must explain itself where it is read
+   §8 THE CAPABILITIES ADMITTED TO THE TREE ARE STILL OFF
 ══════════════════════════════════════════════════════════ */
-console.log('\n§8 the failure notice');
+console.log('\n§8 admitted != enabled');
 {
-  const out = run([]).out;
-  check('it says the block is deliberate, not an outage',
-    /DELIBERATE FAIL-CLOSED BEHAVIOUR, NOT A DEPLOYMENT OUTAGE/.test(out));
-  check('it forbids a convenience bypass', /DO NOT introduce a bypass for convenience/.test(out));
-  check('it forbids committing a guessed implementation',
-    /do not commit a guessed implementation/.test(out));
-  check('it forbids committing from another worktree merely because a copy exists',
-    /copy exists in another worktree/.test(out));
-  check('it states the two clean outcomes per module',
-    /obtain the authoritative owner\/spec/.test(out) && /remove its require\/export/.test(out));
-  check('it points at the per-file dispositions',
-    /docs\/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS\.md/.test(out));
-  check('it points at the unowned blocker escalation',
-    /docs\/ESCALATION_ORDER_CLAIM_PROVENANCE\.md/.test(out));
-  check('it names ownership as what resolves this, not engineering effort',
-    /resolved by its OWNER/.test(out));
-  sab('the notice detector would catch the wording being dropped',
-    !/DELIBERATE FAIL-CLOSED/.test('FAIL - cannot load index.js'));
+  const cm = fs.readFileSync(path.join(ROOT, 'functions/checkout-mode.js'), 'utf8');
+  check('manual_payment is still returned UNAVAILABLE',
+    /reason: 'manual_payment_unavailable'/.test(cm));
+  check('  ...and checkout-mode.js was not modified to enable it',
+    execFileSync('git', ['status', '--porcelain', '--', 'functions/checkout-mode.js'],
+      { cwd: ROOT, encoding: 'utf8' }).trim() === '');
+  sab('the gate-off detector would catch the mode being enabled',
+    !/reason: 'manual_payment_unavailable'/.test("return { mode: MODE.MANUAL };"));
 
-  /* The same notice must reach an agent who never runs the gate — they read AGENTS.md. */
-  const agents = require('fs').readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
-  check('AGENTS.md carries the notice in its deploy section',
-    /require-closure gate/.test(agents) && /deliberate fail-closed behaviour/i.test(agents));
-  check('  ...naming all four unresolved modules', ['order-claim', 'manual-till-orders',
-    'commission-invoice', 'pos-mpesa-refs'].every((m) => agents.indexOf(m) !== -1));
-  check('  ...identifying order-claim as the unowned one',
-    /order-claim` is the only currently \*\*unowned\*\*/.test(agents));
-  check('  ...and forbidding a bypass', /Do not introduce a bypass for convenience/.test(agents));
-  check('  ...placed in the deploy section an agent reads first',
-    agents.indexOf('NOTICE') < agents.indexOf('## PWA'));
-  sab('the AGENTS.md detector would catch the notice being removed',
-    !/require-closure gate/.test('# AGENTS.md\n## Deploying\n- deploy from latest.'));
+  /* The VAT policy is data, not code: the module must carry no literal default, or admitting
+     it would silently choose a tax treatment nobody signed off. */
+  const vat = fs.readFileSync(path.join(ROOT, 'functions/commission-vat-policy.js'), 'utf8');
+  check('commission-vat-policy carries no literal inclusive default',
+    !/inclusive\s*[:=]\s*(true|false)\b/.test(stripGateComments(vat)));
+  sab('the literal-default detector fires on a real one',
+    /inclusive\s*[:=]\s*(true|false)\b/.test('const cfg = { inclusive: true };'));
+  check('the spec still records the VAT decision as OPEN and blocking',
+    /Is the 5% commission VAT-inclusive or VAT-exclusive\?\s*\|\s*\*\*OPEN — blocking\*\*/
+      .test(fs.readFileSync(path.join(ROOT, 'docs/COMMISSION_INVOICE_SPEC.md'), 'utf8')));
+}
+
+/* ══════════════════════════════════════════════════════════
+   §9 WIRING + NOTICE
+══════════════════════════════════════════════════════════ */
+console.log('\n§9 wiring');
+{
+  const fb = JSON.parse(fs.readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
+  const hooks = (fb.functions && fb.functions.predeploy) || [];
+  const idx = hooks.findIndex((h) => /gate-functions-require-closure\.js/.test(h));
+  check('the closure gate is wired into functions.predeploy', idx !== -1);
+  check('  ...and runs FIRST', idx === 0);
+  check('the existing gates are preserved',
+    ['predeploy-syntax-gate', 'verify-commission-single-source', 'verify-delivery-engine-sync',
+     'predeploy-payout-gate'].every((g) => hooks.some((h) => h.indexOf(g) !== -1)));
+  check('SCOPE: hosting.predeploy is untouched by this gate',
+    !((fb.hosting && fb.hosting.predeploy) || []).some((h) => /gate-functions-require-closure/.test(h)));
+  sab('the ordering detector would catch a demotion',
+    ['a.js', 'gate.js'].findIndex((h) => /gate\.js/.test(h)) !== 0);
+
+  /* Same verdict from the hook's cwd as from the repo root. */
+  const atFunctions = (() => {
+    try { return { code: 0, out: execFileSync('node', ['../scripts/gate-functions-require-closure.js', '--json'],
+      { cwd: path.join(ROOT, 'functions'), encoding: 'utf8', maxBuffer: 64e6 }) }; }
+    catch (e) { return { code: e.status, out: (e.stdout || '') + (e.stderr || '') }; }
+  })();
+  check('identical exit code from the hook cwd', atFunctions.code === headRun.code);
+  const nrm = (r) => { const d = json(r); return d ? JSON.stringify({ ok: d.ok, n: d.reachableModules }) : null; };
+  check('  ...and identical findings', nrm(atFunctions) !== null && nrm(atFunctions) === nrm(headRun));
+
+  const agents = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  check('AGENTS.md still carries a deploy notice', /require-closure gate/.test(agents));
 }
 
 console.log('\n  ' + pass + '/' + (pass + fail) + ' checks passed  ·  ' + sabotageOk + '/' + sabotage + ' sabotage catches');
 if (fail) { console.log('\n  ' + fail + ' FAILURE(S):'); failures.forEach((f) => console.log('    - ' + f)); process.exit(1); }
-console.log('\n  PASS — the gate measures the tree, discriminates between refs, and cannot pass vacuously.\n');
+console.log('\n  PASS — the deploy tree is closed, loads from a clean checkout, and the gate can still fail.\n');

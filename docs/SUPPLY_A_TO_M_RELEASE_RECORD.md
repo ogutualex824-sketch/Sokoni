@@ -212,8 +212,17 @@ None of these is resolved here, and no deployment has been performed.
 
 ## The deployment statement
 
-> **A clean checkout of the current branch still cannot load `functions/index.js`; four
-> tracked-tree local dependencies remain unresolved.**
+> **SUPERSEDED 2026-09-05 — the deploy tree is now CLOSED.** All four dependencies were
+> admitted (b28be27, b0ba4a6, d879238, e1be278). `functions/index.js` loads from a clean git
+> checkout: 389 tree blobs, 1718 exports, with any file absent from the tree made
+> unresolvable. The gate exits 0.
+>
+> The earlier statement, kept for the record: *"A clean checkout of the current branch still
+> cannot load functions/index.js; four tracked-tree local dependencies remain unresolved."*
+>
+> **Closed is not deployable.** Admission put modules in the tree; it enabled nothing.
+> `manual_payment` stays UNAVAILABLE, `revenueConfig/commission_vat` stays UNSET so no
+> commission invoice can issue, and `order-claim` attribution is still open.
 
 That is materially different from "the graph is closed", and the difference is the whole point
 of this section.
