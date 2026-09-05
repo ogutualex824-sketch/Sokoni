@@ -1,3 +1,75 @@
+## 2026-09-05 — Functions require-closure gate: enforcing what a commit message only asked for
+
+**Files:** `scripts/gate-functions-require-closure.js` (new),
+`scripts/test-functions-require-closure-gate.js` (new),
+`docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md` (addendum §7),
+`docs/SUPPLY_A_TO_M_RELEASE_RECORD.md`, `CHANGELOG.md`. **Not deployed**; HOLD remains, and
+the gate is deliberately **not** wired into `firebase.json`.
+
+### The gap
+
+`functions/index.js` has carried unconditional requires for `order-claim`,
+`manual-till-orders`, `commission-invoice` and `pos-mpesa-refs` since `fa5082b`. Three of those
+modules are committed nowhere in this repository, on any ref. The author knew — `fa5082b`'s own
+message names all four and declares *"NEVER deploy FULL index.js"* — but the mitigation was a
+sentence in a commit message. `scripts/predeploy-syntax-gate.js` runs `node --check`, which
+parses a file and never resolves a `require()`, so nothing could catch this class.
+`docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md` (2026-09-04) raised exactly this as its Open
+Question 4.
+
+### The measurement error the gate exists to prevent
+
+I reported that "the module graph at HEAD is closed". It is not. My scan walked the
+**filesystem**, where other workstreams' untracked files are present, so it measured the working
+tree and called it the tracked tree. **A deploy uses a checkout, not somebody's disk.**
+
+The gate reads the **git tree** — `git ls-tree` for the file set, `git cat-file --batch` for the
+sources — and walks the transitive require graph from `functions/index.js`, which is what a
+deploy actually loads. A module present only as an untracked working file is reported
+`present-UNTRACKED  <- NOT CLOSURE`. It also separates *blocking* (reachable from the
+entrypoint) from *non-blocking* (a test or probe under `functions/` that the entrypoint never
+loads), because conflating them either cries wolf or hides the thing that breaks.
+
+At `HEAD` it fails on exactly the four the census identified. It does not judge whether any of
+them *should* be committed — that is a founder disposition, per file, in the census.
+
+### Certification
+
+`scripts/test-functions-require-closure-gate.js` — **41 checks, 5 sabotage catches**.
+
+The control that matters is non-vacuity: the same gate **passes** on `fa5082b^` — the commit
+immediately before the broken requires landed — walking 321 modules cleanly. Same gate, same
+repository, two refs, opposite verdicts. That also independently confirms the census's finding
+that closure broke at `fa5082b`. A second positive: the repository's root commit passes with a
+35-module graph, so graph *size* is not what decides the verdict.
+
+It also proves the gate cannot pass vacuously — git's empty tree and an unreadable ref both exit
+**2**, never 0 — and that comments are not requires, in both directions.
+
+### Three defects found while building it, all mine
+
+1. **The blob preload silently failed.** `execFileSync` was given `encoding: 'buffer'` while
+   `input` was a string, which is not a valid input encoding, so it threw and a bare
+   `catch (_) { return; }` swallowed it — every file fell back to a `git show` spawn, 383 of
+   them, turning a 0.2s read into 17s. It now passes a Buffer and **warns loudly** on failure.
+   A swallowed error that only costs time is still a swallowed error. Gate runtime: **24.8s →
+   4.8s**, and 0.55s on a ref with nothing to look up.
+2. **A test asserted the wrong thing.** It assumed the repository's root commit predated
+   `functions/`; it does not, and its graph legitimately closes, so exit 0 was correct and the
+   *test* was wrong. Replaced with git's canonical empty tree, and the root commit kept as a
+   positive control instead.
+3. **A pipe masked an exit code** while I was verifying that same case — `| tail` reports
+   `tail`'s status, not node's. Already a recorded lesson in this repository; re-learned.
+
+### The standing rule this establishes
+
+**Presence on disk is not closure.** No deployment may be attempted until all four tracked-tree
+dependencies are resolved or explicitly dispositioned through the release gate.
+
+**API changes:** none. **Database changes:** none. **Deployment configuration:** unchanged —
+wiring the gate into `firebase.json`'s predeploy hooks is a separate founder decision and was
+not taken. **Breaking changes:** none.
+
 ## 2026-09-05 — Slice M: Supply integration — discovery → catalogue → purchase order
 
 **Files:** `sokoni-merchant-supply.js` (+441/−~35), `functions/procurement.js` (+85/−9),

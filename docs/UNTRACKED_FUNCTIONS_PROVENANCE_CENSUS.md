@@ -172,3 +172,73 @@ not mine to pick.
    payment-critical release?
 4. Should Tier 1's functions deploy explicitly adopt `fa5082b`'s "named-function only" discipline as
    a standing rule, given there is no tooling enforcement of it today?
+
+---
+
+## 7. Addendum — 2026-09-05 · one row resolved, and Open Question 4 answered
+
+**This appends to the census above; none of its analysis is rewritten.** Two things changed
+after it was written, one of them caused by this session.
+
+### `tenant-identity.js` — row resolved, no longer untracked
+
+Committed to `release/multishop-checkout-certified` at **`24f50ba`** under founder
+authorisation. Not a reconstruction: the working copy was byte-identical to an already-committed
+blob.
+
+```
+25d2c19 blob : 4d89a1da854f8a05e41147661dfff42654a4bf3b
+working file : 4d89a1da854f8a05e41147661dfff42654a4bf3b
+cmp          : identical, no differing byte, 4242 bytes both sides
+```
+
+The census recorded its provenance as `bc44f33` on R1; the newest committed instance is
+`25d2c19` (2026-09-04), reachable from `feature/sales-control-centre-approvals` and
+`feature/void-permission-convergence`. Same content either way. All five consumers resolve
+against it: `business-bootstrap.js`, `pos-retail-engine.js`, `pos-staff-ops.js`,
+`pos-zero-friction.js`, `procurement.js`.
+
+**Its classification changes from B (foreign port) to RESOLVED.** The remaining thirteen rows
+stand exactly as written.
+
+### Open Question 4 now has a mechanism, not just a discipline
+
+The census's §3 found that the only thing between an untracked working file and production was
+whether someone typed a full-directory or a named-function deploy — *"procedural discipline
+recorded in a commit message, not tooling"* — and Open Question 4 asked whether that should
+become a standing rule given nothing enforced it.
+
+`scripts/gate-functions-require-closure.js` now enforces the measurable half. It walks the
+**transitive require graph from `functions/index.js`** over the **git tree** (`git ls-tree` +
+`git cat-file --batch`), never the filesystem, and exits non-zero when a module the entrypoint
+needs is not in the tree. A module sitting untracked on someone's disk is reported as
+**`present-UNTRACKED  <- NOT CLOSURE: a deploy uses a checkout, not this disk`**.
+
+At `HEAD` it fails, naming exactly the four this census identified:
+
+| module | on disk | committed on any ref |
+|---|---|---|
+| `order-claim` | present-UNTRACKED | **never** |
+| `manual-till-orders` | present-UNTRACKED | **never** |
+| `commission-invoice` | present-UNTRACKED | **never** |
+| `pos-mpesa-refs` | present-UNTRACKED | `233ac4d` |
+
+Certified by `scripts/test-functions-require-closure-gate.js` — **41 checks, 5 sabotage
+catches**. The non-vacuity control matters most: the same gate **passes** on `fa5082b^`, the
+commit immediately before the broken requires landed, walking 321 modules cleanly. Same gate,
+same repo, two refs, opposite verdicts — which also independently confirms this census's finding
+that closure broke at `fa5082b`.
+
+**The gate is NOT wired into `firebase.json`'s predeploy hooks.** Wiring it is a
+deployment-configuration change and remains a founder decision. It is a standalone check today:
+
+```
+node scripts/gate-functions-require-closure.js            # scan HEAD
+node scripts/gate-functions-require-closure.js --ref X    # scan any ref
+```
+
+### What is still open
+
+Open Questions 1, 2 (for the remaining ports) and 3 are unchanged and remain founder decisions.
+`order-claim.js` in particular is still Outcome **C — provenance missing**, and nothing in this
+addendum resolves it. **No deployment has been performed.**

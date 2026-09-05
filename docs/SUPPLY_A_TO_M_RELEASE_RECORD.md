@@ -210,6 +210,54 @@ None of these is resolved here, and no deployment has been performed.
 
 ---
 
+## The deployment statement
+
+> **A clean checkout of the current branch still cannot load `functions/index.js`; four
+> tracked-tree local dependencies remain unresolved.**
+
+That is materially different from "the graph is closed", and the difference is the whole point
+of this section.
+
+**Presence on disk is not closure.** Those four modules are sitting in this working tree right
+now as other workstreams' untracked files. A deploy uses a checkout, not somebody's disk. The
+filesystem scan that reported closure was measuring the wrong thing, and any future scan that
+consults the filesystem will make the same mistake.
+
+**No deployment may be attempted until all four are resolved or explicitly dispositioned
+through the release gate.** Their per-file provenance is already established in
+`docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md` (2026-09-04): `order-claim` has no provenance
+anywhere and is classified **C — escalated, unresolved**; `manual-till-orders` and
+`commission-invoice` are documented but deliberately gated on decisions never taken;
+`pos-mpesa-refs` is a proven foreign port. Disposition is a founder decision, not an
+engineering one.
+
+### It is now enforced, not merely written down
+
+`fa5082b`'s own commit message declared *"NEVER deploy FULL index.js"* — but the mitigation was
+a sentence, and `predeploy-syntax-gate.js` runs `node --check`, which parses a file and never
+resolves a `require()`. Nothing could catch this class.
+
+`scripts/gate-functions-require-closure.js` walks the transitive require graph from
+`functions/index.js` over the **git tree** and exits non-zero when the entrypoint cannot load.
+Certified at **41 checks, 5 sabotage catches** by
+`scripts/test-functions-require-closure-gate.js`, including the control that matters: the same
+gate **passes** on `fa5082b^` with 321 modules, so it discriminates rather than always failing —
+and that independently confirms closure broke at `fa5082b`.
+
+It is deliberately **not wired into `firebase.json`**. Wiring a predeploy hook is a
+deployment-configuration change and remains a founder decision.
+
+### Documentation integrity
+
+Two corrections in this record (`671782a`, `ef68822`) exist because generated documentation
+needs content-integrity verification after shell-mediated writes: backticked identifiers were
+command-substituted out of a paragraph by bash, shipping a commit with holes in it. The same
+class as the `cmd.exe` caret defect recorded earlier — **content passed through a shell is
+content the shell may rewrite** — and the reason those two commits stand rather than being
+squashed away.
+
+---
+
 ## Deferred, deliberately
 
 Supply: chronological ordering and the indexes it needs · deeper warehouse views · richer
