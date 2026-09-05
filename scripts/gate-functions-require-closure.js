@@ -281,9 +281,28 @@ function main () {
         : ''));
     console.log('      committed on any ref: ' + (d.committedElsewhere || 'NEVER — no provenance anywhere'));
   }
+  /* The person reading this is, most likely, an agent or engineer whose deploy just stopped.
+     Tell them here what is happening and why, because this is the one place they are
+     guaranteed to look — a notice they have to go and find is a notice nobody reads. */
   console.log('\n  FAIL — a clean checkout of ' + REF + ' cannot load ' + ENTRY + '.');
-  console.log('  Each module needs its provenance resolved or an explicit release-gate disposition.');
-  console.log('  Per-file census: docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md\n');
+  console.log('');
+  console.log('  THIS IS DELIBERATE FAIL-CLOSED BEHAVIOUR, NOT A DEPLOYMENT OUTAGE.');
+  console.log('  ' + ENTRY + ' has required these modules since fa5082b; most are committed on');
+  console.log('  no ref anywhere. They exist on this disk only as untracked working files, which');
+  console.log('  is NOT deployable provenance: a deploy uses a checkout, not your disk.');
+  console.log('');
+  console.log('  DO NOT introduce a bypass for convenience. Do not remove or reorder this gate,');
+  console.log('  do not commit a guessed implementation, and do not commit a module merely');
+  console.log('  because a copy exists in another worktree.');
+  console.log('');
+  console.log('  Each module needs its provenance resolved by its OWNER, or an explicit');
+  console.log('  release-gate disposition. Two clean outcomes per module:');
+  console.log('     obtain the authoritative owner/spec -> certify -> commit');
+  console.log('     or, if obsolete: remove its require/export -> certify the graph -> commit');
+  console.log('');
+  console.log('  Per-file dispositions : docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md');
+  console.log('  Unowned blocker       : docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md');
+  console.log('  Release position      : docs/SUPPLY_A_TO_M_RELEASE_RECORD.md\n');
   process.exit(1);
 }
 

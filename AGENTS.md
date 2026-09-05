@@ -5,6 +5,28 @@ worktrees**. These rules prevent failures that have actually happened in product
 (Claude Code also loads the same rules from `CLAUDE.md`.)
 
 ## Deploying — read this first
+
+> ### ⛔ NOTICE (2026-09-05) — Functions deploys are intentionally blocked on this branch
+>
+> `functions.predeploy` now begins with a **Git-tree require-closure gate**
+> (`scripts/gate-functions-require-closure.js`). The current branch **fails it**, because four
+> local dependencies are not present in the deploy tree:
+> `order-claim`, `manual-till-orders`, `commission-invoice`, `pos-mpesa-refs`.
+>
+> **This is deliberate fail-closed behaviour, not a deployment outage.** `functions/index.js`
+> has required these since `fa5082b`; three are committed on no ref anywhere. They are present
+> on disk only as untracked working files, which is **not** deployable provenance — a deploy
+> uses a checkout, not your disk.
+>
+> `order-claim` is the only currently **unowned** provenance blocker — see
+> `docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md`. Per-file dispositions for all four are in
+> `docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md`.
+>
+> **Do not introduce a bypass for convenience.** Do not remove or reorder the gate, do not
+> commit a guessed implementation, and do not commit a module merely because a copy exists in
+> another worktree. Check status any time with:
+> `node scripts/gate-functions-require-closure.js`
+
 - Live production is **`mysokoni.co.ke`** (Firebase Hosting). `sokoni.co.ke` is an
   **unrelated site** — never use it to judge whether a change shipped.
 - **Only deploy hosting from the latest commit.** Firebase deploys the files in *your*

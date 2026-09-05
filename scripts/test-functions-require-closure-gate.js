@@ -226,6 +226,45 @@ console.log('\n§7 predeploy wiring');
     JSON.stringify({ w: 'absent' }) !== JSON.stringify({ w: 'present-UNTRACKED' }));
 }
 
+/* ══════════════════════════════════════════════════════════
+   §8 THE NOTICE — a blocked deploy must explain itself where it is read
+══════════════════════════════════════════════════════════ */
+console.log('\n§8 the failure notice');
+{
+  const out = run([]).out;
+  check('it says the block is deliberate, not an outage',
+    /DELIBERATE FAIL-CLOSED BEHAVIOUR, NOT A DEPLOYMENT OUTAGE/.test(out));
+  check('it forbids a convenience bypass', /DO NOT introduce a bypass for convenience/.test(out));
+  check('it forbids committing a guessed implementation',
+    /do not commit a guessed implementation/.test(out));
+  check('it forbids committing from another worktree merely because a copy exists',
+    /copy exists in another worktree/.test(out));
+  check('it states the two clean outcomes per module',
+    /obtain the authoritative owner\/spec/.test(out) && /remove its require\/export/.test(out));
+  check('it points at the per-file dispositions',
+    /docs\/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS\.md/.test(out));
+  check('it points at the unowned blocker escalation',
+    /docs\/ESCALATION_ORDER_CLAIM_PROVENANCE\.md/.test(out));
+  check('it names ownership as what resolves this, not engineering effort',
+    /resolved by its OWNER/.test(out));
+  sab('the notice detector would catch the wording being dropped',
+    !/DELIBERATE FAIL-CLOSED/.test('FAIL - cannot load index.js'));
+
+  /* The same notice must reach an agent who never runs the gate — they read AGENTS.md. */
+  const agents = require('fs').readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+  check('AGENTS.md carries the notice in its deploy section',
+    /require-closure gate/.test(agents) && /deliberate fail-closed behaviour/i.test(agents));
+  check('  ...naming all four unresolved modules', ['order-claim', 'manual-till-orders',
+    'commission-invoice', 'pos-mpesa-refs'].every((m) => agents.indexOf(m) !== -1));
+  check('  ...identifying order-claim as the unowned one',
+    /order-claim` is the only currently \*\*unowned\*\*/.test(agents));
+  check('  ...and forbidding a bypass', /Do not introduce a bypass for convenience/.test(agents));
+  check('  ...placed in the deploy section an agent reads first',
+    agents.indexOf('NOTICE') < agents.indexOf('## PWA'));
+  sab('the AGENTS.md detector would catch the notice being removed',
+    !/require-closure gate/.test('# AGENTS.md\n## Deploying\n- deploy from latest.'));
+}
+
 console.log('\n  ' + pass + '/' + (pass + fail) + ' checks passed  ·  ' + sabotageOk + '/' + sabotage + ' sabotage catches');
 if (fail) { console.log('\n  ' + fail + ' FAILURE(S):'); failures.forEach((f) => console.log('    - ' + f)); process.exit(1); }
 console.log('\n  PASS — the gate measures the tree, discriminates between refs, and cannot pass vacuously.\n');

@@ -1,3 +1,64 @@
+## 2026-09-05 — Notify parallel workstreams that the Functions block is deliberate
+
+**Files:** `AGENTS.md`, `scripts/gate-functions-require-closure.js`,
+`scripts/test-functions-require-closure-gate.js`, `CHANGELOG.md`. **No deployment performed**;
+HOLD stands and the gate remains correctly red.
+
+### Why a notice, and why in two places
+
+A gate that stops another team's deploy without explaining itself reads as an outage, and the
+first instinct on an outage is to route around it. The notice therefore lives where it will
+actually be read, not where it is tidy to file it.
+
+**1. In the gate's own failure output** — the one place someone is guaranteed to look, because
+their deploy just stopped there. It now states plainly that the block is deliberate fail-closed
+behaviour and not an outage; that `functions/index.js` has required these modules since
+`fa5082b` and most are committed on no ref; that presence on disk is not deployable provenance;
+that no bypass may be introduced; the two clean outcomes per module; and pointers to the
+per-file census, the `order-claim` escalation and the release record.
+
+**2. In `AGENTS.md`** — for an agent who never runs the gate. Placed at the top of *"Deploying —
+read this first"*, above the existing hosting rules, naming all four modules and identifying
+`order-claim` as the only unowned one.
+
+Both say the same thing, and both are certified, so the wording cannot quietly regress.
+
+### The message sent to the parallel workstream
+
+The one peer session on record is offline; the notification is **queued for delivery when that
+machine reconnects**, not delivered. It carries the notice above, plus one thing specific to
+them: their uncommitted edit to `functions/pos-zero-friction.js` requires `./merchant-identity`,
+which is absent here, and two divergent committed versions exist (`7ecd119` at 46,554 bytes;
+`release/merchant-identity` at 20,818). Neither was copied and their file was not touched. It
+also flags that `7ecd119`'s `resolveActor(uid, requestedShopId)` reads `shops/{shopId}` while
+their edit calls `resolveActor(cashierId, merchantId)` — different identifier spaces, which
+coincide only in the owner-uid form. That is a question for them, not a finding: it is a dirty
+file and nothing may be concluded from one.
+
+### Certification
+
+`scripts/test-functions-require-closure-gate.js` — **66 checks, 9 sabotage catches**, now
+covering the notice: the gate's output states the block is deliberate, forbids a convenience
+bypass, forbids a guessed implementation, forbids committing from another worktree merely
+because a copy exists, gives both clean outcomes, points at the census and the escalation, and
+names *ownership* as what resolves this rather than engineering effort. `AGENTS.md` is checked
+for the same content, all four module names, the unowned identification, and placement above the
+PWA section.
+
+**RESTORE — two sabotages, each restored byte-identically:** stripping the notice from
+`AGENTS.md`, and deleting the deliberate-fail-closed line from the gate. Both drive the suite
+red on their named assertions; both restores return exit 0.
+
+### The three principles this closes over
+
+> Presence on disk ≠ deployable provenance.
+> Disposition ≠ deployability.
+> Engineering-complete ≠ production-proven.
+
+**API changes:** none. **Database changes:** none. **Deployment configuration:** unchanged since
+`25402b6` — the gate's wiring is not touched here, only what it says when it fires.
+**Breaking changes:** none.
+
 ## 2026-09-05 — The require-closure gate becomes a predeploy requirement; `order-claim` escalated
 
 **Files:** `firebase.json` (+1 line), `scripts/gate-functions-require-closure.js`,
