@@ -38,9 +38,48 @@ workstream's to make, and the Supply workstream has not made it.
 |---|---|
 | git history on any branch, ever (`git log --all`) | **none** |
 | row in `docs/MULTISHOP_STACK_PROVENANCE_MANIFEST.md` | **none** — out of that manifest's stated scope |
-| contract, spec, ADR or trace document anywhere in `docs/` | **none** |
-| callers | exactly one: `functions/index.js`, unconditional, module-scope |
-| what `claimOrder` / `releaseOrderClaim` are supposed to do | knowable only by reading the file's own source |
+| contract, spec or ADR | **none** |
+| a dedicated provenance trace | **EXISTS** — `docs/ORDER_CLAIM_PROVENANCE_TRACE.md`, committed at `8796777` |
+| a companion test | **EXISTS** — `scripts/test-order-claim-race.js`, also untracked |
+| callers of the exported callables | **none anywhere** outside `index.js` and that test |
+| what `claimOrder` / `releaseOrderClaim` do | documented and functionally verified — see below |
+
+### CORRECTION (2026-09-05)
+
+An earlier revision of this table said no trace document existed and that the module's behaviour
+was "knowable only by reading the file's own source". **Both were wrong**, and the error mattered:
+it framed this as a total evidence vacuum, which argues for removal, when the evidence actually
+argues for attribution.
+
+`docs/ORDER_CLAIM_PROVENANCE_TRACE.md` is a dedicated 100-line trace of exactly this module. It
+establishes:
+
+* **What it does.** Atomic, server-decided order claiming for multi-cashier POS — one online order
+  visible on many stations, exactly one cashier may take it, decided inside a Firestore
+  transaction. It writes only `claimedBy` / `claimedByRole` / `claimedAt` / `claimDeviceId` /
+  `claimStatus`, and never touches order status, payment, inventory, commission or notifications.
+* **Three embedded technical claims, independently verified against the real codebase** — that
+  `orderAdvance` in `notify.js` reads-then-writes with no transaction (true); that
+  `firestore.rules` only permits creating `shopEmployees/{uid}` when
+  `shopOwnerId == request.auth.uid` (true, verbatim); and that `shopEmployees` is real,
+  widely-used infrastructure (true, 25 referencing files).
+* **A companion test that runs.** `scripts/test-order-claim-race.js`, written two minutes after the
+  module, refuses to run without a live Firestore emulator and fires genuine concurrent contention
+  via `Promise.all`. Executed against a real emulator: **27 passed, 0 failed** — 10 concurrent
+  claimers yield exactly 1 winner; the winner's double-tap is idempotent; 100 concurrent claims
+  across 10 orders spread across 7 distinct winners; cross-shop denial holds; terminal states are
+  refused.
+
+**This does not establish provenance and the classification stays C.** Who wrote it, under what
+authorization, as part of which effort, and whether it was ever reviewed remain unknown. Code
+quality is not provenance.
+
+**But it changes which remedy fits.** This is not "we do not know if this is safe" — it is
+verifiably real, tested, working code that nobody formally attributed before it landed in a
+commit's working tree. That is a **process gap, not an integrity risk**, and a process gap is
+closed by an explicit decision to attribute and admit the work, not by reconstruction or deletion.
+The two clean choices above both remain open; the evidence simply no longer points at removal by
+default.
 
 Compare the other three blockers, each of which **does** have an owner and a documented reason
 for being where it is:
@@ -103,6 +142,37 @@ be running.
    change plus a closure re-certification, and it would take the blocker count from 4 to 3.
 
 ---
+
+## Decision support — what each of the four actually costs
+
+Traced 2026-09-05, read-only. Every one of the four is a **self-contained `require` + `exports`
+pair** in one contiguous block of `functions/index.js` (lines 11752–11768). **No binding is
+referenced anywhere else in `index.js`** — no internal use, no cross-wiring. So the mechanical
+cost of either remedy is small in every case; what differs is whether anything depends on the
+callables.
+
+| module | exports it contributes | callers outside `index.js` | mechanical removal |
+|---|---|---|---|
+| `order-claim` | `claimOrder`, `releaseOrderClaim` | **none** except its own emulator test | 3 lines |
+| `manual-till-orders` | `createManualTillOrder`, `attestManualTillPayment` | **`checkout.html:1875` calls `createManualTillOrder`** | 3 lines, **but see below** |
+| `commission-invoice` | `issueCommissionInvoice` | none (only its own suite) | 2 lines |
+| `pos-mpesa-refs` | `claimPosMpesaReference`, `onPosTransactionMpesaRef` | none (only its own suite) | 3 lines |
+
+**`manual-till-orders` must not be removed.** `checkout.html` calls `createManualTillOrder` on a
+live customer-facing page. That path is not dead — it is **server-gated**:
+`functions/checkout-mode.js` returns `{ mode: 'unavailable', reason: 'manual_payment_unavailable' }`
+for `manual_payment`, and says why in its own comment — *"its production order lifecycle
+(createManualTillOrder + attestManualTillPayment) is not yet deployed"*. The gate is designed to be
+flipped when that lifecycle ships. Its correct path is therefore **commit when certified**, not
+removal, which confirms its **B — gated** disposition from the other direction.
+
+For `order-claim`, `commission-invoice` and `pos-mpesa-refs`, nothing outside their own test
+suites would break if the requires were removed — so for those three the decision is purely
+"is this feature wanted?", uncomplicated by breakage.
+
+**If `order-claim` is attributed and committed, its companion test should be committed with it.**
+`scripts/test-order-claim-race.js` is untracked too, and a module admitted without the test that
+proves its concurrency property would be admitted on weaker evidence than currently exists.
 
 ## Verifying the current state
 
