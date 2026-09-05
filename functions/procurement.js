@@ -1249,12 +1249,12 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
     dueDate, amount, vatAmount,
   } = request.data ?? {};
 
-  if (!poId)          _err('poId is required.');
   if (!invoiceNumber) _err('invoiceNumber is required.');
 
-  const poSnap = await db.collection('procPurchaseOrders').doc(poId).get();
-  if (!poSnap.exists) _err('Purchase order not found.', 'not-found');
-  const po = poSnap.data();
+  /* MERCHANT SCOPING (Slice E). Previously only _requireAuth, so any authenticated user
+     could raise an invoice against any merchant's purchase order — a payable created on
+     someone else's books. The buyer is derived from the authoritative PO. */
+  const { po } = await _assertPoAuthority(request, poId);
 
   if (['draft', 'pending_approval', 'cancelled'].includes(po.status)) {
     _err(`Cannot create invoice for a PO in status '${po.status}'.`);
@@ -1266,17 +1266,45 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
   const invTotal     = +(invAmount + invVat).toFixed(2);
 
   /* Warn if invoice total deviates from PO total by more than 5% */
-  const deviation = Math.abs(invTotal - po.total) / po.total;
+  /* A zero-total PO made this NaN, and `NaN > 0.05` is false — so the tolerance check
+     silently passed for any invoice amount. Guarded explicitly. */
+  const poTotal = Number(po.total) || 0;
+  if (poTotal <= 0) _err('Cannot invoice against a purchase order with no total.');
+  const deviation = Math.abs(invTotal - poTotal) / poTotal;
   if (deviation > 0.05) {
-    _err(`Invoice total KES ${invTotal.toLocaleString()} deviates more than 5% from PO total KES ${po.total.toLocaleString()}. Raise a dispute with the supplier.`);
+    _err(`Invoice total KES ${invTotal.toLocaleString()} deviates more than 5% from PO total KES ${poTotal.toLocaleString()}. Raise a dispute with the supplier.`);
   }
 
-  const invoiceId = _genId('inv');
+  /* ── WHICH GRNs MAY BE REFERENCED ────────────────────────────────────────────────
+     grnId was accepted and sanitised but never verified, so an invoice could cite any
+     string — including another merchant's GRN, or one belonging to a different PO. A
+     receipt reference that nobody checks is worse than none: it looks like provenance.
+     If cited, the GRN must exist, belong to THIS purchase order, and to the same
+     merchant. */
+  let verifiedGrnId = null;
+  if (grnId) {
+    const gSnap = await db.collection('procGRN').doc(_san(String(grnId), 100)).get();
+    if (!gSnap.exists) _err('Referenced GRN not found.', 'not-found');
+    const g = gSnap.data() || {};
+    if (g.poId !== poId) _err('Referenced GRN belongs to a different purchase order.');
+    if (g.merchantId && po.merchantId && g.merchantId !== po.merchantId) {
+      _err('Referenced GRN belongs to a different merchant.', 'permission-denied');
+    }
+    verifiedGrnId = gSnap.id;
+  }
+
+  /* ── DUPLICATE INVOICE ───────────────────────────────────────────────────────────
+     The id was random, so submitting the same supplier invoice twice created two
+     payable documents for one debt — and each was independently payable. A supplier's
+     invoice number is unique per supplier by definition, so the id is derived from
+     (poId, supplierId, invoiceNumber). A resubmission addresses the same document. */
+  const invoiceId = _deterministicId(
+    poId + '|' + String(po.supplierId) + '|' + _san(String(invoiceNumber), 100), 'inv');
 
   const invData = {
     invoiceId,
     poId,
-    grnId:          grnId ? _san(grnId, 100) : null,
+    grnId:          verifiedGrnId,
     supplierId:     po.supplierId,
     merchantId:     po.merchantId,
     invoiceNumber:  _san(invoiceNumber, 100),
@@ -1295,7 +1323,17 @@ const createSupplierInvoice = onCall(OPT, async (request) => {
     updatedAt:      F.serverTimestamp(),
   };
 
-  await db.collection('procSupplierInvoices').doc(invoiceId).set(invData);
+  /* create(), not set(): a second submission of the same supplier invoice must be
+     REJECTED rather than silently overwriting a document that may already be paid. */
+  const invRefNew = db.collection('procSupplierInvoices').doc(invoiceId);
+  try {
+    await invRefNew.create(invData);
+  } catch (e) {
+    if (e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(e.message || ''))) {
+      _err('An invoice with this number already exists for this purchase order.', 'already-exists');
+    }
+    throw e;
+  }
 
   /* Update PO to invoiced if not already paid */
   if (!['invoiced', 'paid'].includes(po.status)) {
@@ -1330,94 +1368,106 @@ const approveAndPayInvoice = onCall(OPT, async (request) => {
   const invRef  = db.collection('procSupplierInvoices').doc(invoiceId);
   const invSnap = await invRef.get();
   if (!invSnap.exists) _err('Invoice not found.', 'not-found');
+  const invPre = invSnap.data() || {};
 
-  const inv = invSnap.data();
+  /* MERCHANT SCOPING (Slice E), composed with the existing admin requirement rather than
+     replacing it. _requireAdmin proves a platform role, never that it is held FOR THIS
+     MERCHANT — the same gap Slice C closed on approval, and it matters more here because
+     this moves money. The merchant is read off the invoice. */
+  await _assertMerchantAuthority(request, invPre.merchantId);
 
-  /* Idempotency guard */
-  if (inv.paidAt !== null) {
-    _err('Invoice has already been paid. Duplicate payment prevented.', 'already-exists');
-  }
-  if (inv.status === 'disputed') {
-    _err('Cannot pay a disputed invoice. Resolve the dispute first.');
-  }
-  if (!['pending', 'approved'].includes(inv.status)) {
-    _err(`Cannot pay invoice in status '${inv.status}'.`);
-  }
+  /* ── ONE ATOMIC, IDEMPOTENT PAYMENT ─────────────────────────────────────────────
+     The paid-check was a read OUTSIDE the write batch. Two concurrent payment attempts
+     both observed paidAt === null, both proceeded, and both committed: the supplier
+     balance was decremented twice and four ledger rows were written for one debt. The
+     check now lives inside the transaction that performs the writes, so the loser's read
+     is invalidated and it retries into the already-paid branch.
 
-  const now   = F.serverTimestamp();
-  const batch = db.batch();
+     Ledger ids are derived from the invoice too, so even a retry that somehow reached the
+     write stage would address the same two rows rather than appending new ones. */
+  const result = await db.runTransaction(async (t) => {
+    const snap = await t.get(invRef);
+    if (!snap.exists) _err('Invoice not found.', 'not-found');
+    const inv = snap.data() || {};
 
-  /* Update invoice */
-  batch.update(invRef, {
-    status:        'paid',
-    paidAt:        now,
-    paidBy:        uid,
-    paymentMethod: _san(paymentMethod, 50),
-    paymentRef:    paymentRef ? _san(paymentRef, 200) : null,
-    updatedAt:     now,
+    /* Already paid: report the ORIGINAL outcome. A retry of a completed payment is not a
+       new payment, and must not be reported as a failure that invites another attempt. */
+    if (inv.paidAt) {
+      return { invoiceId, status: 'paid', total: inv.total, duplicate: true };
+    }
+    if (inv.status === 'disputed') {
+      _err('Cannot pay a disputed invoice. Resolve the dispute first.');
+    }
+    if (!['pending', 'approved'].includes(inv.status)) {
+      _err("Cannot pay invoice in status '" + inv.status + "'.");
+    }
+
+    /* The supplier must exist. Unlike a stock document, a missing supplier is not
+       something to create on the fly — paying a counterparty the system has no record of
+       is exactly the state this slice exists to prevent. */
+    const supplierRef  = db.collection('procSuppliers').doc(String(inv.supplierId));
+    const supplierSnap = await t.get(supplierRef);
+    if (!supplierSnap.exists) _err('Supplier not found for this invoice.', 'failed-precondition');
+
+    const now = F.serverTimestamp();
+    const method = _san(paymentMethod, 50);
+    const ref    = paymentRef ? _san(paymentRef, 200) : null;
+
+    t.update(invRef, {
+      status:        'paid',
+      paidAt:        now,
+      paidBy:        uid,
+      paymentMethod: method,
+      paymentRef:    ref,
+      updatedAt:     now,
+    });
+
+    t.update(supplierRef, {
+      currentBalance: F.increment(-inv.total),
+      updatedAt:      now,
+    });
+
+    /* Double-entry, unchanged in meaning:
+         DEBIT  accounts_payable  (liability decreases)
+         CREDIT bank/cash/mpesa   (asset decreases) */
+    const common = {
+      amount:      inv.total,
+      currency:    'KES',
+      refType:     'supplier_invoice',
+      refId:       invoiceId,
+      supplierId:  inv.supplierId,
+      merchantId:  inv.merchantId,
+      poId:        inv.poId,
+      description: 'Supplier invoice payment - ' + inv.invoiceNumber,
+      performedBy: uid,
+      createdAt:   now,
+    };
+    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|debit', 'led')),
+      Object.assign({ type: 'debit', account: 'accounts_payable' }, common));
+    t.set(db.collection('paymentLedger').doc(_deterministicId(invoiceId + '|credit', 'led')),
+      Object.assign({ type: 'credit', account: method, paymentRef: ref }, common));
+
+    if (inv.poId) {
+      t.update(db.collection('procPurchaseOrders').doc(inv.poId), {
+        status:    'paid',
+        updatedAt: now,
+      });
+    }
+
+    return { invoiceId, status: 'paid', total: inv.total, duplicate: false };
   });
 
-  /* Update supplier currentBalance */
-  const supplierRef = db.collection('procSuppliers').doc(inv.supplierId);
-  batch.update(supplierRef, {
-    currentBalance: F.increment(-inv.total),
-    updatedAt:      now,
-  });
-
-  /* Double-entry ledger:
-     DEBIT  accounts_payable  (liability decreases)
-     CREDIT bank/cash         (asset decreases) */
-  const debitRef = db.collection('paymentLedger').doc();
-  batch.set(debitRef, {
-    type:        'debit',
-    account:     'accounts_payable',
-    amount:      inv.total,
-    currency:    'KES',
-    refType:     'supplier_invoice',
-    refId:       invoiceId,
-    supplierId:  inv.supplierId,
-    merchantId:  inv.merchantId,
-    poId:        inv.poId,
-    description: `Supplier invoice payment — ${inv.invoiceNumber}`,
-    performedBy: uid,
-    createdAt:   now,
-  });
-
-  const creditRef = db.collection('paymentLedger').doc();
-  batch.set(creditRef, {
-    type:        'credit',
-    account:     paymentMethod,
-    amount:      inv.total,
-    currency:    'KES',
-    refType:     'supplier_invoice',
-    refId:       invoiceId,
-    supplierId:  inv.supplierId,
-    merchantId:  inv.merchantId,
-    poId:        inv.poId,
-    description: `Supplier invoice payment — ${inv.invoiceNumber}`,
-    paymentRef:  paymentRef ? _san(paymentRef, 200) : null,
-    performedBy: uid,
-    createdAt:   now,
-  });
-
-  /* Update PO to paid */
-  if (inv.poId) {
-    const poRef = db.collection('procPurchaseOrders').doc(inv.poId);
-    batch.update(poRef, {
-      status:    'paid',
-      updatedAt: now,
+  if (!result.duplicate) {
+    await _audit(uid, 'supplier_invoice_paid', invoiceId, {
+      merchantId: invPre.merchantId, supplierId: invPre.supplierId,
+      total: result.total, paymentMethod,
     });
   }
 
-  await batch.commit();
-
-  await _audit(uid, 'supplier_invoice_paid', invoiceId, {
-    merchantId: inv.merchantId, supplierId: inv.supplierId,
-    total: inv.total, paymentMethod,
+  logger.info('procurement.approveAndPayInvoice', {
+    invoiceId, total: result.total, paymentMethod, duplicate: result.duplicate,
   });
-
-  logger.info('procurement.approveAndPayInvoice', { invoiceId, total: inv.total, paymentMethod });
-  return { invoiceId, status: 'paid', total: inv.total };
+  return result;
 });
 
 /* ════════════════════════════════════════════════════════════════

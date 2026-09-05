@@ -1,3 +1,81 @@
+## 2026-09-05 — Slice E: supplier invoice + payment
+
+**Files:** `functions/procurement.js`, `scripts/test-invoice-payment-slice-e.js` (new),
+`CHANGELOG.md`. **Not deployed**; HOLD remains. This slice touches money, so the bar was
+*a failed, duplicated, unauthorized or partially executed payment must never produce an
+incorrect financial state.*
+
+### Five defects fixed
+
+1. **Invoices had no merchant scoping.** `createSupplierInvoice` required only `_requireAuth`,
+   so **any authenticated user could raise a payable against any merchant's purchase order**.
+   Now gated by `_assertPoAuthority` — the buyer comes from the authoritative PO.
+2. **`grnId` was accepted but never verified.** An invoice could cite any string, including
+   another merchant's GRN or one from a different PO. A receipt reference nobody checks is
+   worse than none: it looks like provenance. A cited GRN must now exist, belong to **this**
+   PO, and to the same merchant.
+3. **Duplicate invoices were freely creatable.** The id was random, so submitting the same
+   supplier invoice number twice produced two payable documents for one debt — each
+   independently payable. The id is now derived from (poId, supplierId, invoiceNumber) and
+   written with `create()`, so a resubmission is **rejected** rather than silently
+   overwriting a document that may already be paid.
+4. **Concurrent double payment was possible.** The `paidAt` guard was a read *outside* the
+   write batch: two concurrent attempts both observed `paidAt === null`, both proceeded, and
+   both committed — decrementing the supplier balance twice and writing four ledger rows for
+   one debt. The check now lives inside a transaction with the writes, and ledger row ids are
+   derived from the invoice so even a retry reaching the write stage addresses the same two
+   rows. A duplicate returns the original outcome with `duplicate: true` rather than an error
+   that invites another attempt.
+5. **Payment had no merchant scoping.** `_requireAdmin` admits `token.admin`,
+   `token.superAdmin`, **or `role >= 4`** — a role, never a tenant. Merchant scoping is now
+   composed with it, so a `role >= 4` principal *without* a platform claim can no longer pay
+   another merchant's invoice. A **platform** admin remains permitted, exactly as in Slice C:
+   this preserves the existing model rather than silently narrowing it, and both directions
+   are asserted.
+
+Also fixed: a zero-total PO made the 5% deviation check `NaN`, and `NaN > 0.05` is false — so
+the tolerance silently passed for any invoice amount. Now refused explicitly. And a payment
+whose supplier document is missing is refused rather than half-applied: unlike a stock
+document, a counterparty the system has no record of is precisely what this slice prevents.
+
+### Reported, NOT changed — canonical semantics to decide separately
+
+- **Invoice totals are client-supplied**, not server-derived. The server computes only
+  `amount + vatAmount` and enforces a ±5% band against the PO total. Within that band a caller
+  names the figure. Deriving totals from the GRN would be a semantic redesign, not a fix.
+- **Payment moves no money.** It is a bookkeeping event: invoice status, supplier balance,
+  double-entry ledger, PO status. There is no wallet, cash-drawer or settlement side effect.
+  Whether payment should initiate a real transfer is a product decision.
+
+### Certification
+
+`scripts/test-invoice-payment-slice-e.js` — **63/63 checks, 3/3 sabotage catches**, executing
+the real `createSupplierInvoice` and `approveAndPayInvoice` against an injected fixture.
+Money assertions read the resulting store: ledger row count, supplier balance, invoice status.
+
+**Concurrent duplicate payment** is exercised with an interleaved contention hook, not a
+sequential retry — the sequential path would pass even against the defective read-then-write
+shape. Result: exactly two ledger rows, balance decremented once, invoice paid once, both
+callers seeing the same outcome. Partial-execution guards proven: a payment that fails on a
+missing supplier writes **no** ledger row and leaves the invoice `pending`.
+
+Authority matrix: buyer → own invoice ✅; A → B PO ❌; supplier principal → buyer-side invoice
+❌ and payment ❌; non-admin payment ❌; `role>=4` without platform claim → other merchant ❌;
+platform admin ✅ (documented). RESTORE five ways — paid-check outside the transaction, random
+ledger ids, removed merchant scoping, random invoice id, unvalidated GRN — each drives exit 1
+and each restore returns 0, every sabotage with an applied-check.
+
+**Preserved:** double-entry semantics, the 5% tolerance, the admin requirement, Slice C's
+send/approve gates, Slice D's receipt hardening, and `sendPurchaseOrder`'s delivery
+abstraction. **No Firestore rule widened. API changes:** `approveAndPayInvoice` returns an
+additional `duplicate` flag; export count unchanged at **1522**. **Database changes:** none —
+invoice and ledger ids become deterministic for new documents only. **Breaking changes:**
+resubmitting an existing supplier invoice number now returns `already-exists`; unauthorized
+callers receive `permission-denied`. Both are the defects being fixed.
+
+**Still blocking deployment, unchanged and not mine:** `functions/pos-zero-friction.js` requires
+`./merchant-identity`, which does not exist and was never tracked.
+
 ## 2026-09-05 — Slice D hardening: receipt idempotency, cumulative state, first-receipt creation
 
 **Files:** `functions/procurement.js`, `scripts/test-grn-receiving-slice-d.js`, `CHANGELOG.md`.
