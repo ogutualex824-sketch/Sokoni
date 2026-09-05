@@ -1,3 +1,69 @@
+## 2026-09-05 — Slice J1: the Merchant V2 Supply workspace module
+
+**Files:** `sokoni-merchant-supply.js` (new), `scripts/test-supply-workspace-slice-j.js` (new),
+`CHANGELOG.md`. **`sokoni-merchant-routes.js` and `merchant-v2.html` are untouched** —
+route registration is J2, deliberately deferred. **Not deployed**; HOLD remains.
+
+**Supply is a separate operational system from Sales.** Sales is selling to your customers;
+Supply is acquiring, receiving, storing and supplying stock between businesses. 18 sections
+across Overview, Buy, My Supply, Warehouse, Analytics and Drafts, over the canonical
+procurement engine certified in Slices A–I.
+
+**Every figure is authoritative.** No local computation over listing prices, no multiplier, no
+seeded sample, no fallback catalogue. An absent figure renders `—`, never `0` — an unknown
+shown as zero is an invented fact, the defect `5a45d34` removed from `pos-bi.html`. A failed
+read shows the failure and its reason; it does not degrade into plausible rows.
+
+**Three sections are deliberately unavailable**, each saying why rather than showing something:
+**Find Suppliers** (discovery has no backing, and participation in supply is *not* consent to
+appear in a directory — a visibility decision, not a missing SELECT), **Supply Catalogue** (a
+real wholesale engine exists but its only client is the fabricated catalogue, which is
+deliberately not reused), and **time-ordered views** (the read layer orders by document id on
+purpose; a `createdAt` ordering would silently exclude records missing that field).
+
+**Business identity is not negotiable.** Every read is scoped by the `merchantId` that
+`SokoniShell.merchantContext()` resolved server-side. The module never falls back to
+`activeShopId`, never reads localStorage for identity, and never picks a business for an owner
+who has more than one — an ambiguous owner gets a **selection state and no data**, because
+showing the wrong business's spend, stock and payables is worse than showing nothing.
+
+**No writes.** This surface reads. Approving, sending, receiving and paying are
+authority-bearing actions with their own certified gates; wiring them is a later, deliberate
+slice. Payments are labelled a **bookkeeping record that does not itself move money**, with the
+settlement caveat stated in the UI.
+
+**Certification.** `scripts/test-supply-workspace-slice-j.js` — **62/62 checks, 8/8 sabotage
+catches**, executing the real module against a DOM double and a callable double that records
+every invocation, so *"did it invent a write"* and *"did it display a figure the server never
+sent"* are answered by **observing behaviour**. Proven: ambiguous identity blocks rendering with
+**zero reads attempted**; `activeShopId` never appears as a fallback; a failed read renders no
+numbers and no plausible names; an absent figure renders the dash and not `0`; unavailable
+sections make **no server call of their own** and render no table and no prices; not one
+write-shaped callable is invoked across all twelve backed sections. RESTORE five ways —
+falling back to `activeShopId`, rendering unknown as `0`, falling back to sample rows on
+failure, letting an unavailable section render a catalogue, and inventing a write — each drives
+exit 1 and each restore returns 0, every sabotage with an applied-check.
+
+**Five of my own test defects, corrected rather than worked around:** a supplier fixture omitted
+`isSokoniBusiness`, which `listSuppliers` computes server-side — testing a response shape the
+API never produces; two detectors matched the module's own header comment *documenting* that it
+never touches localStorage or the B2B catalogue (a detector that flags its documentation is a
+bad detector — both now strip comments first, with sabotage proving the stripper hides no real
+code); and two unavailable-section checks counted calls since mount rather than since the
+section was opened, so Overview's legitimate read looked like theirs.
+
+**Provenance boundary held.** `sokoni-merchant-routes.js` is modified-uncommitted by another
+workstream and `scripts/test-merchant-routes.js` is already red (57 passed, 2 failed — sidebar
+order, 18 primaries vs 17) from that edit. J1 does not touch either, does not register a route,
+and does not commit against those unrelated failures. The suite reads **57/2 before and after**.
+Route registration is **J2**, to be done once the registry is clean.
+
+**API changes:** none — the module consumes existing Slice I callables. **Database changes:**
+none. **Breaking changes:** none; nothing mounts it yet.
+
+**Deployment blockers unchanged:** `functions/tenant-identity.js` and
+`functions/merchant-identity.js` remain untracked with committed code requiring them.
+
 ## 2026-09-05 — Slice I: the merchant-scoped read layer
 
 **Files:** `functions/procurement.js`, `functions/index.js` (+6 exports),
