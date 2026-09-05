@@ -317,7 +317,14 @@ function notFoundError() {
     /await _put\(S\.POS, po\);/.test(SRC));
   check('PRESERVED: the observable cloud-sync path from the earlier fix',
     /op: 'posSupplierSync'/.test(SRC) && /retryFailedSyncs/.test(SRC));
-  check('PRESERVED: sendPurchaseOrder is still exported', /createPurchaseOrder, sendPurchaseOrder, getPurchaseOrder,/.test(SRC));
+  /* Assert the EXPORT, not the formatting. An earlier version matched a whole line of
+     adjacent names and broke when Slice B added submitPurchaseOrder and re-wrapped the
+     line — a false failure about a function that was never removed. */
+  const RETURN_BLOCK = (/\n  return \{[\s\S]*?\n  \};/.exec(SRC) || [''])[0];
+  check('PRESERVED: sendPurchaseOrder is still exported',
+    /\bsendPurchaseOrder\b/.test(RETURN_BLOCK));
+  sab('the export detector is not vacuous — it fails on a removed export',
+    !/\bsendPurchaseOrder\b/.test('  return {\n    init, on, off,\n    createPurchaseOrder,\n  };'));
 
   const PROC = fs.readFileSync(path.join(ROOT, 'functions/procurement.js'), 'utf8');
   check('UNTOUCHED: canonical procurement.sendPurchaseOrder still reads procPurchaseOrders',

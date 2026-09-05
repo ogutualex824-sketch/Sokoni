@@ -59,12 +59,21 @@ sab('a missing dispatcher merge is detected', !/posSupplierSync\._h/.test('const
 /* All five denied collections are covered, and only those. */
 const ENT = mod._ENTITIES;
 const COLLECTIONS = Object.keys(ENT).map((k) => ENT[k].collection).sort();
-check('covers exactly the 5 collections pos-suppliers.js writes',
+/* Slice B removed purchaseOrder: POs are owned by the canonical procurement engine and
+   no browser-side pos* PO cloud writer may survive. The remaining four still route here
+   until Slices D and E converge them. */
+check('covers exactly the 4 collections still written via this op',
   JSON.stringify(COLLECTIONS) === JSON.stringify(
-    ['posGRN', 'posPurchaseOrders', 'posSupplierInvoices', 'posSupplierPayments', 'posSuppliers']));
-['supplier', 'purchaseOrder', 'grn', 'supplierInvoice', 'supplierPayment'].forEach((e) => {
+    ['posGRN', 'posSupplierInvoices', 'posSupplierPayments', 'posSuppliers']));
+['supplier', 'grn', 'supplierInvoice', 'supplierPayment'].forEach((e) => {
   check('entity type "' + e + '" is registered', Object.prototype.hasOwnProperty.call(ENT, e));
 });
+check('purchaseOrder is DELIBERATELY absent — no pos* PO cloud writer',
+  !Object.prototype.hasOwnProperty.call(ENT, 'purchaseOrder'));
+check('posPurchaseOrders is not a reachable target collection',
+  COLLECTIONS.indexOf('posPurchaseOrders') === -1);
+sab('the detector would catch a reintroduced PO entity',
+  Object.prototype.hasOwnProperty.call({ purchaseOrder: 1 }, 'purchaseOrder'));
 
 /* ══════════════════════════════════════════════════════════════
    SECTION 2 — the authority model, executed
@@ -145,8 +154,8 @@ const auth = (uid, token) => ({ uid, token: token || {} });
     catch (e) { return /data must be an object/i.test(e.message || String(e)); }
   })());
 
-  /* Per-entity required-field validation, all five types. */
-  const REQUIRED = { supplier: 'name', purchaseOrder: 'supplierId', grn: 'supplierId',
+  /* Per-entity required-field validation. purchaseOrder is absent by design since Slice B. */
+  const REQUIRED = { supplier: 'name', grn: 'supplierId',
                      supplierInvoice: 'supplierId', supplierPayment: 'supplierId' };
   for (const ent of Object.keys(REQUIRED)) {
     check('entity "' + ent + '" rejects a payload missing ' + REQUIRED[ent], await (async () => {

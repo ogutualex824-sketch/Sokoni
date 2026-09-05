@@ -1,3 +1,68 @@
+## 2026-09-05 — Slice B: canonical PO convergence
+
+**Files:** `pos-suppliers.js`, `functions/procurement.js`, `functions/pos-supplier-sync.js`,
+`scripts/test-po-convergence-slice-b.js` (new), `scripts/test-supplier-sync-authority.js`,
+`scripts/test-po-send-honesty.js`, `docs/DEFECT_FABRICATED_B2B_CATALOGUE.md` (new),
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**One PO engine.** Purchase orders now belong exclusively to the canonical procurement
+engine. The browser-side `pos*` PO cloud writer is gone: the three `_sync('posPurchaseOrders',
+…)` call sites are removed, and `purchaseOrder` is removed from the `posSupplierSync` entity
+registry, so the op **rejects** a PO write at runtime rather than merely not being called.
+The remaining four entities (supplier, GRN, invoice, payment) still route there until
+Slices D and E converge them.
+
+**Server-issued identity.** The client `_poNo()` generator is deleted. It reset `_poSeq` to 0
+on every page load, so two devices — or one device twice — reliably minted the same
+`PO-2026-00001`. A PO number appears on a supplier's invoice and delivery note; it cannot come
+from a counter that restarts. The server issues both the id and the number from a
+transactional `procCounters` document.
+
+**IndexedDB is a draft/offline queue, never cloud truth.** A locally composed PO gets
+`status:'local_draft'`, no `poNo` and no `procPoId`. `local_draft` is deliberately not a
+lifecycle state. New `submitPurchaseOrder(poId)` is the only path to the cloud: it calls the
+canonical `createPurchaseOrder`, and only an explicit server `poId` reconciles the record —
+adopting the canonical id and server PO number, and advancing to `submitted`. Any failure
+(rejection, missing id, empty reply, offline, no service) leaves the record a `local_draft`,
+records `lastSubmitError`, emits `po:submit-failed` and **throws**. Re-submitting an already
+submitted PO is idempotent and makes no second call. New `getUnsubmittedDrafts()` exposes
+records lacking a `procPoId`, for Slice G.
+
+**Canonical PO shape extended, additively.** `buyerBusinessId` (the **authorized** merchantId
+from the authority primitive, never the payload's) and `supplierBusinessId` (read off the
+supplier record, **never accepted from the caller** — a client asserting "this PO supplies
+business X" would be declaring a relationship it has no authority to declare). Both nullable;
+`merchantId` and `supplierId` retained unchanged, so nothing migrates and Slice B2 can populate
+the relationship without a schema migration.
+
+**Certification.** `scripts/test-po-convergence-slice-b.js` — **80/80 checks, 9/9 sabotage
+catches**, executed in a VM sandbox with IndexedDB / firebase / navigator doubles. Negative
+paths cover a rejected submission, a result with no canonical id, an empty reply, offline and
+no-service — each asserted to leave the draft unpromoted, uninvented and reported. Sabotage is
+executed and differential: with the promotion guard removed an **empty** server reply promotes
+the draft and stores a fabricated id; with the guard present the identical reply leaves it a
+`local_draft`; the two verdicts are asserted to differ. RESTORE both ways — reinstating the
+client generator, or the `pos*` PO entity — each drives exit 1, and each restore returns 0.
+
+**Two test-contract updates, recorded rather than quietly made.** `test-supplier-sync-authority`
+now asserts four entities and that `purchaseOrder` is **deliberately** absent (73/73).
+`test-po-send-honesty` had a brittle detector matching a whole line of adjacent export names;
+it broke when this slice re-wrapped that line and reported a false failure about a function
+that was never removed. It now asserts the export itself and carries a sabotage check proving
+it is not vacuous (44/44).
+
+**Also tracked, not fixed:** `docs/DEFECT_FABRICATED_B2B_CATALOGUE.md` — `sokoni-b2b.js` serves
+37 hardcoded invented businesses, prices, MOQs and savings as a live marketplace, with no
+callable reference at all. Same class as the `pos-bi.html` defect closed in `5a45d34`. A real
+engine exists (`b2b-wholesale.js`, 12 handlers, live via `servicesDispatch`) and the client
+does not call it; all its collections are empty in both databases.
+
+**Security changes:** none beyond Slice A. **No Firestore rule widened.** **API changes:** none
+— `submitPurchaseOrder` calls the existing `createPurchaseOrder`; export count unchanged at
+1520. **Breaking changes:** locally composed POs now start as `local_draft` with no PO number
+until submitted. **Database changes:** none; `buyerBusinessId`/`supplierBusinessId` are
+additive and nullable on new documents only.
+
 ## 2026-09-05 — Slice A: merchant-scoped authority on the procurement supplier surface
 
 **Files:** `functions/merchant-authority.js` (ported), `functions/procurement.js`,

@@ -61,7 +61,10 @@ const REQUIRED_PERMISSION = 'pos';
 ═══════════════════════════════════════════════════════════════ */
 const ENTITIES = {
   supplier:        { collection: 'posSuppliers',        required: ['name'] },
-  purchaseOrder:   { collection: 'posPurchaseOrders',   required: ['supplierId'] },
+  /* purchaseOrder REMOVED (Slice B, 2026-09-05). Purchase orders are owned by the
+     canonical procurement engine — procPurchaseOrders, via createPurchaseOrder. No
+     browser-side pos* PO cloud writer may survive; re-adding an entry here would
+     recreate the second PO engine the convergence exists to eliminate. */
   grn:             { collection: 'posGRN',              required: ['supplierId'] },
   supplierInvoice: { collection: 'posSupplierInvoices', required: ['supplierId'] },
   supplierPayment: { collection: 'posSupplierPayments', required: ['supplierId'] },

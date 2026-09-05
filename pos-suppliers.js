@@ -72,7 +72,7 @@ window.PosSuppliers = (() => {
   /* entity keys accepted by the posSupplierSync op, keyed by local store */
   const SYNC_ENTITY = {
     posSuppliers:         'supplier',
-    posPurchaseOrders:    'purchaseOrder',
+    /* posPurchaseOrders intentionally absent — POs go to the canonical engine. */
     posGRN:               'grn',
     posSupplierInvoices:  'supplierInvoice',
     posSupplierPayments:  'supplierPayment',
@@ -151,9 +151,10 @@ window.PosSuppliers = (() => {
     }
   }
 
-  /* ── PO number generator ── */
-  let _poSeq = 0;
-  function _poNo() { return 'PO-' + new Date().getFullYear() + '-' + String(++_poSeq).padStart(5, '0'); }
+  /* PO numbering is SERVER-generated (procCounters, transactional). The client generator
+     removed here reset _poSeq to 0 on every page load, so two devices — or one device
+     twice — reliably minted the same PO-YYYY-00001. A PO number appears on a supplier's
+     invoice and delivery note; it cannot come from a counter that restarts. */
   function _grnNo()  { return 'GRN-' + Date.now().toString().slice(-8); }
   function _invNo()  { return 'INV-' + Date.now().toString().slice(-8); }
 
@@ -228,14 +229,19 @@ window.PosSuppliers = (() => {
     const totalCost = items.reduce((s, i) => s + i.lineTotal, 0);
     const po = {
       id:           data.id || uid(),
-      poNo:         data.poNo || _poNo(),
+      /* No poNo. A local draft has no canonical number until the server issues one. */
+      poNo:         null,
+      procPoId:     null,   /* set on submission — the canonical procPurchaseOrders id */
       supplierId:   data.supplierId,
       supplierName: data.supplierName || '',
       branchId:     data.branchId || _branchId,
       items,
       totalCost,
       currency:     data.currency || 'KES',
-      status:       'draft',   /* draft|sent|partial|received|cancelled */
+      /* local_draft is NOT a lifecycle state — it means "composed here, never submitted".
+         Cloud truth lives in procPurchaseOrders; this record is a draft/offline queue entry
+         and can never itself become sent/received/invoiced/paid. */
+      status:       'local_draft',
       expectedDate: data.expectedDate || null,
       notes:        data.notes || '',
       createdBy:    data.createdBy || '',
@@ -245,9 +251,93 @@ window.PosSuppliers = (() => {
       receivedAt:   null,
     };
     await _put(S.POS, po);
-    _sync('posPurchaseOrders', po.id, po);
+    /* No pos* cloud mirror for purchase orders. The canonical engine owns PO truth;
+       submitPurchaseOrder() below is the only path to the cloud. */
     emit('po:created', po);
     return po;
+  }
+
+  /**
+   * Submit a local draft to the CANONICAL procurement engine.
+   *
+   * This is the only path from a local draft to cloud truth. The server owns PO identity:
+   * it issues the procPurchaseOrders id and the human-readable PO number from a
+   * transactional counter, and returns both. The local record is then reconciled — it
+   * keeps its local id for UI continuity but gains procPoId/poNo and moves to 'submitted'.
+   *
+   * The draft NEVER becomes sent, received, invoiced or paid here. Those are lifecycle
+   * states of the canonical PO and are only ever reflected back from an authoritative
+   * server response.
+   *
+   * merchantId is passed as a REQUEST, not as authority — the backend resolves the
+   * authorized merchant from businesses/{id} and ignores a caller who names one they are
+   * not authorized for.
+   *
+   * @returns {Promise<object>} the reconciled local record
+   * @throws  {Error} when the server did not accept the draft; the local draft is kept.
+   */
+  async function submitPurchaseOrder(poId) {
+    const po = await _get(S.POS, poId);
+    if (!po) throw new Error('Purchase order not found');
+    if (po.procPoId) return po;                       /* already submitted — idempotent */
+    if (po.status !== 'local_draft') {
+      throw new Error('Only a local draft can be submitted (status: ' + po.status + ')');
+    }
+
+    const failLocally = async (message, code) => {
+      po.lastSubmitError     = message;
+      po.lastSubmitErrorCode = code || null;
+      po.lastSubmitAttemptAt = Date.now();
+      po.updatedAt           = Date.now();
+      await _put(S.POS, po);
+      emit('po:submit-failed', { poId: poId, error: message, code: code || null });
+      const err = new Error(message); err.code = code || null; throw err;
+    };
+
+    if (!_merchantId) return failLocally('Not initialised with a merchantId — cannot submit.', 'no-merchant');
+    if (!_online)     return failLocally('Cannot submit while offline — the draft is saved and queued.', 'offline');
+    if (!window.firebase?.functions) return failLocally('Cannot submit — the procurement service is unavailable.', 'unavailable');
+
+    let res;
+    try {
+      res = await firebase.functions().httpsCallable('createPurchaseOrder')({
+        merchantId: _merchantId,
+        supplierId: po.supplierId,
+        items: (po.items || []).map(function (i) {
+          return { productId: i.productId, name: i.productName, quantity: i.qty, unitPrice: i.unitCost };
+        }),
+        notes: po.notes || '',
+        expectedDelivery: po.expectedDate || undefined,
+      });
+    } catch (e) {
+      return failLocally(
+        'Could not submit purchase order: ' + ((e && (e.message || e.code)) || 'the server rejected it'),
+        (e && e.code) || 'submit-failed'
+      );
+    }
+
+    const data = res && res.data;
+    if (!data || !data.poId) {
+      return failLocally('The server did not return a canonical purchase order id.', 'unconfirmed');
+    }
+
+    /* Reconcile: canonical identity in, local draft state out. */
+    po.procPoId  = data.poId;
+    po.poNo      = data.poNumber || data.poId;
+    po.status    = 'submitted';
+    po.submittedAt = Date.now();
+    po.updatedAt = Date.now();
+    delete po.lastSubmitError;
+    delete po.lastSubmitErrorCode;
+    await _put(S.POS, po);
+    emit('po:submitted', { poId: poId, procPoId: po.procPoId, poNo: po.poNo });
+    return po;
+  }
+
+  /** Drafts composed locally and never submitted. Slice G reconciles these explicitly. */
+  async function getUnsubmittedDrafts() {
+    const all = await _all(S.POS);
+    return all.filter(function (p) { return !p.procPoId; });
   }
 
   /**
@@ -320,7 +410,6 @@ window.PosSuppliers = (() => {
     delete po.lastSendError;
     delete po.lastSendErrorCode;
     await _put(S.POS, po);
-    _sync('posPurchaseOrders', poId, po);
     emit('po:sent', { poId: poId, delivery: po.delivery });
     return po;
   }
@@ -337,7 +426,6 @@ window.PosSuppliers = (() => {
     po.updatedAt = Date.now();
     po.cancelReason = reason;
     await _put(S.POS, po);
-    _sync('posPurchaseOrders', poId, po);
     emit('po:cancelled', { poId });
     return po;
   }
@@ -395,7 +483,6 @@ window.PosSuppliers = (() => {
         po.receivedAt = allReceived ? Date.now() : null;
         po.updatedAt  = Date.now();
         await _put(S.POS, po);
-        _sync('posPurchaseOrders', po.id, po);
       }
     }
 
@@ -591,7 +678,8 @@ window.PosSuppliers = (() => {
     /* Suppliers */
     addSupplier, updateSupplier, getSupplier, getAllSuppliers, searchSuppliers,
     /* Purchase Orders */
-    createPurchaseOrder, sendPurchaseOrder, getPurchaseOrder,
+    createPurchaseOrder, submitPurchaseOrder, getUnsubmittedDrafts,
+    sendPurchaseOrder, getPurchaseOrder,
     getPurchaseOrdersBySupplier, getAllPurchaseOrders, cancelPurchaseOrder,
     /* GRNs */
     createGRN, getGRN, getGRNsBySupplier, getAllGRNs,

@@ -533,6 +533,24 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
     merchantId,
     supplierId,
     supplierName: supplier.name,
+
+    /* ── Merchant-to-merchant supply (additive, Slice B) ───────────────────────────
+       businesses/{id} is the ONE canonical identity in SOKONI. A supplier may itself be
+       a SOKONI merchant, in which case the counterparty has a canonical business id and
+       must not be duplicated as a separate supplier identity.
+
+       Nullable and additive on purpose: merchantId/supplierId keep working unchanged, so
+       nothing migrates, and the canonical PO shape can already carry a business-to-business
+       relationship when Slice B2 populates it.
+
+       buyerBusinessId is the AUTHORIZED merchantId — the value the authority primitive
+       returned, never the payload's. supplierBusinessId is read off the supplier RECORD,
+       never accepted from the caller: a client asserting "this PO supplies business X"
+       would be asserting a relationship it has no authority to declare. Slice B2 adds the
+       verification (business exists AND has opted into supply) that lets it be set at all;
+       until then it is whatever the supplier record already carries, or null. */
+    buyerBusinessId:    merchantId,
+    supplierBusinessId: supplier.supplierBusinessId || null,
     items:        cleanItems,
     subtotal,
     vatAmount,
