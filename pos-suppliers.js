@@ -672,8 +672,32 @@ window.PosSuppliers = (() => {
   /* ══════════════════════════════════════════
      AUTO-REORDER (integrates with PosInventory)
   ══════════════════════════════════════════ */
+  /**
+   * Auto-reorder: turn low-stock suggestions into CANONICAL purchase-order drafts.
+   *
+   * The heuristic is unchanged - PosInventory.getReorderSuggestions decides what needs
+   * reordering and in what quantity, grouped by supplier. Slice F changes only where the
+   * resulting orders live.
+   *
+   * THE INVARIANT: auto-reorder may RECOMMEND. It can never autonomously turn a
+   * recommendation into an approved or sent purchase order. Each draft is submitted to the
+   * canonical engine, which creates it with status 'draft'; from there it needs
+   * approvePurchaseOrder (manager-gated and merchant-scoped, Slice C) and then an explicit
+   * send. Nothing here approves, sends, or pays - a machine noticing that stock is low is
+   * not a decision to spend money.
+   *
+   * Offline, the draft stays local_draft and is queued; getUnsubmittedDrafts() surfaces it
+   * and Slice G reconciles it. A queued draft is never reported as an order that exists.
+   *
+   * @returns {Promise<Array>} the draft records, each carrying its own submission state.
+   *   The array also carries `.summary` = { created, submitted, queued, failed } so a
+   *   caller can report what actually happened instead of assuming every draft became an
+   *   order.
+   */
   async function createAutoReorderPOs(branchId = _branchId, createdBy = '') {
-    if (!window.PosInventory) return [];
+    if (!window.PosInventory) return Object.assign([], { summary: { created: 0, submitted: 0, queued: 0, failed: 0 } });
+
+    /* --- heuristic, unchanged --- */
     const suggestions = await PosInventory.getReorderSuggestions(branchId);
     const bySupplier  = {};
     for (const s of suggestions) {
@@ -682,13 +706,41 @@ window.PosSuppliers = (() => {
       bySupplier[sid] = bySupplier[sid] || [];
       bySupplier[sid].push({ productId: s.product.id, productName: s.product.name, sku: s.product.sku, qty: s.reorderQty, unitCost: s.product.cost });
     }
-    const createdPOs = [];
+
+    const results = [];
+    let submitted = 0, queued = 0, failed = 0;
+
     for (const [supplierId, items] of Object.entries(bySupplier)) {
       const supplier = await _get(S.SUPPLIERS, supplierId);
+      /* Local draft first - identical to a hand-composed one, and the only thing that
+         survives if the device is offline. */
       const po = await createPurchaseOrder({ supplierId, supplierName: supplier?.name || '', branchId, items, createdBy });
-      createdPOs.push(po);
+      po.autoReorder = true;
+      await _put(S.POS, po);
+
+      if (!_online || !_merchantId || !window.firebase?.functions) {
+        /* Queued, not created-in-the-cloud. Said plainly so a caller cannot mistake it. */
+        queued++;
+        results.push(po);
+        continue;
+      }
+
+      try {
+        const confirmed = await submitPurchaseOrder(po.id);
+        submitted++;
+        results.push(confirmed);
+      } catch (e) {
+        /* A failed submission leaves a local draft with its error recorded by
+           submitPurchaseOrder. It is NOT an order, and is not counted as one. */
+        failed++;
+        results.push(await _get(S.POS, po.id));
+      }
     }
-    return createdPOs;
+
+    emit('reorder:completed', { created: results.length, submitted, queued, failed });
+    return Object.assign(results, {
+      summary: { created: results.length, submitted, queued, failed },
+    });
   }
 
   /* ══════════════════════════════════════════

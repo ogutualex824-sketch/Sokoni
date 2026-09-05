@@ -1,3 +1,51 @@
+## 2026-09-05 — Slice F: auto-reorder → canonical PO drafts
+
+**Files:** `pos-suppliers.js`, `scripts/test-auto-reorder-slice-f.js` (new), `CHANGELOG.md`.
+`functions/procurement.js` **untouched** — no server change was needed. **Not deployed**;
+HOLD remains.
+
+**The invariant.** Auto-reorder may **recommend** and create a canonical *draft*. It can never
+autonomously turn that recommendation into an approved or sent purchase order. A machine
+noticing that stock is low is not a decision to spend money.
+
+**What changed — deliberately small.** The reorder heuristic is untouched:
+`PosInventory.getReorderSuggestions` still decides what to reorder and how much, still grouped
+by supplier, still skipping items with no supplier. Only the destination changed. Each draft is
+now submitted through the Slice B path to canonical `createPurchaseOrder`, which creates it with
+status `draft` — so it still requires `approvePurchaseOrder` (manager-gated and merchant-scoped
+since Slice C) and then an explicit send. Nothing here approves, sends, receives, invoices or
+pays.
+
+**Offline is queued, never claimed.** Without connectivity or a merchantId the draft stays
+`local_draft` with no canonical id, and `getUnsubmittedDrafts()` surfaces it for Slice G.
+
+**Honest reporting.** The returned array now carries
+`.summary = { created, submitted, queued, failed }`, so a caller can say what actually happened
+rather than assuming every draft became an order. A batch with one success and one rejection
+does not throw — it reports one submitted and one failed, and the failed draft keeps its error.
+
+**Certification.** `scripts/test-auto-reorder-slice-f.js` — **45/45 checks, 2/2 sabotage
+catches**, executing the real `createAutoReorderPOs` in a VM sandbox with IndexedDB, firebase
+and PosInventory doubles. Every callable invocation is captured, so *"did it ever approve or
+send"* is answered by **observing behaviour**, not by reading source: `approvePurchaseOrder`,
+`sendPurchaseOrder`, `receiveGoods`, `createSupplierInvoice` and `approveAndPayInvoice` are each
+asserted never called, and the only callable used is `createPurchaseOrder`. Offline, rejected,
+partial and no-inventory paths all verified. RESTORE four ways — auto-approving, auto-sending,
+counting offline drafts as submitted, and skipping canonical submission — each drives exit 1 and
+each restore returns 0, every sabotage with an applied-check.
+
+**Known UI debt, flagged not silently changed:** `pos-inventory.html:735` and
+`pos-suppliers.html:778` both toast `✅ Created N Purchase Orders` unconditionally. With
+`.summary` available they can now distinguish submitted from queued and failed, but rewording
+them is UI scope and belongs with the Supply workspace slice.
+
+**API changes:** none — no new callable, export count unchanged at 1522.
+`createAutoReorderPOs` returns the same array shape with an added `.summary`.
+**Database changes:** none. **Breaking changes:** none.
+
+**Still blocking deployment, unchanged and not mine:** `functions/pos-zero-friction.js` requires
+`./merchant-identity`, which does not exist and was never tracked.
+
 ## 2026-09-05 — Slice E: supplier invoice + payment
 
 **Files:** `functions/procurement.js`, `scripts/test-invoice-payment-slice-e.js` (new),
