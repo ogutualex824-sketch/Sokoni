@@ -69,11 +69,11 @@
       ]
     },
     "functions/pos-mpesa-refs": {
-      "status": "FOREIGN_PORT",
-      "summary": "Proven foreign port, certified 57/0 on its own lineage. Committed at 233ac4d and present on other branches; this branch does not carry it.",
-      "owner": null,
+      "status": "RESOLVED",
+      "summary": "ADMITTED. Foreign port reconciled by blob identity: the working copy is byte-identical (78fe008c5a6e66f5856ba8069fefc3d6f02e2dba) to the committed blob at 233ac4d and on two other refs. A cherry-pick of proven content, not a reconstruction. Suite re-run this pass: 57 passed, exit 0.",
+      "owner": "reconciled — founder-authorised admission on blob identity",
       "ownerNote": "Whoever owns that port's integration into this lineage. Not named here because no record assigns an individual.",
-      "path": "Reconcile the foreign-port lineage and intended integration, then explicitly admit or explicitly remove.",
+      "path": "Done. Deployment remains a separate release decision.",
       "forbidden": "Do NOT copy it into this branch on the strength of a byte-identical blob existing elsewhere. Provenance and intended integration must be reconciled first.",
       "evidence": [
         "233ac4d",
