@@ -101,10 +101,32 @@ async function verdict(fn) { try { return { ok: true, value: await fn() }; } cat
   console.log('§1 canonical identity');
   check('the relationship row points at businesses/{id}, not a new account',
     /supplierBusinessId: _verifiedSupplierBusinessId,/.test(PROC));
-  check('external suppliers keep their contact fields',
-    /name:\s+_san\(name, MAX_SUPPLIER_NAME\)/.test(PROC) && /phone:\s+_san\(phone, 20\)/.test(PROC));
+  /* Slice M split the contact source in two. The invariant here is unchanged and is what
+     these now assert: a GENUINELY EXTERNAL supplier still has no canonical record, so its
+     name and phone remain required and client-supplied. What changed is only that a SOKONI
+     counterparty no longer asks the buyer to retype contact details it already holds —
+     discovery withholds phone by design, so requiring one would invite an invented number.
+     The executed proof of both paths lives in test-supply-integration-slice-m.js. */
+  check('an external supplier still supplies its own contact fields',
+    /const _resolvedName = _bizData[\s\S]{0,140}:\s*name;/.test(PROC) &&
+    /const _resolvedPhone = _bizData \?[^:]*:\s*phone;/.test(PROC));
+  check('an external supplier still REQUIRES a phone',
+    /if \(!_bizData && !phone\) _err\('Contact phone is required\.'\);/.test(PROC));
+  check('the written contact fields are the resolved ones, sanitised',
+    /name:\s+_san\(_resolvedName, MAX_SUPPLIER_NAME\)/.test(PROC) &&
+    /phone:\s+_resolvedPhone \? _san\(_resolvedPhone, 20\) : null,/.test(PROC));
+  sab('the external-phone detector catches the requirement being dropped',
+    !/if \(!_bizData && !phone\) _err\('Contact phone is required\.'\);/.test(
+      'const phone = d.phone || null;'));
   check('supplierBusinessId is nullable for genuinely external suppliers',
-    /supplierBusinessId\s*\n?\s*\?\s*await _assertSuppliesEnabled\(supplierBusinessId\)\s*\n?\s*:\s*null;/.test(PROC));
+    /const _supplyingBusiness = supplierBusinessId\s*\n?\s*\?\s*await _loadSupplyingBusiness\(supplierBusinessId\)\s*\n?\s*:\s*null;/.test(PROC) &&
+    /const _verifiedSupplierBusinessId = _supplyingBusiness \? _supplyingBusiness\.id : null;/.test(PROC));
+  check('the consent check has ONE implementation, not two',
+    /async function _loadSupplyingBusiness/.test(PROC) &&
+    /return \(await _loadSupplyingBusiness\(supplierBusinessId\)\)\.id;/.test(PROC));
+  sab('the single-implementation detector notices the check being copied',
+    !/return \(await _loadSupplyingBusiness\(supplierBusinessId\)\)\.id;/.test(
+      'async function _assertSuppliesEnabled(id) { const s = await db.doc(id).get(); return id; }'));
   check('no second supplier identity is minted for a SOKONI business',
     !/createSupplierAccount|supplierAccounts|new supplier business/i.test(PROC));
 

@@ -1,3 +1,129 @@
+## 2026-09-05 — Slice M: Supply integration — discovery → catalogue → purchase order
+
+**Files:** `sokoni-merchant-supply.js` (+441/−~35), `functions/procurement.js` (+85/−9),
+`scripts/test-supply-integration-slice-m.js` (new), two earlier suites re-pointed,
+`CHANGELOG.md`. **No new callable** — `functions/index.js` is untouched. **Not deployed**;
+HOLD remains.
+
+### What is now wired
+
+Find Suppliers reads `procurement.findSuppliers`; the catalogue drill-down reads
+`procurement.getSupplyCatalogue` scoped to the chosen supplier; and a catalogue row can be
+composed into a purchase order that is placed through `addSupplier` + `createPurchaseOrder`.
+Every NAV section in the Supply workspace is now backed — `UNAVAILABLE` is empty.
+
+### The empty directory explains itself
+
+The wording is the one you specified: **"No businesses are currently advertising Supply to your
+network."** — never *"no suppliers found"*, which reads as a failed search. The panel adds that
+participation and listing are separate opt-ins and that this is a real, empty result from the
+server. All procurement collections are genuinely empty in production (`procSuppliers`,
+`procPurchaseOrders`, `procGRNs`, `procSupplierInvoices`, `procWarehouseStock`,
+`procStockMovements` — all 0), so this is the state a merchant will actually see.
+
+Facets are narrowing equality filters only, matching the server exactly, and a blank box is
+**omitted** rather than sent as `category: ""`, which the server would treat as a real filter.
+There is deliberately no free-text box: the server has no text search, and a box that filtered
+only the loaded page would misreport the network as smaller than it is.
+
+### The first write in this module, and the boundary around it
+
+J1 shipped read-only, and that invariant is now deliberately broken in exactly one place:
+placing a purchase order. It happens only on an explicit click and **constructs nothing**. The
+module calls `addSupplier` to establish the relationship, then `createPurchaseOrder`, which
+assigns the PO number and computes subtotal, VAT and total server-side under its own authority
+gate. Certified by execution: the client payload carries no `total`, no `subtotal`, no
+`vatAmount` and no `poNumber`, and the module contains no VAT arithmetic at all.
+
+Before submission the figure is labelled an **estimate** — the buyer's own quantities against
+the supplier's published prices — with the text stating the engine computes the real total.
+After placement, every number displayed is the server's, and the estimate is not restated.
+Placing is distinguished from sending: the order is raised, and approval and sending keep their
+own gates.
+
+A refused order shows the failure, names what the server said, states that nothing was
+recorded, invents no PO number, and **keeps the draft** so the buyer does not retype it.
+
+### Two engine changes, both narrow
+
+**1. Contact details for a SOKONI counterparty are derived, not demanded.** `addSupplier`
+required `phone`, but Slice K's allowlist deliberately withholds phone and email — so a buyer
+who found a supplier through discovery had no phone to send, and requiring one would either
+block the flow or invite an invented number. For a `supplierBusinessId`, `name` and `phone` now
+come from the canonical business record. This also hardens it: a client-supplied name is
+**ignored**, so a buyer cannot file a SOKONI counterparty under a label of its own choosing.
+Phone is nullable, because a real production business has none on record and a relationship
+must not be blocked on a field the counterparty never filled in. **External suppliers are
+unchanged** — no canonical record, so name and phone remain required and client-supplied.
+
+**2. `addSupplier` is idempotent for a SOKONI counterparty.** There is exactly one relationship
+between a buyer and a business, so adding it twice returns the existing row instead of minting
+a second `supplierId`. Without this, the discovery → catalogue → order flow would create a
+fresh relationship on every order and fill the supplier list with duplicates of the same
+counterparty — the very "second supplier identity" that B2 exists to prevent. Two equality
+filters only, which Firestore serves from single-field indexes; **no composite index**.
+Genuinely external suppliers are untouched: they have no canonical id to match on and may
+legitimately repeat a name.
+
+`_assertSuppliesEnabled` now delegates to one `_loadSupplyingBusiness` implementation, so the
+consent check exists once and the profile is not read twice.
+
+### Two defects the certification found in my own work
+
+**A cached `belowMinimum` flag went stale.** It was computed on add/remove/setQty and read at
+render, so a quantity changed by any other path left the warning either nagging about a line
+that was now fine or silent on one that was not. It is now derived at render time and never
+stored.
+
+**A quantity typed but not blurred would have been dropped.** `placeOrder` now reads the
+quantity fields straight from the DOM first, so a buyer who types an amount and clicks Place
+submits the amount on screen rather than the previous value.
+
+Also: the scope detector `/vat/i` matched **"priVATe"**, **"actiVATe"** and **"deriVATion"**. It
+now looks for VAT arithmetic (`vatAmount`, `VAT_RATE`, `* 0.16`) and is sabotaged in both
+directions.
+
+### Certification
+
+`scripts/test-supply-integration-slice-m.js` — **119 checks, 11 sabotage catches**, across two
+harnesses that both execute real code: the workspace in a DOM double that records every
+callable invocation, and the engine against an injected Firestore double. §10 is adversarial —
+neutering the idempotency guard makes a duplicate relationship appear, and forcing the contact
+derivation off lets the client label win, proving §9 is enforced by the server rather than by a
+clean fixture.
+
+**RESTORE — seven sabotages of the real files**, each restored byte-identically, each failing on
+the right named assertion: repointing Find at `getWholesaleCatalog` (113/119); changing the
+empty state to "No suppliers found." (117/119); defaulting an absent minimum order to 10
+(118/119); sending a client-computed total (118/119, *"the client sends NO total, subtotal or
+VAT"*); displaying the estimate instead of the server total after placement (115/119); removing
+the idempotency guard (114/119); replacing the derived phone with a placeholder (116/119).
+Every restore returns exit 0.
+
+### Earlier suites re-pointed
+
+`test-supply-relationship-b2` (56/56): two source-text assertions moved when `addSupplier` was
+restructured. The invariant is unchanged and is what they now assert — an external supplier
+still supplies and requires its own contact fields — plus a new check that the consent test has
+one implementation rather than two. The executed proof of both paths lives in the M suite.
+
+`test-supply-workspace-slice-j` (68/68): the unavailable-sections loop became empty, so it now
+asserts that `UNAVAILABLE` is empty and that Find Suppliers calls the canonical op exactly once
+and renders the specified empty-state wording.
+
+**Full regression: 18 suites, 1276 checks, 129 sabotage catches, all exit 0.** Adjacent:
+`test-merchant-routes`, `test-secondary-firebase-apps`, `test-product-schema` all pass.
+
+**API changes:** none — no new callable. `addSupplier` gains a documented idempotent return
+(`{ supplierId, existing }`) and relaxes `phone` for SOKONI counterparties only.
+**Database changes:** none. **Security changes:** a client can no longer relabel a SOKONI
+counterparty; consent (`supply.enabled`) is still required and idempotency does not bypass it.
+**Breaking changes:** none.
+
+**Deployment blockers unchanged.** `functions/tenant-identity.js` and
+`functions/merchant-identity.js` remain untracked, `functions/index.js` cannot be `require`d,
+and no functions deploy can succeed. This slice touches neither.
+
 ## 2026-09-05 — Slice L: Supply Catalogue, and the end of the fabricated B2B catalogue
 
 **Files:** `functions/procurement.js` (+246/−9), `functions/index.js` (+1, the export),

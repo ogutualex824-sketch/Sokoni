@@ -23,10 +23,15 @@
      dash here. Reaching a catalogue needs supply.enabled, NOT discoverable — a
      business may supply a counterparty it already knows without being listed.
 
+   FIND SUPPLIERS IS NOW BACKED (Slice M)
+     It reads procurement.findSuppliers with narrowing equality facets and no free-text
+     box — the server has no text search, and a box that filtered only the loaded page
+     would misreport the network as smaller than it is. An empty directory says that no
+     business is advertising Supply, because that is the truth: participation and listing
+     are separate opt-ins and nobody has switched them on. It does NOT say "no suppliers
+     found", which would read as a failed search.
+
    STILL DELIBERATELY UNAVAILABLE
-     Find Suppliers      — discovery exists server-side (Slice K) but this panel is
-                           not wired to it yet. That is its own slice with its own
-                           certification, not a side effect of this one.
      Time-ordered views  — the read layer orders by document id on purpose; a
                            createdAt ordering would silently EXCLUDE documents
                            missing that field and needs composite indexes nobody
@@ -40,7 +45,16 @@
    selection state and NO data — showing the wrong business's spend, stock and
    payables is worse than showing nothing.
 
-   NO WRITES. This surface reads. Approving, sending, receiving and paying are
+   ONE WRITE, AND ONLY ONE (Slice M). Placing a purchase order from a supplier's catalogue
+   is the single mutating action on this surface, and it happens only on an explicit click.
+   It calls the canonical engine twice and constructs nothing of its own: addSupplier to
+   establish the buyer-supplier relationship (idempotent for a SOKONI counterparty, so
+   re-ordering never mints a duplicate), then createPurchaseOrder, which assigns the PO
+   number and computes subtotal, VAT and total SERVER-SIDE under its own authority gate.
+   The draft shown before submission is labelled an estimate and is never restated as a
+   confirmed figure — after placement, every number displayed is the server's.
+
+   Approving, sending, receiving and paying remain out. They are separate
    authority-bearing actions with their own certified gates; a later slice wires
    them deliberately rather than as a side effect of building a dashboard.
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -59,10 +73,7 @@
       { id: 'receiving', name: 'Receiving / GRN', icon: '📦', backed: true },
       { id: 'invoices',  name: 'Invoices',        icon: '🧾', backed: true },
       { id: 'payments',  name: 'Payments',        icon: '💳', backed: true },
-      { id: 'find',      name: 'Find Suppliers',  icon: '🔍', backed: false,
-        why: 'Discovery now exists server-side (procurement.findSuppliers, opt-in and ' +
-             'allowlisted), but this panel is not wired to it yet. Wiring it is its own slice ' +
-             'with its own certification, so nothing is shown here rather than a guess.' },
+      { id: 'find',      name: 'Find Suppliers',  icon: '🔍', backed: true },
       { id: 'catalogue', name: 'Supply Catalogue', icon: '🗂️', backed: true },
     ] },
     { group: 'My Supply', items: [
@@ -152,6 +163,26 @@
     '.sup-btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt);font:inherit;',
       'font-size:13px;font-weight:700;padding:9px 15px;border-radius:10px;cursor:pointer}',
     '.sup-btn:hover{border-color:var(--acc-line)}',
+    '.sup-btn-sm{font-size:12px;padding:6px 11px;border-radius:9px}',
+    '.sup-btn-ghost{background:transparent;color:var(--txt2)}',
+    '.sup-btn-primary{background:var(--acc);border-color:var(--acc);color:#06121f}',
+    '.sup-btn-primary:hover{filter:brightness(1.06)}',
+    '.sup-btn[disabled]{opacity:.55;cursor:progress}',
+    /* Discovery facets */
+    '.sup-facets{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 14px}',
+    '.sup-facet{border:1px solid var(--line);background:var(--surface-2);color:var(--txt);',
+      'font:inherit;font-size:13px;padding:8px 11px;border-radius:10px;min-width:0;flex:1 1 130px}',
+    '.sup-facet:focus{outline:none;border-color:var(--acc-line)}',
+    '.sup-crumb{margin-bottom:8px}',
+    /* Draft-order strip and footer */
+    '.sup-orderbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;',
+      'padding:10px 13px;border:1px solid var(--acc-line);border-radius:12px;background:var(--surface-2);font-size:13px}',
+    '.sup-orderbar .sup-est{color:var(--txt3);font-size:12px}',
+    '.sup-orderbar button{margin-left:auto}',
+    '.sup-orderfoot{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:14px}',
+    '.sup-est-big{font-size:15px;font-weight:800;color:var(--txt)}',
+    '.sup-qty{width:88px;border:1px solid var(--line);background:var(--surface-2);color:var(--txt);',
+      'font:inherit;font-size:13px;padding:6px 9px;border-radius:8px}',
     '.sup-note{font-size:11.5px;color:var(--txt3);margin-top:10px;line-height:1.5}',
     '.sup-choice{display:flex;flex-direction:column;gap:8px;max-width:420px;margin:14px auto 0;text-align:left}',
     '.sup-choice button{border:1px solid var(--line);background:var(--surface-2);color:var(--txt);',
@@ -194,6 +225,15 @@
       choices: [],
       identityError: null,
       cache: {},      /* section -> { items, nextCursor, error } */
+      /* The supplier whose catalogue is open. Null means "my own catalogue" — the server
+         defaults to the viewer's business, so the two cases share one code path. */
+      supplier: null,
+      /* A draft order being composed on this device. It is NOT a purchase order and is
+         never presented as one: no poNumber, no server total, nothing is persisted until
+         the buyer explicitly submits it through the canonical engine. */
+      order: null,
+      facets: { category: '', city: '', county: '' },
+      submitting: false,
       destroyed: false,
     };
 
@@ -382,6 +422,36 @@
         ],
         note: 'Wholesale pricing and public listing need the B2B authority slice; this shows ' +
               'holdings only, not an offer.' },
+      find: { op: 'findSuppliers', title: 'Find Suppliers',
+        sub: 'Businesses that have opted into supply AND into being listed. Two separate ' +
+             'consents: a supplier may trade with you without appearing here.',
+        /* The wording matters. "No suppliers found" reads as a failed search; this is not a
+           failed search, it is an accurate report that nobody has opted in yet. */
+        empty: 'No businesses are currently advertising Supply to your network.',
+        facets: true,
+        cols: [
+          { h: 'Business', strong: true, f: function (r) { return text(r.name); } },
+          { h: 'Category', f: function (r) { return text(r.category); } },
+          { h: 'Town',     f: function (r) { return text(r.city); } },
+          { h: 'County',   f: function (r) { return text(r.county); } },
+          { h: 'Supplies', f: function (r) {
+              var cats = r.supply && r.supply.categories;
+              return (Array.isArray(cats) && cats.length) ? esc(cats.slice(0, 3).join(', ')) : NEUTRAL;
+            } },
+          { h: 'Min order', f: function (r) { return money(r.supply && r.supply.minOrderValue); } },
+          { h: 'Lead time', f: function (r) {
+              var d = r.supply && r.supply.leadDays;
+              return (typeof d === 'number' && isFinite(d)) ? esc(String(d)) + ' days' : NEUTRAL;
+            } },
+          { h: '', f: function (r) {
+              return '<button class="sup-btn sup-btn-sm" type="button" data-view-supply="' +
+                esc(r.businessId) + '" data-supply-name="' + esc(r.name || r.businessId) +
+                '">View supply</button>';
+            } },
+        ],
+        note: 'Listing is not endorsement. SOKONI makes no vetting, verification or quality ' +
+              'claim about a business shown here, and none of these figures is estimated — ' +
+              'a dash means the supplier did not state that term.' },
       catalogue: { op: 'getSupplyCatalogue', title: 'Supply Catalogue',
         sub: 'Wholesale offers, resolved through canonical business identity. Opened without ' +
              'a supplier this is YOUR catalogue: what this business currently offers others.',
@@ -399,6 +469,13 @@
               if (r.inStock === true)  return 'In stock';
               if (r.inStock === false) return 'Out of stock';
               return NEUTRAL;
+            } },
+          /* Only another business's catalogue is orderable. Your own catalogue is what you
+             OFFER; an "add to order" there would mean buying from yourself. */
+          { h: '', f: function (r) {
+              if (!state.supplier) return '';
+              return '<button class="sup-btn sup-btn-sm" type="button" data-add-line="' +
+                esc(r.productId) + '">Add</button>';
             } },
         ],
         note: 'Every figure is a wholesale term the supplier published itself, read from the ' +
@@ -438,13 +515,132 @@
               'records that do not carry one.' },
     };
 
+    /* ── discovery facets ────────────────────────────────────────────────
+       Narrowing filters only, matching the server's equality facets exactly. There is no
+       free-text box: the server has no text search, and a box that silently filtered only
+       the current page would misreport the network as smaller than it is. */
+    function facetsHtml () {
+      var f = state.facets;
+      var box = function (k, ph) {
+        return '<input class="sup-facet" type="text" data-facet="' + k + '" placeholder="' +
+          esc(ph) + '" value="' + esc(f[k] || '') + '">';
+      };
+      return '<div class="sup-facets">' + box('category', 'Category') + box('city', 'Town') +
+        box('county', 'County') +
+        '<button class="sup-btn sup-btn-sm" type="button" data-facet-apply="1">Apply</button>' +
+        (f.category || f.city || f.county
+          ? '<button class="sup-btn sup-btn-sm sup-btn-ghost" type="button" data-facet-clear="1">Clear</button>'
+          : '') +
+        '</div>';
+    }
+
+    /* ── catalogue heading, with the breadcrumb back to discovery ──────── */
+    function catalogueHead (def) {
+      if (!state.supplier) {
+        return '<h2 class="sup-h2">Supply Catalogue</h2>' +
+          '<p class="sup-sub">What this business currently offers other businesses.</p>';
+      }
+      return '<div class="sup-crumb">' +
+          '<button class="sup-btn sup-btn-sm sup-btn-ghost" type="button" data-back-find="1">‹ Find Suppliers</button>' +
+        '</div>' +
+        '<h2 class="sup-h2">' + esc(state.supplier.name || state.supplier.businessId) + '</h2>' +
+        '<p class="sup-sub">' + esc(def.sub) + '</p>';
+    }
+
+    /* ── the draft-order strip ────────────────────────────────────────────
+       Deliberately labelled a DRAFT. Nothing here has reached the server, there is no PO
+       number, and the estimate is the buyer's own quantities against the supplier's own
+       published prices — the authoritative total, with VAT, is computed by the engine on
+       submission and only then displayed as a fact. */
+    function orderEstimate () {
+      var t = 0, known = true;
+      state.order.lines.forEach(function (l) {
+        if (typeof l.wholesalePrice === 'number' && isFinite(l.wholesalePrice)) t += l.wholesalePrice * l.qty;
+        else known = false;
+      });
+      return known ? t : null;
+    }
+    function orderBar () {
+      var est = orderEstimate();
+      return '<div class="sup-orderbar">' +
+        '<span><b>' + count(state.order.lines.length) + '</b> item(s) drafted for <b>' +
+          esc(state.order.supplierName) + '</b></span>' +
+        '<span class="sup-est">Estimate ' + money(est) + '</span>' +
+        '<button class="sup-btn sup-btn-sm" type="button" data-open-order="1">Review order</button>' +
+        '</div>';
+    }
+
+    function renderOrder () {
+      var o = state.order;
+      if (!o || !o.lines.length) {
+        return '<h2 class="sup-h2">Draft order</h2>' +
+          stateBlock('📭', 'Nothing drafted yet',
+            'Open a supplier from Find Suppliers and add products from its catalogue.', 'empty');
+      }
+      var est = orderEstimate();
+      return '<div class="sup-crumb">' +
+          '<button class="sup-btn sup-btn-sm sup-btn-ghost" type="button" data-back-catalogue="1">‹ Back to catalogue</button>' +
+        '</div>' +
+        '<h2 class="sup-h2">Draft order — ' + esc(o.supplierName) + '</h2>' +
+        '<p class="sup-sub">Not yet submitted. Nothing is recorded until you place it.</p>' +
+        table([
+          { h: 'Product', strong: true, f: function (r) { return text(r.name); } },
+          { h: 'Unit price', f: function (r) { return money(r.wholesalePrice); } },
+          { h: 'Supplier minimum', f: function (r) { return count(r.minWholesaleQty); } },
+          { h: 'Quantity', f: function (r) {
+              return '<input class="sup-qty" type="number" min="1" step="1" value="' +
+                esc(String(r.qty)) + '" data-qty="' + esc(r.productId) + '">';
+            } },
+          { h: 'Line', f: function (r) {
+              return (typeof r.wholesalePrice === 'number' && isFinite(r.wholesalePrice))
+                ? money(r.wholesalePrice * r.qty) : NEUTRAL;
+            } },
+          { h: '', f: function (r) {
+              return '<button class="sup-btn sup-btn-sm sup-btn-ghost" type="button" data-remove-line="' +
+                esc(r.productId) + '">Remove</button>';
+            } },
+        ], o.lines, null) +
+        '<div class="sup-orderfoot">' +
+          '<div class="sup-est-big">Estimate ' + money(est) + '</div>' +
+          '<button class="sup-btn sup-btn-primary" type="button" data-place-order="1"' +
+            (state.submitting ? ' disabled' : '') + '>' +
+            (state.submitting ? 'Placing…' : 'Place purchase order') + '</button>' +
+        '</div>' +
+        (belowMinimum(o)
+          ? stateBlock('⚠️', 'Below a stated minimum',
+              'One or more lines is under the quantity that supplier stated. The order can ' +
+              'still be placed — the minimum is the supplier’s term, not a system rule — ' +
+              'but they may decline it.', 'warn')
+          : '') +
+        '<p class="sup-note">The estimate multiplies your quantities by the supplier’s ' +
+        'published wholesale prices. It is NOT the order total: the purchase order total, ' +
+        'including VAT, is calculated by the procurement engine when the order is placed, ' +
+        'and only that figure is authoritative. Placing this order creates a supplier ' +
+        'relationship with that business if you do not already have one.</p>';
+    }
+
     function renderList (def, data) {
-      var rows = (data && (data.items || data.orders || data.products)) || [];
+      var rows = (data && (data.items || data.orders || data.products || data.suppliers)) || [];
       var head = '<h2 class="sup-h2">' + esc(def.title) + '</h2><p class="sup-sub">' + esc(def.sub) + '</p>';
+      if (def.facets) head += facetsHtml();
+      if (def.id === 'catalogue') head = catalogueHead(def);
+      /* The draft strip belongs to the shopping context only. Showing it over Invoices or
+         Stock would imply those sections have something to do with the draft. */
+      if ((def.id === 'catalogue' || def.id === 'find') && state.order && state.order.lines.length) {
+        head += orderBar();
+      }
+
       if (!rows.length) {
-        return head + stateBlock('📭', def.empty,
-          'Nothing has been recorded for this business. This is a real, empty result from the ' +
-          'server — not a placeholder.', 'empty') +
+        /* The reason differs by section and must not be flattened into one sentence. An
+           empty directory is a real state of the network; an empty catalogue is a real
+           state of one supplier. Neither is a failed query. */
+        var why = def.id === 'find'
+          ? 'Supply participation and directory listing are both opt-in, and no business has ' +
+            'switched them on yet. This is a real, empty result from the server — not a ' +
+            'failed search and not a placeholder.'
+          : 'Nothing has been recorded for this business. This is a real, empty result from ' +
+            'the server — not a placeholder.';
+        return head + stateBlock('📭', def.empty, why, 'empty') +
           (def.note ? '<p class="sup-note">' + esc(def.note) + '</p>' : '');
       }
       return head + table(def.cols, rows, data.nextCursor) +
@@ -537,6 +733,11 @@
           return;
         }
 
+        /* The draft order is composed locally and has no read of its own. It is not in NAV:
+           it is reachable only from a catalogue, because an order without a supplier is not
+           a thing this workspace can express. */
+        if (id === 'order') { main.innerHTML = renderOrder(); return; }
+
         var def = LIST_SECTIONS[id];
         if (!def) { main.innerHTML = stateBlock('❓', 'Unknown section', 'That section does not exist.', 'error'); return; }
 
@@ -544,20 +745,176 @@
         if (opts && opts.cursor) payload.cursor = opts.cursor;
         if (def.supplierSide) payload.supplierBusinessId = state.merchantId;
 
+        /* Discovery facets are narrowing equality filters, sent only when set. An empty box
+           must not become `category: ""`, which the server would treat as a real filter. */
+        if (def.facets) {
+          ['category', 'city', 'county'].forEach(function (k) {
+            if (state.facets[k]) payload[k] = state.facets[k];
+          });
+        }
+        /* The catalogue of a supplier opened from discovery. Omitted means the viewer's own
+           catalogue, which is the server's documented default — one code path, two uses. */
+        if (id === 'catalogue' && state.supplier) {
+          payload.supplierBusinessId = state.supplier.businessId;
+        }
+
         var data = await read(def.op, payload);
         var prior = (opts && opts.cursor && state.cache[id]) ? state.cache[id] : null;
         if (prior) {
-          var merged = (prior.items || []).concat(data.items || data.orders || data.products || []);
+          var merged = (prior.items || []).concat(data.items || data.orders || data.products || data.suppliers || []);
           data = { items: merged, nextCursor: data.nextCursor };
         }
-        state.cache[id] = { items: data.items || data.orders || data.products || [], nextCursor: data.nextCursor || null };
-        main.innerHTML = renderList(def, state.cache[id]);
+        state.cache[id] = { items: data.items || data.orders || data.products || data.suppliers || [], nextCursor: data.nextCursor || null };
+        main.innerHTML = renderList(Object.assign({ id: id }, def), state.cache[id]);
       } catch (e) {
         /* A failed read shows the failure. It never falls back to sample rows, and it never
            renders zeroes that would read as a real, empty business. */
         main.innerHTML = stateBlock('⚠️', 'Could not load this section',
           'The server did not return this data (' + text((e && e.message) || 'error') + '). ' +
           'Nothing is shown rather than a guess. Try again.', 'error');
+      }
+    }
+
+    /* ── navigation ──────────────────────────────────────────────────────── */
+    function goSection (id) {
+      state.section = id;
+      host.querySelectorAll('[data-sec]').forEach(function (b) {
+        b.setAttribute('aria-current', b.getAttribute('data-sec') === id ? 'true' : 'false');
+      });
+      loadSection(id);
+    }
+
+    /* ── draft order ─────────────────────────────────────────────────────────
+       Composed entirely on this device. The ONLY figures copied out of the catalogue are
+       the supplier's own published price and stated minimum; the quantity is the buyer's.
+       Nothing here is written anywhere until placeOrder() runs. */
+    function catalogueRow (productId) {
+      var cached = state.cache.catalogue;
+      var rows = (cached && cached.items) || [];
+      for (var i = 0; i < rows.length; i++) if (rows[i].productId === productId) return rows[i];
+      return null;
+    }
+
+    /* DERIVED at render time, never cached on the draft. A cached flag goes stale the moment
+       a quantity changes by any path the setter does not own, and a stale "below minimum"
+       warning is worse than none: it either nags about a line that is now fine, or stays
+       silent on one that is not. */
+    function belowMinimum (order) {
+      return !!(order && order.lines.some(function (l) {
+        return typeof l.minWholesaleQty === 'number' && isFinite(l.minWholesaleQty) &&
+               l.qty < l.minWholesaleQty;
+      }));
+    }
+
+    function addLine (productId) {
+      var row = catalogueRow(productId);
+      if (!row || !state.supplier) return;
+      if (!state.order || state.order.supplierBusinessId !== state.supplier.businessId) {
+        /* One draft, one supplier. A purchase order is placed WITH a supplier, so switching
+           supplier starts a new draft rather than silently mixing counterparties. */
+        state.order = {
+          supplierBusinessId: state.supplier.businessId,
+          supplierName: state.supplier.name || state.supplier.businessId,
+          lines: [],
+        };
+      }
+      var existing = null;
+      state.order.lines.forEach(function (l) { if (l.productId === productId) existing = l; });
+      if (existing) { existing.qty += 1; }
+      else {
+        state.order.lines.push({
+          productId: row.productId,
+          name: row.name,
+          wholesalePrice: row.wholesalePrice,
+          /* Carried for the warning only. A supplier who stated no minimum gets NO minimum:
+             this is never defaulted, so nothing is enforced that they did not ask for. */
+          minWholesaleQty: row.minWholesaleQty,
+          /* The buyer's own starting quantity. Where the supplier stated a minimum we start
+             there, which is a convenience, not a claim — it is editable and visibly theirs. */
+          qty: (typeof row.minWholesaleQty === 'number' && isFinite(row.minWholesaleQty) && row.minWholesaleQty > 0)
+            ? row.minWholesaleQty : 1,
+        });
+      }
+      loadSection('catalogue');
+    }
+
+    function removeLine (productId) {
+      if (!state.order) return;
+      state.order.lines = state.order.lines.filter(function (l) { return l.productId !== productId; });
+      if (!state.order.lines.length) state.order = null;
+      loadSection(state.section);
+    }
+
+    function syncQtysFromDom () {
+      if (!state.order || !host.querySelectorAll) return;
+      var inputs = host.querySelectorAll('[data-qty]');
+      if (!inputs || !inputs.length) return;
+      Array.prototype.forEach.call(inputs, function (i) {
+        setQty(i.getAttribute('data-qty'), i.value);
+      });
+    }
+
+    function setQty (productId, raw) {
+      if (!state.order) return;
+      var n = Math.floor(Number(raw));
+      if (!isFinite(n) || n < 1) n = 1;
+      state.order.lines.forEach(function (l) { if (l.productId === productId) l.qty = n; });
+    }
+
+    /* THE ONLY WRITE THIS MODULE PERFORMS, and it happens solely on an explicit click.
+       It calls the canonical procurement engine — addSupplier to establish the relationship
+       (idempotent for a SOKONI counterparty, so re-ordering never mints a duplicate), then
+       createPurchaseOrder. No order is constructed here: the engine assigns the PO number,
+       computes subtotal, VAT and total server-side, and applies its own authority gates.
+       This surface does not decide anything financial. */
+    async function placeOrder () {
+      if (!state.order || !state.order.lines.length || state.submitting) return;
+      /* Read the quantity fields straight from the DOM first. A buyer who types a quantity
+         and clicks Place without leaving the field would otherwise submit the previous
+         value — ordering a different amount than the one on screen. */
+      syncQtysFromDom();
+      var main = doc.getElementById('sup-main');
+      state.submitting = true;
+      if (main) main.innerHTML = renderOrder();
+      try {
+        var link = await read('addSupplier', {
+          supplierBusinessId: state.order.supplierBusinessId,
+        });
+        var supplierId = link && link.supplierId;
+        if (!supplierId) throw new Error('supplier-link-failed');
+
+        var po = await read('createPurchaseOrder', {
+          supplierId: supplierId,
+          items: state.order.lines.map(function (l) {
+            return { productId: l.productId, name: l.name, qty: l.qty, unitCost: l.wholesalePrice };
+          }),
+        });
+
+        state.submitting = false;
+        var placed = state.order;
+        state.order = null;
+        /* Everything reported back is the SERVER's, including the total. Nothing from the
+           draft estimate is repeated as if it had been confirmed. */
+        if (main) {
+          main.innerHTML = '<h2 class="sup-h2">Purchase order placed</h2>' +
+            stateBlock('✅', text(po && po.poNumber),
+              'Placed with ' + (placed.supplierName || 'the supplier') + '. ' +
+              'Total ' + money(po && po.total) + ' including VAT, as calculated by the ' +
+              'procurement engine.', 'ok') +
+            '<p class="sup-note">The order is raised, not sent. Approval and sending are ' +
+            'separate authorised actions with their own gates — open Purchase Orders to ' +
+            'continue.</p>' +
+            '<button class="sup-btn" type="button" data-sec="pos">Open Purchase Orders</button>';
+        }
+        state.cache = {};
+      } catch (e) {
+        state.submitting = false;
+        if (main) {
+          main.innerHTML = renderOrder() +
+            stateBlock('⚠️', 'The order was not placed',
+              'The server refused this order (' + text((e && e.message) || 'error') + '). ' +
+              'Nothing was recorded. Your draft is unchanged.', 'error');
+        }
       }
     }
 
@@ -578,6 +935,50 @@
         if (cur && cur.nextCursor) loadSection(state.section, { cursor: cur.nextCursor });
         return;
       }
+      /* ── discovery → catalogue ─────────────────────────────────────── */
+      var view = ev.target.closest && ev.target.closest('[data-view-supply]');
+      if (view) {
+        state.supplier = {
+          businessId: view.getAttribute('data-view-supply'),
+          name: view.getAttribute('data-supply-name') || null,
+        };
+        delete state.cache.catalogue;
+        goSection('catalogue');
+        return;
+      }
+      var backFind = ev.target.closest && ev.target.closest('[data-back-find]');
+      if (backFind) { state.supplier = null; delete state.cache.catalogue; goSection('find'); return; }
+      var backCat = ev.target.closest && ev.target.closest('[data-back-catalogue]');
+      if (backCat) { goSection('catalogue'); return; }
+      var openOrder = ev.target.closest && ev.target.closest('[data-open-order]');
+      if (openOrder) { goSection('order'); return; }
+
+      /* ── facets ────────────────────────────────────────────────────── */
+      var apply = ev.target.closest && ev.target.closest('[data-facet-apply]');
+      if (apply) {
+        host.querySelectorAll('[data-facet]').forEach(function (i) {
+          state.facets[i.getAttribute('data-facet')] = String(i.value || '').trim();
+        });
+        delete state.cache.find;
+        loadSection('find');
+        return;
+      }
+      var clear = ev.target.closest && ev.target.closest('[data-facet-clear]');
+      if (clear) {
+        state.facets = { category: '', city: '', county: '' };
+        delete state.cache.find;
+        loadSection('find');
+        return;
+      }
+
+      /* ── draft order composition ───────────────────────────────────── */
+      var add = ev.target.closest && ev.target.closest('[data-add-line]');
+      if (add) { addLine(add.getAttribute('data-add-line')); return; }
+      var rm = ev.target.closest && ev.target.closest('[data-remove-line]');
+      if (rm) { removeLine(rm.getAttribute('data-remove-line')); return; }
+      var place = ev.target.closest && ev.target.closest('[data-place-order]');
+      if (place) { placeOrder(); return; }
+
       var choose = ev.target.closest && ev.target.closest('[data-choose]');
       if (choose) {
         var bid = choose.getAttribute('data-choose');
@@ -598,7 +999,16 @@
       if (state.merchantId) loadSection(state.section);
     }
 
+    /* Quantity edits are read on change, not re-rendered on every keystroke — retyping a
+       number must not fight the cursor. The draft is re-read from the DOM before submission
+       regardless, so an unblurred field cannot be silently dropped. */
+    function onChange (ev) {
+      var q = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-qty');
+      if (q) { setQty(q, ev.target.value); }
+    }
+
     host.addEventListener('click', onClick);
+    host.addEventListener('change', onChange);
     render();
 
     return {
@@ -606,6 +1016,7 @@
       destroy: function () {
         state.destroyed = true;
         try { host.removeEventListener('click', onClick); } catch (_) {}
+        try { host.removeEventListener('change', onChange); } catch (_) {}
         host.innerHTML = '';
       },
       /* Exposed for certification — never for display logic. */

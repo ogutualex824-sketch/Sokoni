@@ -223,21 +223,35 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
   /* ══════════════════════════════════════════════════════════
      §4 unavailable sections cannot fabricate
   ══════════════════════════════════════════════════════════ */
-  console.log('\n§4 unavailable sections');
-  /* Find Suppliers is still unwired: discovery exists server-side (Slice K) but the panel is
-     its own slice. Supply Catalogue moved OUT of this loop when Slice L backed it — see below. */
-  for (const [id, label] of [['find', 'Find Suppliers']]) {
+  console.log('\n§4 backed sections still cannot fabricate');
+  /* Every NAV section is now backed: Slice L wired the catalogue, Slice M wired discovery.
+     The invariant this section holds is unchanged in substance — a panel must never render
+     rows or prices it did not get from the server — but it is now checked against a section
+     that DOES call, rather than one that calls nothing. UNAVAILABLE must be empty. */
+  check('no NAV section is marked unavailable any more',
+    Object.keys(load({}).sandbox.window.SokoniMerchantSupply.UNAVAILABLE || {}).length === 0);
+  sab('the unavailable detector would notice one being reintroduced',
+    Object.keys({ find: 'why' }).length !== 0);
+
+  for (const [id, label, op] of [['find', 'Find Suppliers', 'findSuppliers']]) {
     const h = load({});
     await settle();
-    /* Mounting renders Overview, which legitimately reads. Count only what the UNAVAILABLE
-       section itself triggers. */
+    /* Mounting renders Overview, which legitimately reads. Count only what THIS section
+       triggers. */
     const before = h.calls.length;
     h.host._listeners.click[0]({ target: { closest: (s) => (s === '[data-sec]' ? { getAttribute: () => id } : null) } });
     await settle();
-    check(label + ': shows an explicit unavailable state', /Not available yet/.test(h.main.innerHTML));
-    check(label + ': makes NO server call of its own', h.calls.length === before);
-    check(label + ': renders no supplier or product rows', !/<table/.test(h.main.innerHTML));
-    check(label + ': renders no prices', !/KES/.test(h.main.innerHTML));
+    check(label + ': is no longer an unavailable state', !/Not available yet/.test(h.main.innerHTML));
+    check(label + ': calls the server exactly once', h.calls.length === before + 1);
+    check(label + ': and the op is the canonical one',
+      h.calls[h.calls.length - 1] && h.calls[h.calls.length - 1].name === op);
+    check(label + ': an empty result renders no rows', !/<table/.test(h.main.innerHTML));
+    check(label + ': an empty result renders no prices', !/KES/.test(h.main.innerHTML));
+    /* The wording the founder specified: an empty directory is an intentional state of the
+       network, not a search that failed. */
+    check(label + ': the empty state explains WHY it is empty, not "none found"',
+      /No businesses are currently advertising Supply/.test(h.main.innerHTML) &&
+      !/no suppliers found/i.test(h.main.innerHTML));
   }
 
   /* Slice L backed the catalogue. The invariant flips from "renders nothing and calls

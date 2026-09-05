@@ -313,8 +313,36 @@ const addSupplier = onCall(OPT, async (request) => {
      value comes back from the shared primitive and is the only one written below. Before
      this, any authenticated user could create a supplier under any merchant. */
   const merchantId = await _assertMerchantAuthority(request, _requestedMerchantId);
-  if (!name)       _err('Supplier name is required.');
-  if (!phone)      _err('Contact phone is required.');
+
+  /* THE SOKONI COUNTERPARTY PATH (Slice M).
+     Resolved FIRST, because for a business already on SOKONI the canonical business record is
+     the contact record and the client is not asked to retype it. Discovery deliberately
+     withholds phone and email (Slice K's allowlist), so a buyer who found this supplier
+     through Find Suppliers HAS no phone to send — requiring one would either block the flow
+     or invite an invented number, and an invented supplier phone is exactly the class of
+     fabrication this workstream has been removing. The name is taken from the business too,
+     not merely defaulted: a buyer must not be able to file a SOKONI counterparty under a
+     label of its own choosing. External suppliers are unchanged — they have no canonical
+     record, so their contact fields remain required and client-supplied. */
+  const _supplyingBusiness = supplierBusinessId
+    ? await _loadSupplyingBusiness(supplierBusinessId)
+    : null;
+  const _bizData = _supplyingBusiness ? _supplyingBusiness.data : null;
+
+  const _resolvedName = _bizData
+    ? _san(_bizData.name || _bizData.businessName || '', MAX_SUPPLIER_NAME)
+    : name;
+  /* Nullable on purpose. A real production business has no phone on its record, and a
+     relationship with a contactable counterparty must not be blocked on a field the
+     counterparty never filled in. The surface renders the neutral dash, not a guess. */
+  const _resolvedPhone = _bizData ? (_bizData.phone || null) : phone;
+
+  if (!_resolvedName) {
+    _err(_bizData
+      ? 'That business has no name on its SOKONI record and cannot be added as a supplier.'
+      : 'Supplier name is required.');
+  }
+  if (!_bizData && !phone) _err('Contact phone is required.');
 
   const KRA_RE = /^[A-Z]\d{9}[A-Z]$/;
   if (kraPin && !KRA_RE.test(String(kraPin).trim().toUpperCase())) {
@@ -330,11 +358,34 @@ const addSupplier = onCall(OPT, async (request) => {
   const limit = Number(creditLimit ?? 0);
   if (limit < 0) _err('creditLimit cannot be negative.');
 
-  /* Verify the SOKONI counterparty BEFORE minting an id, so a rejected relationship
-     leaves nothing behind. */
-  const _verifiedSupplierBusinessId = supplierBusinessId
-    ? await _assertSuppliesEnabled(supplierBusinessId)
-    : null;
+  /* Verified above, before any id was minted, so a rejected relationship leaves nothing
+     behind. */
+  const _verifiedSupplierBusinessId = _supplyingBusiness ? _supplyingBusiness.id : null;
+
+  /* IDEMPOTENT FOR A SOKONI COUNTERPARTY (Slice M).
+     There is exactly one relationship between this buyer and that business, so adding it
+     twice must return the existing row rather than mint a second supplierId. Without this,
+     the discovery -> catalogue -> order flow would create a fresh relationship on every
+     order, and the buyer's supplier list would fill with duplicates of the same counterparty
+     — the very "second supplier identity" that B2 exists to prevent.
+
+     Two EQUALITY filters only, which Firestore serves from single-field indexes; no
+     composite index is introduced. This is a narrow guard, not a general dedupe: genuinely
+     external suppliers have no canonical id to match on and may legitimately repeat a name,
+     so they are untouched. */
+  if (_verifiedSupplierBusinessId) {
+    const existing = await db.collection('procSuppliers')
+      .where('merchantId', '==', merchantId)
+      .where('supplierBusinessId', '==', _verifiedSupplierBusinessId)
+      .limit(1)
+      .get();
+    if (!existing.empty) {
+      const doc = existing.docs[0];
+      logger.info('procurement.addSupplier: existing relationship reused',
+        { merchantId, supplierBusinessId: _verifiedSupplierBusinessId, supplierId: doc.id });
+      return { supplierId: doc.data().supplierId || doc.id, existing: true };
+    }
+  }
 
   const supplierId = _genId('sup');
 
@@ -349,9 +400,10 @@ const addSupplier = onCall(OPT, async (request) => {
        into supply. A client naming any business id would otherwise enrol it as a supplier
        without its consent. */
     supplierBusinessId: _verifiedSupplierBusinessId,
-    name:         _san(name, MAX_SUPPLIER_NAME),
+    /* Canonical for a SOKONI counterparty, client-supplied for a genuinely external one. */
+    name:         _san(_resolvedName, MAX_SUPPLIER_NAME),
     contactName:  _san(contactName, 150),
-    phone:        _san(phone, 20),
+    phone:        _resolvedPhone ? _san(_resolvedPhone, 20) : null,
     email:        _san(email, 150),
     kraPin:       kraPin ? String(kraPin).trim().toUpperCase() : null,
     bankDetails:  bankDetails ? _san(JSON.stringify(bankDetails), 500) : null,
@@ -368,7 +420,7 @@ const addSupplier = onCall(OPT, async (request) => {
   await _audit(uid, 'supplier_created', supplierId, { merchantId, name: _san(name, 100) });
 
   logger.info('procurement.addSupplier', { supplierId, merchantId });
-  return { supplierId };
+  return { supplierId, existing: false };
 });
 
 /* ════════════════════════════════════════════════════════════════
@@ -605,7 +657,12 @@ const setSupplyParticipation = onCall(OPT, async (request) => {
  * Verify that a business may be named as the supplier on a relationship.
  * Existence is not participation: the business must have EXPLICITLY opted in.
  */
-async function _assertSuppliesEnabled(supplierBusinessId) {
+/**
+ * Load a business that has consented to supply, or refuse. ONE implementation: callers that
+ * need only the id use _assertSuppliesEnabled below, callers that also need the canonical
+ * contact profile use this directly rather than re-reading the same document.
+ */
+async function _loadSupplyingBusiness(supplierBusinessId) {
   const id = String(supplierBusinessId);
   if (!id || id.includes('/') || id.length > 200) {
     _err('A valid supplierBusinessId is required.');
@@ -617,7 +674,11 @@ async function _assertSuppliesEnabled(supplierBusinessId) {
     _err('That business has not enabled supply and cannot be added as a SOKONI supplier.',
          'failed-precondition');
   }
-  return id;
+  return { id, data: d };
+}
+
+async function _assertSuppliesEnabled(supplierBusinessId) {
+  return (await _loadSupplyingBusiness(supplierBusinessId)).id;
 }
 
 /* ════════════════════════════════════════════════════════════════
