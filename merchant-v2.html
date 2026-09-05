@@ -745,6 +745,9 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-dashboard.js"></script>
 <script src="sokoni-merchant-sell.js"></script>
 <script src="sokoni-merchant-inventory-ui.js"></script>
+<!-- Supply workspace (J1). Registers window.SokoniMerchantSupply; mounted natively by
+     renderModule() when the supply route opens. No fetches at load. -->
+<script src="sokoni-merchant-supply.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
 <script src="sokoni-merchant-campaigns.js"></script>
@@ -2524,6 +2527,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      rather than refreshing a surface that would query the previous shop's data. */
   var MODULES = {
     sell:       { global: 'SokoniMerchantSell',        ctx: _ctx },
+    /* SUPPLY — the merchant-to-merchant procurement workspace (J1, sokoni-merchant-supply.js).
+       Its ctx is deliberately NOT _ctx: Supply is keyed on a BUSINESS, resolved through
+       merchantContext(), which is a different identifier space from the shop scope every
+       other module takes. Handing it _scope() would invite exactly the substitution Slice H
+       exists to prevent. It receives the resolver too, so the workspace can complete a
+       business selection when the owner has more than one. */
+    supply:     { global: 'SokoniMerchantSupply',      ctx: function () { return {
+                    merchantContext: merchantContext,
+                    resolveMerchantContext: resolveMerchantContext,
+                    callable: _callable,
+                  }; } },
     /* Products — native as of this commit; it was kind:'seller' and opened the legacy
        shell in an iframe. Same ctx shape the module was certified against, taken rather
        than re-derived: entitlement comes from SokoniAuthority (never from the page),

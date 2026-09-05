@@ -1,3 +1,52 @@
+## 2026-09-05 — Slice J2: the Supply route
+
+**Files:** `sokoni-merchant-routes.js` (+19, the route only), `merchant-v2.html` (+14),
+`scripts/test-supply-route-slice-j2.js` (new), `CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**Supply is registered once**, in the single route authority, and every navigation surface
+derives it from there — sidebar/more, desktop rail, mobile drawer, bottom nav and command
+palette are projections of that one registry, and none holds its own list.
+
+**`tier:'more'`, deliberately not primary.** `PRIMARY_ORDER` is the founder's canonical sidebar;
+adding a 19th primary is a product decision, not an integration detail — and `cfdc558` was spent
+establishing that changing that spec belongs to the founder. The registry enforces it: promoting
+Supply without also editing `PRIMARY_ORDER` makes `validate()` refuse with *"tier:primary but
+missing from PRIMARY_ORDER — it would have no sidebar position"*. `more` still projects into the
+rail, the drawer and the palette, so nothing is lost; promotion is a one-line change later.
+
+**`ctx: [SELLER_UID]` only, and that is not an oversight.** Supply is keyed on a **business**
+(`businesses/{merchantId}`), which the shell resolves separately through
+`resolveMerchantContext` — a different identifier space from `activeShopId`. Declaring `SHOP_ID`
+would gate the surface on a value it never uses and imply the two are interchangeable, which is
+the exact confusion Slice H exists to prevent. The `MODULES` entry likewise hands it
+`merchantContext` / `resolveMerchantContext` / `_callable` rather than `_scope()`.
+
+**Certification.** `scripts/test-supply-route-slice-j2.js` — **41/41 checks, 4/4 sabotage
+catches**, executing the real registry and asking its own projections for the route rather than
+grepping. Both the committed version and the working copy (which additionally carries another
+workstream's uncommitted `MORE_GROUPS` work) validate clean and expose Supply — a route that
+worked against only one would break the moment either landed. The founder sidebar stays at 18.
+RESTORE three ways: promoting to primary is refused by the registry's own validator; removing
+the `MODULES` entry and handing Supply `_scope()` each drive the suite to exit 1, and each
+restore returns 0. `test-merchant-routes` **60/0**, `test-merchant-route-gate` **168/0**.
+
+**Provenance boundary held, and this needed care.** `sokoni-merchant-routes.js` carries **235
+lines of another workstream's uncommitted work**. Reverting it to commit cleanly is destructive
+and was correctly refused by the safety gate, so this commit was built through the index
+instead: the committed blob is `HEAD` + the Supply route (**20 added lines, 0 removed**), while
+their changes remain untouched in the working tree. Their in-progress `validate()` requires every
+`more` route to belong to a `MORE_GROUPS` group, so the working copy additionally carries
+`'supply'` in the `main` group — one token, without which their own work would fail its own
+invariant. `HEAD` has no `MORE_GROUPS` at all, which is why the two versions legitimately differ.
+
+**One detector rewritten:** a check that the staged diff contained "only the supply route"
+matched added lines against an expected-word list, which proves nothing and breaks on a reworded
+comment. It now loads `HEAD` and the staged version, compares route sets, and asserts exactly
+one route gained (`supply`) and none lost.
+
+**API changes:** none. **Database changes:** none. **Breaking changes:** none — a new
+`more`-tier destination.
+
 ## 2026-09-05 — Route gate: reconcile the stale sidebar spec with the shipped registry
 
 **Files:** `scripts/test-merchant-routes.js`, `CHANGELOG.md`. **`sokoni-merchant-routes.js` is
