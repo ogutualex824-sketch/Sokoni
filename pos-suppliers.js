@@ -245,6 +245,12 @@ window.PosSuppliers = (() => {
       expectedDate: data.expectedDate || null,
       notes:        data.notes || '',
       createdBy:    data.createdBy || '',
+      /* Which merchant this draft was composed FOR. A device outlives an account: the same
+         browser can be used by a different merchant tomorrow, and inventory.html's
+         localStorage fallback can hand back a uid from a previous session. Recording the
+         owner at creation is what lets reconciliation refuse to attach one merchant's draft
+         to another. Legacy drafts predate this field and are treated as unknown-owner. */
+      ownerMerchantId: _merchantId || null,
       createdAt:    Date.now(),
       updatedAt:    Date.now(),
       sentAt:       null,
@@ -744,6 +750,147 @@ window.PosSuppliers = (() => {
   }
 
   /* ══════════════════════════════════════════
+     LOCAL-DRAFT RECONCILIATION (Slice G)
+
+     A device may hold purchase-order records composed before convergence, or while
+     offline, or by a different merchant. None of them may become canonical procurement
+     state on their own. This surface CLASSIFIES them and offers an explicit action; it
+     never submits anything by itself and never deletes anything.
+  ══════════════════════════════════════════ */
+
+  /** Why a record cannot currently be submitted. Never a reason to discard it. */
+  const RECONCILE = {
+    LINKED:            'linked',              /* carries a procPoId */
+    UNVERIFIED_LINK:   'unverified_link',     /* claims a procPoId the server did not confirm */
+    SUBMITTABLE:       'submittable',         /* a genuine local draft, ready when the merchant says so */
+    FOREIGN_MERCHANT:  'foreign_merchant',    /* composed for a DIFFERENT merchant */
+    UNKNOWN_OWNER:     'unknown_owner',       /* legacy: no ownerMerchantId recorded */
+    MALFORMED:         'malformed',           /* structurally unusable */
+  };
+
+  function _classifyDraft(rec, merchantId) {
+    if (!rec || typeof rec !== 'object' || !rec.id) return RECONCILE.MALFORMED;
+    if (!Array.isArray(rec.items) || rec.items.length === 0) return RECONCILE.MALFORMED;
+    if (!rec.supplierId) return RECONCILE.MALFORMED;
+    if (rec.procPoId) return RECONCILE.LINKED;
+    /* Provenance BEFORE readiness: a draft belonging to another merchant is never
+       submittable, however well-formed it is. */
+    if (rec.ownerMerchantId == null) return RECONCILE.UNKNOWN_OWNER;
+    if (merchantId && rec.ownerMerchantId !== merchantId) return RECONCILE.FOREIGN_MERCHANT;
+    return RECONCILE.SUBMITTABLE;
+  }
+
+  /**
+   * Classify every local purchase-order record. Read-only: nothing is submitted, mutated
+   * or removed. `verify` additionally checks each claimed procPoId against the canonical
+   * engine, so a local id that merely LOOKS canonical cannot pass as a submitted order.
+   *
+   * @returns {Promise<{records:Array, summary:object}>}
+   */
+  async function reconcileLocalDrafts(options) {
+    const opts       = options || {};
+    const merchantId = _merchantId;
+    const all        = await _all(S.POS);
+    const records    = [];
+
+    for (const rec of all) {
+      let state  = _classifyDraft(rec, merchantId);
+      let reason = null;
+      let server = null;
+
+      if (state === RECONCILE.LINKED && opts.verify) {
+        if (!_online || !window.firebase?.functions) {
+          state  = RECONCILE.UNVERIFIED_LINK;
+          reason = 'Cannot verify while offline.';
+        } else {
+          try {
+            const res = await firebase.functions().httpsCallable('getPurchaseOrder')({ poId: rec.procPoId });
+            if (res && res.data && res.data.poId) server = res.data;
+            else { state = RECONCILE.UNVERIFIED_LINK; reason = 'The server did not return this purchase order.'; }
+          } catch (e) {
+            state  = RECONCILE.UNVERIFIED_LINK;
+            reason = (e && (e.message || e.code)) || 'Verification failed.';
+          }
+        }
+      }
+
+      if (state === RECONCILE.FOREIGN_MERCHANT) {
+        reason = 'Composed for a different merchant on this device. It will not be submitted here.';
+      } else if (state === RECONCILE.UNKNOWN_OWNER) {
+        reason = 'Created before this device recorded which merchant a draft belongs to. Confirm ownership before submitting.';
+      } else if (state === RECONCILE.MALFORMED) {
+        reason = 'Incomplete record - missing an id, a supplier, or line items. Kept for inspection.';
+      }
+
+      /* The ORIGINAL record is passed through untouched. Reconciliation is a view over
+         local data, not a rewrite of it. */
+      records.push({
+        localId:   rec.id,
+        state:     state,
+        reason:    reason,
+        procPoId:  rec.procPoId || null,
+        poNo:      rec.poNo || null,
+        record:    rec,
+        server:    server,
+      });
+    }
+
+    const summary = { total: records.length };
+    Object.keys(RECONCILE).forEach(function (k) {
+      summary[RECONCILE[k]] = records.filter(function (r) { return r.state === RECONCILE[k]; }).length;
+    });
+    return { records: records, summary: summary };
+  }
+
+  /**
+   * Submit ONE reconciled draft. This is the explicit merchant action - there is no bulk
+   * variant and nothing calls it automatically.
+   *
+   * Ownership is re-checked at submission, not merely at classification: the classification
+   * a merchant saw may be minutes old and the active merchant may have changed since.
+   *
+   * Idempotency is the canonical one already established by submitPurchaseOrder - a record
+   * that already carries a procPoId returns unchanged rather than creating a second order.
+   * No second mechanism is invented here.
+   *
+   * @throws {Error} when the draft is not submittable, or the server rejects it. The local
+   *   record survives either way.
+   */
+  async function submitReconciledDraft(localId, options) {
+    const opts = options || {};
+    const rec  = await _get(S.POS, localId);
+    if (!rec) throw new Error('Draft not found on this device.');
+
+    if (rec.procPoId) return rec;   /* already canonical - not a second order */
+
+    const state = _classifyDraft(rec, _merchantId);
+
+    if (state === RECONCILE.MALFORMED) {
+      const e = new Error('This draft is incomplete and cannot be submitted. It has been kept for inspection.');
+      e.code = RECONCILE.MALFORMED; throw e;
+    }
+    if (state === RECONCILE.FOREIGN_MERCHANT) {
+      const e = new Error('This draft was composed for a different merchant and cannot be submitted here.');
+      e.code = RECONCILE.FOREIGN_MERCHANT; throw e;
+    }
+    if (state === RECONCILE.UNKNOWN_OWNER && !opts.confirmOwnership) {
+      /* Deliberately blocking. A legacy draft with no recorded owner might belong to
+         whoever used this device before; attaching it to the current merchant silently is
+         exactly the accident this slice exists to prevent. */
+      const e = new Error('Confirm this draft belongs to the current merchant before submitting.');
+      e.code = RECONCILE.UNKNOWN_OWNER; throw e;
+    }
+
+    if (state === RECONCILE.UNKNOWN_OWNER && opts.confirmOwnership) {
+      rec.ownerMerchantId = _merchantId || null;
+      rec.ownershipConfirmedAt = Date.now();
+      await _put(S.POS, rec);
+    }
+
+    /* The canonical path, unchanged. Server identity is the only source of procPoId/poNo. */
+    return await submitPurchaseOrder(localId);
+  }
+  /* ══════════════════════════════════════════
      INIT
   ══════════════════════════════════════════ */
   async function init(branchId = 'default', merchantId = null) {
@@ -761,6 +908,8 @@ window.PosSuppliers = (() => {
     addSupplier, updateSupplier, getSupplier, getAllSuppliers, searchSuppliers,
     /* Purchase Orders */
     createPurchaseOrder, submitPurchaseOrder, getUnsubmittedDrafts,
+    /* Local-draft reconciliation (Slice G) - classify, then submit ONE explicitly. */
+    reconcileLocalDrafts, submitReconciledDraft, RECONCILE_STATES: RECONCILE,
     sendPurchaseOrder, getPurchaseOrder,
     getPurchaseOrdersBySupplier, getAllPurchaseOrders, cancelPurchaseOrder,
     /* GRNs */

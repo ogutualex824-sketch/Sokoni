@@ -833,6 +833,42 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   2b. getPurchaseOrder
+   Read one canonical purchase order. Added for Slice G: a device-local record may carry a
+   procPoId, and reconciliation must VERIFY that against the server rather than trusting it.
+   A local id must never be mistaken for a canonical one, and a canonical id that does not
+   resolve must not be reported to a merchant as a submitted order.
+
+   Merchant-scoped through the same PO-derived gate as approve/send/receive, so this cannot
+   become a way to enumerate another merchant's orders.
+════════════════════════════════════════════════════════════════ */
+const getPurchaseOrder = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { poId } = request.data ?? {};
+
+  const { po } = await _assertPoAuthority(request, poId);
+
+  return {
+    poId:               po.poId,
+    poNumber:           po.poNumber,
+    status:             po.status,
+    merchantId:         po.merchantId,
+    buyerBusinessId:    po.buyerBusinessId || po.merchantId || null,
+    supplierId:         po.supplierId,
+    supplierBusinessId: po.supplierBusinessId || null,
+    supplierName:       po.supplierName || null,
+    items:              po.items || [],
+    subtotal:           po.subtotal,
+    vatAmount:          po.vatAmount,
+    total:              po.total,
+    expectedDelivery:   po.expectedDelivery || null,
+    approvedAt:         po.approvedAt || null,
+    sentAt:             po.sentAt || null,
+    delivery:           po.delivery || null,
+    createdAt:          po.createdAt || null,
+  };
+});
+/* ════════════════════════════════════════════════════════════════
    3. approvePurchaseOrder
    Manager or admin: approve (→ 'approved') or reject (→ 'cancelled').
 ════════════════════════════════════════════════════════════════ */
@@ -1899,6 +1935,7 @@ module.exports = {
   setSupplyParticipation,
   getInboundSupplyOrders,
   createPurchaseOrder,
+  getPurchaseOrder,
   approvePurchaseOrder,
   sendPurchaseOrder,
   receiveGoods,

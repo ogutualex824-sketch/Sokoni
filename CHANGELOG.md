@@ -1,3 +1,79 @@
+## 2026-09-05 — Slice G: local-draft reconciliation (A→G convergence complete)
+
+**Files:** `pos-suppliers.js`, `functions/procurement.js`, `functions/index.js` (+1 export),
+`scripts/test-draft-reconciliation-slice-g.js` (new), `CHANGELOG.md`. **Not deployed**; HOLD
+remains.
+
+**The core invariant.** No local draft is promoted to canonical procurement state without an
+explicit merchant action **and** successful server confirmation. Reconciliation classifies; it
+never submits, and it never deletes.
+
+**Classification, read-only.** `reconcileLocalDrafts()` returns every local purchase-order
+record with a state and a reason, passing the **original record through untouched** — it is a
+view over local data, not a rewrite of it. Six states: `linked`, `unverified_link`,
+`submittable`, `foreign_merchant`, `unknown_owner`, `malformed`.
+
+**Identity is never assumed.** A local id is never treated as a canonical one. A record that
+merely *claims* a `procPoId` is now **verified against the server** via a new merchant-scoped
+`getPurchaseOrder` — because without it a fabricated or stale canonical id would be reported to
+a merchant as a submitted order. An unresolvable claim is flagged `unverified_link`, not
+trusted; offline verification is likewise refused rather than assumed valid.
+
+**The account/device edge, closed.** New drafts stamp `ownerMerchantId` at creation. A device
+outlives an account: the same browser can serve a different merchant tomorrow, and
+`inventory.html`'s `localStorage` fallback can hand back a uid from a previous session. A draft
+composed for another merchant is flagged `foreign_merchant` and **refused at submission** — it
+never reaches the server and is never re-owned. Legacy drafts predating the field are
+`unknown_owner` and require explicit `confirmOwnership`, because silently attaching one to the
+current merchant is precisely the accident this slice exists to prevent.
+
+**Nothing is destroyed.** A structurally unusable record is quarantined as `malformed` with an
+explicit reason and kept for inspection. Certified: after a rejected submission the record still
+exists.
+
+**Duplicate submission reuses the canonical mechanism.** A record already carrying a `procPoId`
+returns unchanged rather than creating a second order — Slice B's behaviour, not a second
+mechanism invented here.
+
+**Certification.** `scripts/test-draft-reconciliation-slice-g.js` — **76/76 checks, 3/3 sabotage
+catches**, executing the real module over a real IndexedDB double with every callable captured,
+so *"did anything submit by itself"* is answered by observing behaviour. All required edge cases
+proven: empty queue → zero action; one draft → stays a draft; multiple → each independently
+recoverable; one succeeds / one fails → the failed one untouched, no invented identity, both
+retained; offline → queued, no fake identity; duplicate submit → one canonical PO; unverifiable
+link → flagged; foreign merchant → refused; legacy → blocked until confirmed; malformed →
+quarantined. RESTORE five ways — auto-submitting during classification, letting a foreign draft
+through, trusting a claimed `procPoId`, deleting malformed records, and ungating the canonical
+read — each drives exit 1 and each restore returns 0, every sabotage with an applied-check.
+
+**No pos\* PO writer reintroduced**, asserted three ways: no `_sync('posPurchaseOrders')`
+anywhere, no `purchaseOrder` entity on the sync op, and reconciliation never touching that
+collection. Slices A–F all asserted intact.
+
+**API changes:** one new callable, `getPurchaseOrder` (merchant-scoped through the same
+PO-derived gate as approve/send/receive, so it cannot enumerate another merchant's orders);
+export count 1522 → **1523**. `PosSuppliers` gains `reconcileLocalDrafts`,
+`submitReconciledDraft` and `RECONCILE_STATES`. **Database changes:** none —
+`ownerMerchantId` is additive on new local records only. **Breaking changes:** none.
+**No Firestore rule widened.**
+
+---
+
+### A→G procurement convergence: COMPLETE
+
+One PO engine · server-issued identity · merchant-scoped authority on every operation ·
+buyer/supplier authority independent · receipt idempotent and cumulative · payment
+transactional and idempotent · auto-reorder recommends but never orders · local drafts
+preserved and reconciled only by explicit action.
+
+**Deliberately NOT in this sequence, each its own slice:** the Merchant V2 Supply workspace UI,
+B2B marketplace discovery, WhatsApp notifications, the fabricated `sokoni-b2b.js` catalogue,
+`getPOSInventoryIntelligence`'s 500, invoice-total authority, real payment settlement, the
+`pos-bi.html` KPI zero-coercion, and the four `pos-suppliers.html` method-name mismatches.
+
+**Still blocking deployment, unchanged and not mine:** `functions/pos-zero-friction.js` requires
+`./merchant-identity`, which does not exist and was never tracked.
+
 ## 2026-09-05 — Slice F: auto-reorder → canonical PO drafts
 
 **Files:** `pos-suppliers.js`, `scripts/test-auto-reorder-slice-f.js` (new), `CHANGELOG.md`.

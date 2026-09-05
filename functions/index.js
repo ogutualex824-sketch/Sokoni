@@ -12471,6 +12471,7 @@ exports.updateSupplier                   = procurement.updateSupplier;
 exports.setSupplyParticipation           = procurement.setSupplyParticipation;
 exports.getInboundSupplyOrders           = procurement.getInboundSupplyOrders;
 exports.createPurchaseOrder              = procurement.createPurchaseOrder;
+exports.getPurchaseOrder                 = procurement.getPurchaseOrder;
 exports.approvePurchaseOrder             = procurement.approvePurchaseOrder;
 exports.sendPurchaseOrder                = procurement.sendPurchaseOrder;
 exports.receiveGoods                     = procurement.receiveGoods;
