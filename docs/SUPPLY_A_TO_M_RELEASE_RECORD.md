@@ -109,13 +109,43 @@ Find Suppliers → Supplier Business → Supply Catalogue → Draft
 record) as *"two untracked files with no provenance, so `functions/index.js` cannot be
 required."* That description was wrong in both halves. The trace:
 
-### `functions/index.js` loads. The module graph at HEAD is closed.
+### `functions/index.js` loads from the WORKING TREE. The tracked tree is a different question.
 
 Substituting **HEAD's** committed `pos-zero-friction.js` for the working copy — without
 modifying the working copy — `require('./index.js')` **succeeds**, exporting **1718** names
 including `findSuppliers`, `getSupplyCatalogue`, `servicesDispatch` and `smartPosDispatch`.
-A require-closure scan of all of `functions/*.js` finds exactly **one** unresolvable local
-require in the whole graph.
+
+**Correction (2026-09-05).** An earlier revision of this section said "the module graph at HEAD
+is closed". That was wrong, and the error was in the measurement: the closure scan walked the
+**filesystem**, where other workstreams' untracked files are present, so it measured the
+working tree and reported it as the tracked tree. A deploy uses a checkout, not this disk.
+
+Scanning the **git tree** instead — `git ls-tree` for the file set, `git show` for the sources —
+gives the real position:
+
+| ref | tracked `functions/*.js` | unresolvable local requires |
+|---|---|---|
+| before the tenant-identity commit | 382 | **5** |
+| after it (`24f50ba`) | 383 | **4** |
+
+The one that closed was `tenant-identity` ← `procurement.js`, `business-bootstrap.js`. The four
+that remain are all from `index.js`:
+
+| missing module | ever committed on any ref? | on disk here? |
+|---|---|---|
+| `order-claim` | no | yes (untracked) |
+| `manual-till-orders` | no | yes (untracked) |
+| `commission-invoice` | no | yes (untracked) |
+| `pos-mpesa-refs` | once, at `233ac4d` | yes (untracked) |
+
+All four `require` lines entered the **tracked** `index.js` at `fa5082b` (2026-08-30, *"Rail-B
+multi-shop checkout"*) — this branch's own lineage, committing an `index.js` that references
+four modules the same commit did not commit. The Supply slices did not introduce them: `db89191`
+and `714b38d` each added exactly one `exports.` line to that file.
+
+So a **clean checkout of `release/multishop-checkout-certified` still cannot load
+`functions/index.js`.** The tenant-identity commit removed one of five gaps of this class, not
+the class itself.
 
 ### That one require lives inside another workstream's uncommitted edit
 
@@ -164,10 +194,18 @@ been taken.
 
 ### So the real position
 
-Nothing in the certified Supply stack blocks a functions deploy. The remaining obstacles are a
-branch-content decision (`tenant-identity.js`) and another workstream's in-progress edit
-(`merchant-identity.js`) — plus the separate, unresolved fact that the lineages have diverged
-and production was itself built from a dirty tree.
+Nothing in the certified Supply stack blocks a functions deploy, and  is
+now committed (, byte-identical to ). What still stands between this branch
+and a functions deploy is **not** Supply work:
+
+1. **Four modules  requires are untracked** — , ,
+   , . Three have never been committed on any ref. Each
+   needs its own owner and provenance decision, exactly as tenant-identity did.
+2. **** — another workstream's in-progress edit to 
+   depends on it; two divergent committed versions exist; that decision is theirs.
+3. **The lineages have diverged**, and production was itself built from a dirty tree.
+
+None of these is resolved here, and no deployment has been performed.
 
 ---
 
