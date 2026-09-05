@@ -289,9 +289,14 @@ async function verdict(fn) { try { return { ok: true, value: await fn() }; } cat
   sab('the detector catches an unscoped list op',
     !/const listX = onCall[\s\S]{0,900}_listScoped\(request, '/.test(
       "const listX = onCall(OPT, async (r) => db.collection('x').get());"));
-  check('SCOPE: no supplier discovery added', !/const (findSuppliers|discoverSuppliers) = onCall/.test(PROC));
-  check('SCOPE: no Supply route registered',
-    !/id:\s*'supply'/.test(fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8')));
+  /* Slice K landed. */
+  check('discovery exists (Slice K) and is audience gated',
+    /const findSuppliers = onCall/.test(PROC) && /Supplier discovery is available to SOKONI businesses/.test(PROC));
+  /* Slice J2 has since registered it, at tier:'more'. */
+  check('the Supply route exists and is NOT primary (J2)', (function () {
+    const R = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8');
+    return /id:'supply'/.test(R) && /id:'supply'[\s\S]{0,120}tier:'more'/.test(R);
+  })());
   check('SCOPE: dashboard/forecast authorization untouched (Slice I)',
     /const getProcurementDashboard = onCall\(OPT, async \(request\) => \{\s*\n\s*_requireAuth\(request\);/.test(PROC));
 

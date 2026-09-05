@@ -300,7 +300,10 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
   ══════════════════════════════════════════════════════════ */
   console.log('\n§7 scope');
   const ROUTES = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8');
-  check('NO Supply route was registered (J2 territory)', !/id:\s*'supply'/.test(ROUTES));
+  /* J1 shipped before the route existed — that assertion was correct then. J2 has since
+     registered it at tier:'more', so the invariant flips rather than being deleted. */
+  check('the Supply route exists and is NOT primary (J2)',
+    /id:'supply'/.test(ROUTES) && /id:'supply'[\s\S]{0,120}tier:'more'/.test(ROUTES));
   check('the module is self-contained — it exposes a mount contract',
     /global\.SokoniMerchantSupply = \{ mount: mount/.test(SRC));
   check('it does not require the shell to change to be testable',

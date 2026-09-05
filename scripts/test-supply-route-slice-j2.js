@@ -42,6 +42,9 @@ function loadRegistry(src, label) {
 
 /* The version this slice commits — read from the INDEX, not the working tree, because the
    working tree also carries another workstream's uncommitted changes. */
+/* Prefer the INDEX while this slice is being committed; once committed the index matches
+   HEAD and the same content is read from there. Reading the working tree instead would pull
+   in another workstream's uncommitted changes. */
 const stagedSrc = execSync('git show :sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 });
 const workSrc   = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8');
 const SHELL     = fs.readFileSync(path.join(ROOT, 'merchant-v2.html'), 'utf8');
@@ -136,28 +139,53 @@ check('the mounted global matches what the module registers',
    §5 scope discipline — J2 stayed tiny
 ══════════════════════════════════════════════════════════ */
 console.log('\n§5 scope');
-const stagedDiff = execSync('git diff --cached -- sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 });
-const added = stagedDiff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
-const removed = stagedDiff.split('\n').filter((l) => l.startsWith('-') && !l.startsWith('---'));
-check('the staged route change REMOVES nothing', removed.length === 0);
-/* Behavioural, not a keyword whitelist. An earlier version matched added lines against a
-   list of expected words, which fails the moment a comment is reworded and proves nothing
-   about what actually changed. Load HEAD and the staged version and compare route sets. */
-const headSrc = execSync('git show HEAD:sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 });
-const Chead = loadRegistry(headSrc, 'HEAD');
-const Cstaged = loadRegistry(stagedSrc, 'staged');
-const idsOf = (C) => C.primary().concat(C.more()).map((r) => r.id).sort();
+/* The baseline is the commit that INTRODUCED the route. While J2 was being committed that was
+   the staged diff against HEAD; now that it has landed, the same change is read back from its
+   own commit. Measuring the index instead would silently become an empty diff — every scope
+   check would then pass vacuously and prove nothing. */
+const addedIn = execSync('git log --format=%H -1 -S"id:\'supply\'" -- sokoni-merchant-routes.js',
+  { cwd: ROOT, encoding: 'utf8' }).trim();
+check('the commit that introduced the Supply route is identifiable', /^[0-9a-f]{40}$/.test(addedIn));
+/* The parent is resolved by HASH, never written as `<sha>^`. On Windows execSync runs through
+   cmd.exe, where `^` is the escape character: `A^ B` silently collapses to `A B`, git then
+   diffs the commit against ITSELF, and every scope check below passes against an empty diff.
+   That is a green suite proving nothing, so the caret never reaches a shell. */
+const parentOf = addedIn
+  ? (execSync('git rev-list --parents -n 1 ' + addedIn, { cwd: ROOT, encoding: 'utf8' }).trim().split(/[ ]+/)[1] || '')
+  : '';
+check('the parent commit resolves to a DISTINCT revision',
+  /^[0-9a-f]{40}$/.test(parentOf) && parentOf !== addedIn);
+const routeDiff = parentOf
+  ? execSync('git diff ' + parentOf + ' ' + addedIn + ' -- sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 })
+  : execSync('git diff --cached -- sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 });
+check('the route change is non-empty — the baseline actually resolves to a real diff',
+  routeDiff.split('\n').some((l) => l.startsWith('+') && !l.startsWith('+++')));
+const removed = routeDiff.split('\n').filter((l) => l.startsWith('-') && !l.startsWith('---'));
+check('the route change REMOVES nothing', removed.length === 0);
+sab('the detector would catch a removed line',
+  ["-    { id:'shop' },"].filter((l) => l.startsWith('-') && !l.startsWith('---')).length !== 0);
+
+/* Behavioural, not a keyword whitelist. An earlier version matched added lines against a list
+   of expected words, which fails the moment a comment is reworded and proves nothing about
+   what actually changed. Load the baseline and the current version and compare route SETS. */
+const baseRef  = parentOf || 'HEAD';
+const headSrc  = execSync('git show ' + baseRef + ':sokoni-merchant-routes.js', { cwd: ROOT, encoding: 'utf8', maxBuffer: 8e6 });
+check('the baseline source is NOT the same file as the version under test', headSrc !== stagedSrc);
+const Chead    = loadRegistry(headSrc, baseRef);
+const Cstaged  = loadRegistry(stagedSrc, 'staged');
+const idsOf    = (C) => C.primary().concat(C.more()).map((r) => r.id).sort();
 const beforeIds = idsOf(Chead), afterIds = idsOf(Cstaged);
 const gained = afterIds.filter((id) => beforeIds.indexOf(id) === -1);
 const lost   = beforeIds.filter((id) => afterIds.indexOf(id) === -1);
-check('the staged change adds EXACTLY one route', gained.length === 1);
+check('the change adds EXACTLY one route', gained.length === 1);
 check('and that route is supply', gained[0] === 'supply');
 check('and removes none', lost.length === 0);
 sab('the detector would catch a second added route',
   ['supply', 'extra'].filter((id) => ['a'].indexOf(id) === -1).length !== 1);
-check('no route was reordered or removed', !/^-\s+\{ id:/m.test(stagedDiff));
-check('PRIMARY_ORDER is untouched by this slice', !/PRIMARY_ORDER = \[/.test(stagedDiff.replace(/^\+.*founder.*$/gm, '')));
-check('the other workstream\'s MORE_GROUPS work is NOT staged', !/MORE_GROUPS = \[/.test(stagedDiff));
+check('no route was reordered or removed', !/^-\s+\{ id:/m.test(routeDiff));
+check('PRIMARY_ORDER is untouched by this slice', !/PRIMARY_ORDER = \[/.test(routeDiff.replace(/^\+.*founder.*$/gm, '')));
+check('the other workstream\'s MORE_GROUPS work was NOT swept into the Supply commit',
+  !/MORE_GROUPS = \[/.test(routeDiff));
 check('their uncommitted work is still present in the working tree', /MORE_GROUPS/.test(workSrc));
 
 console.log('\n  ' + pass + '/' + (pass + fail) + ' checks passed  ·  ' + sabotageOk + '/' + sabotage + ' sabotage catches');

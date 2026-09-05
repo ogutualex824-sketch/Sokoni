@@ -1,3 +1,111 @@
+## 2026-09-05 — Slice K: Find Suppliers (discovery over SOKONI businesses)
+
+**Files:** `functions/procurement.js` (+131/−1), `functions/index.js` (+1, the export),
+`scripts/test-find-suppliers-slice-k.js` (new), four earlier suites re-pointed (below),
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**Participation and visibility are separate decisions.** Agreeing to receive business orders is
+not agreeing to appear in a searchable directory: a business may supply a counterparty it
+already knows without being listed to strangers. `supply.discoverable` is therefore its own
+explicit, opt-in boolean on `businesses/{id}`, added to `SUPPLY_MUTABLE`, and is **never
+inferred from `supply.enabled`**. Absent means false. Withdrawing from supply
+(`enabled: false`) also clears `discoverable`, because leaving a business listed after it
+stopped supplying would advertise a counterparty that no longer accepts orders, and the
+merchant would have no reason to think a second switch was still on.
+
+**The trust contract, in full:** `status === 'active'` **and** `supply.enabled === true`
+**and** `supply.discoverable === true` — and nothing else. All three are equality filters, so
+no composite index is introduced. Facets (`category`, `city`, `county`) are narrowing equality
+filters only; pagination orders by `FieldPath.documentId()` with a `startAfter` cursor.
+
+**No verification claim — decision (a), and the evidence for it.** A trace found no
+business-level attestation to claim: `verifications/{uid}` is keyed by **user uid**, attests
+person-level facts (email, phone, identity, KRA, address, bank), is **EMPTY in production**,
+and its only business-ish field is treated as satisfied by merely owning a business. Rendering
+a "verified" badge on top of that would be a fabricated trust signal — the same defect class
+removed from `pos-bi.html`. The response therefore carries an explicit `verificationClaim: null`
+so a caller cannot mistake the absence of a badge for a claim. When a real attestation exists it
+gets its own slice.
+
+**The allowlist is POSITIVE, not subtractive.** Only `businessId, name, category, city,
+county, supply.*` are ever returned, and within `supply` only `displayName, categories,
+minOrderValue, leadDays, deliveryAreas`. `businesses` documents already carry `apiPublicKey`
+and `pairingToken` — credential material on the same document — so a deny-list would leak the
+next sensitive field somebody adds. Explicitly excluded and never added by omission: **phone,
+email, address, rating, products, MOQ, `apiPublicKey`, `pairingToken`, `ownerId`, `adminUids`,
+`status`, `supply.notes`**. A buyer reaches a supplier by forming a relationship, not by lifting
+contact details out of a directory.
+
+**Free-text search is deliberately absent.** A prefix or array-contains search alongside these
+filters needs a composite index nobody has decided on, and inventing one silently is how a query
+starts quietly excluding records. It gets its own slice with an explicit index decision.
+
+**A real gap my own suite caught, and how it was closed.** `_assertMerchantAuthority` honours
+the owner-uid form and returns **without a lookup** when the requested merchant is the caller
+themselves. That is correct for operating on your own data, but it is not an audience gate: it
+would have let **any signed-in account** read the directory by implicitly acting "for itself".
+`findSuppliers` now additionally requires the viewer to resolve to a real, `active` business
+document. Verified in the operation rather than by changing the shared primitive, whose
+behaviour nine other operations depend on.
+
+**Certification.** `scripts/test-find-suppliers-slice-k.js` — **62/62 checks, 4/4 sabotage
+catches**, executing the REAL `findSuppliers` against an injected fixture. The three cases the
+slice was specified against: **A** supply enabled + discoverable → visible; **B** supply enabled
++ discoverable disabled → invisible; **C** supply disabled + discoverable enabled → invisible;
+plus **D** retired-but-both-flags-on → invisible. Fixture documents all carry
+`apiPublicKey`/`pairingToken`/phone/email/address, so a leak is a failure rather than an omission.
+
+**RESTORE — five sabotages of the real server, not a replica**, each re-running the suite and
+each restored to a byte-identical file: dropping the `discoverable` filter (**59/62**, exit 1),
+dropping the `status === 'active'` filter (**60/62**, exit 1), returning the raw document
+instead of `_projectDiscoverable` (**49/62**, exit 1), removing **both** audience guards
+(**61/62**, exit 1), and inferring `discoverable` unconditionally instead of from `v === true`
+(**61/62**, exit 1). Every restore returns exit 0.
+
+**An empty directory in production is a legitimate empty state, not a failure.** No business has
+`supply.discoverable` set, because the field did not exist until this slice. The surface must
+read that as "nobody has opted in yet" — never as an error, and never as a fabricated list.
+
+**Four stale point-in-time assertions in earlier suites were flipped, not deleted.** Slices J2
+and K legitimately invalidated them; each now asserts the new invariant rather than the absence
+of the feature. `test-merchant-context-slice-h` (66/66) and `test-read-layer-slice-i` (77/77):
+*"no supplier discovery added"* → *discovery exists and is audience gated*; *"no Supply route
+registered"* → *the route exists and is NOT primary*. `test-supply-workspace-slice-j` (62/62):
+the same route flip. `test-read-layer-slice-i` additionally: *"the merchant filter is applied
+BEFORE the cursor"* compared **file-wide** `indexOf` positions and broke when K added a
+`findSuppliers` carrying its own, earlier, `startAfter()` — a false failure about an invariant
+that still holds. It is now scoped to the `_listScoped` body, with a guard that the body was
+actually located.
+
+**`test-supply-route-slice-j2` rewritten and re-certified at 46/46, 5/5.** Its §5 baseline was
+the staged diff, which is only meaningful at commit time; once J2 landed, the index was empty and
+every scope check would have passed **vacuously**. It now derives the baseline from the commit
+that introduced the route via the pickaxe. The first attempt wrote the parent as `<sha>^` — on
+Windows `execSync` runs through `cmd.exe`, where `^` is the escape character, so `A^ B` silently
+collapsed to `A B` and git diffed the commit **against itself**: an empty diff and a green
+section proving nothing. The parent is now resolved by hash via `git rev-list --parents`, and two
+new guards fail the suite if the baseline is not a distinct revision or the diff is empty. Proven
+by sabotage: forcing the baseline back to the commit itself → exit 1, restore → exit 0.
+
+**Full regression, all green:** 16 suites, **995 checks, 97 sabotage catches**, every one exit 0
+— `supplier-sync-authority` 73, `bi-no-fabricated-metrics` 40, `po-send-honesty` 44,
+`procurement-merchant-authority` 57, `po-convergence-slice-b` 82, `supply-relationship-b2` 51,
+`po-approval-send-slice-c` 44, `grn-receiving-slice-d` 107, `invoice-payment-slice-e` 63,
+`auto-reorder-slice-f` 45, `draft-reconciliation-slice-g` 76, `merchant-context-slice-h` 66,
+`read-layer-slice-i` 77, `supply-workspace-slice-j` 62, `supply-route-slice-j2` 46,
+`find-suppliers-slice-k` 62.
+
+**API changes:** new callable `findSuppliers`, exported by name in `functions/index.js`.
+**Database changes:** new optional field `businesses/{id}.supply.discoverable` (boolean, opt-in;
+absent === false). No migration — absence is the correct default. No new index.
+**Security changes:** authenticated + active-business audience gate; positive field allowlist.
+**Breaking changes:** none.
+
+**Deployment blockers unchanged — both still open.** `functions/tenant-identity.js` and
+`functions/merchant-identity.js` remain **untracked**; `functions/index.js` cannot be `require`d
+and no functions deploy can succeed. Provenance for both must be established before anything is
+added. This slice touches neither and works around neither.
+
 ## 2026-09-05 — Slice J2: the Supply route
 
 **Files:** `sokoni-merchant-routes.js` (+19, the route only), `merchant-v2.html` (+14),

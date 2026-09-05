@@ -485,7 +485,9 @@ const resolveMerchantContext = onCall(OPT, async (request) => {
 
 /** The only supply fields a client may set. Ownership and derived state are excluded. */
 const SUPPLY_MUTABLE = ['enabled', 'displayName', 'categories', 'minOrderValue',
-                        'leadDays', 'deliveryAreas', 'notes'];
+                        'leadDays', 'deliveryAreas', 'notes',
+                        /* Discovery consent — SEPARATE from participation. See below. */
+                        'discoverable'];
 
 /**
  * Resolve the business a caller may declare supply participation FOR.
@@ -544,6 +546,11 @@ const setSupplyParticipation = onCall(OPT, async (request) => {
     const v = supply[key];
     switch (key) {
       case 'enabled':     patch['supply.enabled'] = v === true; break;
+      /* THE DISTINCTION AT THE HEART OF DISCOVERY: agreeing to receive business orders is
+         not agreeing to be listed in a searchable directory. A business may supply a
+         counterparty it already knows without appearing to strangers, so this is its own
+         explicit boolean and is never inferred from `enabled`. Opt-in: absent means false. */
+      case 'discoverable': patch['supply.discoverable'] = v === true; break;
       case 'displayName': patch['supply.displayName'] = _san(v, 150); break;
       case 'notes':       patch['supply.notes'] = _san(v, 500); break;
       case 'categories': {
@@ -578,6 +585,12 @@ const setSupplyParticipation = onCall(OPT, async (request) => {
   if (supply.enabled === true) {
     patch['supply.enabledAt'] = F.serverTimestamp();
   }
+  /* Withdrawing from supply withdraws discovery with it. Leaving a business listed after it
+     stopped supplying would advertise a counterparty that no longer accepts orders, and the
+     merchant would have no reason to think a second switch was still on. */
+  if (supply.enabled === false) {
+    patch['supply.discoverable'] = false;
+  }
 
   await db.collection('businesses').doc(businessId).update(patch);
 
@@ -606,6 +619,119 @@ async function _assertSuppliesEnabled(supplierBusinessId) {
   }
   return id;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   1a-2. FIND SUPPLIERS — discovery over SOKONI businesses
+
+   THE TRUST CONTRACT, stated in full because it is deliberately narrow:
+       status === 'active'  AND  supply.enabled === true  AND  supply.discoverable === true
+   and nothing else. There is no verification badge and no implied vetting.
+
+   WHY NO VERIFICATION CLAIM. A trace of production found no business-level verification to
+   claim: `verifications/{uid}` is keyed by USER uid, attests person-level facts (email,
+   phone, identity, KRA, address, bank), is EMPTY in production, and its only business-ish
+   field is treated as satisfied by merely owning a business. Rendering a 'verified' badge on
+   top of that would be a fabricated trust signal — the same defect class removed from
+   pos-bi.html. When a real attestation exists it gets its own slice; until then this surface
+   makes no claim at all.
+
+   THE ALLOWLIST IS POSITIVE, NOT SUBTRACTIVE. Only the fields named in DISCOVERABLE_FIELDS
+   are ever returned. `businesses` documents already carry apiPublicKey and pairingToken —
+   credential material on the same document — so a deny-list would leak the next sensitive
+   field somebody adds. Phone, email and address are excluded on purpose: a buyer reaches a
+   supplier by forming a relationship, not by lifting contact details out of a directory.
+════════════════════════════════════════════════════════════════ */
+
+/** The ONLY fields discovery may ever return. Adding one is a privacy decision. */
+const DISCOVERABLE_FIELDS = ['businessId', 'name', 'category', 'city', 'county', 'supply'];
+
+/** The supply sub-fields a discovered business exposes — also positive. */
+const DISCOVERABLE_SUPPLY_FIELDS = ['displayName', 'categories', 'minOrderValue',
+                                    'leadDays', 'deliveryAreas'];
+
+function _projectDiscoverable(id, d) {
+  const src = d || {};
+  const out = { businessId: id };
+  DISCOVERABLE_FIELDS.forEach(function (f) {
+    if (f === 'businessId' || f === 'supply') return;
+    out[f] = src[f] === undefined ? null : src[f];
+  });
+  const sup = src.supply || {};
+  const supOut = {};
+  DISCOVERABLE_SUPPLY_FIELDS.forEach(function (f) {
+    supOut[f] = sup[f] === undefined ? null : sup[f];
+  });
+  out.supply = supOut;
+  /* Deliberately absent and never added by omission: phone, email, address, rating,
+     products, moq, apiPublicKey, pairingToken, ownerId, adminUids, status. */
+  return out;
+}
+
+const findSuppliers = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, category, city, county, limit, cursor } = request.data ?? {};
+
+  /* AUDIENCE. Discovery is for authenticated SOKONI merchants, not the open internet, so the
+     caller must prove they act for a business of their own before they may see anyone
+     else's. This is the same authority every other procurement operation uses; a signed-in
+     account with no merchant relationship is refused. */
+  const viewerMerchantId = await _assertMerchantAuthority(request, merchantId);
+
+  /* The authority primitive honours the owner-uid form and returns WITHOUT a lookup when the
+     requested merchant is the caller themselves. That is correct for operating on your own
+     data, but it is not an audience gate: it would let ANY signed-in account read the
+     directory by implicitly acting "for itself". Discovery is for SOKONI merchants, so the
+     viewer must resolve to a real, active business document. Verified here rather than by
+     changing the shared primitive, whose behaviour every other operation depends on. */
+  const viewerSnap = await db.collection('businesses').doc(String(viewerMerchantId)).get();
+  if (!viewerSnap.exists) {
+    _err('Supplier discovery is available to SOKONI businesses. No business is linked to this account.',
+         'failed-precondition');
+  }
+  if ((viewerSnap.data() || {}).status !== 'active') {
+    _err('Supplier discovery requires an active business.', 'failed-precondition');
+  }
+
+  /* The three flags are ALL required, and all are equality filters so no composite index is
+     introduced. `discoverable` is opt-in: a document without the field does not match. */
+  let q = db.collection('businesses')
+    .where('status', '==', 'active')
+    .where('supply.enabled', '==', true)
+    .where('supply.discoverable', '==', true);
+
+  /* Facets are narrowing equality filters only. Free-text search is deliberately NOT here:
+     a prefix or array-contains search alongside these filters needs a composite index that
+     nobody has decided on, and inventing one silently is how a query starts excluding
+     records. It gets its own slice with an explicit index decision. */
+  if (category) q = q.where('category', '==', _san(String(category), 100));
+  if (city)     q = q.where('city',     '==', _san(String(city), 100));
+  if (county)   q = q.where('county',   '==', _san(String(county), 100));
+
+  q = q.orderBy(admin.firestore.FieldPath.documentId());
+  if (cursor) q = q.startAfter(_san(String(cursor), 200));
+
+  const cap  = Math.min(Math.max(Number(limit ?? 25), 1), 100);
+  const snap = await q.limit(cap + 1).get();
+  const docs = snap.docs.slice(0, cap);
+  const more = snap.docs.length > cap;
+
+  /* A merchant always sees itself in its own network view only if it opted in like anyone
+     else — no special case either way. */
+  const suppliers = docs.map(function (d) { return _projectDiscoverable(d.id, d.data()); });
+
+  logger.info('procurement.findSuppliers', {
+    viewerMerchantId, count: suppliers.length, category: category || null,
+  });
+
+  return {
+    viewerMerchantId,
+    suppliers,
+    count: suppliers.length,
+    nextCursor: more ? docs[docs.length - 1].id : null,
+    /* Stated in the response so a caller cannot mistake absence of a badge for a claim. */
+    verificationClaim: null,
+  };
+});
 
 /* ════════════════════════════════════════════════════════════════
    1b. updateSupplier
@@ -2223,6 +2349,7 @@ module.exports = {
   addSupplier,
   updateSupplier,
   setSupplyParticipation,
+  findSuppliers,
   getInboundSupplyOrders,
   createPurchaseOrder,
   getPurchaseOrder,
@@ -2243,4 +2370,7 @@ module.exports = {
   _listScoped,
   _assertSuppliesEnabled,
   _SUPPLY_MUTABLE: SUPPLY_MUTABLE,
+  _DISCOVERABLE_FIELDS: DISCOVERABLE_FIELDS,
+  _DISCOVERABLE_SUPPLY_FIELDS: DISCOVERABLE_SUPPLY_FIELDS,
+  _projectDiscoverable,
 };
