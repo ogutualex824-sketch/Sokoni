@@ -1077,7 +1077,6 @@ function renderInventory(d) {
     </div>
     <div class="inv-stat-row"><span class="inv-stat-label">Stockout Events</span><span class="${d.stockouts > 0 ? 'down' : 'up'}">${d.stockouts || 0}</span></div>
     <div class="inv-stat-row"><span class="inv-stat-label">Overstock Items</span><span class="neutral">${d.overstock || 0}</span></div>
-    <div class="inv-stat-row"><span class="inv-stat-label">Expiring Soon</span><span style="color:var(--yellow)">${d.expiringSoon || 0} items (${fmt(d.expiringValue || 0)})</span></div>
     <div class="inv-stat-row"><span class="inv-stat-label">Turnover Rate</span><span>${(d.turnoverRate || 0).toFixed(2)}x</span></div>`;
 }
 
@@ -1286,7 +1285,7 @@ function mockPay() {
   ];
 }
 function mockInv() {
-  return { score:82, grade:'B', stockouts:2, overstock:8, expiringSoon:14, expiringValue:18400, turnoverRate:4.7 };
+  return { score:82, grade:'B', stockouts:2, overstock:8, turnoverRate:4.7 };
 }
 function mockCust() {
   const tiers = ['Platinum','Gold','Gold','Silver','Silver','Bronze','Bronze','Bronze','Bronze','Bronze'];
