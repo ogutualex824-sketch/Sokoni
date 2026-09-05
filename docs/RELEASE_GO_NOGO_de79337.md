@@ -79,7 +79,7 @@ So the two mechanisms that look like protection do not cover this case:
 **Recorded as a finding, not fixed here.** Changing a deploy guard's semantics is a deployment
 configuration decision and belongs to an explicit release decision, not to this assessment.
 
-## 4. Dirty production build — materially resolved
+## 4. Dirty production build — content benign, provenance NOT resolved
 
 Production reports `dirtyWorkingTree: true`. Its five `dirtyPaths` are:
 
