@@ -172,8 +172,23 @@ history that this branch does not carry, and the workstream editing `pos-zero-fr
 introduced a dependency on it without bringing it into the tree. **That edit is not ours and
 must not be touched.**
 
-Two divergent committed versions exist, and which is canonical is not a question this record
-answers:
+> **ANSWERED 2026-09-05 — the canonical version is the one running in PRODUCTION.**
+>
+> | ref | blob | size |
+> |---|---|---|
+> | **`d592d8f` — LIVE PRODUCTION** | **`ccc43cf`** | **20,818 bytes** |
+> | `release/merchant-identity` (tip `6801185`) | `ccc43cf` | 20,818 — **byte-identical to live** |
+> | `7ecd119` on `audit/employee-attribution` | `a36997f` | 46,554 — **the outlier, NOT production** |
+>
+> Earlier passes searched feature branches and concluded the question was open. It was not:
+> the deployed lineage carried the answer the whole time. `release/merchant-identity` matches
+> production byte for byte; the 46,554-byte version is the divergent one, not the baseline.
+>
+> This is information for that workstream's owner. Their file was not touched here and neither
+> version was copied into this branch. See `docs/RELEASE_GO_NOGO_de79337.md` §6.
+
+The two versions found while searching feature branches, before the production lineage was
+checked:
 
 | ref | blob | size |
 |---|---|---|
@@ -214,8 +229,11 @@ still stands between this branch and a functions deploy is **not** Supply work:
    `commission-invoice`, `pos-mpesa-refs`. Three have never been committed on any ref. Each
    needs its own owner and provenance decision, exactly as tenant-identity did.
 2. **`merchant-identity.js`** — another workstream's in-progress edit to
-   `pos-zero-friction.js` depends on it; two divergent committed versions exist; that
-   decision is theirs.
+   `pos-zero-friction.js` depends on it. **The canonical version is settled: `ccc43cf`
+   (20,818 bytes), the blob running in production at `d592d8f` and byte-identical to
+   `release/merchant-identity`.** The 46,554-byte `a36997f` on `audit/employee-attribution` is
+   the outlier. Which version to adopt here remains that workstream's decision; which version
+   is authoritative is no longer an open question.
 3. **The lineages have diverged**, and production was itself built from a dirty tree.
 
 None of these is resolved here, and no deployment has been performed.

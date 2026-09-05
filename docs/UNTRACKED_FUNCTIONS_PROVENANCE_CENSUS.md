@@ -242,3 +242,37 @@ node scripts/gate-functions-require-closure.js --ref X    # scan any ref
 Open Questions 1, 2 (for the remaining ports) and 3 are unchanged and remain founder decisions.
 `order-claim.js` in particular is still Outcome **C — provenance missing**, and nothing in this
 addendum resolves it. **No deployment has been performed.**
+
+---
+
+## 8. Addendum — 2026-09-05 · `merchant-identity.js` provenance SETTLED
+
+Not one of this census's 14 rows (it is absent from this working tree entirely, not untracked
+within it), but recorded here because this is the provenance record and the question was open
+across several passes.
+
+**The canonical version is the one running in production.**
+
+| ref | blob | size | status |
+|---|---|---|---|
+| **`d592d8f` — LIVE PRODUCTION** (`release/r1-pos-printer-fn`) | **`ccc43cf`** | **20,818 bytes** | **CANONICAL — deployed** |
+| `release/merchant-identity` (tip `6801185`) | `ccc43cf` | 20,818 bytes | byte-identical to live |
+| `7ecd119` on `audit/employee-attribution` | `a36997f` | 46,554 bytes | **outlier — NOT production** |
+
+**How it was missed.** Earlier passes searched with `git log --all` and found the two feature
+branches, then concluded which was canonical could not be determined. That search never asked
+the deployed lineage. `d592d8f` carried the answer the whole time — the file surfaced only when
+diffing the release candidate against live and finding it among eleven `functions/` modules
+present in production and absent from the candidate.
+
+**The lesson, which generalises:** when a file's canonical version is in question, check what is
+RUNNING before enumerating what is committed. Branch archaeology can enumerate candidates; only
+the deployed lineage identifies the baseline.
+
+**Not acted on.** `functions/pos-zero-friction.js` in this working tree is another workstream's
+uncommitted edit and was not touched; neither version of `merchant-identity.js` was copied into
+`release/multishop-checkout-certified`. Which version that workstream adopts remains their
+decision. Which version is authoritative is no longer an open question.
+
+Recorded in full at `docs/RELEASE_GO_NOGO_de79337.md` §6 and
+`docs/SUPPLY_A_TO_M_RELEASE_RECORD.md`.
