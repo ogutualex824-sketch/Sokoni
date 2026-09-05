@@ -46,12 +46,12 @@
       ]
     },
     "functions/manual-till-orders": {
-      "status": "GATED",
-      "summary": "Retain. checkout.html:1875 calls createManualTillOrder on a live page, and functions/checkout-mode.js deliberately returns manual_payment_unavailable until the lifecycle ships. The gate there is designed to be flipped, not removed.",
+      "status": "RESOLVED",
+      "summary": "ADMITTED to the tree with manual-till-policy (its untracked collaborator). Capability STILL DISABLED: checkout-mode.js returns manual_payment_unavailable and is unchanged. Suite is 67 passed / 14 failed - all 14 are the unbuilt POS attestation queue (section L), which is the outstanding lifecycle certification and exactly why the capability stays off.",
       "owner": null,
       "ownerNote": "The manual-till lifecycle workstream. Not named here because no record assigns an individual.",
-      "path": "Certify the production order lifecycle (createManualTillOrder + attestManualTillPayment), keep manual_payment OFF until then, then commit.",
-      "forbidden": "Do NOT remove: a live customer-facing page calls it. Do NOT enable manual_payment before its lifecycle certification.",
+      "path": "Admission done. STILL REQUIRED before enabling: build and certify the POS attestation queue (section L), then flip checkout-mode.js. Admission to the tree is not permission to enable.",
+      "forbidden": "Do NOT enable manual_payment until section L is built and certified. Do NOT read tree-admission as lifecycle certification.",
       "evidence": [
         "docs/MANUAL_TILL_ORDER_CONTRACT.md",
         "functions/checkout-mode.js"
@@ -78,6 +78,15 @@
       "evidence": [
         "233ac4d",
         "docs/POS_MANUAL_TILL_PAYMENT.md"
+      ]
+    },
+    "functions/manual-till-policy": {
+      "status": "RESOLVED",
+      "summary": "ADMITTED alongside manual-till-orders, which requires it. Was untracked and committed on no ref; admitting its caller without it would have left the tree open.",
+      "owner": "admitted with manual-till-orders",
+      "path": "Done.",
+      "evidence": [
+        "docs/MANUAL_TILL_ORDER_CONTRACT.md"
       ]
     }
   }
