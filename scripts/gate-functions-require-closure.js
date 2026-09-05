@@ -38,6 +38,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const { execFileSync } = require('child_process');
 
 const args = process.argv.slice(2);
@@ -45,8 +46,25 @@ const REF  = (() => { const i = args.indexOf('--ref'); return i >= 0 ? args[i + 
 const JSON_OUT = args.indexOf('--json') >= 0;
 const ENTRY = 'functions/index.js';
 
+/* EVERY git call and every disk check is anchored to the repository root, never to the
+   caller's cwd. Firebase runs a functions predeploy hook with cwd = the functions directory,
+   and `git ls-tree -r HEAD` from there lists paths relative to THAT directory — so
+   `functions/index.js` was not found and the gate exited 2 on every deploy. It failed closed,
+   which is the right direction, but for the wrong reason, and a gate that always errors is a
+   gate that gets removed. */
+const REPO = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch (_) {
+    console.error('GATE ERROR: not inside a git repository — cannot verify the deploy tree.');
+    process.exit(2);
+  }
+})();
+
 function git (a, quiet) {
   return execFileSync('git', a, {
+    cwd: REPO,
     encoding: 'utf8', maxBuffer: 256e6, stdio: ['ignore', 'pipe', quiet ? 'ignore' : 'inherit'],
   });
 }
@@ -123,6 +141,7 @@ function main () {
     let buf;
     try {
       buf = execFileSync('git', ['cat-file', '--batch'], {
+        cwd: REPO,
         input: Buffer.from(wanted.map((w) => w[0]).join('\n') + '\n'),
         maxBuffer: 1024e6, stdio: ['pipe', 'pipe', 'ignore'],
       });
@@ -212,7 +231,14 @@ function main () {
 
   const detail = [...missing.keys()].sort().map((t) => {
     let onDisk = 'absent';
-    try { if (fs.existsSync(t) || fs.existsSync(t + '.js')) onDisk = 'present-UNTRACKED'; } catch (_) {}
+    /* Resolved against the repo root, not the caller's cwd: run as a predeploy hook this
+       reported "absent" for files that were plainly present, which is the opposite of the
+       diagnostic's purpose. */
+    try {
+      if (fs.existsSync(path.join(REPO, t)) || fs.existsSync(path.join(REPO, t + '.js'))) {
+        onDisk = 'present-UNTRACKED';
+      }
+    } catch (_) {}
     const elsewhere = provenance.get(t + '.js') || null;
     return {
       module: t,

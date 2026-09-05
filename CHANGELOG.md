@@ -1,3 +1,105 @@
+## 2026-09-05 — The require-closure gate becomes a predeploy requirement; `order-claim` escalated
+
+**Files:** `firebase.json` (+1 line), `scripts/gate-functions-require-closure.js`,
+`scripts/test-functions-require-closure-gate.js`,
+`docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md` (new), `docs/SUPPLY_A_TO_M_RELEASE_RECORD.md`,
+`CHANGELOG.md`. **No deployment performed**; HOLD stands.
+
+### The deployment contract
+
+`scripts/gate-functions-require-closure.js` is now the **first** hook in
+`firebase.json`'s `functions.predeploy`. Firebase runs predeploy hooks in order and aborts on
+the first non-zero exit, so:
+
+```
+firebase deploy --only functions
+        ↓
+require-closure gate        FAIL → deployment stops here
+        ↓ PASS
+predeploy-syntax-gate → verify-commission-single-source
+        → verify-delivery-engine-sync → predeploy-payout-gate
+        ↓
+release gate
+```
+
+This closes the exact failure mode that let a tracked `functions/index.js` reference four
+modules that were never part of the deployable tree. The previous mitigation was a sentence in
+`fa5082b`'s commit message — *"NEVER deploy FULL index.js"* — with nothing enforcing it, because
+`predeploy-syntax-gate.js` runs `node --check`, which parses a file and never resolves a
+`require()`.
+
+Exactly one line was added. The four existing gates are preserved in order, and
+`hosting.predeploy` is deliberately untouched — this gate is about the functions graph.
+
+### The cwd defect the wiring exposed
+
+A functions predeploy hook runs with `cwd` = the functions directory, and `git ls-tree -r HEAD`
+from there lists paths relative to *that* directory — so `functions/index.js` was not found and
+the gate exited 2 on every deploy. It failed **closed**, which is the right direction, but for
+entirely the wrong reason, and a gate that always errors is a gate that gets removed.
+
+The gate now resolves the repository root itself (`git rev-parse --show-toplevel`) and anchors
+every git call, the `cat-file --batch` read, and the on-disk diagnostic to it. Certified:
+identical exit code **and** byte-identical findings from both the repo root and the hook's cwd.
+Before the fix the diagnostic read `absent` for files that were plainly present — the opposite
+of its purpose.
+
+### Dispositions recorded — and the distinction that matters
+
+**"Dispositioned" does not mean "deployable."** All five have a decided disposition; four are
+not deployable, and that is the correct state.
+
+| module | disposition | deployable now |
+|---|---|---|
+| `order-claim` | **C — unresolved**, no provenance on any ref | No |
+| `manual-till-orders` | **B — gated**, `manual_payment` stays OFF | No |
+| `commission-invoice` | **A — canonical, gated** on an unset config + two business decisions | No |
+| `pos-mpesa-refs` | **B — proven foreign port**, committed at `233ac4d`, not on this branch | No |
+| `tenant-identity` | **RESOLVED / tracked** at `24f50ba` | Yes |
+
+**The gate is red today. That is the correct result, not a defect to route around.** None of
+these may be closed by committing a guessed implementation, by preserving a require because the
+file exists in another worktree, or by weakening the gate.
+
+### `order-claim` escalated
+
+`docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md` states the two clean choices — obtain the
+authoritative owner/spec, certify, commit; **or**, if obsolete, remove the require/export,
+certify the index graph, commit the removal — and records what is explicitly forbidden. It is
+the only *unowned* blocker: no git history on any ref, no spec, no contract, no ADR, one caller.
+Its acceptance test is that the module stops appearing in the gate's output.
+
+Two independent checks (a live `functions:list` inventory, and the GCS source-archive reading in
+`MULTISHOP_STACK_PROVENANCE_MANIFEST.md` §3) agree it does not appear to be running in
+production — which is evidence the named-function discipline was followed, **not** evidence the
+code is safe or wanted.
+
+### Certification
+
+`scripts/test-functions-require-closure-gate.js` — **51 checks, 7 sabotage catches**, now
+covering the wiring itself: the hook is present, runs **first**, uses the same `$RESOURCE_DIR`
+form as its siblings, preserves the existing gates, leaves `hosting.predeploy` alone, and gives
+an identical verdict from the hook's cwd.
+
+**RESTORE — sabotages of the real files**, each restored byte-identically: removing the hook
+(48/51, failing on *"the closure gate is wired into functions.predeploy"*); demoting it below
+the syntax gate (49/51, on *"...and it runs FIRST"*); making the gate consult the filesystem
+instead of the tree; and dropping the repo anchor so it becomes cwd-dependent again (48/50, on
+*"the gate returns the same EXIT CODE from the hook cwd"*).
+
+One suite defect fixed by that round: §3 dereferenced `blocking[0]` and crashed when a sabotage
+made the gate see everything as resolved. It now fails by assertion — the same brittleness
+already fixed once in Slice M.
+
+### The permanent rule
+
+> **A module existing somewhere on disk is not deployable provenance. Only presence in the Git
+> deploy tree counts.**
+
+**API changes:** none. **Database changes:** none. **Deployment configuration:** one predeploy
+hook added to `functions.predeploy`, founder-authorised. **Breaking changes:** none — but note
+that a functions deploy from this branch will now **stop at the gate**, which is the intent.
+
 ## 2026-09-05 — Functions require-closure gate: enforcing what a commit message only asked for
 
 **Files:** `scripts/gate-functions-require-closure.js` (new),

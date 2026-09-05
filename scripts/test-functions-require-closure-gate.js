@@ -85,7 +85,10 @@ console.log('\n§2 non-vacuity');
 console.log('\n§3 tree, not filesystem');
 {
   const fs = require('fs');
-  const d = json(run(['--json']));
+  const d = json(run(['--json'])) || { blocking: [], ok: true };
+  /* Fail BY ASSERTION, never by dereferencing an empty array. A sabotage that makes the gate
+     see everything as resolved should name what broke, not print a stack trace. */
+  check('the gate still reports blocking modules to inspect', d.blocking.length === 4);
   const onDisk = d.blocking.filter((x) => fs.existsSync(path.join(ROOT, x.module + '.js')));
   check('every module it calls missing IS present on this disk right now',
     onDisk.length === d.blocking.length && onDisk.length === 4);
@@ -97,8 +100,8 @@ console.log('\n§3 tree, not filesystem');
     /NOT CLOSURE: a deploy uses a checkout/.test(run([]).out));
   check('it distinguishes a module committed elsewhere from one with no provenance', (function () {
     const byMod = {}; d.blocking.forEach((x) => { byMod[x.module.replace('functions/', '')] = x; });
-    return byMod['pos-mpesa-refs'].committedElsewhere !== null &&
-           byMod['order-claim'].committedElsewhere === null;
+    const a = byMod['pos-mpesa-refs'], b = byMod['order-claim'];
+    return !!a && !!b && a.committedElsewhere !== null && b.committedElsewhere === null;
   })());
   sab('the disk-vs-tree detector would fire if the gate consulted the disk',
     fs.existsSync(path.join(ROOT, 'functions/order-claim.js')));
@@ -179,8 +182,48 @@ console.log('\n§6 blocking vs non-blocking');
     d.blocking.length === 4);
   check('a file the entrypoint never loads is not in the blocking set',
     d.blocking.every((x) => !/\/test\/|probe-/.test(x.requiredBy.join(','))));
-  check('the gate does not wire itself into any deploy path — that is a separate decision',
-    !/predeploy|firebase deploy/.test(require('fs').readFileSync(GATE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')));
+}
+
+/* ══════════════════════════════════════════════════════════
+   §7 THE WIRING — the gate is a predeploy REQUIREMENT, and it is first
+══════════════════════════════════════════════════════════ */
+console.log('\n§7 predeploy wiring');
+{
+  const fb = JSON.parse(require('fs').readFileSync(path.join(ROOT, 'firebase.json'), 'utf8'));
+  const hooks = (fb.functions && fb.functions.predeploy) || [];
+  check('firebase.json parses and functions.predeploy is an array', Array.isArray(hooks) && hooks.length > 0);
+  const idx = hooks.findIndex((h) => /gate-functions-require-closure\.js/.test(h));
+  check('the closure gate is wired into functions.predeploy', idx !== -1);
+  /* Firebase runs predeploy hooks in order and aborts on the first non-zero exit, so FIRST is
+     the difference between "the deploy stops" and "the deploy stops after doing other work". */
+  check('  ...and it runs FIRST, so a broken tree stops the deploy immediately', idx === 0);
+  check('  ...using the same $RESOURCE_DIR form as its siblings',
+    /^node "\$RESOURCE_DIR\/\.\.\/scripts\/gate-functions-require-closure\.js"$/.test(hooks[0] || ''));
+  check('the existing gates are preserved, not replaced',
+    ['predeploy-syntax-gate', 'verify-commission-single-source', 'verify-delivery-engine-sync',
+     'predeploy-payout-gate'].every((g) => hooks.some((h) => h.indexOf(g) !== -1)));
+  check('SCOPE: hosting.predeploy is NOT modified by this slice',
+    !((fb.hosting && fb.hosting.predeploy) || []).some((h) => /gate-functions-require-closure/.test(h)));
+  sab('the ordering detector would catch it being demoted below another gate',
+    ['a.js', 'gate-functions-require-closure.js'].findIndex((h) => /gate-functions-require-closure/.test(h)) !== 0);
+
+  /* A hook runs with cwd = the functions directory. The gate must give the SAME verdict there
+     as at the repo root — it previously did not, and reported every module "absent". */
+  const atRoot = run(['--json']);
+  const atFunctions = (() => {
+    try {
+      const out = execFileSync('node', ['../scripts/gate-functions-require-closure.js', '--json'],
+        { cwd: path.join(ROOT, 'functions'), encoding: 'utf8', maxBuffer: 64e6 });
+      return { code: 0, out };
+    } catch (e) { return { code: e.status, out: (e.stdout || '') + (e.stderr || '') }; }
+  })();
+  check('the gate returns the same EXIT CODE from the hook cwd', atRoot.code === atFunctions.code);
+  const nrm = (r) => { const d = json(r); return d ? JSON.stringify({ ok: d.ok, n: d.reachableModules,
+    b: d.blocking.map((x) => x.module + ':' + x.workingTree + ':' + x.committedElsewhere).sort() }) : null; };
+  check('  ...and byte-identical findings, including the on-disk diagnostic',
+    nrm(atRoot) !== null && nrm(atRoot) === nrm(atFunctions));
+  sab('a cwd-dependent gate would be caught by this comparison',
+    JSON.stringify({ w: 'absent' }) !== JSON.stringify({ w: 'present-UNTRACKED' }));
 }
 
 console.log('\n  ' + pass + '/' + (pass + fail) + ' checks passed  ·  ' + sabotageOk + '/' + sabotage + ' sabotage catches');

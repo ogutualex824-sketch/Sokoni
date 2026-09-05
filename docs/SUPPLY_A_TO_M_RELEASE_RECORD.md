@@ -231,6 +231,23 @@ anywhere and is classified **C — escalated, unresolved**; `manual-till-orders`
 `pos-mpesa-refs` is a proven foreign port. Disposition is a founder decision, not an
 engineering one.
 
+### Dispositions — and the distinction that matters
+
+**"Dispositioned" does not mean "deployable."** Every module below has a decided disposition.
+Not one of them is deployable today, and that is the correct state, not a backlog.
+
+| module | disposition | deployable now |
+|---|---|---|
+| `order-claim` | **C — unresolved.** No provenance, no spec, no contract on any ref. The only truly *unowned* blocker. Escalated: `docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md` | **No** |
+| `manual-till-orders` | **B — gated.** `manual_payment` stays OFF until its contract and certification are complete | **No** |
+| `commission-invoice` | **A — canonical, gated.** Spec exists, certified 52/0, but `revenueConfig/commission_vat` is unset and two business decisions are open | **No** |
+| `pos-mpesa-refs` | **B — proven foreign port.** Committed at `233ac4d`; this branch does not carry it | **No** |
+| `tenant-identity` | **RESOLVED / tracked** at `24f50ba`, byte-identical to `25d2c19` | **Yes** |
+
+**Therefore the require-closure gate is red today, and that is the correct result.** None of
+these may be closed by committing a guessed implementation, by preserving a require because the
+file happens to exist in another worktree, or by weakening the gate.
+
 ### It is now enforced, not merely written down
 
 `fa5082b`'s own commit message declared *"NEVER deploy FULL index.js"* — but the mitigation was
@@ -244,8 +261,34 @@ Certified at **41 checks, 5 sabotage catches** by
 gate **passes** on `fa5082b^` with 321 modules, so it discriminates rather than always failing —
 and that independently confirms closure broke at `fa5082b`.
 
-It is deliberately **not wired into `firebase.json`**. Wiring a predeploy hook is a
-deployment-configuration change and remains a founder decision.
+**It is wired into `firebase.json` as the FIRST `functions.predeploy` hook** (founder-authorised,
+2026-09-05). Firebase runs predeploy hooks in order and aborts on the first non-zero exit, so
+the deployment contract is now:
+
+```
+firebase deploy --only functions
+        ↓
+require-closure gate        FAIL → deployment stops here
+        ↓ PASS
+predeploy-syntax-gate → verify-commission-single-source
+        → verify-delivery-engine-sync → predeploy-payout-gate
+        ↓
+release gate
+```
+
+The hook runs with `cwd` = the functions directory, so the gate resolves the repository root
+itself (`git rev-parse --show-toplevel`) and anchors every git call and disk check to it. Before
+that fix it reported `functions/index.js is not in the tree` from the hook's cwd — failing
+closed, which was the right direction for the wrong reason, and a gate that always errors is a
+gate that gets removed. Certified: identical exit code **and** byte-identical findings from both
+the repo root and the hook's cwd.
+
+`hosting.predeploy` is deliberately unchanged — this gate is about the functions graph.
+
+### The permanent rule
+
+> **A module existing somewhere on disk is not deployable provenance. Only presence in the Git
+> deploy tree counts.**
 
 ### Documentation integrity
 
