@@ -25,16 +25,25 @@
       "summary": "Committed at 24f50ba, byte-identical to the blob at 25d2c19 (sha1 4d89a1da854f8a05e41147661dfff42654a4bf3b). Five consumers resolve against it.",
       "owner": "resolved — founder-authorised",
       "path": "Done. No further action.",
-      "evidence": ["24f50ba", "25d2c19", "docs/TENANT_IDENTITY_DEPENDENCY_TRACE.md"]
+      "evidence": [
+        "24f50ba",
+        "25d2c19",
+        "docs/TENANT_IDENTITY_DEPENDENCY_TRACE.md"
+      ]
     },
     "functions/order-claim": {
-      "status": "UNRESOLVED",
-      "summary": "Unresolved provenance, but TECHNICALLY EVIDENCED. A dedicated trace exists (8796777) and a companion concurrency test passes 27/0 against a live Firestore emulator. What is missing is governance, not working code.",
+      "status": "RESOLVED",
+      "summary": "ADMITTED to the deploy tree with its companion race test. Implementation unchanged, not reconstructed. Race test re-verified against a live Firestore emulator this pass: 27 passed, 0 failed.",
       "owner": null,
       "ownerNote": "Do not infer an owner from commits, file authorship, or adjacent work — no record anywhere establishes who authorised it.",
-      "path": "Attribute the work, then admit it: commit the module TOGETHER WITH scripts/test-order-claim-race.js. Only if the feature is genuinely unwanted: an explicit, tested removal of its require/export.",
+      "path": "Done as admission. ATTRIBUTION REMAINS OPEN: owner is still unknown and must not be fabricated.",
       "forbidden": "Do NOT delete it to make this gate green. Absence of an owner is not evidence a feature is unwanted, and a red gate is not a reason to destroy a demonstrated, transactionally safe capability.",
-      "evidence": ["docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md", "docs/ORDER_CLAIM_PROVENANCE_TRACE.md", "8796777"]
+      "evidence": [
+        "docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md",
+        "docs/ORDER_CLAIM_PROVENANCE_TRACE.md",
+        "8796777",
+        "re-verified 27/0 on a live emulator, 2026-09-05"
+      ]
     },
     "functions/manual-till-orders": {
       "status": "GATED",
@@ -43,7 +52,10 @@
       "ownerNote": "The manual-till lifecycle workstream. Not named here because no record assigns an individual.",
       "path": "Certify the production order lifecycle (createManualTillOrder + attestManualTillPayment), keep manual_payment OFF until then, then commit.",
       "forbidden": "Do NOT remove: a live customer-facing page calls it. Do NOT enable manual_payment before its lifecycle certification.",
-      "evidence": ["docs/MANUAL_TILL_ORDER_CONTRACT.md", "functions/checkout-mode.js"]
+      "evidence": [
+        "docs/MANUAL_TILL_ORDER_CONTRACT.md",
+        "functions/checkout-mode.js"
+      ]
     },
     "functions/commission-invoice": {
       "status": "GATED",
@@ -52,7 +64,9 @@
       "ownerNote": "Decision-holder is whoever owns revenueConfig/commission_vat and the two open business decisions. Not named here because no record assigns an individual.",
       "path": "Set revenueConfig/commission_vat, resolve the two outstanding business decisions, then commit.",
       "forbidden": "Do NOT weaken the gate to accommodate it, and do NOT deploy it before its configuration exists — no invoice may issue against an unset VAT policy.",
-      "evidence": ["docs/COMMISSION_INVOICE_SPEC.md"]
+      "evidence": [
+        "docs/COMMISSION_INVOICE_SPEC.md"
+      ]
     },
     "functions/pos-mpesa-refs": {
       "status": "FOREIGN_PORT",
@@ -61,7 +75,10 @@
       "ownerNote": "Whoever owns that port's integration into this lineage. Not named here because no record assigns an individual.",
       "path": "Reconcile the foreign-port lineage and intended integration, then explicitly admit or explicitly remove.",
       "forbidden": "Do NOT copy it into this branch on the strength of a byte-identical blob existing elsewhere. Provenance and intended integration must be reconciled first.",
-      "evidence": ["233ac4d", "docs/POS_MANUAL_TILL_PAYMENT.md"]
+      "evidence": [
+        "233ac4d",
+        "docs/POS_MANUAL_TILL_PAYMENT.md"
+      ]
     }
   }
 }
