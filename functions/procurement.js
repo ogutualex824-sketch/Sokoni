@@ -623,6 +623,45 @@ const updateSupplier = onCall(OPT, async (request) => {
   return { supplierId: String(supplierId), updated: Object.keys(patch) };
 });
 
+/**
+ * PO-DERIVED BUYER AUTHORITY — the gate for every operation that acts on an existing
+ * purchase order.
+ *
+ * The merchant is read off the AUTHORITATIVE document, never from the request. A caller
+ * naming a poId is naming a document; the document says whose it is. So a forged
+ * merchantId, supplierId or supplierBusinessId in the payload is simply irrelevant here —
+ * there is nothing for it to influence.
+ *
+ * Fails closed on a missing PO: an unknown order is not an open one.
+ *
+ * Role is not tenancy. `_requireManager` proves a caller holds a manager claim; it never
+ * proves they hold it FOR THIS MERCHANT. Operations that need both compose them — the role
+ * gate first, then this.
+ *
+ * @returns {Promise<{poRef, po, merchantId}>}
+ */
+async function _assertPoAuthority(request, poId) {
+  if (!poId) _err('poId is required.');
+
+  const poRef  = db.collection('procPurchaseOrders').doc(String(poId));
+  const poSnap = await poRef.get();
+  if (!poSnap.exists) _err('Purchase order not found.', 'not-found');
+
+  const po = poSnap.data() || {};
+  /* buyerBusinessId (Slice B) is the forward-looking field; merchantId is retained for
+     compatibility and is what every existing document carries. Either identifies the
+     BUYER — the party whose order this is. */
+  const owner = po.buyerBusinessId || po.merchantId;
+  if (!owner) {
+    /* A PO with no owner cannot be authorized against anything. Refuse rather than
+       fall through to a permissive default. */
+    _err('Purchase order has no owning merchant.', 'failed-precondition');
+  }
+
+  const merchantId = await _assertMerchantAuthority(request, String(owner));
+  return { poRef, po, merchantId };
+}
+
 /* ════════════════════════════════════════════════════════════════
    1c. SUPPLIER-SIDE AUTHORITY — deliberately NOT the buyer-side check.
 
@@ -798,17 +837,16 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
    Manager or admin: approve (→ 'approved') or reject (→ 'cancelled').
 ════════════════════════════════════════════════════════════════ */
 const approvePurchaseOrder = onCall(OPT, async (request) => {
+  /* BOTH gates, composed. The manager claim is retained unchanged — approval is still a
+     manager/admin action. What it never established is WHICH merchant, so a manager at one
+     merchant could approve another's order. _assertPoAuthority closes that by reading the
+     owner off the PO itself. */
   const uid = _requireManager(request);
   const { poId, approved, notes } = request.data ?? {};
 
-  if (!poId) _err('poId is required.');
   if (typeof approved !== 'boolean') _err('approved must be a boolean.');
 
-  const poRef  = db.collection('procPurchaseOrders').doc(poId);
-  const poSnap = await poRef.get();
-  if (!poSnap.exists) _err('Purchase order not found.', 'not-found');
-
-  const po = poSnap.data();
+  const { poRef, po } = await _assertPoAuthority(request, poId);
   if (!['draft', 'pending_approval'].includes(po.status)) {
     _err(`Cannot approve a PO in status '${po.status}'.`);
   }
@@ -839,13 +877,13 @@ const sendPurchaseOrder = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
   const { poId } = request.data ?? {};
 
-  if (!poId) _err('poId is required.');
-
-  const poRef  = db.collection('procPurchaseOrders').doc(poId);
-  const poSnap = await poRef.get();
-  if (!poSnap.exists) _err('Purchase order not found.', 'not-found');
-
-  const po = poSnap.data();
+  /* Merchant scoping added (Slice C). Previously this required only that the caller was
+     signed in, so any authenticated user could send any merchant's purchase order to its
+     supplier. The delivery abstraction below is deliberately untouched: the same
+     emailSvc.queue + notify.notify routing, the same deterministic po-sent-{poId} email id,
+     the same honest per-channel delivery record. This slice changes WHO may call it, not
+     what it does. */
+  const { poRef, po } = await _assertPoAuthority(request, poId);
   if (po.status !== 'approved') {
     _err(`PO must be in 'approved' status to send. Current status: '${po.status}'.`);
   }
@@ -1736,6 +1774,7 @@ module.exports = {
   _SUPPLIER_MUTABLE: SUPPLIER_MUTABLE,
   _assertMerchantAuthority,
   _assertSupplierSideAuthority,
+  _assertPoAuthority,
   _assertSuppliesEnabled,
   _SUPPLY_MUTABLE: SUPPLY_MUTABLE,
 };

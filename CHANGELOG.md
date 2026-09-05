@@ -1,3 +1,63 @@
+## 2026-09-05 — Slice C: merchant-scoped approval + send
+
+**Files:** `functions/procurement.js`, `scripts/test-po-approval-send-slice-c.js` (new),
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**The defect.** `approvePurchaseOrder` required a manager claim — which proves a role, never
+that it is held *for this merchant* — so a manager at one merchant could approve another's
+purchase order. `sendPurchaseOrder` required only `_requireAuth`, so **any authenticated user
+could send any merchant's purchase order to its supplier.**
+
+**The fix.** New `_assertPoAuthority(request, poId)` reads the PO, fails closed if it is
+missing, derives the owner from `buyerBusinessId || merchantId` **on the document**, and
+authorizes the caller against that merchant through the Slice A primitive. Because the owner
+comes from the authoritative document, a forged `merchantId`, `supplierId` or
+`supplierBusinessId` in the payload is simply irrelevant — there is nothing for it to
+influence. A PO carrying no owner is refused rather than defaulted.
+
+`approvePurchaseOrder` composes **both** gates: `_requireManager` is retained unchanged, then
+merchant scoping. `sendPurchaseOrder` gains the scoping only.
+
+**The delivery abstraction is untouched, and asserted so.** Same `emailSvc.queue` with the
+deterministic `po-sent-{poId}` id (a retry cannot email the supplier twice), same PDF
+attachment, same `notify.notify` for SMS/in-app/push with `dedupeKey: po:{poId}:sent`, same
+honest per-channel `delivery` record written back onto the PO, same real return value. This
+slice changes **who may call**, not what the call does. No WhatsApp channel was added — that
+remains blocked on external WABA provisioning.
+
+**Certification.** `scripts/test-po-approval-send-slice-c.js` — **43/43 checks, 3/3 sabotage
+catches**, with the cross-merchant matrix executed against two merchants and two principals:
+A→A ✅, B→B ✅, A→B ❌, B→A ❌, **manager claim on A + B's PO → DENIED**, **merchant-admin of A
++ B's PO → DENIED**. Also nonexistent PO → `not-found`, owner-less PO → `failed-precondition`,
+unauthenticated → rejected, and forged merchant/supplier/business ids on the request proven
+irrelevant. RESTORE five ways — removing the gate from approve, deriving the owner from the
+request, failing open on a missing PO, dropping the orphan refusal, and removing the
+relationship check in the primitive — each drives exit 1, and each restore returns 0.
+
+**A hole in my own suite, found and closed rather than shipped.** The first version drove a
+hand-written *replica* of the gate over the fixture. Sabotaging the real fail-closed branch
+left the suite **green**, because the replica still failed closed on its own — the suite could
+not see the code it claimed to certify. It now loads the real `procurement.js` with
+`firebase-admin` stubbed at require time, so `_assertPoAuthority` closes over the fixture and
+the matrix executes the actual function. The previously-passing sabotage now correctly fails.
+
+**On "admin", kept explicit rather than blurred.** Two notions share the word. A **merchant**
+admin — a member of business A's `adminUids` — is DENIED on B, and that is tested. A
+**platform** admin (`token.admin`/`token.superAdmin`, set server-side and unforgeable) is
+ALLOWED, which is what the current authority model explicitly permits; this slice preserves it
+rather than silently changing it, and the suite asserts that too.
+
+**Security changes:** two operations moved from role-only / authenticated-only to
+merchant-scoped. **No Firestore rule widened.** **API changes:** none — no new callable;
+export count unchanged at 1522. **Database changes:** none. **Breaking changes:** a caller not
+authorized for a PO's merchant now receives `permission-denied` instead of succeeding. That is
+the defect being fixed.
+
+**Still blocking deployment, unchanged and not mine to fix:** `functions/pos-zero-friction.js`
+requires `./merchant-identity`, a file that does not exist and was never tracked. It is an
+uncommitted working-tree change owned by another workstream. `functions/index.js` therefore
+cannot be required, and a functions deploy from this tree would fail.
+
 ## 2026-09-05 — Slice B2: SOKONI supply relationships
 
 **Files:** `functions/procurement.js`, `functions/index.js` (+2 exports),
