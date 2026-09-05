@@ -103,19 +103,71 @@ Find Suppliers → Supplier Business → Supply Catalogue → Draft
 
 ---
 
-## The gate: the Functions module graph cannot be loaded
+## The gate — traced 2026-09-05, and NOT what it was previously recorded as
 
-`functions/index.js` **cannot be `require`d**, so no functions deploy can succeed regardless of
-how well-certified the application code is. Two dependencies are **untracked**:
+**Correction.** This blocker was previously described (including in earlier revisions of this
+record) as *"two untracked files with no provenance, so `functions/index.js` cannot be
+required."* That description was wrong in both halves. The trace:
 
-| file | required by | since |
+### `functions/index.js` loads. The module graph at HEAD is closed.
+
+Substituting **HEAD's** committed `pos-zero-friction.js` for the working copy — without
+modifying the working copy — `require('./index.js')` **succeeds**, exporting **1718** names
+including `findSuppliers`, `getSupplyCatalogue`, `servicesDispatch` and `smartPosDispatch`.
+A require-closure scan of all of `functions/*.js` finds exactly **one** unresolvable local
+require in the whole graph.
+
+### That one require lives inside another workstream's uncommitted edit
+
+| | |
+|---|---|
+| unresolvable require | `./merchant-identity` |
+| required by | `functions/pos-zero-friction.js` — **working copy only** |
+| at HEAD | that file does **not** reference `merchant-identity` at all; its closure is complete |
+
+The file does not exist in this working tree. It is not missing provenance — it is committed
+history that this branch does not carry, and the workstream editing `pos-zero-friction.js` has
+introduced a dependency on it without bringing it into the tree. **That edit is not ours and
+must not be touched.**
+
+Two divergent committed versions exist, and which is canonical is not a question this record
+answers:
+
+| ref | blob | size |
 |---|---|---|
-| `functions/tenant-identity.js` | `procurement.js` (Slice B2, `b239ae5`), `business-bootstrap.js` | before B2 |
-| `functions/merchant-identity.js` | `pos-zero-friction.js` (another workstream) | — |
+| `7ecd119` (2026-08-21, on `audit/employee-attribution`) | `a36997f` | 46,554 bytes |
+| `release/merchant-identity` (tip `6801185`) | `ccc43cf` | 20,818 bytes |
 
-Neither may be recreated, copied, or reconstructed. Exact source, owner and intended lineage
-must be established first — a file that is required by certified code but has no provenance is
-a worse problem than a missing file, because it will be deployed and trusted.
+`7ecd119` does export `_internal.resolveActor`, which is the shape the dirty edit imports.
+**But its signature is `resolveActor(uid, requestedShopId)` and it reads `shops/{shopId}`,
+while the dirty edit calls `resolveActor(cashierId, merchantId)`** — the two identifier spaces
+this entire workstream exists to keep apart, which coincide only in the owner-uid form. That is
+a flag for the owner of that edit, not a finding about their finished work: it is a dirty file,
+and nothing may be inferred from it.
+
+### `functions/tenant-identity.js` is NOT a load blocker
+
+It exists in this tree, resolves, and is required successfully by five modules
+(`procurement.js`, `business-bootstrap.js`, `pos-retail-engine.js`, `pos-staff-ops.js`,
+`pos-zero-friction.js`).
+
+Its provenance is **established, not mysterious**: the local file is **byte-identical** to a
+committed blob — sha1 `4d89a1da854f8a05e41147661dfff42654a4bf3b`, committed by Alex Ogutu at
+`25d2c19` (2026-09-04) and present on `feature/sales-control-centre-approvals` and
+`feature/void-permission-convergence`. Nothing would need to be reconstructed.
+
+What it *is*: an **uncommitted-file risk on this branch**. `release/multishop-checkout-certified`
+carries no copy, so a clean checkout of this branch breaks five modules, including the
+`procurement.js` that every Supply certification depends on. Committing it here would be a
+cherry-pick of known, identical content — but that is a branch-content decision and has not
+been taken.
+
+### So the real position
+
+Nothing in the certified Supply stack blocks a functions deploy. The remaining obstacles are a
+branch-content decision (`tenant-identity.js`) and another workstream's in-progress edit
+(`merchant-identity.js`) — plus the separate, unresolved fact that the lineages have diverged
+and production was itself built from a dirty tree.
 
 ---
 
