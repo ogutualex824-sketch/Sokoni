@@ -67,17 +67,42 @@ documented logic it would **allow** this deploy:
 > **otherwise (ahead / diverged / live commit unknown here) → allowed.**
 
 Our candidate is **diverged**, not an ancestor — the branch the guard permits. And it is wired
-into **`hosting.predeploy` only**; `functions.predeploy` has no rollback guard at all.
+into **`hosting.predeploy` only**.
 
-So the two mechanisms that look like protection do not cover this case:
+### ⚠️ CORRECTION — production already has a functions guard, and the candidate would DELETE it
 
-| mechanism | covers this? |
+An earlier revision of this section said *"`functions.predeploy` has no rollback guard at all."*
+That is true of **the candidate** and false of **production**. Live's `functions.predeploy`
+begins with `scripts/deploy/guard-functions-safety.js` — a file that **does not exist in this
+candidate at all**.
+
+It was built for precisely this failure class, observed 2026-08-28, and says so:
+
+> A functions deploy must not silently remove the payment-path protections that are already
+> live. […] For several hours, `firebase deploy --only functions` from the hosting lineage would
+> have silently reverted MSISDN validation on the live customer STK path, the fail-CLOSED
+> seller-phone ownership check (back to fail-OPEN), and the sandbox callback lane. Nothing
+> warned. `guard-no-rollback` compares the HOSTING tree against live hosting; it says nothing
+> about functions. This closes that gap.
+
+It guards by **properties, not commit ancestry** — deliberately, because converging fixes by
+cherry-pick creates new SHAs, so the code can be present and correct while the original commits
+are not ancestors. That is a better design than the ancestry test, and the candidate does not
+have it.
+
+**So this compounds the verdict rather than qualifying it:** deploying the candidate would not
+only revert live code, it would remove the guard that exists to stop exactly that.
+
+| mechanism | covers this case? |
 |---|---|
-| `gate-functions-require-closure` (functions, first) | No — it proves self-containment, not recency |
-| `guard-no-rollback` (hosting only) | No — "diverged → allowed", and not wired to functions |
+| `gate-functions-require-closure` (candidate, functions, first) | No — proves self-containment, not recency |
+| `guard-no-rollback` (both, hosting only) | No — "diverged → allowed", never wired to functions |
+| `guard-functions-safety` (**live only**, functions, first) | Would have — **but the candidate deletes it** |
 
-**Recorded as a finding, not fixed here.** Changing a deploy guard's semantics is a deployment
-configuration decision and belongs to an explicit release decision, not to this assessment.
+**Recorded as findings, not fixed here.** Changing deploy-guard semantics is a
+deployment-configuration decision. Reconciliation must bring `guard-functions-safety.js`
+forward and merge it with the candidate's closure gate — both belong in
+`functions.predeploy`, and they answer different questions.
 
 ## 4. Dirty production build — content benign, provenance NOT resolved
 
@@ -144,6 +169,27 @@ matches it byte for byte. The 46,554-byte version is the divergent one, not the 
 
 This is information for that workstream's owner, not an action taken here — their file was not
 touched and neither version was copied.
+
+## 6b. Reconciliation cost — measured, not estimated
+
+`git merge-tree --write-tree d592d8f HEAD` (read-only; nothing in the working tree touched):
+
+**173 conflicted paths.** This is not a mechanical merge.
+
+| conflicted, highest risk | why it matters |
+|---|---|
+| `firebase.json` | both lineages changed `functions.predeploy` — live has `guard-functions-safety.js` first, the candidate has `gate-functions-require-closure.js` first. Both must survive. |
+| `firestore.indexes.json` | index governance diverged on both sides |
+| `functions/index.js` | the deploy entrypoint itself |
+| `functions/procurement.js` | the Supply A-M engine — live changed it too |
+| `functions/business-bootstrap.js`, `application-lifecycle.js`, `delivery-authority.js`, `delivery-pin.js`, `merchant-inventory.js` | live authority modules |
+
+`firestore.rules`, `package.json` and `version.json` merge clean.
+
+**This must NOT be attempted in this working tree.** It carries **192 uncommitted entries
+belonging to other workstreams**; a 173-conflict merge here would put their unsaved work at
+risk, and CLAUDE.md forbids overwriting it. Reconciliation belongs in a clean, dedicated
+worktree, as its own authorised slice.
 
 ## 7. What a GO would require
 
