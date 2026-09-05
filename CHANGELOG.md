@@ -1,3 +1,65 @@
+## 2026-09-05 — Slice A: merchant-scoped authority on the procurement supplier surface
+
+**Files:** `functions/merchant-authority.js` (ported), `functions/procurement.js`,
+`functions/index.js` (+1 export), `scripts/test-procurement-merchant-authority.js` (new),
+`CHANGELOG.md`. **Not deployed**; HOLD remains. First slice of POS→procurement convergence.
+
+**The defect this closes.** A gate census of `procurement.js` found **six of nine** operations
+required only `_requireAuth` — signed-in-ness — while three accepted `merchantId` from the
+payload. Concretely: **any authenticated user could create a supplier under any merchant**, and
+`createPurchaseOrder`'s ownership check compared `supplier.merchantId` against the
+**caller-supplied** `merchantId` — self-referential, so naming merchant B alongside one of B's
+suppliers passed. It proved supplier↔merchant consistency and never caller↔merchant authority.
+`approvePurchaseOrder`'s `_requireManager` proves a manager claim, never that it is held *for
+this merchant*.
+
+**The primitive is reused, not reinvented.** `functions/merchant-authority.js` already existed on
+the undeployed `fix/tenant-merchant-authority` branch, and its own header names `procurement` as
+one of the defective modules ("manager/admin claim only — role, never tenant"). It is ported
+**byte-identical** — a certification check enforces that — so the branches cannot diverge.
+Writing a second primitive would repeat the exact mistake it was built to end: *"no shared
+primitive, so every author invented one and two forgot entirely."*
+
+**Composition rather than a fork.** `_assertMerchantAuthority(request, requested)` layers the
+employee path onto the canonical check: `assertMerchantAccess` (owner / adminUids / unforgeable
+platform claims, failing **closed** on a missing authority document), and on a tenancy denial
+only, `_assertBusinessPermission(uid, merchantId, 'pos')` — the **existing** capability
+vocabulary. No new permission string was invented. No `users/{uid}` field is consulted:
+`merchantId`, `sellerId`, `businessId` and `shopId` there are all self-writable.
+
+**Applied to** `addSupplier`, `createPurchaseOrder`, `getSupplierPerformance` (reads are tenant
+data too) and the new `updateSupplier`. The authorized merchantId returned by the primitive is
+the only value written — never the payload's.
+
+**New: `updateSupplier`.** Reads the supplier first and authorizes against the **document's**
+`merchantId`, never the payload's — otherwise a caller could name their own merchant while
+addressing someone else's supplier. The patch is **built from an allowlist**
+(`name, contactName, phone, email, kraPin, bankDetails, paymentTerms, creditLimit, status`),
+never spread from `updates`, so `merchantId`, `supplierId`, `createdBy`, `createdAt`,
+`currentBalance` and `rating` are unreachable from a client payload by construction. Same
+validation as `addSupplier` (KRA PIN format, payment-term set, non-negative credit limit).
+
+**Certification.** `scripts/test-procurement-merchant-authority.js` — **57/57 checks, 7/7
+sabotage catches**, executed against an injected Firestore double holding **two businesses and
+two principals**, plus memberships and a foreign supplier. Positive: each owner authorized for
+its own merchant, the owner-uid form, and the default-to-caller path. Negative: A denied on B,
+B denied on A, **a manager claim alone denied on another merchant**, nonexistent merchant
+(fails closed), unauthenticated, path-traversing id, forged `ownerId`/`merchantId`/`sellerId` on
+the payload, and an unforgeable platform-admin claim correctly allowed. Sabotage is executed and
+differential: with the relationship check removed A **is** wrongly allowed onto B, with it
+present A is denied, and the two verdicts are asserted to differ. RESTORE three ways — removing
+the primitive's check, reverting `addSupplier` to authenticated-only, or allowing a payload
+spread in `updateSupplier` — each drives exit 1, and each restore returns exit 0. Regression:
+po-send-honesty 43/43, supplier-sync 72/72, fabricated-metrics 40/40, publication contract 36/36,
+pos-payment-destination 90/0; 18b harness deliberately unchanged at 18/20.
+
+**Security changes:** four operations moved from authenticated-only to merchant-scoped; one new
+merchant-scoped write path. **No Firestore rule widened, added or removed.** **API changes:** one
+new callable, `updateSupplier`; `functions/index.js` export count 1519 → **1520**.
+**Breaking changes:** callers of `addSupplier`, `createPurchaseOrder` and `getSupplierPerformance`
+that are not authorized for the merchant they name now receive `permission-denied` instead of
+succeeding. That is the defect being fixed. **Database changes:** none.
+
 ## 2026-09-05 — A purchase order is "sent" only when the backend confirms it
 
 **Files:** `pos-suppliers.js`, `scripts/test-po-send-honesty.js` (new), `CHANGELOG.md`.

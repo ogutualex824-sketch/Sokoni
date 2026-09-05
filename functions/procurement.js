@@ -51,6 +51,8 @@ const logger                  = require('firebase-functions/logger');
    sendPurchaseOrder hand-wrote its own emailQueue document and got the shape wrong — the
    whole reason no supplier ever received a PO. */
 const emailSvc                = require('./email-service');
+const { assertMerchantAccess } = require('./merchant-authority');
+const { _assertBusinessPermission } = require('./workforce-identity');
 const notify                  = require('./notify');
 const { buildPoPdf }          = require('./po-pdf');
 
@@ -174,6 +176,42 @@ function _requireManager(request) {
   return request.auth.uid;
 }
 
+/**
+ * MERCHANT-SCOPED AUTHORITY — the gate every merchant-owned operation in this module
+ * must pass. Role is not tenancy: `_requireManager` proves a caller holds a manager
+ * claim, never that they hold it FOR THIS MERCHANT, so a manager at merchant A could
+ * act on merchant B. Six of this module's operations previously required only
+ * `_requireAuth` — signed-in-ness — while accepting `merchantId` from the payload.
+ *
+ * Composition, deliberately, rather than a second primitive:
+ *   1. `assertMerchantAccess` (functions/merchant-authority.js) — the canonical, shared
+ *      check against `businesses/{merchantId}.ownerId` (+ adminUids, + unforgeable
+ *      platform claims). Fails CLOSED on a missing authority document.
+ *   2. the employee path — an active `workspaceMemberships` record carrying the
+ *      EXISTING `pos` capability. Membership alone is not authority.
+ *
+ * No `users/{uid}` identity field is consulted: merchantId, sellerId, businessId and
+ * shopId there are all self-writable, so a check against one is theatre.
+ *
+ * @returns {Promise<string>} the AUTHORIZED merchantId — use this, never the payload's.
+ */
+async function _assertMerchantAuthority(request, requested) {
+  const auth = request && request.auth;
+  if (!auth || !auth.uid) _err('Authentication required.', 'unauthenticated');
+  try {
+    return await assertMerchantAccess(auth, requested);
+  } catch (e) {
+    /* Only a tenancy denial may fall through to the capability path. An
+       invalid-argument or unauthenticated error is final. */
+    if (!e || e.code !== 'permission-denied') throw e;
+    const merchantId = (requested === undefined || requested === null || requested === '')
+      ? String(auth.uid) : String(requested);
+    /* Throws unless the membership is active AND carries the capability. */
+    await _assertBusinessPermission(String(auth.uid), merchantId, 'pos');
+    return merchantId;
+  }
+}
+
 /** Assert caller has admin / superAdmin claim. */
 function _requireAdmin(request) {
   _requireAuth(request);
@@ -265,12 +303,15 @@ function _validateItems(items) {
 const addSupplier = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
   const {
-    merchantId, name, contactName, phone, email,
+    merchantId: _requestedMerchantId, name, contactName, phone, email,
     kraPin, bankDetails, paymentTerms, creditLimit,
   } = request.data ?? {};
 
   /* Validation */
-  if (!merchantId) _err('merchantId is required.');
+  /* AUTHORITY, not an argument. The payload's merchantId is a REQUEST; the authorized
+     value comes back from the shared primitive and is the only one written below. Before
+     this, any authenticated user could create a supplier under any merchant. */
+  const merchantId = await _assertMerchantAuthority(request, _requestedMerchantId);
   if (!name)       _err('Supplier name is required.');
   if (!phone)      _err('Contact phone is required.');
 
@@ -316,18 +357,128 @@ const addSupplier = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   1b. updateSupplier
+   Edit a supplier the caller is authorized for. Ownership and derived state are
+   server-controlled and cannot be moved by a client payload.
+════════════════════════════════════════════════════════════════ */
+
+/* The ONLY fields a client may change. Everything else on the document — supplierId,
+   merchantId, currentBalance, rating, createdBy, createdAt — is either identity or
+   server-derived state, and is unreachable from here by construction: the update object
+   is BUILT from this list, never spread from the payload. */
+const SUPPLIER_MUTABLE = ['name', 'contactName', 'phone', 'email', 'kraPin',
+                          'bankDetails', 'paymentTerms', 'creditLimit', 'status'];
+
+const updateSupplier = onCall(OPT, async (request) => {
+  const uid = _requireAuth(request);
+  const { supplierId, updates } = request.data ?? {};
+
+  if (!supplierId) _err('supplierId is required.');
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+    _err('updates must be an object.');
+  }
+
+  /* Read the supplier FIRST, then authorize against the merchantId ON THE DOCUMENT —
+     never one supplied by the caller. Authorizing against a payload merchantId would let
+     a caller name their own merchant while addressing someone else's supplier. */
+  const ref  = db.collection('procSuppliers').doc(String(supplierId));
+  const snap = await ref.get();
+  if (!snap.exists) _err('Supplier not found.', 'not-found');
+  const existing = snap.data() || {};
+
+  await _assertMerchantAuthority(request, existing.merchantId);
+
+  /* Build the patch from the allowlist. An unknown or immutable key is ignored, not
+     merged — so a payload carrying merchantId, currentBalance or createdBy changes
+     nothing rather than silently taking effect. */
+  const patch = {};
+  for (const key of SUPPLIER_MUTABLE) {
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) continue;
+    const v = updates[key];
+
+    switch (key) {
+      case 'name': {
+        if (!v) _err('Supplier name cannot be empty.');
+        patch.name = _san(v, MAX_SUPPLIER_NAME);
+        break;
+      }
+      case 'phone': {
+        if (!v) _err('Contact phone cannot be empty.');
+        patch.phone = _san(v, 20);
+        break;
+      }
+      case 'contactName': patch.contactName = _san(v, 150); break;
+      case 'email':       patch.email       = _san(v, 150); break;
+      case 'kraPin': {
+        if (v === null || v === '') { patch.kraPin = null; break; }
+        const KRA_RE = /^[A-Z]d{9}[A-Z]$/;
+        const norm = String(v).trim().toUpperCase();
+        if (!KRA_RE.test(norm)) _err('Invalid KRA PIN format. Expected: A123456789B');
+        patch.kraPin = norm;
+        break;
+      }
+      case 'bankDetails':
+        patch.bankDetails = v ? _san(JSON.stringify(v), 500) : null;
+        break;
+      case 'paymentTerms': {
+        const VALID_TERMS = new Set([7, 14, 30, 45, 60, 90]);
+        const termDays = Number(v);
+        if (!VALID_TERMS.has(termDays)) {
+          _err('paymentTerms must be one of: 7, 14, 30, 45, 60, 90 (days).');
+        }
+        patch.paymentTerms = termDays;
+        break;
+      }
+      case 'creditLimit': {
+        const limit = Number(v);
+        if (!isFinite(limit) || limit < 0) _err('creditLimit cannot be negative.');
+        patch.creditLimit = limit;
+        break;
+      }
+      case 'status': {
+        if (!['active', 'inactive'].includes(v)) {
+          _err("status must be 'active' or 'inactive'.");
+        }
+        patch.status = v;
+        break;
+      }
+    }
+  }
+
+  if (Object.keys(patch).length === 0) _err('No updatable fields supplied.');
+
+  patch.updatedAt = F.serverTimestamp();
+  patch.updatedBy = uid;
+
+  await ref.update(patch);
+
+  await _audit(uid, 'supplier_updated', String(supplierId), {
+    merchantId: existing.merchantId, fields: Object.keys(patch),
+  });
+
+  logger.info('procurement.updateSupplier', {
+    supplierId, merchantId: existing.merchantId, fields: Object.keys(patch),
+  });
+  return { supplierId: String(supplierId), updated: Object.keys(patch) };
+});
+
+/* ════════════════════════════════════════════════════════════════
    2. createPurchaseOrder
    Draft a purchase order against a supplier.
 ════════════════════════════════════════════════════════════════ */
 const createPurchaseOrder = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
   const {
-    merchantId, supplierId, items,
+    merchantId: _requestedMerchantId, supplierId, items,
     notes, expectedDelivery,
   } = request.data ?? {};
 
-  if (!merchantId)  _err('merchantId is required.');
   if (!supplierId)  _err('supplierId is required.');
+
+  /* The old check compared supplier.merchantId against the CALLER-SUPPLIED merchantId —
+     self-referential, so supplying merchant B's id with one of B's suppliers passed. It
+     proved supplier<->merchant consistency and never caller<->merchant authority. */
+  const merchantId = await _assertMerchantAuthority(request, _requestedMerchantId);
 
   /* Verify supplier belongs to this merchant */
   const supplierSnap = await db.collection('procSuppliers').doc(supplierId).get();
@@ -914,10 +1065,12 @@ const approveAndPayInvoice = onCall(OPT, async (request) => {
 ════════════════════════════════════════════════════════════════ */
 const getSupplierPerformance = onCall(OPT, async (request) => {
   _requireAuth(request);
-  const { supplierId, merchantId, months } = request.data ?? {};
+  const { supplierId, merchantId: _requestedMerchantId, months } = request.data ?? {};
 
   if (!supplierId) _err('supplierId is required.');
-  if (!merchantId) _err('merchantId is required.');
+  /* Reads are tenant data too — the caller must be authorized for the merchant whose
+     supplier performance they are asking about. */
+  const merchantId = await _assertMerchantAuthority(request, _requestedMerchantId);
 
   const numMonths = Math.min(Math.max(Number(months ?? 3), 1), 24);
 
@@ -1331,6 +1484,7 @@ const scheduledVendorPerformanceUpdate = onSchedule(
 ════════════════════════════════════════════════════════════════ */
 module.exports = {
   addSupplier,
+  updateSupplier,
   createPurchaseOrder,
   approvePurchaseOrder,
   sendPurchaseOrder,
@@ -1341,4 +1495,6 @@ module.exports = {
   getProcurementForecast,
   getProcurementDashboard,
   scheduledVendorPerformanceUpdate,
+  _SUPPLIER_MUTABLE: SUPPLIER_MUTABLE,
+  _assertMerchantAuthority,
 };
