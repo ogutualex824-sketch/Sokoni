@@ -1,3 +1,78 @@
+## 2026-09-05 — The closure gate becomes exhaustive and self-explanatory
+
+**Files:** `docs/DEPLOY_TREE_DISPOSITIONS.json` (new — governance ledger),
+`scripts/gate-functions-require-closure.js`, `scripts/test-functions-require-closure-gate.js`,
+`CHANGELOG.md`. **No module committed, copied or removed. No owner invented.** The gate still
+exits 1 at HEAD, intentionally.
+
+### The problem with "missing"
+
+Four missing modules are not four instances of one defect. One needs attribution, two are
+deliberately gated behind documented prerequisites, and one needs its foreign-port lineage
+reconciled — four decisions with four owners. Reporting them all as *missing* loses exactly the
+information the reader needs, and invites the wrong remedy (deletion) for the wrong reason.
+
+### The shape
+
+```
+require-closure
+      ↓
+identify every unresolved tracked-tree dependency
+      ↓
+name disposition + owner/provenance + path to resolution + what is forbidden
+      ↓
+block
+```
+
+The gate now reads `docs/DEPLOY_TREE_DISPOSITIONS.json` and reports each blocker as
+**RESOLVED · GATED · UNRESOLVED · FOREIGN_PORT · UNDECLARED**, with its owner (or an explicit
+UNKNOWN), the path to resolution, the prohibition attached to it, and its evidence. Current
+output: `4 (FOREIGN_PORT 1, GATED 2, UNRESOLVED 1)` — the four are visibly three different
+situations, not one.
+
+`order-claim`'s row carries its own prohibition into the deploy output verbatim: *"Do NOT delete
+it to make this gate green."* So does `manual-till-orders`: *"Do NOT remove: a live
+customer-facing page calls it."*
+
+### Two states that must be loud
+
+**UNDECLARED** is the default for anything absent from the ledger — a dependency nobody has
+dispositioned has drifted into the deploy graph unnoticed, and must never inherit a reassuring
+label. **REGRESSION** fires when a module declared RESOLVED is absent from the tree: a closed
+dependency was reverted or dropped, which is a different and worse problem than a routine block.
+
+### What it must never do
+
+The gate **never auto-removes, auto-copies, or auto-admits** a module, and never writes to the
+repository at all. Certified, not merely asserted: the suite strips the gate's own comments (its
+header necessarily names the operations it promises not to perform) and proves the source
+contains no filesystem write and no mutating git command — only `ls-tree`, `cat-file`, `log`
+and `rev-parse`.
+
+### A ledger row does not make anything deployable
+
+Closure is decided by `git ls-tree`, never by JSON or Markdown. The ledger's own header says so,
+the gate's header says so, and the suite proves it: with all four dispositioned, **the gate still
+fails.** A recorded disposition is a decision RECORDED, not a dependency RESOLVED. Editing that
+file is a governance act, not configuration.
+
+### Certification
+
+`scripts/test-functions-require-closure-gate.js` — **93 checks, 12 sabotage catches.** New §9
+covers: every blocker carries a status; none is reported as bare "missing"; the specific ruling
+per module; that the four are not collapsed into one status; that `tenant-identity` is RESOLVED
+and therefore absent from the blockers; that each blocker names an owner or an explicit UNKNOWN
+and **no owner is invented**; that each states a resolution path and a prohibition; and that the
+gate still fails with everything dispositioned.
+
+**RESTORE — three sabotages of the real files**, each restored byte-identically: dropping
+`order-claim` from the ledger (it becomes UNDECLARED); mislabelling it RESOLVED while it is
+absent from the tree (REGRESSION fires); and adding a `fs.writeFileSync` to the gate (the
+no-write prohibition fails).
+
+**API changes:** none. **Database changes:** none. **Deployment configuration:** unchanged —
+`firebase.json` is not touched; only what the gate reports. **Breaking changes:** none.
+
 ## 2026-09-05 — Notify parallel workstreams that the Functions block is deliberate
 
 **Files:** `AGENTS.md`, `scripts/gate-functions-require-closure.js`,

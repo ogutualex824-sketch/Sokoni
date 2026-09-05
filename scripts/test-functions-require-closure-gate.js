@@ -43,6 +43,12 @@ function run (args) {
 }
 const json = (r) => { try { return JSON.parse(r.out); } catch (_) { return null; } };
 
+/* Absence tests over the gate's OWN source must not match its documentation — the gate's header
+   necessarily names the operations it promises never to perform. */
+function stripGateComments (t) {
+  return t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+}
+
 /* ══════════════════════════════════════════════════════════
    §1 the gate FAILS at HEAD, and names exactly the right modules
 ══════════════════════════════════════════════════════════ */
@@ -224,6 +230,83 @@ console.log('\n§7 predeploy wiring');
     nrm(atRoot) !== null && nrm(atRoot) === nrm(atFunctions));
   sab('a cwd-dependent gate would be caught by this comparison',
     JSON.stringify({ w: 'absent' }) !== JSON.stringify({ w: 'present-UNTRACKED' }));
+}
+
+/* ══════════════════════════════════════════════════════════
+   §9 EXHAUSTIVE AND SELF-EXPLANATORY — four dispositions, not one word
+══════════════════════════════════════════════════════════ */
+console.log('\n§9 dispositions');
+{
+  const fs = require('fs');
+  const LEDGER = path.join(ROOT, 'docs/DEPLOY_TREE_DISPOSITIONS.json');
+  let led = null;
+  try { led = JSON.parse(fs.readFileSync(LEDGER, 'utf8')); } catch (_) {}
+  check('the governance ledger exists and is valid JSON', !!led && !!led.dispositions);
+
+  const d = json(run(['--json'])) || { blocking: [] };
+  check('every blocking module carries a disposition status',
+    d.blocking.length === 4 && d.blocking.every((x) => !!x.status));
+  check('NONE is reported as merely "missing"',
+    d.blocking.every((x) => x.status !== 'MISSING' && x.status !== 'UNDECLARED'));
+
+  const st = {}; d.blocking.forEach((x) => { st[x.module.replace('functions/', '')] = x.status; });
+  check('order-claim is UNRESOLVED, not deletable-by-default', st['order-claim'] === 'UNRESOLVED');
+  check('manual-till-orders is GATED', st['manual-till-orders'] === 'GATED');
+  check('commission-invoice is GATED', st['commission-invoice'] === 'GATED');
+  check('pos-mpesa-refs is FOREIGN_PORT', st['pos-mpesa-refs'] === 'FOREIGN_PORT');
+  check('the four are NOT collapsed into one status',
+    new Set(Object.values(st)).size === 3);
+  check('tenant-identity is declared RESOLVED and therefore absent from the blockers',
+    led.dispositions['functions/tenant-identity'].status === 'RESOLVED' &&
+    !d.blocking.some((x) => /tenant-identity/.test(x.module)));
+
+  check('each blocker names an owner or an explicit UNKNOWN',
+    d.blocking.every((x) => x.owner !== undefined && (x.owner || x.ownerNote)));
+  check('  ...and no owner is invented for an unowned module',
+    d.blocking.every((x) => x.owner === null));
+  check('each blocker states its path to resolution',
+    d.blocking.every((x) => typeof x.resolutionPath === 'string' && x.resolutionPath.length > 20));
+  check('each blocker states what is forbidden',
+    d.blocking.every((x) => typeof x.forbidden === 'string' && x.forbidden.length > 20));
+
+  const out = run([]).out;
+  check('the human output shows the status label per module',
+    /\[UNRESOLVED\]/.test(out) && /\[GATED\]/.test(out) && /\[FOREIGN_PORT\]/.test(out));
+  check('it counts by status rather than reporting a bare total',
+    /FOREIGN_PORT 1/.test(out) && /GATED 2/.test(out) && /UNRESOLVED 1/.test(out));
+  check('order-claim carries its do-not-delete prohibition into the gate output',
+    /Do NOT delete it to make this gate green/.test(out));
+  check('manual-till-orders carries its do-not-remove prohibition',
+    /Do NOT remove: a live customer-facing page calls it/.test(out));
+
+  /* Dispositioned still does not mean deployable. */
+  check('the gate STILL fails with all four dispositioned', d.ok === false);
+  sab('a gate that passed once modules were dispositioned would be caught here',
+    d.ok === false && d.blocking.length === 4);
+
+  /* An undeclared dependency must be the loud case, not the quiet one. */
+  check('UNDECLARED is the default for anything not in the ledger', (function () {
+    const src = fs.readFileSync(GATE, 'utf8');
+    return /status: d \? d\.status : 'UNDECLARED'/.test(src);
+  })());
+  check('and the gate explains what to do about an undeclared dependency',
+    /No disposition recorded/.test(fs.readFileSync(GATE, 'utf8')));
+  check('a RESOLVED module absent from the tree is reported as a REGRESSION',
+    /REGRESSION — declared RESOLVED but absent/.test(fs.readFileSync(GATE, 'utf8')));
+
+  /* THE HARD PROHIBITION: the gate must never mutate anything. */
+  const gsrc = stripGateComments(fs.readFileSync(GATE, 'utf8'));
+  check('the gate never writes to the filesystem',
+    !/fs\.(writeFile|writeFileSync|appendFile|appendFileSync|unlink|unlinkSync|rm|rmSync|rename|renameSync|copyFile|copyFileSync|mkdir|mkdirSync)/.test(gsrc));
+  check('the gate runs no mutating git command',
+    !/'(add|commit|checkout|rm|mv|restore|reset|clean|stash|push|apply|cherry-pick|merge)'/.test(gsrc));
+  check('  ...it only ever reads: ls-tree, cat-file, log, rev-parse',
+    (gsrc.match(/execFileSync\('git', \[\s*'([a-z-]+)'/g) || [])
+      .every((m) => /'(ls-tree|cat-file|log|rev-parse)'/.test(m)));
+  sab('the write detector fires on a real write',
+    /fs\.(writeFileSync)/.test("fs.writeFileSync('x', 'y');"));
+  sab('the mutating-git detector fires on a real mutation',
+    /'(add|commit|checkout)'/.test("execFileSync('git', ['add', '.']);"));
 }
 
 /* ══════════════════════════════════════════════════════════

@@ -24,10 +24,32 @@
  * is a real defect but does not stop a deploy, so it is reported separately and does not fail
  * the gate. Conflating the two would either cry wolf or hide the thing that actually breaks.
  *
- * WHAT IT DOES NOT DO
- * It does not judge whether a missing module SHOULD be committed — that is a provenance and
- * release-gate decision, documented per file in docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md.
- * It only refuses to let the question go unanswered silently.
+ * EXHAUSTIVE AND SELF-EXPLANATORY
+ * Four missing modules are not four instances of one defect. One needs attribution, two are
+ * deliberately gated behind documented prerequisites, and one needs its foreign-port lineage
+ * reconciled — four decisions with four owners. Collapsing them into the word "missing" loses
+ * exactly the information the reader needs and invites the wrong remedy (deletion) for the
+ * wrong reason. So the gate reads a governance ledger,
+ * docs/DEPLOY_TREE_DISPOSITIONS.json, and reports each blocker as:
+ *
+ *     RESOLVED | GATED | UNRESOLVED | FOREIGN_PORT | UNDECLARED
+ *     + owner (or an explicit UNKNOWN) + the path to resolution + what is forbidden
+ *
+ * UNDECLARED is the alarming state, not the friendly one: a dependency nobody has
+ * dispositioned has drifted into the deploy graph unnoticed, and must never inherit a
+ * reassuring label by default. A module declared RESOLVED but absent from the tree is
+ * reported as a REGRESSION — a closed dependency was reverted or dropped.
+ *
+ * WHAT IT DOES NOT DO — AND MUST NEVER DO
+ * It NEVER auto-removes, auto-copies, or auto-admits a module, and it never writes to the
+ * repository at all. It does not judge whether a missing module SHOULD be committed: that is a
+ * governance decision belonging to that module's owner. It only refuses to let the question go
+ * unanswered silently.
+ *
+ * A ROW IN THE LEDGER DOES NOT MAKE ANYTHING DEPLOYABLE. Closure is decided by `git ls-tree`,
+ * never by JSON or Markdown. A recorded disposition is a decision RECORDED, not a dependency
+ * RESOLVED — only committed deploy-tree content, or an explicit tested removal of the
+ * require/export, turns this gate green.
  *
  * USAGE
  *   node scripts/gate-functions-require-closure.js            # scan HEAD
@@ -45,6 +67,7 @@ const args = process.argv.slice(2);
 const REF  = (() => { const i = args.indexOf('--ref'); return i >= 0 ? args[i + 1] : 'HEAD'; })();
 const JSON_OUT = args.indexOf('--json') >= 0;
 const ENTRY = 'functions/index.js';
+const LEDGER = 'docs/DEPLOY_TREE_DISPOSITIONS.json';
 
 /* EVERY git call and every disk check is anchored to the repository root, never to the
    caller's cwd. Firebase runs a functions predeploy hook with cwd = the functions directory,
@@ -229,6 +252,29 @@ function main () {
     } catch (_) { /* provenance is informative, not load-bearing */ }
   }
 
+  /* ── the governance ledger ────────────────────────────────────────────────
+     Four missing modules are not four instances of one defect. One needs attribution, two are
+     deliberately gated behind documented prerequisites, one needs its foreign-port lineage
+     reconciled — four decisions, four owners. Collapsing them into "missing" loses exactly the
+     information the reader needs, and invites the wrong remedy (deletion) for the wrong reason.
+
+     This gate READS the ledger. It never writes it, and a row in it never makes anything
+     deployable: closure is decided by `git ls-tree`, not by Markdown or JSON. */
+  let ledger = { dispositions: {} };
+  let ledgerError = null;
+  try {
+    ledger = JSON.parse(fs.readFileSync(path.join(REPO, LEDGER), 'utf8'));
+  } catch (e) {
+    ledgerError = String(e.message).split('\n')[0];
+  }
+  const dispositionOf = (mod) => (ledger.dispositions || {})[mod] || null;
+
+  /* A module declared RESOLVED that is NOT in the tree has regressed — someone reverted or
+     dropped a dependency that governance already closed. That is a louder problem than an
+     undeclared one and must not be reported as a routine block. */
+  const regressed = Object.keys(ledger.dispositions || {}).filter((m) =>
+    (ledger.dispositions[m].status === 'RESOLVED') && !resolveTo(m));
+
   const detail = [...missing.keys()].sort().map((t) => {
     let onDisk = 'absent';
     /* Resolved against the repo root, not the caller's cwd: run as a predeploy hook this
@@ -240,11 +286,22 @@ function main () {
       }
     } catch (_) {}
     const elsewhere = provenance.get(t + '.js') || null;
+    const d = dispositionOf(t);
     return {
       module: t,
       requiredBy: [...missing.get(t)].sort(),
       workingTree: onDisk,
       committedElsewhere: elsewhere,
+      /* UNDECLARED is the alarming state, not the friendly one: a dependency nobody has
+         dispositioned has drifted into the deploy graph unnoticed. It must never inherit a
+         reassuring label by default. */
+      status: d ? d.status : 'UNDECLARED',
+      summary: d ? d.summary : null,
+      owner: d ? (d.owner || null) : null,
+      ownerNote: d ? (d.ownerNote || null) : null,
+      resolutionPath: d ? d.path : null,
+      forbidden: d ? (d.forbidden || null) : null,
+      evidence: d ? (d.evidence || []) : [],
     };
   });
 
@@ -252,6 +309,8 @@ function main () {
     console.log(JSON.stringify({
       ref: REF, entry: ENTRY, reachableModules: visited,
       ok: !detail.length, blocking: detail, nonBlocking: others,
+      ledger: LEDGER, ledgerError: ledgerError, regressed: regressed,
+      byStatus: detail.reduce((m, d) => { m[d.status] = (m[d.status] || 0) + 1; return m; }, {}),
     }, null, 2));
     process.exit(detail.length ? 1 : 0);
   }
@@ -271,15 +330,42 @@ function main () {
     process.exit(0);
   }
 
-  console.log('  unresolved        : ' + detail.length + '\n');
+  const byStatus = {};
+  detail.forEach((d) => { (byStatus[d.status] = byStatus[d.status] || []).push(d); });
+  console.log('  unresolved        : ' + detail.length + '  (' +
+    Object.keys(byStatus).sort().map((s) => s + ' ' + byStatus[s].length).join(', ') + ')');
+  if (ledgerError) {
+    console.log('  LEDGER UNREADABLE : ' + LEDGER + ' — ' + ledgerError);
+    console.log('                      every module below is reported UNDECLARED as a result.');
+  }
+  console.log('');
+
   for (const d of detail) {
-    console.log('  x ' + d.module);
+    console.log('  [' + d.status + ']  ' + d.module);
+    if (d.summary) console.log('      ' + d.summary);
     console.log('      required by         : ' + d.requiredBy.join(', '));
     console.log('      in working tree     : ' + d.workingTree +
       (d.workingTree === 'present-UNTRACKED'
         ? '   <- NOT CLOSURE: a deploy uses a checkout, not this disk'
         : ''));
     console.log('      committed on any ref: ' + (d.committedElsewhere || 'NEVER — no provenance anywhere'));
+    console.log('      owner               : ' + (d.owner || 'UNKNOWN' +
+      (d.ownerNote ? ' — ' + d.ownerNote : '')));
+    if (d.resolutionPath) console.log('      to resolve          : ' + d.resolutionPath);
+    if (d.forbidden)      console.log('      FORBIDDEN           : ' + d.forbidden);
+    if (d.evidence && d.evidence.length) console.log('      evidence            : ' + d.evidence.join(' · '));
+    if (d.status === 'UNDECLARED') {
+      console.log('      ** No disposition recorded. This dependency drifted into the deploy');
+      console.log('         graph without a governance decision. Do NOT guess: establish its');
+      console.log('         provenance and owner, then record it in ' + LEDGER + '.');
+    }
+    console.log('');
+  }
+
+  if (regressed.length) {
+    console.log('  ** REGRESSION — declared RESOLVED but absent from the tree:');
+    regressed.forEach((m) => console.log('       ' + m + '  (a closed dependency was reverted or dropped)'));
+    console.log('');
   }
   /* The person reading this is, most likely, an agent or engineer whose deploy just stopped.
      Tell them here what is happening and why, because this is the one place they are
