@@ -1,3 +1,38 @@
+## 2026-09-05 — Route gate: reconcile the stale sidebar spec with the shipped registry
+
+**Files:** `scripts/test-merchant-routes.js`, `CHANGELOG.md`. **`sokoni-merchant-routes.js` is
+NOT touched** — the registry was never wrong. **Not deployed.**
+
+**What was actually failing.** `scripts/test-merchant-routes.js` reported **57 passed, 2
+failed** — *"sidebar ORDER matches the canonical spec"* and *"no extra primary destinations
+[18 vs 17]"*. I previously attributed this to another workstream's uncommitted edits to
+`sokoni-merchant-routes.js`. **That was wrong**, and the correction matters for provenance:
+
+* The failure reproduces at **HEAD**, with the uncommitted diff excluded — `HEAD`'s registry
+  already has 18 primaries including `till`.
+* `till` became `tier:'primary'` in **`1ebc58e` — "feat(merchant): Till & QR surface in
+  Merchant V2 shell (Part 2)"**, an ancestor of HEAD. A deliberately shipped feature.
+* The registry is **self-consistent**: `validate()` returns `[]`, and its own `PRIMARY_ORDER`
+  lists `till` between `payments` and `deliveries`, with the total partition enforced in both
+  directions (primary-but-unordered and ordered-but-absent both raise).
+* `scripts/test-merchant-routes.js` is **committed and unmodified**, and its `FOUNDER_SIDEBAR`
+  literal never included `till` — `git log -S` finds no commit that added it.
+
+So the stale artefact was the test's spec, not the shipped navigation. The gate was reporting
+the correct registry as wrong.
+
+**The fix.** `'till'` added to `FOUNDER_SIDEBAR` in the position the registry's own
+`PRIMARY_ORDER` already declares — taken from the registry rather than chosen here, since the
+registry is the single route authority and the sidebar, drawer, bottom nav and command palette
+are all projections of it.
+
+**Result:** `test-merchant-routes` **60 passed, 0 failed** (was 57/2);
+`test-merchant-route-gate` **168 passed, 0 failed** (unchanged).
+
+**Deliberately not done:** the other workstream's uncommitted `?shell=merchant` src changes are
+untouched and uncommitted — they are theirs to land. No route was added, removed or reordered.
+This commit changes a test literal only.
+
 ## 2026-09-05 — Slice J1: the Merchant V2 Supply workspace module
 
 **Files:** `sokoni-merchant-supply.js` (new), `scripts/test-supply-workspace-slice-j.js` (new),

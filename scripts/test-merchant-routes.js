@@ -164,8 +164,14 @@ console.log('\n9. Founder sidebar coverage');
                  increments `sold` — so a correction was recorded as a sale. `#inventory` no
                  longer aliases to POS for exactly that reason.
    Products stays separate: catalogue management is a different job from stock operations. */
+/* 'till' (Till & QR) was added as a primary destination by 1ebc58e — 'feat(merchant):
+   Till & QR surface in Merchant V2 shell (Part 2)' — a shipped feature. This literal was
+   never updated to match, so the gate reported the SHIPPED registry as wrong. The registry is
+   the authority and self-validates clean (validate() returns []), with PRIMARY_ORDER and the
+   tier:'primary' set agreeing in both directions; the stale artefact was this spec. Position
+   taken from the registry's own PRIMARY_ORDER, not chosen here. */
 const FOUNDER_SIDEBAR = ['dashboard','plan','sell','products','inventory','pos','orders','analytics',
-  'revenue','payments','deliveries','returns','receipts','staff','messages','disputes','settings'];
+  'revenue','payments','till','deliveries','returns','receipts','staff','messages','disputes','settings'];
 
 FOUNDER_SIDEBAR.forEach(id => {
   const r = C.get(id);
