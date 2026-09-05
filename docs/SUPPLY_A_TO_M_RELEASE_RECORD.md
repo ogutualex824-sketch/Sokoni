@@ -223,6 +223,16 @@ now as other workstreams' untracked files. A deploy uses a checkout, not somebod
 filesystem scan that reported closure was measuring the wrong thing, and any future scan that
 consults the filesystem will make the same mistake.
 
+**The open item, stated as it should be tracked:**
+
+> **Resolve four deploy-tree dependencies by provenance + feature disposition; dispositioned
+> does not mean deployable.**
+
+Not *"resolve four unresolved modules"* — that wording treats them as four instances of one
+missing-code defect, which they are not. One needs attribution, one is deliberately gated behind
+a shipped-lifecycle switch, one waits on a Firestore config and two business decisions, and one
+needs its foreign-port lineage reconciled. Four different decisions, four different owners.
+
 **No deployment may be attempted until all four are resolved or explicitly dispositioned
 through the release gate.** Their per-file provenance is already established in
 `docs/UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS.md` (2026-09-04): `order-claim` has no provenance
@@ -236,17 +246,32 @@ engineering one.
 **"Dispositioned" does not mean "deployable."** Every module below has a decided disposition.
 Not one of them is deployable today, and that is the correct state, not a backlog.
 
-| module | disposition | deployable now |
-|---|---|---|
-| `order-claim` | **C — unresolved.** No provenance, no spec, no contract on any ref. The only truly *unowned* blocker. Escalated: `docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md` | **No** |
-| `manual-till-orders` | **B — gated.** `manual_payment` stays OFF until its contract and certification are complete | **No** |
-| `commission-invoice` | **A — canonical, gated.** Spec exists, certified 52/0, but `revenueConfig/commission_vat` is unset and two business decisions are open | **No** |
-| `pos-mpesa-refs` | **B — proven foreign port.** Committed at `233ac4d`; this branch does not carry it | **No** |
-| `tenant-identity` | **RESOLVED / tracked** at `24f50ba`, byte-identical to `25d2c19` | **Yes** |
+Rulings as of 2026-09-05. These are resolved by **feature intent + provenance**, not by treating
+all four as missing-code defects — they are not the same problem.
 
-**Therefore the require-closure gate is red today, and that is the correct result.** None of
-these may be closed by committing a guessed implementation, by preserving a require because the
-file happens to exist in another worktree, or by weakening the gate.
+| module | ruling | next step | deployable now |
+|---|---|---|---|
+| `order-claim` | **C — unresolved provenance, but technically evidenced.** A real trace (`8796777`) and a real concurrency test (27/0 on a live emulator) exist. Governance is what is missing, not working code. | **Attribution.** Admit it pending attribution; its race test travels with it. **Do not delete it to make the gate green.** `docs/ESCALATION_ORDER_CLAIM_PROVENANCE.md` | **No** |
+| `manual-till-orders` | **B — retain, gated.** `checkout.html` calls it; `checkout-mode.js` deliberately returns `manual_payment_unavailable` until the lifecycle ships | Stay in the tree, remain **operationally gated** | **No** |
+| `commission-invoice` | **A — canonical, gated.** Spec exists, certified 52/0 | Stay gated until `revenueConfig/commission_vat` is set and the two business decisions are resolved | **No** |
+| `pos-mpesa-refs` | **B — foreign port, provenance required.** Committed at `233ac4d`; this branch does not carry it | **Reconcile the foreign-port lineage** before admission | **No** |
+| `tenant-identity` | **RESOLVED / tracked** at `24f50ba`, byte-identical to `25d2c19` | done | **Yes** |
+
+**The require-closure gate is red today, and that is the correct result.** None of these may be
+closed by committing a guessed implementation, by preserving a require because the file happens
+to exist in another worktree, or by weakening the gate.
+
+### A documentation disposition alone does not satisfy closure
+
+Writing a ruling into this record does not change the deploy tree. The gate reads
+`git ls-tree`, not Markdown. It stays red until each decision is **converted into actual
+deploy-tree content** — the module committed, or an explicit, tested removal of its
+require/export committed. Until then the entry above is a decision *recorded*, not a dependency
+*resolved*.
+
+The corollary, which is the reason `order-claim` is not simply deleted: **absence of an owner is
+not evidence that a feature is unwanted**, and a red gate is not a reason to destroy a
+demonstrated capability.
 
 ### It is now enforced, not merely written down
 

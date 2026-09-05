@@ -1,29 +1,44 @@
-# ESCALATION — `functions/order-claim.js` has no provenance
+# ESCALATION — `functions/order-claim.js` needs ATTRIBUTION, not reconstruction
 
 **Status: OPEN · owner UNKNOWN · blocks every functions deploy from this branch**
-Raised 2026-09-05 · Disposition **C — escalated, unresolved** (unchanged since the 2026-09-04 census)
+Raised 2026-09-05 · Disposition **C — unresolved provenance, but technically evidenced**
+(founder ruling, 2026-09-05; supersedes the earlier "provenance missing" framing)
 **Related:** [[UNTRACKED_FUNCTIONS_PROVENANCE_CENSUS]] · [[SUPPLY_A_TO_M_RELEASE_RECORD]] ·
 [[ORDER_CLAIM_PROVENANCE_TRACE]]
 
 ---
 
+## The ruling
+
+> **The evidence supports admission pending attribution, not deletion.**
+
+**`order-claim` must NOT be removed merely to make the closure gate green.** Doing so would
+discard a demonstrated, transactionally safe capability because its ownership is unknown. What
+is missing here is **governance, not working code** — a real provenance trace (`8796777`) and a
+real concurrency test (`scripts/test-order-claim-race.js`, 27/0 against a live Firestore
+emulator) both exist.
+
 ## What is being asked
 
-**Someone who owns this feature must decide one of two things.** No engineering work should
-proceed on it until they have.
+**Someone who owns this feature must decide.** No engineering work should proceed on it until
+they have.
 
 ```
-EITHER   obtain the authoritative owner/spec  →  certify  →  commit
-OR       the feature is obsolete: remove its require/export  →  certify the index graph  →  commit the removal
+PREFERRED   attribute the work  →  admit it  →  commit it WITH its race test  →  gate closes
+ONLY IF the feature is genuinely unwanted:
+            an explicit, tested removal of its require/export  →  certify the index graph  →  commit
 ```
 
 Both paths end in a commit that makes `functions/index.js` load from a clean checkout. Neither
-path may be substituted by any of the following, which are explicitly forbidden:
+may be substituted by any of the following, which are explicitly forbidden:
 
-* **Do not commit a guessed implementation.** There is no spec to guess against.
+* **Do not commit a guessed implementation.** Attribution means identifying the real author and
+  authorisation, not writing a replacement.
 * **Do not preserve the require merely because the file exists in another worktree or on
   someone's disk.** A module existing somewhere on disk is not deployable provenance.
 * **Do not suppress, weaken, or bypass the closure gate to make a deploy possible.**
+* **Do not delete it for convenience.** Absence of an owner is not evidence the feature is
+  unwanted, and the gate being red is not a reason to destroy capability.
 
 This decision belongs to the owner of the order-claim feature. It is **not** the Supply
 workstream's to make, and the Supply workstream has not made it.
@@ -32,7 +47,8 @@ workstream's to make, and the Supply workstream has not made it.
 
 ## Why it is unowned
 
-`order-claim.js` is the only module in the entire untracked census with nothing behind it:
+Ownership — not quality — is what is missing. The code is evidenced (see the correction below);
+what no record anywhere establishes is who authorised it:
 
 | evidence sought | result |
 |---|---|
