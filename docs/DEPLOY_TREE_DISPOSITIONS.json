@@ -58,12 +58,12 @@
       ]
     },
     "functions/commission-invoice": {
-      "status": "GATED",
-      "summary": "Canonical and already certified 52/0, but deliberately not deployable: 'BUILT 52/0 · NOT DEPLOYED · NO INVOICE CAN ISSUE'. Blocked by configuration and business decisions, not by code quality.",
+      "status": "RESOLVED",
+      "summary": "ADMITTED to the tree with commission-vat-policy. Suite re-run: 52 passed, exit 0. NO INVOICE CAN ISSUE: revenueConfig/commission_vat verified ABSENT in production, which is a fail-closed condition, so every issuing path refuses.",
       "owner": null,
-      "ownerNote": "Decision-holder is whoever owns revenueConfig/commission_vat and the two open business decisions. Not named here because no record assigns an individual.",
-      "path": "Set revenueConfig/commission_vat, resolve the two outstanding business decisions, then commit.",
-      "forbidden": "Do NOT weaken the gate to accommodate it, and do NOT deploy it before its configuration exists — no invoice may issue against an unset VAT policy.",
+      "ownerNote": "Decision-holder for the VAT treatment and the two open questions is a commercial/tax owner, not an engineering one. Not named here because no record assigns an individual.",
+      "path": "Admission done. STILL REQUIRED before any invoice issues: decisions #1 (VAT-inclusive vs exclusive, ~16% revenue swing), #2 (per-sale vs periodic statement) and #3 (fiscalise without merchant KRA PIN) per spec section 5b, then set revenueConfig/commission_vat WITH decidedBy.",
+      "forbidden": "Do NOT set revenueConfig/commission_vat without an attributed human commercial decision - the module refuses an unattributable tax decision by design (decidedBy missing is fail-closed). An issued fiscal invoice cannot be corrected, only credit-noted.",
       "evidence": [
         "docs/COMMISSION_INVOICE_SPEC.md"
       ]
@@ -87,6 +87,15 @@
       "path": "Done.",
       "evidence": [
         "docs/MANUAL_TILL_ORDER_CONTRACT.md"
+      ]
+    },
+    "functions/commission-vat-policy": {
+      "status": "RESOLVED",
+      "summary": "ADMITTED alongside commission-invoice, which requires it. Was untracked and committed on no ref. Contains no literal inclusive:true/false - the policy is data, not code, and stays unset.",
+      "owner": "admitted with commission-invoice",
+      "path": "Done.",
+      "evidence": [
+        "docs/COMMISSION_INVOICE_SPEC.md"
       ]
     }
   }
