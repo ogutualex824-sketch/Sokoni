@@ -188,10 +188,20 @@ const okCreate = { data: { poId: 'po_canonical_abc', poNumber: 'PO-2026-00042' }
   check('buyerBusinessId is on the canonical PO', /buyerBusinessId:\s*merchantId,/.test(PROC));
   check('supplierBusinessId is nullable and read off the supplier record',
     /supplierBusinessId:\s*supplier\.supplierBusinessId \|\| null,/.test(PROC));
-  check('supplierBusinessId is NOT accepted from the caller',
-    !/supplierBusinessId\s*[,}]/.test((/const \{\s*merchantId[\s\S]{0,220}\} = request\.data/.exec(PROC) || [''])[0]));
+  /* Scoped to createPurchaseOrder specifically. An earlier version matched the FIRST
+     `const { merchantId … } = request.data` in the file, which after Slice B2 is
+     addSupplier's — where supplierBusinessId is legitimately accepted and then VERIFIED.
+     The invariant here is narrower: the PO must never take the counterparty from the
+     caller, because a client asserting "this PO supplies business X" would be declaring a
+     relationship it has no authority to declare. */
+  const CPO = (/const createPurchaseOrder = onCall[\s\S]*?\}\s*=\s*request\.data \?\? \{\};/.exec(PROC) || [''])[0];
+  check('createPurchaseOrder does not destructure supplierBusinessId from the payload',
+    CPO.length > 0 && !/supplierBusinessId/.test(CPO));
+  check('the PO reads the counterparty off the SUPPLIER record',
+    /supplierBusinessId:\s*supplier\.supplierBusinessId \|\| null,/.test(PROC));
   sab('the detector catches a client-supplied supplierBusinessId',
-    /supplierBusinessId\s*[,}]/.test('const { merchantId, supplierId, supplierBusinessId } = request.data;'));
+    /supplierBusinessId/.test('const {\n  merchantId, supplierId, supplierBusinessId,\n} = request.data ?? {};'));
+  sab('the detector does not misfire on the correct code', !/supplierBusinessId/.test(CPO));
   check('COMPAT: merchantId retained on the PO', /^\s+merchantId,$/m.test(PROC));
   check('COMPAT: supplierId retained on the PO', /^\s+supplierId,$/m.test(PROC));
   check('buyerBusinessId uses the AUTHORIZED merchantId, not the payload',

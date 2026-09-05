@@ -53,6 +53,7 @@ const logger                  = require('firebase-functions/logger');
 const emailSvc                = require('./email-service');
 const { assertMerchantAccess } = require('./merchant-authority');
 const { _assertBusinessPermission } = require('./workforce-identity');
+const { resolveMerchantIdForOwner, REASON: TENANT_REASON } = require('./tenant-identity');
 const notify                  = require('./notify');
 const { buildPoPdf }          = require('./po-pdf');
 
@@ -303,7 +304,7 @@ function _validateItems(items) {
 const addSupplier = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
   const {
-    merchantId: _requestedMerchantId, name, contactName, phone, email,
+    merchantId: _requestedMerchantId, supplierBusinessId, name, contactName, phone, email,
     kraPin, bankDetails, paymentTerms, creditLimit,
   } = request.data ?? {};
 
@@ -329,11 +330,25 @@ const addSupplier = onCall(OPT, async (request) => {
   const limit = Number(creditLimit ?? 0);
   if (limit < 0) _err('creditLimit cannot be negative.');
 
+  /* Verify the SOKONI counterparty BEFORE minting an id, so a rejected relationship
+     leaves nothing behind. */
+  const _verifiedSupplierBusinessId = supplierBusinessId
+    ? await _assertSuppliesEnabled(supplierBusinessId)
+    : null;
+
   const supplierId = _genId('sup');
 
   await db.collection('procSuppliers').doc(supplierId).set({
     supplierId,
     merchantId:   _san(merchantId, 100),
+    /* The SOKONI counterparty, when there is one. procSuppliers is a RELATIONSHIP row:
+       it links this buyer to a supplier. For a business already on SOKONI that supplier is
+       businesses/{id} — the same canonical identity it trades under, never a duplicate
+       account. Null for genuinely external suppliers, whose contact fields below carry
+       everything instead. Verified, not trusted: the business must exist AND have opted
+       into supply. A client naming any business id would otherwise enrol it as a supplier
+       without its consent. */
+    supplierBusinessId: _verifiedSupplierBusinessId,
     name:         _san(name, MAX_SUPPLIER_NAME),
     contactName:  _san(contactName, 150),
     phone:        _san(phone, 20),
@@ -357,6 +372,143 @@ const addSupplier = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   1a. SUPPLY PARTICIPATION — a business opts in to supplying other businesses.
+
+   SOKONI has ONE canonical identity: businesses/{businessId}. A merchant that also
+   supplies other businesses is the SAME business, not a second account. Supply is a
+   CAPABILITY on that identity, never a separate supplier record.
+
+   Participation is explicit and server-authoritative. It is deliberately NOT inferred
+   from owning products, nor from wholesaleEnabled on individual products: a merchant
+   listing goods for consumers has not thereby agreed to receive purchase orders from
+   other businesses, and inferring that would enrol them without consent.
+════════════════════════════════════════════════════════════════ */
+
+/** The only supply fields a client may set. Ownership and derived state are excluded. */
+const SUPPLY_MUTABLE = ['enabled', 'displayName', 'categories', 'minOrderValue',
+                        'leadDays', 'deliveryAreas', 'notes'];
+
+/**
+ * Resolve the business a caller may declare supply participation FOR.
+ *
+ * Stricter than _assertMerchantAuthority on purpose. That helper honours the owner-uid
+ * form (merchantId === auth.uid) without a lookup, which is correct for everyday
+ * operations — but production contains an owner with THREE businesses documents, two
+ * simultaneously ACTIVE (census 2026-09-04). Letting a uid stand in for "my business"
+ * during an opt-in would enrol whichever record the short-circuit happened to name, and
+ * a supplier discoverable under the wrong one of its owner's two businesses is a
+ * data-integrity problem, not a cosmetic one.
+ *
+ * So: an explicitly-named businessId is authorized normally. A bare uid is resolved
+ * through the canonical resolver, which REFUSES when the owner has more than one.
+ */
+async function _assertSupplyDeclarationTarget(request, requestedBusinessId) {
+  const auth = request && request.auth;
+  if (!auth || !auth.uid) _err('Authentication required.', 'unauthenticated');
+
+  if (requestedBusinessId && requestedBusinessId !== auth.uid) {
+    /* Explicit target — ordinary merchant authority applies. */
+    return await _assertMerchantAuthority(request, requestedBusinessId);
+  }
+
+  /* Bare uid (or omitted): resolve, and refuse rather than guess. */
+  const owned = await resolveMerchantIdForOwner(String(auth.uid));
+  if (!owned || !owned.ok) {
+    if (owned && owned.reason === TENANT_REASON.AMBIGUOUS) {
+      _err('You own more than one business. Name the businessId to declare supply for.',
+           'failed-precondition');
+    }
+    _err('No business found for this account.', 'failed-precondition');
+  }
+  /* Confirm authority over the resolved id too — resolution is not authorization. */
+  return await _assertMerchantAuthority(request, owned.merchantId);
+}
+
+const setSupplyParticipation = onCall(OPT, async (request) => {
+  const uid = _requireAuth(request);
+  const { businessId: _requestedBusinessId, supply } = request.data ?? {};
+
+  if (!supply || typeof supply !== 'object' || Array.isArray(supply)) {
+    _err('supply must be an object.');
+  }
+  if (typeof supply.enabled !== 'boolean') {
+    _err('supply.enabled must be a boolean — participation is explicit, never inferred.');
+  }
+
+  const businessId = await _assertSupplyDeclarationTarget(request, _requestedBusinessId);
+
+  /* Built from the allowlist, never spread — ownerId, adminUids and every other field on
+     the business document must be unreachable from this payload. */
+  const patch = {};
+  for (const key of SUPPLY_MUTABLE) {
+    if (!Object.prototype.hasOwnProperty.call(supply, key)) continue;
+    const v = supply[key];
+    switch (key) {
+      case 'enabled':     patch['supply.enabled'] = v === true; break;
+      case 'displayName': patch['supply.displayName'] = _san(v, 150); break;
+      case 'notes':       patch['supply.notes'] = _san(v, 500); break;
+      case 'categories': {
+        if (!Array.isArray(v)) _err('supply.categories must be an array.');
+        patch['supply.categories'] = v.slice(0, 20).map((c) => _san(c, 60));
+        break;
+      }
+      case 'deliveryAreas': {
+        if (!Array.isArray(v)) _err('supply.deliveryAreas must be an array.');
+        patch['supply.deliveryAreas'] = v.slice(0, 50).map((c) => _san(c, 80));
+        break;
+      }
+      case 'minOrderValue': {
+        const num = Number(v);
+        if (!isFinite(num) || num < 0) _err('supply.minOrderValue cannot be negative.');
+        patch['supply.minOrderValue'] = num;
+        break;
+      }
+      case 'leadDays': {
+        const num = Number(v);
+        if (!Number.isInteger(num) || num < 0 || num > 365) {
+          _err('supply.leadDays must be a whole number of days between 0 and 365.');
+        }
+        patch['supply.leadDays'] = num;
+        break;
+      }
+    }
+  }
+
+  patch['supply.updatedAt'] = F.serverTimestamp();
+  patch['supply.updatedBy'] = uid;
+  if (supply.enabled === true) {
+    patch['supply.enabledAt'] = F.serverTimestamp();
+  }
+
+  await db.collection('businesses').doc(businessId).update(patch);
+
+  await _audit(uid, supply.enabled ? 'supply_enabled' : 'supply_disabled', businessId, {
+    businessId, fields: Object.keys(patch),
+  });
+  logger.info('procurement.setSupplyParticipation', { businessId, enabled: supply.enabled });
+  return { businessId, enabled: supply.enabled === true };
+});
+
+/**
+ * Verify that a business may be named as the supplier on a relationship.
+ * Existence is not participation: the business must have EXPLICITLY opted in.
+ */
+async function _assertSuppliesEnabled(supplierBusinessId) {
+  const id = String(supplierBusinessId);
+  if (!id || id.includes('/') || id.length > 200) {
+    _err('A valid supplierBusinessId is required.');
+  }
+  const snap = await db.collection('businesses').doc(id).get();
+  if (!snap.exists) _err('Supplier business not found.', 'not-found');
+  const d = snap.data() || {};
+  if (!d.supply || d.supply.enabled !== true) {
+    _err('That business has not enabled supply and cannot be added as a SOKONI supplier.',
+         'failed-precondition');
+  }
+  return id;
+}
+
+/* ════════════════════════════════════════════════════════════════
    1b. updateSupplier
    Edit a supplier the caller is authorized for. Ownership and derived state are
    server-controlled and cannot be moved by a client payload.
@@ -367,7 +519,9 @@ const addSupplier = onCall(OPT, async (request) => {
    server-derived state, and is unreachable from here by construction: the update object
    is BUILT from this list, never spread from the payload. */
 const SUPPLIER_MUTABLE = ['name', 'contactName', 'phone', 'email', 'kraPin',
-                          'bankDetails', 'paymentTerms', 'creditLimit', 'status'];
+                          'bankDetails', 'paymentTerms', 'creditLimit', 'status',
+                          /* the SOKONI counterparty link — verified, never merged blind */
+                          'supplierBusinessId'];
 
 const updateSupplier = onCall(OPT, async (request) => {
   const uid = _requireAuth(request);
@@ -442,6 +596,13 @@ const updateSupplier = onCall(OPT, async (request) => {
         patch.status = v;
         break;
       }
+      case 'supplierBusinessId': {
+        /* Clearing the link is always allowed; setting one is verified the same way
+           addSupplier verifies it — existence is not participation. */
+        if (v === null || v === '') { patch.supplierBusinessId = null; break; }
+        patch.supplierBusinessId = await _assertSuppliesEnabled(v);
+        break;
+      }
     }
   }
 
@@ -460,6 +621,63 @@ const updateSupplier = onCall(OPT, async (request) => {
     supplierId, merchantId: existing.merchantId, fields: Object.keys(patch),
   });
   return { supplierId: String(supplierId), updated: Object.keys(patch) };
+});
+
+/* ════════════════════════════════════════════════════════════════
+   1c. SUPPLIER-SIDE AUTHORITY — deliberately NOT the buyer-side check.
+
+   Buyer authority answers "may this caller act as merchant X". Supplier authority answers
+   "may this caller act as the SUPPLYING business on this order". They must never collapse:
+   a purchase order is two businesses' data, and being authorized for the buyer must not
+   confer sight of the supplier's book, or the reverse.
+
+   The resolution differs materially, not just nominally. _assertMerchantAuthority honours
+   the owner-uid form without a lookup, so a caller whose uid is a merchantId short-circuits
+   to THAT identity. Production has an owner with two simultaneously active businesses
+   (census 2026-09-04), so a supplier-side query resolved from the caller's uid would answer
+   for the uid-keyed business and MISS orders addressed to their generated-id business.
+   Supplier-side authority therefore always resolves from the ORDER's supplierBusinessId and
+   verifies the caller against that business.
+════════════════════════════════════════════════════════════════ */
+async function _assertSupplierSideAuthority(request, supplierBusinessId) {
+  const auth = request && request.auth;
+  if (!auth || !auth.uid) _err('Authentication required.', 'unauthenticated');
+  if (!supplierBusinessId) {
+    _err('This order has no SOKONI supplier business.', 'failed-precondition');
+  }
+  /* Authority over the SUPPLIER business specifically — never the caller's own merchant. */
+  return await _assertMerchantAuthority(request, String(supplierBusinessId));
+}
+
+/**
+ * The supplying business's own view of inbound supply orders — "Business Orders" /
+ * "Orders to Fulfil". Scoped by supplierBusinessId, authorized supplier-side.
+ */
+const getInboundSupplyOrders = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { supplierBusinessId, status, limit } = request.data ?? {};
+
+  const businessId = await _assertSupplierSideAuthority(request, supplierBusinessId);
+
+  let q = db.collection('procPurchaseOrders').where('supplierBusinessId', '==', businessId);
+  if (status) q = q.where('status', '==', String(status));
+  const cap = Math.min(Math.max(Number(limit ?? 50), 1), 200);
+
+  const snap = await q.limit(cap).get();
+  const orders = snap.docs.map((d) => {
+    const p = d.data() || {};
+    /* The supplier sees the order, not the buyer's whole book. */
+    return {
+      poId: p.poId, poNumber: p.poNumber, status: p.status,
+      buyerBusinessId: p.buyerBusinessId || p.merchantId || null,
+      items: p.items, subtotal: p.subtotal, vatAmount: p.vatAmount, total: p.total,
+      expectedDelivery: p.expectedDelivery || null,
+      sentAt: p.sentAt || null, createdAt: p.createdAt || null,
+    };
+  });
+
+  logger.info('procurement.getInboundSupplyOrders', { businessId, count: orders.length });
+  return { supplierBusinessId: businessId, count: orders.length, orders };
 });
 
 /* ════════════════════════════════════════════════════════════════
@@ -1503,6 +1721,8 @@ const scheduledVendorPerformanceUpdate = onSchedule(
 module.exports = {
   addSupplier,
   updateSupplier,
+  setSupplyParticipation,
+  getInboundSupplyOrders,
   createPurchaseOrder,
   approvePurchaseOrder,
   sendPurchaseOrder,
@@ -1515,4 +1735,7 @@ module.exports = {
   scheduledVendorPerformanceUpdate,
   _SUPPLIER_MUTABLE: SUPPLIER_MUTABLE,
   _assertMerchantAuthority,
+  _assertSupplierSideAuthority,
+  _assertSuppliesEnabled,
+  _SUPPLY_MUTABLE: SUPPLY_MUTABLE,
 };

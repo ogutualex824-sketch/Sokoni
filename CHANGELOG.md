@@ -1,3 +1,78 @@
+## 2026-09-05 — Slice B2: SOKONI supply relationships
+
+**Files:** `functions/procurement.js`, `functions/index.js` (+2 exports),
+`scripts/test-supply-relationship-b2.js` (new), `scripts/test-po-convergence-slice-b.js`,
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**One canonical identity.** A SOKONI merchant that also supplies other businesses is the
+**same** `businesses/{id}` — never a second supplier account. `procSuppliers` becomes a
+**relationship** row: `supplierBusinessId` links the buyer to an on-SOKONI counterparty, and
+stays null for genuinely external suppliers, whose contact fields carry everything instead.
+
+**Supply participation is explicit and server-authoritative.** New `setSupplyParticipation`
+writes `businesses/{id}.supply.*` behind a field allowlist (`enabled`, `displayName`,
+`categories`, `minOrderValue`, `leadDays`, `deliveryAreas`, `notes`) — built from the list,
+never spread, so `ownerId`/`adminUids` are unreachable from the payload. `supply.enabled` must
+be an explicit boolean. Participation is **deliberately not inferred** from owning products or
+from `wholesaleEnabled` on individual products: a merchant listing goods for consumers has not
+thereby agreed to receive purchase orders from other businesses, and inferring it would enrol
+them without consent. `_assertSuppliesEnabled` enforces that existence is not participation —
+a business must have opted in before it can be named as a supplier.
+
+**Ambiguity is refused, not guessed.** Opt-in uses a stricter target resolver than everyday
+operations. `_assertMerchantAuthority` honours the owner-uid form without a lookup, which is
+correct in general — but the identifier census (2026-09-04) found an owner with **three**
+`businesses` documents, **two simultaneously active**. Letting a bare uid stand in for "my
+business" during opt-in would enrol whichever record the short-circuit named, and a supplier
+discoverable under the wrong one of its owner's two businesses is a data-integrity problem.
+So an explicitly-named `businessId` is authorized normally, while a bare uid goes through
+`resolveMerchantIdForOwner`, which **refuses** on `AMBIGUOUS`. Resolution is then followed by
+an authorization check — resolving an id is not the same as being allowed to act for it.
+
+**Buyer-side and supplier-side authority are independent.** New `_assertSupplierSideAuthority`
+resolves from the ORDER's `supplierBusinessId`, never the caller's uid, and new
+`getInboundSupplyOrders` ("Business Orders" / "Orders to Fulfil") is scoped by that business.
+The distinction is material, not nominal: because a uid can short-circuit to a uid-keyed
+business, a supplier-side query resolved from the caller would answer for the wrong one of
+that owner's two active businesses and **miss** orders addressed to the other. The supplier
+sees the order, not the buyer's whole book.
+
+**`inventory.html` is NOT broken by Slice A** — traced as required before implementation.
+`_merchantId()` returns the authenticated user's own uid, which hits the primitive's
+`merchantId === uid` branch. One edge noted: its `localStorage` fallback can supply a uid from
+a previous account, which then fails closed as `permission-denied` rather than prompting a
+re-sign-in.
+
+**Certification.** `scripts/test-supply-relationship-b2.js` — **51/51 checks, 6/6 sabotage
+catches**, executed against an injected Firestore double with two principals, two businesses,
+and a third that has NOT opted in. Buyer B denied supplier-side access to A; supplier A denied
+access to buyer B; a manager claim bridges neither. RESTORE three ways — making existence imply
+participation, collapsing the supplier view into a caller-scoped query, or guessing instead of
+refusing an ambiguous owner — each drives exit 1 and back to 0.
+
+**Two detector corrections, recorded not buried.** A B2 check for "supply is not inferred from
+`wholesaleEnabled`" matched the bare word and fired on the **comment documenting the rule** — a
+detector flagging its own documentation. It now strips comments first and carries sabotage
+checks proving the stripper hides no real code. A Slice B check for "supplierBusinessId is not
+accepted from the caller" matched the file's FIRST `const { merchantId … } = request.data`,
+which after B2 is `addSupplier`'s — where the field is legitimately accepted **and verified**.
+It is now scoped to `createPurchaseOrder`, where the invariant actually lives, and RESTORE
+proves it fails when the field is added to that destructure. Slice B suite now 82/82.
+
+**Security changes:** one new business-level opt-in write path and one new supplier-side read
+path, both merchant-scoped. **No Firestore rule widened.** **API changes:** two new callables,
+`setSupplyParticipation` and `getInboundSupplyOrders`; export count 1520 → **1522**.
+**Database changes:** none — `businesses.supply.*` is additive on write; no migration.
+**Breaking changes:** none.
+
+**Unrelated pre-existing breakage found while running regression, NOT introduced here and NOT
+fixed:** `functions/pos-zero-friction.js:15` requires `./merchant-identity`, a file that does
+not exist and has never been tracked. It is an **uncommitted working-tree change** (the require
+is absent from the committed file at `18aa183`, `e331182` and `2539aad`), so `functions/index.js`
+cannot be `require`d in this worktree. `node --check` passes on every file; this is a missing
+module, not a syntax error. **A functions deploy from this tree would fail** — it needs
+resolving by whoever owns that edit before any deploy is attempted.
+
 ## 2026-09-05 — Slice B: canonical PO convergence
 
 **Files:** `pos-suppliers.js`, `functions/procurement.js`, `functions/pos-supplier-sync.js`,
