@@ -1,3 +1,85 @@
+## 2026-09-05 — Supplier sync made server-authoritative; dead posBatches BI presentation retired
+
+**Files:** `functions/pos-supplier-sync.js` (new), `functions/smartpos-dispatch.js` (+1 module
+in the `_h` merge), `pos-suppliers.js` (sync path replaced), `functions/pos-bi.js` (two dead
+subqueries removed), `pos-bi.html` (dead row + mock wiring removed),
+`scripts/test-supplier-sync-authority.js` (new), `CHANGELOG.md`.
+**No deployment performed.** Functions-source change only; deployment HOLD remains in force.
+
+### 1. The supplier/procurement sync defect — fixed
+
+`pos-suppliers.js` mirrored every local write straight to Firestore from the browser through a
+fire-and-forget `_sync()` whose rejection was swallowed by `.catch(() => {})`. Measured against
+the served ruleset (`1cf1f3f2-8669-4f60-8ccf-70dd24b8c57b`): **all five target collections deny
+that write.** `posSuppliers` and `posPurchaseOrders` grant `read` only; `posGRN`,
+`posSupplierInvoices` and `posSupplierPayments` have **no match block at all**, which under
+`rules_version = '2'` is a closed-world deny. Confirmed exhaustively — one `service` block, and
+the only recursive wildcard is scoped to `/tenants/**`, so no catch-all could reach these paths.
+
+Consequence: the supplier, PO, GRN, invoice and payment UI has been reporting success while
+**nothing has ever reached the cloud** — corroborated by all five collections being empty in
+**both** the `(default)` and `sokoni-ops` databases, with a `users` positive control proving the
+probe could see data when it exists.
+
+This is *not* data loss: the module is local-first and `_put()` writes IndexedDB before the
+mirror fires, so records survive on the device. What was lost is every cross-device guarantee —
+no server authority, no second device, no recovery if site data is cleared.
+
+**Fix.** New `posSupplierSync` op on `smartPosDispatch` writes with Admin SDK authority.
+Firestore rules are deliberately **not widened** — the read-only POS block encodes the intended
+architecture (server writes, client reads), and this change conforms to it rather than eroding it.
+
+**Authority.** `users/{uid}.merchantId`, `.sellerId`, `.businessId` and `.shopId` are all
+self-writable, so **no `users` identity field is an authorization input**. Authority resolves
+`businesses/{merchantId}.ownerId` via `workforce-identity._assertBusinessPermission`; the
+owner-uid form (`merchantId === auth.uid`) is honoured without a lookup; a missing business
+document **denies** rather than defaulting; employees need an active `workspaceMemberships`
+record carrying an existing capability (`pos`), since inventing a permission string would deny
+every current member. `sellerId` is never accepted from the payload — the sibling writer at
+`pos-inventory-pro.js:193` does accept it behind the forgeable `posRole` claim, and that defect
+shape is deliberately not reproduced. Every server-owned field is stripped from client data and
+re-stamped.
+
+**Observability.** `_sync` no longer swallows. Failures are recorded in `_syncState`, emitted as
+`sync:error` / `sync:deferred`, exposed through `getSyncState()`, and re-drivable through
+`retryFailedSyncs()`. Local-first behaviour is unchanged. `init()` now takes a `merchantId`.
+
+### 2. Dead posBatches BI presentation — retired (ADR-018c disposition)
+
+`getExecutiveDashboard` and `getInventoryHealthScore` queried `posBatches` on `expiresAt` /
+`consumed` — **fields no posBatches writer has ever produced** — against a collection empty in
+both databases. Both always contributed 0 while presenting it as a measurement. Removed, along
+with the now-dead `expiringCount`/`expiringValue` wiring, the alert branch that could never
+fire, the stale JSDoc, the "Expiring Soon" panel row and its mock fallback fields.
+
+**Scope correction found during implementation:** the inventory-health panel is **not** empty.
+Stockout Events, Overstock Items and Turnover Rate are fed by live `posSales`/products queries,
+and the low-stock query in `getExecutiveDashboard` is live. Only the posBatches half was dead, so
+only that was removed — the panel and its working rows are preserved.
+
+**Explicitly preserved,** per the ruled 18c boundary: `posBatches`, its Firestore rule, its
+writer `receivePurchaseOrder`, the scheduled `batchExpiryAlertSweep` (which runs every 24h and
+makes the collection a live operational capability), both `pos-intelligence.js` readers, and
+`procurement.sendPurchaseOrder`. `getPOSInventoryIntelligence` is **untouched** — its 500 remains
+a separate unresolved defect and was not patched on the strength of the missing-index hypothesis.
+
+### Certification
+
+`scripts/test-supplier-sync-authority.js` — **72/72 checks, 11/11 sabotage catches.** Authority
+branches are executed against injected fakes, not merely grepped. RESTORE proven in both
+directions: reverting the fail-closed authority check drives the suite to exit 1 and restoring it
+returns exit 0; likewise reintroducing the swallowing client write. Regression: publication
+contract 36/36, pos-payment-destination 90/0, commission single-source PASS, all touched files
+`node --check` clean, dispatcher loads. **`functions/index.js` export count unchanged at 1519** —
+the op routes through `smartPosDispatch` rather than adding a Cloud Function. The 18b harness is
+deliberately **unchanged at 18/20**; its two stale assertions were not "fixed" to produce 20/20.
+
+**Security changes:** one new authenticated, App Check-enforced write path with fail-closed
+merchant authority. No Firestore rule widened, added or removed. **Database changes:** none —
+no collection was created, migrated or backfilled. **API changes:** one new dispatcher op,
+`posSupplierSync`. **Breaking changes:** `PosSuppliers.init()` gains an optional second argument;
+callers that omit it keep working locally and report `sync:error` rather than failing silently.
+
 ## 2026-09-05 — IAM Step 2: Donna granted developer + deploy access on sokoni-aeb26
 
 **Files:** `docs/IAM_ACCESS_DECISIONS.md`, `CHANGELOG.md`. No application code changed.
