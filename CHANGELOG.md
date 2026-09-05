@@ -1,3 +1,37 @@
+## 2026-09-05 — IAM: Donna granted billing-viewer only; ownership boundary held
+
+**Files:** `docs/IAM_ACCESS_DECISIONS.md` (new — the access-decision ledger), `CHANGELOG.md`.
+No application code changed. **No deployment performed and none required** — this is a
+cloud IAM change, not a SOKONI release.
+
+**What changed.** `user:donna@adg.io` granted `roles/billing.viewer` on billing account
+`016742-7E2122-8406F7` ("Firebase Payment"). That is the entire change. Donna is a
+trusted development/management collaborator; ownership remains exclusively with
+`alexochieng3030@gmail.com`.
+
+**Security changes.** Billing-account IAM gained one read-only member. Verified after
+applying: `roles/owner` on `sokoni-aeb26` is still `alexochieng3030@gmail.com` and no one
+else; a `donna` filter over both the project and the organization IAM policies returns
+empty. Owner, Org Admin, Billing Admin, and all project-level production roles were
+explicitly withheld. Billing linkage, `firestore.rules`, payment rails, deployment
+configuration, and repository visibility were all confirmed unchanged. Policy etag moved
+`BwZTnZ1Be3Q=` -> `BwZauLRpjaI=`.
+
+**Two structural findings recorded during the pre-change mapping**, both of which change
+how future access must be granted:
+
+1. **`sokoni-aeb26` is not inside the `SokoniTech` organization** — it has no `parent` and
+   sits standalone; the org holds only an empty "My First Project". Any role granted at the
+   org, including Organization Administrator, therefore confers *zero* authority over
+   production SOKONI. Project access must be bound on `sokoni-aeb26` directly.
+2. **The GitHub repository is public**, so read access to all source is already universal;
+   GCP IAM grants no repository access in either direction. Reviewed for exposure: the only
+   tracked secret-shaped file, `functions/.env`, holds six non-sensitive config keys and no
+   credentials or service-account material. No exposure found; the visibility posture is
+   logged as an open decision.
+
+**Database changes:** none. **API changes:** none. **Breaking changes:** none.
+
 ## 2026-09-04 — Buyer-facing SOKONI Till QR payment page — /pay/q/** (Q8)
 
 **Files:** `pay-q.html`, `sokoni-pay-q-core.js` (both new), `firebase.json` (+`/pay/q/**`
