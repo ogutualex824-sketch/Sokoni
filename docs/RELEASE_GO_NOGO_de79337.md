@@ -191,18 +191,65 @@ belonging to other workstreams**; a 173-conflict merge here would put their unsa
 risk, and CLAUDE.md forbids overwriting it. Reconciliation belongs in a clean, dedicated
 worktree, as its own authorised slice.
 
-## 7. What a GO would require
+## 7. The route to a GO — three slices, in this order
 
-1. **Resolve the lineage.** Either release from a tree that contains live's 576 commits, or
-   merge `d592d8f` into the candidate and re-certify. A merge decision, not a fast-forward.
-2. Re-run require-closure and the full regression **on the merged tree** — closure is a property
-   of a tree, and this one's green verdict does not transfer.
-3. Close, or explicitly accept, the four capability items in §5.
-4. Decide whether `guard-no-rollback` should refuse the diverged case and cover functions.
-5. Resolve production's own open items surfaced by the release gate: the missing AAAA
-   record, the legacy host still answering, the four console errors, and the unreproducible
-   live build.
-6. Then an explicit human **GO**.
+> **Governing principle:** *never allow a green dependency gate to masquerade as a green release
+> gate.* Require-closure exit 0 proves the tree is self-contained. It proves nothing about
+> lineage, recency, runtime properties, or production health.
+
+### Slice 1 — LINEAGE RECONCILIATION · **FIRST · NOT YET AUTHORISED**
+
+A real integration project, not a merge: **173 conflicted paths** (§6b). **Only in a clean,
+dedicated worktree** — never in this shared tree with its 192 entries of other workstreams'
+uncommitted work.
+
+**Both Functions predeploy controls must survive.** They answer different questions and neither
+replaces the other:
+
+```
+production   guard-functions-safety.js         protects deployed RUNTIME PROPERTIES
+candidate    gate-functions-require-closure.js protects GIT-TREE DEPENDENCY CLOSURE
+```
+
+Special treatment, because Supply and the production lineage both modify them:
+`firebase.json` · `firestore.indexes.json` · `functions/index.js` · `functions/procurement.js`
+
+Then re-certify the merged tree **as a new subject**. None of the Supply A→M evidence transfers:
+closure is a property of a tree, and every suite was run against a different one.
+
+### Slice 2 — GUARD SEMANTICS · SECOND
+
+**Do not blindly change the guard to "diverged = fail."** The corrected evidence shows the real
+protection is **property-based, not ancestry-based** — deliberately, because cherry-picked
+convergence creates new SHAs, so correct code can sit on non-ancestor commits. An ancestry test
+would have failed the very convergence it was meant to protect.
+
+The design question to trace and specify before implementing:
+
+> How do we keep property-level protection while also refusing a deploy from an unreviewed
+> divergent lineage?
+
+The answer likely needs all three, **composable rather than one replacing another**:
+
+```
+lineage safety  +  runtime/property safety  +  require-closure
+```
+
+### Slice 3 — PRODUCTION REMEDIATION · THIRD
+
+Its own production-correctness slice, independent of any candidate: missing **AAAA record** ·
+legacy host `217.20.124.84` still responding · four console errors including two **403s** and
+`[SOKONI] Security verification failed` · the **unreproducible dirty build**.
+
+The dirty build deserves particular weight: **a production artifact that cannot be reconstructed
+from a known tree undermines the whole evidence chain**, even while its runtime behaviour looks
+healthy. Everything else in this document reasons from "what is live"; that premise is currently
+unverifiable.
+
+### Then
+
+Close or explicitly accept the four capability items in §5, re-run the full RVS block on the
+reconciled tree, and issue a new GO/NO-GO. **Only an explicit human GO permits a deployment.**
 
 ---
 
