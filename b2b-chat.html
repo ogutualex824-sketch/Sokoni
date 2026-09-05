@@ -227,11 +227,9 @@ function renderThreads() {
   const q = (document.getElementById('threadSearch').value||'').toLowerCase();
   _threads = B.getThreads();
 
-  /* Seed sample threads if none */
-  if (!_threads.length) {
-    seedSampleThreads();
-    _threads = B.getThreads();
-  }
+  /* No seeding. An empty inbox is an empty inbox: the previous code invented two
+     conversations with an invented supplier whenever a user had none, and B.sendMessage
+     PERSISTS, so the fabrication was written to Firestore as real message history. */
 
   const filtered = _threads.filter(t=>!q || t.name.toLowerCase().includes(q) || (t.lastMsg?.text||'').toLowerCase().includes(q));
   const list = document.getElementById('threadList');
@@ -241,7 +239,10 @@ function renderThreads() {
   }
   list.innerHTML = filtered.map(t=>{
     const icon = threadIcon(t.id);
-    const unread = Math.floor(Math.random()*3);
+    /* An unread count is a fact about messages, not a die roll. Math.random() here
+       rendered a different badge on every repaint. No per-thread read state is tracked
+       yet, so nothing is claimed. */
+    const unread = 0;
     return `
     <div class="bc-thread${_activeThread===t.id?' active':''}" onclick="openThread('${t.id}','${escStr(t.name)}','${icon}')">
       <div class="bc-thread-icon">${icon}</div>
@@ -424,22 +425,6 @@ function showChat() {
   document.getElementById('noChatPlaceholder').style.display='none';
 }
 
-function seedSampleThreads() {
-  const samples = [
-    { id:'supplier_'+B.SUPPLIERS[0]?.id, name: B.SUPPLIERS[0]?.name||'Top Supplier', msgs: [
-      {text:'Hello! We are interested in your bulk electronics catalog.', from:'me'},
-      {text:'Welcome! We have a wide range of products. What quantities are you looking for?', from:'them', icon:'🏭', name:'Sales Team'},
-    ]},
-    { id:'rfq_sample1', name: 'RFQ: Office Furniture (100 units)', msgs: [
-      {text:'We have submitted our quotation. Please review the attached catalog.', from:'them', icon:'🏭', name:'Furniture Supplier'},
-    ]},
-  ];
-  samples.forEach(s=>{
-    s.msgs.forEach(m=>{
-      B.sendMessage({ threadId: s.id, text: m.text, senderId: m.from==='me'?(ME.uid||'me'):'supplier', senderName: m.from==='me'?(ME.name||'You'):(m.name||'Supplier'), senderIcon: m.from==='me'?'👤':(m.icon||'🏭') });
-    });
-  });
-}
 
 /* Desktop: show placeholder until thread selected */
 if (window.innerWidth > 640) {

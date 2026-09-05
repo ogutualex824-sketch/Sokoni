@@ -1,3 +1,167 @@
+## 2026-09-05 — Slice L: Supply Catalogue, and the end of the fabricated B2B catalogue
+
+**Files:** `functions/procurement.js` (+246/−9), `functions/index.js` (+1, the export),
+`sokoni-b2b.js` (−38 fabricated rows), `sokoni-merchant-supply.js`, `b2b-chat.html`,
+`b2b.html`, `scripts/test-supply-catalogue-slice-l.js` (new), two earlier suites re-pointed,
+`docs/DEFECT_FABRICATED_B2B_CATALOGUE.md`, `CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+### The named authority could not serve the target, and the trace says why
+
+`getWholesaleCatalog` is live only through `servicesDispatch` — the "B2B / Wholesale Commerce
+v1.0" header in `functions/index.js` has **no exports beneath it**. Its only consumer is
+`wholesale-portal.html`. `updateWholesaleProduct` has **zero callers anywhere**.
+
+Probed against production, both databases, routing proven (`sokoni-ops` is entirely empty —
+its own controls read 0, so all data lives in `(default)`):
+
+| probe | count |
+|---|---|
+| `products` (control) | 108 |
+| `products.wholesaleEnabled == true` — **the filter the handler uses** | **0** |
+| `products.wholesalePrice > 0` — **real wholesale offers** | **10** |
+| `products.minWholesaleQty > 0` | 10 (coupled) |
+| `products.minOrderQty > 0` — its MOQ field | **0** |
+| `wholesaleAccounts` (all / approved) | **0 / 0** |
+| `businesses` | 4 (3 active) |
+
+All 10 real offers belong to owners of those businesses and are `status:'active'`, so the join
+to canonical business identity yields real data today. The handler would return **0 of the 10,
+to 0 eligible callers** — and would manufacture exactly what this slice forbids: `minOrderQty
+|| 10` invents a minimum order on every row (that field is set on no product), and
+`wholesalePrice || 0` presents a missing price as zero. It never checks business status, and
+its ownership test reads `sellerId`/`uid` while `firestore.rules` enforces `sellerUid`.
+
+**Decision (founder): add the canonical read to `procurement.js`; leave `b2b-wholesale.js`
+untouched.** Repointing a live-dispatched handler would redefine the contract
+`wholesale-portal.html` reads. This is a READ — no orders, no pricing engine, no settlement.
+Not a second commerce engine.
+
+### The authoritative vocabulary, established by trace
+
+`wholesalePrice > 0` **is** the wholesale-enabled signal: `sokoni-product-schema.js` couples
+the pair, nulling both price and `minWholesaleQty` together, so there is no separate boolean to
+consult and inventing one would create a fourth vocabulary. MOQ is `minWholesaleQty` **or
+NULL** — never a default, because an invented minimum order is a term of trade the supplier
+never agreed to. Owner is `sellerUid` → `businesses/{id}.ownerId`. Availability is
+`status`/`isVisible`/`outOfStock`/`stock`.
+
+### Catalogue access is not discovery
+
+Reaching a supplier's catalogue requires `supply.enabled`. It deliberately does **not** require
+`supply.discoverable`. A business may supply a counterparty it already knows while staying out
+of the directory, so a buyer holding a businessId from an existing relationship can read the
+catalogue of a supplier Slice K's search will never return. Collapsing the two would silently
+revoke that. §2 of the suite exists solely to hold this line.
+
+### Positive allowlist
+
+Returned: `productId, name, category, wholesalePrice, minWholesaleQty, retailPrice, inStock,
+image, description, supplierBusinessId, supplierName`. Excluded and never added by omission:
+**`costPrice`** (the supplier's margin), `sellerEmail`, `sellerUid`, `uid`, `sellerId`,
+`shopId`, `totalRevenue`, `totalUnitsSold`, `sold`, `lastSaleOrderId`, `lastSoldAt`,
+`digitalUrl`, `digitalLicense`, `verificationStatus`, `_testPricedBy`, and **`stock`** — exact
+inventory depth is never exposed. No saving or discount percentage is computed: a derived
+figure sitting beside real ones reads as authoritative.
+
+**Availability has three states, not two.** A product with no availability signal resolves to
+`null`, never `false` (which would advertise it as sold out) and never `true`.
+
+### Eligibility
+
+Same audience gate as Slice K: authenticated, resolving to a real `businesses/{id}` with
+`status: 'active'`. That gate is now **one shared helper**, `_assertActiveBusinessAudience`,
+which discovery and the catalogue both call — an audience gate that exists twice is one that
+will diverge. Slice K's 62/62 is unchanged through the refactor.
+
+### No composite index
+
+One equality filter (`sellerUid`), ordered by document id, with the wholesale predicate applied
+in memory. `where('sellerUid','==',x).where('wholesalePrice','>',0)` mixes an equality and an
+inequality on different fields and would require a composite index; deployment is on hold, so
+such a query would simply fail in production, and adding an index silently is how a catalogue
+starts omitting products nobody can explain. A page therefore scans more documents than it
+returns, reported honestly as `scanned`, and the cursor advances by the last document
+**scanned** — advancing by a returned row would skip every non-wholesale product between it and
+the next match.
+
+### The fabricated catalogue is eliminated, not hidden
+
+Deleted from `sokoni-b2b.js`: **15 invented supplier businesses** (names, phone numbers,
+ratings, review counts, founding years, minimum-order values, and ISO/KEBS/GlobalGAP
+certification claims) and **23 invented wholesale product rows** (prices, MOQs, savings
+percentages). Both bindings survive as empty literals so the seven consuming pages keep their
+API; no mock or seed generator was left behind. `b2b.html` gained the truthful empty state its
+featured-products strip lacked.
+
+**Two adjacent fabrications on the same live path went with them.** `b2b-chat.html` seeded two
+invented conversations with an invented supplier whenever a user had no threads — and
+`B.sendMessage` **persists**, so that fabrication was being written to Firestore as real
+message history. The same file rendered unread badges from `Math.floor(Math.random()*3)`, a
+different count on every repaint. And `registerSupplier` initialised a new supplier with
+`rating: 0`; zero reads as *rated badly*, so an unrated business is now `rating: null`.
+
+### Merchant V2
+
+The Supply workspace's Catalogue section is now backed and bound to `getSupplyCatalogue`. A
+minimum order nobody set renders as a dash; unknown availability renders as a dash. Find
+Suppliers stays unwired — discovery exists server-side from Slice K, but wiring that panel is
+its own slice — and its note was corrected so it no longer claims discovery is missing.
+
+### Certification
+
+`scripts/test-supply-catalogue-slice-l.js` — **149 checks, 15 sabotage catches**, executing the
+REAL `getSupplyCatalogue` against an injected fixture whose documents all carry `costPrice`,
+`sellerEmail`, credential and digital-licence fields, so a leak fails rather than being omitted.
+
+**§8 is adversarial by construction**: it rewrites the real source three ways and proves the
+positive results depend on the server, not the fixture — pointing the scan at a non-existent
+collection collapses the catalogue to nothing; neutering `_isCatalogueEntry` lets the draft,
+hidden and non-wholesale products leak in; removing the projection leaks the supplier's margin.
+
+**RESTORE — seven sabotages of the real files**, each restored byte-identically: dropping the
+`supply.enabled` gate (141/145, exit 1); requiring `discoverable` and thereby collapsing
+catalogue into discovery (exit 1, failing on *"a supplying but UNDISCOVERABLE business still
+has a readable catalogue"*); defaulting the missing MOQ to 10 (exit 1, failing on *"an ABSENT
+MOQ comes back NULL"*); removing the audience gate (140/145); keying the query on `uid` instead
+of `sellerUid` (136/145); exposing exact stock (142/145); reintroducing one fabricated
+catalogue row (140/145). Every restore returns exit 0.
+
+**Two suite defects found and fixed by that round.** Two sections dereferenced `rows[0]`, so an
+emptied catalogue produced a stack trace instead of a named failure — they now fail by
+assertion. And §10's op detector matched the module's own header comment, so repointing the
+panel at `getWholesaleCatalog` left it green; it now reads the section's op binding with
+comments stripped, and was re-sabotaged to prove it bites.
+
+### Earlier suites re-pointed
+
+`test-read-layer-slice-i` (79/79): *"no wholesale/catalogue redesign"* → the catalogue exists
+and reads the canonical vocabulary. And *"payment semantics untouched"* was matching the word
+"settlement" **inside Slice L's comment explaining there is none** — the fifth comment-matching
+detector in this workstream; it now strips comments, with sabotage in both directions.
+
+`test-supply-workspace-slice-j` (64/64): Supply Catalogue moved out of the unavailable-sections
+loop into its own block asserting it calls the canonical op exactly once and still renders no
+invented rows. Its fabricated-reference detector listed `wholesalePrice` as a marker of the
+fabricated catalogue; Slice L established that field as **authoritative**, so the detector was
+narrowed to the fabricated module and its invented vocabulary.
+
+**Full regression: 17 suites, 1148 checks, 115 sabotage catches, all exit 0.** Adjacent gates:
+`test-merchant-routes` 60, `test-secondary-firebase-apps` 9, `test-product-schema` 13.
+`test-merchant-v2-certification` fails closed on a missing `SOKONI_APPCHECK_DEBUG_TOKEN` — an
+environmental credential gate, unrelated to this change and not satisfied here.
+
+**API changes:** new callable `getSupplyCatalogue`, exported by name in `functions/index.js`.
+**Database changes:** none — no new field, no migration, no index. **Security changes:**
+authenticated + active-business audience gate, now shared with discovery; positive field
+allowlist; exact stock and supplier cost never returned. **Breaking changes:** none —
+`b2b-wholesale.js` and `wholesale-portal.html` are untouched.
+
+**Still open, deliberately separate.** `b2b.html` and its siblings are customer-facing and now
+render truthful empty states; wiring them to a business-scoped authority is a different audience
+question. **Both deployment blockers are unchanged:** `functions/tenant-identity.js` and
+`functions/merchant-identity.js` remain untracked, `functions/index.js` cannot be `require`d,
+and no functions deploy can succeed. This slice touches neither and works around neither.
+
 ## 2026-09-05 — Slice K: Find Suppliers (discovery over SOKONI businesses)
 
 **Files:** `functions/procurement.js` (+131/−1), `functions/index.js` (+1, the export),

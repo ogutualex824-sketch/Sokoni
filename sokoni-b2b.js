@@ -62,51 +62,32 @@ const INDUSTRIES = [
   {id:'auto',label:'Auto Parts & Accessories',icon:'🔩'},
 ];
 
-/* ── SUPPLIER DIRECTORY ── */
-const SUPPLIERS = [
-  {id:'sup001',name:'Nairobi Apparel Co.',type:'manufacturer',industry:'fashion',location:'Industrial Area, Nairobi',city:'nairobi',verified:true,rating:4.8,reviews:142,established:2012,employees:'50-200',desc:'Kenya\'s leading garment manufacturer. Custom clothing, uniforms, branded wear. Export-ready with EU certifications.',minOrder:'KES 50,000',phone:'0712345001',exportReady:true,tags:['uniforms','custom-branding','export'],certifications:['ISO 9001','KEBS'],catalog:['ws001','ws002']},
-  {id:'sup002',name:'TechHub Kenya Ltd.',type:'distributor',industry:'electronics',location:'Westlands, Nairobi',city:'nairobi',verified:true,rating:4.7,reviews:98,established:2016,employees:'10-50',desc:'Authorized distributor of smartphones, tablets, accessories and computing equipment. Direct supply to corporates and retailers.',minOrder:'KES 100,000',phone:'0723456002',exportReady:false,tags:['smartphones','laptops','b2b-tech'],certifications:['Samsung Partner','Safaricom Reseller'],catalog:['ws003','ws004']},
-  {id:'sup003',name:'Rift Valley Mills',type:'manufacturer',industry:'food',location:'Nakuru',city:'nakuru',verified:true,rating:4.9,reviews:210,established:2005,employees:'200-500',desc:'Large-scale milling company producing maize flour, wheat flour, animal feeds. KEBS-certified. Retail and bulk packing available.',minOrder:'KES 30,000',phone:'0734567003',exportReady:true,tags:['flour','grains','animal-feeds'],certifications:['KEBS','KEPHA','ISO 22000'],catalog:['ws005','ws006']},
-  {id:'sup004',name:'Murang\'a Farmers Cooperative',type:'exporter',industry:'agriculture',location:'Murang\'a',city:'murang\'a',verified:true,rating:4.6,reviews:87,established:2008,employees:'200-500',desc:'Farmer cooperative exporting avocado, macadamia, coffee. GlobalGAP certified. Direct farm-to-buyer. MOQ negotiable.',minOrder:'KES 20,000',phone:'0745678004',exportReady:true,tags:['avocado','macadamia','export','GlobalGAP'],certifications:['GlobalGAP','KEPHIS'],catalog:['ws007']},
-  {id:'sup005',name:'Beauty Depot Kenya',type:'wholesaler',industry:'beauty',location:'Mombasa',city:'mombasa',verified:true,rating:4.5,reviews:63,established:2014,employees:'10-50',desc:'Wholesale distributor of salon products, cosmetics and personal care. Brands: Revlon, ORS, Dark & Lovely and private label.',minOrder:'KES 15,000',phone:'0756789005',exportReady:false,tags:['cosmetics','salon','wholesale'],certifications:['KFDA Registered'],catalog:['ws008']},
-  {id:'sup006',name:'FurnishPro East Africa',type:'manufacturer',industry:'furniture',location:'Industrial Area, Nairobi',city:'nairobi',verified:true,rating:4.7,reviews:119,established:2010,employees:'50-200',desc:'Contract furniture manufacturer. Office, hotel, school and residential furniture. Custom projects accepted. Showroom available.',minOrder:'KES 80,000',phone:'0767890006',exportReady:true,tags:['office-furniture','hotel','contract'],certifications:['KEBS'],catalog:['ws009','ws010']},
-  {id:'sup007',name:'CleanCo Kenya',type:'manufacturer',industry:'chemicals',location:'Thika Road, Nairobi',city:'nairobi',verified:true,rating:4.4,reviews:44,established:2017,employees:'10-50',desc:'Manufacturer of industrial and household cleaning chemicals. White-label manufacturing available. Custom formulations.',minOrder:'KES 25,000',phone:'0778901007',exportReady:false,tags:['detergents','cleaning','white-label'],certifications:['KEBS','KFDA'],catalog:['ws011']},
-  {id:'sup008',name:'ToolsKE Distributors',type:'distributor',industry:'machinery',location:'Industrial Area, Nairobi',city:'nairobi',verified:true,rating:4.6,reviews:77,established:2013,employees:'10-50',desc:'Authorized distributor of Bosch, DeWalt and local power tools. Hardware, safety equipment and site supplies.',minOrder:'KES 40,000',phone:'0789012008',exportReady:false,tags:['power-tools','hardware','bosch','dewalt'],certifications:['Bosch Partner','DeWalt Authorized'],catalog:['ws012','ws013']},
-  {id:'sup009',name:'Kariuki Textiles Ltd.',type:'importer',industry:'fashion',location:'Eastleigh, Nairobi',city:'nairobi',verified:true,rating:4.3,reviews:55,established:2009,employees:'10-50',desc:'Importer of Ankara fabric, lace, cotton and polyester materials. Direct from West Africa and China. Retail and wholesale.',minOrder:'KES 10,000',phone:'0790123009',exportReady:false,tags:['ankara','fabric','textiles','eastleigh'],certifications:['KRA Registered'],catalog:['ws014','ws015']},
-  {id:'sup010',name:'SolarKe Solutions',type:'distributor',industry:'electronics',location:'Karen, Nairobi',city:'nairobi',verified:true,rating:4.8,reviews:132,established:2015,employees:'50-200',desc:'Solar panels, batteries, inverters and complete solar systems. County-level supply and installation. Government approved.',minOrder:'KES 200,000',phone:'0701234010',exportReady:false,tags:['solar','energy','off-grid'],certifications:['ERC Registered','REA Partner'],catalog:['ws016']},
-  {id:'sup011',name:'MedSupply Kenya',type:'distributor',industry:'healthcare',location:'Upper Hill, Nairobi',city:'nairobi',verified:true,rating:4.9,reviews:188,established:2011,employees:'50-200',desc:'Medical supplies: PPE, consumables, diagnostic kits, hospital furniture. Licensed by PPB. Government and private sector.',minOrder:'KES 50,000',phone:'0712345011',exportReady:false,tags:['medical','PPE','hospital','diagnostic'],certifications:['PPB Registered','ISO 13485'],catalog:['ws017','ws018']},
-  {id:'sup012',name:'Embroidery House Kenya',type:'service',industry:'printing',location:'Westlands, Nairobi',city:'nairobi',verified:true,rating:4.7,reviews:96,established:2013,employees:'10-50',desc:'Corporate branding: embroidery, screen printing, digital printing, promotional merchandise. 5-day standard turnaround.',minOrder:'KES 8,000',phone:'0723456012',exportReady:false,tags:['branding','embroidery','print','merchandise'],certifications:['KRA Registered'],catalog:['ws019','ws020']},
-  {id:'sup013',name:'Agri-Inputs Kenya',type:'distributor',industry:'agriculture',location:'Nakuru',city:'nakuru',verified:true,rating:4.5,reviews:71,established:2014,employees:'10-50',desc:'Fertilizers, seeds, pesticides and farm equipment. Authorized dealer of Yara, SeedCo. County delivery available.',minOrder:'KES 20,000',phone:'0734567013',exportReady:false,tags:['fertilizer','seeds','pesticides','farm'],certifications:['PCPB Licensed','KEPHIS'],catalog:['ws021']},
-  {id:'sup014',name:'BuildRight Materials Ltd.',type:'wholesaler',industry:'construction',location:'Mombasa Road, Nairobi',city:'nairobi',verified:true,rating:4.4,reviews:58,established:2016,employees:'10-50',desc:'Building materials: cement, steel bars, timber, roofing. Bulk site deliveries. Open-term credit for contractors.',minOrder:'KES 100,000',phone:'0745678014',exportReady:false,tags:['cement','steel','timber','roofing'],certifications:['KRA Registered'],catalog:['ws022','ws023']},
-  {id:'sup015',name:'Swift Logistics Kenya',type:'service',industry:'logistics',location:'Jomo Kenyatta Airport Area, Nairobi',city:'nairobi',verified:true,rating:4.6,reviews:103,established:2012,employees:'50-200',desc:'Freight forwarding, customs clearance, warehousing and last-mile delivery. B2B and B2C. Air, sea, road options.',minOrder:'Quotation based',phone:'0756789015',exportReady:true,tags:['freight','clearance','warehousing','last-mile'],certifications:['KAA Licensed','KIFWA Member'],catalog:[]},
-];
+/* == SUPPLIER DIRECTORY =====================================================
+   INTENTIONALLY EMPTY. This array previously shipped invented Kenyan businesses:
+   names, phone numbers, ratings, review counts, founding years, minimum order values
+   and ISO / KEBS / GlobalGAP certification claims, rendered as a live supplier
+   directory on a page linked from the homepage. None of it was backed by any query.
+   There was no request to fail, because the invented data WAS the data.
 
-/* ── PRODUCT CATALOG ── */
-const PRODUCTS = [
-  {id:'ws001',supplierId:'sup001',supplierName:'Nairobi Apparel Co.',name:'Corporate Polo Shirts (Branded)',category:'fashion',price:900,wholesalePrice:480,moq:30,unit:'pcs',desc:'100% cotton polo, custom embroidery or screen-print. 5 working days. Sizes S-5XL.',savings:47},
-  {id:'ws002',supplierId:'sup001',supplierName:'Nairobi Apparel Co.',name:'Staff Uniforms (Complete Set)',category:'fashion',price:2800,wholesalePrice:1600,moq:20,unit:'sets',desc:'Shirt + trouser + jacket set. Custom colours, logo embroidery. 7-day turnaround.',savings:43},
-  {id:'ws003',supplierId:'sup002',supplierName:'TechHub Kenya Ltd.',name:'Android Smartphones (4G Bulk)',category:'electronics',price:12000,wholesalePrice:8500,moq:10,unit:'units',desc:'Budget Android 4G, 32GB, 3GB RAM. 12-month warranty. Customs cleared. Mix model available.',savings:29},
-  {id:'ws004',supplierId:'sup002',supplierName:'TechHub Kenya Ltd.',name:'Business Laptops (i5/8GB)',category:'electronics',price:65000,wholesalePrice:48000,moq:5,unit:'units',desc:'Core i5, 8GB RAM, 256GB SSD. Pre-configured. 1-year warranty. Corporate invoicing available.',savings:26},
-  {id:'ws005',supplierId:'sup003',supplierName:'Rift Valley Mills',name:'Maize Flour 2kg (Retail Packs)',category:'food',price:180,wholesalePrice:110,moq:100,unit:'bags',desc:'Grade 1 super maize flour, 2kg white-branded packs. Shelf life 12 months. County distribution.',savings:39},
-  {id:'ws006',supplierId:'sup003',supplierName:'Rift Valley Mills',name:'Wheat Flour 1kg (Wholesale)',category:'food',price:120,wholesalePrice:72,moq:200,unit:'bags',desc:'Premium wheat flour, 1kg packs. Suitable for bakeries. Consistent quality.',savings:40},
-  {id:'ws007',supplierId:'sup004',supplierName:'Murang\'a Farmers Cooperative',name:'Hass Avocado (Export Grade)',category:'agriculture',price:80,wholesalePrice:35,moq:500,unit:'kg',desc:'Grade A Hass avocado. Export quality. Cold-chain available. Reliable supply Feb–Nov.',savings:56},
-  {id:'ws008',supplierId:'sup005',supplierName:'Beauty Depot Kenya',name:'Salon Hair Products Set',category:'beauty',price:3500,wholesalePrice:1800,moq:20,unit:'sets',desc:'Relaxer + shampoo + conditioner professional pack. Branded packaging. Nationwide delivery.',savings:49},
-  {id:'ws009',supplierId:'sup006',supplierName:'FurnishPro East Africa',name:'Ergonomic Office Chair',category:'furniture',price:18000,wholesalePrice:11000,moq:5,unit:'units',desc:'Mesh ergonomic chair, lumbar support, 5-year frame warranty. Free Nairobi delivery > 10 units.',savings:39},
-  {id:'ws010',supplierId:'sup006',supplierName:'FurnishPro East Africa',name:'Executive Office Desk (1.8m)',category:'furniture',price:28000,wholesalePrice:17500,moq:3,unit:'units',desc:'Melamine finish, cable management, lockable drawers. Custom sizes available.',savings:38},
-  {id:'ws011',supplierId:'sup007',supplierName:'CleanCo Kenya',name:'Floor Cleaning Detergent 5L',category:'chemicals',price:600,wholesalePrice:320,moq:24,unit:'bottles',desc:'Industrial-grade liquid floor cleaner. Lemon/pine variants. White-label available.',savings:47},
-  {id:'ws012',supplierId:'sup008',supplierName:'ToolsKE Distributors',name:'Cordless Drill Set (18V)',category:'machinery',price:8500,wholesalePrice:5200,moq:5,unit:'units',desc:'18V brushless drill, 21-piece bit set, 2 batteries. 1-year warranty. Bosch authorized.',savings:39},
-  {id:'ws013',supplierId:'sup008',supplierName:'ToolsKE Distributors',name:'Safety Workwear Kit',category:'machinery',price:3200,wholesalePrice:1900,moq:10,unit:'kits',desc:'Hard hat + reflective vest + safety boots + gloves. OSHA compliant. Custom branding available.',savings:41},
-  {id:'ws014',supplierId:'sup009',supplierName:'Kariuki Textiles Ltd.',name:'Ankara Fabric Rolls (6 yards)',category:'fashion',price:1800,wholesalePrice:980,moq:20,unit:'rolls',desc:'Premium wax print Ankara, 100% cotton. 50+ patterns in stock. New stock monthly.',savings:46},
-  {id:'ws015',supplierId:'sup009',supplierName:'Kariuki Textiles Ltd.',name:'Plain Cotton Fabric (Per Metre)',category:'fashion',price:280,wholesalePrice:150,moq:50,unit:'metres',desc:'200gsm plain cotton. 30+ colours. Ideal for uniforms and school wear.',savings:46},
-  {id:'ws016',supplierId:'sup010',supplierName:'SolarKe Solutions',name:'300W Solar Panel + Battery Kit',category:'electronics',price:85000,wholesalePrice:58000,moq:2,unit:'systems',desc:'300W monocrystalline panel + 200Ah battery + inverter. 10-year panel warranty. Installation included Nairobi.',savings:32},
-  {id:'ws017',supplierId:'sup011',supplierName:'MedSupply Kenya',name:'Surgical Gloves (Box of 100)',category:'healthcare',price:1200,wholesalePrice:650,moq:50,unit:'boxes',desc:'Latex-free nitrile gloves. S/M/L. PPB registered. Ideal for clinics and hospitals.',savings:46},
-  {id:'ws018',supplierId:'sup011',supplierName:'MedSupply Kenya',name:'Rapid Test Kits (Malaria/COVID)',category:'healthcare',price:350,wholesalePrice:190,moq:100,unit:'kits',desc:'WHO pre-qualified rapid diagnostic kits. Cold-chain supplied. Government approved.',savings:46},
-  {id:'ws019',supplierId:'sup012',supplierName:'Embroidery House Kenya',name:'Branded T-Shirts (Printed)',category:'printing',price:900,wholesalePrice:420,moq:30,unit:'pcs',desc:'Premium 180g cotton tee, full-colour digital print. 5 days. Pantone colour matching.',savings:53},
-  {id:'ws020',supplierId:'sup012',supplierName:'Embroidery House Kenya',name:'Branded Caps (Embroidered)',category:'printing',price:750,wholesalePrice:380,moq:50,unit:'pcs',desc:'6-panel baseball cap, custom embroidery up to 10k stitches. 5-day lead time.',savings:49},
-  {id:'ws021',supplierId:'sup013',supplierName:'Agri-Inputs Kenya',name:'NPK Fertilizer (50kg Bag)',category:'agriculture',price:5500,wholesalePrice:3800,moq:20,unit:'bags',desc:'Balanced NPK 17-17-17. PCPB approved. Bulk pricing available > 100 bags. County delivery.',savings:31},
-  {id:'ws022',supplierId:'sup014',supplierName:'BuildRight Materials Ltd.',name:'Portland Cement (50kg)',category:'construction',price:780,wholesalePrice:620,moq:100,unit:'bags',desc:'Grade 32.5N Portland cement. Site delivery Nairobi & Mombasa. Credit terms for contractors.',savings:21},
-  {id:'ws023',supplierId:'sup014',supplierName:'BuildRight Materials Ltd.',name:'Steel Rebar Y12 (12m)',category:'construction',price:1800,wholesalePrice:1350,moq:50,unit:'bars',desc:'Y12 deformed steel bars, 12m length. BS 4449 standard. Mill certificates provided.',savings:25},
-];
+   The canonical supplier surfaces are server-side and business-scoped:
+     procurement.findSuppliers       discovery over businesses that opted in (Slice K)
+     procurement.getSupplyCatalogue  a business real wholesale offers        (Slice L)
+
+   Do not repopulate this with literals. A truthful empty directory is correct; an
+   invented one is the defect this file is named in.
+   See docs/DEFECT_FABRICATED_B2B_CATALOGUE.md.
+   ========================================================================== */
+const SUPPLIERS = [];
+
+/* == PRODUCT CATALOG ========================================================
+   INTENTIONALLY EMPTY, for the same reason. This array shipped invented wholesale
+   rows carrying invented prices, minimum order quantities and savings percentages.
+   A fabricated MOQ is a term of trade no supplier agreed to, and a fabricated
+   saving is a financial claim. Real wholesale terms live on the product itself
+   (wholesalePrice / minWholesaleQty) and are read through the canonical
+   procurement.getSupplyCatalogue, never from a client-side literal.
+   ========================================================================== */
+const PRODUCTS = [];
 
 /* ── CAT EMOJI MAP ── */
 const CAT_ICONS = {
@@ -376,7 +357,10 @@ function getSupplierById(id) {
 
 function registerSupplier(data) {
   const id = 'sup_' + Date.now();
-  const sup = { id, ...data, verified: false, rating: 0, reviews: 0, createdAt: Date.now() };
+  /* rating is NULL, not 0. A newly registered supplier has not been rated; zero reads as
+     "rated badly" and is an invented judgement about a real business. reviews:0 is a true
+     count. verified:false is a true absence of a claim. */
+  const sup = { id, ...data, verified: false, rating: null, reviews: 0, createdAt: Date.now() };
   const arr = fsRead('b2b_suppliers');
   arr.unshift(sup);
   localStorage.setItem('b2b_b2b_suppliers', JSON.stringify(arr));

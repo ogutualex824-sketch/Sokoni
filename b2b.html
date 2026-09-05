@@ -539,7 +539,7 @@ function renderOverview() {
   document.getElementById('featuredSuppliers').innerHTML = sups.map(s=>supplierCardHTML(s)).join('') || '<div class="b2-empty"><div class="big">🏭</div><p>No suppliers yet</p></div>';
   /* Featured products */
   const prods = B.getProducts({}).slice(0,6);
-  document.getElementById('featuredProducts').innerHTML = prods.map(p=>productCardHTML(p)).join('');
+  document.getElementById('featuredProducts').innerHTML = prods.map(p=>productCardHTML(p)).join('') || '<div class="b2-empty"><div class="big">📦</div><p>No wholesale products listed yet</p></div>';
   /* Open RFQs preview */
   const rfqs = B.getRFQs().filter(r=>r.status==='open').slice(0,3);
   document.getElementById('overviewRFQs').innerHTML = rfqs.length ? rfqs.map(r=>rfqCardHTML(r, false)).join('') : `<div class="b2-empty" style="padding:20px;"><p>No open RFQs yet. <button onclick="openTab('rfq-create')" style="background:none;border:none;color:#00aaff;font-weight:800;cursor:pointer;">Post the first one →</button></p></div>`;

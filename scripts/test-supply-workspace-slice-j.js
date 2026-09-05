@@ -224,7 +224,9 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
      §4 unavailable sections cannot fabricate
   ══════════════════════════════════════════════════════════ */
   console.log('\n§4 unavailable sections');
-  for (const [id, label] of [['find', 'Find Suppliers'], ['catalogue', 'Supply Catalogue']]) {
+  /* Find Suppliers is still unwired: discovery exists server-side (Slice K) but the panel is
+     its own slice. Supply Catalogue moved OUT of this loop when Slice L backed it — see below. */
+  for (const [id, label] of [['find', 'Find Suppliers']]) {
     const h = load({});
     await settle();
     /* Mounting renders Overview, which legitimately reads. Count only what the UNAVAILABLE
@@ -237,8 +239,31 @@ const settle = () => new Promise((r) => setTimeout(r, 5));
     check(label + ': renders no supplier or product rows', !/<table/.test(h.main.innerHTML));
     check(label + ': renders no prices', !/KES/.test(h.main.innerHTML));
   }
+
+  /* Slice L backed the catalogue. The invariant flips from "renders nothing and calls
+     nothing" to "calls the CANONICAL op and still invents nothing on an empty result". */
+  {
+    const h = load({});
+    await settle();
+    const before = h.calls.length;
+    h.host._listeners.click[0]({ target: { closest: (s) => (s === '[data-sec]' ? { getAttribute: () => 'catalogue' } : null) } });
+    await settle();
+    check('Supply Catalogue: is no longer an unavailable state', !/Not available yet/.test(h.main.innerHTML));
+    check('Supply Catalogue: calls the server exactly once', h.calls.length === before + 1);
+    check('Supply Catalogue: and the op is the canonical one',
+      h.calls[h.calls.length - 1] && h.calls[h.calls.length - 1].name === 'getSupplyCatalogue');
+    check('Supply Catalogue: an empty result renders an empty state, not invented rows',
+      !/<table/.test(h.main.innerHTML));
+    check('Supply Catalogue: an empty result renders no prices', !/KES/.test(h.main.innerHTML));
+    sab('the op detector would catch the fabricated client being called instead',
+      'getWholesaleCatalog' !== 'getSupplyCatalogue');
+  }
+
+  /* Narrowed deliberately. `wholesalePrice` used to be listed here as a fabricated-catalogue
+     marker; Slice L established it as the AUTHORITATIVE wholesale field, so its presence is
+     now correct and only the fabricated module and its invented vocabulary are forbidden. */
   check('the fabricated B2B catalogue is never referenced (code, not prose)',
-    !/sokoni-b2b|wholesalePrice|moq/i.test(CODE));
+    !/sokoni-b2b|SokoniB2B|\bmoq\b|savings/i.test(CODE));
   sab('the detector catches a reused fabricated catalogue',
     /sokoni-b2b|moq/i.test("var rows = window.__b2bCatalogue; // moq"));
   check('no invented business names ship in the module',

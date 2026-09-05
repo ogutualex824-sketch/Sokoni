@@ -14,14 +14,19 @@
    plausible — the failure mode this codebase has already paid for twice, in
    pos-bi.html's mock* fallbacks and sokoni-b2b.js's 37 invented businesses.
 
-   THREE SECTIONS ARE DELIBERATELY UNAVAILABLE
-     Find Suppliers      — discovery has no backing query, and participation in
-                           supply is NOT the same as consent to appear in a
-                           public directory. That is a visibility decision, not a
-                           missing SELECT.
-     Supply Catalogue    — a real wholesale engine exists (b2b-wholesale.js) but
-                           its client is the fabricated catalogue. Reusing that
-                           here would reproduce the exact defect it is tracked as.
+   SUPPLY CATALOGUE IS NOW BACKED (Slice L)
+     It reads procurement.getSupplyCatalogue: a supplier business resolved through
+     businesses/{id}.ownerId, its own products carrying wholesalePrice > 0, and a
+     positive field allowlist. It does NOT read the b2b-wholesale handler, which a
+     trace found filtering on a field set on 0 of 108 production products and
+     defaulting every missing minimum order to 10. A minimum order nobody set is a
+     dash here. Reaching a catalogue needs supply.enabled, NOT discoverable — a
+     business may supply a counterparty it already knows without being listed.
+
+   STILL DELIBERATELY UNAVAILABLE
+     Find Suppliers      — discovery exists server-side (Slice K) but this panel is
+                           not wired to it yet. That is its own slice with its own
+                           certification, not a side effect of this one.
      Time-ordered views  — the read layer orders by document id on purpose; a
                            createdAt ordering would silently EXCLUDE documents
                            missing that field and needs composite indexes nobody
@@ -55,12 +60,10 @@
       { id: 'invoices',  name: 'Invoices',        icon: '🧾', backed: true },
       { id: 'payments',  name: 'Payments',        icon: '💳', backed: true },
       { id: 'find',      name: 'Find Suppliers',  icon: '🔍', backed: false,
-        why: 'Supplier discovery needs its own backing slice. A business opting into supply ' +
-             'has not thereby agreed to appear in a public directory, so this is a visibility ' +
-             'decision as much as a missing query. Nothing is shown rather than a guess.' },
-      { id: 'catalogue', name: 'Supply Catalogue', icon: '🗂️', backed: false,
-        why: 'The wholesale engine exists but has no authoritative client yet. The existing ' +
-             'B2B catalogue is fabricated sample data and is deliberately not reused here.' },
+        why: 'Discovery now exists server-side (procurement.findSuppliers, opt-in and ' +
+             'allowlisted), but this panel is not wired to it yet. Wiring it is its own slice ' +
+             'with its own certification, so nothing is shown here rather than a guess.' },
+      { id: 'catalogue', name: 'Supply Catalogue', icon: '🗂️', backed: true },
     ] },
     { group: 'My Supply', items: [
       { id: 'mysupply',    name: 'Products I Supply', icon: '🏷️', backed: true },
@@ -379,6 +382,29 @@
         ],
         note: 'Wholesale pricing and public listing need the B2B authority slice; this shows ' +
               'holdings only, not an offer.' },
+      catalogue: { op: 'getSupplyCatalogue', title: 'Supply Catalogue',
+        sub: 'Wholesale offers, resolved through canonical business identity. Opened without ' +
+             'a supplier this is YOUR catalogue: what this business currently offers others.',
+        empty: 'No wholesale offers published for this business yet.',
+        cols: [
+          { h: 'Product',   strong: true, f: function (r) { return text(r.name); } },
+          { h: 'Category',  f: function (r) { return text(r.category); } },
+          { h: 'Wholesale', f: function (r) { return money(r.wholesalePrice); } },
+          /* A minimum order the supplier never set is a DASH. The catalogue this replaces
+             defaulted it to 10 and presented that as a term of trade. */
+          { h: 'Min order', f: function (r) { return count(r.minWholesaleQty); } },
+          { h: 'Retail',    f: function (r) { return money(r.retailPrice); } },
+          /* Three states, not two. Unknown availability is a dash, never 'Out of stock'. */
+          { h: 'Available', f: function (r) {
+              if (r.inStock === true)  return 'In stock';
+              if (r.inStock === false) return 'Out of stock';
+              return NEUTRAL;
+            } },
+        ],
+        note: 'Every figure is a wholesale term the supplier published itself, read from the ' +
+              'procurement engine. No saving or discount is computed here, no minimum order is ' +
+              'assumed, exact stock levels are never exposed, and no supplier is vetted or ' +
+              'endorsed by this surface.' },
       bizorders: { op: 'getInboundSupplyOrders', title: 'Business Orders',
         sub: 'Orders to fulfil for other SOKONI businesses.',
         empty: 'No business orders to fulfil.',
@@ -413,7 +439,7 @@
     };
 
     function renderList (def, data) {
-      var rows = (data && (data.items || data.orders)) || [];
+      var rows = (data && (data.items || data.orders || data.products)) || [];
       var head = '<h2 class="sup-h2">' + esc(def.title) + '</h2><p class="sup-sub">' + esc(def.sub) + '</p>';
       if (!rows.length) {
         return head + stateBlock('📭', def.empty,
@@ -521,10 +547,10 @@
         var data = await read(def.op, payload);
         var prior = (opts && opts.cursor && state.cache[id]) ? state.cache[id] : null;
         if (prior) {
-          var merged = (prior.items || []).concat(data.items || data.orders || []);
+          var merged = (prior.items || []).concat(data.items || data.orders || data.products || []);
           data = { items: merged, nextCursor: data.nextCursor };
         }
-        state.cache[id] = { items: data.items || data.orders || [], nextCursor: data.nextCursor || null };
+        state.cache[id] = { items: data.items || data.orders || data.products || [], nextCursor: data.nextCursor || null };
         main.innerHTML = renderList(def, state.cache[id]);
       } catch (e) {
         /* A failed read shows the failure. It never falls back to sample rows, and it never

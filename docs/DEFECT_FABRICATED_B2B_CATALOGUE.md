@@ -76,3 +76,61 @@ The counterparty-as-external-contact shape applies to both engines, not just `pr
 Not to be fixed inside Slice B, B2 or any PO-convergence slice. Also still open and
 separate: `getPOSInventoryIntelligence`'s 500, and the `pos-bi.html` KPI missing-field → `0`
 coercion.
+
+---
+
+## REMEDIATED — Slice L, 2026-09-05
+
+**Status: CLOSED.** The fabricated rows are deleted, and a canonical replacement exists.
+
+### What was removed
+
+| removed from `sokoni-b2b.js` | count |
+|---|---|
+| invented supplier businesses (`SUPPLIERS`) — names, phones, ratings, review counts, founding years, minimum-order values, ISO/KEBS/GlobalGAP certification claims | **15** |
+| invented wholesale product rows (`PRODUCTS`) — prices, MOQs, savings percentages | **23** |
+
+Both bindings survive as frozen empty literals so the seven consuming pages keep their API and
+do not crash; no mock or seed generator was left behind. Two adjacent fabrications on the same
+live path went with them:
+
+* `b2b-chat.html` seeded two invented conversations with an invented supplier whenever a user
+  had no threads — and `B.sendMessage` **persists**, so the fabrication was written to
+  Firestore as real message history.
+* `b2b-chat.html` rendered unread badges from `Math.floor(Math.random()*3)` — a different
+  count on every repaint.
+* `registerSupplier` initialised a new supplier with `rating: 0`. Zero reads as *rated badly*;
+  an unrated business is now `rating: null`.
+
+### Why `getWholesaleCatalog` was NOT the replacement
+
+Traced against production (both databases; `sokoni-ops` is entirely empty, its own controls
+read 0):
+
+| probe | count |
+|---|---|
+| `products` (control) | 108 |
+| `products.wholesaleEnabled == true` — **what the handler filters on** | **0** |
+| `products.wholesalePrice > 0` — **real wholesale offers** | **10** |
+| `products.minOrderQty > 0` — its MOQ field | **0** |
+| `wholesaleAccounts` — its permission gate | **0** |
+
+The handler is structurally blind to every real wholesale offer: it filters a field no product
+writer in the repository sets (`updateWholesaleProduct`, its only writer, has **zero callers**),
+reads MOQ from a field set on no product while defaulting it to 10, renders a missing price as
+`0`, and gates on a collection with no documents — so it denies every caller on the platform.
+Its identity space is a user uid, not `businesses/{businessId}`.
+
+### The canonical replacement
+
+`procurement.getSupplyCatalogue` — see `CHANGELOG.md` and
+`scripts/test-supply-catalogue-slice-l.js` (149 checks, 15 sabotage catches).
+`b2b-wholesale.js` is deliberately untouched: repointing it would redefine a live-dispatched
+contract that `wholesale-portal.html` reads.
+
+### Still open, deliberately separate
+
+`b2b.html` and its sibling pages are **customer-facing** and now render truthful empty states;
+wiring them to a business-scoped authority is a different audience question from the merchant
+Supply workspace and is not resolved here. Also still open: `getPOSInventoryIntelligence`'s
+500, and the `pos-bi.html` KPI missing-field → `0` coercion.

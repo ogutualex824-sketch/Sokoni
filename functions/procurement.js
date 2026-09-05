@@ -667,6 +667,25 @@ function _projectDiscoverable(id, d) {
   return out;
 }
 
+/* ── The audience gate, shared by every read that exposes ANOTHER business ────────
+   `_assertMerchantAuthority` honours the owner-uid form and returns WITHOUT a lookup when the
+   requested merchant is the caller themselves. That is correct for operating on your own
+   data, but on its own it is not an audience gate: it would let ANY signed-in account reach a
+   cross-business surface by implicitly acting "for itself". These surfaces are for SOKONI
+   businesses, so the viewer must resolve to a real, ACTIVE business document.
+
+   Checked here rather than inside the shared authority primitive, whose behaviour nine other
+   operations depend on. ONE helper rather than a copy per surface: an audience gate that
+   exists twice is an audience gate that will eventually diverge — which is the whole reason
+   this engine exists. The messages stay per-surface so the caller learns what was refused. */
+async function _assertActiveBusinessAudience(merchantId, notLinkedMessage, notActiveMessage) {
+  const snap = await db.collection('businesses').doc(String(merchantId)).get();
+  if (!snap.exists) _err(notLinkedMessage, 'failed-precondition');
+  const data = snap.data() || {};
+  if (data.status !== 'active') _err(notActiveMessage, 'failed-precondition');
+  return data;
+}
+
 const findSuppliers = onCall(OPT, async (request) => {
   _requireAuth(request);
   const { merchantId, category, city, county, limit, cursor } = request.data ?? {};
@@ -677,20 +696,9 @@ const findSuppliers = onCall(OPT, async (request) => {
      account with no merchant relationship is refused. */
   const viewerMerchantId = await _assertMerchantAuthority(request, merchantId);
 
-  /* The authority primitive honours the owner-uid form and returns WITHOUT a lookup when the
-     requested merchant is the caller themselves. That is correct for operating on your own
-     data, but it is not an audience gate: it would let ANY signed-in account read the
-     directory by implicitly acting "for itself". Discovery is for SOKONI merchants, so the
-     viewer must resolve to a real, active business document. Verified here rather than by
-     changing the shared primitive, whose behaviour every other operation depends on. */
-  const viewerSnap = await db.collection('businesses').doc(String(viewerMerchantId)).get();
-  if (!viewerSnap.exists) {
-    _err('Supplier discovery is available to SOKONI businesses. No business is linked to this account.',
-         'failed-precondition');
-  }
-  if ((viewerSnap.data() || {}).status !== 'active') {
-    _err('Supplier discovery requires an active business.', 'failed-precondition');
-  }
+  await _assertActiveBusinessAudience(viewerMerchantId,
+    'Supplier discovery is available to SOKONI businesses. No business is linked to this account.',
+    'Supplier discovery requires an active business.');
 
   /* The three flags are ALL required, and all are equality filters so no composite index is
      introduced. `discoverable` is opt-in: a document without the field does not match. */
@@ -729,6 +737,208 @@ const findSuppliers = onCall(OPT, async (request) => {
     count: suppliers.length,
     nextCursor: more ? docs[docs.length - 1].id : null,
     /* Stated in the response so a caller cannot mistake absence of a badge for a claim. */
+    verificationClaim: null,
+  };
+});
+
+/* ════════════════════════════════════════════════════════════════════════════════
+   1a-3. SUPPLY CATALOGUE — what one SOKONI business offers another, wholesale
+
+   WHY THIS READ EXISTS AND WHY IT IS NOT getWholesaleCatalog.
+   A wholesale engine already exists (b2b-wholesale.js). A trace of it against production
+   found it structurally unable to see the real data:
+
+     · it filters `products.wholesaleEnabled == true` — a field set on 0 of 108 production
+       products, and written by nothing in the repository except `updateWholesaleProduct`,
+       which has ZERO callers anywhere;
+     · it reads MOQ from `minOrderQty`, set on 0 products, defaulting to 10 — so every row it
+       ever returned would carry an INVENTED minimum order quantity;
+     · it renders a missing price as `wholesalePrice || 0`;
+     · it gates on `wholesaleAccounts/{uid}.status == 'approved'` — 0 documents exist, so it
+       denies every caller on the platform today;
+     · its identity space is a user uid, not `businesses/{businessId}`.
+
+   Meanwhile 10 production products DO carry real wholesale terms, published through the
+   canonical writer. Repointing that handler would redefine a live-dispatched contract that
+   wholesale-portal.html reads; this read is added to the engine that already owns Supply
+   instead, and b2b-wholesale.js is left untouched. It is a READ — no orders, no pricing
+   engine, no settlement. Not a second commerce engine.
+
+   THE AUTHORITATIVE VOCABULARY, established by trace, not by preference:
+     wholesale offered  ⟺  products.wholesalePrice > 0
+        sokoni-product-schema.js couples the pair — a price at or below zero nulls BOTH
+        wholesalePrice and minWholesaleQty — so a positive price IS the enable flag. There is
+        no separate boolean to consult, and inventing one would create a fourth vocabulary.
+     minimum order      =  products.minWholesaleQty, or NULL. Never a default. An invented
+        MOQ is a term of trade the supplier never agreed to.
+     product owner      =  products.sellerUid  (the field firestore.rules enforces; note
+        b2b-wholesale.js checks sellerId/uid instead, a divergence recorded, not adopted)
+     business identity  =  businesses/{id}.ownerId === products.sellerUid
+     availability       =  status / isVisible / outOfStock / stock
+
+   CATALOGUE ACCESS IS NOT DISCOVERY. Reaching a supplier's catalogue requires
+   `supply.enabled` — the business agreed to supply others. It does NOT require
+   `supply.discoverable`, which is only consent to be FOUND. A business may supply a
+   counterparty it already knows while staying out of the directory, so a buyer holding a
+   businessId from an existing relationship can read the catalogue of a supplier that Slice
+   K's search will never return. Collapsing the two would silently revoke that.
+════════════════════════════════════════════════════════════════════════════════ */
+
+/** The ONLY product fields the catalogue may ever return. Adding one is a privacy decision. */
+const CATALOGUE_FIELDS = ['productId', 'name', 'category', 'wholesalePrice', 'minWholesaleQty',
+                          'retailPrice', 'inStock', 'image', 'description',
+                          'supplierBusinessId', 'supplierName'];
+
+/* How many documents one page may examine. The wholesale predicate is applied in memory
+   (see the query note below), so a page can scan more products than it returns. */
+const CATALOGUE_SCAN = 120;
+
+/** A finite, positive number, or null. Anything else — string, NaN, 0, negative — is NOT a
+    price and must never be presented as one. */
+function _positiveNumber(v) {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Availability WITHOUT revealing inventory depth. Exact stock is a competitor's dream and is
+ * never returned. A product that carries no availability signal at all resolves to null —
+ * unknown — and never to `false`, which would wrongly advertise it as sold out, nor to
+ * `true`, which would promise stock nobody recorded.
+ */
+function _availability(d) {
+  if (d.outOfStock === true) return false;
+  const n = typeof d.stock === 'number' ? d.stock : Number(d.stock);
+  if (Number.isFinite(n)) return n > 0;
+  if (d.outOfStock === false) return true;
+  return null;
+}
+
+/**
+ * A product is a catalogue entry only if the supplier actually offers it wholesale AND it is
+ * live on the marketplace. Every clause is a positive requirement: a document missing the
+ * field fails the test rather than passing by default.
+ */
+function _isCatalogueEntry(d) {
+  if (_positiveNumber(d.wholesalePrice) === null) return false;
+  if (d.status !== 'active') return false;
+  if (d.isVisible === false) return false;
+  return true;
+}
+
+function _projectCatalogueEntry(id, d, supplierBusinessId, supplierName) {
+  const src = d || {};
+  return {
+    productId:          id,
+    name:               src.name === undefined ? null : src.name,
+    category:           src.category === undefined ? null : src.category,
+    /* Authoritative and coupled by the schema. */
+    wholesalePrice:     _positiveNumber(src.wholesalePrice),
+    /* NULL when the supplier set none. Never MIN_ITEM_QTY, never 1, never 10. */
+    minWholesaleQty:    _positiveNumber(src.minWholesaleQty),
+    /* Already world-readable on the marketplace, so this reveals nothing new. No saving or
+       discount percentage is computed here: a derived figure presented next to real ones
+       reads as authoritative, and the buyer can do the subtraction. */
+    retailPrice:        _positiveNumber(src.price),
+    inStock:            _availability(src),
+    image:              src.image || (Array.isArray(src.images) ? src.images[0] : null) || null,
+    description:        _san(src.description || '', 500) || null,
+    supplierBusinessId: supplierBusinessId,
+    supplierName:       supplierName === undefined ? null : supplierName,
+    /* Deliberately absent and never added by omission: costPrice (the supplier's margin),
+       sellerEmail, sellerUid, uid, shopId, totalRevenue, totalUnitsSold, sold,
+       lastSaleOrderId, lastSoldAt, stock (the exact quantity), digitalUrl, digitalLicense,
+       verificationStatus, _testPricedBy, _ownerNormalizedFrom. */
+  };
+}
+
+const getSupplyCatalogue = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, supplierBusinessId, category, limit, cursor } = request.data ?? {};
+
+  const viewerMerchantId = await _assertMerchantAuthority(request, merchantId);
+  await _assertActiveBusinessAudience(viewerMerchantId,
+    'The supply catalogue is available to SOKONI businesses. No business is linked to this account.',
+    'Reading a supply catalogue requires an active business.');
+
+  /* Omitted supplier means "my own catalogue" — what this business offers others. That is a
+     view of your own data, so it needs no supply participation: you may always see what you
+     are offering, including that you are offering nothing. */
+  const supplierId = supplierBusinessId ? _san(String(supplierBusinessId), 200) : viewerMerchantId;
+  const isOwnCatalogue = supplierId === viewerMerchantId;
+
+  const supplierSnap = await db.collection('businesses').doc(String(supplierId)).get();
+  if (!supplierSnap.exists) {
+    /* A forged or stale businessId resolves to nothing. It cannot widen authority: the
+       viewer's own gate has already passed independently of this value, and nothing below
+       reads a client-supplied owner. */
+    _err('That business is not on SOKONI.', 'not-found');
+  }
+  const supplier = supplierSnap.data() || {};
+
+  if (supplier.status !== 'active') {
+    _err('That business is not active on SOKONI.', 'failed-precondition');
+  }
+  if (!isOwnCatalogue && ((supplier.supply || {}).enabled !== true)) {
+    /* Participation is required to show a business's terms to a DIFFERENT business.
+       Discoverability is deliberately NOT required — see the header. */
+    _err('That business does not supply other businesses.', 'failed-precondition');
+  }
+
+  /* The canonical bridge: a business's wholesale offers are its OWNER's marketplace products.
+     ownerId is read from the business document the server just fetched — never from the
+     request — so a client cannot point the query at somebody else's products. */
+  const ownerUid = supplier.ownerId;
+  if (!ownerUid) {
+    _err('That business has no canonical owner, so its catalogue cannot be resolved.',
+         'failed-precondition');
+  }
+
+  /* ONE equality filter, ordered by document id. The wholesale predicate is applied in memory
+     on purpose: `where('sellerUid','==',x).where('wholesalePrice','>',0)` mixes an equality
+     and an inequality on different fields, which REQUIRES a composite index. Deployment is on
+     hold, so such a query would simply fail in production — and adding an index silently is
+     how a catalogue starts omitting products nobody can explain. The cost is that a page
+     scans more documents than it returns, which is reported honestly as `scanned`. */
+  let q = db.collection('products').where('sellerUid', '==', String(ownerUid));
+  q = q.orderBy(admin.firestore.FieldPath.documentId());
+  if (cursor) q = q.startAfter(_san(String(cursor), 200));
+
+  const snap = await q.limit(CATALOGUE_SCAN).get();
+  const wantCategory = category ? _san(String(category), 100) : null;
+
+  const products = [];
+  snap.docs.forEach(function (doc) {
+    const d = doc.data() || {};
+    if (!_isCatalogueEntry(d)) return;
+    if (wantCategory && d.category !== wantCategory) return;
+    products.push(_projectCatalogueEntry(doc.id, d, supplierId, supplier.name || null));
+  });
+
+  const cap = Math.min(Math.max(Number(limit ?? 50), 1), 100);
+  const page = products.slice(0, cap);
+
+  /* The cursor advances by the last document SCANNED, not the last one returned. Advancing by
+     a returned row would skip every non-wholesale product between it and the next match. */
+  const scanned = snap.docs.length;
+  const exhausted = scanned < CATALOGUE_SCAN && page.length === products.length;
+  const nextCursor = exhausted ? null : (snap.docs.length ? snap.docs[snap.docs.length - 1].id : null);
+
+  logger.info('procurement.getSupplyCatalogue', {
+    viewerMerchantId, supplierId, own: isOwnCatalogue, scanned, returned: page.length,
+  });
+
+  return {
+    viewerMerchantId,
+    supplierBusinessId: supplierId,
+    supplierName: supplier.name || null,
+    isOwnCatalogue,
+    products: page,
+    count: page.length,
+    /* Reported so an empty page with a cursor reads as "more to scan", not "nothing exists". */
+    scanned,
+    nextCursor,
+    /* Same honesty marker as discovery: no vetting is claimed by this surface. */
     verificationClaim: null,
   };
 });
@@ -2350,6 +2560,7 @@ module.exports = {
   updateSupplier,
   setSupplyParticipation,
   findSuppliers,
+  getSupplyCatalogue,
   getInboundSupplyOrders,
   createPurchaseOrder,
   getPurchaseOrder,
@@ -2373,4 +2584,11 @@ module.exports = {
   _DISCOVERABLE_FIELDS: DISCOVERABLE_FIELDS,
   _DISCOVERABLE_SUPPLY_FIELDS: DISCOVERABLE_SUPPLY_FIELDS,
   _projectDiscoverable,
+  _assertActiveBusinessAudience,
+  _CATALOGUE_FIELDS: CATALOGUE_FIELDS,
+  _CATALOGUE_SCAN: CATALOGUE_SCAN,
+  _isCatalogueEntry,
+  _availability,
+  _positiveNumber,
+  _projectCatalogueEntry,
 };

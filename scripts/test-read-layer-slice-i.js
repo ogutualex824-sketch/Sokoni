@@ -29,6 +29,11 @@ const failures = [];
 const check = (n, c) => { if (c) { pass++; console.log('  PASS  ' + n); } else { fail++; failures.push(n); console.log('  FAIL  ' + n); } };
 const sab   = (n, c) => { sabotage++; if (c) { sabotageOk++; pass++; console.log('  PASS    (sabotage: ' + n + ')'); } else { fail++; failures.push('SABOTAGE ' + n); console.log('  FAIL    (sabotage: ' + n + ')'); } };
 
+/* An absence test must never match the comment that documents the absence. */
+function stripCommentsI (t) {
+  return t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+}
+
 console.log('\nCERT — Slice I: merchant-scoped read layer\n');
 
 const UID_A = 'uid-A', UID_B = 'uid-B';
@@ -275,14 +280,28 @@ const OPS = ['listSuppliers', 'listPurchaseOrders', 'listGRNs', 'listSupplierInv
   /* Slice K landed: discovery must now EXIST and be audience-gated. */
   check('discovery exists (Slice K) and is audience gated',
     /const findSuppliers = onCall/.test(PROC) && /Supplier discovery is available to SOKONI businesses/.test(PROC));
-  check('SCOPE: no wholesale/catalogue redesign', !/const getSupplyCatalogue = onCall/.test(PROC));
+  /* Slice L landed the catalogue. The invariant flips from "absent" to "present AND
+     canonical": it must read the authoritative wholesale vocabulary, never the
+     b2b-wholesale field that is set on no production product. */
+  check('the supply catalogue exists (Slice L) and reads the canonical vocabulary',
+    /const getSupplyCatalogue = onCall/.test(PROC) &&
+    /where\('sellerUid', '==', String\(ownerUid\)\)/.test(PROC) &&
+    !/wholesaleEnabled/.test(stripCommentsI(PROC)));
   /* Slice J2 has since registered it, at tier:'more' so the founder's primary sidebar spec
      stays untouched. The invariant flips from "absent" to "present and not primary". */
   check('the Supply route exists and is NOT primary (J2)', (function () {
     const R = fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8');
     return /id:'supply'/.test(R) && /id:'supply'[\s\S]{0,120}tier:'more'/.test(R);
   })());
-  check('SCOPE: payment semantics untouched', /return result;\n\}\);/.test(PROC) && !/settlement/i.test(PROC));
+  /* Comments are stripped FIRST. Slice L's header explains that the catalogue adds no
+     settlement, and the word in that sentence was matching this very detector — the fifth
+     time in this workstream a comment documenting an absence has been read as the thing. */
+  check('SCOPE: payment semantics untouched',
+    /return result;\n\}\);/.test(PROC) && !/settlement/i.test(stripCommentsI(PROC)));
+  sab('the settlement detector fires on real settlement code',
+    /settlement/i.test(stripCommentsI('await settlementEngine.post(x);')));
+  sab('...and stays silent on a comment that merely says there is none',
+    !/settlement/i.test(stripCommentsI('/* no settlement here */\nvar a = 1;')));
   check('SCOPE: invoice totals still client-supplied within the 5% band', /deviation > 0\.05/.test(PROC));
   check('PRESERVED: Slice H resolver', /const resolveMerchantContext = onCall/.test(PROC));
   check('PRESERVED: Slice E payment idempotency', /_deterministicId\(invoiceId \+ '\|debit', 'led'\)/.test(PROC));
