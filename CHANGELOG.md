@@ -1,3 +1,74 @@
+## 2026-09-05 — Slice I: the merchant-scoped read layer
+
+**Files:** `functions/procurement.js`, `functions/index.js` (+6 exports),
+`scripts/test-read-layer-slice-i.js` (new), `scripts/test-merchant-context-slice-h.js`,
+`CHANGELOG.md`. **Not deployed**; HOLD remains.
+
+**A real authority fix, not just read helpers.** `getProcurementDashboard` and
+`getProcurementForecast` required only `_requireAuth` while accepting `merchantId` from the
+payload — so **any signed-in user could read any merchant's** open POs, pending approvals,
+goods-to-receive, payables and overdue-invoice detail. Both now resolve through
+`_assertMerchantAuthority`, and the queried value is the authorized one.
+
+**Six new merchant-scoped reads:** `listSuppliers` (both SOKONI counterparties, via
+`supplierBusinessId`/`isSokoniBusiness`, and external ones), `listPurchaseOrders`, `listGRNs`,
+`listSupplierInvoices`, `listWarehouseStock` (`posProducts`, the same `merchantId` field
+`business-health-score` and `business-bootstrap` already query it on) and `listStockMovements`.
+
+**One primitive, not six near-copies.** `_listScoped` holds the *only* scoping query in the
+read layer; a second hand-written one is how a filter eventually goes missing, and a read that
+forgets its filter leaks another merchant's suppliers, orders, payables and stock. Certified:
+no list op writes its own scoping query, and every one routes through the primitive.
+
+**Scope cannot be widened.** `merchantId` arrives as a request; the value queried is what the
+authority primitive returns, so a forged `merchantId`, `supplierId`, `businessId` or
+`activeShopId` has nothing to influence. **The merchant filter is applied before the cursor**,
+and a cursor is only a document id inside that already-filtered query — so one lifted from
+another merchant's page cannot reach across. Counts come from the filtered page, never a
+collection-wide aggregate. Oversized limits are capped.
+
+Ordering is by document id **deliberately**: a `createdAt` ordering would silently EXCLUDE any
+legacy document missing that field and would need composite indexes this slice is not
+authorised to add. Time-ordered views are a follow-up with an explicit index decision.
+`stockQty` is `null` when unknown, never `0` — an unknown rendered as zero is the defect
+`5a45d34` removed from `pos-bi.html`.
+
+**Certification.** `scripts/test-read-layer-slice-i.js` — **76/76 checks, 3/3 sabotage
+catches**, executing the real operations against a fixture with **two merchants, two
+principals and interleaved documents in every collection**, so a missing filter leaks visibly
+rather than passing because the fixture held only one merchant's rows. Leakage is judged by
+inspecting returned ROWS, not by reading source. All six ops: A→A ✅, B→B ✅, A→B ❌, B→A ❌.
+Plus manager/admin claim without relationship ❌, unauthenticated ❌, forged identity fields
+inert, narrowing filters unable to escape scope, **a cursor stolen from another merchant's page
+returning no foreign rows**, pages non-overlapping, and the analytics pair now denying
+cross-merchant. RESTORE four ways — querying the requested rather than authorized id, dropping
+the merchant filter entirely, applying the cursor before the scope, and reverting the dashboard
+fix — each drives exit 1 and each restore returns 0, every sabotage with an applied-check.
+
+**Two of my own test defects, corrected rather than worked around:** the query double's
+snapshot lacked `forEach`, which a real `QuerySnapshot` has — making a correct dashboard look
+broken; and a file-wide count of scoping queries failed on the dashboard's own pre-existing
+ones, which are a different operation and legitimately scope themselves. The check now targets
+the list-op bodies.
+
+**Three Slice H checks updated, not deleted.** They asserted the read layer had *not* landed,
+correct while that was I's job. The invariant flips: they now assert it exists and is scoped,
+with a sabotage proving they are not vacuous. H remains 66/66.
+
+**Scope held:** no supplier discovery, no wholesale/catalogue redesign, **no Supply route**, no
+payment-settlement change, invoice totals still client-supplied within the ±5% band.
+
+**API changes:** six new callables; export count 1524 → **1530**. **Database changes:** none.
+**Breaking changes:** callers of `getProcurementDashboard`/`getProcurementForecast` not
+authorized for the merchant they name now receive `permission-denied` instead of data. That is
+the defect being fixed. **No Firestore rule widened. No new file dependency** — requires are
+byte-identical to `HEAD`.
+
+**Both untracked modules remain deployment blockers:** `functions/tenant-identity.js` (required
+by `procurement.js` since my B2, and by `business-bootstrap.js` before that) and
+`functions/merchant-identity.js` (required by `pos-zero-friction.js`, another workstream).
+Neither committed here.
+
 ## 2026-09-05 — Slice H: Merchant V2 business-identity resolution
 
 **Files:** `functions/procurement.js`, `functions/index.js` (+1 export), `merchant-v2.html`,

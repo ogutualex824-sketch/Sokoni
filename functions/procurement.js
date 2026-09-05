@@ -819,6 +819,184 @@ const getInboundSupplyOrders = onCall(OPT, async (request) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   1d. THE SCOPED READ LAYER (Slice I)
+
+   Every procurement read is tenant data. One primitive, not six near-copies: a second
+   hand-written scoping query is how one of them ends up missing its filter, and a read that
+   forgets its filter leaks another merchant's suppliers, orders, payables and stock.
+
+   THE SCOPE IS NEVER THE CALLER'S TO CHOOSE. `merchantId` arrives as a REQUEST; the value
+   actually queried is the one `_assertMerchantAuthority` returns. A forged merchantId,
+   supplierId or businessId in the payload therefore has nothing to influence.
+
+   PAGINATION CANNOT WIDEN THE SCOPE. The merchant filter is applied before the cursor, and
+   the cursor is only ever a document id passed to startAfter within that already-filtered
+   query — so a cursor lifted from another merchant's result set cannot reach across. Counts
+   are computed from the same filtered query, never from a collection-wide aggregate.
+
+   Ordering is by document id deliberately. A createdAt ordering would silently EXCLUDE any
+   legacy document missing that field, and would need composite indexes this slice is not
+   authorised to add. Time-ordered views are a follow-up with an explicit index decision.
+════════════════════════════════════════════════════════════════ */
+
+const _MAX_PAGE = 200;
+
+/**
+ * Read one page of a merchant-owned collection.
+ *
+ * @param {object} request   the callable request (authority comes from here, not the args)
+ * @param {string} collection
+ * @param {object} [opts]    { requested, equals: {field:value}, limit, cursor, project }
+ * @returns {Promise<{merchantId, items, nextCursor, count}>}
+ */
+async function _listScoped(request, collection, opts) {
+  const o = opts || {};
+  /* AUTHORITY FIRST. Everything below queries the value this returns. */
+  const merchantId = await _assertMerchantAuthority(request, o.requested);
+
+  let q = db.collection(collection).where('merchantId', '==', merchantId);
+
+  /* Additional equality filters are narrowing only — they can never widen past the
+     merchant filter above, which is applied first and unconditionally. */
+  const eq = o.equals || {};
+  for (const field of Object.keys(eq)) {
+    const v = eq[field];
+    if (v === undefined || v === null || v === '') continue;
+    q = q.where(field, '==', typeof v === 'string' ? _san(v, 200) : v);
+  }
+
+  q = q.orderBy(admin.firestore.FieldPath.documentId());
+
+  if (o.cursor) {
+    /* A cursor is a position WITHIN the caller's own filtered result set. Because the
+       merchant filter is already applied, a cursor taken from another merchant's page can
+       only skip forward inside this caller's own data — never reach into theirs. */
+    q = q.startAfter(_san(String(o.cursor), 200));
+  }
+
+  const limit = Math.min(Math.max(Number(o.limit ?? 50), 1), _MAX_PAGE);
+  const snap  = await q.limit(limit + 1).get();
+
+  const docs = snap.docs.slice(0, limit);
+  const more = snap.docs.length > limit;
+
+  const items = docs.map((d) => {
+    const data = d.data() || {};
+    return o.project ? o.project(data, d.id) : Object.assign({ id: d.id }, data);
+  });
+
+  return {
+    merchantId,
+    items,
+    count: items.length,          /* of THIS page, from the filtered query */
+    nextCursor: more ? docs[docs.length - 1].id : null,
+  };
+}
+
+/** Suppliers for this merchant — both SOKONI counterparties and external ones. */
+const listSuppliers = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, status, limit, cursor } = request.data ?? {};
+  const page = await _listScoped(request, 'procSuppliers', {
+    requested: merchantId, equals: { status }, limit, cursor,
+    project: (d, id) => ({
+      supplierId: d.supplierId || id,
+      name: d.name || null, contactName: d.contactName || null,
+      phone: d.phone || null, email: d.email || null,
+      /* The SOKONI counterparty when there is one; null for a genuinely external supplier. */
+      supplierBusinessId: d.supplierBusinessId || null,
+      isSokoniBusiness: !!d.supplierBusinessId,
+      paymentTerms: d.paymentTerms ?? null, creditLimit: d.creditLimit ?? null,
+      currentBalance: d.currentBalance ?? 0, rating: d.rating ?? 0,
+      status: d.status || null, createdAt: d.createdAt || null,
+    }),
+  });
+  return page;
+});
+
+const listPurchaseOrders = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, status, supplierId, limit, cursor } = request.data ?? {};
+  return await _listScoped(request, 'procPurchaseOrders', {
+    requested: merchantId, equals: { status, supplierId }, limit, cursor,
+    project: (d, id) => ({
+      poId: d.poId || id, poNumber: d.poNumber || null, status: d.status || null,
+      supplierId: d.supplierId || null, supplierName: d.supplierName || null,
+      supplierBusinessId: d.supplierBusinessId || null,
+      buyerBusinessId: d.buyerBusinessId || d.merchantId || null,
+      itemCount: Array.isArray(d.items) ? d.items.length : 0,
+      subtotal: d.subtotal ?? null, vatAmount: d.vatAmount ?? null, total: d.total ?? null,
+      expectedDelivery: d.expectedDelivery || null, approvedAt: d.approvedAt || null,
+      sentAt: d.sentAt || null, delivery: d.delivery || null, createdAt: d.createdAt || null,
+    }),
+  });
+});
+
+const listGRNs = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, poId, limit, cursor } = request.data ?? {};
+  return await _listScoped(request, 'procGRN', {
+    requested: merchantId, equals: { poId }, limit, cursor,
+    project: (d, id) => ({
+      grnId: d.grnId || id, poId: d.poId || null, supplierId: d.supplierId || null,
+      branchId: d.branchId || null, totalReceived: d.totalReceived ?? 0,
+      discrepancyCount: Array.isArray(d.discrepancies) ? d.discrepancies.length : 0,
+      poStatusAfter: d.poStatusAfter || null, receivedBy: d.receivedBy || null,
+      receivedAt: d.receivedAt || null,
+    }),
+  });
+});
+
+const listSupplierInvoices = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, status, supplierId, limit, cursor } = request.data ?? {};
+  return await _listScoped(request, 'procSupplierInvoices', {
+    requested: merchantId, equals: { status, supplierId }, limit, cursor,
+    project: (d, id) => ({
+      invoiceId: d.invoiceId || id, invoiceNumber: d.invoiceNumber || null,
+      poId: d.poId || null, grnId: d.grnId || null, supplierId: d.supplierId || null,
+      amount: d.amount ?? null, vatAmount: d.vatAmount ?? null, total: d.total ?? null,
+      status: d.status || null, dueDate: d.dueDate || null,
+      /* paidAt records a BOOKKEEPING entry, not a transfer of funds. */
+      paidAt: d.paidAt || null, paymentMethod: d.paymentMethod || null,
+      createdAt: d.createdAt || null,
+    }),
+  });
+});
+
+/** Warehouse stock. Scoped by merchantId — the same field business-health-score and
+    business-bootstrap already query posProducts on. */
+const listWarehouseStock = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, branchId, limit, cursor } = request.data ?? {};
+  return await _listScoped(request, 'posProducts', {
+    requested: merchantId, equals: { branchId }, limit, cursor,
+    project: (d, id) => ({
+      id, productId: d.productId || null, name: d.name || null, sku: d.sku || null,
+      branchId: d.branchId || null,
+      stockQty: d.stockQty ?? null,      /* null means UNKNOWN, never 0 */
+      reorderPoint: d.reorderPoint ?? null, costPrice: d.costPrice ?? null,
+      supplierId: d.supplierId || null, updatedAt: d.updatedAt || null,
+    }),
+  });
+});
+
+/** Stock movements — the audit trail receiveGoods writes alongside every stock change. */
+const listStockMovements = onCall(OPT, async (request) => {
+  _requireAuth(request);
+  const { merchantId, productId, branchId, type, limit, cursor } = request.data ?? {};
+  return await _listScoped(request, 'stockMovements', {
+    requested: merchantId, equals: { productId, branchId, type }, limit, cursor,
+    project: (d, id) => ({
+      id, type: d.type || null, productId: d.productId || null, branchId: d.branchId || null,
+      qty: d.qty ?? null, unitCost: d.unitCost ?? null,
+      refType: d.refType || null, refId: d.refId || null,
+      poId: d.poId || null, supplierId: d.supplierId || null,
+      performedBy: d.performedBy || null, createdAt: d.createdAt || null,
+    }),
+  });
+});
+/* ════════════════════════════════════════════════════════════════
    2. createPurchaseOrder
    Draft a purchase order against a supplier.
 ════════════════════════════════════════════════════════════════ */
@@ -1693,6 +1871,8 @@ const getSupplierPerformance = onCall(OPT, async (request) => {
 ════════════════════════════════════════════════════════════════ */
 const getProcurementForecast = onCall(OPT, async (request) => {
   _requireAuth(request);
+  /* Same authority fix as the dashboard: forecast reads a merchant's consumption history. */
+  await _assertMerchantAuthority(request, (request.data || {}).merchantId);
   const { merchantId, branchId } = request.data ?? {};
 
   if (!merchantId) _err('merchantId is required.');
@@ -1804,9 +1984,13 @@ const getProcurementForecast = onCall(OPT, async (request) => {
 ════════════════════════════════════════════════════════════════ */
 const getProcurementDashboard = onCall(OPT, async (request) => {
   _requireAuth(request);
-  const { merchantId } = request.data ?? {};
+  const { merchantId: _requestedMerchantId } = request.data ?? {};
 
-  if (!merchantId) _err('merchantId is required.');
+  /* AUTHORITY FIX (Slice I), not a read helper. This required only _requireAuth while
+     accepting merchantId from the payload, so any signed-in user could read any merchant's
+     open POs, pending approvals, goods-to-receive and payables — including overdue invoice
+     detail. The queried value is now the authorized one. */
+  const merchantId = await _assertMerchantAuthority(request, _requestedMerchantId);
 
   const since30 = new Date();
   since30.setDate(since30.getDate() - 30);
@@ -2030,6 +2214,12 @@ const scheduledVendorPerformanceUpdate = onSchedule(
 ════════════════════════════════════════════════════════════════ */
 module.exports = {
   resolveMerchantContext,
+  listSuppliers,
+  listPurchaseOrders,
+  listGRNs,
+  listSupplierInvoices,
+  listWarehouseStock,
+  listStockMovements,
   addSupplier,
   updateSupplier,
   setSupplyParticipation,
@@ -2050,6 +2240,7 @@ module.exports = {
   _assertSupplierSideAuthority,
   _assertPoAuthority,
   _merchantIdForm,
+  _listScoped,
   _assertSuppliesEnabled,
   _SUPPLY_MUTABLE: SUPPLY_MUTABLE,
 };

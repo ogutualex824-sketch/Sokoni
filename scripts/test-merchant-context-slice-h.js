@@ -277,11 +277,18 @@ async function verdict(fn) { try { return { ok: true, value: await fn() }; } cat
     /try \{ await resolveMerchantContext\(\); \} catch \(_\) \{\}/.test(SHELL));
 
   /* H must not have grown into I. */
-  check('SCOPE: no listSuppliers added', !/const listSuppliers = onCall/.test(PROC));
-  check('SCOPE: no PO/GRN/invoice list API added',
-    !/const list(PurchaseOrders|GRNs|SupplierInvoices) = onCall/.test(PROC));
-  check('SCOPE: no warehouse/movement read added',
-    !/const (getWarehouseStock|listStockMovements) = onCall/.test(PROC));
+  /* These three asserted the read layer had NOT landed, which was correct while it was
+     Slice I's job. Slice I has since landed, so the invariant flips: the read layer must
+     exist AND must be merchant-scoped. Updated rather than deleted — H's boundary with I is
+     still worth asserting, just from the other side. */
+  check('the read layer now exists (Slice I)', /const listSuppliers = onCall/.test(PROC));
+  check('every list op is merchant-scoped through the shared primitive',
+    ['listSuppliers', 'listPurchaseOrders', 'listGRNs', 'listSupplierInvoices',
+     'listWarehouseStock', 'listStockMovements']
+      .every((op) => new RegExp('const ' + op + ' = onCall[\\s\\S]{0,900}_listScoped\\(request, \'').test(PROC)));
+  sab('the detector catches an unscoped list op',
+    !/const listX = onCall[\s\S]{0,900}_listScoped\(request, '/.test(
+      "const listX = onCall(OPT, async (r) => db.collection('x').get());"));
   check('SCOPE: no supplier discovery added', !/const (findSuppliers|discoverSuppliers) = onCall/.test(PROC));
   check('SCOPE: no Supply route registered',
     !/id:\s*'supply'/.test(fs.readFileSync(path.join(ROOT, 'sokoni-merchant-routes.js'), 'utf8')));

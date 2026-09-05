@@ -12467,6 +12467,12 @@ exports.rateLegalProvider        = legalHub.rateLegalProvider;
 /* ── Procurement Engine v1.0 ────────────────────────────────────────────── */
 const procurement = require('./procurement');
 exports.resolveMerchantContext           = procurement.resolveMerchantContext;
+exports.listSuppliers                    = procurement.listSuppliers;
+exports.listPurchaseOrders               = procurement.listPurchaseOrders;
+exports.listGRNs                         = procurement.listGRNs;
+exports.listSupplierInvoices             = procurement.listSupplierInvoices;
+exports.listWarehouseStock               = procurement.listWarehouseStock;
+exports.listStockMovements               = procurement.listStockMovements;
 exports.addSupplier                      = procurement.addSupplier;
 exports.updateSupplier                   = procurement.updateSupplier;
 exports.setSupplyParticipation           = procurement.setSupplyParticipation;
