@@ -1,3 +1,49 @@
+## 2026-09-05 — IAM Step 2: Donna granted developer + deploy access on sokoni-aeb26
+
+**Files:** `docs/IAM_ACCESS_DECISIONS.md`, `CHANGELOG.md`. No application code changed.
+**No deployment performed and none required** — an IAM change is not a SOKONI release.
+
+**What changed.** `user:donna@adg.io` granted six reviewed, least-privilege roles on
+project `sokoni-aeb26`: `firebase.developAdmin`, `cloudfunctions.developer`,
+`firebasehosting.admin`, `logging.viewer`, `errorreporting.viewer`, `monitoring.viewer`.
+Donna can now build, debug, and deploy SOKONI as a development collaborator. Her Step 1
+`roles/billing.viewer` is retained. Project policy etag `BwZab5yQA3Q=` ->
+`BwZauN7VlmI=`; member-bindings 39 -> 45.
+
+**Security changes.** The boundary is that Donna can ship code but cannot escalate herself
+or administer the project. Withheld and verified absent: `roles/owner`,
+`resourcemanager.projectIamAdmin`, `resourcemanager.organizationAdmin`, `billing.admin`,
+`firebaserules.admin`, `secretmanager.secretAccessor`, `iam.serviceAccountKeyAdmin`, and
+`iam.serviceAccountUser`. That last one is conditional by design — it is to be granted
+only if a real deployment failure proves it necessary, and then only after reporting the
+failure for a fresh decision; no deployment was run, so no such need exists.
+
+**Accepted trade-off, explicitly acknowledged by the owner.** `firebase.developAdmin`
+carries read/write access to live production Firebase data. No Firebase role grants deploy
+capability without it, so this is the consequence of choosing a deploy-capable developer
+over a staging-only one. Administrative and self-escalation roles are withheld as the
+compensating control.
+
+**Verification.** Donna holds exactly the six approved roles and no others; all eight
+withheld roles confirmed absent. `roles/owner` remains `alexochieng3030@gmail.com` alone.
+Billing policy unchanged at etag `BwZauLRpjaI=` with Donna still at `billing.viewer` only.
+No organization binding for Donna. A diff of every non-Donna binding, before against after,
+is identical — nothing else moved. Organization membership, project ownership, billing
+administration, repository visibility, Firestore Rules, payment rails, secrets, and
+application code were all left untouched.
+
+**Operational note.** Donna must deploy with explicit targets —
+`firebase deploy --only hosting,functions` — never a bare `firebase deploy`, which would
+attempt a Firestore Rules publish. She also needs briefing on
+`scripts/deploy/guard-no-rollback.js`: deploy rights mean a stale worktree can roll
+production back, and that guard is the control.
+
+**GitHub: unchanged and pending.** Donna's GitHub username is not yet known
+(`donna@adg.io` is a Google identity, not a GitHub handle). When supplied she gets
+Write/push, not Admin. GCP IAM grants no repository access in either direction.
+
+**Database changes:** none. **API changes:** none. **Breaking changes:** none.
+
 ## 2026-09-05 — IAM: Donna granted billing-viewer only; ownership boundary held
 
 **Files:** `docs/IAM_ACCESS_DECISIONS.md` (new — the access-decision ledger), `CHANGELOG.md`.
