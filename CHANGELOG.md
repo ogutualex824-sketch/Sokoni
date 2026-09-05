@@ -1,3 +1,60 @@
+## 2026-09-05 — CRITICAL: pos-bi.html no longer fabricates business metrics (RC)
+
+**Files:** `pos-bi.html`, `scripts/test-bi-no-fabricated-metrics.js` (new), `CHANGELOG.md`.
+**In the RC** as a critical correctness/compliance fix — `pos-bi.html` is a live merchant
+surface reachable from POS nav (`pos.html:2671`, `sokoni-nav-engine.js:145` as a `seller`
+route). **Not deployed**; deployment HOLD remains in force.
+
+**The defect.** Nine call sites substituted invented figures whenever a query failed. Two
+paths, and the first was the more dangerous:
+
+* **Partial failure, no signal at all.** The calls run under `Promise.allSettled`; each
+  rejected one became `null`, then `|| mockExec()` / `mockInv()` / `mockPay()` / … supplied
+  fabricated data. A merchant whose revenue call succeeded but whose inventory call failed saw
+  **real and invented numbers side by side**, with a normal `lastUpdated` timestamp and nothing
+  distinguishing them.
+* **Total failure, a weak signal.** The catch branch rendered a full set of mocks and labelled
+  the page `Demo data` — still fabricated, merely captioned.
+
+The values were specific enough to be acted on: revenue `KES 284,560`, M-Pesa `182,000`,
+inventory score `82` grade `B`, avg LTV `42,800`. Direct violation of two standing rules — no UI
+component may fabricate business metrics, and no demo/seed fallback on production data paths.
+
+**A third fabrication vector, found while implementing.** `renderAlerts` defaulted an unknown
+inventory score to **100** — i.e. to *healthy* — and an unknown revenue change to 0. Alerts are
+verdicts, so those defaults did not merely display a wrong number, they **silently withheld a
+warning** and could print "All metrics within normal range" from data that was never measured.
+
+**The fix.** Every fallback generator is deleted, not merely unreferenced — `mockExec`,
+`mockTrend`, `mockCats`, `mockPay`, `mockInv`, `mockCust`, `mockStaff`, `mockForecast`. Each
+widget is now independently guarded: a genuine result renders its real values even when a
+sibling query failed, and a failed one renders `renderUnavailable()` — an em dash, a reason, and
+`role="status"`, carrying **no digit** that could be misread as a metric. An unknown shown as `0`
+is the same defect as an invented number, so the neutral state is never a zero. Total failure
+marks every widget unavailable and sets `lastUpdated` to `Data unavailable`. Alert verdicts now
+read each input only when genuinely present, and "all clear" is asserted only when every input
+was measured — otherwise the panel says the status is incomplete. The forecast renders
+unavailable rather than a fabricated extrapolation.
+
+**Certification.** `scripts/test-bi-no-fabricated-metrics.js` — **40/40 checks, 6/6 sabotage
+catches.** The page's real `renderUnavailable`, `renderAllUnavailable` and `renderAlerts` are
+extracted and **executed** against a DOM double and the resulting HTML asserted; static checks
+appear only where the property is genuinely textual. Both directions are proven: an absent
+inventory score no longer clears the page, **and** genuinely healthy data still reports all-clear;
+a real revenue drop still raises its alert. Detectors carry adversarial tests in both directions —
+each must fire on the regression and must not fire on the correct code. RESTORE proven three
+ways: reintroducing a mock generator, reverting the healthy-score default, or reverting one
+widget guard to a `||` fallback each drives the suite to exit 1, and restoring returns exit 0.
+Regression: supplier-sync 72/72, publication contract 36/36, pos-payment-destination 90/0, inline
+script parses. The 18b harness remains deliberately at 18/20.
+
+**Not touched:** `getPOSInventoryIntelligence` (its 500 is still a separate unresolved defect and
+this trace did not require it), `procurement.sendPurchaseOrder`, `functions/index.js`,
+`functions/pos-intelligence.js`, and every Firestore rule.
+
+**Database changes:** none. **API changes:** none. **Breaking changes:** none — no metric that
+was genuine before is withheld now; only invented ones stopped appearing.
+
 ## 2026-09-05 — Supplier sync made server-authoritative; dead posBatches BI presentation retired
 
 **Files:** `functions/pos-supplier-sync.js` (new), `functions/smartpos-dispatch.js` (+1 module

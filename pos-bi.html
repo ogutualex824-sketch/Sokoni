@@ -937,36 +937,66 @@ async function loadDashboard() {
     const cats  = catRes.status   === 'fulfilled' ? catRes.value.data    : null;
     const pay   = payRes.status   === 'fulfilled' ? payRes.value.data    : null;
 
-    renderKPIs(exec || mockExec());
-    renderTrend(trend || mockTrend());
-    renderCategories(cats || mockCats());
-    renderPayments(pay || mockPay());
-    renderInventory(inv || mockInv());
-    renderCustomerGrowth(cust || mockCust());
-    renderTopCustomers(cust || mockCust());
-    renderStaff(staff || mockStaff());
-    renderAlerts(exec || mockExec(), inv || mockInv(), cust || mockCust());
+    /* Each widget is independent: a genuine result still renders even when a sibling
+       query failed. A failed one is shown as unavailable — never back-filled. */
+    if (exec)  renderKPIs(exec);            else { renderUnavailable('kpiGrid', 'Revenue & profit unavailable'); }
+    if (trend) renderTrend(trend);          else { renderUnavailable('revChart', 'Trend unavailable'); renderUnavailable('revXAxis', ''); }
+    if (cats)  renderCategories(cats);      else { renderUnavailable('categoryPanel', 'Categories unavailable'); }
+    if (pay)   renderPayments(pay);         else { renderUnavailable('paymentPanel', 'Payment mix unavailable'); }
+    if (inv)   renderInventory(inv);        else { renderUnavailable('inventoryPanel', 'Inventory health unavailable'); }
+    if (cust)  renderCustomerGrowth(cust);  else { renderUnavailable('customerGrowthPanel', 'Customer growth unavailable'); }
+    if (cust)  renderTopCustomers(cust);    else { renderUnavailable('topCustomersPanel', 'Top customers unavailable'); }
+    if (staff) renderStaff(staff);          else { renderUnavailable('staffBody', 'Staff performance unavailable'); }
+
+    /* Alerts are DERIVED. Deriving them from absent inputs invents a verdict — the old
+       code defaulted an unknown inventory score to 100 and reported "all metrics within
+       normal range". Alerts render only when every input they read is genuine. */
+    if (exec && inv && cust) renderAlerts(exec, inv, cust);
+    else renderUnavailable('alertsPanel', 'Alerts unavailable while data is incomplete');
 
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch (err) {
     console.error('BI load error:', err);
-    // Render mocks for demo
-    renderKPIs(mockExec());
-    renderTrend(mockTrend());
-    renderCategories(mockCats());
-    renderPayments(mockPay());
-    renderInventory(mockInv());
-    renderCustomerGrowth(mockCust());
-    renderTopCustomers(mockCust());
-    renderStaff(mockStaff());
-    renderAlerts(mockExec(), mockInv(), mockCust());
-    document.getElementById('lastUpdated').textContent = 'Demo data';
+    /* Total failure. Every widget goes neutral. Previously this rendered a full set of
+       invented figures and labelled the page "Demo data" — a merchant could act on them. */
+    renderAllUnavailable();
+    document.getElementById('lastUpdated').textContent = 'Data unavailable';
   } finally {
     setLoading(false);
   }
 }
 
 /* ── Render: KPIs ── */
+/* ── Neutral state ────────────────────────────────────────────────────────────
+   A failed or unavailable data source must NEVER cause fabricated business
+   metrics to appear. There are no mock/demo fallbacks on this page: a widget
+   whose query did not return renders as explicitly unavailable, and widgets
+   whose queries DID return still render their genuine values.
+
+   An unknown rendered as 0 is the same defect as an invented number, so the
+   neutral state is a dash and a reason — never a zero, never an extrapolation.
+───────────────────────────────────────────────────────────────────────────── */
+const NEUTRAL = '—';
+
+function renderUnavailable(targetId, what) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.innerHTML =
+    '<div class="data-unavailable" data-unavailable="1" role="status" ' +
+    'style="color:var(--muted);text-align:center;padding:18px;font-size:13px">' +
+    NEUTRAL + ' ' + (what || 'No data yet') +
+    '<div style="font-size:11px;opacity:.75;margin-top:4px">Could not be loaded — retry to refresh</div>' +
+    '</div>';
+}
+
+/* Mark a whole set of widgets unavailable. Used for a total load failure so that
+   not one panel is left showing a stale or invented figure. */
+function renderAllUnavailable() {
+  ['kpiGrid','revChart','revXAxis','categoryPanel','paymentPanel','inventoryPanel',
+   'customerGrowthPanel','topCustomersPanel','staffBody','alertsPanel','drillBody']
+    .forEach(id => renderUnavailable(id, 'Data unavailable'));
+}
+
 function renderKPIs(d) {
   const kpis = [
     { icon:'💰', label:'Revenue',         value: fmt(d.revenue),       sub: '',  change: d.revenueChange },
@@ -1152,10 +1182,11 @@ async function loadForecast() {
   btn.disabled = true;
   try {
     const r = await cfGetRevenueForecast({ period: currentPeriod, days: currentHorizon });
-    const data = r.data || mockForecast(currentHorizon);
-    renderForecast(data);
+    if (r && r.data) renderForecast(r.data);
+    else renderUnavailable('forecastBody', 'Forecast unavailable');
   } catch {
-    renderForecast(mockForecast(currentHorizon));
+    /* A forecast is an extrapolation by nature; a FABRICATED one is not a forecast. */
+    renderUnavailable('forecastBody', 'Forecast unavailable');
   } finally {
     btn.textContent = 'Generate Forecast';
     btn.disabled = false;
@@ -1214,18 +1245,29 @@ function renderForecast(data) {
 /* ── Alerts ── */
 function renderAlerts(exec, inv, cust) {
   const alerts = [];
-  const revChg = exec.revenueChange || 0;
-  const invScore = inv.score || 100;
-  const stockouts = inv.stockouts || 0;
-  const churnRate = exec.churnRate || 0;
+  /* Alerts are VERDICTS. A default stands in for a measurement, so each input is used only
+     when it is genuinely present — an absent one simply cannot raise or clear its alert.
+     The old code defaulted an unknown inventory score to 100, i.e. to "healthy", which is
+     the most dangerous possible default: it silently withheld a warning. */
+  const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : null;
+  const revChg    = num(exec.revenueChange);
+  const invScore  = num(inv.score);
+  const stockouts = num(inv.stockouts);
+  const churnRate = num(exec.churnRate);
 
-  if (revChg <= -20) alerts.push({ cls:'alert-red', icon:'🔴', msg:`Revenue is down ${Math.abs(revChg).toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Trend' });
-  if (invScore < 70)  alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`Inventory health score is ${invScore}/100 — attention needed.`, href:'pos-inventory.html', action:'View Inventory' });
-  if (stockouts > 3)  alerts.push({ cls:'alert-red', icon:'🔴', msg:`${stockouts} stockout events detected this period.`, href:'pos-inventory.html', action:'Restock Now' });
-  if (churnRate > 15) alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`High churn rate detected: ${churnRate.toFixed(1)}%.`, href:'pos-crm-pro.html', action:'View CRM' });
-  if (revChg >= 20)   alerts.push({ cls:'alert-green', icon:'🟢', msg:`Revenue record! Up ${revChg.toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Report' });
+  if (revChg !== null && revChg <= -20) alerts.push({ cls:'alert-red', icon:'🔴', msg:`Revenue is down ${Math.abs(revChg).toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Trend' });
+  if (invScore !== null && invScore < 70)  alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`Inventory health score is ${invScore}/100 — attention needed.`, href:'pos-inventory.html', action:'View Inventory' });
+  if (stockouts !== null && stockouts > 3)  alerts.push({ cls:'alert-red', icon:'🔴', msg:`${stockouts} stockout events detected this period.`, href:'pos-inventory.html', action:'Restock Now' });
+  if (churnRate !== null && churnRate > 15) alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`High churn rate detected: ${churnRate.toFixed(1)}%.`, href:'pos-crm-pro.html', action:'View CRM' });
+  if (revChg !== null && revChg >= 20)   alerts.push({ cls:'alert-green', icon:'🟢', msg:`Revenue record! Up ${revChg.toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Report' });
 
-  if (!alerts.length) alerts.push({ cls:'alert-green', icon:'🟢', msg:'All metrics within normal range.', href:'#', action:'OK' });
+  /* "All clear" is itself a claim. Only assert it when every input was measured. */
+  const allMeasured = [revChg, invScore, stockouts, churnRate].every(v => v !== null);
+  if (!alerts.length) {
+    alerts.push(allMeasured
+      ? { cls:'alert-green', icon:'🟢', msg:'All metrics within normal range.', href:'#', action:'OK' }
+      : { cls:'alert-yellow', icon:'🟡', msg:'Some metrics could not be loaded — status incomplete.', href:'#', action:'Retry' });
+  }
 
   document.getElementById('alertsPanel').innerHTML = alerts.map(a => `
     <div class="alert-item ${a.cls}">
@@ -1243,83 +1285,13 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* ── Mock Data (fallback / offline / demo) ── */
-function mockExec() {
-  return {
-    revenue: 284560, revenueChange: 12.4,
-    grossProfit: 98000, grossMargin: 34.5, grossProfitChange: 8.1,
-    netProfit: 51200, netMargin: 18.0, netProfitChange: 5.7,
-    transactions: 312, avgBasket: 912, transactionsChange: 3.2,
-    newCustomers: 47, newCustomersChange: 18.6,
-    returningCustomers: 265, repeatRate: 84.9, returningChange: 2.3,
-    inventoryScore: 82, inventoryGrade: 'B',
-    netCash: 72400, netCashChange: 9.1,
-    churnRate: 6.2,
-  };
-}
-function mockTrend() {
-  const now = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (13 - i));
-    return {
-      label: d.toLocaleDateString('en-KE', { day:'numeric', month:'short' }).split(' ')[0] + (d.toLocaleDateString('en-KE',{month:'short'}).slice(0,3)),
-      revenue: 18000 + Math.random() * 35000,
-    };
-  });
-}
-function mockCats() {
-  return [
-    { name:'Groceries', revenue:84200 }, { name:'Electronics', revenue:62300 },
-    { name:'Clothing', revenue:48100 }, { name:'Beverages', revenue:36700 },
-    { name:'Pharmacy', revenue:28400 }, { name:'Household', revenue:19800 },
-    { name:'Beauty', revenue:14600 }, { name:'Snacks', revenue:9400 },
-  ];
-}
-function mockPay() {
-  return [
-    { key:'mpesa', name:'M-Pesa', amount:182000, change:7.3 },
-    { key:'cash',  name:'Cash',   amount:56400,  change:-2.1 },
-    { key:'card',  name:'Card',   amount:29600,  change:14.8 },
-    { key:'qr',    name:'QR/Wallet', amount:16560, change:31.2 },
-  ];
-}
-function mockInv() {
-  return { score:82, grade:'B', stockouts:2, overstock:8, turnoverRate:4.7 };
-}
-function mockCust() {
-  const tiers = ['Platinum','Gold','Gold','Silver','Silver','Bronze','Bronze','Bronze','Bronze','Bronze'];
-  return {
-    newCustomers:47, returningCustomers:265, churn:12, repeatRate:84.9, avgLtv:42800,
-    topCustomers: Array.from({ length:10 }, (_, i) => ({
-      uid: 'uid'+i, name:'Customer '+(i+1),
-      phone:'+2547'+(Math.random()*89999999+10000000|0),
-      tier: tiers[i], totalSpent: 120000 - i*9800, visits: 28 - i*2,
-    })),
-  };
-}
-function mockStaff() {
-  return [
-    { name:'Jane Mwangi', totalSales:98400, transactions:112, salesPerHour:12300, avgBasket:878, attendanceRate:97 },
-    { name:'Peter Kamau', totalSales:82100, transactions:94,  salesPerHour:10262, avgBasket:873, attendanceRate:94 },
-    { name:'Aisha Omar',  totalSales:71600, transactions:86,  salesPerHour:8950,  avgBasket:833, attendanceRate:100 },
-    { name:'Brian Oloo',  totalSales:32460, transactions:37,  salesPerHour:8115,  avgBasket:877, attendanceRate:85 },
-  ];
-}
-function mockForecast(days) {
-  const hist = Array.from({ length: 7 }, (_, i) => ({
-    label: 'D-'+(7-i), value: 20000 + Math.random() * 30000, confidence: null,
-  }));
-  const fore = Array.from({ length: days }, (_, i) => {
-    const base = 28000 + i * 800;
-    return {
-      label: 'D+'+(i+1), value: base + Math.random()*8000,
-      lower: base * 0.85, upper: base * 1.15,
-      confidence: 90 - i * 1.5,
-    };
-  });
-  return { historical: hist, forecast: fore };
-}
+/* Mock data generators REMOVED (2026-09-05).
+   They fabricated revenue, payment-mix, inventory, customer and staff figures and were
+   substituted whenever a query failed, on a live merchant surface reachable from POS nav.
+   A partial failure mixed invented numbers beside genuine ones with no visual distinction.
+   Unavailable data now renders a neutral state via renderUnavailable(). Do not reintroduce
+   a fallback generator here — scripts/test-bi-no-fabricated-metrics.js fails the build. */
+
 </script>
 </body>
 </html>
