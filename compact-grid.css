@@ -599,22 +599,6 @@
     width: 100% !important;
   }
 
-  .ptrend-grid .pcard-m-wish,
-  #productsContainer .pcard-m-wish {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 14px !important;
-    flex-shrink: 0 !important;
-  }
-  .ptrend-grid .pcard-m-buy,
-  #productsContainer .pcard-m-buy {
-    flex: 1 !important;
-    height: 32px !important;
-    padding: 0 10px !important;
-    font-size: 11.5px !important;
-    border-radius: 16px !important;
-  }
-
   /* ════════════════════════════════════════════════════════
      SECONDARY GRIDS — keep horizontal swipe strip
   ════════════════════════════════════════════════════════ */
@@ -676,7 +660,17 @@
 
   /* ════ PREMIUM MOBILE ACTION STRIP ════ */
 
-  .pcard-actions { display: none !important; }
+  /* SCOPED. This was a bare `.pcard-actions { display:none !important }`, which reached
+     EVERY renderer on the platform — not just the cards that have a mobile strip to show
+     instead. category.js builds its own `.pcard-actions` (Add / Wish / Buy Now, with an
+     inline display:flex that an !important beats) inside `.product-card`, and emits no
+     strip. So below 600px the category page had NO product-card buttons at all: hidden by a
+     rule written for a different card, with nothing put in their place.
+     Pre-existing — present in HEAD before this change. Now limited to the grids that
+     actually render a replacement. */
+  :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .pcard-actions {
+    display: none !important;
+  }
 
   .pcard-mobile-strip {
     display: flex !important;
@@ -726,96 +720,13 @@
     color: #ff9800 !important;
   }
 
-  /* Buttons row — 3 buttons: heart | cart | buy */
-  .pcard-m-btns {
-    display: flex !important;
-    gap: 5px !important;
-    align-items: center !important;
-    width: 100% !important;
-  }
+  
 
-  /* Heart — glowing circle, min 40px tap target */
-  .pcard-m-wish {
-    width: 40px !important;
-    height: 40px !important;
-    flex-shrink: 0 !important;
-    background: rgba(255,30,80,0.1) !important;
-    border: 1px solid rgba(255,45,85,0.32) !important;
-    border-radius: 50% !important;
-    color: #ff4d6d !important;
-    font-size: 14px !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 !important;
-    box-shadow: 0 0 8px rgba(255,45,85,0.18) !important;
-    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease !important;
-  }
-  .pcard-m-wish:active {
-    transform: scale(0.85) !important;
-    box-shadow: 0 0 16px rgba(255,45,85,0.45) !important;
-  }
-  .pcard-m-wish--active {
-    background: rgba(255,45,85,0.25) !important;
-    border-color: rgba(255,45,85,0.6) !important;
-    color: #ff2d55 !important;
-    box-shadow: 0 0 14px rgba(255,45,85,0.35) !important;
-  }
+  
 
-  /* Cart — ghost green icon button */
-  .pcard-m-cart {
-    width: 40px !important;
-    height: 40px !important;
-    flex-shrink: 0 !important;
-    background: rgba(113,255,0,0.09) !important;
-    border: 1px solid rgba(113,255,0,0.3) !important;
-    border-radius: 50% !important;
-    color: #71ff00 !important;
-    font-size: 14px !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 !important;
-    transition: transform 0.12s ease, background 0.12s ease !important;
-  }
-  .pcard-m-cart:active {
-    transform: scale(0.85) !important;
-    background: rgba(113,255,0,0.2) !important;
-  }
+  
 
-  /* Buy — full-width neon gradient pill */
-  .pcard-m-buy {
-    flex: 1 !important;
-    height: 40px !important;
-    padding: 0 8px !important;
-    background: linear-gradient(135deg, #71ff00 0%, #39e600 100%) !important;
-    border: none !important;
-    border-radius: 20px !important;
-    color: #050e05 !important;
-    font-size: 11px !important;
-    font-weight: 900 !important;
-    cursor: pointer !important;
-    font-family: inherit !important;
-    white-space: nowrap !important;
-    letter-spacing: 0.01em !important;
-    box-shadow: 0 2px 10px rgba(113,255,0,0.32) !important;
-    transition: filter 0.12s ease, transform 0.12s ease !important;
-  }
-  .pcard-m-buy:active {
-    filter: brightness(0.88) !important;
-    transform: scale(0.92) !important;
-    box-shadow: 0 1px 6px rgba(113,255,0,0.2) !important;
-  }
-
-  .pcard-m-buy:disabled,
-  .pcard-m-cart:disabled,
-  .pcard-m-wish:disabled {
-    opacity: 0.32 !important;
-    cursor: not-allowed !important;
-    pointer-events: none !important;
-  }
+  
 }
 
 /* ════════════════════════════════════════════════════════
@@ -939,35 +850,11 @@
     flex: 1 !important;
     min-width: 0 !important;
   }
-
-  .ptrend-grid .pcard-m-wish,
-  #productsContainer .pcard-m-wish {
-    width: 40px !important;
-    height: 40px !important;
-    flex-shrink: 0 !important;
-    font-size: 15px !important;
-  }
-
-  .ptrend-grid .pcard-m-cart,
-  #productsContainer .pcard-m-cart {
-    width: 40px !important;
-    height: 40px !important;
-    flex-shrink: 0 !important;
-    font-size: 15px !important;
-  }
-
-  .ptrend-grid .pcard-m-buy,
-  #productsContainer .pcard-m-buy {
-    flex: 1 !important;
-    height: 40px !important;
-    padding: 0 10px !important;
-    font-size: 12px !important;
-    border-radius: 20px !important;
-  }
 }
 
 /* Desktop: hide the mobile strip and the portrait overlay */
-.pcard-mobile-strip  { display: none; }
+/* .pcard-mobile-strip default display REMOVED — the consolidated block at the end of this
+   file now shows it at every width. See "PRODUCT CARD ACTIONS". */
 .pcard-name-overlay  { display: none; }
 
 /* ════════════════════════════════════════════════════════
@@ -1382,4 +1269,201 @@ body.light-mode #storiesSection {
   border-radius: 16px !important;
   margin: 0 12px 4px !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PRODUCT CARD ACTIONS — ONE ROW, TWO BUTTONS, EVERY DEVICE
+   Added 2026-09-09. This block is the SINGLE authority for the card's action
+   buttons and deliberately sits last, so it settles a cascade that four
+   earlier rule sets were fighting over.
+
+   ── WHAT WAS WRONG, MEASURED ────────────────────────────────────────────
+   scripts/measure-product-card-buttons.js, before this block:
+
+       320px   card 133px   cart OVERFLOWS RIGHT 17px, buy OVERFLOWS 96px
+       390px   card 178px   buy OVERFLOWS RIGHT 51px
+       820px+  card 259px   NO ACTION BUTTONS AT ALL
+
+   The overflow was not a sizing mistake in these files. sokoni-quality.css
+   (injected on every page by shared-header.js) sets a WCAG 2.5.5 touch
+   target:
+
+       button, a, [role="button"] … { min-height:44px; min-width:44px; }
+
+   `min-width` CLAMPS the used width upward, so it beats `width:32px
+   !important` — every card button is at least 44px wide no matter what the
+   rules here say. Three of them plus two gaps need 142px; the row inside a
+   two-column card is 111px. And `flex-shrink:0 !important` forbade shrinking,
+   so the surplus ran off the right edge of the card and was clipped.
+
+   The accessibility rule is CORRECT and is not overridden here. The card
+   simply cannot hold three 44px controls, so it now holds two.
+
+   ── WHY THERE IS NO "BUY NOW" ───────────────────────────────────────────
+   The card itself opens the product page, which carries the real purchase
+   flow. A Buy on the card started a checkout for something the shopper had
+   not yet seen, and it was the third control the row had no room for.
+   Cart and Wishlist are the two actions worth taking without opening the
+   product. Removed from the markup, not merely hidden — see script.js.
+
+   ── ONE BLOCK, NOT TWO ──────────────────────────────────────────────────
+   buildProductCard emits BOTH `.pcard-actions` and `.pcard-mobile-strip`,
+   and CSS chose between them per breakpoint: the strip below 768px, the
+   actions block on desktop in the side rails, and NEITHER in the main feed
+   on desktop. Three different answers, which is why the same page looked
+   different on every device. The strip is now the only one shown, at every
+   width, in every grid.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* The duplicate block never renders. It stays in the markup because the
+   secondary Share/Offer row still belongs to a future non-listing surface;
+   it must simply never compete with the strip. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-actions,
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-actions--compact { display: none !important; }
+
+/* The action strip — shown at EVERY width, in every grid. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-mobile-strip {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding: 8px 9px 10px !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  background: rgba(255,255,255,0.02) !important;
+  margin-top: auto !important;          /* pin to the card foot so rows align */
+}
+
+/* Social-proof line stays a single quiet row; it must never push the buttons. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-top-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+
+/* ── THE BUTTON ROW — GRID, NOT FLEX ─────────────────────────────────────
+   Two equal columns. `1fr 1fr` sizes the tracks from the CONTAINER, so both
+   buttons are identical and together they fill the row exactly, whatever
+   their labels say.
+
+   Flex was tried first and measurably did not work here: with
+   `flex: 1 1 0 !important` winning the cascade (confirmed through
+   CSS.getMatchedStylesForNode) and `min-width:0 !important` clearing the
+   44px floor, the buttons still laid out at their CONTENT width — 43px in a
+   156px row — leaving 60px unused. The same markup grows correctly in
+   document.body, so something in the card subtree defeats flex-grow.
+
+   Grid does not depend on that behaviour at all: a `1fr` track is resolved
+   from the container's own size rather than from the item's content, so the
+   result is the same two equal buttons without needing to find what was
+   eating the free space. `minmax(0, 1fr)` keeps a long label from pushing
+   its track wider than half the row. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+  justify-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button {
+  width: 100% !important;               /* fill the 1fr track */
+  /* THE 15px THAT PUSHED THE ROW OFF THE CARD.
+     style.css:736 `.product-card button { margin:15px; width:calc(100% - 30px) }` is a
+     legacy rule applying to EVERY button inside a product card. The width was already being
+     overridden here; the margin was not, so both buttons sat 15px right of their tracks and
+     the second one hung 5px past the card edge — with the card's `overflow:hidden` clipping
+     it. Measured: row 156px [23..179], children 156px, free 0px, slack L15/R-15. */
+  margin: 0 !important;
+  max-width: none !important;
+  /* 44px is the WCAG 2.5.5 floor from sokoni-quality.css, restated rather than
+     fought: two of them fit the narrowest card (117px row -> 54px each). */
+  min-height: 44px !important;
+  height: 44px !important;
+  min-width: 0 !important;              /* the ROW guarantees >=44px; see above */
+  padding: 0 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  border-radius: 12px !important;
+  font-family: inherit !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+  transition: transform .12s ease, filter .12s ease, background .15s ease !important;
+}
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button:active { transform: scale(0.94) !important; }
+
+/* The label hides itself before the button can be squeezed out of shape, so a
+   narrow card degrades to a clean icon pair instead of clipped text. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button > span {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
+}
+
+/* Cart — the primary action, filled. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-cart {
+  background: linear-gradient(135deg, #71ff00 0%, #4fc800 100%) !important;
+  border: none !important;
+  color: #051005 !important;
+  box-shadow: 0 2px 10px rgba(113,255,0,0.28) !important;
+}
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-cart:hover { filter: brightness(1.06) !important; }
+
+/* Wishlist — the same size, outlined so the pair reads as one control group. */
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-wish {
+  background: rgba(255,45,85,0.10) !important;
+  border: 1px solid rgba(255,45,85,0.34) !important;
+  border-radius: 12px !important;       /* was a 50% circle — now matches Cart */
+  color: #ff4d6d !important;
+  box-shadow: none !important;
+}
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-wish:hover { background: rgba(255,45,85,0.18) !important; }
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-wish--active {
+  background: rgba(255,45,85,0.24) !important;
+  border-color: rgba(255,45,85,0.62) !important;
+  color: #ff2d55 !important;
+}
+
+:is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button:disabled {
+  opacity: 0.32 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  filter: grayscale(0.4) !important;
+}
+
+/* Very small phones: drop the labels, keep two equal 44px targets. */
+@media (max-width: 359px) {
+  :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns { gap: 6px !important; }
+  :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button { font-size: 13px !important; padding: 0 4px !important; }
+  :is(.ptrend-grid, #productsContainer, .products-grid, .new-arrivals-grid) .product-card .pcard-m-btns > button > span { display: none !important; }
+}
+
+/* ── FLASH SALE cards — the same two-button contract ─────────────────────
+   `.fs-item` is a different card built by loadFlashSale(), and it had the same
+   three-control row plus a full-width Buy Now beneath it. Equalised here so a
+   shopper meets ONE button layout on this page, not two. */
+.fs-btn-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+}
+.fs-btn-row > .fs-btn {
+  width: 100% !important;
+  margin: 0 !important;                 /* same legacy .product-card button margin trap */
+  max-width: none !important;           /* .fs-wish carried max-width:48px */
+  min-width: 0 !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+}
+@media (max-width: 359px) {
+  .fs-btn-row > .fs-btn > span { display: none !important; }
 }

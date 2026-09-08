@@ -844,7 +844,12 @@ function buildProductCard(product, size = "normal"){
     const DIG_CATS = new Set(["ebook","template","course","software","license"]);
     const isServiceProd = SVC_CATS.has(product.category) || product.isService;
     const isDigitalProd = DIG_CATS.has(product.category) || product.isDigital;
-    const buyLabel = isServiceProd ? "📩 Book" : isDigitalProd ? "⚡ Get" : "Buy Now";
+    /* NO "Buy Now" ON A CARD.
+       The card itself is the buy button: clicking it opens the product page, which carries
+       the real purchase flow (price, variants, delivery, quantity). A second Buy on the card
+       started a checkout for a product the shopper had not yet seen, and it cost the row a
+       third control it had no room for — see the strip below. Cart and Wishlist are the two
+       actions that are genuinely useful WITHOUT opening the product. */
     const cartLabel = isServiceProd ? "📋 Enquire" : isDigitalProd ? "🛒 Buy" : "🛒 Cart";
 
     /* ── All user-data goes into data-* attributes; zero inline JS injection. ──
@@ -863,9 +868,6 @@ function buildProductCard(product, size = "normal"){
                     <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">
                         ❤
                     </button>
-                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
-                        ${isServiceProd ? "📋" : "⚡"} <span>${isServiceProd ? "Hire" : "Buy"}</span>
-                    </button>
                 </div>
            </div>`
         : `<div class="pcard-actions">
@@ -874,9 +876,6 @@ function buildProductCard(product, size = "normal"){
                         ${isServiceProd ? "📩" : "🛒"} ${cartLabel.replace(/^[^\s]+ /,"")}
                     </button>
                     <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
-                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
-                        ${buyLabel}
-                    </button>
                 </div>
                 <div class="pcard-row pcard-row--secondary">
                     <button class="pcard-btn pcard-btn--share" data-action="share"
@@ -915,9 +914,8 @@ function buildProductCard(product, size = "normal"){
             <span class="pcard-strip-info">${_stripInfo}</span>${stockChip}
         </div>
         <div class="pcard-m-btns">
-            <button class="pcard-m-wish${inWishlist?' pcard-m-wish--active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
-            <button class="pcard-m-cart" data-action="cart" ${btnDisabled}>${isServiceProd?'📩':'🛒'}</button>
-            <button class="pcard-m-buy" data-action="buy" ${btnDisabled}>${isServiceProd?'Book':'⚡ Buy'}</button>
+            <button class="pcard-m-cart" data-action="cart" ${btnDisabled}>${isServiceProd?'📩':'🛒'} <span>${isServiceProd?'Enquire':'Cart'}</span></button>
+            <button class="pcard-m-wish${inWishlist?' pcard-m-wish--active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤ <span>${inWishlist?'Saved':'Save'}</span></button>
         </div>
     </div>`;
 
@@ -2354,12 +2352,20 @@ function loadFlashSale(){
                     <span class="fs-sp">KES ${Number(p.salePrice).toLocaleString()}</span>
                 </div>
             </div>
+            <!-- TWO equal actions, same as every other product card on this page.
+                 The full-width "Buy Now" that sat under this row is gone: tapping the card
+                 opens the product, which is where a purchase belongs. It was also the third
+                 control in a card too narrow for three.
+                 The heart previously carried a stopPropagation handler and NOTHING else — it
+                 looked like a wishlist button and saved nothing. It now calls the same
+                 addToWishlist the rest of the page uses.
+                 (No backticks in here: this comment lives INSIDE a template literal, and one
+                 backtick would terminate it — see the CSS-in-JS backtick trap.) -->
             <div class="fs-btns">
                 <div class="fs-btn-row">
-                    <button style="flex:1;padding:8px 4px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.28);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:3px;" onclick="event.stopPropagation();buyProduct('${p.id}')">🛒 Cart</button>
-                    <button style="flex:0 0 40px;padding:8px 4px;background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.28);color:#ff6060;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;" onclick="event.stopPropagation()">❤️</button>
+                    <button class="fs-btn fs-cart" onclick="event.stopPropagation();buyProduct('${p.id}')">🛒 <span>Cart</span></button>
+                    <button class="fs-btn fs-wish" onclick="event.stopPropagation();addToWishlist('${p.id}')">❤ <span>Save</span></button>
                 </div>
-                <button style="width:100%;padding:9px 4px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#050f05;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:3px;" onclick="event.stopPropagation();buyNow('${p.id}')">⚡ Buy Now</button>
             </div>
         </div>`;
     }).join("")
