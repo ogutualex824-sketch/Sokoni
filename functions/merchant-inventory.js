@@ -3,78 +3,54 @@
  * SOKONI Merchant Inventory — the ONE authority for a stock CORRECTION.
  *
  * ── Why this exists ─────────────────────────────────────────────────────────
- * Two things change canonical `products.stock`, and they mean different things:
+ * Two things change `products.stock`, and they mean different things:
  *
- *   A SALE        posCompleteCheckout  → stock down, sale recorded, money moves
- *   A CORRECTION  here                 → stock moves, movement recorded, NO sale
+ *   A SALE            posCompleteCheckout → stock down, sale event, money
+ *   A CORRECTION      here               → stock moves, movement record, NO sale
  *
- * On this branch there is no server authority for the second one. The only
- * client path is `PosDB.products.adjustStock()`, which writes IndexedDB first
- * and then pushes the delta to canonical `products.stock` "best-effort,
- * online-only" — so the phone shows a number that the server may never have
- * agreed to. A merchant counting damaged stock off the shelf offline sees the
- * correction applied and has no way to learn it was never persisted.
+ * Before this module there was no server authority for the second one. The only
+ * client path to the canonical field was `sokoni-db.updateProductStock()`, which
+ * writes `stock: increment(delta)` AND `sold: increment(-delta)` — so a merchant
+ * counting three damaged units off the shelf silently recorded three SALES.
+ * `inventoryAdjustStock` (inventory-engine.js) was no help either: it writes
+ * `tenants/{id}/inventory_levels|movements|products`, a different counter from
+ * the one POS deducts and the catalogue reads. Using it would have given one
+ * shelf two numbers.
  *
- * `inventoryAdjustStock` (inventory-engine.js) is NOT that authority either. It
- * writes `tenants/{id}/inventory_levels|movements|products` — the enterprise
- * warehouse model, a different counter from the one POS deducts and the
- * catalogue reads. Routing corrections there would give one shelf two numbers.
- *
- * So this is the FIRST authority over corrections to canonical
- * `products.stock`, not a second one. It is deliberately narrow.
+ * So: this is the FIRST authority over corrections to canonical `products.stock`,
+ * not a second one. It is deliberately narrow.
  *
  * ── The invariant ───────────────────────────────────────────────────────────
- *   sale        → posCompleteCheckout → stock ↓ → sale recorded → sold ↑
+ *   sale        → posCompleteCheckout → stock ↓ → sale event    → sold ↑
  *   correction  → merchantAdjustStock → stock ⇅ → movement      → sold UNCHANGED
  *
  * `products.sold` is never read, written, incremented or defaulted here. A
  * correction is not a sale and must never look like one in any aggregate.
  *
- * ── Authorisation (reconciled for THIS branch) ──────────────────────────────
- * Ownership is `products/{id}.sellerUid === uid`, or a platform admin claim.
- * That is exactly the invariant firestore.rules already enforces for a direct
- * product update, so this callable is never weaker than the rule it bypasses.
- *
- * It deliberately does NOT reuse analytics-engine's `_assertShop`. That helper
- * grants access when `shopEmployees/{shopId}_{uid}` merely EXISTS, and
- * firestore.rules allows any authenticated client to create a shopEmployees
- * document whose payload names itself (`shopOwnerId == request.auth.uid`).
- * Believing such a record is a privilege-escalation path. It is pre-existing on
- * read-only analytics; it must not be extended to a surface that MUTATES stock.
- * Employee delegation can be added later on top of a verified contract — the
- * narrow owner/admin rule loses nothing that currently works.
+ * ── Authorisation ───────────────────────────────────────────────────────────
+ * Ownership is resolved from Firestore (shop owner, shop employee, or platform
+ * admin) using the same rule analytics-engine already applies — NOT from the
+ * caller's `seller` claim. The claim population is known-divergent (0 of 11
+ * sellers hold it), so gating on it would lock every real merchant out of their
+ * own stock. The shop document is the authority on who owns the shop.
  *
  * ── Idempotency ─────────────────────────────────────────────────────────────
  * The caller supplies `adjustmentId`. The movement document is claimed under
  * that id INSIDE the transaction, so a double tap, a retried call, or a
  * duplicated network attempt applies the delta exactly once and returns the
- * original result rather than moving stock twice.
+ * original result.
  *
- * Exports (must be re-exported by name from functions/index.js):
- *   merchantAdjustStock   onCall — the sole canonical stock-correction path
+ * Exports (re-exported by name from functions/index.js):
+ *   merchantAdjustStock   onCall  — the sole canonical stock-correction path
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const admin  = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 
+const REGION = 'us-central1';
 const _db = () => getFirestore();
 const _ts = () => FieldValue.serverTimestamp();
-
-/* Runtime config matches the POS/payment functions this is called alongside
-   (pos-zero-friction.js `cfg`), NOT inventory-engine's warehouse callables:
-
-     · region        pinned. The client reaches this through
-                     getFunctions(window.firebaseApp) with no region argument,
-                     which resolves us-central1 by default — pinning makes that
-                     agreement explicit instead of leaving it to a default that
-                     could drift.
-     · enforceAppCheck  every POS money/stock callable enforces it, and this
-                     mutates canonical stock. Omitting it would have left the
-                     one NEW write surface as the only unattested one. */
-const REGION = 'us-central1';
-const CFG = { region: REGION, enforceAppCheck: true, memory: '256MiB', timeoutSeconds: 30 };
 
 /* Why the stock moved. A correction without a stated reason is an unexplained
    inventory change, which is exactly what an audit cannot work with. */
@@ -83,151 +59,144 @@ const REASONS = Object.freeze([
   'restock', 'return_to_supplier', 'transfer', 'other',
 ]);
 
-/* A delta larger than this is a fat-finger or a unit mix-up, not a correction. */
-const MAX_DELTA = 1000000;
+const _san = (v, n = 200) => String(v == null ? '' : v).slice(0, n).replace(/[<>"]/g, '').trim();
 
-const _san = (v, n = 200) =>
-  String(v == null ? '' : v).slice(0, n).replace(/[<>"]/g, '').trim();
+/**
+ * Owner, employee, or platform admin — resolved from data, mirroring
+ * analytics-engine's `_assertShop`. Throws HttpsError, never a bare Error, so
+ * the client receives a code it can act on.
+ */
+/* Delegates to the ONE shopEmployees contract (functions/shop-employees.js).
 
-async function _isPlatformAdmin (uid) {
-  try {
-    const claims = (await admin.auth().getUser(uid)).customClaims || {};
-    return claims.role === 'admin' || claims.role === 'superAdmin';
-  } catch (_) {
-    return false;
-  }
-}
+   This module previously carried its own copy of the check, and that copy granted
+   employee access on `empSnap.exists` alone. Two things were wrong with it:
+
+     · the record it looked for could never exist — `acceptShopInvite` wrote
+       `shopEmployees/{uid}` while this read `shopEmployees/{shopId}_{uid}`, so no
+       real employee has ever been able to adjust stock; and
+     · a record that DID exist was believed without corroboration, and
+       firestore.rules lets a client create one at any id naming itself owner.
+
+   The shared contract keys canonically, refuses the legacy {uid} record, and
+   believes an employee only when the shop document agrees with it. */
+const { assertShopAccess } = require('./shop-employees');
 
 exports.merchantAdjustStock = onCall(
-  CFG,
+  { region: REGION, maxInstances: 20, memory: '256MiB', timeoutSeconds: 30, enforceAppCheck: true },
   async (req) => {
+    /* ── 1. Authenticate ─────────────────────────────────────────────────── */
     const uid = req.auth && req.auth.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in to adjust stock.');
 
     const d = req.data || {};
-    const productId    = _san(d.productId, 128);
-    const shopId       = _san(d.shopId, 128);
-    const adjustmentId = _san(d.adjustmentId, 128);
-    const reason       = _san(d.reason, 40);
-    const note         = _san(d.note, 200);
-    const delta        = Number(d.delta);
+    const productId = _san(d.productId, 200);
+    const shopId = _san(d.shopId, 200);
+    const adjustmentId = _san(d.adjustmentId, 200);
+    const reason = _san(d.reason, 40);
+    const note = _san(d.note, 500);
+    const delta = Number(d.delta);
 
-    if (!productId)    throw new HttpsError('invalid-argument', 'productId is required.');
-    if (!shopId)       throw new HttpsError('invalid-argument', 'shopId is required.');
-    /* Mandatory, not generated here: the id must survive a retry from the SAME
-       client attempt, so only the caller can supply it. */
+    /* ── 2. Validate ─────────────────────────────────────────────────────── */
+    if (!productId) throw new HttpsError('invalid-argument', 'productId is required.');
+    if (!shopId) throw new HttpsError('invalid-argument', 'shopId is required.');
     if (!adjustmentId) throw new HttpsError('invalid-argument', 'adjustmentId is required (it makes the adjustment idempotent).');
-    if (!Number.isInteger(delta) || delta === 0)
+    if (!Number.isFinite(delta) || !Number.isInteger(delta) || delta === 0) {
       throw new HttpsError('invalid-argument', 'delta must be a non-zero whole number.');
-    if (Math.abs(delta) > MAX_DELTA)
-      throw new HttpsError('invalid-argument', 'delta is implausibly large.');
-    if (!REASONS.includes(reason))
+    }
+    if (Math.abs(delta) > 1000000) throw new HttpsError('invalid-argument', 'delta is implausibly large.');
+    if (!REASONS.includes(reason)) {
       throw new HttpsError('invalid-argument', `reason must be one of: ${REASONS.join(', ')}.`);
+    }
 
-    const db       = _db();
-    const prodRef  = db.collection('products').doc(productId);
-    const mvRef    = db.collection('stockMovements').doc(adjustmentId);
-    const isAdmin  = await _isPlatformAdmin(uid);
+    /* ── 3. Authorise against the SHOP, not the claim ────────────────────── */
+    const role = await assertShopAccess(uid, shopId);
+
+    /* ── 4. Apply, once ──────────────────────────────────────────────────── */
+    const db = _db();
+    const prodRef = db.collection('products').doc(productId);
+    const mvRef = db.collection('stockMovements').doc(adjustmentId);
 
     const result = await db.runTransaction(async (t) => {
-      /* Idempotency is claimed INSIDE the transaction. A replay returns the
-         original outcome and performs no second mutation. */
-      const mvSnap = await t.get(mvRef);
+      /* All reads first — Firestore requires it. */
+      const [prodSnap, mvSnap] = await Promise.all([t.get(prodRef), t.get(mvRef)]);
+
+      /* Idempotent: a retry returns the original outcome and applies nothing. */
       if (mvSnap.exists) {
-        const m = mvSnap.data() || {};
-        return {
-          idempotent: true,
-          before: m.before ?? null,
-          after:  m.after  ?? null,
-          inventoryVersion: m.inventoryVersion ?? null,
-        };
+        const m = mvSnap.data();
+        return { applied: false, idempotent: true, before: m.before, after: m.after,
+          inventoryVersion: m.inventoryVersion == null ? null : m.inventoryVersion };
       }
 
-      const prodSnap = await t.get(prodRef);
       if (!prodSnap.exists) throw new HttpsError('not-found', 'Product not found.');
       const p = prodSnap.data() || {};
 
-      /* ── Ownership: exactly three answers, deliberately ───────────────────
-           SELLER OWNER    products/{id}.sellerUid === uid    → allowed
-           PLATFORM ADMIN  role admin | superAdmin            → allowed
-           SHOP EMPLOYEE   —                                  → BLOCKED
-
-         `sellerUid` is the field firestore.rules gates product updates on, so
-         this callable enforces the same owner invariant rather than a weaker
-         one. A caller may not adjust another seller's stock by naming their own
-         shopId.
-
-         The employee case is blocked ON PURPOSE and must stay blocked until an
-         employee authorization model is formally defined. The only existing
-         signal is a `shopEmployees/{shopId}_{uid}` document, and firestore.rules
-         permits ANY authenticated client to create a shopEmployees document
-         whose payload names itself (`shopOwnerId == request.auth.uid`). Treating
-         that as stock-write authority would let a caller mint their own
-         permission. Do not add an employee branch here by reading that
-         collection — it needs a verified contract first. */
-      if (!isAdmin && p.sellerUid !== uid)
-        throw new HttpsError('permission-denied', 'That product does not belong to this seller.');
-
-      /* The caller's asserted scope must agree with the product's own, when the
-         product carries one. Prevents a correct owner writing a movement filed
-         under the wrong shop. */
-      const prodShop = p.shopId || p.merchantId || null;
-      if (prodShop && shopId && String(prodShop) !== String(shopId))
+      /* The product must belong to THIS shop. Without this, a merchant could
+         adjust another shop's stock by naming their own shopId. */
+      if (String(p.shopId || '') !== shopId) {
         throw new HttpsError('permission-denied', 'That product does not belong to this shop.');
+      }
 
       const before = typeof p.stock === 'number' ? p.stock : 0;
-      const after  = before + delta;
-      /* Floored at zero, never negative — the same floor posCompleteCheckout
-         applies. A correction that would go below zero is a miscount, and
-         silently wrapping it negative corrupts every downstream aggregate. */
-      if (after < 0)
+      const after = before + delta;
+
+      /* A correction is deliberate, so an impossible result is REFUSED rather
+         than floored. (The sale path floors instead, because payment has
+         already happened there and the shortfall is flagged, not rejected.) */
+      if (after < 0) {
         throw new HttpsError('failed-precondition',
-          `Insufficient stock: ${before} on hand, ${Math.abs(delta)} removed.`);
+          `That would leave ${after} in stock. There are ${before}; count again or adjust by at most ${before}.`);
+      }
 
-      const nextVersion = (typeof p.inventoryVersion === 'number' ? p.inventoryVersion : 0) + 1;
+      const priorVersion = Number(p.inventoryVersion) || 0;
 
-      /* stock + updatedAt + inventoryVersion move TOGETHER, atomically, so a
-         client cache can never see a new quantity at an old version.
-         `sold` is deliberately absent. */
+      /* stock, updatedAt and inventoryVersion move together in ONE write so
+         every listener sees a single monotonic change signal — the same
+         contract the payment webhook honours.
+         `sold` is ABSENT on purpose: a correction is not a sale. */
       t.update(prodRef, {
-        stock:            after,
-        inventoryVersion: nextVersion,
-        updatedAt:        _ts(),
+        stock: after,
+        updatedAt: _ts(),
+        inventoryVersion: FieldValue.increment(1),
       });
 
       t.set(mvRef, {
-        adjustmentId,
+        id: adjustmentId,
+        kind: 'adjustment',
         productId,
-        productName: p.name || null,
-        shopId:      shopId || prodShop || null,
-        sellerUid:   p.sellerUid || null,
-        type:        delta > 0 ? 'in' : 'out',
+        productName: p.name || p.title || null,
+        shopId,
+        sellerUid: uid,
+        actorRole: role,
         delta,
-        qty:         Math.abs(delta),
         before,
         after,
-        inventoryVersion: nextVersion,
+        inventoryVersion: priorVersion + 1,
         reason,
-        note:        note || null,
-        source:      'merchantAdjustStock',
-        actorUid:    uid,
-        actorIsAdmin: isAdmin,
-        createdAt:   _ts(),
+        note: note || null,
+        createdAt: _ts(),
       });
 
-      return { idempotent: false, before, after, inventoryVersion: nextVersion };
+      return { applied: true, idempotent: false, before, after, inventoryVersion: priorVersion + 1 };
     });
 
-    logger.info('[merchantAdjustStock]', {
-      uid, productId, shopId, adjustmentId, delta, reason,
-      idempotent: result.idempotent, before: result.before, after: result.after,
+    logger.info('[merchantInventory] stock adjusted', {
+      productId, shopId, uid, delta, reason,
+      applied: result.applied, idempotent: result.idempotent,
     });
 
-    return { ok: true, ...result };
+    return {
+      ok: true,
+      productId,
+      shopId,
+      adjustmentId,
+      delta,
+      reason,
+      before: result.before,
+      after: result.after,
+      inventoryVersion: result.inventoryVersion,
+      idempotent: result.idempotent,
+    };
   }
 );
 
-/* Exported for unit tests — the validation surface, not the transaction. */
-exports._REASONS   = REASONS;
-exports._MAX_DELTA = MAX_DELTA;
-exports._san       = _san;
+exports.REASONS = REASONS;

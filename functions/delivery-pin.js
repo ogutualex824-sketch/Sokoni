@@ -301,3 +301,8 @@ exports.getMyDeliveryPin = onCall(
     return { ok: true, issued: true, pin: String(pSnap.data().pin) };
   }
 );
+
+/* Exposed so seller-handover.js can issue its own, independent pickup-stage PIN with the
+   exact same generation/hashing logic — never a duplicated crypto implementation. Does NOT
+   expose deliveryPinOnAccept's trigger or touch the delivery-stage PIN in any way. */
+exports._h = { _gen6, _hash };
