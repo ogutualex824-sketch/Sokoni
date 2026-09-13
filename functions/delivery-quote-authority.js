@@ -490,6 +490,7 @@ module.exports = {
   assertPolicy,
   loadPolicy,
   POLICY_CONTRACT,
+  CLASS_ECONOMICS_CONTRACT,
   POLICY_DOC,
   assertSettleable,
   assertNoClientPricing,
