@@ -37,6 +37,17 @@ const BASE = {
   shopCount: 1,
 };
 const mk = (o) => Object.assign({}, BASE, o || {});
+
+/* FIXTURE POLICY — NOT SOKONI POLICY. These curve values exist so the arithmetic can be
+   exercised; the authority refuses without a policy precisely so that no engineer's guess can
+   become production pricing. Real values must be approved by SOKONI and supplied at runtime. */
+const FIXTURE_POLICY = Object.freeze({
+  distanceWeight: 0.6, demandWeight: 0.4,
+  distanceSaturationKm: 20, demandSaturationIndex: 3,
+  approvedBy: 'FIXTURE-ONLY — not approved for production',
+  approvedAt: '2026-09-13',
+});
+const Q = (input, policy) => DQ.quote(input, policy === undefined ? FIXTURE_POLICY : policy);
 const minor = (m) => m.minorUnits;
 
 (async () => {
@@ -44,7 +55,7 @@ const minor = (m) => m.minorUnits;
 
   /* ── 0. POSITIVE CONTROL ──────────────────────────────────────────────────────────────── */
   console.log('0 - positive control (a gate that refuses everybody is not a fix)');
-  const q = DQ.quote(BASE);
+  const q = Q(BASE);
   ckt('0a a complete, legitimate request PRODUCES a quote', () => !!q && !!q.quoteId, () => q.quoteId);
   ckt('0b it pays the rider a positive amount', () => minor(q.riderEarning) > 0,
     () => 'rider KES ' + money.toMajorString(q.riderEarning) + ' of ' + money.toMajorString(q.customerCharge));
@@ -66,8 +77,8 @@ const minor = (m) => m.minorUnits;
   ckt('A6 CONTROL: a payload with no pricing fields passes',
     () => refuses(() => DQ.assertNoClientPricing({ vehicleType: 'motorcycle', distanceKm: 5 })) === null);
   /* The decisive one: a client-supplied fee must not influence the computed result. */
-  const qClean = DQ.quote(BASE);
-  const qDirty = DQ.quote(mk({ deliveryFee: 99999, driverNet: 88888, riderEarning: 77777 }));
+  const qClean = Q(BASE);
+  const qDirty = Q(mk({ deliveryFee: 99999, driverNet: 88888, riderEarning: 77777 }));
   ckt('A7 client-supplied fee/driverNet/riderEarning have ZERO effect on the computed figures',
     () => minor(qDirty.riderEarning) === minor(qClean.riderEarning)
        && minor(qDirty.customerCharge) === minor(qClean.customerCharge),
@@ -118,18 +129,18 @@ const minor = (m) => m.minorUnits;
   /* THE LOAD-BEARING ONE. If rider pay were a slice of the customer charge, then moving a factor
      that changes the charge would change the rider's pay. It must not: demandIndex moves only
      SOKONI's share. Rider earning depends on operating cost and time, and on nothing else. */
-  const cheapDemand = DQ.quote(mk({ demandIndex: 1.0 }));
-  const scarceDemand = DQ.quote(mk({ demandIndex: 3.5 }));
+  const cheapDemand = Q(mk({ demandIndex: 1.0 }));
+  const scarceDemand = Q(mk({ demandIndex: 3.5 }));
   ckt('C1b rider earning is INVARIANT when only the share moves — pay is not a slice of the charge',
     () => minor(cheapDemand.riderEarning) === minor(scarceDemand.riderEarning)
        && minor(cheapDemand.customerCharge) !== minor(scarceDemand.customerCharge),
     () => 'rider ' + minor(cheapDemand.riderEarning) + '=' + minor(scarceDemand.riderEarning)
       + '  charge ' + minor(cheapDemand.customerCharge) + '->' + minor(scarceDemand.customerCharge));
   ckt('C1c rider earning DOES move when the underlying economics move',
-    () => minor(DQ.quote(mk({ riderMinuteRateMinor: 1200 })).riderEarning) > minor(q.riderEarning)
-       && minor(DQ.quote(mk({ energyUnitCostMinor: 39000 })).riderEarning) > minor(q.riderEarning));
+    () => minor(Q(mk({ riderMinuteRateMinor: 1200 })).riderEarning) > minor(q.riderEarning)
+       && minor(Q(mk({ energyUnitCostMinor: 39000 })).riderEarning) > minor(q.riderEarning));
   ckt('C2 injecting legacy fields into the request changes nothing',
-    () => minor(DQ.quote(mk({ riderSharePct: 88, DRIVER_SHARE: 0.88, shareTarget: 0.82 })).riderEarning)
+    () => minor(Q(mk({ riderSharePct: 88, DRIVER_SHARE: 0.88, shareTarget: 0.82 })).riderEarning)
        === minor(qClean.riderEarning));
   ckt('C3 the realised share is NOT one of the legacy splits (80/88 are outside the band)',
     () => q.sokoniSharePct >= DQ.SHARE_MIN_PCT && q.sokoniSharePct <= DQ.SHARE_MAX_PCT,
@@ -142,21 +153,21 @@ const minor = (m) => m.minorUnits;
    ['demandIndex', 'demand/supply'], ['distanceKm', 'route'], ['estimatedMinutes', 'duration']]
     .forEach(([f, label], i) => {
       const input = mk(); delete input[f];
-      const e = refuses(() => DQ.quote(input));
+      const e = refuses(() => Q(input));
       ck('D' + (i + 1) + ' removing ' + label + ' (' + f + ') REFUSES',
         !!e && e.reason === 'missing_economics', e ? e.reason : 'QUOTED ANYWAY — fallback pricing');
     });
   ckt('D8 undefined is not treated as zero (the `undefined !== false` class)',
-    () => { const e = refuses(() => DQ.quote(mk({ riderMinuteRateMinor: undefined }))); return !!e; });
+    () => { const e = refuses(() => Q(mk({ riderMinuteRateMinor: undefined }))); return !!e; });
   ckt('D9 NaN / non-numeric economics REFUSE',
-    () => !!refuses(() => DQ.quote(mk({ distanceKm: NaN })))
-       && !!refuses(() => DQ.quote(mk({ energyUnitCostMinor: '500' }))));
+    () => !!refuses(() => Q(mk({ distanceKm: NaN })))
+       && !!refuses(() => Q(mk({ energyUnitCostMinor: '500' }))));
   ckt('D10 a zero-distance trip REFUSES rather than pricing at zero',
-    () => !!refuses(() => DQ.quote(mk({ distanceKm: 0 }))));
+    () => !!refuses(() => Q(mk({ distanceKm: 0 }))));
 
   /* ── E. Replay ────────────────────────────────────────────────────────────────────────── */
   console.log('\nE - a quote cannot create two obligations');
-  const ids = new Set(Array.from({ length: 200 }, () => DQ.quote(BASE).quoteId));
+  const ids = new Set(Array.from({ length: 200 }, () => Q(BASE).quoteId));
   ckt('E1 every quote carries a distinct quoteId (200 draws, no collision)', () => ids.size === 200,
     () => ids.size + '/200 distinct');
   /* A settlement ledger keyed by quoteId is the enforcement; prove the key is usable for it. */
@@ -171,7 +182,7 @@ const minor = (m) => m.minorUnits;
     () => { settleOnce(pinned); const e = refuses(() => settleOnce(pinned));
       return !!e && /DUPLICATE_SETTLEMENT/.test(e.message) && ledger.size === 1; });
   ckt('E3 CONTROL: a different quote still settles', () => {
-    const q2 = DQ.quote(BASE);
+    const q2 = Q(BASE);
     return settleOnce({ quoteId: q2.quoteId, pricingVersion: q2.pricingVersion,
       customerCharge: q2.customerCharge, riderEarning: q2.riderEarning, sokoniCommission: q2.sokoniCommission })
       && ledger.size === 2;
@@ -188,7 +199,7 @@ const minor = (m) => m.minorUnits;
     mk({ vehicleType: 'tuktuk', distanceKm: 9.9, estimatedMinutes: 29, demandIndex: 3.1 }),
     mk({ packageCount: 6, shopCount: 4, fragile: true, distanceKm: 12, estimatedMinutes: 40 }),
   ];
-  const quotes = cases.map((c) => DQ.quote(c));
+  const quotes = cases.map((c) => Q(c));
   ckt('F1 conservation holds on EVERY case (' + quotes.length + ')',
     () => quotes.every((x) => minor(x.customerCharge) === minor(x.riderEarning) + minor(x.sokoniCommission)));
   ckt('F2 no figure is negative', () => quotes.every((x) =>
@@ -207,18 +218,18 @@ const minor = (m) => m.minorUnits;
   ckt('G2 the share is NOT a fixed universal percentage', () => new Set(shares).size > 1,
     () => new Set(shares).size + ' distinct values: ' + [...new Set(shares)].sort((a, b) => a - b).join(','));
   ckt('G3 a longer route carries a higher share than a short one',
-    () => DQ.quote(mk({ distanceKm: 25, estimatedMinutes: 60 })).sokoniSharePct
-        > DQ.quote(mk({ distanceKm: 1.5, estimatedMinutes: 8 })).sokoniSharePct);
+    () => Q(mk({ distanceKm: 25, estimatedMinutes: 60 })).sokoniSharePct
+        > Q(mk({ distanceKm: 1.5, estimatedMinutes: 8 })).sokoniSharePct);
   ckt('G4 scarce supply raises the share',
-    () => DQ.quote(mk({ demandIndex: 3.5 })).sokoniSharePct > DQ.quote(mk({ demandIndex: 1.0 })).sokoniSharePct);
+    () => Q(mk({ demandIndex: 3.5 })).sokoniSharePct > Q(mk({ demandIndex: 1.0 })).sokoniSharePct);
   ckt('G5 the band floor is respected at the cheapest possible trip',
-    () => { const x = DQ.quote(mk({ distanceKm: 0.4, estimatedMinutes: 3, demandIndex: 1 }));
+    () => { const x = Q(mk({ distanceKm: 0.4, estimatedMinutes: 3, demandIndex: 1 }));
       return x.sokoniSharePct >= DQ.SHARE_MIN_PCT; });
 
   /* ── H. Multi-shop ────────────────────────────────────────────────────────────────────── */
   console.log('\nH - multi-shop is priced ONCE, in the quote');
-  const one = DQ.quote(mk({ shopCount: 1, packageCount: 1 }));
-  const many = DQ.quote(mk({ shopCount: 4, packageCount: 6 }));
+  const one = Q(mk({ shopCount: 1, packageCount: 1 }));
+  const many = Q(mk({ shopCount: 4, packageCount: 6 }));
   ckt('H1 extra stops and parcels raise the rider earning', () => minor(many.riderEarning) > minor(one.riderEarning),
     () => minor(one.riderEarning) + ' -> ' + minor(many.riderEarning));
   ckt('H2 the multi-shop load is expressed as TIME, recorded in the quote',
@@ -228,24 +239,24 @@ const minor = (m) => m.minorUnits;
     () => many.shopCount === 4 && many.packageCount === 6);
   ckt('H4 conservation still holds for a multi-shop quote',
     () => minor(many.customerCharge) === minor(many.riderEarning) + minor(many.sokoniCommission));
-  ckt('H5 a zero/negative shopCount REFUSES', () => !!refuses(() => DQ.quote(mk({ shopCount: 0 }))));
+  ckt('H5 a zero/negative shopCount REFUSES', () => !!refuses(() => Q(mk({ shopCount: 0 }))));
 
   /* ── I. Vehicle vocabulary ────────────────────────────────────────────────────────────── */
   console.log('\nI - vehicle classes resolve against the canonical V-2 vocabulary');
   ckt('I1 `tuktuk` and `ebike` are canonical classes with explicit economics',
-    () => DQ.quote(mk({ vehicleType: 'tuktuk' })).vehicleType === 'tuktuk'
-       && DQ.quote(mk({ vehicleType: 'ebike' })).vehicleType === 'ebike');
+    () => Q(mk({ vehicleType: 'tuktuk' })).vehicleType === 'tuktuk'
+       && Q(mk({ vehicleType: 'ebike' })).vehicleType === 'ebike');
   ckt('I2 the legacy alias `moto` canonicalises to motorcycle (no invented alias)',
-    () => DQ.quote(mk({ vehicleType: 'moto' })).vehicleType === 'motorcycle');
+    () => Q(mk({ vehicleType: 'moto' })).vehicleType === 'motorcycle');
   ckt('I3 an UNKNOWN vehicle REFUSES — it does not fall back to a motorcycle',
-    () => { const e = refuses(() => DQ.quote(mk({ vehicleType: 'spaceship' })));
+    () => { const e = refuses(() => Q(mk({ vehicleType: 'spaceship' })));
       return !!e && e.reason === 'vehicle_class_unknown'; });
   ['pickup', 'suv', 'lorry', 'trailer', 'tractor'].forEach((v, i) => {
-    const e = refuses(() => DQ.quote(mk({ vehicleType: v })));
+    const e = refuses(() => Q(mk({ vehicleType: v })));
     ck('I' + (4 + i) + ' unpriced class `' + v + '` REFUSES',
       !!e && e.reason === 'vehicle_class_unpriced', e ? e.reason : 'PRICED ANYWAY');
   });
-  ckt('I9 an absent vehicleType REFUSES', () => !!refuses(() => DQ.quote(mk({ vehicleType: undefined }))));
+  ckt('I9 an absent vehicleType REFUSES', () => !!refuses(() => Q(mk({ vehicleType: undefined }))));
 
   /* ── J. The settlement WIRING, not just the module ────────────────────────────────────── */
   console.log('\nJ - dispatch settlement consumes the pinned quote');
@@ -273,6 +284,91 @@ const minor = (m) => m.minorUnits;
   ckt('J6 the refusal does NOT fall back to the browser figure of 180',
     () => { try { DQ.assertSettleable(legacyDelivery.deliveryQuote); return false; }
       catch (e) { return !/180/.test(String(e.message)); } });
+
+  /* ── K. Commercial policy is required, never invented ─────────────────────────────────── */
+  console.log('\nK - production pricing is BLOCKED until SOKONI policy exists');
+  ckt('K1 a quote with NO policy REFUSES (an engineer cannot default the curve)',
+    () => { const e = refuses(() => Q(BASE, null)); return !!e && e.reason === 'pricing_policy_required'; },
+    () => (refuses(() => Q(BASE, null)) || {}).message);
+  Object.keys(DQ.POLICY_CONTRACT).forEach((k, i) => {
+    const partial = Object.assign({}, FIXTURE_POLICY); delete partial[k];
+    const e = refuses(() => Q(BASE, partial));
+    ck('K' + (2 + i) + ' policy missing `' + k + '` REFUSES',
+      !!e && (e.reason === 'pricing_policy_incomplete' || e.reason === 'pricing_policy_unapproved'),
+      e ? e.reason : 'QUOTED ANYWAY');
+  });
+  ckt('K8 weights that do not sum to 1 REFUSE (they would silently rescale the whole band)',
+    () => { const e = refuses(() => Q(BASE, Object.assign({}, FIXTURE_POLICY, { distanceWeight: 0.9, demandWeight: 0.9 })));
+      return !!e && e.reason === 'pricing_policy_invalid'; });
+  ckt('K9 an unapproved policy (blank approvedBy) REFUSES',
+    () => { const e = refuses(() => Q(BASE, Object.assign({}, FIXTURE_POLICY, { approvedBy: '   ' })));
+      return !!e && (e.reason === 'pricing_policy_unapproved' || e.reason === 'pricing_policy_incomplete'); });
+  ckt('K10 the policy that priced a quote is PINNED onto it',
+    () => !!q.pricingInputs.policy && q.pricingInputs.policy.distanceWeight === FIXTURE_POLICY.distanceWeight
+       && /FIXTURE-ONLY/.test(q.pricingInputs.policy.approvedBy),
+    () => JSON.stringify(q.pricingInputs.policy.approvedBy));
+  ckt('K11 a DIFFERENT approved curve produces a different share (policy actually drives pricing)',
+    () => Q(mk({ distanceKm: 10 }), Object.assign({}, FIXTURE_POLICY, { distanceSaturationKm: 5 })).sokoniSharePct
+        !== Q(mk({ distanceKm: 10 }), Object.assign({}, FIXTURE_POLICY, { distanceSaturationKm: 40 })).sokoniSharePct);
+
+  /* ── L. Renegotiation guard (BUILT — EARNING_RENEGOTIATED did not exist) ──────────────── */
+  console.log('\nL - a quote cannot settle under a changed commercial policy');
+  const full = { quoteId: q.quoteId, pricingVersion: q.pricingVersion, sokoniSharePct: q.sokoniSharePct,
+    customerCharge: q.customerCharge, riderEarning: q.riderEarning, sokoniCommission: q.sokoniCommission,
+    pricingInputs: q.pricingInputs };
+  ckt('L0 CONTROL: settles when the policy is UNCHANGED',
+    () => minor(DQ.assertSettleable(full, null, { currentPolicy: FIXTURE_POLICY })) === minor(q.riderEarning));
+  ['distanceWeight', 'demandWeight', 'distanceSaturationKm', 'demandSaturationIndex'].forEach((k, i) => {
+    const changed = Object.assign({}, FIXTURE_POLICY, { [k]: FIXTURE_POLICY[k] * 0.5 + 0.1 });
+    const e = refuses(() => DQ.assertSettleable(full, null, { currentPolicy: changed }));
+    ck('L' + (1 + i) + ' policy drift in `' + k + '` REFUSES settlement',
+      !!e && e.reason === 'earning_renegotiated', e ? e.reason : 'SETTLED ANYWAY');
+  });
+  ckt('L5 a quote with NO pinned policy cannot settle once a policy is in force',
+    () => { const e = refuses(() => DQ.assertSettleable(pinned, null, { currentPolicy: FIXTURE_POLICY }));
+      return !!e && e.reason === 'earning_renegotiated'; });
+  ckt('L6 a tampered declared share (amounts untouched) is REFUSED',
+    () => { const e = refuses(() => DQ.assertSettleable(Object.assign({}, full, { sokoniSharePct: 25 }),
+      null, { currentPolicy: FIXTURE_POLICY }));
+      return !!e && e.reason === 'declared_share_mismatch'; },
+    () => (refuses(() => DQ.assertSettleable(Object.assign({}, full, { sokoniSharePct: 25 }), null,
+      { currentPolicy: FIXTURE_POLICY })) || {}).message);
+  ckt('L7 the guard does NOT silently recalculate — it throws',
+    () => { try { DQ.assertSettleable(full, null, { currentPolicy: Object.assign({}, FIXTURE_POLICY, { demandWeight: 0.1, distanceWeight: 0.9 }) }); return false; }
+      catch (e) { return e.reason === 'earning_renegotiated'; } });
+
+  /* ── M. Producer pinning + the residual's removal ─────────────────────────────────────── */
+  console.log('\nM - the producer pins the quote and the residual is gone');
+  const idxSrc = strip(fs.readFileSync(path.join(ROOT, 'functions', 'index.js'), 'utf8'));
+
+  ckt('M1 the packageRequests producer no longer derives driverNet from the residual',
+    () => !/driverNet:\s*Math\.round\(_delivery/.test(idxSrc));
+  ckt('M2 CONTROL: the detector CAN see that pattern when present',
+    () => /driverNet:\s*Math\.round\(_delivery/.test('driverNet:  Math.round(_delivery * 0.8),'),
+    'without this, M1 could pass on a broken regex');
+  ckt('M3 the producer spreads the server-pinned pricing', () => /\.\.\._deliveryPricing/.test(idxSrc));
+  ckt('M4 the producer loads approved policy before pricing', () => /_dqa\.loadPolicy\(/.test(idxSrc));
+  ckt('M5 index.js requires the quote authority', () => /require\(["']\.\/delivery-quote-authority["']\)/.test(idxSrc));
+  /* The receipt legitimately records what the customer actually paid; that is a RECORD of a
+     transaction, not a pricing authority, and removing it would make the receipt wrong. */
+  ckt('M6 the RECEIPT still records the amount actually paid (not a pricing path)',
+    () => /deliveryFee:\s+_delivery,/.test(idxSrc));
+  ckt('M7 settlement revalidates against the policy in force (renegotiation guard wired)',
+    () => { const d = strip(fs.readFileSync(path.join(ROOT, 'functions', 'dispatch.js'), 'utf8'));
+      return /loadPolicy\(/.test(d) && /currentPolicy/.test(d); });
+
+  console.log('\nN - live quote issuance is BLOCKED until SOKONI approves policy');
+  const noDb = await DQ.loadPolicy(null);
+  ckt('N1 loadPolicy(null) yields NO policy — callers must refuse', () => noDb === null, String(noDb));
+  const fakeDbMissing = { collection: () => ({ doc: () => ({ get: async () => ({ exists: false }) }) }) };
+  const missing = await DQ.loadPolicy(fakeDbMissing);
+  ckt('N3 absent config -> null (production pricing blocked)', () => missing === null, String(missing));
+  const fakeDbBad = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ distanceWeight: 0.9, demandWeight: 0.9 }) }) }) }) };
+  const bad = await DQ.loadPolicy(fakeDbBad);
+  ckt('N4 a MALFORMED config refuses exactly like an absent one', () => bad === null, String(bad));
+  const fakeDbGood = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => Object.assign({}, FIXTURE_POLICY) }) }) }) };
+  const good = await DQ.loadPolicy(fakeDbGood);
+  ckt('N5 CONTROL: a complete approved config DOES load', () => !!good && good.distanceWeight === 0.6);
 
   console.log('\n' + '-'.repeat(74));
   console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed');

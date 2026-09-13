@@ -83,17 +83,65 @@ function assertRequired(input, spec, bag) {
   }
 }
 
+/* ── POLICY IS NOT ENGINEERING ──────────────────────────────────────────────────────────────
+   The shape of the share curve — how much weight distance carries against demand, and where each
+   saturates — is a COMMERCIAL decision about how SOKONI treats riders and customers. It is not a
+   default an engineer may pick.
+
+   An earlier draft of this module hard-coded distance 0.6 / demand 0.4 saturating at 20 km. Those
+   numbers were invented to make the arithmetic demonstrable, and leaving them in place would have
+   made a plausible-looking guess into SOKONI policy the first time a live quote issued. The curve
+   is therefore INJECTED, and a quote without one REFUSES.
+
+   Same reasoning as the economics themselves: this module already refuses without a fuel price
+   because inventing one sets a rider's pay. Inventing the curve sets it just as surely. */
+const POLICY_CONTRACT = Object.freeze({
+  distanceWeight: 'share of the curve driven by route length (0..1); with demandWeight must sum to 1',
+  demandWeight: 'share of the curve driven by demand/supply (0..1)',
+  distanceSaturationKm: 'route length at which the distance factor reaches its maximum (> 0)',
+  demandSaturationIndex: 'demand index at which the demand factor reaches its maximum (> 1)',
+  approvedBy: 'who approved these commercial values — a non-empty string',
+  approvedAt: 'ISO date the values were approved',
+});
+
+function assertPolicy(policy) {
+  if (!policy || typeof policy !== 'object') {
+    throw new QuoteRefused('pricing_policy_required',
+      'no SOKONI pricing policy supplied — required: ' + Object.keys(POLICY_CONTRACT).join(', '));
+  }
+  for (const key of Object.keys(POLICY_CONTRACT)) {
+    if (policy[key] === undefined || policy[key] === null || policy[key] === '') {
+      throw new QuoteRefused('pricing_policy_incomplete', key + ' — ' + POLICY_CONTRACT[key]);
+    }
+  }
+  const { distanceWeight: dw, demandWeight: mw, distanceSaturationKm: dsk, demandSaturationIndex: dsi } = policy;
+  if (!isFiniteNumber(dw) || dw < 0 || dw > 1) throw new QuoteRefused('pricing_policy_invalid', 'distanceWeight');
+  if (!isFiniteNumber(mw) || mw < 0 || mw > 1) throw new QuoteRefused('pricing_policy_invalid', 'demandWeight');
+  /* Weights must partition the curve. If they do not sum to 1 the blend silently scales the whole
+     band, which would move every rider's pay without anyone changing the band. */
+  if (Math.abs((dw + mw) - 1) > 1e-9) {
+    throw new QuoteRefused('pricing_policy_invalid', 'distanceWeight + demandWeight must equal 1, got ' + (dw + mw));
+  }
+  if (!isPositiveNumber(dsk)) throw new QuoteRefused('pricing_policy_invalid', 'distanceSaturationKm');
+  if (!isFiniteNumber(dsi) || dsi <= 1) throw new QuoteRefused('pricing_policy_invalid', 'demandSaturationIndex must be > 1');
+  if (typeof policy.approvedBy !== 'string' || !policy.approvedBy.trim()) {
+    throw new QuoteRefused('pricing_policy_unapproved', 'approvedBy must name who approved these values');
+  }
+  return policy;
+}
+
 /* ── The SOKONI share, derived — never fixed ───────────────────────────────────────────────
    A trip that is longer, or running into scarce supply, can carry more commission without
-   starving the rider; a short trip in a balanced market cannot. The share therefore MOVES with
-   the economics and lands inside the guardrail by construction.
+   starving the rider; a short trip in a balanced market cannot. The share MOVES with the
+   economics and lands inside the guardrail by construction.
 
    Deliberately NOT a constant: the whole defect being removed is a universal split. */
-function deriveSharePct(distanceKm, demandIndex) {
+function deriveSharePct(distanceKm, demandIndex, policy) {
+  assertPolicy(policy);
   const span = SHARE_MAX_PCT - SHARE_MIN_PCT;
-  const distanceFactor = clamp01(distanceKm / 20);          /* saturates at 20 km */
-  const demandFactor = clamp01((demandIndex - 1) / 2);      /* 1.0 balanced -> 0; 3.0+ -> 1 */
-  const blended = (distanceFactor * 0.6) + (demandFactor * 0.4);
+  const distanceFactor = clamp01(distanceKm / policy.distanceSaturationKm);
+  const demandFactor = clamp01((demandIndex - 1) / (policy.demandSaturationIndex - 1));
+  const blended = (distanceFactor * policy.distanceWeight) + (demandFactor * policy.demandWeight);
   const pct = SHARE_MIN_PCT + Math.round(span * blended);
   /* Structural, not decorative: if the derivation is ever changed carelessly, refuse rather than
      silently pay a share outside the commercial mandate. */
@@ -124,8 +172,11 @@ function handlingMinutes(input) {
  * Produce an immutable, pinned delivery quote — or refuse.
  * Returns integer-minor-unit figures; never floats, never a fallback price.
  */
-function quote(input) {
+function quote(input, policy) {
   if (!input || typeof input !== 'object') throw new QuoteRefused('no_input');
+  /* Refuse BEFORE any arithmetic. A quote computed and then rejected still leaks a number into
+     logs and callers; refusing first means an unapproved policy produces no figure at all. */
+  assertPolicy(policy);
 
   /* 1. Vehicle must be a canonical, PRICED class. An unknown token or an unpriced class refuses;
         it must never fall back to a motorcycle, which is the old vehicle defect. */
@@ -155,7 +206,7 @@ function quote(input) {
   if (riderEarningMinor <= 0) throw new QuoteRefused('non_positive_rider_earning');
 
   /* 6. SOKONI's share, derived from the same economics, inside the guardrail. */
-  const sokoniSharePct = deriveSharePct(e.distanceKm, e.demandIndex);
+  const sokoniSharePct = deriveSharePct(e.distanceKm, e.demandIndex, policy);
 
   /* 7. The customer charge is what makes the rider whole AFTER commission:
            charge - (share% of charge) = riderEarning
@@ -206,6 +257,17 @@ function quote(input) {
       handling: Object.freeze(handling),
       timeValueMinor,
       shareBand: [SHARE_MIN_PCT, SHARE_MAX_PCT],
+      /* WHICH commercial values priced this delivery. Without this a later reader can see the
+         figures but cannot tell a quote issued under approved policy from one issued under a
+         since-revised curve — which is exactly what the renegotiation guard must detect. */
+      policy: Object.freeze({
+        distanceWeight: policy.distanceWeight,
+        demandWeight: policy.demandWeight,
+        distanceSaturationKm: policy.distanceSaturationKm,
+        demandSaturationIndex: policy.demandSaturationIndex,
+        approvedBy: String(policy.approvedBy),
+        approvedAt: String(policy.approvedAt),
+      }),
     }),
     createdAt: new Date().toISOString(),
   });
@@ -215,7 +277,7 @@ function quote(input) {
    Settlement must pay the PINNED figure and nothing else. This verifies a stored quote against
    the figures a caller believes it is settling, so a tampered `riderEarning` on the delivery
    document cannot become a payout. Tampering REFUSES; it does not silently re-derive. */
-function assertSettleable(pinned, claimed) {
+function assertSettleable(pinned, claimed, opts) {
   if (!pinned || typeof pinned !== 'object') throw new QuoteRefused('no_pinned_quote');
   for (const k of ['quoteId', 'pricingVersion']) {
     if (!pinned[k]) throw new QuoteRefused('pinned_quote_incomplete', k);
@@ -231,11 +293,50 @@ function assertSettleable(pinned, claimed) {
   if (s * 100 < SHARE_MIN_PCT * c || s * 100 > SHARE_MAX_PCT * c) {
     throw new QuoteRefused('pinned_share_out_of_band', (s * 100 / c).toFixed(3) + '%');
   }
-  if (claimed !== undefined) {
+  if (claimed !== undefined && claimed !== null) {
     const cl = minor(claimed);
     if (cl === null) throw new QuoteRefused('claimed_not_minor_units');
     if (cl !== r) throw new QuoteRefused('claimed_earning_mismatch', cl + ' != pinned ' + r);
   }
+
+  /* ── RENEGOTIATION GUARD ─────────────────────────────────────────────────────────────────
+     BUILT HERE, NOT REUSED. The directive referred to an existing `EARNING_RENEGOTIATED`
+     protection; the census proved no such identifier exists anywhere in this codebase, so
+     claiming reuse would have been false. This is the smallest contract that enforces the
+     invariant:
+
+         quote created -> persisted -> delivery completed -> settlement revalidates -> settle
+
+     A delivery priced under one approved commercial policy must not settle under another. Without
+     this, revising the share curve would silently re-price every delivery already in flight — the
+     rider agreed to one number and would be paid another. Mismatch REFUSES; it never re-derives,
+     because re-deriving is exactly the silent recalculation being prevented. */
+  if (opts && opts.currentPolicy) {
+    const cur = opts.currentPolicy;
+    const pinnedPolicy = (pinned.pricingInputs && pinned.pricingInputs.policy) || null;
+    if (!pinnedPolicy) {
+      throw new QuoteRefused('earning_renegotiated', 'pinned quote records no pricing policy to compare');
+    }
+    const FIELDS = ['distanceWeight', 'demandWeight', 'distanceSaturationKm', 'demandSaturationIndex'];
+    const drifted = FIELDS.filter((k) => Number(pinnedPolicy[k]) !== Number(cur[k]));
+    if (drifted.length) {
+      throw new QuoteRefused('earning_renegotiated',
+        'pricing policy changed since the quote was pinned: ' + drifted.join(', '));
+    }
+  }
+
+  /* The pinned figures must still be internally reproducible: the share the quote claims must be
+     the share its own numbers actually realise. A tampered `sokoniSharePct` that leaves the
+     amounts alone would otherwise pass every check above. */
+  if (pinned.sokoniSharePct !== undefined && pinned.sokoniSharePct !== null) {
+    const realisedTimes100 = s * 100;
+    const lo = (pinned.sokoniSharePct - 1) * c, hi = (pinned.sokoniSharePct + 1) * c;
+    if (realisedTimes100 < lo || realisedTimes100 > hi) {
+      throw new QuoteRefused('declared_share_mismatch',
+        'declares ' + pinned.sokoniSharePct + '% but realises ' + (s * 100 / c).toFixed(3) + '%');
+    }
+  }
+
   return money.fromMinor(r);
 }
 
@@ -252,8 +353,33 @@ function assertNoClientPricing(payload) {
   if (found.length) throw new QuoteRefused('client_supplied_pricing', found.join(', '));
 }
 
+/* ── Where production policy comes from ────────────────────────────────────────────────────
+   Firestore config, not code — so approving a commercial change is a deliberate act by whoever
+   owns the commercial decision, not a code edit by whoever happens to be in the file.
+
+   Returns null when unset. Callers must treat null as REFUSE, never as "use defaults": there are
+   no defaults, by design. `platformConfig/deliveryPricing` does not exist in production today, so
+   live quote issuance is BLOCKED until SOKONI supplies approved values. */
+const POLICY_DOC = { collection: 'platformConfig', doc: 'deliveryPricing' };
+
+async function loadPolicy(db) {
+  if (!db) return null;
+  let snap;
+  try { snap = await db.collection(POLICY_DOC.collection).doc(POLICY_DOC.doc).get(); }
+  catch (e) { return null; }
+  if (!snap || !snap.exists) return null;
+  const raw = snap.data() || {};
+  /* Validate at the boundary. A malformed config must refuse exactly like an absent one, rather
+     than reaching the arithmetic and producing a plausible-looking wrong number. */
+  try { return assertPolicy(raw); } catch (e) { return null; }
+}
+
 module.exports = {
   quote,
+  assertPolicy,
+  loadPolicy,
+  POLICY_CONTRACT,
+  POLICY_DOC,
   assertSettleable,
   assertNoClientPricing,
   QuoteRefused,

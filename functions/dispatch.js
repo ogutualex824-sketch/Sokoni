@@ -407,7 +407,14 @@ exports.captureProofOfDelivery = onCall(
        because no earning has ever been credited on this rail. */
     let _settleMinor = null, _settleBlocked = null;
     try {
-      _settleMinor = _deliveryQuote.assertSettleable(delivery.deliveryQuote).minorUnits;
+      /* RENEGOTIATION GUARD. The quote is revalidated against the commercial policy IN FORCE NOW,
+         not merely against itself. A delivery priced under one approved curve must not settle
+         under another — the rider agreed to a number and must be paid that number. Policy drift
+         REFUSES; it never silently re-prices. (This guard was built for Step 4: the census proved
+         no `EARNING_RENEGOTIATED` protection existed anywhere to reuse.) */
+      const _pol = await _deliveryQuote.loadPolicy(firestore);
+      _settleMinor = _deliveryQuote.assertSettleable(
+        delivery.deliveryQuote, null, _pol ? { currentPolicy: _pol } : undefined).minorUnits;
     } catch (err) {
       _settleBlocked = err && err.reason ? err.reason : 'unsettleable_quote';
       logger.error('[dispatch] settlement refused — rider NOT credited', {

@@ -5,6 +5,18 @@
 ============================================================ */
 
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
+/* Step 4 — the ONLY delivery pricing authority. Delivery money originates there or not at all;
+   see functions/delivery-quote-authority.js.
+
+   Deliberately NOT requiring ./money-authority here. That module is the canonical money
+   representation and delivery-quote-authority does depend on it — but it is currently UNTRACKED
+   (present on disk, in zero commits, another agent's in-flight work). Adding a second require on
+   an uncommitted file would widen a broken require closure rather than contain it. The two
+   display strings below are therefore formatted with INTEGER arithmetic only; no float money, and
+   no new dependency. The authoritative figures live in `deliveryQuote` as integer minor units. */
+const _dqa = require("./delivery-quote-authority");
+const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
+  String(Math.abs(m) % 100).padStart(2, "0");
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
@@ -8585,6 +8597,48 @@ exports.webhookIntasend = onRequest(
               const _exists = await _delDoc.get();
               if (!_exists.exists) {
                 const _pin = String(Math.floor(1000 + Math.random() * 9000));
+
+                /* ── Server-authored delivery pricing, or none ──────────────────────────────
+                   UNITS ARE STATED ON BOTH SIDES, deliberately. The authority works in INTEGER
+                   MINOR UNITS; the legacy field `deliveryFee` on this collection holds MAJOR
+                   units (220, 237). Writing an authority figure into a field whose unit differs
+                   is how a 100x error ships, so the authoritative figures live inside
+                   `deliveryQuote` with explicit `...Minor` names and settlement reads only those.
+                   `riderFeeKES` / `platformCut` are written as MAJOR-unit display strings for the
+                   legacy/human readers the directive names — never read back for money. */
+                let _deliveryPricing;
+                try {
+                  const _pol = await _dqa.loadPolicy(db);
+                  if (!_pol) throw new _dqa.QuoteRefused('pricing_policy_required',
+                    'platformConfig/deliveryPricing is unset — SOKONI has not approved commercial values');
+                  /* Route and per-vehicle economics must come from the approved policy too; this
+                     webhook has no OSRM route, so absent inputs REFUSE rather than guess. */
+                  const _q = _dqa.quote(Object.assign({ vehicleType: 'moto' },
+                    _pol.economics || {}, _pol.defaultRoute || {}), _pol);
+                  _deliveryPricing = {
+                    deliveryQuote: {
+                      quoteId: _q.quoteId, pricingVersion: _q.pricingVersion,
+                      sokoniSharePct: _q.sokoniSharePct,
+                      customerCharge: { currency: _q.customerCharge.currency, minorUnits: _q.customerCharge.minorUnits },
+                      riderEarning:   { currency: _q.riderEarning.currency,   minorUnits: _q.riderEarning.minorUnits },
+                      sokoniCommission: { currency: _q.sokoniCommission.currency, minorUnits: _q.sokoniCommission.minorUnits },
+                      pricingInputs: _q.pricingInputs,
+                      createdAt: _q.createdAt,
+                    },
+                    quoteId: _q.quoteId, pricingVersion: _q.pricingVersion,
+                    riderFeeKES: _kesMajor(_q.riderEarning.minorUnits),
+                    platformCut: _kesMajor(_q.sokoniCommission.minorUnits),
+                  };
+                } catch (_qe) {
+                  /* NO FALLBACK PRICE. The delivery is still created so the order is not lost;
+                     it is simply unpriced and visibly so. */
+                  _deliveryPricing = {
+                    pricingBlocked: (_qe && _qe.reason) || 'quote_failed',
+                    pricingBlockedDetail: (_qe && _qe.detail) || null,
+                  };
+                  console.warn('[webhookIntasend] delivery created UNPRICED', {
+                    ref: _delRef, reason: _deliveryPricing.pricingBlocked });
+                }
                 await _delDoc.set({
                   ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
                   buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
@@ -8592,8 +8646,23 @@ exports.webhookIntasend = onRequest(
                   pickupAddress:   _pm.sellerName || "Shop", pickupCoords: null,
                   deliveryAddress: _pm.address || _pm.deliveryAddress || "", deliveryCoords: null,
                   items:      _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty })),
-                  orderTotal: amount, deliveryFee: _delivery,
-                  driverNet:  Math.round(_delivery * 0.8), commissionPct: 5,
+                  orderTotal: amount,
+                  /* DELIVERY MONEY IS PINNED FROM THE SERVER QUOTE AUTHORITY, OR NOT AT ALL.
+                     These two lines used to read:
+                       deliveryFee: _delivery,
+                       driverNet:  Math.round(_delivery * 0.8),
+                     Neither was a price. `_delivery` is a RESIDUAL — `amount - _subtotal`, i.e.
+                     whatever figure the BROWSER decided the customer should pay — and the 0.8 then
+                     paid a rider out of it. Measured live, the 5 priced records carry
+                     driverNet = fee * 0.82 (the browser's shareTarget), not this 0.8, so the
+                     server was not even the author of the numbers it stored.
+
+                     `_deliveryPricing` below carries the PINNED server quote when one could be
+                     issued, and a `pricingBlocked` reason when it could not. It never carries a
+                     fallback figure: an unpriced delivery is visible and repairable, whereas a
+                     silently invented one becomes a rider's pay. */
+                  ..._deliveryPricing,
+                  commissionPct: 5,
                   vehicleType: "moto", speed: "same_day", category: "general",
                   /* proofPin is NOT stored here. firestore.rules grants the assigned
                      rider a read on packageRequests (`assignedDriverId`), and
