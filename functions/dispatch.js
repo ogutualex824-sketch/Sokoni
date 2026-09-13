@@ -15,6 +15,7 @@ const SokoniLogistics        = require('./sokoni-logistics');
 /* ONE delivery actor primitive, shared with fulfilment-scan.js. A second copy
    of this logic is how `assigned` and `driver_assigned` drifted apart. */
 const _deliveryAuth          = require('./delivery-authority');
+const riderEligibility       = require('./rider-eligibility');   /* DL-01 — the eligibility authority */
 
 const REGION = 'us-central1'; /* match the rest of the platform */
 
@@ -113,8 +114,25 @@ exports.dispatchDelivery = onCall(
       if (st === 'offered' || st === 'accepted') return { status: st, cached: true };
     }
 
-    const ridersSnap = await firestore.collection('rideDrivers').where('isOnline', '==', true).limit(100).get();
-    const riders  = ridersSnap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+    /* DL-01. `rideDrivers` is a PRESENCE shard, not an authority — it is client-creatable in the
+       served ruleset, and `noAdminFields()` does not protect `status`, `suspendedAt` or
+       `isOnline`. Selecting on `isOnline` alone let any signed-in account be dispatched real
+       deliveries, pickup address and fee included. Presence still comes from here; every
+       candidate is now joined against `drivers` + `driverVerification`, which no client can
+       write. Being online is a fact about a device, not a permission. */
+    const presenceSnap = await firestore.collection('rideDrivers').where('isOnline', '==', true).limit(100).get();
+    const candidates = presenceSnap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+    const elig = await riderEligibility.filterEligible(firestore, candidates);
+    const riders = elig.riders;
+    if (elig.refused.length) {
+      /* Logged for operators, never returned to the caller: naming the gate that refused tells
+         an attacker which one to attack next. */
+      console.warn('[dispatch] ineligible presence rows refused', {
+        deliveryRef,
+        refused: elig.refused.length,
+        reasons: elig.refused.reduce((a, r) => { a[r.reason] = (a[r.reason] || 0) + 1; return a; }, {}),
+      });
+    }
     const ranked  = SokoniDispatch.rankRiders(riders, delivery);
 
     if (!ranked.length) {
@@ -194,6 +212,28 @@ exports.respondToDispatch = onCall(
     if (!current || current.riderId !== riderId) throw new HttpsError('permission-denied', 'You are not the current dispatch candidate');
 
     if (accept) {
+      /* DL-01 — re-verify at ACCEPT, not only at ranking. A cascade outlives the query that
+         built it: `rankedRiders` is a stored snapshot, so a rider suspended or un-verified
+         after being ranked would otherwise still take the job. Re-checked against the
+         server-controlled records so suspension bites immediately.
+         Only the ACCEPT branch is gated — a decline must stay available, or an ineligible
+         candidate would stall every delivery offered to them. */
+      const [drvSnap, verSnap] = await Promise.all([
+        firestore.collection('drivers').doc(riderId).get(),
+        firestore.collection('driverVerification').doc(riderId).get(),
+      ]);
+      const verdict = riderEligibility.evaluate(
+        drvSnap.exists ? drvSnap.data() : null,
+        verSnap.exists ? verSnap.data() : null,
+      );
+      if (!verdict.eligible) {
+        logger.warn('[dispatch] accept refused — rider not eligible', { deliveryRef, riderId, reason: verdict.reason });
+        /* Advance rather than stall: the delivery must still reach someone who can work. */
+        SokoniDispatch.advanceCascade(cascade, 'declined');
+        await cascadeRef.update({ ...cascade, updatedAt: _now() });
+        throw new HttpsError('permission-denied', 'You are not currently eligible to accept deliveries');
+      }
+
       SokoniDispatch.acceptCascade(cascade, riderId);
       await cascadeRef.update({ ...cascade, updatedAt: _now() });
       await firestore.collection('packageRequests').doc(deliveryRef).update({
