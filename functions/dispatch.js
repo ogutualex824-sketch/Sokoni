@@ -16,6 +16,7 @@ const SokoniLogistics        = require('./sokoni-logistics');
    of this logic is how `assigned` and `driver_assigned` drifted apart. */
 const _deliveryAuth          = require('./delivery-authority');
 const riderEligibility       = require('./rider-eligibility');   /* DL-01 — the eligibility authority */
+const _deliveryQuote         = require('./delivery-quote-authority'); /* Step 4 — the ONLY pricing authority */
 
 const REGION = 'us-central1'; /* match the rest of the platform */
 
@@ -389,12 +390,47 @@ exports.captureProofOfDelivery = onCall(
       sellerPayoutReady:true,
       updatedAt:        _now(),
     });
-    batchOp.update(firestore.collection('rideDrivers').doc(riderId), {
+    /* SETTLEMENT READS THE PINNED QUOTE, NEVER THE DELIVERY DOCUMENT'S OWN FIGURE.
+       This line used to be `increment(delivery.driverNet || 0)`. `driverNet` on the live records
+       was computed in a BROWSER (`sokoni-delivery-pricing.js`, shareTarget 0.82 — 220 -> 180 and
+       237 -> 194 match 0.82 exactly, not the server's 0.8), so crediting it made a client the
+       author of a rider's earnings. `|| 0` also meant a missing figure paid zero silently.
+
+       `assertSettleable` re-checks the pinned quote at the moment of payment: version, integer
+       minor units, conservation (charge == rider + commission) and the 16-25% commission band.
+       A tampered quote THROWS rather than paying a re-derived number.
+
+       FAIL CLOSED, BUT DO NOT DESTROY THE DELIVERY. A rider who completed the job keeps their
+       proof and the delivery is marked delivered; only the CREDIT is withheld, and the reason is
+       recorded on the delivery so an operator can see it rather than discovering a silent zero.
+       Legacy records carry no pinned quote, so they land here by design — nothing is lost,
+       because no earning has ever been credited on this rail. */
+    let _settleMinor = null, _settleBlocked = null;
+    try {
+      _settleMinor = _deliveryQuote.assertSettleable(delivery.deliveryQuote).minorUnits;
+    } catch (err) {
+      _settleBlocked = err && err.reason ? err.reason : 'unsettleable_quote';
+      logger.error('[dispatch] settlement refused — rider NOT credited', {
+        deliveryRef, riderId, reason: _settleBlocked,
+      });
+    }
+
+    const _riderPatch = {
       activeDeliveries: admin.firestore.FieldValue.increment(-1),
       totalDeliveries:  admin.firestore.FieldValue.increment(1),
-      totalEarnings:    admin.firestore.FieldValue.increment(delivery.driverNet || 0),
       updatedAt:        _now(),
-    });
+    };
+    if (_settleMinor !== null) {
+      _riderPatch.totalEarningsMinor = admin.firestore.FieldValue.increment(_settleMinor);
+      _riderPatch.lastSettledQuoteId = delivery.deliveryQuote.quoteId;
+    }
+    batchOp.update(firestore.collection('rideDrivers').doc(riderId), _riderPatch);
+
+    if (_settleBlocked) {
+      batchOp.update(firestore.collection('packageRequests').doc(deliveryRef), {
+        earningsBlocked: _settleBlocked, earningsBlockedAt: _now(),
+      });
+    }
     await batchOp.commit();
 
     /* Unified multi-channel notification (push + SMS + email + WhatsApp) */
