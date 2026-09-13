@@ -28,9 +28,42 @@ console.log('\nSTEP 4 FINAL CERTIFICATION — SOKONI approved pricing policy v1\
 
 /* 1 ── policy loads */
 console.log('1 - policy loads');
-blk('the policy loads from platformConfig/deliveryPricing',
-  'not written — blocked on an authorised effectiveFrom');
 ck('1b the approved values satisfy the certified schema', !refuses(() => DQ.assertPolicy(P)));
+
+/* LIVE production check, deferred to the end so the synchronous body below is unchanged.
+   Reports the real state of the written document rather than assuming it. */
+const admin = require(path.join(ROOT, 'functions', 'node_modules', 'firebase-admin'));
+admin.initializeApp({ projectId: 'sokoni-aeb26' });
+const liveDb = admin.firestore();
+
+async function liveChecks() {
+  console.log('\n1a - the policy as actually stored in production');
+  const snap = await liveDb.collection('platformConfig').doc('deliveryPricing').get();
+  ck('1a1 the approved policy EXISTS in production', snap.exists,
+    snap.exists ? 'policyVersion=' + snap.data().policyVersion : 'ABSENT');
+  if (!snap.exists) return;
+  const stored = snap.data();
+  ck('1a2 the stored document is schema-valid', !refuses(() => DQ.assertPolicy(stored)));
+  ck('1a3 the stored values match the approved set exactly',
+    JSON.stringify(stored.economics.vehicleClasses) === JSON.stringify(APPROVED.economics.vehicleClasses)
+    && JSON.stringify(stored.shareCurve) === JSON.stringify(APPROVED.shareCurve)
+    && JSON.stringify(stored.handling) === JSON.stringify(APPROVED.handling));
+  ck('1a4 bicycle is absent from the stored policy', !('bicycle' in stored.economics.vehicleClasses));
+
+  /* WRITTEN and IN FORCE are different states; report which, never conflate them. */
+  const startsAt = Date.parse(stored.effectiveFrom);
+  const loaded = await DQ.loadPolicy(liveDb);
+  if (loaded) {
+    ck('1a5 the policy is IN FORCE (loadPolicy accepts it)', true, 'effective ' + stored.effectiveFrom);
+  } else if (Date.now() < startsAt) {
+    blk('the policy is IN FORCE',
+      'written and valid; effective ' + stored.effectiveFrom + ' — '
+      + Math.max(0, Math.round((startsAt - Date.now()) / 60000)) + ' min away, exactly as approved');
+  } else {
+    ck('1a5 the policy is IN FORCE (loadPolicy accepts it)', false,
+      'past its effective date but loadPolicy still refuses it');
+  }
+}
 
 /* 2 ── accepted only when approved */
 console.log('\n2 - accepted only when status === "approved"');
@@ -179,11 +212,13 @@ if (misses.length) {
   misses.forEach((m) => console.log('      ! ' + m));
 }
 
-console.log('\n' + '-'.repeat(74));
-console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed, ' + blocked + ' blocked');
-if (blocked) {
-  console.log('\n  BLOCKED (not failed): the policy is not written to production because\n'
-    + '  `effectiveFrom` is a business date that has not been authorised. Everything that can be\n'
-    + '  certified without it is certified above.');
-}
-process.exit(fail === 0 ? 0 : 1);
+liveChecks().then(() => {
+  console.log('\n' + '-'.repeat(74));
+  console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed, ' + blocked + ' blocked');
+  if (blocked) {
+    console.log('\n  BLOCKED (not failed): the policy is WRITTEN and schema-valid, but its approved\n'
+      + '  effective date has not yet arrived. That is the behaviour a deliberately chosen start\n'
+      + '  date asks for — it becomes loadable on its own schedule, with no further action.');
+  }
+  process.exit(fail === 0 ? 0 : 1);
+}).catch((e) => { console.error('LIVE CHECK FAILED: ' + e.message); process.exit(1); });

@@ -433,7 +433,12 @@ const minor = (m) => m.minorUnits;
   const fakeDbMissing = { collection: () => ({ doc: () => ({ get: async () => ({ exists: false }) }) }) };
   const missing = await DQ.loadPolicy(fakeDbMissing);
   ckt('N3 absent config -> null (production pricing blocked)', () => missing === null, String(missing));
-  const fakeDbBad = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ distanceWeight: 0.9, demandWeight: 0.9 }) }) }) }) };
+  /* PER-LAYER ISOLATION. `loadPolicy` now has two independent refusals: schema validation and the
+     effectiveFrom check. A malformed fixture with no `effectiveFrom` is caught by the DATE check,
+     which makes the schema check invisible — removing it changed nothing the suite could see.
+     This fixture carries a valid, already-past effectiveFrom so ONLY the schema defect remains. */
+  const fakeDbBad = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true,
+    data: () => ({ effectiveFrom: '2020-01-01T00:00:00+03:00', distanceWeight: 0.9, demandWeight: 0.9 }) }) }) }) };
   const bad = await DQ.loadPolicy(fakeDbBad);
   ckt('N4 a MALFORMED config refuses exactly like an absent one', () => bad === null, String(bad));
   const fakeDbGood = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => Object.assign({}, FIXTURE_POLICY) }) }) }) };
@@ -537,6 +542,21 @@ const minor = (m) => m.minorUnits;
         .replace(/\/\*[\s\S]*?\*\//g, '');
       return !/\*\s*2;|\*\s*5;|===\s*true\s*\?\s*3\s*:/.test(src); },
     'moved to policy');
+
+  /* ── R. effectiveFrom is a control, not a comment ─────────────────────────────────────── */
+  console.log('\nR - a future-dated policy is written but NOT yet in force');
+  const dbWith = (eff) => ({ collection: () => ({ doc: () => ({
+    get: async () => ({ exists: true, data: () => Object.assign({}, FIXTURE_POLICY, { effectiveFrom: eff }) }) }) }) });
+  const past = await DQ.loadPolicy(dbWith('2020-01-01T00:00:00+03:00'));
+  const future = await DQ.loadPolicy(dbWith('2099-01-01T00:00:00+03:00'));
+  ckt('R1 CONTROL: a policy already in force LOADS', () => !!past && past.policyVersion === 'FIXTURE-P0');
+  ckt('R2 a FUTURE-dated policy does NOT load (the start date is enforced)', () => future === null,
+    'without this, a 2099 policy would price today and the approved date would be decorative');
+  const unparseable = await DQ.loadPolicy(dbWith('whenever'));
+  ckt('R3 an unparseable effectiveFrom does not load', () => unparseable === null);
+  const absent = await DQ.loadPolicy({ collection: () => ({ doc: () => ({ get: async () => ({ exists: false }) }) }) });
+  ckt('R4 a not-yet-in-force policy behaves exactly like an ABSENT one (callers already refuse)',
+    () => future === null && absent === null);
 
   console.log('\n' + '-'.repeat(74));
   console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed');

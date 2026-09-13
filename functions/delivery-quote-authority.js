@@ -539,7 +539,20 @@ async function loadPolicy(db) {
   const raw = snap.data() || {};
   /* Validate at the boundary. A malformed config must refuse exactly like an absent one, rather
      than reaching the arithmetic and producing a plausible-looking wrong number. */
-  try { return assertPolicy(raw); } catch (e) { return null; }
+  let validated;
+  try { validated = assertPolicy(raw); } catch (e) { return null; }
+
+  /* EFFECTIVE FROM IS ENFORCED, NOT DECORATIVE.
+     Without this a policy dated 2099 would price deliveries today, and the approved commencement
+     date would be a comment rather than a control. A future-dated policy is WRITTEN but NOT YET IN
+     FORCE: `loadPolicy` returns null until its moment arrives, callers refuse exactly as they do
+     for an absent policy, and deliveries stay `pricingBlocked` — which is the behaviour a
+     deliberately chosen start date is asking for. */
+  const startsAt = Date.parse(validated.effectiveFrom);
+  if (Number.isNaN(startsAt)) return null;
+  if (Date.now() < startsAt) return null;
+
+  return validated;
 }
 
 module.exports = {

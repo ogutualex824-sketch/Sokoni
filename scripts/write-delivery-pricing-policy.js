@@ -26,7 +26,11 @@ const EFFECTIVE_FROM = effArg ? effArg.slice('--effective-from='.length).trim() 
    "remain unpriced/uneconomised under the existing certified schema", so a bicycle delivery
    refuses `vehicle_class_uneconomised` rather than being priced on invented zero-energy figures. */
 const APPROVED = {
-  policyVersion: 'v2-goods',
+  /* FIRST policy ever written to production, so it is v1. The `v2-goods` label used during
+     development tracked an internal iteration (before/after handling time) that was never
+     persisted — numbering production from it would imply a v1 that no one can find. Successors
+     bump from here; the writer refuses to overwrite, so a v2 is a deliberate act. */
+  policyVersion: 'v1',
   status: 'approved',
   approvedBy: 'SOKONI business approval',
   effectiveFrom: EFFECTIVE_FROM,
@@ -123,9 +127,26 @@ const db = admin.firestore();
   await ref.create(Object.assign({}, APPROVED, { writtenAt: new Date().toISOString() }));
   console.log('\n  WRITTEN to platformConfig/deliveryPricing');
 
-  /* Read back through the real loader — the only proof that matters. */
+  /* Read back and prove the stored document is valid.
+     NOTE: `loadPolicy` deliberately returns null for a policy whose effectiveFrom has not arrived
+     — being written and being IN FORCE are different states. Treating "not yet in force" as a
+     write failure would report a correct future-dated write as broken, so the two are separated
+     here: the stored document must be schema-valid now, and it becomes loadable at its own time. */
+  const snap = await ref.get();
+  const stored = snap.data();
+  try { DQ.assertPolicy(stored); }
+  catch (e) { fail('written, but the stored document is not schema-valid: ' + e.reason); }
+  console.log('  read-back schema check   : VALID (policyVersion=' + stored.policyVersion + ')');
+
+  const startsAt = Date.parse(stored.effectiveFrom);
   const loaded = await DQ.loadPolicy(db);
-  if (!loaded) fail('written, but loadPolicy() refused it on read-back');
-  console.log('  read-back via loadPolicy : ACCEPTED (policyVersion=' + loaded.policyVersion + ')');
+  if (loaded) {
+    console.log('  in force                 : YES — loadPolicy accepts it now');
+  } else if (Date.now() < startsAt) {
+    const mins = Math.max(0, Math.round((startsAt - Date.now()) / 60000));
+    console.log('  in force                 : NOT YET — effective in ' + mins + ' minute(s), as approved');
+  } else {
+    fail('written and past its effective date, but loadPolicy() still refuses it');
+  }
   process.exit(0);
 })().catch((e) => { console.error('  WRITE FAILED: ' + e.message); process.exit(1); });
