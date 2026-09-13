@@ -3496,19 +3496,43 @@ function _normalizeMsisdn(raw) {
   return /^254[17]\d{8}$/.test(d) ? d : null;
 }
 
-/* ── Helper: get Daraja OAuth access token ── */
+/* ── Helper: get Daraja OAuth access token — RETIRED (outbound only) ──────────────────────
+ *
+ * IntaSend is the only electronic collection route. This is the OUTBOUND retirement: SOKONI no
+ * longer initiates anything against Safaricom's Daraja API.
+ *
+ * WHY THIS FUNCTION AND ONLY THIS FUNCTION
+ * Every outbound Daraja path in the codebase passes through here — it is the sole producer of
+ * both the OAuth token and the `base` URL that the STK POSTs are built from. Census of
+ * `safaricom.co.ke` across `functions/*.js` returns exactly one file (this one) and exactly
+ * three callers: `darajaSTKPush`, `validateDarajaCredentials`, `sendTestSTKPush`. Closing the
+ * chokepoint closes all three, and cannot miss a fourth that does not exist.
+ *
+ * WHY THE INBOUND SIDE IS DELIBERATELY LEFT ALIVE
+ * `darajaSTKCallback` and `webhookMpesa` are `onRequest` handlers whose URLs are registered in
+ * SELLERS' OWN Safaricom portals. That registration was performed manually, outside version
+ * control — there is no RegisterURL automation in this repo, so a code search returning zero
+ * callers does NOT prove the registrations are gone. Deleting a handler does not unregister it:
+ * it converts a live callback into a silent 404, and money that Safaricom has already settled
+ * then never reconciles, with nothing raising an error. Same for `mpesa-c2b.js`, which is NOT
+ * the Daraja rail at all — it holds no consumer key, secret or passkey, makes zero outbound
+ * calls, and exists purely to reconcile C2B money Safaricom has already taken. It was deleted
+ * once under a "retire Daraja" sweep (2165817) and had to be restored verbatim (822d766).
+ *
+ * The correct order is external-first: unregister at Safaricom -> observe zero inbound traffic
+ * -> only then remove the handlers. Step one is not a code change, so it cannot be done here.
+ *
+ * MEASURED BEFORE CLOSING (2026-09-13, production, read-only): of 2 `shopSettings` documents,
+ * 1 held Daraja credentials and it is `env: 'sandbox'`; `paymentIntents` and `payments` carry
+ * ZERO records with `provider: 'daraja'`. No real money has ever moved on this rail, so this
+ * closes a path that was configured but never used.
+ *
+ * Reversible by restoring this body; nothing else was removed. */
 async function _darajaToken(consumerKey, consumerSecret, env) {
-  const base = env === "production"
-    ? "https://api.safaricom.co.ke"
-    : "https://sandbox.safaricom.co.ke";
-  const creds = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-  const res = await fetch(
-    `${base}/oauth/v1/generate?grant_type=client_credentials`,
-    { headers: { Authorization: `Basic ${creds}` } }
+  throw new HttpsError(
+    "failed-precondition",
+    "M-Pesa Daraja is retired. All payments are collected through IntaSend."
   );
-  const data = await res.json();
-  if (!data.access_token) throw new Error("Daraja auth failed: " + JSON.stringify(data));
-  return { token: data.access_token, base };
 }
 
 /* ── darajaSTKPush — called from POS frontend ──────────────────────────────────
