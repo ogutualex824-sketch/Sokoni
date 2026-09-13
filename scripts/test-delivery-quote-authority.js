@@ -23,30 +23,50 @@ const ckt = (label, fn, detail) => {
 };
 const refuses = (fn) => { try { fn(); return null; } catch (e) { return e; } };
 
-/* A complete, realistic economics payload — a boda on a 6 km city run. */
+/* The TRIP — what the caller may describe. Note there are no cost figures here: economics live in
+   approved policy, so a caller can say where a parcel is going but not what carrying it is worth. */
 const BASE = {
   vehicleType: 'motorcycle',
   distanceKm: 6,
   estimatedMinutes: 18,
-  energyUnitCostMinor: 19500,      /* KES 195.00 per litre */
-  energyUnitsPerKm: 0.025,         /* 40 km per litre */
-  maintenanceCostPerKmMinor: 250,  /* KES 2.50 per km */
-  riderMinuteRateMinor: 600,       /* KES 6.00 per minute */
   demandIndex: 1.0,
   packageCount: 1,
   shopCount: 1,
 };
 const mk = (o) => Object.assign({}, BASE, o || {});
 
-/* FIXTURE POLICY — NOT SOKONI POLICY. These curve values exist so the arithmetic can be
-   exercised; the authority refuses without a policy precisely so that no engineer's guess can
-   become production pricing. Real values must be approved by SOKONI and supplied at runtime. */
-const FIXTURE_POLICY = Object.freeze({
-  distanceWeight: 0.6, demandWeight: 0.4,
-  distanceSaturationKm: 20, demandSaturationIndex: 3,
-  approvedBy: 'FIXTURE-ONLY — not approved for production',
-  approvedAt: '2026-09-13',
+/* ══ FIXTURE POLICY — NOT SOKONI POLICY, AND CANNOT BECOME IT ══════════════════════════════
+   Every number below exists only so the arithmetic can be exercised. They are NOT approved
+   commercial values. Production policy is read from `platformConfig/deliveryPricing` by
+   `loadPolicy`, which cannot see this file — so these cannot leak into production even by
+   accident. `status` is deliberately spelled 'approved' because the fixture must exercise the
+   happy path; `policyVersion` and `approvedBy` both shout FIXTURE so any figure traced back to
+   this policy is self-identifying. */
+const klass = (label, cost, kmPerUnit, maint, minute) => ({
+  energyUnitLabel: label, energyCostKESPerUnit: cost,
+  efficiencyKmPerUnit: kmPerUnit, maintenanceKESPerKm: maint, riderTimeKESPerMinute: minute,
 });
+const FIXTURE_POLICY = Object.freeze({
+  policyVersion: 'FIXTURE-P0',
+  status: 'approved',
+  effectiveFrom: '2026-09-13',
+  approvedBy: 'FIXTURE-ONLY — not approved for production',
+  shareCurve: { distanceWeight: 0.6, demandWeight: 0.4, saturationKm: 20, demandSaturationIndex: 3 },
+  economics: {
+    demandIndex: { source: 'FIXTURE — not a real market feed' },
+    vehicleClasses: {
+      motorcycle: klass('litre', 195, 40, 2.5, 6),
+      bicycle:    klass('litre', 0, 1000, 0.5, 6),
+      ebike:      klass('kWh', 25, 50, 0.8, 6),
+      tuktuk:     klass('litre', 195, 25, 3.5, 6),
+      car:        klass('litre', 195, 12, 6, 8),
+      van:        klass('litre', 190, 8, 9, 10),
+      truck:      klass('litre', 190, 4, 15, 12),
+    },
+  },
+});
+const withCurve = (o) => Object.assign({}, FIXTURE_POLICY,
+  { shareCurve: Object.assign({}, FIXTURE_POLICY.shareCurve, o) });
 const Q = (input, policy) => DQ.quote(input, policy === undefined ? FIXTURE_POLICY : policy);
 const minor = (m) => m.minorUnits;
 
@@ -136,9 +156,17 @@ const minor = (m) => m.minorUnits;
        && minor(cheapDemand.customerCharge) !== minor(scarceDemand.customerCharge),
     () => 'rider ' + minor(cheapDemand.riderEarning) + '=' + minor(scarceDemand.riderEarning)
       + '  charge ' + minor(cheapDemand.customerCharge) + '->' + minor(scarceDemand.customerCharge));
-  ckt('C1c rider earning DOES move when the underlying economics move',
-    () => minor(Q(mk({ riderMinuteRateMinor: 1200 })).riderEarning) > minor(q.riderEarning)
-       && minor(Q(mk({ energyUnitCostMinor: 39000 })).riderEarning) > minor(q.riderEarning));
+  /* Economics live in policy now, so moving them means moving APPROVED values — which is the
+     only legitimate way a rider's pay changes. */
+  const richerTime = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+  richerTime.economics.vehicleClasses.motorcycle.riderTimeKESPerMinute = 12;
+  const dearerFuel = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+  dearerFuel.economics.vehicleClasses.motorcycle.energyCostKESPerUnit = 390;
+  ckt('C1c rider earning DOES move when the APPROVED economics move',
+    () => minor(Q(BASE, richerTime).riderEarning) > minor(q.riderEarning)
+       && minor(Q(BASE, dearerFuel).riderEarning) > minor(q.riderEarning),
+    () => 'base ' + minor(q.riderEarning) + ' -> time ' + minor(Q(BASE, richerTime).riderEarning)
+      + ', fuel ' + minor(Q(BASE, dearerFuel).riderEarning));
   ckt('C2 injecting legacy fields into the request changes nothing',
     () => minor(Q(mk({ riderSharePct: 88, DRIVER_SHARE: 0.88, shareTarget: 0.82 })).riderEarning)
        === minor(qClean.riderEarning));
@@ -148,20 +176,42 @@ const minor = (m) => m.minorUnits;
 
   /* ── D. Missing economics refuse, never fall back ─────────────────────────────────────── */
   console.log('\nD - absent economics REFUSE (no fallback pricing)');
-  [['energyUnitCostMinor', 'fuel/electricity cost'], ['energyUnitsPerKm', 'consumption'],
-   ['maintenanceCostPerKmMinor', 'maintenance'], ['riderMinuteRateMinor', 'rider time'],
-   ['demandIndex', 'demand/supply'], ['distanceKm', 'route'], ['estimatedMinutes', 'duration']]
+  /* Cost economics now live in POLICY, so removing them from the policy is the real test. */
+  Object.keys({ energyUnitLabel: 1, energyCostKESPerUnit: 1, efficiencyKmPerUnit: 1,
+    maintenanceKESPerKm: 1, riderTimeKESPerMinute: 1 }).forEach((f, i) => {
+    const pol = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+    delete pol.economics.vehicleClasses.motorcycle[f];
+    const e = refuses(() => Q(BASE, pol));
+    /* PER-LAYER ASSERTION. The completeness check and the downstream type/money checks BOTH refuse
+       a missing field, so accepting either reason made the completeness layer invisible — deleting
+       it changed nothing the suite could see. Requiring its specific reason keeps that layer
+       independently covered, per the standing defence-in-depth rule. */
+    ck('D' + (i + 1) + ' policy missing class economics `' + f + '` REFUSES at the COMPLETENESS layer',
+      !!e && e.reason === 'pricing_policy_incomplete',
+      e ? e.reason : 'QUOTED ANYWAY — fallback pricing');
+  });
+  [['demandIndex', 'live demand/supply'], ['distanceKm', 'route'], ['estimatedMinutes', 'duration']]
     .forEach(([f, label], i) => {
       const input = mk(); delete input[f];
       const e = refuses(() => Q(input));
-      ck('D' + (i + 1) + ' removing ' + label + ' (' + f + ') REFUSES',
+      ck('D' + (6 + i) + ' removing ' + label + ' (' + f + ') REFUSES',
         !!e && e.reason === 'missing_economics', e ? e.reason : 'QUOTED ANYWAY — fallback pricing');
     });
-  ckt('D8 undefined is not treated as zero (the `undefined !== false` class)',
-    () => { const e = refuses(() => Q(mk({ riderMinuteRateMinor: undefined }))); return !!e; });
-  ckt('D9 NaN / non-numeric economics REFUSE',
-    () => !!refuses(() => Q(mk({ distanceKm: NaN })))
-       && !!refuses(() => Q(mk({ energyUnitCostMinor: '500' }))));
+  ckt('D9 undefined is not treated as zero (the `undefined !== false` class)',
+    () => !!refuses(() => Q(mk({ estimatedMinutes: undefined }))));
+  ckt('D9b NaN / non-numeric inputs REFUSE',
+    () => !!refuses(() => Q(mk({ distanceKm: NaN }))) && !!refuses(() => Q(mk({ demandIndex: '2' }))));
+  ckt('D9c a vehicle class with NO declared economics REFUSES (not priced from another class)',
+    () => { const pol = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+      delete pol.economics.vehicleClasses.van;
+      const e = refuses(() => Q(mk({ vehicleType: 'van' }), pol));
+      return !!e && e.reason === 'vehicle_class_uneconomised'; },
+    () => (refuses(() => { const p = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+      delete p.economics.vehicleClasses.van; return Q(mk({ vehicleType: 'van' }), p); }) || {}).reason);
+  ckt('D9d sub-cent money in policy REFUSES (a rider cost basis is not silently rounded)',
+    () => { const pol = JSON.parse(JSON.stringify(FIXTURE_POLICY));
+      pol.economics.vehicleClasses.motorcycle.maintenanceKESPerKm = 2.505;
+      const e = refuses(() => Q(BASE, pol)); return !!e && e.reason === 'pricing_policy_invalid'; });
   ckt('D10 a zero-distance trip REFUSES rather than pricing at zero',
     () => !!refuses(() => Q(mk({ distanceKm: 0 }))));
 
@@ -298,18 +348,26 @@ const minor = (m) => m.minorUnits;
       e ? e.reason : 'QUOTED ANYWAY');
   });
   ckt('K8 weights that do not sum to 1 REFUSE (they would silently rescale the whole band)',
-    () => { const e = refuses(() => Q(BASE, Object.assign({}, FIXTURE_POLICY, { distanceWeight: 0.9, demandWeight: 0.9 })));
+    () => { const e = refuses(() => Q(BASE, withCurve({ distanceWeight: 0.9, demandWeight: 0.9 })));
       return !!e && e.reason === 'pricing_policy_invalid'; });
   ckt('K9 an unapproved policy (blank approvedBy) REFUSES',
     () => { const e = refuses(() => Q(BASE, Object.assign({}, FIXTURE_POLICY, { approvedBy: '   ' })));
       return !!e && (e.reason === 'pricing_policy_unapproved' || e.reason === 'pricing_policy_incomplete'); });
+  /* A DRAFT policy is complete in every field — that is exactly why it is dangerous. Testing only
+     for MISSING fields would let a finished-but-unapproved policy price real deliveries. */
+  ['draft', 'pending', 'retired', '', 'APPROVED'].forEach((st, i) => {
+    const e = refuses(() => Q(BASE, Object.assign({}, FIXTURE_POLICY, { status: st })));
+    ck('K12' + String.fromCharCode(97 + i) + ' a COMPLETE policy with status="' + st + '" REFUSES',
+      !!e && (e.reason === 'pricing_policy_unapproved' || e.reason === 'pricing_policy_incomplete'),
+      e ? e.reason : 'PRICED ANYWAY — an unapproved policy set a rider\'s pay');
+  });
   ckt('K10 the policy that priced a quote is PINNED onto it',
-    () => !!q.pricingInputs.policy && q.pricingInputs.policy.distanceWeight === FIXTURE_POLICY.distanceWeight
+    () => !!q.pricingInputs.policy && q.pricingInputs.policy.distanceWeight === FIXTURE_POLICY.shareCurve.distanceWeight
        && /FIXTURE-ONLY/.test(q.pricingInputs.policy.approvedBy),
     () => JSON.stringify(q.pricingInputs.policy.approvedBy));
   ckt('K11 a DIFFERENT approved curve produces a different share (policy actually drives pricing)',
-    () => Q(mk({ distanceKm: 10 }), Object.assign({}, FIXTURE_POLICY, { distanceSaturationKm: 5 })).sokoniSharePct
-        !== Q(mk({ distanceKm: 10 }), Object.assign({}, FIXTURE_POLICY, { distanceSaturationKm: 40 })).sokoniSharePct);
+    () => Q(mk({ distanceKm: 10 }), withCurve({ saturationKm: 5 })).sokoniSharePct
+        !== Q(mk({ distanceKm: 10 }), withCurve({ saturationKm: 40 })).sokoniSharePct);
 
   /* ── L. Renegotiation guard (BUILT — EARNING_RENEGOTIATED did not exist) ──────────────── */
   console.log('\nL - a quote cannot settle under a changed commercial policy');
@@ -318,12 +376,23 @@ const minor = (m) => m.minorUnits;
     pricingInputs: q.pricingInputs };
   ckt('L0 CONTROL: settles when the policy is UNCHANGED',
     () => minor(DQ.assertSettleable(full, null, { currentPolicy: FIXTURE_POLICY })) === minor(q.riderEarning));
-  ['distanceWeight', 'demandWeight', 'distanceSaturationKm', 'demandSaturationIndex'].forEach((k, i) => {
-    const changed = Object.assign({}, FIXTURE_POLICY, { [k]: FIXTURE_POLICY[k] * 0.5 + 0.1 });
+  ['distanceWeight', 'demandWeight', 'saturationKm', 'demandSaturationIndex'].forEach((k, i) => {
+    const changed = withCurve({ [k]: FIXTURE_POLICY.shareCurve[k] * 0.5 + 0.1 });
     const e = refuses(() => DQ.assertSettleable(full, null, { currentPolicy: changed }));
     ck('L' + (1 + i) + ' policy drift in `' + k + '` REFUSES settlement',
       !!e && e.reason === 'earning_renegotiated', e ? e.reason : 'SETTLED ANYWAY');
   });
+  /* The declared way policy moves: a version bump. Caught even when the curve numbers are
+     identical, because "same numbers, new version" still means a new commercial decision. */
+  ckt('L4b a policyVersion bump alone REFUSES, even with identical curve values',
+    () => { const bumped = Object.assign({}, FIXTURE_POLICY, { policyVersion: 'FIXTURE-P1' });
+      const e = refuses(() => DQ.assertSettleable(full, null, { currentPolicy: bumped }));
+      return !!e && e.reason === 'earning_renegotiated'; },
+    () => (refuses(() => DQ.assertSettleable(full, null,
+      { currentPolicy: Object.assign({}, FIXTURE_POLICY, { policyVersion: 'FIXTURE-P1' }) })) || {}).message);
+  ckt('L4c the pinned policyVersion is recorded on the quote',
+    () => q.pricingInputs.policy.policyVersion === 'FIXTURE-P0',
+    () => q.pricingInputs.policy.policyVersion);
   ckt('L5 a quote with NO pinned policy cannot settle once a policy is in force',
     () => { const e = refuses(() => DQ.assertSettleable(pinned, null, { currentPolicy: FIXTURE_POLICY }));
       return !!e && e.reason === 'earning_renegotiated'; });
@@ -334,7 +403,7 @@ const minor = (m) => m.minorUnits;
     () => (refuses(() => DQ.assertSettleable(Object.assign({}, full, { sokoniSharePct: 25 }), null,
       { currentPolicy: FIXTURE_POLICY })) || {}).message);
   ckt('L7 the guard does NOT silently recalculate — it throws',
-    () => { try { DQ.assertSettleable(full, null, { currentPolicy: Object.assign({}, FIXTURE_POLICY, { demandWeight: 0.1, distanceWeight: 0.9 }) }); return false; }
+    () => { try { DQ.assertSettleable(full, null, { currentPolicy: withCurve({ demandWeight: 0.1, distanceWeight: 0.9 }) }); return false; }
       catch (e) { return e.reason === 'earning_renegotiated'; } });
 
   /* ── M. Producer pinning + the residual's removal ─────────────────────────────────────── */
@@ -368,7 +437,7 @@ const minor = (m) => m.minorUnits;
   ckt('N4 a MALFORMED config refuses exactly like an absent one', () => bad === null, String(bad));
   const fakeDbGood = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => Object.assign({}, FIXTURE_POLICY) }) }) }) };
   const good = await DQ.loadPolicy(fakeDbGood);
-  ckt('N5 CONTROL: a complete approved config DOES load', () => !!good && good.distanceWeight === 0.6);
+  ckt('N5 CONTROL: a complete approved config DOES load', () => !!good && good.shareCurve.distanceWeight === 0.6);
 
   console.log('\n' + '-'.repeat(74));
   console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed');

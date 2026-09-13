@@ -61,15 +61,10 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
    Every one of these must be supplied by the caller and must be a real number. `undefined` is
    NOT zero — `Number(undefined)` is NaN and NaN comparisons are false, which is precisely how an
    absent input silently becomes a permissive default. Each is checked explicitly. */
-const REQUIRED_ECONOMICS = [
-  ['energyUnitCostMinor', isNonNegInt, 'cost of one energy unit (litre of fuel / kWh) in minor units'],
-  ['energyUnitsPerKm', isPositiveNumber, 'energy units consumed per km by this vehicle'],
-  ['maintenanceCostPerKmMinor', isNonNegInt, 'wear/maintenance provision per km, minor units'],
-  ['riderMinuteRateMinor', isNonNegInt, 'what a rider must earn per minute of their time, minor units'],
-  ['demandIndex', isPositiveNumber, 'demand/supply ratio; 1.0 = balanced'],
-];
-
+/* Cost economics are NOT listed here any more: they come from approved policy, per vehicle class.
+   Only the live trip description and market signal come from the caller. */
 const REQUIRED_ROUTE = [
+  ['demandIndex', isPositiveNumber, 'live demand/supply ratio; 1.0 = balanced (a market signal, not a cost)'],
   ['distanceKm', isPositiveNumber, 'route distance'],
   ['estimatedMinutes', isPositiveNumber, 'estimated trip duration'],
 ];
@@ -95,14 +90,41 @@ function assertRequired(input, spec, bag) {
 
    Same reasoning as the economics themselves: this module already refuses without a fuel price
    because inventing one sets a rider's pay. Inventing the curve sets it just as surely. */
+/* EVERY FIELD NAMES ITS UNIT. `fuelCost`, `rate` and `consumption` are forbidden shapes: a number
+   whose unit lives only in someone's head is how a per-litre price gets read as per-km, or a
+   major-unit figure lands in a minor-unit field. The unit is part of the name. */
 const POLICY_CONTRACT = Object.freeze({
-  distanceWeight: 'share of the curve driven by route length (0..1); with demandWeight must sum to 1',
-  demandWeight: 'share of the curve driven by demand/supply (0..1)',
-  distanceSaturationKm: 'route length at which the distance factor reaches its maximum (> 0)',
-  demandSaturationIndex: 'demand index at which the demand factor reaches its maximum (> 1)',
+  policyVersion: 'identifier of this approved policy, e.g. "P17" — pinned onto every quote it prices',
+  status: 'must be exactly "approved"; anything else refuses',
+  effectiveFrom: 'ISO date from which these values apply',
   approvedBy: 'who approved these commercial values — a non-empty string',
-  approvedAt: 'ISO date the values were approved',
+  shareCurve: 'object: distanceWeight, demandWeight (must sum to 1), saturationKm, demandSaturationIndex',
+  economics: 'object: vehicleClasses{<canonicalClass>:{...}} and demandIndex{source}',
 });
+
+/* Per-vehicle-class economics. Declared PER CLASS deliberately: a boda and a van do not share a
+   fuel burn, and one blended figure would silently subsidise one class out of the other's riders. */
+const CLASS_ECONOMICS_CONTRACT = Object.freeze({
+  energyUnitLabel: 'the unit energy is priced in — "litre" or "kWh". Stated, never inferred.',
+  energyCostKESPerUnit: 'KES per litre / per kWh (major units, max 2dp)',
+  efficiencyKmPerUnit: 'km travelled per litre / per kWh (> 0)',
+  maintenanceKESPerKm: 'wear + servicing provision, KES per km (major units, max 2dp)',
+  riderTimeKESPerMinute: 'what a rider must earn per minute of their time, KES (major units, max 2dp)',
+});
+
+const ENERGY_UNITS = ['litre', 'kWh'];
+
+/* KES major -> integer minor, refusing anything that is not a clean 2-decimal money value.
+   `19.995` is not a price; accepting it would silently round a rider's cost basis. */
+function kesMajorToMinor(v, label) {
+  if (!isFiniteNumber(v) || v < 0) throw new QuoteRefused('pricing_policy_invalid', label + ' must be a non-negative number');
+  const scaled = v * 100;
+  const rounded = Math.round(scaled);
+  if (Math.abs(scaled - rounded) > 1e-6) {
+    throw new QuoteRefused('pricing_policy_invalid', label + '=' + v + ' has sub-cent precision');
+  }
+  return rounded;
+}
 
 function assertPolicy(policy) {
   if (!policy || typeof policy !== 'object') {
@@ -110,24 +132,96 @@ function assertPolicy(policy) {
       'no SOKONI pricing policy supplied — required: ' + Object.keys(POLICY_CONTRACT).join(', '));
   }
   for (const key of Object.keys(POLICY_CONTRACT)) {
-    if (policy[key] === undefined || policy[key] === null || policy[key] === '') {
+    const v = policy[key];
+    if (v === undefined || v === null || v === '') {
       throw new QuoteRefused('pricing_policy_incomplete', key + ' — ' + POLICY_CONTRACT[key]);
     }
   }
-  const { distanceWeight: dw, demandWeight: mw, distanceSaturationKm: dsk, demandSaturationIndex: dsi } = policy;
-  if (!isFiniteNumber(dw) || dw < 0 || dw > 1) throw new QuoteRefused('pricing_policy_invalid', 'distanceWeight');
-  if (!isFiniteNumber(mw) || mw < 0 || mw > 1) throw new QuoteRefused('pricing_policy_invalid', 'demandWeight');
-  /* Weights must partition the curve. If they do not sum to 1 the blend silently scales the whole
-     band, which would move every rider's pay without anyone changing the band. */
-  if (Math.abs((dw + mw) - 1) > 1e-9) {
-    throw new QuoteRefused('pricing_policy_invalid', 'distanceWeight + demandWeight must equal 1, got ' + (dw + mw));
+  /* APPROVAL IS EXPLICIT. A draft policy sitting in the config document must not price anything
+     just because every field happens to be filled in. */
+  if (String(policy.status) !== 'approved') {
+    throw new QuoteRefused('pricing_policy_unapproved', 'status="' + policy.status + '", expected "approved"');
   }
-  if (!isPositiveNumber(dsk)) throw new QuoteRefused('pricing_policy_invalid', 'distanceSaturationKm');
-  if (!isFiniteNumber(dsi) || dsi <= 1) throw new QuoteRefused('pricing_policy_invalid', 'demandSaturationIndex must be > 1');
   if (typeof policy.approvedBy !== 'string' || !policy.approvedBy.trim()) {
     throw new QuoteRefused('pricing_policy_unapproved', 'approvedBy must name who approved these values');
   }
+  if (typeof policy.policyVersion !== 'string' || !policy.policyVersion.trim()) {
+    throw new QuoteRefused('pricing_policy_incomplete', 'policyVersion must be a non-empty identifier');
+  }
+
+  const curve = policy.shareCurve;
+  if (!curve || typeof curve !== 'object') throw new QuoteRefused('pricing_policy_incomplete', 'shareCurve');
+  const { distanceWeight: dw, demandWeight: mw, saturationKm: sk, demandSaturationIndex: dsi } = curve;
+  if (!isFiniteNumber(dw) || dw < 0 || dw > 1) throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.distanceWeight');
+  if (!isFiniteNumber(mw) || mw < 0 || mw > 1) throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.demandWeight');
+  /* Weights must partition the curve. If they do not sum to 1 the blend silently scales the whole
+     band, which would move every rider's pay without anyone changing the band. */
+  if (Math.abs((dw + mw) - 1) > 1e-9) {
+    throw new QuoteRefused('pricing_policy_invalid',
+      'shareCurve.distanceWeight + demandWeight must equal 1, got ' + (dw + mw));
+  }
+  if (!isPositiveNumber(sk)) throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.saturationKm');
+  if (!isFiniteNumber(dsi) || dsi <= 1) {
+    throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.demandSaturationIndex must be > 1');
+  }
+
+  const econ = policy.economics;
+  if (!econ || typeof econ !== 'object') throw new QuoteRefused('pricing_policy_incomplete', 'economics');
+  if (!econ.demandIndex || !String(econ.demandIndex.source || '').trim()) {
+    throw new QuoteRefused('pricing_policy_incomplete',
+      'economics.demandIndex.source — where the demand/supply figure comes from');
+  }
+  const classes = econ.vehicleClasses;
+  if (!classes || typeof classes !== 'object' || !Object.keys(classes).length) {
+    throw new QuoteRefused('pricing_policy_incomplete', 'economics.vehicleClasses');
+  }
+  /* Validate EVERY declared class up front. A class whose economics are malformed must refuse at
+     load, not on the first delivery that happens to use it. */
+  for (const cls of Object.keys(classes)) {
+    const canon = vehicleClasses.canonicalise(cls);
+    if (!canon) throw new QuoteRefused('pricing_policy_invalid', 'economics.vehicleClasses."' + cls + '" is not a canonical class');
+    const c = classes[cls] || {};
+    for (const key of Object.keys(CLASS_ECONOMICS_CONTRACT)) {
+      if (c[key] === undefined || c[key] === null || c[key] === '') {
+        throw new QuoteRefused('pricing_policy_incomplete',
+          'economics.vehicleClasses.' + cls + '.' + key + ' — ' + CLASS_ECONOMICS_CONTRACT[key]);
+      }
+    }
+    if (ENERGY_UNITS.indexOf(String(c.energyUnitLabel)) === -1) {
+      throw new QuoteRefused('pricing_policy_invalid',
+        'economics.vehicleClasses.' + cls + '.energyUnitLabel must be one of ' + ENERGY_UNITS.join('/'));
+    }
+    if (!isPositiveNumber(c.efficiencyKmPerUnit)) {
+      throw new QuoteRefused('pricing_policy_invalid', 'economics.vehicleClasses.' + cls + '.efficiencyKmPerUnit');
+    }
+    kesMajorToMinor(c.energyCostKESPerUnit, 'economics.vehicleClasses.' + cls + '.energyCostKESPerUnit');
+    kesMajorToMinor(c.maintenanceKESPerKm, 'economics.vehicleClasses.' + cls + '.maintenanceKESPerKm');
+    kesMajorToMinor(c.riderTimeKESPerMinute, 'economics.vehicleClasses.' + cls + '.riderTimeKESPerMinute');
+  }
   return policy;
+}
+
+/* Resolve the per-class economics into the flat, integer-minor-unit form the arithmetic uses.
+   A class with no declared economics REFUSES — "every supported vehicle must have explicit
+   economics; unsupported vehicles refuse". */
+function resolveEconomics(policy, canonicalClass) {
+  const classes = policy.economics.vehicleClasses;
+  let entry = null;
+  for (const cls of Object.keys(classes)) {
+    if (vehicleClasses.canonicalise(cls) === canonicalClass) { entry = classes[cls]; break; }
+  }
+  if (!entry) {
+    throw new QuoteRefused('vehicle_class_uneconomised',
+      canonicalClass + ' has no declared economics in policy ' + policy.policyVersion);
+  }
+  const costPerUnitMinor = kesMajorToMinor(entry.energyCostKESPerUnit, 'energyCostKESPerUnit');
+  return {
+    energyUnitCostMinor: costPerUnitMinor,
+    energyUnitsPerKm: 1 / entry.efficiencyKmPerUnit,
+    maintenanceCostPerKmMinor: kesMajorToMinor(entry.maintenanceKESPerKm, 'maintenanceKESPerKm'),
+    riderMinuteRateMinor: kesMajorToMinor(entry.riderTimeKESPerMinute, 'riderTimeKESPerMinute'),
+    energyUnitLabel: String(entry.energyUnitLabel),
+  };
 }
 
 /* ── The SOKONI share, derived — never fixed ───────────────────────────────────────────────
@@ -139,9 +233,9 @@ function assertPolicy(policy) {
 function deriveSharePct(distanceKm, demandIndex, policy) {
   assertPolicy(policy);
   const span = SHARE_MAX_PCT - SHARE_MIN_PCT;
-  const distanceFactor = clamp01(distanceKm / policy.distanceSaturationKm);
-  const demandFactor = clamp01((demandIndex - 1) / (policy.demandSaturationIndex - 1));
-  const blended = (distanceFactor * policy.distanceWeight) + (demandFactor * policy.demandWeight);
+  const distanceFactor = clamp01(distanceKm / policy.shareCurve.saturationKm);
+  const demandFactor = clamp01((demandIndex - 1) / (policy.shareCurve.demandSaturationIndex - 1));
+  const blended = (distanceFactor * policy.shareCurve.distanceWeight) + (demandFactor * policy.shareCurve.demandWeight);
   const pct = SHARE_MIN_PCT + Math.round(span * blended);
   /* Structural, not decorative: if the derivation is ever changed carelessly, refuse rather than
      silently pay a share outside the commercial mandate. */
@@ -186,10 +280,16 @@ function quote(input, policy) {
     throw new QuoteRefused('vehicle_class_unpriced', vclass);
   }
 
-  /* 2. Economics and route — all mandatory, all explicitly present. */
+  /* 2. Route and live market signal come from the CALLER; cost economics come from APPROVED
+        POLICY, per vehicle class. Splitting them this way is the point: a caller can describe the
+        trip but cannot state what it costs, so no request can move a rider's pay. */
   const e = {};
-  assertRequired(input, REQUIRED_ECONOMICS, e);
   assertRequired(input, REQUIRED_ROUTE, e);
+  const classEcon = resolveEconomics(policy, vclass);
+  e.energyUnitCostMinor = classEcon.energyUnitCostMinor;
+  e.energyUnitsPerKm = classEcon.energyUnitsPerKm;
+  e.maintenanceCostPerKmMinor = classEcon.maintenanceCostPerKmMinor;
+  e.riderMinuteRateMinor = classEcon.riderMinuteRateMinor;
 
   /* 3. Operating cost the rider actually incurs. */
   const energyCostMinor = Math.ceil(e.distanceKm * e.energyUnitsPerKm * e.energyUnitCostMinor);
@@ -261,12 +361,14 @@ function quote(input, policy) {
          figures but cannot tell a quote issued under approved policy from one issued under a
          since-revised curve — which is exactly what the renegotiation guard must detect. */
       policy: Object.freeze({
-        distanceWeight: policy.distanceWeight,
-        demandWeight: policy.demandWeight,
-        distanceSaturationKm: policy.distanceSaturationKm,
-        demandSaturationIndex: policy.demandSaturationIndex,
+        policyVersion: String(policy.policyVersion),
+        effectiveFrom: String(policy.effectiveFrom),
         approvedBy: String(policy.approvedBy),
-        approvedAt: String(policy.approvedAt),
+        distanceWeight: policy.shareCurve.distanceWeight,
+        demandWeight: policy.shareCurve.demandWeight,
+        saturationKm: policy.shareCurve.saturationKm,
+        demandSaturationIndex: policy.shareCurve.demandSaturationIndex,
+        energyUnitLabel: classEcon.energyUnitLabel,
       }),
     }),
     createdAt: new Date().toISOString(),
@@ -317,8 +419,17 @@ function assertSettleable(pinned, claimed, opts) {
     if (!pinnedPolicy) {
       throw new QuoteRefused('earning_renegotiated', 'pinned quote records no pricing policy to compare');
     }
-    const FIELDS = ['distanceWeight', 'demandWeight', 'distanceSaturationKm', 'demandSaturationIndex'];
-    const drifted = FIELDS.filter((k) => Number(pinnedPolicy[k]) !== Number(cur[k]));
+    /* VERSION FIRST. Bumping `policyVersion` is the declared way policy moves, so comparing it
+       catches a revision even when the numbers coincide. The curve fields are compared as well,
+       so an edit that changes values but FORGETS to bump the version is caught too — neither
+       check alone is sufficient. */
+    if (String(pinnedPolicy.policyVersion) !== String(cur.policyVersion)) {
+      throw new QuoteRefused('earning_renegotiated',
+        'quote priced under policy ' + pinnedPolicy.policyVersion + ', now ' + cur.policyVersion);
+    }
+    const curCurve = cur.shareCurve || {};
+    const FIELDS = ['distanceWeight', 'demandWeight', 'saturationKm', 'demandSaturationIndex'];
+    const drifted = FIELDS.filter((k) => Number(pinnedPolicy[k]) !== Number(curCurve[k]));
     if (drifted.length) {
       throw new QuoteRefused('earning_renegotiated',
         'pricing policy changed since the quote was pinned: ' + drifted.join(', '));

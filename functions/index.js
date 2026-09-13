@@ -8611,10 +8611,19 @@ exports.webhookIntasend = onRequest(
                   const _pol = await _dqa.loadPolicy(db);
                   if (!_pol) throw new _dqa.QuoteRefused('pricing_policy_required',
                     'platformConfig/deliveryPricing is unset — SOKONI has not approved commercial values');
-                  /* Route and per-vehicle economics must come from the approved policy too; this
-                     webhook has no OSRM route, so absent inputs REFUSE rather than guess. */
-                  const _q = _dqa.quote(Object.assign({ vehicleType: 'moto' },
-                    _pol.economics || {}, _pol.defaultRoute || {}), _pol);
+                  /* The caller supplies the TRIP; the authority supplies the COST. This webhook
+                     has no routing (no OSRM leg, no live demand index), so it cannot describe the
+                     trip — and the quote therefore REFUSES rather than guessing a distance. That
+                     is the correct outcome today: the delivery is created `pricingBlocked`, and
+                     wiring a real route/demand source is its own gate. */
+                  const _q = _dqa.quote({
+                    vehicleType: 'moto',
+                    distanceKm:       _pm.routeDistanceKm,
+                    estimatedMinutes: _pm.routeMinutes,
+                    demandIndex:      _pm.demandIndex,
+                    packageCount: Array.isArray(_lines) ? _lines.length : 1,
+                    shopCount: 1,
+                  }, _pol);
                   _deliveryPricing = {
                     deliveryQuote: {
                       quoteId: _q.quoteId, pricingVersion: _q.pricingVersion,
