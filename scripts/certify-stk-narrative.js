@@ -1,0 +1,356 @@
+'use strict';
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   THE M-PESA PROMPT NAMES THE SHOP — certification.
+
+   WHAT CAN AND CANNOT BE DONE, stated once so it is not re-litigated:
+   the PIN dialog on the buyer's handset is Safaricom's SIM-toolkit screen. It cannot be styled,
+   branded, re-laid-out or replaced by SOKONI or by anyone else. The ONE thing we control is the
+   `narrative` string in the STK request. It used to carry our own payment reference —
+   `SOKONI: SKN-1757…` — which is the "random code" a buyer sees and which tells them nothing about
+   who is receiving their money. That string is what this gate fixes.
+
+   WHAT IS PROVEN HERE
+   The real `initiateSTKPush` handler is executed with the gateway and Firestore replaced, and the
+   ACTUAL payload it would send is captured and read. Not "the module exists" — the bytes on the
+   wire.
+
+   WHAT IS NOT PROVEN HERE, AND CANNOT BE
+   Whether IntaSend forwards `narrative` into what Safaricom finally renders. That needs one real
+   push to a real handset. This suite proves SOKONI sends the right string; it cannot prove the
+   carrier displays it. Said plainly rather than implied away.
+
+   Run:  node scripts/certify-stk-narrative.js
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+const fs = require('fs');
+const path = require('path');
+const ROOT = path.resolve(__dirname, '..');
+const FN = path.join(ROOT, 'functions');
+process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-stk-cert';
+/* The handler refuses before the gateway if the secret is unset; supply a local value so the
+   PAYLOAD-BUILDING path is reached. No real key, and the gateway is intercepted regardless. */
+process.env.INTASEND_PRIVATE_KEY = process.env.INTASEND_PRIVATE_KEY || 'cert-local-not-a-real-key';
+
+const WATCHDOG = setTimeout(() => {
+  process.stdout.write('\n  ✖ WATCHDOG — the suite did not finish in 120s. Failing closed.\n');
+  process.exit(2);
+}, 120000);
+
+let PASS = 0, FAIL = 0, BLOCKED = 0;
+const FAILURES = [];
+const ok = (id, m) => { PASS++; console.log('  ✔ ' + id.padEnd(7) + m); return true; };
+const bad = (id, m, x) => { FAIL++; FAILURES.push(id + ' — ' + m); console.log('  ✖ ' + id.padEnd(7) + m + (x ? '\n            ' + String(x).slice(0, 240) : '')); return false; };
+const blocked = (id, m) => { BLOCKED++; FAILURES.push(id + ' — BLOCKED: ' + m); console.log('  ⚠ ' + id.padEnd(7) + 'BLOCKED: ' + m); return false; };
+const check = (id, c, m, x) => (c ? ok(id, m) : bad(id, m, x));
+const section = (t) => console.log('\n' + t + '\n' + '─'.repeat(Math.max(t.length, 78)));
+const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/[^\n]*$/gm, ' ');
+
+async function quiet(fn) {
+  const so = process.stdout.write.bind(process.stdout), se = process.stderr.write.bind(process.stderr);
+  process.stdout.write = () => true; process.stderr.write = () => true;
+  try { return await fn(); } finally { process.stdout.write = so; process.stderr.write = se; }
+}
+
+/* ── Store ─────────────────────────────────────────────────────────────────────────────────── */
+function makeStore() {
+  const data = new Map();
+  const key = (c, d) => c + '/' + d;
+  const snapOf = (c, d) => { const v = data.get(key(c, d)); return { id: d, exists: v !== undefined, data: () => (v === undefined ? undefined : Object.assign({}, v)) }; };
+  const collection = (c) => ({
+    doc: (d) => ({
+      id: String(d),
+      get: async () => snapOf(c, d),
+      set: async (o) => data.set(key(c, d), Object.assign({}, o)),
+      create: async (o) => { if (data.has(key(c, d))) { const e = new Error('EXISTS'); e.code = 6; throw e; } data.set(key(c, d), Object.assign({}, o)); },
+      update: async (o) => data.set(key(c, d), Object.assign({}, data.get(key(c, d)) || {}, o)),
+      delete: async () => data.delete(key(c, d)),
+    }),
+    where: function (_f, _op, val) {
+      const self = { where: () => self, limit: () => self, orderBy: () => self,
+        get: async () => {
+          const ids = Array.isArray(val) ? val : [val];
+          const docs = ids.filter((i) => data.has(key(c, i))).map((i) => snapOf(c, i));
+          return { empty: !docs.length, size: docs.length, docs, forEach: (f) => docs.forEach(f) };
+        } };
+      return self;
+    },
+  });
+  return { collection, _put: (c, d, o) => data.set(key(c, d), Object.assign({}, o)), _del: (c, d) => data.delete(key(c, d)) };
+}
+const STORE = makeStore();
+let LAST_ERR = null;
+
+/* ── Load, with the gateway intercepted so nothing leaves the machine ───────────────────────── */
+let admin, idx, MI, SENT = [];
+try {
+  admin = require(require.resolve('firebase-admin', { paths: [FN] }));
+  const real = admin.firestore;
+  const stub = function () { return STORE; };
+  Object.getOwnPropertyNames(real).forEach((k) => { if (!['length', 'name', 'prototype'].includes(k)) { try { stub[k] = real[k]; } catch (_) {} } });
+  Object.defineProperty(admin, 'firestore', { value: stub, configurable: true, writable: true });
+  if (admin.firestore() !== STORE) throw new Error('the Firestore stub did not take effect');
+
+  /* The STK call goes out over node:https. Intercept `request` and capture the body instead of
+     letting it reach IntaSend — a certification that pushed real prompts would be a defect. */
+  const https = require('https');
+  const realRequest = https.request;
+  https.request = function (opts, cb) {
+    const chunks = [];
+    const res = {
+      statusCode: 200, headers: {},
+      on(ev, fn) {
+        if (ev === 'data') fn(Buffer.from(JSON.stringify({ id: 'stub-checkout-id', invoice: { invoice_id: 'stub' } })));
+        if (ev === 'end') fn();
+        return res;
+      },
+      setEncoding() { return res; },
+    };
+    const req = {
+      on() { return req; },
+      write(b) { chunks.push(String(b)); return true; },
+      end() { SENT.push(chunks.join('')); if (cb) cb(res); return req; },
+      destroy() {}, setTimeout() { return req; },
+    };
+    return req;
+  };
+  https.request.__real = realRequest;
+
+  MI = require(path.join(FN, 'shared', 'merchant-identity.js'));
+  idx = require(path.join(FN, 'index.js'));
+} catch (e) {
+  console.log('\n  ✖ SETUP — ' + (e && e.message));
+  console.log((e && e.stack || '').split('\n').slice(0, 6).join('\n'));
+  clearTimeout(WATCHDOG); process.exit(2);
+}
+
+const BUYER = 'buyer-stk', SELLER = 'seller-stk', PRODUCT = 'prod-stk';
+const REQ = (data) => ({ data, auth: { uid: BUYER, token: { uid: BUYER } }, rawRequest: { headers: {}, ip: '127.0.0.1' }, acceptsStreaming: false });
+const idOf = (n) => ({ v: 1, resolved: true, name: n, sellerUid: 'u', authority: 'shops/u.name', reason: null });
+
+function seed(shopName) {
+  STORE._put('products', PRODUCT, { name: 'Item', price: 100, sellerUid: SELLER, stock: 5 });
+  if (shopName === null) STORE._del('shops', SELLER);
+  else STORE._put('shops', SELLER, { name: shopName });
+}
+
+async function push(overrides) {
+  SENT = [];
+  const payload = Object.assign({
+    phone: '254712345678', amount: 250, ref: 'SKN-' + Date.now(),
+    meta: { category: 'product', serviceDesc: 'SOKONI Order', items: [{ productId: PRODUCT, qty: 1 }],
+      sellerUid: 'ATTACKER-CLAIMED-UID', sellerName: 'TOTALLY DIFFERENT SHOP' },
+  }, overrides || {});
+  let _err = null;
+  try { await quiet(() => idx.initiateSTKPush.run(REQ(payload))); } catch (e) { _err = e; }
+  if (!SENT.length && _err) LAST_ERR = (_err.message || String(_err));
+  const body = SENT.length ? JSON.parse(SENT[SENT.length - 1]) : null;
+  return body;
+}
+
+async function main() {
+  console.log('\n════════════════════════════════════════════════════════════════════════════════');
+  console.log('  THE M-PESA PROMPT NAMES THE SHOP');
+  console.log('  The PIN dialog is Safaricom\'s and cannot be branded. The narrative is ours.');
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+
+  section('0  HARNESS');
+  check('H0-1', typeof idx.initiateSTKPush.run === 'function', 'the REAL initiateSTKPush handler is invocable');
+  seed('KASS SHOP');
+  const probe = await push();
+  if (!probe) { blocked('H0-2', 'the gateway interceptor captured no payload — handler refused first: ' + LAST_ERR); return finish(); }
+  ok('H0-2', 'the outgoing STK payload is captured, not sent (nothing leaves this machine)');
+  check('H0-3', probe.method === 'M-PESA' && probe.currency === 'KES', 'it is a real STK payload (method + currency present)');
+
+  section('1  WHAT THE BUYER READS');
+  check('N1-1', typeof probe.narrative === 'string' && probe.narrative.length > 0, 'a narrative is sent');
+  ok('N1-0', 'the string actually on the wire: "' + probe.narrative + '"');
+  check('N1-2', !/SKN-|^SOKONI: /.test(probe.narrative),
+    'it is NOT the payment reference any more — the "random code" is gone');
+  check('N1-3', probe.narrative.indexOf('KASS SHOP') === 0, 'the SHOP NAME leads');
+  check('N1-4', /Powered by SOKONI/.test(probe.narrative), 'it says Powered by SOKONI');
+  check('N1-5', /Bravilex/i.test(probe.narrative), 'it carries the Bravilex identity');
+  check('N1-6', probe.api_ref && /SKN-/.test(probe.api_ref),
+    'the reference still travels in api_ref — reconciliation is unaffected by the narrative change');
+
+  section('2  THE NAME IS THE SERVER\'S, NOT THE BROWSER\'S');
+  check('S2-1', probe.narrative.indexOf('TOTALLY DIFFERENT SHOP') === -1,
+    'the shop name the CLIENT claimed in meta.sellerName is ignored');
+  {
+    /* The client named a different seller too. The server resolved through
+       products/{id}.sellerUid, so the claim changed nothing. */
+    seed('KASS SHOP');
+    const forged = await push({ meta: { category: 'product', items: [{ productId: PRODUCT }],
+      sellerUid: 'ATTACKER', sellerName: 'ATTACKER SHOP', serviceDesc: 'x' } });
+    check('S2-2', !!forged && forged.narrative.indexOf('KASS SHOP') === 0 && !/ATTACKER/.test(forged.narrative),
+      'a forged meta.sellerUid + meta.sellerName cannot rename the prompt');
+  }
+  {
+    STORE._put('products', PRODUCT, { name: 'Item', price: 100, sellerUid: 'OTHER-SELLER', stock: 5 });
+    STORE._put('shops', 'OTHER-SELLER', { name: 'THE REAL OWNER' });
+    const moved = await push();
+    check('S2-3', !!moved && /THE REAL OWNER/.test(moved.narrative),
+      'change who OWNS the product and the prompt follows — it reads products/{id}.sellerUid');
+    seed('KASS SHOP');
+  }
+
+  section('3  FAIL CLOSED — never name a shop we cannot prove');
+  {
+    seed(null);
+    const noShop = await push();
+    check('F3-1', !!noShop && !/KASS|undefined|null|SELLER|seller-stk/.test(noShop.narrative),
+      'no shop document → no merchant claim: "' + (noShop && noShop.narrative) + '"');
+    check('F3-2', !!noShop && /SOKONI/.test(noShop.narrative) && /Bravilex/i.test(noShop.narrative),
+      '…the buyer still sees the platform and its owner');
+  }
+  {
+    STORE._put('shops', SELLER, { name: '   ' });
+    const blank = await push();
+    check('F3-3', !!blank && blank.narrative.indexOf('SOKONI') === 0, 'a blank shop name is not a name');
+    seed('KASS SHOP');
+  }
+  {
+    const noItems = await push({ meta: { category: 'product', serviceDesc: 'x' } });
+    check('F3-4', !!noItems && !/KASS/.test(noItems.narrative),
+      'no items to resolve from → no merchant claim, and the push still goes out');
+  }
+  check('F3-5', MI.narrativeFor({ resolved: false }) === 'SOKONI · a product of Bravilex',
+    'the unresolved string names nobody it cannot prove');
+
+  section('4  TWO CHANNELS, ONE AUTHORITY');
+  {
+    const on = MI.narrativeFor(idOf('KASS SHOP'), { channel: 'online' });
+    const till = MI.narrativeFor(idOf('KASS SHOP'), { channel: 'till' });
+    ok('C4-0', 'online : "' + on + '"');
+    ok('C4-1', 'till   : "' + till + '"');
+    check('C4-2', on !== till && /Till/.test(till), 'the till format is distinct and says Till');
+    check('C4-3', /Powered by SOKONI/.test(on) && /Powered by SOKONI/.test(till), 'both carry the platform');
+    check('C4-4', /Bravilex/i.test(on) && /Bravilex/i.test(till), 'both carry Bravilex');
+    check('C4-5', till.indexOf('KASS SHOP') === 0 && on.indexOf('KASS SHOP') === 0, 'both lead with the shop');
+  }
+
+  section('5  IT DEGRADES ON OUR TERMS, NOT THE GATEWAY\'S');
+  {
+    const long = 'MAMA NJERI FRESH GROCERIES HOUSEHOLD SUPPLIES AND GENERAL STORE';
+    const n = MI.narrativeFor(idOf(long));
+    check('D5-1', n.length <= MI.MAX_NARRATIVE, 'a long shop name still fits the budget (' + n.length + ' ≤ ' + MI.MAX_NARRATIVE + ')');
+    check('D5-2', n.indexOf(long) === 0, '…and the SHOP NAME survives — the part that answers "am I paying the right person?"');
+    const huge = 'X'.repeat(200);
+    const hn = MI.narrativeFor(idOf(huge));
+    check('D5-3', hn.length <= MI.MAX_NARRATIVE && hn.indexOf('X') === 0,
+      'a shop name longer than the whole budget keeps the name and drops our branding');
+    check('D5-4', MI.narrativeFor(idOf('A B')).indexOf('a product of Bravilex') > -1,
+      'a short name gets the FULL identity line');
+  }
+
+  section('6  THE AMOUNT IS SAFARICOM\'S TO RENDER');
+  check('A6-1', !/\b250\b|Ksh|KES/.test(probe.narrative),
+    'the narrative does not repeat the amount — the dialog already shows "Pay Ksh …", and a second figure that ever disagreed would be worse than none');
+  check('A6-2', probe.amount === 250, '…while the amount itself is sent in the field Safaricom reads');
+
+  section('7  SOURCE — one authority, no second opinion');
+  const IDX = strip(fs.readFileSync(path.join(FN, 'index.js'), 'utf8'));
+  check('R7-1', /narrative:\s*_merchantIdentity\.narrativeFor\(/.test(IDX), 'the payload takes its narrative from the shared authority');
+  check('R7-2', !/narrative:\s*[`'"]SOKONI: /.test(IDX), 'the old ref-based narrative is gone from the source');
+  check('R7-3', !/narrativeFor\([^)]*meta\.|resolveMerchantIdentity\([^)]*meta\.sellerUid/.test(IDX),
+    'no path feeds client metadata into the identity');
+
+  section('8  SABOTAGE');
+  sab('X8-1', 'restoring the ref-based narrative',
+    IDX.replace(/narrative:\s*_merchantIdentity\.narrativeFor\([^)]*\)/, 'narrative: `SOKONI: ${ref}`'),
+    (s) => /narrative:\s*[`'"]SOKONI: /.test(s) && !/narrative:\s*_merchantIdentity/.test(s));
+  sab('X8-2', 'letting the resolver fall back to a uid',
+    strip(fs.readFileSync(path.join(FN, 'shared', 'merchant-identity.js'), 'utf8'))
+      .replace('return unresolved(\'shop_has_no_name\');', 'return { resolved: true, name: sellerUid };'),
+    (s) => /name:\s*sellerUid/.test(s));
+  {
+    const orig = MI.narrativeFor;
+    MI.narrativeFor = () => 'SOKONI: SKN-DECOY';
+    const out = await push();
+    MI.narrativeFor = orig;
+    check('X8-3', !!out && out.narrative === 'SOKONI: SKN-DECOY',
+      'neutralising narrativeFor changes the string actually sent — the handler really calls it, it is not decoration');
+  }
+  {
+    const after = await push();
+    check('X8-R', !!after && after.narrative.indexOf('KASS SHOP') === 0, 'POST-SABOTAGE — restored and correct again');
+  }
+
+  section('9  THE IN-APP STK PANEL — built long ago, and never reached');
+  {
+    const CO = fs.readFileSync(path.join(ROOT, 'checkout.html'), 'utf8');
+    const COS = strip(CO);
+    /* The panel's copy lives in markup, so it is read from the RAW file; the wiring is read
+       from the stripped file, because the comment explaining the wiring names the very
+       identifiers being searched for. */
+    check('P9-1', /id="stkSteps"/.test(CO) && /id="stkStep1"/.test(CO) && /id="stkStep3"/.test(CO),
+      'the three-step panel markup is present');
+    check('P9-2', /📤 Sending STK Push/.test(CO) && /📱 Check Your Phone/.test(CO)
+      && /Enter your M-PESA PIN when prompted/.test(CO),
+      'it carries the emoji-forward copy that was built: "📤 Sending STK Push" → "📱 Check Your Phone"');
+    check('P9-3', /\.stk-steps\{[^}]*display:\s*none/.test(CO),
+      'it is display:none until something reveals it — which is why an unwired path shows nothing');
+
+    /* THE DEFECT: only sendStkPush() ever revealed it. _placeOrderCore is the path the Pay
+       button actually runs. */
+    const core = (() => {
+      const a = COS.indexOf('async function _placeOrderCore');
+      if (a < 0) return null;
+      const b = COS.indexOf('\nfunction ', a + 10);
+      return b > a ? COS.slice(a, b) : COS.slice(a);
+    })();
+    if (core === null) { blocked('P9-4', 'could not isolate _placeOrderCore'); }
+    else {
+      check('P9-4', /_stkPanel\s*\(\s*1\s*\)/.test(core) && /_stkPanel\s*\(\s*2\s*\)/.test(core),
+        'the LIVE checkout path now reveals and advances the panel (this is what was missing)');
+      check('P9-5', /_stkPanel\s*\(\s*2\s*\)[\s\S]{0,200}enter your PIN on your phone/.test(core),
+        'step 2 — "Check Your Phone" — fires exactly when the prompt has been sent');
+    }
+    check('P9-6', /function _stkPanel\s*\([\s\S]{0,400}activateStkStep/.test(COS),
+      'it drives the SAME activateStkStep the old path uses — not a second step engine that would drift');
+    check('P9-7', /function _stkPanel\s*\([\s\S]{0,400}catch/.test(COS),
+      'and it is swallowed on failure — a decorative panel must never interrupt a payment');
+
+    sab('P9-S1', 'unwiring the live path from the panel',
+      core ? core.replace(/_stkPanel\s*\(\s*\d\s*\)/g, 'void 0') : '',
+      (s) => !/_stkPanel\s*\(/.test(s));
+    /* `activateStkStep` appears TWICE inside _stkPanel — the typeof guard and the call — so a
+       single-occurrence replace leaves the second one inside the detector's window and the
+       sabotage reads as undetected. Replace every occurrence, which is what "it stopped using
+       the shared engine" actually means. */
+    sab('P9-S2', 'giving it a second step engine instead of the shared one',
+      COS.replace(/activateStkStep/g, 'myOwnStepEngine'),
+      (s) => !/function _stkPanel\s*\([\s\S]{0,400}activateStkStep/.test(s));
+  }
+
+  section('10  NOT PROVEN HERE');
+  console.log('  ○ U9-1   Whether IntaSend forwards `narrative` into what Safaricom finally renders is');
+  console.log('           UNPROVEN and cannot be proven from a test harness. It needs ONE real push to a');
+  console.log('           real handset. This suite proves SOKONI sends the right string, not that the');
+  console.log('           carrier displays it.');
+  console.log('  ○ U9-2   The Till/SPOS STK SENDER does not exist on this branch — `functions/shared/');
+  console.log('           stk-gateway.js` and the pos-qr.js wiring are on slice/realtime-control-plane.');
+  console.log('           The till FORMAT is built and certified above; it has no live caller here yet.');
+
+  return finish();
+}
+
+function sab(id, what, mutated, detector) {
+  let f; try { f = detector(mutated) === true; } catch (e) { return bad(id, what + ' — detector CRASHED', e.message); }
+  return f ? ok(id, 'SABOTAGE ' + what + ' → detected') : bad(id, 'SABOTAGE ' + what + ' → NOT detected');
+}
+
+function finish() {
+  section('SUMMARY');
+  console.log('  passed  : ' + PASS + '\n  failed  : ' + FAIL + '\n  blocked : ' + BLOCKED);
+  if (FAILURES.length) { console.log('\n  FAILURES:'); FAILURES.forEach((f) => console.log('   • ' + f)); }
+  const green = FAIL === 0 && BLOCKED === 0;
+  console.log('\n  ' + (green ? '✅ STK NARRATIVE: GREEN' : '❌ NOT GREEN') + '  (handset proof still outstanding — see section 9)');
+  console.log('  Certification only. Nothing here deploys anything, and no prompt was sent.\n');
+  clearTimeout(WATCHDOG);
+  process.exit(green ? 0 : 1);
+}
+
+main().catch((e) => {
+  console.log('\n  ✖ SUITE CRASHED — a crash is not a pass.\n    ' + (e && e.stack ? e.stack.split('\n').slice(0, 6).join('\n    ') : e));
+  clearTimeout(WATCHDOG); process.exit(2);
+});

@@ -1,3 +1,106 @@
+## 2026-09-14 (53) — the M-PESA prompt names the shop, not a reference code
+
+**46 assertions, 0 failed, 0 blocked. Nothing deployed. Handset proof still outstanding.**
+Suite: `scripts/certify-stk-narrative.js`
+
+### What the buyer used to read
+
+```
+SOKONI: SKN-1757…
+```
+
+Our own payment reference — a random-looking code that tells a buyer nothing about who is receiving
+their money. It is now:
+
+```
+KASS SHOP · Powered by SOKONI · a product of Bravilex
+```
+
+### The boundary, stated so it is not re-litigated
+
+The PIN dialog on the handset is **Safaricom's SIM-toolkit screen**. It cannot be styled, branded,
+re-laid-out or given emojis by SOKONI or by anyone else, and the business name at the top of it is
+the one registered on the collection account with Safaricom — an account configuration, not a code
+change. The `narrative` string is the whole of our influence over what the buyer reads there, which
+is exactly why spending it on an internal id was spending the only voice we had on nothing.
+
+### What was recovered, and what is new
+
+`functions/shared/merchant-identity.js` is recovered **verbatim** from `85c13be` on
+`slice/realtime-control-plane` — built there, never an ancestor of this branch, so this branch was
+still sending the reference. Its authority chain is unchanged:
+`products/{id}.sellerUid → shops/{sellerUid}.name`, read server-side, failing closed.
+
+New in this entry: `narrativeFor` takes a **channel** and carries the corporate identity.
+
+| channel | string |
+|---|---|
+| `online` | `<SHOP> · Powered by SOKONI · a product of Bravilex` |
+| `till` | `<SHOP> Till · Powered by SOKONI · a product of Bravilex` |
+| unresolved | `SOKONI · a product of Bravilex` — names nobody it cannot prove |
+
+**It degrades from the right.** Gateways truncate, so the order is shop, then platform, then
+corporate identity: if the field is clipped the buyer still reads the shop name, which is the part
+that answers "am I paying the right person?". A shop name longer than the whole budget keeps the
+name and drops our branding.
+
+**The amount is deliberately not in it.** Safaricom's dialog already renders `Pay Ksh <amount> to …`
+from the figure in the request. Repeating it would spend the few characters we own on something the
+buyer is already reading, and a second amount that ever disagreed with the authoritative one would
+be worse than none.
+
+### The name is the server's, not the browser's
+
+`initiateSTKPush` resolves the shop from the product ownership authority. `meta.sellerUid` and
+`meta.sellerName` arrive from the buyer's own browser and are ignored — the client may say WHICH
+PRODUCTS, the server decides WHO OWNS them. Proven by execution: a payload claiming
+`sellerName: "TOTALLY DIFFERENT SHOP"` still produces the real shop's name (`S2-1`, `S2-2`), and
+moving the product to another seller moves the prompt (`S2-3`).
+
+Resolution is best-effort — a lookup failure yields no merchant claim and never blocks a payment.
+
+### Certified by reading the bytes on the wire
+
+The suite executes the real `initiateSTKPush` with Firestore replaced and `https.request`
+intercepted, and asserts on the **actual payload that would be sent**. No prompt is pushed and
+nothing leaves the machine. `X8-3` neutralises `narrativeFor` and shows the string on the wire
+change, proving the handler really calls it.
+
+### Second find: the in-app STK panel was built and never reached
+
+`checkout.html` has carried a three-step emoji panel — `📤 Sending STK Push` → `📱 Check Your Phone
+/ Enter your M-PESA PIN when prompted` → verifying — behind `display:none`. Only `sendStkPush()`
+(the old `#mpesaPushBtn` path) ever revealed it. **`_placeOrderCore()` — the path the Pay button
+actually runs — never touched it**, showing a single grey status line instead. Built, styled, and
+dead.
+
+It is now driven from the live path through the **same** `activateStkStep` the old path uses; a
+second step engine would drift from the first within a release. Every call is guarded and swallowed:
+a decorative panel must never interrupt a payment already in flight.
+
+### Not proven here
+
+* **Whether IntaSend forwards `narrative` into what Safaricom finally renders.** It needs one real
+  push to a real handset. This suite proves SOKONI sends the right string, not that the carrier
+  displays it. Carried forward from `cc93c24`, which flagged the same gap.
+* **The Till/SPOS STK sender does not exist on this branch.** `functions/shared/stk-gateway.js` and
+  the `pos-qr.js` wiring are on `slice/realtime-control-plane`. The till FORMAT is built and
+  certified here; it has no live caller yet.
+
+### Files affected
+
+`functions/shared/merchant-identity.js` (new) · `functions/index.js` (2 hunks, isolated) ·
+`checkout.html` · `scripts/certify-stk-narrative.js` (new)
+
+**Database:** none. **API:** none. **Breaking:** none — `api_ref` still carries the reference, so
+webhook reconciliation is untouched.
+
+### Deployment
+
+**None.**
+
+---
+
 ## 2026-09-14 (52) — PIN YAKO NI PRODUCT YAKO restored to this branch
 
 **38 assertions, 0 failed. Nothing deployed.**

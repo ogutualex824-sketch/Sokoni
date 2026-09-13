@@ -2344,6 +2344,20 @@ function placeOrder(){
   _placeOrderCore();
 }
 
+/* Reveal the built STK panel and advance it, without owning a second step engine.
+   `activateStkStep` and the markup are the ones `sendStkPush()` already uses; this only makes
+   the live checkout path reach them. Every failure is swallowed: a decorative panel must never
+   be able to interrupt a payment. */
+function _stkPanel(step){
+  try {
+    const panel = document.getElementById("stkSteps");
+    if (panel) panel.style.display = "flex";
+    if (typeof activateStkStep === "function" && document.getElementById("stkStep" + step)) {
+      activateStkStep(step);
+    }
+  } catch (_) {}
+}
+
 async function _placeOrderCore(){
   const name = document.getElementById("coName").value.trim();
   const phone = document.getElementById("coPhone").value.trim();
@@ -2458,6 +2472,19 @@ async function _placeOrderCore(){
           if (window._skToast) window._skToast('Updated total: KES ' + _authTotal.toLocaleString());
         }
 
+        /* ── THE STK PANEL WAS BUILT AND NEVER REACHED ────────────────────────────────────
+           #stkSteps — 📤 Sending STK Push → 📱 Check Your Phone → verifying — has been in this
+           page all along, but only `sendStkPush()` (the old #mpesaPushBtn path) ever revealed
+           it. THIS is the path the Pay button actually runs, and it showed a single grey line
+           of status text instead. Built, styled, and dead.
+
+           So it is driven from here now, through the SAME `activateStkStep` the other path
+           uses — a second step engine would drift from the first within a release. The
+           one-line status stays as well: it is what the trust panel and screen readers read.
+
+           Defensive by design: a missing node must never take down a payment that is already
+           in flight, so every call is guarded and failure is swallowed. */
+        _stkPanel(1);
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Sending M-PESA prompt…');
         /* Seller + order linkage ride in meta so the webhook credits the right
            seller (meta.sellerUid, since the buyer is the caller) and creates/finalises
@@ -2476,6 +2503,7 @@ async function _placeOrderCore(){
           serviceDesc: 'SOKONI Order',
         });
 
+        _stkPanel(2);
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('waiting', 'M-PESA prompt sent — enter your PIN on your phone…');
         await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: _authTotal, phone }, (status) => {
           if (window._checkoutSetTrustStatus && status === 'PENDING') {
@@ -2518,6 +2546,7 @@ async function _placeOrderCore(){
            credited). Do NOT re-write it — alreadyPersisted skips the client write.
            Phase is 'completing' (the webhook is updating order/inventory/records);
            no success text is asserted until the order document is authoritative. */
+        _stkPanel(3);
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('completing', 'Completing your order…');
         saveAndRedirect(phone, 'mpesa', _ordId, null, true, /* alreadyPersisted */ true);
       } catch (e) {

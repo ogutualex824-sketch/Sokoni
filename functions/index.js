@@ -20,6 +20,7 @@ const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https")
    dead weight that a certification can go on asserting long after the code stopped using it. */
 const _dqEndpoint = require("./delivery-quote-endpoint");
 const _dqCarry = require("./delivery-quote-carry");   /* RES-1 — the pin travels; it is never re-derived */
+const _merchantIdentity = require("./shared/merchant-identity"); /* WHO the buyer is paying, on the M-PESA prompt */
 const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
   String(Math.abs(m) % 100).padStart(2, "0");
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
@@ -6836,12 +6837,53 @@ exports.initiateSTKPush = onCall(
        {"method":["This field is required."]} and NO `detail` key — which is
        exactly the shape the failed production payment produced: the generic
        fallback fired precisely because `detail` was absent. */
+    /* ── WHO THE BUYER IS PAYING ────────────────────────────────────────────────
+       The narrative used to read `SOKONI: SKN-1757…` — our own payment reference,
+       which tells the buyer nothing about who receives their money. It is the ONLY
+       buyer-facing string we control on that handset (the PIN dialog itself is
+       Safaricom's and cannot be styled or branded by anyone), so spending it on an
+       internal id was spending the only voice we had on nothing.
+
+       RESOLVED SERVER-SIDE, FROM THE OWNERSHIP AUTHORITY. `meta.sellerUid` and
+       `meta.sellerName` arrive from the buyer's own browser and prove nothing about
+       who is paid. The client may say WHICH PRODUCTS; the server decides WHO OWNS
+       them: products/{id}.sellerUid -> shops/{sellerUid}.name.
+
+       FAILS CLOSED. No seller, several sellers, or a shop with no name yields no
+       merchant claim at all — never a uid, a ref, or "SOKONI Merchant". Telling a
+       buyer they are paying a shop that is not receiving the money is worse than
+       telling them nothing. A lookup failure must also never block a payment, so
+       the whole resolution is best-effort. */
+    let _merchant = _merchantIdentity.resolveMerchantIdentity([], {});
+    try {
+      const _pids = [...new Set(
+        (Array.isArray(meta && meta.items) ? meta.items : [])
+          .map((i) => String((i && (i.productId || i.id)) || "")).filter(Boolean)
+      )].slice(0, 10);
+      if (_pids.length) {
+        const _pSnap = await db.collection("products")
+          .where(admin.firestore.FieldPath.documentId(), "in", _pids).get();
+        const _uids = [];
+        _pSnap.forEach((d) => { const s = (d.data() || {}).sellerUid; if (s) _uids.push(s); });
+        const _u = [...new Set(_uids)];
+        const _shops = {};
+        if (_u.length) {
+          const _sSnap = await db.collection("shops")
+            .where(admin.firestore.FieldPath.documentId(), "in", _u.slice(0, 10)).get();
+          _sSnap.forEach((d) => { _shops[d.id] = d.data() || {}; });
+        }
+        _merchant = _merchantIdentity.resolveMerchantIdentity(_u, _shops);
+      }
+    } catch (e) {
+      console.warn("[initiateSTKPush] merchant identity unresolved:", e && e.message);
+    }
+
     const payload = JSON.stringify({
       method:       "M-PESA",
       phone_number: phone,
       amount:       amountKES,
       currency:     "KES",
-      narrative:    `SOKONI: ${(meta && meta.serviceDesc) || ref}`,
+      narrative:    _merchantIdentity.narrativeFor(_merchant, { channel: "online" }),
       api_ref:      ref,
     });
 
