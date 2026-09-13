@@ -26,10 +26,30 @@ const EFFECTIVE_FROM = effArg ? effArg.slice('--effective-from='.length).trim() 
    "remain unpriced/uneconomised under the existing certified schema", so a bicycle delivery
    refuses `vehicle_class_uneconomised` rather than being priced on invented zero-energy figures. */
 const APPROVED = {
-  policyVersion: 'v1',
+  policyVersion: 'v2-goods',
   status: 'approved',
   approvedBy: 'SOKONI business approval',
   effectiveFrom: EFFECTIVE_FROM,
+  /* ── GOODS HANDLING TIME ─────────────────────────────────────────────────────────────────
+     This is what makes SOKONI a goods-delivery service rather than a passenger fare. The rider
+     waits at the merchant, takes custody, hands over and captures proof — real minutes, paid for.
+
+     Expressed as TIME, not as a higher per-minute rate, and that distinction is the whole point.
+     Reaching the KES 180 benchmark by raising `riderTimeKESPerMinute` to ~13.50 would hit the same
+     1.9 km number, but the premium would then scale with trip length: a 50 km run would go from
+     KES 1,150 to KES 2,283. Handling overhead does not grow with distance. Modelled as flat
+     baseline minutes, 50 km rises only to ~KES 1,263 and the KES/km taper survives.
+
+     `baselineMinutes: 17` is what produces ~KES 180 for the 1.9 km / 10 min motorcycle benchmark
+     — derived from the target, not a special case: the same 17 minutes apply to every distance
+     and every class, which is why the whole curve stays coherent. The previous hard-coded 2/5/3
+     handling constants lived in the authority and are now here, where commercial values belong. */
+  handling: {
+    baselineMinutes: 17,
+    perExtraPackageMinutes: 2,
+    perExtraStopMinutes: 5,
+    fragileMinutes: 3,
+  },
   shareCurve: {
     distanceWeight: 1.00,
     demandWeight: 0.00,

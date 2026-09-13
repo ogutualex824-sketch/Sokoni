@@ -52,6 +52,7 @@ const FIXTURE_POLICY = Object.freeze({
   effectiveFrom: '2026-09-13',
   approvedBy: 'FIXTURE-ONLY — not approved for production',
   shareCurve: { distanceWeight: 0.6, demandWeight: 0.4, saturationKm: 20, demandSaturationIndex: 3 },
+  handling: { baselineMinutes: 0, perExtraPackageMinutes: 2, perExtraStopMinutes: 5, fragileMinutes: 3 },
   economics: {
     demandIndex: { source: 'FIXTURE — not a real market feed' },
     vehicleClasses: {
@@ -481,6 +482,61 @@ const minor = (m) => m.minorUnits;
       const e = refuses(() => DQ.assertSettleable({ quoteId: 'x', pricingVersion: DQ.PRICING_VERSION,
         customerCharge: money.fromMinor(c), riderEarning: money.fromMinor(r), sokoniCommission: money.fromMinor(s) }));
       return !!e && e.reason === 'pinned_share_out_of_band'; });
+
+  /* ── P. Goods handling time ───────────────────────────────────────────────────────────────
+     The goods premium is expressed as TIME, not as a higher per-minute rate. That is the whole
+     design decision: a rate increase scales with trip length, so a 50 km run would carry the
+     premium fifty times over. Handling overhead does not grow with distance. P2 is the assertion
+     that holds the design in place. */
+  console.log('\nP - the goods handling premium is flat, not distance-scaled');
+  const withHandling = (h) => Object.assign({}, FIXTURE_POLICY,
+    { handling: Object.assign({}, FIXTURE_POLICY.handling, h) });
+  const h0 = withHandling({ baselineMinutes: 0 });
+  const h17 = withHandling({ baselineMinutes: 17 });
+
+  const short0 = Q(mk({ distanceKm: 1.9, estimatedMinutes: 10 }), h0);
+  const short17 = Q(mk({ distanceKm: 1.9, estimatedMinutes: 10 }), h17);
+  const long0 = Q(mk({ distanceKm: 50, estimatedMinutes: 100 }), h0);
+  const long17 = Q(mk({ distanceKm: 50, estimatedMinutes: 100 }), h17);
+
+  ckt('P1 a baseline raises the rider earning', () => minor(short17.riderEarning) > minor(short0.riderEarning),
+    () => minor(short0.riderEarning) + ' -> ' + minor(short17.riderEarning));
+  /* The premium in RIDER terms is baselineMinutes x rate — identical at both distances. */
+  ckt('P2 the premium is FLAT: the same absolute rider uplift at 1.9 km and at 50 km',
+    () => (minor(short17.riderEarning) - minor(short0.riderEarning))
+       === (minor(long17.riderEarning) - minor(long0.riderEarning)),
+    () => 'uplift short ' + (minor(short17.riderEarning) - minor(short0.riderEarning))
+      + ' vs long ' + (minor(long17.riderEarning) - minor(long0.riderEarning)));
+  ckt('P3 ...so the premium is proportionally far larger on a short trip than a long one',
+    () => ((minor(short17.customerCharge) / minor(short0.customerCharge))
+        > (minor(long17.customerCharge) / minor(long0.customerCharge))));
+  ckt('P4 the handling policy is pinned onto the quote',
+    () => short17.pricingInputs.policy.handling.baselineMinutes === 17
+       && short17.pricingInputs.handling.baseline === 17,
+    () => JSON.stringify(short17.pricingInputs.handling));
+  ckt('P5 extra parcels and stops still add their policy-defined minutes',
+    () => { const m = Q(mk({ packageCount: 4, shopCount: 3 }), h17).pricingInputs.handling;
+      return m.extraPackages === 3 * FIXTURE_POLICY.handling.perExtraPackageMinutes
+          && m.extraStops === 2 * FIXTURE_POLICY.handling.perExtraStopMinutes
+          && m.baseline === 17; });
+  ckt('P6 a MISSING handling block REFUSES (it is commercial policy, not a default)',
+    () => { const p = JSON.parse(JSON.stringify(FIXTURE_POLICY)); delete p.handling;
+      const e = refuses(() => Q(BASE, p)); return !!e && e.reason === 'pricing_policy_incomplete'; });
+  Object.keys(DQ.HANDLING_CONTRACT).forEach((k, i) => {
+    const p = JSON.parse(JSON.stringify(FIXTURE_POLICY)); delete p.handling[k];
+    const e = refuses(() => Q(BASE, p));
+    ck('P7' + String.fromCharCode(97 + i) + ' handling missing `' + k + '` REFUSES',
+      !!e && e.reason === 'pricing_policy_incomplete', e && e.reason);
+  });
+  ckt('P8 fractional handling minutes REFUSE (a rider does not spend 2.5 minutes)',
+    () => { const e = refuses(() => Q(BASE, withHandling({ baselineMinutes: 2.5 })));
+      return !!e && e.reason === 'pricing_policy_invalid'; });
+  ckt('P9 the handling constants are NOT hard-coded in the authority any more',
+    () => { const fs2 = require('fs');
+      const src = fs2.readFileSync(path.join(ROOT, 'functions', 'delivery-quote-authority.js'), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '');
+      return !/\*\s*2;|\*\s*5;|===\s*true\s*\?\s*3\s*:/.test(src); },
+    'moved to policy');
 
   console.log('\n' + '-'.repeat(74));
   console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed');

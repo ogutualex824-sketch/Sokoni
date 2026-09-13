@@ -99,6 +99,7 @@ const POLICY_CONTRACT = Object.freeze({
   effectiveFrom: 'ISO date from which these values apply',
   approvedBy: 'who approved these commercial values — a non-empty string',
   shareCurve: 'object: distanceWeight, demandWeight (must sum to 1), saturationKm, demandSaturationIndex',
+  handling: 'object: baselineMinutes, perExtraPackageMinutes, perExtraStopMinutes, fragileMinutes',
   economics: 'object: vehicleClasses{<canonicalClass>:{...}} and demandIndex{source}',
 });
 
@@ -113,6 +114,17 @@ const CLASS_ECONOMICS_CONTRACT = Object.freeze({
 });
 
 const ENERGY_UNITS = ['litre', 'kWh'];
+
+/* Handling time — HOW LONG A GOODS DELIVERY TAKES BEYOND DRIVING.
+   These were hard-coded in this module (2 / 5 / 3 minutes). They are commercial values: they
+   decide what a rider is paid for handling work, and no engineer should be setting them. Moved
+   into policy for the same reason the fuel price is in policy. */
+const HANDLING_CONTRACT = Object.freeze({
+  baselineMinutes: 'minutes every delivery consumes beyond driving — merchant wait, custody handover, proof capture',
+  perExtraPackageMinutes: 'additional minutes per parcel beyond the first',
+  perExtraStopMinutes: 'additional minutes per pickup beyond the first',
+  fragileMinutes: 'additional minutes when the consignment is fragile',
+});
 
 /* KES major -> integer minor, refusing anything that is not a clean 2-decimal money value.
    `19.995` is not a price; accepting it would silently round a rider's cost basis. */
@@ -163,6 +175,23 @@ function assertPolicy(policy) {
   if (!isPositiveNumber(sk)) throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.saturationKm');
   if (!isFiniteNumber(dsi) || dsi <= 1) {
     throw new QuoteRefused('pricing_policy_invalid', 'shareCurve.demandSaturationIndex must be > 1');
+  }
+
+  const handling = policy.handling;
+  if (!handling || typeof handling !== 'object') {
+    throw new QuoteRefused('pricing_policy_incomplete',
+      'handling — ' + Object.keys(HANDLING_CONTRACT).join(', '));
+  }
+  for (const key of Object.keys(HANDLING_CONTRACT)) {
+    const v = handling[key];
+    if (v === undefined || v === null || v === '') {
+      throw new QuoteRefused('pricing_policy_incomplete', 'handling.' + key + ' — ' + HANDLING_CONTRACT[key]);
+    }
+    /* Whole minutes only: a fractional minute is not a thing a rider spends, and it would make
+       the time value depend on float arithmetic. */
+    if (!isNonNegInt(v)) {
+      throw new QuoteRefused('pricing_policy_invalid', 'handling.' + key + ' must be a whole number of minutes, got ' + JSON.stringify(v));
+    }
   }
 
   const econ = policy.economics;
@@ -249,17 +278,28 @@ function deriveSharePct(distanceKm, demandIndex, policy) {
    Packages, stops and fragile goods cost the rider TIME, which is already paid per minute — so
    they are expressed as additional minutes, not as a surcharge on a fee. Multi-shop pickups are
    priced here ONCE; downstream must never re-derive per-leg arithmetic. */
-function handlingMinutes(input) {
+function handlingMinutes(input, handling) {
   const packageCount = isNonNegInt(input.packageCount) ? input.packageCount : 1;
   const shopCount = isNonNegInt(input.shopCount) ? input.shopCount : 1;
   if (packageCount < 1) throw new QuoteRefused('invalid_economics', 'packageCount must be >= 1');
   if (shopCount < 1) throw new QuoteRefused('invalid_economics', 'shopCount must be >= 1');
-  const extraPackages = Math.max(0, packageCount - 1) * 2;      /* 2 min per extra parcel */
-  const extraStops = Math.max(0, shopCount - 1) * 5;            /* 5 min per extra pickup */
-  const fragile = input.fragile === true ? 3 : 0;
+
+  /* BASELINE is what makes this a GOODS delivery rather than a passenger trip. Driving time is
+     only part of the job: the rider waits at the merchant, takes custody, hands over, and captures
+     proof. Those minutes are real and are paid for.
+
+     Expressing the goods premium as TIME rather than as a higher per-minute rate matters. A rate
+     increase scales with trip length, so a 50 km run would carry the same premium 50 times over;
+     handling overhead does not grow with distance. Modelled this way the premium is flat, the
+     KES/km taper survives, and `riderTimeKESPerMinute` keeps meaning what its name says. */
+  const baseline = handling.baselineMinutes;
+  const extraPackages = Math.max(0, packageCount - 1) * handling.perExtraPackageMinutes;
+  const extraStops = Math.max(0, shopCount - 1) * handling.perExtraStopMinutes;
+  const fragile = input.fragile === true ? handling.fragileMinutes : 0;
   const pickupComplexity = isNonNegInt(input.pickupComplexityMinutes) ? input.pickupComplexityMinutes : 0;
-  return { extraPackages, extraStops, fragile, pickupComplexity,
-    total: extraPackages + extraStops + fragile + pickupComplexity, packageCount, shopCount };
+  return { baseline, extraPackages, extraStops, fragile, pickupComplexity,
+    total: baseline + extraPackages + extraStops + fragile + pickupComplexity,
+    packageCount, shopCount };
 }
 
 /**
@@ -297,7 +337,7 @@ function quote(input, policy) {
   const operatingCostMinor = energyCostMinor + maintenanceMinor;
 
   /* 4. The rider's time, including handling. */
-  const handling = handlingMinutes(input);
+  const handling = handlingMinutes(input, policy.handling);
   const totalMinutes = e.estimatedMinutes + handling.total;
   const timeValueMinor = Math.ceil(totalMinutes * e.riderMinuteRateMinor);
 
@@ -381,6 +421,7 @@ function quote(input, policy) {
         saturationKm: policy.shareCurve.saturationKm,
         demandSaturationIndex: policy.shareCurve.demandSaturationIndex,
         energyUnitLabel: classEcon.energyUnitLabel,
+        handling: Object.freeze(Object.assign({}, policy.handling)),
       }),
     }),
     createdAt: new Date().toISOString(),
@@ -507,6 +548,7 @@ module.exports = {
   loadPolicy,
   POLICY_CONTRACT,
   CLASS_ECONOMICS_CONTRACT,
+  HANDLING_CONTRACT,
   POLICY_DOC,
   assertSettleable,
   assertNoClientPricing,

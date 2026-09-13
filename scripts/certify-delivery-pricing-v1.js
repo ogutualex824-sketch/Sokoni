@@ -83,7 +83,11 @@ ck('6a every long route prices and stays in band', longOk);
 /* 7 ── version pinning */
 console.log('\n7 - quote pins the policy version');
 const q7 = DQ.quote(trip('motorcycle', 6, 18), P);
-ck('7a the quote records policyVersion', q7.pricingInputs.policy.policyVersion === 'v1', q7.pricingInputs.policy.policyVersion);
+/* Derived from the approved policy, not hard-coded: a literal here goes stale the moment a new
+   policy version is approved, and then reports a version mismatch as a code failure. */
+ck('7a the quote records the APPROVED policyVersion',
+  q7.pricingInputs.policy.policyVersion === APPROVED.policyVersion,
+  q7.pricingInputs.policy.policyVersion + ' (approved: ' + APPROVED.policyVersion + ')');
 ck('7b the quote records its pricing schema version', q7.pricingVersion === DQ.PRICING_VERSION, q7.pricingVersion);
 ck('7c the quote records who approved the commercial values',
   /SOKONI/.test(q7.pricingInputs.policy.approvedBy), q7.pricingInputs.policy.approvedBy);
@@ -134,6 +138,46 @@ ck('11b the ledger holds ONE credit of the pinned amount',
 ck('11c a retry is idempotent — repeated assertSettleable returns the same figure, never doubles',
   DQ.assertSettleable(pin, null, { currentPolicy: P }).minorUnits
   === DQ.assertSettleable(pin, null, { currentPolicy: P }).minorUnits);
+
+/* 12 ── commercial benchmarks ─────────────────────────────────────────────────────────────
+   Targets supplied by SOKONI for a 1.9 km goods delivery. Reported against the curve rather than
+   tuned to individually, because hitting each one separately would mean per-class exceptions —
+   the brittleness this whole rebuild exists to remove. */
+console.log('\n12 - commercial benchmark, 1.9 km / 10 min');
+const TARGETS = { motorcycle: [170, 190], ebike: [160, 180], tuktuk: [220, 260],
+  car: [280, 330], van: [350, 450], truck: [500, Infinity] };
+const misses = [];
+Object.entries(TARGETS).forEach(([cls, [lo, hi]]) => {
+  const q = DQ.quote(trip(cls, 1.9, 10), P);
+  const v = q.customerCharge.minorUnits / 100;
+  const ok = v >= lo && v <= hi;
+  if (!ok) misses.push(cls + ' KES ' + v.toFixed(2) + ' vs target ' + lo + (hi === Infinity ? '+' : '-' + hi));
+  console.log('    ' + (ok ? 'IN  ' : 'OUT ') + cls.padEnd(11) + 'KES ' + v.toFixed(2).padStart(8)
+    + '   target ' + (hi === Infinity ? lo + '+' : lo + '-' + hi));
+});
+ck('12a the motorcycle benchmark is met (the approved target)',
+  (() => { const v = DQ.quote(trip('motorcycle', 1.9, 10), P).customerCharge.minorUnits / 100;
+    return v >= TARGETS.motorcycle[0] && v <= TARGETS.motorcycle[1]; })(),
+  'KES ' + (DQ.quote(trip('motorcycle', 1.9, 10), P).customerCharge.minorUnits / 100).toFixed(2));
+ck('12b the curve is monotonic in distance for every class',
+  (() => {
+    for (const cls of ['motorcycle', 'ebike', 'tuktuk', 'car', 'van', 'truck']) {
+      let prev = 0;
+      for (const [km, min] of [[1, 6], [1.9, 10], [3, 14], [5, 20], [10, 30], [20, 45], [30, 65], [50, 100]]) {
+        const c = DQ.quote(trip(cls, km, min), P).customerCharge.minorUnits;
+        if (c < prev) return false; prev = c;
+      }
+    }
+    return true;
+  })());
+ck('12c effective KES/km FALLS with distance (no long-trip penalty)',
+  (() => { const a = DQ.quote(trip('motorcycle', 1.9, 10), P).customerCharge.minorUnits / 1.9;
+    const b = DQ.quote(trip('motorcycle', 50, 100), P).customerCharge.minorUnits / 50;
+    return b < a; })());
+if (misses.length) {
+  console.log('\n    NOT MET (reported, not tuned around): ');
+  misses.forEach((m) => console.log('      ! ' + m));
+}
 
 console.log('\n' + '-'.repeat(74));
 console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed, ' + blocked + ' blocked');

@@ -45,6 +45,7 @@ const template = {
     saturationKm: MARK + ' — km at which the distance factor reaches maximum (> 0)',
     demandSaturationIndex: MARK + ' — demand index at which the demand factor maxes out (> 1)',
   },
+  handling: Object.entries(DQ.HANDLING_CONTRACT).reduce((a,[k,m])=>{a[k]=MARK+" — "+m;return a;},{}),
   economics: {
     demandIndex: { source: MARK + ' — where the live demand/supply figure comes from' },
     vehicleClasses: pricedClasses.reduce((acc, c) => { acc[c] = classTemplate(); return acc; }, {}),
