@@ -1,3 +1,98 @@
+## 2026-09-14 (51) — RES-1: the delivery quote is CARRIED to the rider, not re-derived
+
+**57 assertions, 0 failed, 0 blocked. Nothing deployed.**
+Suite: `scripts/certify-res1-delivery-quote-binding.js` · Record: `docs/RES1_DELIVERY_QUOTE_BINDING.md`
+
+Gate C made the **charge** authoritative. This makes the **rider's side of the same delivery**
+authoritative: `checkout → session → order → packageRequests → settlement`, one quote throughout.
+
+### A correction to entry 50's RES-1 note
+
+The Gate C record said the checkout-created delivery "carries no pinned `deliveryQuote`, so dispatch
+settlement refuses it." The conclusion was right; the mechanism named was not. The census shows two
+separate rails: `deliveries` is written by `delivery-hub.js` **in the browser** and dispatch **never
+reads it**; `packageRequests` is written server-side and is the only record dispatch and settlement
+touch. The browser rail is orphaned from settlement, not refused by it.
+
+### The defect
+
+The `packageRequests` producer called `_dqa.quote(...)` — a **second** quote minted at webhook time
+for a delivery already charged for. It priced a trip it could not describe (the webhook has no
+routing leg), so the authority refused and **every** marketplace delivery was created
+`pricingBlocked` with no rider earning at all. Had it succeeded it would have been the wrong number:
+a second derivation of the same job that the rider never agreed to.
+
+### What changed
+
+* **New** `functions/delivery-quote-carry.js` — `findCarriedPin` / `deliveryPricingForOrder`. The
+  producer's decision is only reachable through a signature-verified IntaSend callback, so it was
+  extracted to be **executable by a test**. A guard no test can drive is a guard nobody has checked.
+  The webhook's control flow is unchanged.
+* `delivery-quote-endpoint.js` — `resolveQuoteForCheckout` also returns the settlement-shaped
+  `pinned`; new `pinnedFromStored` and **`bindQuoteToOrderTx`**.
+* `functions/index.js` — the session carries the pin; `verifyIntasendPayment` copies it **from the
+  session** onto the order and consumes the quote in the same transaction; the producer carries
+  instead of minting. The now-dead `_dqa` require is removed.
+* `functions/dispatch.js` — **unchanged.** The census confirmed it already settles via
+  `assertSettleable(delivery.deliveryQuote)` and never credits `driverNet`. Asserted, not assumed.
+
+### Single-use became real
+
+Gate C's `resolveQuoteForCheckout` refuses a quote whose `status !== 'issued'`, and the Gate C suite
+proved that check worked — **by writing the state itself.** Nothing ever moved a quote off `issued`,
+so the guard protected a state that could not occur and one quote could back any number of orders.
+The check was certified; the **writer** was never asked for. `bindQuoteToOrderTx` is that writer. It
+runs in the transaction that creates the order — not at session creation, because an abandoned or
+retried checkout must not burn the buyer's quote, exactly as it must not burn their loyalty points.
+
+### The decisive check
+
+Equality of one figure could be coincidence, so `M2-1` counts the `deliveryQuotes` collection across
+a carry and requires it **unchanged** — the producer cannot be issuing anything. `C3-5` then moves
+the trip and requires the rider's earning to move with it.
+
+### A sabotage that was passing for the wrong reason
+
+`X8-2` originally rebound `dqCarry.findCarriedPin`, which `deliveryPricingForOrder` calls
+**lexically** — the patch never reached the running code, so the assertion passed whatever the
+product did. A decorative check is worse than none. Replaced with a property that is both true and
+checkable: the carry module never calls the quote **issuer** and holds **no money literal**, so
+removing the refusal could only crash, never invent a figure.
+
+### A Step 4 assertion had to follow the code
+
+`test-delivery-quote-authority` M4 asserted `_dqa.loadPolicy(` appears in `index.js`. RES-1 moved
+that call one module along, so anchored there it reported a regression for a change that made the
+property stronger. M4/M5 now check the **chain** (index → carry → authority) with a new `M4b`
+control proving the chain detector can fail. Neither was weakened; the Step 4 authority itself was
+not touched. Suite: 128/0.
+
+### Residual — proven, NOT fixed
+
+**RES-1b** — `checkout.html` patches `orders/{id}.deliveryFee` after payment with
+`delivery-hub.js`'s browser figure, and `order-settlement._grossCents` computes the seller's gross
+as `total − deliveryFee`. A browser number therefore still moves the **seller's** settlement, in
+either direction. It does not affect the rider (settlement reads the pinned quote) or the buyer
+(Gate C). Closing it needs a rules denial on the client write plus a server-fed replacement for the
+success overlay. Its own gate.
+
+### Files affected
+
+`functions/delivery-quote-carry.js` (new) · `functions/delivery-quote-endpoint.js` ·
+`functions/index.js` (5 hunks, isolated) · `scripts/certify-res1-delivery-quote-binding.js` (new) ·
+`scripts/test-delivery-quote-authority.js` · `docs/RES1_DELIVERY_QUOTE_BINDING.md` (new)
+
+**Database:** `deliveryQuotes/{id}` gains `status:'consumed'`, `orderId`, `consumedAt`;
+`checkoutSessions` and `orders` gain `deliveryQuoteId` + `deliveryQuote`; `packageRequests` gains
+`quotePinSource` and `quotedVehicleClass`. **Breaking:** none. **Regression:** Gate C 113/0/0,
+quote authority 128/0, vehicle selection 40/0, pricing v1 38/0/0, suspension 27/0.
+
+### Deployment
+
+**None.** No function deployed, no hosting published.
+
+---
+
 ## 2026-09-14 (50) — Gate C: checkout consumes the AUTHORITATIVE server quote
 
 **113 assertions, 0 failed, 0 blocked. Nothing deployed.**

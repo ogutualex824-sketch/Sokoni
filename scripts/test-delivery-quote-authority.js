@@ -417,8 +417,21 @@ const minor = (m) => m.minorUnits;
     () => /driverNet:\s*Math\.round\(_delivery/.test('driverNet:  Math.round(_delivery * 0.8),'),
     'without this, M1 could pass on a broken regex');
   ckt('M3 the producer spreads the server-pinned pricing', () => /\.\.\._deliveryPricing/.test(idxSrc));
-  ckt('M4 the producer loads approved policy before pricing', () => /_dqa\.loadPolicy\(/.test(idxSrc));
-  ckt('M5 index.js requires the quote authority', () => /require\(["']\.\/delivery-quote-authority["']\)/.test(idxSrc));
+  /* RES-1 moved the producer's pricing DECISION out of index.js into `delivery-quote-carry` — the
+     webhook path is only reachable through a signature-verified callback, and a decision no test
+     can drive is a decision nobody has checked. These two assertions used to be anchored to
+     index.js alone; anchored there they would now report a regression for a change that made the
+     property stronger, so they follow the chain instead. Neither is weakened: the policy load and
+     the authority dependency must still both exist, one module along. */
+  const carrySrc = strip(fs.readFileSync(path.join(ROOT, 'functions', 'delivery-quote-carry.js'), 'utf8'));
+  ckt('M4 the producer loads approved policy before pricing',
+    () => /_dqCarry\.deliveryPricingForOrder\(/.test(idxSrc) && /dqa\.loadPolicy\(/.test(carrySrc));
+  ckt('M4b CONTROL: the chain detector fails when either link is missing',
+    () => !(/_dqCarry\.deliveryPricingForOrder\(/.test('const x = 1;') && /dqa\.loadPolicy\(/.test(carrySrc)),
+    'without this, M4 could pass on a regex that matches anything');
+  ckt('M5 the delivery path requires the quote authority',
+    () => /require\(["']\.\/delivery-quote-carry["']\)/.test(idxSrc)
+       && /require\(["']\.\/delivery-quote-authority["']\)/.test(carrySrc));
   /* The receipt legitimately records what the customer actually paid; that is a RECORD of a
      transaction, not a pricing authority, and removing it would make the receipt wrong. */
   ckt('M6 the RECEIPT still records the amount actually paid (not a pricing path)',

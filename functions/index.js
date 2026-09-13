@@ -14,8 +14,12 @@ const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https")
    an uncommitted file would widen a broken require closure rather than contain it. The two
    display strings below are therefore formatted with INTEGER arithmetic only; no float money, and
    no new dependency. The authoritative figures live in `deliveryQuote` as integer minor units. */
-const _dqa = require("./delivery-quote-authority");
+/* RES-1 — `_dqa` is no longer required HERE. index.js used to call the quote authority directly to
+   mint a second quote at webhook time; that decision moved to `delivery-quote-carry`, which is the
+   only module on this path that touches the authority now. A require kept for old time's sake is
+   dead weight that a certification can go on asserting long after the code stopped using it. */
 const _dqEndpoint = require("./delivery-quote-endpoint");
+const _dqCarry = require("./delivery-quote-carry");   /* RES-1 — the pin travels; it is never re-derived */
 const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
   String(Math.abs(m) % 100).padStart(2, "0");
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
@@ -2620,6 +2624,15 @@ exports.createCheckoutSession = onCall(
       items:       sessionItems,
       serverTotal,
       deliveryFee: safeDeliveryFee,
+      /* RES-1 — THE SESSION CARRIES THE PIN, NOT JUST THE AMOUNT.
+         `deliveryFee` alone is a number with no provenance: downstream, the dispatch record had
+         no way to know WHICH quote produced it, so it minted a fresh one from a trip description
+         it did not have. The pinned quote travels from here to the order to the rider's
+         packageRequest, so the figure the buyer was charged is the figure the rider is paid out
+         of — one quote, one delivery, one settlement. Pickup carries none, by construction. */
+      deliveryQuoteId: _deliveryQuote ? _deliveryQuote.quoteId : null,
+      pricingVersion:  _deliveryQuote ? _deliveryQuote.pricingVersion : null,
+      deliveryQuote:   _deliveryQuote ? _deliveryQuote.pinned : null,
       promoCode:   promoApplied ? promoApplied.code : null,
       promoId:     promoApplied ? promoApplied.promoId : null,
       promoDiscount,
@@ -2881,6 +2894,12 @@ exports.verifyIntasendPayment = onRequest(
            → previously 0), AND settlement gross (order-settlement `_grossCents` = total − deliveryFee,
            previously over-settled the seller by the delivery amount). Server-authoritative. */
         deliveryFee:     Number((sessionDoc && sessionDoc.deliveryFee) || 0),
+        /* RES-1 — carried from the SESSION, never from the client. The dispatch record reads this
+           rather than pricing the trip again; `dispatch.js` settles from `deliveryQuote` and
+           refuses anything it cannot revalidate, so an order without a pin stays visibly unpriced
+           instead of silently paying an invented number. */
+        deliveryQuoteId: (sessionDoc && sessionDoc.deliveryQuoteId) || null,
+        deliveryQuote:   (sessionDoc && sessionDoc.deliveryQuote)   || null,
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
         items:           resolvedItems,
@@ -2910,7 +2929,22 @@ exports.verifyIntasendPayment = onRequest(
           return; /* commit with no writes — idempotent */
         }
 
+        /* RES-1 — read the quote BEFORE any write in this transaction: Firestore forbids a read
+           after a write, and consuming the quote must be atomic with creating the order it is
+           bound to. Bound here and nowhere earlier, because an abandoned or retried checkout must
+           not burn the buyer's quote — the same reasoning that keeps loyalty points unspent until
+           this moment. */
+        const _dqId = (sessionDoc && sessionDoc.deliveryQuoteId) || null;
+        const _dqSnap = _dqId
+          ? await tx.get(db.collection(_dqEndpoint.QUOTES).doc(String(_dqId)))
+          : null;
+
         tx.set(db.collection("orders").doc(orderId), orderDoc);
+
+        if (_dqId) {
+          _dqEndpoint.bindQuoteToOrderTx(tx, db, String(_dqId), orderId,
+            (sessionDoc && sessionDoc.uid) || null, _dqSnap);
+        }
 
         /* Idempotency record written atomically with the order */
         tx.set(verifRef, {
@@ -8622,53 +8656,25 @@ exports.webhookIntasend = onRequest(
               if (!_exists.exists) {
                 const _pin = String(Math.floor(1000 + Math.random() * 9000));
 
-                /* ── Server-authored delivery pricing, or none ──────────────────────────────
-                   UNITS ARE STATED ON BOTH SIDES, deliberately. The authority works in INTEGER
-                   MINOR UNITS; the legacy field `deliveryFee` on this collection holds MAJOR
-                   units (220, 237). Writing an authority figure into a field whose unit differs
-                   is how a 100x error ships, so the authoritative figures live inside
-                   `deliveryQuote` with explicit `...Minor` names and settlement reads only those.
-                   `riderFeeKES` / `platformCut` are written as MAJOR-unit display strings for the
-                   legacy/human readers the directive names — never read back for money. */
-                let _deliveryPricing;
-                try {
-                  const _pol = await _dqa.loadPolicy(db);
-                  if (!_pol) throw new _dqa.QuoteRefused('pricing_policy_required',
-                    'platformConfig/deliveryPricing is unset — SOKONI has not approved commercial values');
-                  /* The caller supplies the TRIP; the authority supplies the COST. This webhook
-                     has no routing (no OSRM leg, no live demand index), so it cannot describe the
-                     trip — and the quote therefore REFUSES rather than guessing a distance. That
-                     is the correct outcome today: the delivery is created `pricingBlocked`, and
-                     wiring a real route/demand source is its own gate. */
-                  const _q = _dqa.quote({
-                    vehicleType: 'moto',
-                    distanceKm:       _pm.routeDistanceKm,
-                    estimatedMinutes: _pm.routeMinutes,
-                    demandIndex:      _pm.demandIndex,
-                    packageCount: Array.isArray(_lines) ? _lines.length : 1,
-                    shopCount: 1,
-                  }, _pol);
-                  _deliveryPricing = {
-                    deliveryQuote: {
-                      quoteId: _q.quoteId, pricingVersion: _q.pricingVersion,
-                      sokoniSharePct: _q.sokoniSharePct,
-                      customerCharge: { currency: _q.customerCharge.currency, minorUnits: _q.customerCharge.minorUnits },
-                      riderEarning:   { currency: _q.riderEarning.currency,   minorUnits: _q.riderEarning.minorUnits },
-                      sokoniCommission: { currency: _q.sokoniCommission.currency, minorUnits: _q.sokoniCommission.minorUnits },
-                      pricingInputs: _q.pricingInputs,
-                      createdAt: _q.createdAt,
-                    },
-                    quoteId: _q.quoteId, pricingVersion: _q.pricingVersion,
-                    riderFeeKES: _kesMajor(_q.riderEarning.minorUnits),
-                    platformCut: _kesMajor(_q.sokoniCommission.minorUnits),
-                  };
-                } catch (_qe) {
-                  /* NO FALLBACK PRICE. The delivery is still created so the order is not lost;
-                     it is simply unpriced and visibly so. */
-                  _deliveryPricing = {
-                    pricingBlocked: (_qe && _qe.reason) || 'quote_failed',
-                    pricingBlockedDetail: (_qe && _qe.detail) || null,
-                  };
+                /* ── RES-1 — THE QUOTE IS CARRIED, NOT MINTED ───────────────────────────────
+                   This block used to call `_dqa.quote(...)` right here: a SECOND quote, issued at
+                   webhook time, for a delivery the buyer had already been charged for. Two defects
+                   in one — it priced a trip it could not describe (no routing leg here, so the
+                   authority refused and EVERY marketplace delivery was created `pricingBlocked`,
+                   the rider's record carrying no earning at all), and had it succeeded it would
+                   have been the WRONG number, because a second derivation of the same job is a
+                   different figure the rider never agreed to.
+
+                   The decision now lives in `delivery-quote-carry`, where a suite can EXECUTE it —
+                   this path is only reachable through a signature-verified IntaSend callback, and
+                   a guard no test can drive is a guard nobody has checked. The contract is
+                   unchanged: the pinned quote, revalidated, or a stated `pricingBlocked` reason.
+                   Never a fallback price. */
+                const _deliveryPricing = await _dqCarry.deliveryPricingForOrder(db, {
+                  orderId:   _pm.orderId,
+                  sessionId: _pm.sessionId || null,
+                });
+                if (_deliveryPricing.pricingBlocked) {
                   console.warn('[webhookIntasend] delivery created UNPRICED', {
                     ref: _delRef, reason: _deliveryPricing.pricingBlocked });
                 }

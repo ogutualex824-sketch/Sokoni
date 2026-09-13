@@ -186,7 +186,58 @@ async function resolveQuoteForCheckout(quoteId, buyerUid, _db) {
     customerChargeMinor: q.customerChargeMinor,
     riderEarningMinor: q.riderEarningMinor,
     sokoniCommissionMinor: q.sokoniCommissionMinor,
+    /* RES-1 — the SETTLEMENT-SHAPED pin. `dispatch.js` calls `assertSettleable(delivery.deliveryQuote)`
+       and that contract wants nested money objects and `pricingInputs.policy`, not the flat
+       `...Minor` fields the store keeps. Building it here, from the record just validated, is what
+       lets the SAME figures the buyer was charged travel to the rider — rather than a second quote
+       being minted downstream from a different trip description. */
+    pinned: pinnedFromStored(q),
   };
+}
+
+/* ── The pin that travels ───────────────────────────────────────────────────────────────────
+   Derived from the STORED record only. It deliberately re-states nothing: every figure is copied,
+   none is recomputed, because a pin that re-derives is not a pin. */
+function pinnedFromStored(q) {
+  return {
+    quoteId: q.quoteId,
+    pricingVersion: q.pricingVersion,
+    sokoniSharePct: q.sokoniSharePct,
+    customerCharge: { currency: 'KES', minorUnits: q.customerChargeMinor },
+    riderEarning: { currency: 'KES', minorUnits: q.riderEarningMinor },
+    sokoniCommission: { currency: 'KES', minorUnits: q.sokoniCommissionMinor },
+    pricingInputs: q.pricingInputs,
+    vehicleClass: q.vehicleClass,
+    createdAt: q.createdAt || null,
+  };
+}
+
+/* ── Consumption ────────────────────────────────────────────────────────────────────────────
+   GATE C CLAIMED SINGLE USE AND DID NOT ENFORCE IT. `resolveQuoteForCheckout` refuses a quote
+   whose `status !== 'issued'` — but nothing in the codebase ever moved a quote off `issued`, so
+   the check guarded a state that could not occur and one quote could back any number of orders.
+   The certification proved the CHECK worked (by writing the state itself) and never asked whether
+   a WRITER existed. This is that writer.
+
+   It runs inside the transaction that creates the order, not at session creation: an abandoned or
+   retried checkout must not burn the buyer's quote, exactly as an abandoned checkout must not burn
+   their loyalty points.
+
+   Idempotent for the SAME order — a webhook replay re-binds harmlessly — and refused for any
+   other, which is what makes a quote single-use rather than merely marked. */
+function bindQuoteToOrderTx(tx, store, quoteId, orderId, buyerUid, existing) {
+  if (!quoteId) return;
+  if (!existing || !existing.exists) throw new HttpsError('failed-precondition', 'delivery_quote_not_found');
+  const q = existing.data() || {};
+  if (q.buyerUid !== buyerUid) throw new HttpsError('permission-denied', 'delivery_quote_not_yours');
+  if (q.status === 'consumed' && String(q.orderId || '') !== String(orderId)) {
+    throw new HttpsError('failed-precondition', 'delivery_quote_already_bound');
+  }
+  tx.update(store.collection(QUOTES).doc(quoteId), {
+    status: 'consumed',
+    orderId: String(orderId),
+    consumedAt: now(),
+  });
 }
 
 /* Fields a checkout payload may NEVER carry. `deliveryFee` is the one the census found being
@@ -207,6 +258,8 @@ function assertNoCheckoutPricing(payload) {
 
 module.exports.requestDeliveryQuote = exports.requestDeliveryQuote;
 module.exports.resolveQuoteForCheckout = resolveQuoteForCheckout;
+module.exports.pinnedFromStored = pinnedFromStored;
+module.exports.bindQuoteToOrderTx = bindQuoteToOrderTx;
 module.exports.assertNoCheckoutPricing = assertNoCheckoutPricing;
 module.exports.CHECKOUT_FORBIDDEN_PRICING = CHECKOUT_FORBIDDEN_PRICING;
 module.exports.QUOTES = QUOTES;
