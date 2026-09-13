@@ -86,6 +86,11 @@
 <!-- Canonical cart access path (Track 2.6). shared-header.js reads the cart badge
      through SokoniCart; without this tag the pip cannot render a count. -->
 <script src="sokoni-cart.js"></script>
+<!-- PIN YAKO NI PRODUCT YAKO — the same protection the checkout overlay shows, from the same
+     module. A buyer who lands here instead of on the in-page overlay must not get a weaker
+     version of it, and a page that restated the copy would drift from the original. -->
+<link rel="stylesheet" href="sokoni-pin-protection.css">
+<script src="sokoni-pin-protection.js" defer></script>
 <script src="shared-header.js" defer></script>
 <script src="/components/checkout/celebration-engine.js" defer></script>
 <script src="/components/checkout/success-experience.js" defer></script>
@@ -312,8 +317,18 @@
   /* The component scripts are deferred, so they load AFTER this inline script
      parses. Wait for DOMContentLoaded — deferred scripts have run by then — so
      SokoniSuccess is defined and we render the real experience, not the fallback. */
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderSuccess);
-  else renderSuccess();
+  /* PIN YAKO NI PRODUCT YAKO — best-effort, and painted AFTER the success content: the
+     protection sits ON TOP of a screen that already says the order worked, not instead of it. */
+  function _pinProtection () {
+    try {
+      var P = window.SokoniPinProtection;
+      if (P && typeof P.show === "function") P.show();
+    } catch (_) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { renderSuccess(); _pinProtection(); });
+  }
+  else { renderSuccess(); _pinProtection(); }
 
   /* ── Analytics: forward the renderer's event to the page's existing pipeline ── */
   window.addEventListener('sokoni:checkout_success', function(ev){

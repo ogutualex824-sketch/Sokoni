@@ -1596,6 +1596,9 @@
 <!-- GATE C: sokoni-delivery-pricing.js removed. It computed the charged delivery fee in the
      browser (shareTarget 0.82); pricing is now server-authoritative via requestDeliveryQuote. -->
 <script src="sokoni-routing.js"></script>
+<!-- PIN YAKO NI PRODUCT YAKO — the buyer's protection screen, shown once the order is placed. -->
+<link rel="stylesheet" href="sokoni-pin-protection.css">
+<script src="sokoni-pin-protection.js" defer></script>
 <script type="module" src="sokoni-delivery.js"></script>
 <script src="checkout.js"></script>
 <script>
@@ -3494,6 +3497,24 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
   /* Consume the session idempotency key — next order gets a fresh one */
   sessionStorage.removeItem('_ckikey');
 
+  /* ── PIN YAKO NI PRODUCT YAKO ──────────────────────────────────────────────────────────
+     Shown after the order is placed, which is the earliest useful moment: the buyer is not yet
+     at their door, has time to read it properly, and will meet the rider later already knowing
+     the rule. Warning somebody only at the doorstep, with a rider waiting, is warning them when
+     they are least able to act on it.
+
+     It ACKNOWLEDGES AND NOTHING ELSE. It holds no PIN, calls no callable and moves no delivery —
+     the buyer still has to inspect the goods and choose to speak the code.
+
+     Best-effort by construction: a protection screen that failed to load must never block an
+     order the buyer has already paid for, so every failure here is swallowed. */
+  function _showPinProtection () {
+    try {
+      var P = window.SokoniPinProtection;
+      if (P && typeof P.show === "function") P.show();
+    } catch (_) {}
+  }
+
   /* Show in-page success overlay instead of redirect */
   const overlay = document.getElementById("orderSuccessOverlay");
   const refEl   = document.getElementById("successOrderRef");
@@ -3522,6 +3543,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
       if(msgEl2) msgEl2.innerHTML = `We’ve recorded your order and are waiting for your payment to be confirmed.<br><strong style="color:#71ff00;">It will not be dispatched until payment is verified.</strong><br>We’ll notify you the moment it clears.`;
     }
     overlay.style.display = "flex";
+    _showPinProtection();
 
     /* ── Trust: generate receipt + show status ── */
     try {

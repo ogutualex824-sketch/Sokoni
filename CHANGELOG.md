@@ -1,3 +1,81 @@
+## 2026-09-14 (52) — PIN YAKO NI PRODUCT YAKO restored to this branch
+
+**38 assertions, 0 failed. Nothing deployed.**
+Suite: `scripts/certify-pin-yako-protection.js`
+
+### It was built, and it was not here
+
+The buyer's protection screen was built and browser-certified on **`release/merchant-launch-rc`**
+(`e84d162`, `f996e80`, 2026-09-10). None of those commits is an ancestor of this branch, and the
+whole feature — `sokoni-delivery-hub.js`, `sokoni-delivery-hub.css`, `functions/delivery-hub.js`
+and all four of its test suites — was **absent from the working tree**. Present in history, missing
+from the product: a buyer checking out on this branch was shown nothing.
+
+That is the failure mode this entry records. The code was fine; it had simply never crossed.
+
+### Recovered verbatim, not rewritten
+
+`sokoni-pin-protection.js` / `.css` carry the markup, the copy in both languages, the class names
+(`.dh-py-*`) and the stylesheet **byte-for-byte** from `f996e80`. A rewritten protection screen
+would be a different screen wearing the same slogan, so nothing was reworded.
+
+**Only the screen came across.** The original lives inside the 722-line delivery hub client, whose
+rider board, dispatch chat and tracking map call `functions/delivery-hub.js` callables that do not
+exist on this branch. Importing the whole module would have added a rider rail that cannot work
+here in order to deliver a screen that can. The screen is self-contained — it reads no PIN, invokes
+no callable, moves no delivery — so it travels alone cleanly. Class names are unchanged so a later
+merge of the full hub collides visibly rather than diverging silently.
+
+Exposed as `window.SokoniPinProtection` rather than the original
+`SokoniDeliveryHub.showPinProtection`: on this branch there is no delivery hub, and claiming that
+name would promise a rail this file does not carry.
+
+### Where it appears
+
+After the order is placed — the in-page checkout overlay and the standalone `success.html` — which
+is the earliest useful moment. The buyer is not yet at their door, has time to read it, and meets
+the rider later already knowing the rule. Warning somebody only at the doorstep, with a rider
+waiting, warns them when they are least able to act on it.
+
+Both calls are wrapped in `try/catch`: a protection screen that failed to load must never block an
+order the buyer has already paid for.
+
+### What is certified
+
+* **Reachability first** — not that the file exists but that both surfaces LOAD it and CALL it
+  (`R5-*`), since "present in history, missing from the product" is exactly how it was lost.
+* **Each page carries the whole protection** — all five checks, the warning and the rights sentence
+  in English AND Kiswahili (`C2-*`). A reader of one language must not get less. The slogan appears
+  once, above the seam: it is the name of the protection, not a sentence inside either page.
+* **It cannot confirm a delivery** (`S3-*`) — no callable, no network, no navigation, no PIN read
+  or held. A protection screen that could complete the action it warns about would be worse than
+  none.
+* **It puts the page back as it found it** (`B4-*`) — scroll locked while up and restored exactly;
+  Escape acknowledges as well as the button, because trapping a reader inside a message they have
+  read is an obstacle, not a protection.
+* **Sabotage** (`X6-*`) — dropping the script tag, loading but never calling, dropping the call from
+  `success.html`, removing the Kiswahili page, and letting the screen invoke a callable are each
+  detected.
+
+`C2-6` initially failed because the detector compared raw copy against **HTML-escaped** markup —
+`seller's policy` renders as `seller&#39;s policy`. The detector now speaks the same encoding the
+screen does, with `C2-6b` as the control proving the copy really is escaped on the way out.
+
+### Files affected
+
+`sokoni-pin-protection.js` (new) · `sokoni-pin-protection.css` (new) ·
+`scripts/certify-pin-yako-protection.js` (new) · `checkout.html` · `success.html`
+
+**Database:** none. **API:** none. **Breaking:** none.
+**Still only on `release/merchant-launch-rc`:** the delivery hub client, its server module and its
+four suites, and the tracking-view presentations of this same protection.
+
+### Deployment
+
+**None.**
+
+---
+
 ## 2026-09-14 (51) — RES-1: the delivery quote is CARRIED to the rider, not re-derived
 
 **57 assertions, 0 failed, 0 blocked. Nothing deployed.**
