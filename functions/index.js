@@ -15,6 +15,7 @@ const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https")
    display strings below are therefore formatted with INTEGER arithmetic only; no float money, and
    no new dependency. The authoritative figures live in `deliveryQuote` as integer minor units. */
 const _dqa = require("./delivery-quote-authority");
+const _dqEndpoint = require("./delivery-quote-endpoint");
 const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
   String(Math.abs(m) % 100).padStart(2, "0");
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
@@ -2339,7 +2340,17 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-    const { cartItems, deliveryFee, promoCode, redeemLoyalty, fulfillmentType } = request.data || {};
+    /* GATE C — the delivery fee is no longer an input.
+       It used to arrive here as `deliveryFee` from `request.data`, computed in the browser by
+       `sokoni-delivery-pricing.js` and accepted behind nothing but a clamp(0…5000): any value in
+       that range was charged verbatim. The client now sends a `deliveryQuoteId` and the server
+       resolves the STORED quote, so the browser can ask for a price but can no longer state one.
+
+       A payload still carrying `deliveryFee` (or any other pricing field) is REFUSED rather than
+       ignored — silently dropping it would teach a caller that sending it is harmless, and would
+       hide a stale client that thinks it is still setting the price. */
+    const { cartItems, deliveryQuoteId, promoCode, redeemLoyalty, fulfillmentType } = request.data || {};
+    _dqEndpoint.assertNoCheckoutPricing(request.data || {});
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
     }
@@ -2481,8 +2492,21 @@ exports.createCheckoutSession = onCall(
       }
     }
 
-    /* Cap delivery fee at KES 5,000 to prevent inflated totals */
-    const safeDeliveryFee = Math.max(0, Math.min(5000, Math.round(Number(deliveryFee) || 0)));
+    /* GATE C — the delivery fee comes from the STORED quote, not from the caller.
+       The previous line was `Math.max(0, Math.min(5000, Math.round(Number(deliveryFee) || 0)))`.
+       A clamp is not a price: it bounded how wrong the browser's number could be, not whether it
+       was authoritative. `resolveQuoteForCheckout` reads `deliveryQuotes/{id}`, verifies the quote
+       belongs to this buyer, is unused, unexpired, still on the current pricing version and the
+       same commercial policy, and re-asserts conservation and the commission band on the stored
+       figures. A forged or unknown id resolves to nothing and the checkout refuses.
+
+       Pickup legitimately has no delivery leg and therefore needs no quote. */
+    let safeDeliveryFee = 0;
+    let _deliveryQuote = null;
+    if (String(fulfillmentType || '') !== 'pickup') {
+      _deliveryQuote = await _dqEndpoint.resolveQuoteForCheckout(deliveryQuoteId, request.auth.uid);
+      safeDeliveryFee = Math.round(_deliveryQuote.customerChargeMinor / 100);
+    }
 
     /* ── Promo code ────────────────────────────────────────────────────────────
        checkout.html used to hold its own hardcoded map of codes (SAVE5/SAVE10/
@@ -11848,6 +11872,7 @@ exports.getShopCheckoutMode = checkoutMode.getShopCheckoutMode;
    Coupled pair: this forwarding line + functions/multishop-checkout-quote.js
    must ship together, or the functions load fails. Reuses the canonical
    product_order validator + the shared delivery engine; no new money authority. */
+exports.requestDeliveryQuote = _dqEndpoint.requestDeliveryQuote;   /* Gate C — the browser asks; it does not tell */
 exports.createMultiShopCheckoutQuote = require('./multishop-checkout-quote').createMultiShopCheckoutQuote;
 
 /* ── Atomic order claim (multi-employee POS distribution) ──────────── */

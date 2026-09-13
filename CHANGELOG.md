@@ -1,3 +1,121 @@
+## 2026-09-14 (50) — Gate C: checkout consumes the AUTHORITATIVE server quote
+
+**113 assertions, 0 failed, 0 blocked. Nothing deployed.**
+Suite: `scripts/certify-gate-c-checkout-quote.js` · Record: `docs/GATE_C_CHECKOUT_QUOTE_CERTIFICATION.md`
+
+The census (entry 49's successor, `docs/GATE_C_CHECKOUT_PATH_CENSUS.md`) proved the browser
+computed the delivery fee and the server charged it, behind nothing but `clamp(0…5000)`. The
+browser can now **ask** for a price; it can no longer **tell** us one.
+
+### Summary
+
+* **New** `functions/delivery-quote-endpoint.js` — the `requestDeliveryQuote` callable. It consumes
+  the Step 4 authority, persists every issued quote to `deliveryQuotes/{quoteId}` (buyer-bound,
+  single-use, 30-minute TTL), and exposes `resolveQuoteForCheckout` + `assertNoCheckoutPricing`.
+  The quote is persisted because a returned-but-unstored quote cannot be verified later: a forged
+  id would be indistinguishable from a real one, and checkout would be trusting the client again
+  by a longer route.
+* `createCheckoutSession` destructures **`deliveryQuoteId`, not `deliveryFee`**, refuses a payload
+  carrying any of nine pricing fields rather than ignoring them, and reads the charge from the
+  **stored** quote. The clamp is gone: a clamp bounded how *wrong* the browser could be, not
+  whether it was authoritative.
+* `checkout.html` requests the server quote, sends the id, and displays the fee. The client pricing
+  engine, its `<script>` tag and the `80 + 15/km` fallback are removed — a fallback price is an
+  invented price, and it lived on the least-observed path.
+
+### Files affected
+
+`functions/delivery-quote-endpoint.js` (new) · `functions/index.js` (4 hunks, isolated) ·
+`checkout.html` · `scripts/certify-gate-c-checkout-quote.js` (new) ·
+`docs/GATE_C_CHECKOUT_QUOTE_CERTIFICATION.md` (new)
+
+**Database:** new collection `deliveryQuotes/{quoteId}`, server-written only.
+**API:** new callable `requestDeliveryQuote`. **Breaking:** `createCheckoutSession` now REFUSES a
+`deliveryFee` field — a stale client that still sends one fails loudly rather than silently, which
+is the intent. **Not touched:** the Step 4 authority, the approved policy, promo, loyalty, the
+platform fee, the Impact contribution, and the IntaSend/STK rails.
+
+### The suite executes the production handlers
+
+The failure the census found was **not a missing guard** — the authority existed all along and
+nothing called it. A suite proving `_dqa` is *mentioned* would have passed against the defect. So
+this one loads the real `functions/index.js` and calls the real `createCheckoutSession` /
+`requestDeliveryQuote`, with `admin.firestore()` replaced by an in-memory store that records every
+path read. Reachability is a fact about an execution trace, not an inference.
+
+Two things that would otherwise have made the instrument lie:
+
+* `admin.firestore` is a **prototype getter** — plain assignment throws in strict mode and fails
+  **silently** in sloppy mode, so a stub can look installed while every call reaches the real
+  backend. It is installed with `defineProperty` and proved effective before anything loads.
+* Every source assertion runs on **comment-stripped** text; the Gate C comments quote the very
+  patterns being searched for.
+
+Derivation is proven by **covariance**, not equality on one sample: move the stored figure and the
+charge moves by exactly the same amount.
+
+### The under-charge tolerance was preserved, not replaced
+
+`if (stkAmount > _quoted + 1)` is one-directional by design. The suite extracts that expression
+from the file and evaluates it over a matrix rather than re-typing it. Sabotage `X10-9` swaps in a
+symmetric `stkAmount !== _quoted` and proves the legitimate under-charge then breaks — which is why
+the naive "displayed total equals authoritative total" invariant was not used.
+
+### Sabotage, per guard, never on disk
+
+Server guards are neutralised on the **live call path** (the call sites are property lookups, so
+rebinding the export sabotages the running code); the hostile input is replayed and the guard is
+credited only if it now gets through. Browser guards are sabotaged as text and re-run through the
+same detector functions. Nothing is written to disk, so a killed run cannot strand a mutation.
+`X10-R` re-proves every guard after restoration.
+
+`X10-7` caught a weakness in this suite's own detector: restoring the client pricing engine inside
+`calcDelivery` left `requestDeliveryQuote` in the file, so an existence check stayed green. It was
+replaced with a reachability chain — helper wraps the callable, `calcDelivery` calls the helper,
+the inputs call `calcDelivery`.
+
+### Defect found by the suite, and fixed
+
+**The default checkout would have been refused.** `checkout.html` sent its `<select>` value
+(default `moto`). The selection authority picks the smallest class that fits and refuses anything
+larger, so a 1 kg parcel selects `ebike` and a requested `motorcycle` returned
+`requested_vehicle_oversized`. Every option except one refused, and the buyer had no way to know
+which.
+
+Relaxing the authority was not an option — it is approved Step 4 work, and refusing an
+unnecessarily large class is exactly what stops a customer buying van economics for a letter. The
+fix is on the browser: **the page no longer asserts a vehicle class.** It describes the shipment,
+the authority chooses, and the chosen class and its stated reason are displayed read-only.
+
+A hostile-only suite would have been green while no real customer could check out.
+
+### Residuals — proven, deliberately NOT changed
+
+* **RES-1** `checkout.html` still calls `SokoniDelivery.createOrderDelivery()` *after* payment and
+  patches `orders/{id}.deliveryFee` with `delivery-hub.js`'s browser-computed figure
+  (`DRIVER_SHARE 0.88`). It does not affect what the buyer is charged, but the order record and the
+  created delivery carry a non-authoritative fee, and the delivery is created with **no pinned
+  `deliveryQuote`**, so `dispatch.js` settlement refuses it — fail-closed, not mispaid, but the
+  rider cannot be settled either. Binding the created delivery to the quote is its own gate.
+* **RES-2** the Parcel Size control is inert: dimensions would refuse anyway
+  (`vehicle_selection_insufficient_data`) until SOKONI declares volume capacities — the held Step 4
+  item.
+
+### Isolation
+
+`functions/index.js` carries other agents' in-flight work (subscription amount sufficiency, STK
+intent enforcement, the POS commission rail). Hunks were classified by **content markers, not line
+numbers**: 4 mine, 4 theirs, 0 mixed. Separability proven in both directions — mine-only applies to
+the index, theirs-only applies, and mine-only reverse-applies to the working tree.
+
+### Deployment
+
+**None.** No function was deployed and no hosting was published. Releasing `requestDeliveryQuote`
+and the amended `createCheckoutSession` is a separate decision; until it is taken, production still
+runs the pre-Gate-C code.
+
+---
+
 ## 2026-09-05 — The closure gate becomes exhaustive and self-explanatory
 
 **Files:** `docs/DEPLOY_TREE_DISPOSITIONS.json` (new — governance ledger),

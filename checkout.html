@@ -1075,13 +1075,14 @@
           </div>
           <div>
             <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Vehicle</label>
-            <select id="deliveryVehicle" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
-              <option value="moto">🏍️ Motorcycle</option>
-              <option value="bicycle">🚲 Bicycle</option>
-              <option value="tuktuk">🛺 Tuk-Tuk</option>
-              <option value="car">🚗 Car</option>
-              <option value="van">🚐 Van</option>
-            </select>
+            <!-- GATE C — THE VEHICLE IS CHOSEN, NOT ORDERED.
+                 This was a <select> whose value was sent to the pricing call. The selection
+                 authority picks the SMALLEST class that fits the load and refuses anything
+                 larger (`requested_vehicle_oversized`) — buying van economics for a parcel is
+                 exactly what it exists to stop. So every option in that list except one refused,
+                 and the buyer had no way to know which one. It is now a read-only display of
+                 what the server chose, and why. -->
+            <div id="deliveryVehicleChosen" class="co-input" style="margin-bottom:0;display:flex;align-items:center;color:rgba(255,255,255,0.55);">Chosen for your load</div>
           </div>
           <div>
             <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Weight (kg)</label>
@@ -1592,7 +1593,8 @@
 <script src="sokoni-invoice.js"></script>
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
-<script src="sokoni-delivery-pricing.js"></script>
+<!-- GATE C: sokoni-delivery-pricing.js removed. It computed the charged delivery fee in the
+     browser (shareTarget 0.82); pricing is now server-authoritative via requestDeliveryQuote. -->
 <script src="sokoni-routing.js"></script>
 <script type="module" src="sokoni-delivery.js"></script>
 <script src="checkout.js"></script>
@@ -1975,6 +1977,10 @@ function _ckLineTotal(item) {
 }
 let promoDiscount = 0;
 let deliveryFee = 0;
+/* GATE C — the authoritative delivery quote. The purchase carries the ID, never the amount:
+   the server resolves the stored quote and reads the charge from it. */
+let _deliveryQuoteId = null;
+let _deliveryQuoteVersion = null;
 let fulfillmentType = 'delivery';   /* 'delivery' (rider + fee) | 'pickup' (free, no rider) */
 
 /* Buyer chooses Delivery vs Pickup. Pickup → fee 0, no rider dispatch, order marked
@@ -2678,7 +2684,9 @@ async function sendStkPush(){
 
       const sessionRes = await createSession({
         cartItems:   cartForSession,
-        deliveryFee: deliveryFee || 0,
+        /* GATE C — the ID, not the amount. The server resolves the stored quote and reads the
+           charge from it; a payload carrying deliveryFee is now REFUSED outright. */
+        deliveryQuoteId: _deliveryQuoteId || undefined,
         /* Chosen fulfillment channel — the server enforces the seller's shop
            availability (delivery/pickup on/off) against it before authorising. */
         fulfillmentType: fulfillmentType,
@@ -3708,11 +3716,44 @@ const _ZONE_MAP = {
   nationwide: { distanceKm: 150, durationMin: 480, isRural:true,  eta:'2–5 business days',     days:5, label:'Nationwide'      },
 };
 
-function calcDelivery(){
+/* GATE C — the browser's ONLY route to a delivery price.
+   It sends the trip description and receives an authoritative quote. It cannot send a fee: the
+   callable refuses a payload carrying pricing fields rather than ignoring them. */
+async function _requestServerDeliveryQuote(payload){
+  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+  const call = httpsCallable(getFunctions(undefined, "us-central1"), "requestDeliveryQuote");
+  const res  = await call(payload);
+  const q    = res && res.data;
+  if (!q || !q.quoteId) throw new Error('no_quote_returned');
+  return q;
+}
+
+/* Display names for the class the SERVER selected. Presentation only — the authority's own
+   vocabulary is what travels on the quote and what settlement reads. */
+const _VEHICLE_LABEL = {
+  bicycle: '🚲 Bicycle', ebike: '⚡ E-bike', motorcycle: '🏍️ Motorcycle',
+  tuktuk: '🛺 Tuk-Tuk', car: '🚗 Car', van: '🚐 Van', truck: '🚛 Truck',
+};
+
+/* Reasons a quote can be refused are operational facts a buyer can act on — an unpriceable
+   vehicle, a shipment we cannot size — so they are surfaced rather than flattened to "error". */
+function _deliveryQuoteMessage(e){
+  const code = (e && (e.details && e.details.reason || e.code || e.message)) || '';
+  if (/vehicle_selection_insufficient_data/.test(code)) return 'we need the parcel weight';
+  if (/vehicle_class_uneconomised|vehicle_class_unpriced/.test(code)) return 'that vehicle is unavailable';
+  if (/requested_vehicle_too_small/.test(code))  return 'that vehicle is too small for this load';
+  if (/requested_vehicle_oversized/.test(code))  return 'a smaller vehicle fits this load';
+  if (/shipment_exceeds_all_capacities/.test(code)) return 'this load is too large for our fleet';
+  if (/hazardous/.test(code))                    return 'we cannot carry hazardous goods';
+  if (/failed-precondition|unavailable/.test(code)) return 'please try again shortly';
+  return 'please try again';
+}
+
+async function calcDelivery(){
   const zoneKey   = document.getElementById("deliveryZone")?.value || '';
   const weight    = Math.max(0.1, Number(document.getElementById("deliveryWeight")?.value||1));
   const parcel    = document.getElementById("deliverySize")?.value  || 'small';
-  const vehicle   = document.getElementById("deliveryVehicle")?.value || 'moto';
+  const vehEl     = document.getElementById("deliveryVehicleChosen");
   const resultEl  = document.getElementById("deliveryCostResult");
   const etaEl     = document.getElementById("deliveryEtaResult");
   const bkEl      = document.getElementById("deliveryBreakdown");
@@ -3728,38 +3769,55 @@ function calcDelivery(){
 
   const zone = _ZONE_MAP[zoneKey];
 
-  /* Intelligent pricing */
-  if(window.SokoniDeliveryPricing){
-    const result = window.SokoniDeliveryPricing.calculate({
-      vehicleType:  vehicle,
-      distanceKm:   zone.distanceKm,
-      durationMin:  zone.durationMin,
-      weightKg:     weight,
-      parcelSize:   parcel,
-      isRural:      zone.isRural,
-      timestamp:    Date.now(),
+  /* GATE C — THE SERVER PRICES THIS DELIVERY. THE BROWSER ASKS.
+     This block used to call `SokoniDeliveryPricing.calculate()` and assign
+     `deliveryFee = result.customerPaysFee`, and that figure was what the buyer was charged: the
+     server accepted it from `request.data` behind a clamp(0…5000). The browser's own pricing
+     table (shareTarget 0.82) therefore decided what SOKONI paid a rider.
+
+     It also carried a FALLBACK — `Math.round(80 + zone.distanceKm * 15)` — used whenever the
+     pricing script failed to load. A third rate card, agreeing with nothing, on the least
+     observed path. Both are gone: there is no client-side price any more, and no fallback price,
+     because a fallback price is an invented price.
+
+     `deliveryFee` is now only ever set from the SERVER quote below, and the purchase carries the
+     quote's id rather than its amount. */
+  if(resultEl) resultEl.textContent = 'Getting delivery price…';
+  if(bkEl)    bkEl.style.display = 'none';
+  if(surgeEl) surgeEl.style.display = 'none';
+
+  try {
+    const quote = await _requestServerDeliveryQuote({
+      distanceKm:       zone.distanceKm,
+      estimatedMinutes: zone.durationMin,
+      /* NO vehicleType. The selection authority decides which class fits the load; a browser-
+         asserted class is validated, never honoured, and asserting one larger than necessary is
+         refused outright. Letting the server choose is what makes the common path work. */
+      shipment: {
+        totalWeightKg: Number(weight) > 0 ? Number(weight) : undefined,
+        packageCount:  1,
+      },
     });
-    deliveryFee = result.customerPaysFee;
-    if(resultEl) resultEl.textContent = `Estimated delivery: KES ${result.customerPaysFee.toLocaleString()}`;
+    _deliveryQuoteId = quote.quoteId;
+    _deliveryQuoteVersion = quote.pricingVersion;
+    deliveryFee = quote.customerChargeKES;
+    if(vehEl) vehEl.textContent = _VEHICLE_LABEL[quote.vehicleClass] || String(quote.vehicleClass || '—');
+    if(resultEl) resultEl.textContent = `Delivery: KES ${Number(quote.customerChargeKES).toLocaleString()}`;
     if(bkEl){
       bkEl.style.display = 'block';
-      bkEl.innerHTML = `<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:.6px;margin-bottom:8px;">FEE BREAKDOWN</div>`
-                     + window.SokoniDeliveryPricing.renderBreakdown(result);
+      bkEl.innerHTML = '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:.6px;margin-bottom:8px;">DELIVERY</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,0.55);">'
+        + 'Vehicle: <strong style="color:white;">' + String(quote.vehicleClass || '') + '</strong><br>'
+        + String(quote.vehicleSelectionReason || '') + '</div>';
     }
-    if(surgeEl){
-      if(result.isPeakHour || result.isSurging){
-        surgeEl.style.display = 'block';
-        surgeEl.textContent = '🔥 ' + (result.primaryReason || 'Surge pricing active');
-      } else {
-        surgeEl.style.display = 'none';
-      }
-    }
-  } else {
-    /* Fallback */
-    deliveryFee = Math.round(80 + zone.distanceKm * 15);
-    if(resultEl) resultEl.textContent = `Estimated delivery: KES ${deliveryFee.toLocaleString()}`;
-    if(bkEl) bkEl.style.display = 'none';
-    if(surgeEl) surgeEl.style.display = 'none';
+  } catch (e) {
+    /* NO PRICE IS BETTER THAN AN INVENTED ONE. The quote is cleared so nothing stale can be
+       carried into the purchase, and checkout cannot proceed on a delivery it cannot price. */
+    _deliveryQuoteId = null;
+    _deliveryQuoteVersion = null;
+    deliveryFee = 0;
+    if(vehEl) vehEl.textContent = '—';
+    if(resultEl) resultEl.textContent = 'Delivery price unavailable — ' + _deliveryQuoteMessage(e);
   }
 
   if(etaEl) etaEl.innerHTML = `⏰ Est. arrival: <strong style="color:white;">${zone.eta}</strong>`;
