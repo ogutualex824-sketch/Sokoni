@@ -79,65 +79,131 @@ function resolveMerchantIdentity(sellerUids, shopState) {
  * buyer reads on the handset. It previously carried the payment REF
  * ("SOKONI: SKN-1234…"), which tells the buyer nothing about who is being paid.
  *
- * ── WHY THE AMOUNT IS NOT IN HERE ────────────────────────────────────────────
- * Safaricom's dialog already renders "Pay Ksh <amount> to …" itself, from the
- * figure in the request. Repeating it would spend the few characters we own on
- * something the buyer is already reading, and a second amount that ever
- * disagreed with the authoritative one would be worse than no amount at all.
- * What the buyer cannot otherwise tell is WHO they are paying. That is what this
- * string is for.
+ * ── WHY THE AMOUNT IS IN HERE ────────────────────────────────────────────────
+ * An earlier revision left it out, reasoning that Safaricom's dialog renders
+ * "Pay Ksh <amount> to …" itself and that repeating it would spend the few
+ * characters we own on something the buyer is already reading. SOKONI decided
+ * otherwise, and the decision stands: a person approving money should be ASKED,
+ * in words, for a stated figure — "Please approve a payment of KES 4,566" — not
+ * handed a bare merchant string. The amount here is always the server-validated
+ * one, so it cannot disagree with what is actually charged.
  *
  * ── WHY IT DEGRADES FROM THE RIGHT ───────────────────────────────────────────
- * Gateways truncate. The order is therefore SHOP, then platform, then corporate
- * identity: if the field is clipped the buyer still reads the shop name, which is
- * the part that answers "am I paying the right person?". Losing "a product of
- * Bravilex" off the end costs nothing; losing the shop name would cost the whole
- * purpose of the string.
+ * Gateways truncate. The ladder therefore sheds OUR branding first, then shortens
+ * the courtesy, and only drops the amount when the shop's own name has consumed
+ * the whole line — so a clipped field still reads as the shop asking for a sum,
+ * which is the part that answers "am I paying the right person, the right
+ * amount?". Losing "a product of Bravilex" off the end costs nothing.
  */
 
-/** Identity lines, longest first. `budget` picks the longest one that survives. */
-const SUFFIX = Object.freeze({
-  /* The buyer's own checkout. They chose the shop, so the shop leads. */
-  online: [
-    ' · Powered by SOKONI · a product of Bravilex',
-    ' · Powered by SOKONI · Bravilex',
-    ' · Powered by SOKONI',
-    ' · SOKONI',
-  ],
-  /* At a till the buyer is standing in the shop and already knows where they
-     are; what reassures them is that the rail handling their money is a named
-     platform, not an anonymous paybill. */
-  till: [
-    ' Till · Powered by SOKONI · a product of Bravilex',
-    ' Till · Powered by SOKONI · Bravilex',
-    ' Till · Powered by SOKONI',
-    ' Till · SOKONI',
-  ],
-});
+/* ── SYMBOLS THE HANDSET CAN ACTUALLY DRAW ───────────────────────────────────
+   The prompt is rendered by the SIM toolkit, not by a browser. Characters in the
+   Basic Multilingual Plane have a real chance of appearing; anything above
+   U+FFFF — which is where 🛍️ 💰 📲 and most colour emoji live — needs a
+   surrogate pair the toolkit generally cannot draw, and arrives as boxes or
+   garbles the line. A garbled PAYMENT prompt is not a cosmetic problem: it is
+   the moment a buyer decides whether to trust the transaction.
+
+   So the mark used here is BMP, and `sanitiseForHandset` below REMOVES anything
+   astral no matter where it came from. The full colour-emoji treatment belongs
+   on the in-app panel, which is a browser and can draw it. */
+const MARK = '✔';           /* ✔ — BMP, widely drawable */
+const DOT = ' · ';          /* · — Latin-1 */
+
+/**
+ * Strip what the handset cannot render, so a payment prompt can never be
+ * corrupted by a character somebody added upstream in good faith.
+ */
+function sanitiseForHandset(s) {
+  return String(s == null ? '' : s)
+    /* Astral plane: emoji, most pictographs. Surrogate pairs, unrenderable by the toolkit. */
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    /* Variation selectors, ZWJ and keycaps left behind once the emoji itself is gone. */
+    .replace(/[\uFE00-\uFE0F\u200D\u20E3]/g, '')
+    /* Control characters. Written as escapes on purpose: a literal NUL in this file would
+       make git call it binary and hide every future change to payment copy from review. */
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const kes = (n) => 'KES ' + Math.round(Number(n) || 0).toLocaleString('en-KE');
+
+/**
+ * ONE CHANNEL FOR POS AND TILL, deliberately.
+ *
+ * A SmartPOS sale and a till sale are the same event to the person paying:
+ * they are standing in the shop, being served, and are asked to approve an
+ * amount. Giving the two rails separate copy would let them drift until the same
+ * customer, in the same shop, reads two different things depending on which
+ * device the attendant happened to pick up. `pos` therefore RESOLVES to `till`
+ * rather than getting a format of its own.
+ */
+function channelOf(raw) {
+  const c = String(raw || '').toLowerCase();
+  return (c === 'till' || c === 'pos' || c === 'smartpos' || c === 'terminal') ? 'till' : 'online';
+}
+
+/* Each ladder runs longest-first and the first line that fits is used, so the
+   buyer gets the most informative version their shop name leaves room for. */
+function lines(channel, name, amount) {
+  const here = channel === 'till' ? name + ' Till' : name;
+  /* THE ASK IS THE LAST THING TO GO. A buyer approving money should be ASKED, in words, for a
+     stated figure — "Please approve a payment of KES 4,566" — not handed a bare total. So the
+     ladder sheds our branding first, then shortens the courtesy, and only drops the amount when
+     the shop's own name has consumed the whole line. */
+  const askFull = amount ? 'Please approve a payment of ' + amount : 'Please approve this payment';
+  const askShort = amount ? 'Please approve ' + amount : 'Please approve';
+  return [
+    MARK + ' ' + here + DOT + askFull + DOT + 'Powered by SOKONI, a product of Bravilex',
+    MARK + ' ' + here + DOT + askFull + DOT + 'Powered by SOKONI' + DOT + 'Bravilex',
+    MARK + ' ' + here + DOT + askFull + DOT + 'Powered by SOKONI',
+    here + DOT + askFull + DOT + 'Powered by SOKONI',
+    here + DOT + askFull + DOT + 'SOKONI',
+    here + DOT + askShort + DOT + 'SOKONI',
+    here + DOT + (amount || '') + DOT + 'SOKONI',
+    here + DOT + 'SOKONI',
+    here,
+  ];
+}
 
 /* Generous by gateway standards and deliberately not a guess at Safaricom's own
-   limit: the point of the ladder above is that we degrade on OUR terms before
-   anybody else truncates on theirs. */
+   limit: the point of the ladder is that we degrade on OUR terms before anybody
+   else truncates on theirs. */
 const MAX_NARRATIVE = 100;
 
+/**
+ * @param {object} identity  from resolveMerchantIdentity
+ * @param {object} [opts]    { channel: 'online'|'till'|'pos', amountKES }
+ */
 function narrativeFor(identity, opts) {
-  const channel = (opts && opts.channel) === 'till' ? 'till' : 'online';
+  const o = opts || {};
+  const channel = channelOf(o.channel);
+  const amount = (Number(o.amountKES) > 0) ? kes(o.amountKES) : null;
+
   /* Unresolved means we could not prove who receives the money. Naming a shop we
      are not sure about is the one failure this module exists to prevent, so the
-     buyer gets the platform and its owner and no merchant claim at all. */
+     buyer gets the platform, its owner, the amount they are approving — and no
+     merchant claim at all. */
   if (!identity || !identity.resolved || !identity.name) {
-    return 'SOKONI · a product of Bravilex';
+    const base = amount
+      ? MARK + ' SOKONI' + DOT + 'Please approve a payment of ' + amount + DOT + 'a product of Bravilex'
+      : 'SOKONI' + DOT + 'a product of Bravilex';
+    return sanitiseForHandset(base).slice(0, MAX_NARRATIVE);
   }
-  const name = identity.name;
-  for (const suffix of SUFFIX[channel]) {
-    if (name.length + suffix.length <= MAX_NARRATIVE) return name + suffix;
+
+  const name = sanitiseForHandset(identity.name);
+  for (const line of lines(channel, name, amount)) {
+    const clean = sanitiseForHandset(line);
+    if (clean.length <= MAX_NARRATIVE) return clean;
   }
-  /* A shop name long enough to crowd out every suffix keeps the name: the buyer
+  /* A shop name long enough to crowd out every line keeps the name: the buyer
      needs to know who they are paying more than they need our branding. */
   return name.slice(0, MAX_NARRATIVE);
 }
 
 module.exports = {
   displayNameOf, resolveMerchantIdentity, narrativeFor,
-  MAX_NAME, MAX_NARRATIVE, SUFFIX,
+  sanitiseForHandset, channelOf,
+  MAX_NAME, MAX_NARRATIVE, MARK,
 };

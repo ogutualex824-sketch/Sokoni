@@ -6883,7 +6883,15 @@ exports.initiateSTKPush = onCall(
       phone_number: phone,
       amount:       amountKES,
       currency:     "KES",
-      narrative:    _merchantIdentity.narrativeFor(_merchant, { channel: "online" }),
+      /* The channel comes from the payment's own category, so a SmartPOS or till sale gets the
+         in-shop wording and an online order gets the online wording — from ONE ladder, so the two
+         can never drift into saying different things to the same customer. The amount travels
+         with it: the buyer is being asked to approve a figure, and naming it is the polite and
+         the safe thing to do. */
+      narrative:    _merchantIdentity.narrativeFor(_merchant, {
+        channel:   _merchantIdentity.channelOf((meta && meta.category) || "online"),
+        amountKES: amountKES,
+      }),
       api_ref:      ref,
     });
 

@@ -2348,10 +2348,21 @@ function placeOrder(){
    `activateStkStep` and the markup are the ones `sendStkPush()` already uses; this only makes
    the live checkout path reach them. Every failure is swallowed: a decorative panel must never
    be able to interrupt a payment. */
-function _stkPanel(step){
+function _stkPanel(step, amountKES){
   try {
     const panel = document.getElementById("stkSteps");
     if (panel) panel.style.display = "flex";
+    /* THE AMOUNT BELONGS HERE, not in the handset narrative. This panel is a browser: it can
+       draw the figure, draw emoji, and be read at leisure. The SIM-toolkit prompt cannot, and
+       Safaricom already states the amount there itself. So the buyer is told exactly what they
+       are approving on the surface that can actually say it well. */
+    if (step === 2 && Number(amountKES) > 0) {
+      const p = document.querySelector("#stkStep2 .stk-step-text p");
+      if (p) p.innerHTML = "Please approve a payment of <strong style=\"color:#71ff00;\">KES "
+        + Number(amountKES).toLocaleString() + "</strong> — enter your M-PESA PIN 🔐";
+      const h = document.querySelector("#stkStep2 .stk-step-text h4");
+      if (h) h.textContent = "📲 Check your phone";
+    }
     if (typeof activateStkStep === "function" && document.getElementById("stkStep" + step)) {
       activateStkStep(step);
     }
@@ -2503,7 +2514,7 @@ async function _placeOrderCore(){
           serviceDesc: 'SOKONI Order',
         });
 
-        _stkPanel(2);
+        _stkPanel(2, _authTotal);
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('waiting', 'M-PESA prompt sent — enter your PIN on your phone…');
         await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: _authTotal, phone }, (status) => {
           if (window._checkoutSetTrustStatus && status === 'PENDING') {

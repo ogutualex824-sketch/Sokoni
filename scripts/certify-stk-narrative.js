@@ -125,6 +125,8 @@ try {
 
 const BUYER = 'buyer-stk', SELLER = 'seller-stk', PRODUCT = 'prod-stk';
 const REQ = (data) => ({ data, auth: { uid: BUYER, token: { uid: BUYER } }, rawRequest: { headers: {}, ip: '127.0.0.1' }, acceptsStreaming: false });
+/* The line may open with the BMP mark, so 'leads' means 'leads the content'. */
+const leads = (narrative, shop) => String(narrative || '').replace(/^✔\s*/, '').indexOf(shop) === 0;
 const idOf = (n) => ({ v: 1, resolved: true, name: n, sellerUid: 'u', authority: 'shops/u.name', reason: null });
 
 function seed(shopName) {
@@ -166,7 +168,7 @@ async function main() {
   ok('N1-0', 'the string actually on the wire: "' + probe.narrative + '"');
   check('N1-2', !/SKN-|^SOKONI: /.test(probe.narrative),
     'it is NOT the payment reference any more — the "random code" is gone');
-  check('N1-3', probe.narrative.indexOf('KASS SHOP') === 0, 'the SHOP NAME leads');
+  check('N1-3', leads(probe.narrative, 'KASS SHOP'), 'the SHOP NAME leads the content');
   check('N1-4', /Powered by SOKONI/.test(probe.narrative), 'it says Powered by SOKONI');
   check('N1-5', /Bravilex/i.test(probe.narrative), 'it carries the Bravilex identity');
   check('N1-6', probe.api_ref && /SKN-/.test(probe.api_ref),
@@ -181,7 +183,7 @@ async function main() {
     seed('KASS SHOP');
     const forged = await push({ meta: { category: 'product', items: [{ productId: PRODUCT }],
       sellerUid: 'ATTACKER', sellerName: 'ATTACKER SHOP', serviceDesc: 'x' } });
-    check('S2-2', !!forged && forged.narrative.indexOf('KASS SHOP') === 0 && !/ATTACKER/.test(forged.narrative),
+    check('S2-2', !!forged && leads(forged.narrative, 'KASS SHOP') && !/ATTACKER/.test(forged.narrative),
       'a forged meta.sellerUid + meta.sellerName cannot rename the prompt');
   }
   {
@@ -205,7 +207,7 @@ async function main() {
   {
     STORE._put('shops', SELLER, { name: '   ' });
     const blank = await push();
-    check('F3-3', !!blank && blank.narrative.indexOf('SOKONI') === 0, 'a blank shop name is not a name');
+    check('F3-3', !!blank && leads(blank.narrative, 'SOKONI'), 'a blank shop name is not a name');
     seed('KASS SHOP');
   }
   {
@@ -225,7 +227,7 @@ async function main() {
     check('C4-2', on !== till && /Till/.test(till), 'the till format is distinct and says Till');
     check('C4-3', /Powered by SOKONI/.test(on) && /Powered by SOKONI/.test(till), 'both carry the platform');
     check('C4-4', /Bravilex/i.test(on) && /Bravilex/i.test(till), 'both carry Bravilex');
-    check('C4-5', till.indexOf('KASS SHOP') === 0 && on.indexOf('KASS SHOP') === 0, 'both lead with the shop');
+    check('C4-5', leads(till, 'KASS SHOP') && leads(on, 'KASS SHOP'), 'both lead with the shop');
   }
 
   section('5  IT DEGRADES ON OUR TERMS, NOT THE GATEWAY\'S');
@@ -233,26 +235,79 @@ async function main() {
     const long = 'MAMA NJERI FRESH GROCERIES HOUSEHOLD SUPPLIES AND GENERAL STORE';
     const n = MI.narrativeFor(idOf(long));
     check('D5-1', n.length <= MI.MAX_NARRATIVE, 'a long shop name still fits the budget (' + n.length + ' ≤ ' + MI.MAX_NARRATIVE + ')');
-    check('D5-2', n.indexOf(long) === 0, '…and the SHOP NAME survives — the part that answers "am I paying the right person?"');
+    check('D5-2', leads(n, long), '…and the SHOP NAME survives — the part that answers "am I paying the right person?"');
     const huge = 'X'.repeat(200);
     const hn = MI.narrativeFor(idOf(huge));
-    check('D5-3', hn.length <= MI.MAX_NARRATIVE && hn.indexOf('X') === 0,
+    check('D5-3', hn.length <= MI.MAX_NARRATIVE && leads(hn, 'X'),
       'a shop name longer than the whole budget keeps the name and drops our branding');
     check('D5-4', MI.narrativeFor(idOf('A B')).indexOf('a product of Bravilex') > -1,
       'a short name gets the FULL identity line');
   }
 
-  section('6  THE AMOUNT IS SAFARICOM\'S TO RENDER');
-  check('A6-1', !/\b250\b|Ksh|KES/.test(probe.narrative),
-    'the narrative does not repeat the amount — the dialog already shows "Pay Ksh …", and a second figure that ever disagreed would be worse than none');
-  check('A6-2', probe.amount === 250, '…while the amount itself is sent in the field Safaricom reads');
+  section('6  THE ASK — a buyer approving money is ASKED, for a stated figure');
+  /* An earlier revision of this suite asserted the OPPOSITE: that the narrative must not repeat
+     the amount, because Safaricom renders it already. That was my reasoning, and SOKONI decided
+     against it — a buyer should read a courteous sentence naming what they are approving, not a
+     bare merchant string. The assertion is reversed here rather than quietly dropped, so the
+     change of contract is visible in the record. */
+  check('A6-1', /Please approve a payment of KES/.test(probe.narrative),
+    'the narrative asks politely and names the figure: "Please approve a payment of KES …"');
+  check('A6-2', probe.narrative.indexOf('250') > -1, '…and the figure is THIS payment\'s amount');
+  check('A6-3', probe.amount === 250, '…while the authoritative amount still travels in the field Safaricom reads');
+  {
+    const other = await push({ amount: 4566, ref: 'SKN-' + Date.now() });
+    check('A6-4', !!other && /Please approve a payment of KES 4,566/.test(other.narrative),
+      'change the amount and the sentence follows it — "' + (other && other.narrative || '') + '"');
+  }
+
+  section('6b  ONE CHANNEL FOR POS AND TILL');
+  {
+    const t = MI.narrativeFor(idOf('KASS SHOP'), { channel: 'till', amountKES: 4566 });
+    for (const c of ['pos', 'smartpos', 'terminal', 'TILL', 'Pos']) {
+      check('C6-' + c, MI.narrativeFor(idOf('KASS SHOP'), { channel: c, amountKES: 4566 }) === t,
+        '"' + c + '" resolves to the till wording — the two rails cannot drift apart');
+    }
+    check('C6-online', MI.narrativeFor(idOf('KASS SHOP'), { channel: 'online', amountKES: 4566 }) !== t,
+      'online is still distinct (no "Till"), from the same ladder');
+    const o = MI.narrativeFor(idOf('KASS SHOP'), { channel: 'online', amountKES: 4566 });
+    check('C6-ask', /Please approve a payment of KES 4,566/.test(o) && /Please approve a payment of KES 4,566/.test(t),
+      'ONLINE, TILL and POS all carry the same courteous ask');
+    ok('C6-0', 'online : "' + o + '"');
+    ok('C6-1', 'till   : "' + t + '"');
+  }
+
+  section('6c  IT CANNOT GARBLE A PAYMENT PROMPT');
+  {
+    /* The SIM toolkit draws BMP characters; 🛍️ 💰 📲 live above U+FFFF and arrive as boxes or
+       corrupt the line. A garbled PAYMENT prompt is the moment a buyer decides not to trust the
+       transaction, so astral code points are stripped wherever they came from. */
+    check('E6-1', MI.sanitiseForHandset('KASS 🛍️💰📲 SHOP') === 'KASS SHOP',
+      'astral emoji are stripped, along with the variation selectors they leave behind');
+    check('E6-2', MI.narrativeFor(idOf('KASS 🛍️ SHOP'), { amountKES: 250 }).indexOf('\u{1F6CD}') === -1,
+      'a shop that put an emoji in its own name cannot put one on the handset');
+    check('E6-3', MI.narrativeFor(idOf('KASS SHOP'), { amountKES: 250 }).indexOf(MI.MARK) === 0,
+      'the mark that IS used (' + MI.MARK + ', U+2714) is BMP and leads the line');
+    check('E6-4', MI.MARK.codePointAt(0) <= 0xFFFF, '…and is provably inside the plane the handset can draw');
+    check('E6-5', MI.sanitiseForHandset('a b\nc   d') === 'a b c d', 'control characters and runs of space are normalised');
+    for (const n of [1, 4566, 99000, 150000]) {
+      const s = MI.narrativeFor(idOf('MAMA NJERI FRESH GROCERIES AND GENERAL STORE'), { channel: 'till', amountKES: n });
+      check('E6-len-' + n, s.length <= MI.MAX_NARRATIVE && /Please approve a payment of/.test(s),
+        'KES ' + n + ' with a long shop name still fits (' + s.length + ') AND keeps the ask');
+    }
+  }
 
   section('7  SOURCE — one authority, no second opinion');
   const IDX = strip(fs.readFileSync(path.join(FN, 'index.js'), 'utf8'));
   check('R7-1', /narrative:\s*_merchantIdentity\.narrativeFor\(/.test(IDX), 'the payload takes its narrative from the shared authority');
   check('R7-2', !/narrative:\s*[`'"]SOKONI: /.test(IDX), 'the old ref-based narrative is gone from the source');
-  check('R7-3', !/narrativeFor\([^)]*meta\.|resolveMerchantIdentity\([^)]*meta\.sellerUid/.test(IDX),
-    'no path feeds client metadata into the identity');
+  /* The IDENTITY may never come from the client. The CHANNEL may: `meta.category` says whether
+     this is a till sale or an online order, which selects wording and nothing else — a buyer who
+     forged it would change "Till" to no "Till" and gain nothing. Narrowed to the claim that
+     actually matters rather than dropped, and the amount is the server's own `amountKES`. */
+  check('R7-3', !/resolveMerchantIdentity\([^)]*meta\.|narrativeFor\([^)]*meta\.sellerName/.test(IDX),
+    'no path feeds client metadata into the IDENTITY');
+  check('R7-4', /channelOf\(\(meta && meta\.category\)/.test(IDX) && /amountKES:\s*amountKES/.test(IDX),
+    'the channel comes from the payment category and the amount from the server-validated figure');
 
   section('8  SABOTAGE');
   sab('X8-1', 'restoring the ref-based narrative',
@@ -272,7 +327,7 @@ async function main() {
   }
   {
     const after = await push();
-    check('X8-R', !!after && after.narrative.indexOf('KASS SHOP') === 0, 'POST-SABOTAGE — restored and correct again');
+    check('X8-R', !!after && leads(after.narrative, 'KASS SHOP'), 'POST-SABOTAGE — restored and correct again');
   }
 
   section('9  THE IN-APP STK PANEL — built long ago, and never reached');
@@ -300,18 +355,24 @@ async function main() {
     })();
     if (core === null) { blocked('P9-4', 'could not isolate _placeOrderCore'); }
     else {
-      check('P9-4', /_stkPanel\s*\(\s*1\s*\)/.test(core) && /_stkPanel\s*\(\s*2\s*\)/.test(core),
+      check('P9-4', /_stkPanel\s*\(\s*1\b/.test(core) && /_stkPanel\s*\(\s*2\b/.test(core),
         'the LIVE checkout path now reveals and advances the panel (this is what was missing)');
-      check('P9-5', /_stkPanel\s*\(\s*2\s*\)[\s\S]{0,200}enter your PIN on your phone/.test(core),
-        'step 2 — "Check Your Phone" — fires exactly when the prompt has been sent');
+      check('P9-5', /_stkPanel\s*\(\s*2\b[^)]*\)[\s\S]{0,200}enter your PIN on your phone/.test(core),
+        'step 2 — "Check your phone" — fires exactly when the prompt has been sent');
+      check('P9-8', /_stkPanel\s*\(\s*2\s*,\s*_authTotal\s*\)/.test(core),
+        '…and it is handed the server-confirmed total, so the panel names the figure being approved');
     }
-    check('P9-6', /function _stkPanel\s*\([\s\S]{0,400}activateStkStep/.test(COS),
+    check('P9-6', /function _stkPanel\s*\([\s\S]{0,1200}activateStkStep/.test(COS),
       'it drives the SAME activateStkStep the old path uses — not a second step engine that would drift');
-    check('P9-7', /function _stkPanel\s*\([\s\S]{0,400}catch/.test(COS),
+    check('P9-7', /function _stkPanel\s*\([\s\S]{0,1200}catch/.test(COS),
       'and it is swallowed on failure — a decorative panel must never interrupt a payment');
+    check('P9-9', /Please approve a payment of[\s\S]{0,120}enter your M-PESA PIN/.test(COS),
+      'the panel asks in the same words the handset does — "Please approve a payment of KES …"');
+    check('P9-10', /🔐|📲/.test(COS),
+      'and it carries the emoji the handset cannot draw, on the surface that can');
 
     sab('P9-S1', 'unwiring the live path from the panel',
-      core ? core.replace(/_stkPanel\s*\(\s*\d\s*\)/g, 'void 0') : '',
+      core ? core.replace(/_stkPanel\s*\([^)]*\)/g, 'void 0') : '',
       (s) => !/_stkPanel\s*\(/.test(s));
     /* `activateStkStep` appears TWICE inside _stkPanel — the typeof guard and the call — so a
        single-occurrence replace leaves the second one inside the detector's window and the

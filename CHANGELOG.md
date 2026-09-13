@@ -1,3 +1,85 @@
+## 2026-09-14 (54) — the prompt asks politely, names the amount, and says it the same way at the till
+
+**70 assertions, 0 failed, 0 blocked. Nothing deployed. Handset proof still outstanding.**
+Suite: `scripts/certify-stk-narrative.js`
+
+### What the buyer now reads
+
+```
+online    ✔ KASS SHOP · Please approve a payment of KES 4,566 · Powered by SOKONI, a product of Bravilex
+till/POS  ✔ KASS SHOP Till · Please approve a payment of KES 4,566 · Powered by SOKONI, a product of Bravilex
+```
+
+Entry 53 made the prompt name the shop. This makes it **ask**, and name the figure.
+
+### One channel for POS and till
+
+A SmartPOS sale and a till sale are the same event to the person paying: they are standing in the
+shop, being served, and are asked to approve an amount. Separate copy would let the two drift until
+the same customer, in the same shop, read different things depending on which device the attendant
+picked up. So `pos`, `smartpos` and `terminal` all **resolve to** `till` — one ladder, not two
+formats. Online differs only by the absence of `Till`.
+
+### A reversal, recorded rather than quietly dropped
+
+Entry 53's suite asserted the narrative must **not** repeat the amount, on the grounds that
+Safaricom renders it already. That was my reasoning; SOKONI decided against it. A buyer approving
+money should be asked, in words, for a stated figure — not handed a bare merchant string. `A6-1` is
+now the opposite assertion, and the old one is gone rather than left ambiguous.
+
+### The ask is the last thing to go
+
+Gateways truncate, so the ladder sheds our branding first, then shortens the courtesy, and only
+drops the amount when the shop's own name has consumed the whole line:
+
+```
+✔ <SHOP> · Please approve a payment of KES X · Powered by SOKONI, a product of Bravilex
+✔ <SHOP> · Please approve a payment of KES X · Powered by SOKONI · Bravilex
+✔ <SHOP> · Please approve a payment of KES X · Powered by SOKONI
+  <SHOP> · Please approve a payment of KES X · SOKONI
+  <SHOP> · Please approve KES X · SOKONI
+  <SHOP> · KES X · SOKONI
+```
+
+A 44-character shop name at KES 150,000 still fits in 100 characters **and keeps the ask**
+(`E6-len-*`).
+
+### Emoji: on the surface that can draw them
+
+🛍️ 💰 📲 live above U+FFFF. The SIM toolkit needs a surrogate pair it generally cannot draw, so they
+arrive as boxes or corrupt the line — and a garbled **payment** prompt is the moment a buyer decides
+not to trust the transaction. So:
+
+* the handset mark is `✔` (U+2714, BMP), and `sanitiseForHandset` **strips every astral code point**,
+  the variation selectors they leave behind, and control characters — wherever they came from. A
+  shop that puts an emoji in its own name cannot put one on a handset (`E6-2`).
+* the full colour-emoji treatment goes on the **in-app panel**, which is a browser:
+  `📲 Check your phone` / `Please approve a payment of KES 4,566 — enter your M-PESA PIN 🔐`, with the
+  server-confirmed total.
+
+### Client may choose the channel; never the identity
+
+`meta.category` selects wording and nothing else — a buyer who forged it would change `Till` to no
+`Till` and gain nothing. The shop name still comes from `products/{id}.sellerUid → shops/{uid}.name`,
+and the amount from the server-validated `amountKES`. `R7-3` was narrowed to the claim that matters
+and `R7-4` added, rather than left to fire on a harmless input.
+
+### Files affected
+
+`functions/shared/merchant-identity.js` · `functions/index.js` (1 hunk, isolated) · `checkout.html` ·
+`scripts/certify-stk-narrative.js`
+
+**Database:** none. **API:** none. **Breaking:** none.
+**Still outstanding:** whether IntaSend forwards `narrative` to what Safaricom renders (one real
+handset push); and the Till/SPOS STK **sender** remains on `slice/realtime-control-plane` — the
+format is certified here, it has no live caller on this branch.
+
+### Deployment
+
+**None.**
+
+---
+
 ## 2026-09-14 (53) — the M-PESA prompt names the shop, not a reference code
 
 **46 assertions, 0 failed, 0 blocked. Nothing deployed. Handset proof still outstanding.**
