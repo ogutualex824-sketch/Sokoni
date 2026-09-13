@@ -321,8 +321,20 @@ function quote(input, policy) {
   if (customerChargeMinor !== riderEarningMinor + sokoniCommissionMinor) {
     throw new QuoteRefused('conservation_violated');
   }
+  /* ROUNDING TOLERANCE AT THE UPPER BOUND — exactly one minor unit, and no more.
+     `customerCharge` is a CEILING, which keeps the rider whole; the cost is that the realised
+     share can sit a fraction above the derived integer. At the top of the band that fraction
+     crosses SHARE_MAX and a perfectly legitimate quote refuses: a 25 km route derives exactly 25%
+     and realises 25.001%, so long routes, vans and trucks could not be priced at all. Found by
+     validating a proposed production policy, not by inspection.
+
+     The allowance is the rounding increment itself (one minor unit, hence +100 on the
+     ×100-scaled comparison) — NOT a loosened band. A share genuinely above the mandate still
+     refuses, because the excess is bounded by 1/customerCharge: at these amounts that is under
+     0.003 of a percentage point. The LOWER bound gets no tolerance: a ceiling can only push the
+     share up, so any shortfall there is a real defect. */
   if (sokoniCommissionMinor * 100 < SHARE_MIN_PCT * customerChargeMinor
-      || sokoniCommissionMinor * 100 > SHARE_MAX_PCT * customerChargeMinor) {
+      || sokoniCommissionMinor * 100 > (SHARE_MAX_PCT * customerChargeMinor) + 100) {
     throw new QuoteRefused('realised_share_out_of_band',
       (sokoniCommissionMinor * 100 / customerChargeMinor).toFixed(3) + '%');
   }
@@ -392,7 +404,11 @@ function assertSettleable(pinned, claimed, opts) {
   const c = minor(pinned.customerCharge), r = minor(pinned.riderEarning), s = minor(pinned.sokoniCommission);
   if (c === null || r === null || s === null) throw new QuoteRefused('pinned_quote_not_minor_units');
   if (c !== r + s) throw new QuoteRefused('pinned_quote_conservation_violated', c + ' != ' + r + ' + ' + s);
-  if (s * 100 < SHARE_MIN_PCT * c || s * 100 > SHARE_MAX_PCT * c) {
+  /* SAME rounding tolerance as issuance. If settlement were stricter than the quote authority, a
+     quote this module itself issued at the top of the band would be refused at payment time — the
+     rider does the work and cannot be paid. The two bounds must move together; keeping them
+     identical (and derived from the same constants) is what stops them drifting apart. */
+  if (s * 100 < SHARE_MIN_PCT * c || s * 100 > (SHARE_MAX_PCT * c) + 100) {
     throw new QuoteRefused('pinned_share_out_of_band', (s * 100 / c).toFixed(3) + '%');
   }
   if (claimed !== undefined && claimed !== null) {

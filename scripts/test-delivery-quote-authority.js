@@ -439,6 +439,49 @@ const minor = (m) => m.minorUnits;
   const good = await DQ.loadPolicy(fakeDbGood);
   ckt('N5 CONTROL: a complete approved config DOES load', () => !!good && good.shareCurve.distanceWeight === 0.6);
 
+  /* ── O. Top-of-band rounding ──────────────────────────────────────────────────────────────
+     REGRESSION. This suite stood at 104/0 while a real defect sat in the band check: a route
+     deriving exactly SHARE_MAX realises a fraction ABOVE it, because customerCharge is a CEILING
+     (which is what keeps the rider whole). Nothing here exercised the top of the band, so every
+     long route, van and truck would have refused in production. Found by validating a proposed
+     policy, not by inspection — hence these tests. */
+  console.log('\nO - the top of the band prices (ceiling rounding must not refuse a valid quote)');
+  const maxCurve = withCurve({ distanceWeight: 1, demandWeight: 0, saturationKm: 10, demandSaturationIndex: 2 });
+  const topRoutes = [['motorcycle', 25, 55], ['van', 20, 45], ['truck', 30, 70], ['car', 40, 80]];
+  let topOk = true, sawMax = false;
+  topRoutes.forEach(([v, km, min]) => {
+    try {
+      const x = Q(mk({ vehicleType: v, distanceKm: km, estimatedMinutes: min }), maxCurve);
+      if (x.sokoniSharePct === DQ.SHARE_MAX_PCT) sawMax = true;
+    } catch (err) { topOk = false; }
+  });
+  ckt('O1 routes at the TOP of the band quote successfully', () => topOk);
+  ckt('O2 at least one of them derives exactly SHARE_MAX (the case that used to refuse)',
+    () => sawMax, 'SHARE_MAX = ' + DQ.SHARE_MAX_PCT + '%');
+  ckt('O3 the realised share never exceeds the band by more than one minor unit',
+    () => topRoutes.every(([v, km, min]) => {
+      const x = Q(mk({ vehicleType: v, distanceKm: km, estimatedMinutes: min }), maxCurve);
+      const realised = (minor(x.sokoniCommission) * 100) / minor(x.customerCharge);
+      return realised <= DQ.SHARE_MAX_PCT + (100 / minor(x.customerCharge));
+    }));
+  /* The tolerance must be a rounding allowance, NOT a loosened band. */
+  ckt('O4 a genuinely out-of-band pinned share is STILL refused at settlement',
+    () => { const c = 100000, s = 30000, r = 70000;   /* 30% — well past the mandate */
+      const e = refuses(() => DQ.assertSettleable({ quoteId: 'x', pricingVersion: DQ.PRICING_VERSION,
+        customerCharge: money.fromMinor(c), riderEarning: money.fromMinor(r), sokoniCommission: money.fromMinor(s) }));
+      return !!e && e.reason === 'pinned_share_out_of_band'; });
+  ckt('O5 issuance and settlement share the SAME bound (settlement cannot be stricter)',
+    () => { const x = Q(mk({ vehicleType: 'truck', distanceKm: 30, estimatedMinutes: 70 }), maxCurve);
+      return minor(DQ.assertSettleable({ quoteId: x.quoteId, pricingVersion: x.pricingVersion,
+        customerCharge: x.customerCharge, riderEarning: x.riderEarning,
+        sokoniCommission: x.sokoniCommission })) === minor(x.riderEarning); },
+    'a quote the authority issues must be settleable');
+  ckt('O6 the LOWER bound gets no tolerance (a ceiling can only push the share up)',
+    () => { const c = 100000, s = 15000, r = 85000;   /* 15% — below the mandate */
+      const e = refuses(() => DQ.assertSettleable({ quoteId: 'x', pricingVersion: DQ.PRICING_VERSION,
+        customerCharge: money.fromMinor(c), riderEarning: money.fromMinor(r), sokoniCommission: money.fromMinor(s) }));
+      return !!e && e.reason === 'pinned_share_out_of_band'; });
+
   console.log('\n' + '-'.repeat(74));
   console.log('RESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail === 0 ? 0 : 1);
