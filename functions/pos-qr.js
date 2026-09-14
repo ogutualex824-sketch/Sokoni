@@ -17,6 +17,9 @@ const admin                   = require('firebase-admin');
 const crypto                  = require('crypto');
 
 const _verify                 = require('./shared/intasend-verify');
+const _gateway                = require('./shared/stk-gateway');
+const _identity               = require('./shared/merchant-identity');
+const https                   = require('https');
 
 const QR_SIGNING_SECRET   = defineSecret('QR_SIGNING_SECRET');
 const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
@@ -25,10 +28,11 @@ const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
    a rail whose signing secret was declared on the two callables that READ handoff codes and missed
    on the one that MINTS them — in production every acceptance refused NO_SIGNING_KEY. So the
    completion callable, which is the one that now calls IntaSend, declares the key explicitly.
-   `OPT` keeps the narrower set: nothing else on this rail talks to the gateway. */
+   `OPT` keeps the narrower set: only the two callables that talk to IntaSend — the SENDER
+   (initiatePOSQRPayment, P2) and the VERIFIER (completePOSQRPayment, P1) — carry the key. */
 const OPT       = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB', secrets: [QR_SIGNING_SECRET] };
 const OPT128    = { region: 'us-central1', enforceAppCheck: true, memory: '128MiB', secrets: [QR_SIGNING_SECRET] };
-const OPT_VERIFY = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB',
+const OPT_GATEWAY = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB',
   secrets: [QR_SIGNING_SECRET, INTASEND_PRIVATE_KEY] };
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -48,6 +52,10 @@ const _isAdmin  = (auth) => auth && (
   auth.token?.admin === true ||
   auth.token?.superAdmin === true
 );
+
+/* One spelling of the masked number, so the two "prompt sent" branches cannot drift into
+   showing the customer a differently-formatted phone for the same event. */
+const _maskPhone = (p) => String(p).replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, '+$1 $2 $3 $4');
 
 /* Generate a URL-safe transaction ID */
 function _txnId() {
@@ -239,12 +247,25 @@ exports.getPOSPaymentDetails = onCall(
    Duplicate/replay safe.
 ════════════════════════════════════════════════════════════ */
 exports.initiatePOSQRPayment = onCall(
-  OPT,
+  OPT_GATEWAY,
   async (request) => {
     const { transactionId, method, phone } = request.data;
 
     if (!transactionId || typeof transactionId !== 'string' || transactionId.length !== 32) {
       throw new HttpsError('invalid-argument', 'Invalid payment reference');
+    }
+
+    /* ── P2 — THE CALLER NAMES A SALE AND A PHONE. IT DOES NOT NAME A PRICE. ──────────────
+       The amount comes from `posPayments/{id}.total`, written by the server at QR creation
+       from validated items. A payload carrying an amount is REFUSED rather than ignored:
+       silently dropping it would teach a caller that sending it is harmless, and would hide a
+       client that believes it is setting the charge. Same reasoning as Gate C's
+       `assertNoCheckoutPricing`. */
+    const _forbidden = ['amount', 'total', 'subtotal', 'tax', 'discount', 'currency', 'items']
+      .filter((f) => (request.data || {})[f] !== undefined);
+    if (_forbidden.length) {
+      throw new HttpsError('invalid-argument',
+        'The sale total is server-authoritative; remove: ' + _forbidden.join(', '));
     }
 
     const db   = fdb();
@@ -287,21 +308,116 @@ exports.initiatePOSQRPayment = onCall(
       const normPhone = String(phone).replace(/\D/g, '').replace(/^0/, '254').replace(/^254254/, '254');
       if (!/^2547\d{8}$/.test(normPhone)) throw new HttpsError('invalid-argument', 'Invalid Kenyan phone number');
 
-      /* Store pending STK context so webhook can match back */
-      await ref.update({
-        pendingMpesaPhone: normPhone,
-        pendingMethod:     'mpesa',
-        paymentInitiatedAt: _now(),
+      /* ── P2 — THE PROMPT IS ACTUALLY SENT ────────────────────────────────────────────────
+         What stood here wrote `pendingMpesaPhone`, answered "M-Pesa prompt sent… Check your
+         phone", and called NO GATEWAY, under a comment reading "Delegate to existing
+         initiateSTKPush CF pattern". There was no delegation. The customer stood at the till
+         waiting for a prompt that was never going to arrive — 5 of the rail's stuck `pending`
+         rows are exactly that.
+
+         CREATED ≠ PROMPTED ≠ ACCEPTED ≠ PAID. This function may establish that the gateway
+         ACCEPTED the request. It must never mark the payment complete or create an order:
+         only `completePOSQRPayment` may do that, and only after independently verifying with
+         IntaSend (P1). */
+
+      /* ── 1. SINGLE-FLIGHT, BEFORE THE GATEWAY ───────────────────────────────────────────
+         A reservation taken AFTER the request cannot prevent the second request — the window
+         it needs to cover is exactly the one it would be sitting outside of. `create()` is
+         atomic: two taps race, one wins, the loser converges on the winner's outcome instead
+         of issuing a second prompt (and a second potential charge). */
+      const attemptRef = db.collection('paymentAttempts').doc(transactionId);
+      let reserved = false;
+      try {
+        await attemptRef.create({
+          transactionId, sellerId: data.sellerId, phone: normPhone,
+          amount: data.total, state: 'RESERVED', createdAt: _now(),
+        });
+        reserved = true;
+      } catch (e) {
+        /* ALREADY_EXISTS (code 6): somebody got here first. Report what that attempt became
+           rather than starting a second one. */
+        const prior = (await attemptRef.get()).data() || {};
+        if (prior.state === 'GATEWAY_ACCEPTED') {
+          return {
+            status:  'stk_initiated',
+            message: `M-Pesa prompt sent to ${_maskPhone(normPhone)}. Check your phone.`,
+            phone:   normPhone, total: data.total, currency: data.currency,
+            checkoutId: prior.checkoutId || null, deduplicated: true,
+          };
+        }
+        throw new HttpsError('aborted',
+          'A payment request for this sale is already in progress. Please wait.');
+      }
+
+      /* ── 2. WHO THE CUSTOMER IS PAYING ──────────────────────────────────────────────────
+         Resolved through the certified authority, from `shops/{sellerId}.name` — NOT from
+         `data.sellerName`, which `generatePOSPaymentQR` fills with a
+         `|| 'SOKONI Merchant'` fallback that merchant-identity exists to forbid. Unresolved
+         yields the platform-only string; it never names a shop it cannot prove. */
+      let _identityShop = _identity.resolveMerchantIdentity([], {});
+      try {
+        const shopSnap = await db.collection('shops').doc(String(data.sellerId)).get();
+        if (shopSnap.exists) {
+          _identityShop = _identity.resolveMerchantIdentity(
+            [String(data.sellerId)], { [String(data.sellerId)]: shopSnap.data() || {} });
+        }
+      } catch (_) { /* fail closed to the platform-only narrative */ }
+
+      /* ── 3. Send ────────────────────────────────────────────────────────────────────────
+         The amount is `data.total` — written by the server at QR creation from validated
+         items. The caller supplies a phone and nothing else that touches money. */
+      const payload = _gateway.buildPayload({
+        phone:      normPhone,
+        amountKES:  data.total,
+        narrative:  _identity.narrativeFor(_identityShop, { channel: 'till', amountKES: data.total }),
+        apiRef:     transactionId,
       });
 
-      /* Delegate to existing initiateSTKPush CF pattern (inline call via shared module) */
-      return {
-        status:  'stk_initiated',
-        message: `M-Pesa prompt sent to ${normPhone.replace(/(\d{3})(\d{4})(\d{4})/, '+$1 $2 $3')}. Check your phone.`,
-        phone:   normPhone,
-        total:   data.total,
-        currency: data.currency,
-      };
+      let outcome, gwStatus = 0, gwData = null;
+      try {
+        const res = await _gateway.pushSTK({
+          payload, privateKey: INTASEND_PRIVATE_KEY.value(),
+          sandbox: process.env.INTASEND_SANDBOX === 'true', https,
+        });
+        gwStatus = res.status; gwData = res.data;
+        outcome = _gateway.classifyOutcome(gwStatus);
+      } catch (e) {
+        /* A non-answer. NOT a rejection: the request may have been processed. */
+        outcome = 'OUTCOME_UNKNOWN';
+      }
+
+      if (outcome === 'GATEWAY_ACCEPTED') {
+        const checkoutId = _gateway.checkoutIdOf(gwData);
+        await attemptRef.update({ state: 'GATEWAY_ACCEPTED', checkoutId, acceptedAt: _now() });
+        await ref.update({
+          pendingMpesaPhone:  normPhone,
+          pendingMethod:      'mpesa',
+          paymentInitiatedAt: _now(),
+          stkState:           'GATEWAY_ACCEPTED',
+          gatewayCheckoutId:  checkoutId,
+        });
+        /* "Sent" is claimed HERE and nowhere else — the one branch where the gateway said yes. */
+        return {
+          status:  'stk_initiated',
+          message: `M-Pesa prompt sent to ${_maskPhone(normPhone)}. Check your phone.`,
+          phone:   normPhone, total: data.total, currency: data.currency, checkoutId,
+        };
+      }
+
+      if (outcome === 'GATEWAY_REJECTED') {
+        /* The gateway ANSWERED, and said no. Nothing is in flight, so release the reservation
+           and let the cashier try again. */
+        await attemptRef.delete().catch(() => {});
+        throw new HttpsError('failed-precondition',
+          'The payment provider refused the request. Please try again.');
+      }
+
+      /* OUTCOME_UNKNOWN — 5xx or no answer at all. The reservation is HELD, deliberately:
+         no response is not no charge, and releasing it would let a retry issue a second
+         prompt for a request that may already have reached the customer. */
+      await attemptRef.update({ state: 'OUTCOME_UNKNOWN', heldAt: _now() }).catch(() => {});
+      throw new HttpsError('unavailable',
+        'We could not confirm the payment request reached M-PESA. Check the customer\'s phone before retrying.');
     }
 
     if (method === 'card') {
@@ -324,7 +440,7 @@ exports.initiatePOSQRPayment = onCall(
    Idempotent.
 ════════════════════════════════════════════════════════════ */
 exports.completePOSQRPayment = onCall(
-  OPT_VERIFY,
+  OPT_GATEWAY,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');

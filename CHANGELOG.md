@@ -1,3 +1,99 @@
+## 2026-09-14 (59) — P2: the till prompt is actually sent
+
+**62 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p2-pos-stk-sender.js`
+Full regression: **612 assertions across 10 suites, 0 failed, 0 blocked.** Require-closure passes.
+Nothing deployed.
+
+### The defect
+
+`initiatePOSQRPayment`'s M-PESA branch wrote `pendingMpesaPhone`, answered *"M-Pesa prompt sent…
+Check your phone"*, and **called no gateway**, under a comment reading *"Delegate to existing
+initiateSTKPush CF pattern"*. There was no delegation. The customer stood at the till waiting for a
+prompt that was never going to arrive — five of the rail's stuck `pending` rows are exactly that.
+
+### The invariant
+
+```
+CREATED  ≠  PROMPTED  ≠  ACCEPTED  ≠  PAID
+```
+
+P2 may establish that the gateway **accepted** the request. Only `completePOSQRPayment` (P1) may
+establish **paid**, and only by independently verifying with IntaSend. Section 6 of the suite proves
+the sender writes no paid status, creates no order and does not touch settlement.
+
+### What changed
+
+* **`functions/shared/stk-gateway.js` recovered verbatim** from `cc93c24` — payload, request and
+  outcome classification, with `https` **injected** rather than required inside, so a harness can
+  count calls without every suite that loads it becoming capable of a real charge.
+* **Single-flight before the gateway.** An atomic `create()` on `paymentAttempts/{transactionId}` is
+  taken *first*: a reservation placed after the request cannot cover the window it exists for. Two
+  concurrent taps issue **one** gateway request; the loser is told the sale is already in progress
+  rather than handed a false "sent".
+* **"Sent" is claimed in exactly one branch** — `GATEWAY_ACCEPTED`. A 4xx **releases** the
+  reservation (the gateway answered, nothing is in flight, a retry is safe). A 5xx or a socket error
+  **holds** it as `OUTCOME_UNKNOWN`, because no response is not no charge and a released reservation
+  would let a retry put a second prompt on the customer's phone.
+* **The certified till narrative**, byte-identical to the generator: `✔ KASS SHOP Till · Please
+  approve a payment of KES 1,500 · Powered by SOKONI, a product of Bravilex`. Resolved from
+  `shops/{sellerId}.name` through the certified authority — deliberately **not** from
+  `data.sellerName`, which `generatePOSPaymentQR` fills with a `|| 'SOKONI Merchant'` fallback that
+  `merchant-identity` exists to forbid. An unnamed shop yields the platform-only string.
+* **The caller names a sale and a phone, never a price.** `amount`, `total`, `subtotal`, `tax`,
+  `discount`, `currency` and `items` are **refused** rather than ignored — a silently dropped field
+  teaches a caller that sending it is harmless. The amount is `posPayments/{id}.total`, written by
+  the server at QR creation from validated items.
+* **Secrets declared.** `OPT_VERIFY` became `OPT_GATEWAY` and now covers both callables that talk to
+  IntaSend — the sender and the verifier. Callables that do not keep the narrower set.
+
+### A third sabotage that did not land, with a new cause
+
+`X9-4` mutated the payload's `amountKES: data.total` and still reported "not detected". The mutation
+had applied correctly; the **detector** was at fault — a lazy window from `buildPayload({` simply
+scanned past the mutated line and matched the *narrative's* `amountKES: data.total` on the next line.
+Re-anchored on the trailing comma, which only the payload line carries.
+
+That is three this session, each with a different cause: an anchor on a comment the detector had
+already stripped; an export rebound where the call site is lexical; and now a regex that matched a
+second occurrence beyond the mutation. The rule needs stating more broadly than "reach the running
+code": **prove the mutation actually changed what you think it changed** — a sabotage that reports
+"not detected" is as often a broken detector as a missing guard.
+
+### Boundaries held
+
+`order-settlement.js` and `finos-utils.js` untouched — they remain the refund agent's. Step 4,
+Gate C, RES-1, RES-1b, the deferred buyer-visibility work and the `posPayments` shape collision are
+all unchanged. Authorization, expiry and phone validation all run **before** any gateway call, so an
+unauthorised or invalid request never reaches IntaSend.
+
+### Where the rail now stands
+
+```
+generate QR      →  reserve  →  gateway  →  GATEWAY_ACCEPTED  →  customer sees a real prompt
+                                                              ↓
+                                        (P1)  independent IntaSend verification  →  paid + order
+```
+
+P1 was refusing every completion because there was no gateway transaction to verify. P2 creates it,
+anchored on the same `transactionId` P1 checks (`api_ref`). The two halves now meet.
+
+### Files affected
+
+`functions/shared/stk-gateway.js` (new, recovered) · `functions/pos-qr.js` ·
+`scripts/certify-p2-pos-stk-sender.js` (new)
+
+**Database:** `posPayments` gains `stkState`, `gatewayCheckoutId`; new collection
+`paymentAttempts/{transactionId}` (server-written single-flight reservation).
+**Breaking:** a client sending an amount to `initiatePOSQRPayment` is now refused — by design; the
+rail has no production traffic. **Deployment:** none.
+
+### Still open
+
+P3 — the `pendingMpesaPhone` match-back, which nothing reads. And the `posPayments` document-shape
+collision between this rail and the retired Daraja POS rail, recorded in entry 58.
+
+---
+
 ## 2026-09-14 (58) — P1: a string is not a payment. POS confirmation now asks the gateway.
 
 **46 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p1-pos-payment-confirmation.js`
