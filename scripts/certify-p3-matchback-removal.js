@@ -222,8 +222,38 @@ async function main() {
     'they key on api_ref and look up payments/{apiRef}');
   check('W4-3', /if \(!snap\.exists\) \{ res\.status\(200\)\.send\("OK"\); return; \}/.test(IDX),
     'an unknown api_ref is acknowledged and DROPPED — nothing is created, nothing corrupted');
-  check('W4-4', !/posPayments/.test(IDX.slice(IDX.indexOf('exports.intasendWebhook'), IDX.indexOf('exports.webhookMpesa'))),
-    'neither handler knows posPayments exists — so a QR callback is dropped, which is why P1 asks IntaSend directly');
+  /* W4-4 ROTTED ON 2026-09-14, and that is the correct outcome: it asserted "neither handler
+     knows posPayments exists", which was P3's RECORD OF A DEFECT, not an invariant to protect.
+     P3-A then closed it in `webhookIntasend`. A gate rots when its finding is fixed, so the
+     check is re-aimed at what must stay true rather than deleted or widened into vacuity. */
+  {
+    /* Scope to each EXPORT'S OWN BODY. A slice that simply runs from one export name to another
+       swept up the P3-A helper defined between them, and reported the opposite of the truth. */
+    const bodyOf = (name) => {
+      const a = IDX.indexOf(name);
+      if (a < 0) return '';
+      const b = IDX.indexOf('\nexports.', a + name.length);
+      return b < 0 ? IDX.slice(a) : IDX.slice(a, b);
+    };
+
+    check('W4-4', !/posPayments/.test(bodyOf('exports.intasendWebhook')),
+      'intasendWebhook still drops a QR callback — it takes no production traffic and P3-A did not wire it');
+
+    check('W4-4b', /_associatePosQrCallback\(/.test(bodyOf('exports.webhookIntasend')),
+      '…while webhookIntasend now ASSOCIATES a QR callback (P3-A) instead of discarding it');
+
+    /* The invariant is about the ASSOCIATION path, not the whole handler: webhookIntasend
+       legitimately marks ONLINE payments paid, and always did. What must stay true is that the
+       POS association cannot. Scope the assertion to the helper that does it. */
+    const helper = (() => {
+      const a = IDX.indexOf('async function _associatePosQrCallback');
+      return a < 0 ? '' : IDX.slice(a, IDX.indexOf('\n}', a) + 2);
+    })();
+    check('W4-4c', helper.length > 200 && !/status/.test(helper) && !/settleOrder/.test(helper)
+      && !/collection\("orders"\)/.test(helper),
+      '…and the association path itself writes no status, no order and no settlement — P1 remains '
+      + 'the only authority, which is the invariant P3 actually cared about');
+  }
   check('W4-5', fs.existsSync(path.join(ROOT, 'docs', 'P3A_POS_QR_WEBHOOK_ASSOCIATION.md')),
     'the deferred gate P3-A is recorded so this is not rediscovered by accident');
   {

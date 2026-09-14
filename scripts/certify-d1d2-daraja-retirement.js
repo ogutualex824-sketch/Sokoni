@@ -212,7 +212,13 @@ async function main() {
          on THEIR work and keep failing whatever this gate did — the same mis-assertion P1's T8-1
          made. What matters is that no D1/D2 change touched it, which is checked by content
          below. */
-      for (const name of ['exports.darajaSTKCallback', 'exports.webhookMpesa', 'exports.webhookIntasend', 'exports.verifyIntasendPayment']) {
+      /* `webhookIntasend` was in this list until 2026-09-14. P3-A then added the POS QR
+         association at its `payments/{apiRef}` miss — authorised work, in a different gate.
+         "Byte-identical to HEAD" is therefore the WRONG question for it now, for exactly the
+         reason stated above about initiateSTKPush: this suite's concern is that no DARAJA
+         change touched it, and that is a question about content, not about whether the bytes
+         moved. Moved to the attribution check below. A gate rots when its finding is fixed. */
+      for (const name of ['exports.darajaSTKCallback', 'exports.webhookMpesa', 'exports.verifyIntasendPayment']) {
         const a = blockOf(head, name), b = blockOf(IDX_RAW, name);
         check('U4-' + name.replace('exports.', ''), a !== null && b !== null && a === b,
           name + ' is byte-identical to HEAD');
@@ -222,6 +228,14 @@ async function main() {
         const blk = blockOf(IDX_RAW, 'exports.initiateSTKPush');
         check('U4-initiateSTKPush', blk !== null && !mine.test(blk),
           'initiateSTKPush carries no D1/D2 change (it differs from HEAD only through another agent\'s in-flight work)');
+
+        /* Same question, same answer, for the handler P3-A legitimately edited. */
+        const wi = blockOf(IDX_RAW, 'exports.webhookIntasend');
+        check('U4-webhookIntasend', wi !== null && !mine.test(wi),
+          'webhookIntasend carries no D1/D2 change either — it differs from HEAD only through P3-A\'s POS QR association');
+        check('U4-webhookIntasend-intact', wi !== null && /db\.collection\("payments"\)\.doc\(apiRef\)/.test(wi)
+          && /existing\.status === "COMPLETE"/.test(wi),
+          '…and its online-payment path — the payments lookup and the COMPLETE short-circuit — is still there');
       }
     }
     for (const f of ['functions/mpesa-c2b.js']) {

@@ -21,6 +21,7 @@ const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https")
 const _dqEndpoint = require("./delivery-quote-endpoint");
 const _dqCarry = require("./delivery-quote-carry");   /* RES-1 — the pin travels; it is never re-derived */
 const _merchantIdentity = require("./shared/merchant-identity"); /* WHO the buyer is paying, on the M-PESA prompt */
+const _qrAssoc = require("./shared/pos-qr-association"); /* P3-A — WHICH POS sale a callback names. Never whether it is paid. */
 const _kesMajor = (m) => (m < 0 ? "-" : "") + Math.trunc(Math.abs(m) / 100) + "." +
   String(Math.abs(m) % 100).padStart(2, "0");
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
@@ -7580,6 +7581,53 @@ async function _processWebhook(req, res, opts) {
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* â”€â”€ IntaSend â”€â”€ */
+/* == P3-A -- ASSOCIATE A POS QR CALLBACK ==================================================
+   A POS QR sale lives in `posPayments/{transactionId}`, and P2 sets IntaSend's `api_ref` to
+   that same transactionId. Both webhooks look the ref up in `payments/{apiRef}`, miss, and
+   drop the callback. That is safe, but the till and the customer's pay.html learn nothing.
+
+   This records WHICH sale the gateway is talking about. It does NOT decide payment:
+   `completePOSQRPayment` remains the only thing that may mark a sale paid, and only after
+   verifying with IntaSend directly (P1). The decision lives in a pure module that refuses
+   its own output if it ever contains `status` or any other settlement field.
+
+   Same contract as `_finalizeWalletTopUp` above: true if the ref belonged to a POS QR sale,
+   false otherwise. It NEVER throws. A callback must not 500 because an improvement failed,
+   because IntaSend would then retry a payment webhook forever. */
+async function _associatePosQrCallback(apiRef, state, gatewayInvoiceId, tag) {
+  /* Shape pre-filter: only a 32-hex ref can be a QR transactionId, so a `wtop_` or `pout_`
+     reference can never reach a posPayments read even if the dispatch order changed. */
+  if (!_qrAssoc.isQrRef(apiRef)) return false;
+
+  try {
+    let outcome = "no_document";
+    const ref = db.collection("posPayments").doc(apiRef);
+    await db.runTransaction(async (txn) => {
+      const snap = await txn.get(ref);
+      if (!snap.exists) { outcome = "no_document"; return; }
+      /* The DOCUMENT is the only source of seller and amount. Nothing here reads either from
+         the callback body, so a hostile callback can name a transaction and no more. */
+      const v = _qrAssoc.associationFor(snap.data(), {
+        state,
+        gatewayInvoiceId,
+        receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (!v.associate) { outcome = v.reason; return; }
+      txn.update(ref, Object.assign({}, v.fields, {
+        /* Duplicates are EXPECTED: IntaSend retries on timeout and 5xx. The count makes a
+           redelivery observable; the other three fields converge on the same value. */
+        [_qrAssoc.COUNT_FIELD]: admin.firestore.FieldValue.increment(1),
+      }));
+      outcome = v.monotonicHold ? "associated_held" : "associated";
+    });
+    console.log(`[${tag}] POS QR association ${apiRef} -> ${outcome}`);
+    return outcome !== "no_document";
+  } catch (e) {
+    console.error(`[${tag}] POS QR association error:`, e.message);
+    return false;
+  }
+}
+
 /* Canonical production receiver — IntaSend is configured to POST to this URL.
    Challenge-based auth (body.challenge); full payment + subscription activation.
    intasendWebhook is a secondary deployment that receives no real IntaSend traffic. */
@@ -7661,7 +7709,12 @@ exports.webhookIntasend = onRequest(
 
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
-    if (!snap.exists) { res.status(200).send("OK"); return; }
+    if (!snap.exists) {
+      /* P3-A — no online payment carries this ref. Before dropping it, see whether it
+         names a POS QR sale. Association only; the 200 below is unchanged. */
+      await _associatePosQrCallback(apiRef, state, checkoutId, "webhookIntasend");
+      res.status(200).send("OK"); return;
+    }
 
     const existing = snap.data();
     if (existing.status === "COMPLETE") { res.status(200).send("OK"); return; }

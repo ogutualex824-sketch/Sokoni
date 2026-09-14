@@ -1,3 +1,131 @@
+## 2026-09-14 (66) — P3-A: the callback now says WHICH sale. It still cannot say PAID.
+
+**99 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p3a-pos-qr-association.js`
+Require-closure passes on the STAGED tree (290 relative requires, none missing).
+Nothing deployed. **No inbound Daraja handler touched. No callback can establish `paid`.**
+
+### What was broken
+
+P2 sets IntaSend's `api_ref` to the POS `transactionId`, and the sale lives in
+`posPayments/{transactionId}`. Both webhooks looked the ref up in `payments/{apiRef}`, missed, and
+dropped the callback. Safe — nothing created, nothing corrupted — but the till and the customer's
+`pay.html` learned nothing until a cashier pressed confirm.
+
+### The census decided the shape before a line was written
+
+**Only `webhookIntasend` receives production callbacks.** Measured on 180 days of Cloud Logging
+against the `raw payload` line each handler writes before parsing: `webhookIntasend` has all of
+them; `intasendWebhook` (260 lines) and `verifyIntasendPayment` (389 lines) have **never received
+one**. So the change surface collapsed from two divergent handlers to one, and
+`intasendWebhook` was **not touched merely because it exists** — `D4-5` asserts that.
+
+**The authorization layer decided where association goes.** On the *deployed* ruleset,
+`posPayments` is readable by the seller and the buyer, while `paymentAttempts` has **no match block
+at all** and is invisible to every client. Association written only to `paymentAttempts` would have
+satisfied an audit trail and achieved nothing for the latency problem. `D4-12`/`D4-13` assert the
+write lands on `posPayments` and never on `paymentAttempts`.
+
+### The seam, and why it is the smallest safe one
+
+```
+payments/{apiRef} exists ──► the certified online rail, byte-for-byte unchanged
+                   absent ──► associate ──► 200 OK  (the same 200 as before)
+```
+
+The call sits **after** the miss, never before. `D4-8` proves the order — lookup → miss →
+associate — so an existing online payment never enters a different path, and this branch's
+previous behaviour was *doing nothing*, which cannot be regressed.
+
+**The strongest proof in the suite is `E5-2`:** mechanically reversing the insertion restores
+`webhookIntasend` **byte-for-byte to HEAD**. Not "it looks similar" — identical.
+
+### NO DARAJA, ONLY INTASEND — asserted three ways
+
+A Daraja-shaped document is refused outright (`C3-5`), and refused at runtime too, writing nothing
+(`F6-14`). The wiring exists only in the IntaSend handler. `darajaSTKCallback`, `webhookMpesa`,
+`intasendWebhook`, `verifyIntasendPayment`, `mpesa-c2b.js` and `pos-qr.js` are all **byte-identical
+to HEAD**.
+
+### It cannot become a second payment authority
+
+The decision lives in `functions/shared/pos-qr-association.js`: **one `require`** (the sibling
+ownership module, for the rail discriminator — there is one implementation, not two), no admin SDK,
+no network, **no clock**, and no Firestore operation of any kind.
+
+`status` is on an executable `FORBIDDEN_FIELDS` list, and the module **validates its own output
+against it before returning** rather than trusting itself. Four fields may be written —
+`gatewayInvoiceId`, `gatewayState`, `gatewayNotifiedAt`, `gatewayCallbackCount` — and `F6-5` proves
+the shipped write contained exactly those four and nothing else.
+
+### Proven by executing the shipped code, not by reading it
+
+§6 extracts `_associatePosQrCallback` from `index.js` by brace-matching and runs **that text** in a
+VM against a stubbed store:
+
+* a real QR callback → one write, all four fields, and **`status` still `pending`** (`F6-3`)
+* **five duplicate deliveries** → the count observes five, nothing else changes (`F6-7/8`)
+* a `FAILED` arriving after a `COMPLETE` → does not walk the sale backwards (`F6-9`)
+* an unknown `api_ref` → **zero writes**, and the 200 still goes out (`F6-10`)
+* `wtop_…`, `pout_…`, upper-case, empty, null and path-shaped refs → never reach a read (`F6-11`)
+* a callback naming transaction A → writes **only** A; shop B's sale is untouched (`F6-12/13`)
+* Firestore throwing → returns false instead of throwing, so **IntaSend is never made to retry a
+  payment webhook forever** (`F6-16`)
+
+### Two assertions ROTTED, and that is the correct outcome
+
+The full regression came back with two failures, both in older suites, and both because this
+gate changed something they had recorded as true:
+
+* **D1+D2 `U4-webhookIntasend`** asserted the handler was byte-identical to HEAD. That suite
+  already carried the right pattern one block below, for `initiateSTKPush`, with a comment
+  spelling out the exact lesson — and the same mistake had been made again three lines above
+  it. `webhookIntasend` moved into the attribution check: the D1/D2 question is whether a
+  DARAJA change touched it, which is about content, not about whether the bytes moved.
+* **P3 `W4-4`** asserted "neither handler knows posPayments exists". That was P3's RECORD OF A
+  DEFECT, not an invariant — and P3-A is the gate that fixed it. Re-aimed at what must stay
+  true: `intasendWebhook` still drops (it was not wired), `webhookIntasend` now associates, and
+  the association path writes no status, no order and no settlement.
+
+My first re-aim of `W4-4` was **itself wrong, and the suite caught it**: the slice ran from one
+export name to another and swept up the P3-A helper defined between them, while a companion
+check asserted the whole 781-line handler never writes `paid` — which it legitimately does, for
+ONLINE payments. Both are now scoped to a single export body and to the association helper
+respectively. **A gate rots when its finding is fixed; the repair is to re-aim it, never to
+widen it into vacuity.**
+
+### Isolation
+
+`functions/index.js` carries another agent's work. Hunks classified by content markers: **3 mine,
+4 theirs, 0 mixed**, and separability proven **in both directions** before staging. The classifier
+**refused three hunks as UNCLASSIFIED** rather than bucket them — each was then read and given its
+own specific marker (subscription amount sufficiency, `stk-intent-enforcement`, the POS commission
+rail, the canonical merchant-subscription migration). A catch-all "not mine means theirs" would
+have absorbed work nobody had looked at.
+
+The **staged blob** was certified, not just the working tree: none of their four markers appear in
+it, both of mine do, and its 290 relative requires all resolve within the staged tree — so this
+commit does not import their untracked modules.
+
+### Files affected
+
+`functions/shared/pos-qr-association.js` (new) · `functions/index.js` (3 isolated hunks: one
+require, one helper, one call site) · `scripts/certify-p3a-pos-qr-association.js` (new) ·
+`docs/P3A_CENSUS_INTASEND_POS_ASSOCIATION.md` (new)
+
+**Database:** four additive metadata fields on `posPayments`; no existing field is read or written.
+**API:** none. **Breaking:** none. **Deployment:** none — and it needs its own gate, because this
+touches a live payment webhook.
+
+### Still open
+
+`intasendWebhook` is **dead** — zero callbacks in 180 days, 260 lines kept in partial sync with a
+781-line sibling; its retirement is its own gate. `getPOSPaymentDetails` does not yet surface the
+association, so `pay.html` cannot show it — the callable is the next step if the latency win is
+wanted end-to-end. `posPayments` still carries two document shapes. D3 remains blocked, and the
+Safaricom IP rejection recorded in entry 65 stays **recorded, not repaired**.
+
+---
+
 ## 2026-09-14 (65) — Daraja outbound DELETED FROM PRODUCTION; the frontend gap this exposes
 
 **Three Cloud Functions deleted from `sokoni-aeb26`. 1712 → 1709. Verified: exactly three removed,
