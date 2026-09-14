@@ -389,8 +389,26 @@ exports.initiatePOSQRPayment = onCall(
       if (outcome === 'GATEWAY_ACCEPTED') {
         const checkoutId = _gateway.checkoutIdOf(gwData);
         await attemptRef.update({ state: 'GATEWAY_ACCEPTED', checkoutId, acceptedAt: _now() });
+        /* ── P3 — `pendingMpesaPhone` IS GONE ──────────────────────────────────────────────
+           It was written here under "Store pending STK context so webhook can match back".
+           The census found ONE producer and ZERO consumers: no webhook, no client, nothing
+           anywhere ever read it. It implied a mechanism nobody built.
+
+           It was also the wrong key. Two concurrent sales to the same handset are
+           indistinguishable by phone number, so matching on it could only ever be ambiguous —
+           exactly the case that has to fail closed. The anchor that does work is `api_ref`,
+           which P2 sets to the transactionId and P1 verifies against.
+
+           Nothing is lost by removing it: P2's `paymentAttempts/{transactionId}` reservation
+           already records the phone that was prompted, so the audit trail is intact.
+
+           WHAT HAPPENS TO A CALLBACK TODAY, recorded rather than changed: both IntaSend
+           webhooks key on api_ref and look up `payments/{apiRef}`. For a QR sale that document
+           does not exist, so they answer 200 and drop it. That is safe — nothing is created,
+           nothing is corrupted — and it is why P1 verifies with IntaSend directly instead of
+           waiting to be told. Associating the callback is deferred to P3-A; see
+           docs/P3A_POS_QR_WEBHOOK_ASSOCIATION.md. */
         await ref.update({
-          pendingMpesaPhone:  normPhone,
           pendingMethod:      'mpesa',
           paymentInitiatedAt: _now(),
           stkState:           'GATEWAY_ACCEPTED',

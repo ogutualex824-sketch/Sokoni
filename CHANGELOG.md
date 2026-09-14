@@ -1,3 +1,85 @@
+## 2026-09-14 (60) — P3: the dead match-back field is gone. P3-A recorded, not built.
+
+**27 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p3-matchback-removal.js`
+Full regression: **639 assertions across 11 suites, 0 failed, 0 blocked.** Require-closure passes.
+Nothing deployed; **no webhook modified.**
+
+### What was removed, and why it was never going to work
+
+`initiatePOSQRPayment` wrote `pendingMpesaPhone` under the comment *"Store pending STK context so
+webhook can match back"*. The census found **one producer and zero consumers** — 1,621 tracked
+js/html files scanned, no webhook, no client, nothing anywhere ever read it. It implied a mechanism
+nobody built.
+
+It was also **the wrong key**. Two concurrent sales to the same handset are indistinguishable by
+phone number, so matching on it could only ever be ambiguous — exactly the case the gate says must
+fail closed. The anchor that works already exists: `api_ref`, which P2 sets to the `transactionId`
+and P1 verifies against.
+
+**Nothing is lost.** P2's `paymentAttempts/{transactionId}` reservation already records the phone
+that was prompted, so the audit trail is intact (`A2-6`).
+
+### What a QR callback does today — recorded, not changed
+
+```js
+const payRef = db.collection("payments").doc(apiRef);
+const snap   = await payRef.get();
+if (!snap.exists) { res.status(200).send("OK"); return; }   // ← QR sales land here
+```
+
+Both IntaSend webhooks key on `api_ref` and look up **`payments/{apiRef}`**. A QR sale lives in
+**`posPayments/{apiRef}`**, which neither handler knows about, so the callback is acknowledged and
+dropped. That fails closed — nothing created, nothing corrupted — and it is precisely why P1 asks
+IntaSend directly rather than waiting to be told.
+
+Section 4 of the suite **asserts** this and asserts the handlers are untouched; `X5-5` sabotages a
+webhook into learning about `posPayments` and requires the detector to catch it, so P3-A cannot be
+smuggled in early.
+
+### P3-A recorded as its own gate
+
+`docs/P3A_POS_QR_WEBHOOK_ASSOCIATION.md`. The distinction it fixes in writing:
+
+> **P3 removes dead weight. P3-A would improve callback latency. Neither may become a second
+> definition of "paid".**
+
+It is deferred rather than built because the only place to do the association is inside two
+webhook handlers that are certified shared infrastructure, are **already divergent** (one prod sale
+is provably unpaid through that divergence), and live in `functions/index.js` alongside other
+agents' in-flight work. Modifying a payment webhook to fix a latency problem, in a file three
+parties are editing, is not a change to make under a cleanup gate.
+
+### The sabotage guard I should have had from the start
+
+Three times this session a mutation silently failed to apply and the check reported "not detected"
+while the product was fine. This suite's `sab()` now asserts `mutated !== original` **before**
+running the detector, and fails with *"THE MUTATION DID NOT APPLY (anchor missed); the check would
+have proved nothing."* One line; all three would have been caught instantly.
+
+### Also found, deliberately NOT removed
+
+`pendingMethod` and `paymentInitiatedAt` have **zero consumers** too — the same dead weight, written
+beside the field this gate removed. Your scope named only `pendingMpesaPhone`, so they stay.
+Recorded in the P3-A document.
+
+### Files affected
+
+`functions/pos-qr.js` · `scripts/certify-p3-matchback-removal.js` (new) ·
+`docs/P3A_POS_QR_WEBHOOK_ASSOCIATION.md` (new)
+
+**Database:** `posPayments` stops gaining `pendingMpesaPhone`. **API:** none. **Breaking:** none —
+nothing read it. **Deployment:** none.
+
+### Board after P3
+
+P1, P2 and P3 are closed and the till rail is coherent:
+`QR → reserve → gateway → GATEWAY_ACCEPTED → P1 verification → paid + order`.
+
+Still open, all separate gates: **P3-A** (callback association), the **`posPayments` two-shape
+collision** with the retired Daraja rail, the **8.2 s discovery headroom**, and **deployment**.
+
+---
+
 ## 2026-09-14 (59) — P2: the till prompt is actually sent
 
 **62 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p2-pos-stk-sender.js`
