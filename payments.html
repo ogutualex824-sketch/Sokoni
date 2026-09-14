@@ -429,7 +429,7 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
           <div class="pmt-guide-content">
             <div class="pmt-guide-title">Register Callback URL</div>
             <div class="pmt-guide-desc">In Daraja portal → Lipa Na M-Pesa Online → Validation URL. Paste SOKONI's callback URL below.</div>
-            <div class="pmt-url-chip" onclick="pmtCopy('https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback')">📋 Copy Callback URL</div>
+            <!-- D1 — callback-registration instruction removed. Publishing this URL is what caused sellers to register it in their own Safaricom portals; those registrations are external to this repository and are why the inbound handler itself cannot yet be deleted (D3). -->
           </div>
         </li>
       </ul>
@@ -648,8 +648,7 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
 
   <div class="pmt-sec">Callback URL</div>
   <div class="pmt-callback-box">
-    <div class="pmt-callback-url">https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback</div>
-    <button class="pmt-btn pmt-btn-ghost pmt-btn-sm" style="margin-top:0;" onclick="pmtCopy('https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback')">📋 Copy</button>
+    <!-- D1 — callback-registration instruction removed (see D3). -->
   </div>
   <div class="pmt-info" style="margin-top:10px;">Register this URL in your Safaricom Daraja portal under <strong>Lipa Na M-Pesa Online → CallbackURL</strong>.</div>
 
@@ -1046,9 +1045,8 @@ async function wizSendTestPush() {
   if (status) { status.textContent = '📲 Sending STK Push…'; status.style.color = 'rgba(255,255,255,.5)'; }
 
   try {
-    const fn  = httpsCallable(_fns, 'sendTestSTKPush');
-    const res = await fn({ phone });
-    _testCheckoutId = res.data.checkoutId;
+    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
+    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
 
     if (btn) btn.textContent = '⏳ Waiting for PIN…';
     if (status) { status.textContent = '📱 Enter your M-Pesa PIN on your phone…'; status.style.color = '#71ff00'; }
@@ -1292,8 +1290,8 @@ async function pmtTestConnection() {
   const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
   setMsg('Verifying credentials…','info');
   try {
-    const fn  = httpsCallable(_fns,'validateDarajaCredentials');
-    const res = await fn();
+    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
+    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
     setMsg('✅ Connection verified! Env: ' + res.data.env + ' · Shortcode: ' + res.data.shortCode, 'ok');
   } catch(e) { setMsg('❌ '+e.message,'err'); }
 }
@@ -1305,8 +1303,8 @@ async function pmtRunTestFromSettings() {
   if (!phone) { setMsg('⚠️ Enter a phone number.','err'); return; }
   setMsg('Sending STK Push…','info');
   try {
-    const fn  = httpsCallable(_fns,'sendTestSTKPush');
-    const res = await fn({ phone });
+    /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
+    throw new Error('M-PESA Daraja setup has been retired. SOKONI now collects every payment through IntaSend — there is nothing for you to configure here.');
     setMsg('📲 PIN prompt sent to '+phone+'. Enter your M-Pesa PIN. Listening for result…','ok');
     const unsub = onSnapshot(doc(_db,'posPayments',res.data.checkoutId), snap => {
       if (!snap.exists()) return;
@@ -1359,7 +1357,7 @@ const AI_KB = {
 
   'passkey': `Your **Passkey** is a secret key provided by Safaricom that's used to generate a secure password for each STK Push request.\n\n**For Sandbox (Testing):**\nUse the sandbox passkey from the Daraja portal — it's shown on your Lipa Na M-Pesa Sandbox credentials page.\n\nSandbox passkey: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919\n\n**For Production (Live):**\nLogin to M-Pesa Business dashboard → Lipa Na M-Pesa Online → Passkey tab. This passkey is unique to your shortcode.`,
 
-  'callback': `The **Callback URL** is where Safaricom sends payment confirmation after a customer enters their M-Pesa PIN.\n\n⏱️ **Speed:** Callbacks typically arrive within **3-15 seconds** after PIN entry. Can occasionally take up to 60 seconds.\n\n🔄 **What happens:**\n1. Customer enters PIN\n2. Safaricom processes payment\n3. Safaricom sends POST request to SOKONI's callback URL\n4. SOKONI updates the payment status\n5. Your dashboard shows "Payment Received" toast\n\nSOKONI's callback URL: **us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback**\n\nMake sure to register this in your Daraja app settings.`,
+  'callback': `The **Callback URL** is where Safaricom sends payment confirmation after a customer enters their M-Pesa PIN.\n\n⏱️ **Speed:** Callbacks typically arrive within **3-15 seconds** after PIN entry. Can occasionally take up to 60 seconds.\n\n🔄 **What happens:**\n1. Customer enters PIN\n2. Safaricom processes payment\n3. Safaricom sends POST request to SOKONI's callback URL\n4. SOKONI updates the payment status\n5. Your dashboard shows "Payment Received" toast\n\nSOKONI now collects every payment through IntaSend. There is no callback URL for you to register.`,
 
   'holds funds': `**SOKONI never holds your money.** 🎉\n\nHere's exactly how the payment works:\n\n1. Customer enters their phone number in SOKONI\n2. SOKONI sends an STK Push using **your own Daraja credentials** to **your own Shortcode**\n3. Customer receives M-Pesa PIN prompt\n4. Customer enters PIN → money goes **directly into your M-Pesa account**\n5. Safaricom sends confirmation to SOKONI's server\n6. SOKONI updates the order to "Paid"\n\nAt no point does any money pass through SOKONI. SOKONI is purely the orchestration layer — it just triggers the payment using your credentials. You have 100% control of your M-Pesa account.`,
 };

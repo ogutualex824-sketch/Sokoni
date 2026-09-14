@@ -35,6 +35,25 @@ const OPT128    = { region: 'us-central1', enforceAppCheck: true, memory: '128Mi
 const OPT_GATEWAY = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB',
   secrets: [QR_SIGNING_SECRET, INTASEND_PRIVATE_KEY] };
 
+/* ── D2 — THE QR RAIL'S STATUS CONTRACT, STATED ONCE ──────────────────────────────────────
+   `posPayments` holds two incompatible document shapes. The retired Daraja rail wrote
+   `pending | completed | failed` with a `checkoutId`; this rail writes the vocabulary below
+   with a `transactionId`. They were kept apart only by the accident that neither happened to
+   spell a terminal state the same way — `completed` vs `paid`. That is not a boundary, it is a
+   coincidence, and `pos-zero-friction` had already grown a check that depended on it.
+
+   So the contract is declared rather than implied:
+
+       pending ──► paid        (completePOSQRPayment, only after IntaSend verification — P1)
+               ──► expired     (TTL elapsed)
+               ──► cancelled   (seller withdrew the QR)
+               └─► refunded    (after paid)
+
+   `completed` IS NOT A QR STATUS and must never be written here. It belongs to the retired
+   Daraja rail, and to the separate `orders` collection, whose vocabulary is its own. */
+const QR_STATUSES = Object.freeze(['pending', 'paid', 'expired', 'cancelled', 'refunded']);
+const QR_TERMINAL_PAID = 'paid';
+
 /* ── helpers ─────────────────────────────────────────────── */
 const fdb   = () => admin.firestore();
 const _now  = () => admin.firestore.FieldValue.serverTimestamp();
@@ -65,6 +84,27 @@ function _txnId() {
 /* HMAC signature over transactionId — prevents forged QR references */
 function _sign(txnId, secret) {
   return crypto.createHmac('sha256', secret).update(txnId).digest('hex').slice(0, 16);
+}
+
+/* ── D2 — A MISMATCH IS A REFUSAL, NOT A CRASH ────────────────────────────────────────────
+   Both signature checks called `crypto.timingSafeEqual(Buffer.from(data.signature || ''), …)`
+   directly. That function THROWS on a length mismatch rather than returning false — so a
+   document without a `signature` (a legacy Daraja row, or anything malformed) produced an
+   uncaught TypeError and surfaced as INTERNAL. A crash is not a refusal: it leaks the shape of
+   the failure, is not the controlled `invalid-argument` the caller is written for, and reads as
+   a server fault when it is a rejected input.
+
+   Length is compared FIRST and in the clear. That is not a timing leak worth defending: the
+   expected length is a fixed constant of this scheme, so an attacker already knows it. What
+   must stay constant-time is the comparison of two equal-length candidate signatures, and that
+   is exactly what still reaches timingSafeEqual. */
+function _sigMatches(candidate, expected) {
+  if (typeof candidate !== 'string' || typeof expected !== 'string') return false;
+  const a = Buffer.from(candidate, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  try { return crypto.timingSafeEqual(a, b); }
+  catch (_) { return false; }
 }
 
 /* Validate items array */
@@ -218,7 +258,7 @@ exports.getPOSPaymentDetails = onCall(
 
     /* Verify HMAC signature */
     const expectedSig = _sign(transactionId, QR_SIGNING_SECRET.value());
-    if (!crypto.timingSafeEqual(Buffer.from(data.signature || ''), Buffer.from(expectedSig))) {
+    if (!_sigMatches(data.signature, expectedSig)) {
       throw new HttpsError('invalid-argument', 'Invalid payment reference');
     }
 
@@ -297,7 +337,7 @@ exports.initiatePOSQRPayment = onCall(
 
     /* HMAC verification */
     const expectedSig = _sign(transactionId, QR_SIGNING_SECRET.value());
-    if (!crypto.timingSafeEqual(Buffer.from(data.signature || ''), Buffer.from(expectedSig))) {
+    if (!_sigMatches(data.signature, expectedSig)) {
       throw new HttpsError('invalid-argument', 'Invalid payment reference');
     }
 
@@ -694,6 +734,11 @@ exports.refundPOSPayment = onCall(
    CF 7 — getPOSPaymentHistory
    Seller views their POS QR payment history.
 ════════════════════════════════════════════════════════════ */
+/* Exported so the certification can pin the contract to the implementation rather than to a
+   transcription of it. */
+exports.QR_STATUSES = QR_STATUSES;
+exports.QR_TERMINAL_PAID = QR_TERMINAL_PAID;
+
 exports.getPOSPaymentHistory = onCall(
   OPT128,
   async (request) => {

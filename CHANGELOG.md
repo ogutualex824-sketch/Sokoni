@@ -1,3 +1,123 @@
+## 2026-09-14 (61) — D1+D2: Daraja outbound retired; posPayments is explicitly the IntaSend QR rail
+
+**41 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-d1d2-daraja-retirement.js`
+Full regression: **680 assertions across 12 suites, 0 failed, 0 blocked.** Require-closure passes.
+Nothing deployed; **no inbound webhook modified.**
+
+### D1 — the outbound surface is gone
+
+`548e15d` had already made it inert at the `_darajaToken` chokepoint, so nothing here changed
+behaviour — it removed code that could no longer transact: `_darajaToken`, `darajaSTKPush`,
+`sendTestSTKPush`, `validateDarajaCredentials`, and the timestamp helper whose only three callers
+were those functions. **631 lines**, each range verified against its first and last line before a
+single cut, bottom-up so earlier numbers could not shift under later ones.
+
+Merchant-facing callers removed from `pos.js`, `payments.html`, **`merchant-v2.html` and
+`sokoni-mpesa.js`** — the last two found by the suite, not by my census, which had hand-listed the
+files to check. That is the second time this session a suite caught what a census missed.
+
+**A fabrication went with it.** The `pos.js` till flow, when `window.firebaseApp` was absent,
+invented `checkoutId = "SIMULATED_" + Date.now()`, declared the payment CONFIRMED after three polls
+with a made-up reference `SIM…`, and completed the sale. **A real POS sale closed against a payment
+that never existed, decided entirely in the browser.** Removed, and not reproduced anywhere.
+
+Callback-registration instructions removed from `payments.html` (x3) and `seller.html` (x2).
+Publishing that URL is what caused sellers to register it in their own Safaricom portals, so
+stopping new registrations has to precede any thought of removing the handler.
+
+Deployment drivers no longer deploy the three retired callables. **`darajaSTKCallback` deliberately
+still does**, because it is inbound and D3 is blocked.
+
+### D2 — the QR rail states its contract
+
+```
+pending ──► paid       (only after IntaSend verification — P1)
+        ──► expired
+        ──► cancelled
+        └─► refunded
+```
+
+`completed` is **not** a QR status. The two rails were kept apart only by the accident that neither
+spelled a terminal state the same way; that is a coincidence, not a boundary, and code had already
+grown to depend on it.
+
+Two of the three latent edges are closed:
+
+* **`getPOSPaymentDetails` refuses instead of crashing.** Both signature checks called
+  `timingSafeEqual` directly, which *throws* on a length mismatch — so a document without a
+  `signature` produced an uncaught TypeError surfacing as `INTERNAL`. Now routed through
+  `_sigMatches`, proven against every previously-crashing input. Length is compared first and in the
+  clear: the expected length is a fixed constant an attacker already knows, and what stays
+  constant-time is the equal-length comparison.
+* **`verifyPaymentStatus` is rail-scoped.** An explicit `_isDarajaShape` discriminator; its
+  `orderId` query returns `not_found` for a QR document rather than reporting a QR status to a
+  caller written for the Daraja vocabulary.
+
+### The third edge was WITHDRAWN, not fixed — and handed over
+
+The `pos-zero-friction` confirm path has two defects that Daraja's retirement makes live:
+
+1. `if (pay.sellerUid && pay.sellerUid !== merchantId …)` — a QR document carries `sellerId`, so
+   `pay.sellerUid` is undefined and **the whole ownership check short-circuits away**.
+2. `if (pay.status !== 'completed')` — only `darajaSTKCallback` ever wrote `completed`, so after
+   retirement this refuses **every** till payment forever.
+
+I wrote the fix, then found the block containing it **does not exist in HEAD**. It is another
+agent's uncommitted work in progress, and my change sat inside their 893-line addition — there was
+no hunk that could carry mine without carrying 288 lines of their unfinished code. The edit was
+withdrawn and their block restored verbatim; `functions/pos-zero-friction.js` is **not in this
+commit**.
+
+**Handed to whoever owns that file.** The suite asserts the withdrawal rather than the fix, so the
+finding is recorded and its absence is deliberate.
+
+### What was deliberately not touched, asserted rather than assumed
+
+`darajaSTKCallback`, `webhookMpesa`, `webhookIntasend` and `verifyIntasendPayment` are
+**byte-identical to HEAD**. `functions/mpesa-c2b.js` is byte-identical — it is **not** the Daraja
+STK rail: zero outbound credentials, it only receives C2B for money Safaricom already settled.
+`initiateSTKPush` carries no D1/D2 change; it differs from HEAD only through another agent's
+in-flight work, so asserting "unchanged" there would have failed on *their* work — the same
+mis-assertion P1's `T8-1` made, and P3's `U3-1` made again.
+
+The **13 historical Daraja documents are untouched**, and no code path can create a Daraja-shaped
+`posPayments` document any more — the shape is frozen. `darajaSTKCallback` can still settle the
+existing ones, so they are not orphaned.
+
+### A removal from this repository is not a removal from production
+
+The deployed functions remain until someone explicitly deletes them, which is a deployment action
+and is not authorised. Production also still runs whatever was last deployed, which predates
+`548e15d` — so **production's `darajaSTKPush` may still be the fully working implementation.** The
+repository is IntaSend-only; production is not yet.
+
+### Isolation
+
+Four files carry other agents' work. Hunks classified by content markers — 26 mine, 54 theirs,
+separability proven in both directions. My first classifier marked a hunk MINE if it contained any
+of my markers and **had no mixed-hunk detection at all**, which swept 288 lines of someone else's
+work into the staging area before I caught it. That is how the `pos-zero-friction` finding surfaced.
+
+### Files affected
+
+`functions/index.js` (5 hunks, isolated) · `functions/pos-qr.js` · `pos.js` (isolated) ·
+`payments.html` · `seller.html` (isolated) · `merchant-v2.html` · `sokoni-mpesa.js` ·
+`deploy-batches.ps1` · `scripts/batch_deploy.sh` · `scripts/deploy/functions-allowlist.js` ·
+`scripts/certify-d1d2-daraja-retirement.js` (new) · `scripts/certify-p3-matchback-removal.js`
+(its `U3-1` was too broad and fired on D2's legitimate index.js edit — narrowed to P3's own marker)
+
+**Breaking:** merchants can no longer configure or test Daraja; the POS till flow directs to the QR
+charge. **Deployment:** none.
+
+### Still open
+
+**D3** — removing `darajaSTKCallback` / `webhookMpesa`, blocked on external Safaricom
+de-registration and a quiet period. **`payments.html` remains a Daraja-shaped setup console** whose
+retirement is a UI gate of its own: its invocations are inert, but the page still walks a merchant
+through configuring a dead rail. Plus **P3-A**, the discovery headroom, and deployment.
+
+---
+
 ## 2026-09-14 (60) — P3: the dead match-back field is gone. P3-A recorded, not built.
 
 **27 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-p3-matchback-removal.js`

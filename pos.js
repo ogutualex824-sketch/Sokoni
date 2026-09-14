@@ -1407,111 +1407,27 @@ const SPos = (function () {
       );
     },
 
+    /* ── D1 — THE DARAJA TILL FLOW IS REMOVED ──────────────────────────────────────
+       This asked for a phone number, called `darajaSTKPush`, and polled
+       `verifyPaymentStatus` for `completed`. Daraja is retired: the callable no longer
+       exists and the status it waited for can no longer be written.
+
+       IT ALSO CARRIED A FABRICATION. When `window.firebaseApp` was absent the flow
+       invented `checkoutId = "SIMULATED_" + Date.now()`, then after three polls declared
+       the payment CONFIRMED with a made-up reference `SIM…` and completed the sale. A
+       real POS sale was closed against a payment that never existed, decided entirely in
+       the browser. That is removed with the rest of it and is not reproduced anywhere.
+
+       The POS already has the IntaSend rail: `generatePOSPaymentQR` (pos.html), where the
+       customer scans, IntaSend sends the prompt (P2), and the sale is confirmed only after
+       server-side verification with IntaSend (P1). This method points there rather than
+       becoming a second payment implementation. */
     async sendSTK() {
-      const phone  = _v('mpesa-phone').replace(/\s/g, '');
-      const total  = cart.getTotal();
-
-      if (!phone || phone.length < 9) { toast('Enter valid phone number', 'error'); return; }
-
-      const cleanPhone = phone.startsWith('0') ? '254' + phone.slice(1) : phone.startsWith('+') ? phone.slice(1) : phone;
-
-      document.getElementById('mpesa-send-btn').disabled = true;
-      document.getElementById('mpesa-send-btn').textContent = 'Sending...';
-
-      /* Step 1: active */
-      _setMpesaStep(1, 'active');
-
-      try {
-        const fn = window.firebaseApp
-          ? (await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'))
-          : null;
-
-        let checkoutId = null;
-
-        if (fn && window.firebaseApp) {
-          const { getFunctions, httpsCallable } = fn;
-          const functions = getFunctions(window.firebaseApp);
-          const call = httpsCallable(functions, 'darajaSTKPush');
-          const uid  = window.currentUser?.uid;
-          const result = await call({
-            sellerUid:   uid,
-            phone:       cleanPhone,
-            amount:      Math.ceil(total),
-            description: 'SOKONI SmartPOS Sale',
-            hub:         'pos',
-          });
-          checkoutId = result.data?.checkoutId;
-        }
-
-        if (!checkoutId) {
-          /* Dev mode: simulate STK push */
-          checkoutId = 'SIMULATED_' + Date.now();
-        }
-
-        state.mpesaCheckoutId = checkoutId;
-        _setMpesaStep(1, 'done');
-        _setMpesaStep(2, 'active');
-
-        /* Poll for confirmation */
-        let attempts = 0;
-        state.mpesaPollTimer = setInterval(async () => {
-          attempts++;
-          if (attempts > 24) { /* 2 min timeout */
-            clearInterval(state.mpesaPollTimer);
-            _setMpesaStep(2, 'failed');
-            _setMpesaStep(3, 'failed');
-            document.getElementById('mpesa-result').style.display = 'block';
-            document.getElementById('mpesa-result').style.background = 'rgba(239,68,68,0.1)';
-            document.getElementById('mpesa-result').style.color = 'var(--red)';
-            document.getElementById('mpesa-result').textContent = 'Payment timed out. Ask customer to try again.';
-            document.getElementById('mpesa-send-btn').disabled = false;
-            document.getElementById('mpesa-send-btn').textContent = '📱 Send M-PESA Request';
-            return;
-          }
-
-          try {
-            let confirmed = false, mpesaRef = '';
-
-            if (fn && window.firebaseApp && !checkoutId.startsWith('SIMULATED_')) {
-              const { getFunctions, httpsCallable } = fn;
-              const functions = getFunctions(window.firebaseApp);
-              const call = httpsCallable(functions, 'verifyPaymentStatus');
-              const result = await call({ checkoutId });
-              confirmed = result.data?.status === 'completed';
-              mpesaRef  = result.data?.mpesaCode;
-            } else if (checkoutId.startsWith('SIMULATED_') && attempts >= 3) {
-              /* Simulation: confirm after 3 polls (~15s) */
-              confirmed = true;
-              mpesaRef  = 'SIM' + Date.now().toString().slice(-8);
-            }
-
-            if (confirmed) {
-              clearInterval(state.mpesaPollTimer);
-              _setMpesaStep(2, 'done');
-              _setMpesaStep(3, 'done');
-
-              document.getElementById('mpesa-result').style.display = 'block';
-              document.getElementById('mpesa-result').style.background = 'rgba(0,168,78,0.1)';
-              document.getElementById('mpesa-result').style.color = '#00a84e';
-              document.getElementById('mpesa-result').textContent = `✓ M-PESA confirmed. Ref: ${mpesaRef}`;
-
-              setTimeout(async () => {
-                modal.close('mpesa-modal');
-                await payment.complete({ method: 'mpesa', amountPaid: total, change: 0, mpesaRef, mpesaPhone: cleanPhone });
-              }, 1500);
-            }
-          } catch (_) {}
-        }, 5000);
-
-      } catch (e) {
-        _setMpesaStep(1, 'failed');
-        document.getElementById('mpesa-result').style.display = 'block';
-        document.getElementById('mpesa-result').style.background = 'rgba(239,68,68,0.1)';
-        document.getElementById('mpesa-result').style.color = 'var(--red)';
-        document.getElementById('mpesa-result').textContent = 'Error: ' + e.message;
-        document.getElementById('mpesa-send-btn').disabled = false;
-        document.getElementById('mpesa-send-btn').textContent = '📱 Send M-PESA Request';
-      }
+      toast('M-PESA by phone number has been retired. Use "Charge by QR" — the customer ' +
+            'scans and approves on their phone, and the sale confirms once M-PESA verifies it.',
+            'error');
+      const btn = document.getElementById('mpesa-send-btn');
+      if (btn) { btn.disabled = false; btn.textContent = '📱 Send M-PESA Request'; }
     },
 
     cancelSTK() {
@@ -1555,12 +1471,13 @@ const SPos = (function () {
         state.settings.mpesaConfigured = true;
         state.settings.mpesaShortcode  = shortcode;
 
-        /* Validate with Cloud Function (test OAuth token generation) */
-        if (window.firebaseApp) {
-          const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
-          const fn = getFunctions(window.firebaseApp);
-          await httpsCallable(fn, 'validateDarajaCredentials')({});
-        }
+        /* ── D1 — no Daraja credential validation ───────────────────────────────────
+           This called `validateDarajaCredentials`, which minted a Safaricom OAuth token
+           from the shortcode/consumer key/secret the merchant typed in. Daraja is retired
+           and the callable is gone; SOKONI collects through IntaSend, so a merchant has no
+           Safaricom credentials for SOKONI to validate. The stored shortcode is left alone
+           — it is the merchant's own record of their till, and deleting merchant data is
+           not this gate's business. */
 
         const statusEl = document.getElementById('mpesa-config-status');
         if (statusEl) statusEl.textContent = 'Connected ✓';

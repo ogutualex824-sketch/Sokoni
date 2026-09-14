@@ -286,7 +286,10 @@
         /* Call Cloud Function */
         const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
         const { app: fbApp } = await import('./firebase.js');
-        const fn = httpsCallable(getFunctions(fbApp), 'darajaSTKPush');
+        /* D1 — Daraja is retired; SOKONI collects through IntaSend. */
+        throw new Error('M-PESA by phone number has been retired. Use the SOKONI QR charge, where the customer scans and approves on their phone.');
+        /* eslint-disable-next-line no-unreachable */
+        const fn = null;
 
         const result = await fn({
           sellerUid,

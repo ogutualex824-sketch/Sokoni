@@ -2484,7 +2484,12 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
          been paid: darajaSTKPush cannot report success, and verifyPaymentStatus
          cannot cause a charge. The record they meet on is written by the Daraja
          callback, which this client cannot reach at all. */
-      callStk: _callable('darajaSTKPush'),
+      /* D1 — Daraja is retired. This wired the Sell screen straight at the Daraja STK
+         callable; SOKONI now collects through IntaSend, and the POS QR rail
+         (generatePOSPaymentQR -> initiatePOSQRPayment -> completePOSQRPayment) is the
+         only path that can request money. Left unset so the caller fails loudly rather
+         than silently doing nothing. */
+      callStk: null,
       callVerify: _callable('verifyPaymentStatus'),
       onToast: toast,
       onPrint: function (job) {

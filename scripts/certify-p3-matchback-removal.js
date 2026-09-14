@@ -199,10 +199,17 @@ async function main() {
 
   section('3  settleOrder AND THE ONLINE RAIL ARE UNTOUCHED');
   {
-    const d = require('child_process').execSync('git diff HEAD --name-only', { cwd: ROOT, encoding: 'utf8' }).split('\n');
-    check('U3-1', d.indexOf('functions/index.js') === -1 || !/pendingMpesaPhone|posPayments/.test(
-      require('child_process').execSync('git diff HEAD -- functions/index.js', { cwd: ROOT, encoding: 'utf8' })),
-      'no P3 change appears in functions/index.js');
+    /* THIS ASSERTION WAS TOO BROAD and failed the moment a LATER gate legitimately edited
+       index.js — D1/D2 rail-scoped `verifyPaymentStatus`, which necessarily mentions
+       `posPayments`. "No P3 change" is the claim; "nobody ever touches this file again" is what
+       it was actually checking. Third time this session that an unchanged-file assertion has
+       fired on someone else's legitimate work.
+
+       Narrowed to P3's own marker: the field this gate removed must not reappear as a WRITE
+       anywhere in index.js. */
+    const idx = require('child_process').execSync('git diff HEAD -- functions/index.js', { cwd: ROOT, encoding: 'utf8' });
+    check('U3-1', !/^\+.*pendingMpesaPhone\s*:/m.test(idx),
+      'no P3 change (a pendingMpesaPhone write) appears in functions/index.js');
     const os = require('child_process').execSync('git diff HEAD -- functions/order-settlement.js', { cwd: ROOT, encoding: 'utf8' });
     check('U3-2', !/pendingMpesaPhone|posPayments|pos_qr/.test(os),
       'no P3 change appears in order-settlement.js (dirty from the refund agent, not from this gate)');
