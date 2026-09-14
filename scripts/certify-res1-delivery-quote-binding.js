@@ -491,18 +491,27 @@ async function main() {
       && /deliveryFee:\s*result\.deliveryFee/.test(CO);
     const settlementReads = /Number\(order\.deliveryFee\s*\|\|\s*0\)/
       .test(strip(fs.readFileSync(path.join(FN, 'order-settlement.js'), 'utf8')));
+    /* THIS DETECTOR ONCE REPORTED A DEFECT THAT DID NOT EXIST.
+       It found a client producer and a server consumer and called the path open, without checking
+       the layer between them. The 2026-09-14 rules census evaluated the DEPLOYED ruleset: no
+       client branch permits `deliveryFee` on orders, so the browser write was refused every time
+       and `.catch(function(){})` hid it. The write has since been removed (RES-1b), and the
+       boundary is pinned by scripts/certify-res1b-seller-settlement.js against the live engine.
+
+       What remains here is the honest form of the check: a client write to that field is a defect
+       REGARDLESS of whether the rules currently stop it, because dead code aimed at a settlement
+       field becomes live the day somebody widens an allowlist. But it is no longer described as a
+       live money defect, because it is not one. */
     if (browserWrite && settlementReads) {
       RESIDUALS.push(
-        'RES-1b — checkout.html still patches orders/{id}.deliveryFee AFTER payment with '
-        + 'delivery-hub.js\'s browser-computed figure, and order-settlement._grossCents subtracts '
-        + 'that same field from the seller\'s gross. A browser number therefore still moves the '
-        + 'SELLER\'s settlement, in either direction. It does NOT affect the rider (settlement reads '
-        + 'the pinned quote) and it does NOT affect what the buyer was charged (Gate C). Closing it '
-        + 'needs a rules denial on the client write plus a server-fed replacement for the success '
-        + 'overlay — its own gate.');
-      console.log('  ○ RES-1b  a browser write still reaches orders.deliveryFee, which settlement subtracts (see summary)');
+        'A client write to orders/{id}.deliveryFee has REAPPEARED in checkout.html. '
+        + 'order-settlement._grossCents subtracts that field from the seller\'s gross. The deployed '
+        + 'rules deny such a write today, so this is not (yet) a money defect — but it is dead code '
+        + 'aimed at a settlement field and becomes live the moment an allowlist is widened. '
+        + 'RES-1b removed it; run scripts/certify-res1b-seller-settlement.js.');
+      console.log('  ○ RES-1b  a client write to orders.deliveryFee has reappeared (see summary)');
     } else {
-      ok('RES-1b', 'no browser-authored deliveryFee reaches the seller settlement path');
+      ok('RES-1b', 'no client write targets orders.deliveryFee — the settlement field has no browser producer');
     }
   }
 

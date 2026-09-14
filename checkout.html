@@ -3681,18 +3681,19 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
         notes:           document.getElementById("coNotes")?.value?.trim() || '',
       });
 
-      /* Patch Firestore order with deliveryRef */
-      if(_uid && window.firebaseDB && result.deliveryRef){
-        try{
-          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(function(m){
-            m.updateDoc(m.doc(window.firebaseDB,"orders",orderId),{
-              deliveryRef:    result.deliveryRef,
-              deliveryFee:    result.deliveryFee,
-              deliveryStatus: 'order_placed',
-            }).catch(function(){});
-          }).catch(function(){});
-        }catch(e){}
-      }
+      /* ── RES-1b — THE ORDER PATCH IS GONE, AND IT NEVER WORKED ────────────────────────────
+         This block used to write deliveryRef / deliveryFee / deliveryStatus onto
+         orders/{orderId} from the browser. The production rules allow a buyer to change only
+         ['status','cancelReason','updatedAt','review'], so every one of those writes was
+         REFUSED — and `.catch(function(){})` swallowed the refusal, which is why nobody ever
+         noticed it did nothing.
+
+         It is removed rather than repaired. `orders.deliveryFee` is what
+         order-settlement._grossCents subtracts from the seller's gross, so a client write to it
+         must never succeed; leaving dead code aimed at that field is a trap waiting for the day
+         somebody widens an allowlist to fix an unrelated bug. The server already sets the field
+         from the checkout session (Gate C -> RES-1), and `orders.deliveryRef` is stamped
+         server-side by the webhook producer. */
 
       /* Update success overlay with delivery info */
       const di  = document.getElementById('successDeliveryInfo');
@@ -3702,8 +3703,23 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
       const btn = document.getElementById('successTrackBtn');
       if(di && result.deliveryRef){
         if(dr) dr.textContent = result.deliveryRef;
-        if(df) df.textContent = 'Delivery fee: KES ' + Number(result.deliveryFee||0).toLocaleString()
-                               + ' · ' + result.distanceKm?.toFixed(1) + ' km';
+        /* ── RES-1b — THE FEE SHOWN IS THE ONE THE BUYER WAS CHARGED ───────────────────────
+           This read `result.deliveryFee` and `result.distanceKm` — both computed by
+           delivery-hub.js in this browser, on a different rate card (0.88 share) from the
+           server quote the buyer actually paid. So the success screen could state a delivery
+           fee that no system anywhere had charged.
+
+           `deliveryFee` below is the page's own variable, and Gate C fixed its provenance: it
+           is assigned only from `quote.customerChargeKES` or 0, never computed here. When
+           there is no server quote it shows nothing rather than 0 — an unknown rendered as a
+           figure is worse than an absent line, and this is a money figure on a receipt. */
+        if(df){
+          if(_deliveryQuoteId && Number(deliveryFee) > 0){
+            df.textContent = 'Delivery fee: KES ' + Number(deliveryFee).toLocaleString();
+          } else {
+            df.textContent = '';
+          }
+        }
         if(dp) dp.textContent = 'Show your 4-digit delivery PIN to the rider when they arrive.';
         if(btn){ btn.href = 'delivery-tracking.html?ref=' + result.deliveryRef; btn.textContent = '📍 Track Delivery'; }
         di.style.display = 'block';

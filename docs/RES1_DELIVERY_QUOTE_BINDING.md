@@ -121,20 +121,52 @@ not touched.
 
 ---
 
-## Residual — proven, NOT fixed
+## Residual — RES-1b, and the correction to it
 
-**RES-1b — a browser write still moves the SELLER's settlement.**
-`checkout.html` patches `orders/{id}.deliveryFee` after payment with `delivery-hub.js`'s
-browser-computed figure, and `order-settlement._grossCents` computes the seller's gross as
-`total − deliveryFee`. A browser number therefore still moves the seller's settlement, in either
-direction.
+> **⚠ THE FINDING BELOW WAS WRONG, AND IS CORRECTED HERE. It is left in place rather than deleted,
+> because a retracted finding that quietly disappears teaches nobody anything.**
 
-* It does **not** affect the rider — settlement reads the pinned quote.
-* It does **not** affect what the buyer was charged — Gate C closed that.
-* Closing it needs a rules denial on the client write **plus** a server-fed replacement for the
-  success overlay, which reads `result.deliveryRef` / `deliveryFee` / `distanceKm`.
+**What this document originally claimed:**
 
-Its own gate. Not opened.
+> *RES-1b — a browser write still moves the SELLER's settlement. `checkout.html` patches
+> `orders/{id}.deliveryFee` after payment with `delivery-hub.js`'s browser-computed figure, and
+> `order-settlement._grossCents` computes the seller's gross as `total − deliveryFee`. A browser
+> number therefore still moves the seller's settlement, in either direction.*
+
+**Why it was wrong.** That was an **inference, not a finding**. A client producer was located
+(`checkout.html`) and a server consumer was located (`_grossCents`), and the path between them was
+assumed open without checking it. The rules census of 2026-09-14 evaluated the **deployed** ruleset
+and found the buyer, seller and rider update branches permit only:
+
+```
+buyer   status, cancelReason, updatedAt, review
+seller  status, sellerNote, readyAt, trackingNo, updatedAt
+rider   status, driverNote, updatedAt, pickedUpAt, etaMin
+```
+
+`deliveryFee` is in none of them, and there is exactly one `match /orders/{orderId}` block, so no
+second block unions a grant back in. **The browser write was refused every time** — and
+`.catch(function(){})` swallowed the refusal, which is why it looked alive for as long as it did.
+
+**The invariant held all along**, enforced at the rules layer rather than by the quote chain.
+
+### What RES-1b actually became
+
+A cleanup gate, closed 2026-09-14, certified by `scripts/certify-res1b-seller-settlement.js`
+(29/29):
+
+* the dead client write is **removed** — dead code aimed at a settlement field is a trap waiting for
+  somebody to widen an allowlist while fixing something unrelated
+* the success overlay now shows the **server-quoted** fee, or nothing at all, instead of
+  `delivery-hub.js`'s browser figure on a different rate card
+* the protection is **pinned at the live boundary**: the suite fetches the currently-deployed
+  ruleset and submits test cases to the Firebase Rules engine, so it proves what production does
+  rather than what the worktree's rules say — with a control that inverts one expectation and
+  requires the engine to report FAILURE, so a SUCCESS is a real verdict
+* the converse is proven too: a legitimate authoritative fee change **does** move the seller's gross
+
+**The lesson worth keeping:** a producer plus a consumer is not a path. The layer in between has to
+be checked, and checked where it actually runs.
 
 ---
 

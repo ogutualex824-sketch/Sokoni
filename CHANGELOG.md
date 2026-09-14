@@ -1,3 +1,105 @@
+## 2026-09-14 (57) — RES-1b: the seller-settlement defect did not exist. Cleanup and a regression lock.
+
+**29 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-res1b-seller-settlement.js`
+Full regression: **504 assertions across 8 suites, 0 failed, 0 blocked.** Nothing deployed.
+
+### The correction
+
+Entry 51 reported RES-1b as a live money defect — *"a browser number still moves the seller's
+settlement, in either direction."* **That was wrong, and this entry retracts it.**
+
+It was an **inference, not a finding**: a client producer (`checkout.html`) and a server consumer
+(`order-settlement._grossCents`) were located, and the path between them was assumed open without
+checking it. The rules census evaluated the **deployed** ruleset and found the update branches
+permit only:
+
+```
+buyer   status, cancelReason, updatedAt, review
+seller  status, sellerNote, readyAt, trackingNo, updatedAt
+rider   status, driverNote, updatedAt, pickedUpAt, etaMin
+```
+
+`deliveryFee` is in none of them, and there is exactly one `match /orders/{orderId}` block, so no
+second block unions a grant back in. The browser write was **refused every time**, and
+`.catch(function(){})` swallowed the refusal — which is why it looked alive. Entry 51 carries a
+correction marker rather than being rewritten.
+
+**The invariant held all along**, enforced at the rules layer rather than by the quote chain.
+
+### What RES-1b actually was, and what was done
+
+A cleanup gate and a regression lock, not a repair:
+
+* **The dead client write is removed.** Dead code aimed at a settlement field is a trap waiting for
+  somebody to widen an allowlist while fixing something unrelated.
+* **The success overlay shows the server-quoted fee**, or nothing at all — it previously rendered
+  `delivery-hub.js`'s browser figure, computed on a different rate card (0.88 share) from the quote
+  the buyer actually paid, so the success screen could state a delivery fee no system had charged.
+  When no server quote backs it, it now shows **nothing** rather than `0`: an unknown money figure
+  rendered as a number is worse than an absent line.
+
+### The boundary is evaluated, not read
+
+Section 2 of the suite does not grep the rules. It fetches the ruleset **currently deployed** to
+`sokoni-aeb26` and submits test cases to the Firebase Rules engine — the same evaluator that runs in
+production. Six forbidden mutations (buyer raising the fee, buyer *lowering* it to inflate their own
+gross, seller, rider, smuggling it alongside a permitted key, changing `orderTotal`) must DENY; two
+legitimate ones must ALLOW, or the rule would be refusing everybody and proving nothing.
+
+And a control that makes the verdict real: **one expectation is deliberately inverted and the engine
+must report FAILURE.** Without it, every SUCCESS could mean "the evaluator rubber-stamps".
+
+When credentials or network are unavailable the section reports **BLOCKED, never PASS** — an
+unevaluated boundary is not a proven one.
+
+### The converse is proven too
+
+`_grossCents` is exercised directly: a legitimate authoritative fee change **does** move the seller's
+gross (+KES 150 fee → −15000 cents), and the gross floors at zero so a fee exceeding the total can
+never produce a negative settlement.
+
+### A sabotage that was passing by not being applied
+
+`X5-1` anchored its mutation on a **comment** — but the detector runs on comment-stripped source, so
+the anchor matched nothing, the sabotage was never applied, and the check "passed". Re-anchored on
+live code. Third instance this session of a sabotage that tested nothing; the pattern is always the
+same: verify the mutation actually landed before trusting the verdict.
+
+### For the refund rail (other agent)
+
+No overlap and nothing moved underneath you:
+
+* Files touched here: `checkout.html`, `scripts/certify-res1b-seller-settlement.js`,
+  `docs/RES1_DELIVERY_QUOTE_BINDING.md`. **`functions/order-settlement.js` and
+  `functions/finos-utils.js` were not touched by any commit in this session.**
+* **No server behaviour changed.** The removed client write never succeeded; the overlay is display
+  only.
+* Useful to you: `orders/{id}.deliveryFee` is now **proven client-immutable at the deployed
+  boundary**, so a refund derived from `_grossCents` cannot be inflated by a tampered delivery fee.
+  `_grossCents` is the single gross formula, exported, and now covered including the floor-at-zero
+  case. Run `node scripts/certify-res1b-seller-settlement.js` if you change how refunds read that
+  field.
+
+### Files affected
+
+`checkout.html` · `scripts/certify-res1b-seller-settlement.js` (new) ·
+`scripts/certify-res1-delivery-quote-binding.js` (residual detector corrected) ·
+`docs/RES1_DELIVERY_QUOTE_BINDING.md` · `CHANGELOG.md` entry 51 (correction marker)
+
+**Deleted:** `scripts/stk-handset-probe.js` — never committed. The handset observation is captured
+and the procedure stands; a reusable utility whose purpose is to initiate real payment prompts is
+not something to leave lying in a shared repository.
+
+**Database:** none. **API:** none. **Breaking:** none. **Deployment:** none.
+
+### Recorded, NOT fixed here
+
+The 8.2 s `functions/index.js` discovery time against the CLI's 10 s limit (entry 56) is an
+operational risk and belongs to its own deployment-readiness gate. It was not opportunistically
+fixed inside RES-1b.
+
+---
+
 ## 2026-09-14 (56) — handset verification RUN: the narrative is not forwarded. FAIL, recorded.
 
 **Door A opened and used. `initiateSTKPush` deployed from `12fc4e7` (that function only). One KES 1
@@ -453,6 +555,13 @@ control proving the chain detector can fail. Neither was weakened; the Step 4 au
 not touched. Suite: 128/0.
 
 ### Residual — proven, NOT fixed
+
+> **⚠ CORRECTED BY ENTRY 57 (2026-09-14). The claim below is WRONG.** It was an inference, not a
+> finding: a client producer and a server consumer were located and the path between them assumed
+> open. The deployed rules permit no client write to `orders.deliveryFee`, so the browser write was
+> refused every time and `.catch(function(){})` hid it. **The seller's settlement was never
+> reachable from the browser.** Left in place rather than deleted — a retracted finding that
+> quietly disappears teaches nobody anything.
 
 **RES-1b** — `checkout.html` patches `orders/{id}.deliveryFee` after payment with
 `delivery-hub.js`'s browser figure, and `order-settlement._grossCents` computes the seller's gross
