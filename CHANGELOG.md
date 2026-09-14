@@ -1,3 +1,66 @@
+## 2026-09-14 (65) — Daraja outbound DELETED FROM PRODUCTION; the frontend gap this exposes
+
+**Three Cloud Functions deleted from `sokoni-aeb26`. 1712 → 1709. Verified: exactly three removed,
+nothing added, every protected rail alive.**
+
+Entry 61 closed with "a removal from this repository is not a removal from production — the
+deployed functions remain until someone explicitly deletes them." That is now done for the
+**outbound** surface, under explicit authorization.
+
+### Deleted
+
+| Function | Evidence for deleting it |
+|---|---|
+| `darajaSTKPush` | **6 invocations in 180 days, every one `rail:pos env:sandbox`**, all from the founder's own handset. Zero production-environment calls. |
+| `sendTestSTKPush` | no request traffic since 2026-08-28; deployment rollouts only |
+| `validateDarajaCredentials` | no request traffic since 2026-08-28; deployment rollouts only |
+
+This mattered beyond tidiness: the **deployed** `darajaSTKPush` predated `548e15d`, so production
+was running the fully working implementation — including the browser-supplied-`amount` behaviour
+recorded in the payment-authority memory — and it was callable by any authenticated client. The
+repository had been Daraja-free outbound for a day; production had not.
+
+### NOT deleted, and why the evidence says so
+
+`darajaSTKCallback` is **still receiving live POSTs from Safaricom** — `196.201.212.69`, most
+recently **2026-09-06**. Sellers' registrations live in their own Safaricom portals and cannot be
+revoked from here, so deleting the handler would send real callbacks into the void. **D3 stays
+blocked, now on measurement rather than inference.** `webhookMpesa`, `initiateSTKPush`, both C2B
+handlers and all three reconciliation callables are untouched and verified alive.
+
+### The gap this exposed, which is the opposite of the one entry 61 named
+
+Entry 61 warned that the repository can be clean while production is not. Production hosting now
+shows the mirror image: **the backend is retired and the frontend is not.**
+
+`https://mysokoni.co.ke/payments` serves **47 Daraja occurrences** — the full wizard pane, the
+credential screen, the test-push button and the callback-registration instruction — and it names
+`sendTestSTKPush` and `validateDarajaCredentials`, **both of which this entry deleted**. Live
+hosting is `d592d8f` on `release/r1-pos-printer-fn`, built 2026-09-02; entry 64's fix is on
+`release/multishop-checkout-certified` and has never been deployed.
+
+So a merchant on the live site can still open a Daraja setup wizard, and its buttons now fail with
+`NOT_FOUND` rather than the sandbox behaviour they had this morning. **They were already a dead end
+— D1 made them inert in the repository and the wizard configures a rail that cannot transact — but
+the failure mode changed, and that is this entry's doing.**
+
+Closing it is a **hosting deploy, and deliberately not done here.** Live runs a different branch,
+and the rollback guard exists precisely because deploying hosting from a branch that is behind live
+has repeatedly reverted production. That is its own gate, with its own lineage check — not a
+footnote to a function deletion.
+
+### Verification performed
+
+Pre- and post-deletion function lists were captured and **diffed**, rather than spot-checked: the
+diff shows exactly three removals and zero additions. Every protected rail was asserted present by
+name, before and after.
+
+**Files affected:** none — this is a production action, not a code change.
+**Database:** none. **Breaking:** the three deleted callables now return `NOT_FOUND` to any caller;
+the only callers are on live hosting that predates their retirement.
+
+---
+
 ## 2026-09-14 (64) — Daraja UI retirement: the console for a rail that cannot transact
 
 **76 assertions, 0 failed, 0 blocked.** Suite: `scripts/certify-daraja-ui-retirement.js`
